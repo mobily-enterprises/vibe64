@@ -1,5 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtemp, mkdir, readFile, writeFile, rm, access, readdir } from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+
+async function databaseHelperRuntime(t) {
+  const stateRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-database-helper-"));
+  t.after(() => rm(stateRoot, { recursive: true, force: true }));
+  const artifactsRoot = path.join(stateRoot, "artifacts");
+  return { stateRoot, store: {
+    async readArtifact(_id, name) {
+      try { return await readFile(path.join(artifactsRoot, name), "utf8"); }
+      catch (error) { if (error.code === "ENOENT") return ""; throw error; }
+    },
+    async writeJsonArtifact(_id, name, value) {
+      const filename = path.join(artifactsRoot, name);
+      await mkdir(path.dirname(filename), { recursive: true });
+      await writeFile(filename, JSON.stringify(value));
+    },
+    runSessionExclusive: async (_id, _key, operation) => ({ acquired: true, value: await operation() }),
+    mutateSession: (_id, operation) => operation({ artifactsRoot }),
+    withReadableSessionPaths: (_id, operation) => operation({ artifactsRoot })
+  } };
+}
+
+const sharedDatabaseSelection = { engineId: "opencode", agentId: "build", modelProviderId: "deepseek",
+  modelId: "deepseek-chat", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
 
 import {
   DATABASE_ASSISTANT_OUTPUT_SCHEMA,
@@ -802,28 +828,11 @@ test("database assistant uses one selected-provider secondary conversation and a
   }]);
 });
 
-test("database assistant availability follows the session's durable assistant selection", () => {
-  assert.deepEqual(databaseAssistantAvailability({
-    metadata: {
-      assistant_selection: JSON.stringify({
-        agentId: "build",
-        catalogRevision: `sha256:${"a".repeat(64)}`,
-        engineId: "opencode",
-        modelId: "deepseek-chat",
-        modelProviderId: "deepseek",
-        schema: "vibe64.assistant-selection.v1",
-        variantId: ""
-      })
-    }
-  }), {
-    available: true,
-    engineId: "opencode",
-    model: "deepseek-chat"
-  });
-  assert.deepEqual(databaseAssistantAvailability({ metadata: {} }), {
-    available: false,
-    engineId: "",
-    model: ""
+test("database assistant availability describes the resolved Economy destination", () => {
+  assert.deepEqual(databaseAssistantAvailability({ available: true, effectiveSelection: sharedDatabaseSelection,
+    backupUsed: true }), { available: true, engineId: "opencode", model: "deepseek-chat", backupUsed: true, message: "" });
+  assert.deepEqual(databaseAssistantAvailability({ available: false, message: "Economy is unavailable" }), {
+    available: false, engineId: "", model: "", backupUsed: false, message: "Economy is unavailable"
   });
 });
 
@@ -1108,13 +1117,15 @@ test("schema access fails visibly instead of truncating one enormous object", ()
   );
 });
 
-test("database members can browse, run SQL and use a shared assistant through the existing identities", async () => {
+test("database members can browse, run SQL and use a shared assistant through the existing identities", async (t) => {
+  const helperRuntime = await databaseHelperRuntime(t);
   const schema = testSchema();
   const artifacts = new Map([["database/schema.json", JSON.stringify(schema)]]);
   const environments = [];
   const statements = [];
   const assistantTurns = [];
   const assistantDeletions = [];
+  let economyAvailable = true;
   const store = {
     async readArtifact(_sessionId, artifactPath) {
       return artifacts.get(artifactPath) || "";
@@ -1125,9 +1136,9 @@ test("database members can browse, run SQL and use a shared assistant through th
           assistant_selection: JSON.stringify({
             agentId: "build",
             catalogRevision: `sha256:${"b".repeat(64)}`,
-            engineId: "opencode",
-            modelId: "deepseek-chat",
-            modelProviderId: "deepseek",
+            engineId: "codex",
+            modelId: "gpt-6-astra",
+            modelProviderId: "openai",
             schema: "vibe64.assistant-selection.v1",
             variantId: ""
           })
@@ -1140,6 +1151,7 @@ test("database members can browse, run SQL and use a shared assistant through th
     }
   };
   const projectService = {
+    createRuntime: async () => helperRuntime,
     async createSessionStore() {
       return store;
     },
@@ -1216,21 +1228,21 @@ test("database members can browse, run SQL and use a shared assistant through th
     });
   };
   const terminalService = {
-    async deleteDetachedAgentChatThread(sessionId, input, options) {
-      assistantDeletions.push({ input, options, sessionId });
+    async deleteEphemeralAgentConversation(scope, input, options) {
+      assistantDeletions.push({ input, options, scope });
       return { deleted: true, ok: true };
     },
-    async requireAssistantAccess(sessionId, options) {
-      assert.equal(sessionId, "service-session");
-      assert.deepEqual(options.vibe64User, {
-        role: "member",
-        username: "member"
-      });
-      return { ok: true };
+    async resolveAssistantPurpose(input, options) {
+      assert.equal(input.purpose, "database_assistant");
+      assert.equal(options.vibe64User.role, "member");
+      return economyAvailable ? { available: true, effectiveSelection: sharedDatabaseSelection, connectionIdentity: "shared-api" }
+        : { available: false, message: "The Economy model was disabled.", reasonCode: "vibe64_assistant_routing_unavailable" };
     },
-    async runDetachedAgentChatTurn(sessionId, input, options) {
-      assistantTurns.push({ input, options, sessionId });
-      options.onEvent({
+    async resolveEphemeralAgentExecutionProfile() { return databaseExecutionProfile(); },
+    async runEphemeralAgentChatTurn(scope, input, options) {
+      assistantTurns.push({ input, options, scope });
+      await options.onEvent({ type: "thread", threadId: "database-service-thread" });
+      await options.onEvent({
         executionProfile: databaseExecutionProfile(),
         type: "execution-profile"
       });
@@ -1266,19 +1278,25 @@ test("database members can browse, run SQL and use a shared assistant through th
   assert.equal(assistant.engineId, "opencode");
   assert.equal(assistant.model, "deepseek-chat");
   assert.equal(assistantTurns.length, 1);
-  assert.equal(assistantTurns[0].sessionId, "service-session");
+  assert.notEqual(assistantTurns[0].scope.id, "service-session");
+  assert.equal(assistantTurns[0].options.assistantSelection.engineId, "opencode");
+  assert.deepEqual(assistantTurns[0].scope.environment, {});
   assert.equal(assistantTurns[0].input.ephemeral, true);
-  assert.deepEqual(assistantTurns[0].input.executionProfile, {
-    profileId: "economy",
-    workloadId: "database_assistant"
-  });
+  assert.deepEqual(assistantTurns[0].input.executionProfile, databaseExecutionProfile());
   assert.deepEqual(assistantTurns[0].options.vibe64User, {
     role: "member",
     username: "member"
   });
   assert.equal(assistantDeletions.length, 1);
-  assert.equal(assistantDeletions[0].sessionId, "service-session");
-  assert.equal(assistantDeletions[0].input.threadId, "database-service-thread");
+  assert.equal(assistantDeletions[0].scope.id, assistantTurns[0].scope.id);
+  assert.equal(assistantDeletions[0].input.conversationId, "database-service-thread");
+  await assert.rejects(access(assistantTurns[0].scope.workdir), { code: "ENOENT" });
+
+  economyAvailable = false;
+  const disabled = await service.readState({ sessionId: "service-session", vibe64User: { role: "member", username: "member" } });
+  assert.equal(disabled.ok, true);
+  assert.equal(disabled.assistant.available, false);
+  assert.match(disabled.assistant.message, /disabled/);
 
   const read = await service.runQuery({
     queryId: "reader-query",
@@ -1386,11 +1404,13 @@ for (const { name, scenario } of [
   { name: "database acquisition rejects a concurrent duplicate query id", scenario: "duplicate" },
   { name: "database acquisition failure releases ownership for a same-id retry", scenario: "acquire-error" },
   { name: "database close reaches assistant SQL after an unrelated Stop during its provider turn", scenario: "assistant" },
+  { name: "database session close prevents a copilot query from executing after late acquisition", scenario: "assistant-acquiring" },
   { name: "database cancellation failure retains exact query ownership for retry", scenario: "cancel-error" },
   { name: "database cancellation isolates the same query id in different sessions", scenario: "session-isolation" },
   { name: "database close skips pending acquisition without cancelling an unavailable connection", scenario: "pending-close" }
 ]) {
-  test(name, async () => {
+  test(name, async (t) => {
+    const helperRuntime = await databaseHelperRuntime(t);
     const artifacts = new Map([["database/schema.json", JSON.stringify(testSchema())]]);
     const attempts = [0, 1].map((id) => ({
       acquire: Promise.withResolvers(),
@@ -1418,6 +1438,7 @@ for (const { name, scenario } of [
     let attemptIndex = 0;
     const service = createDatabaseService({
       projectService: {
+        createRuntime: async () => helperRuntime,
         async createSessionStore() {
           return {
             async readArtifact(_sessionId, artifactPath) {
@@ -1456,22 +1477,19 @@ for (const { name, scenario } of [
         }
       },
       terminalService: {
-        async requireAssistantAccess(sessionId, options) {
-          assert.equal(sessionId, "acquisition-session");
-          assert.equal(options.vibe64User.role, "owner");
-          return { ok: true };
-        },
-        async runDetachedAgentChatTurn(sessionId, _input, options) {
-          assert.equal(sessionId, "acquisition-session");
-          options.onEvent({ executionProfile: databaseExecutionProfile(), type: "execution-profile" });
-          options.onEvent({ threadId: "acquisition-assistant", type: "thread" });
+        async resolveAssistantPurpose() { return { available: true, effectiveSelection: sharedDatabaseSelection, connectionIdentity: "shared-api" }; },
+        async resolveEphemeralAgentExecutionProfile() { return databaseExecutionProfile(); },
+        async runEphemeralAgentChatTurn(scope, _input, options) {
+          assert.notEqual(scope.id, "acquisition-session");
+          await options.onEvent({ executionProfile: databaseExecutionProfile(), type: "execution-profile" });
+          await options.onEvent({ threadId: "acquisition-assistant", type: "thread" });
           providerTurns += 1;
           providerStarted.resolve();
           return providerTurns === 1 ? providerResponse.promise : providerAnswer;
         },
-        async deleteDetachedAgentChatThread(sessionId, input) {
-          assert.equal(sessionId, "acquisition-session");
-          providerDeletions.push(input.threadId);
+        async deleteEphemeralAgentConversation(scope, input) {
+          assert.notEqual(scope.id, "acquisition-session");
+          providerDeletions.push(input.conversationId);
           return { deleted: true, ok: true };
         }
       },
@@ -1534,7 +1552,7 @@ for (const { name, scenario } of [
       vibe64User: { role: "owner", username: "owner" }
     };
     try {
-      if (scenario === "assistant") {
+      if (["assistant", "assistant-acquiring"].includes(scenario)) {
         const assistant = service.askAssistant({
           ...input,
           messages: [{ content: "Read the book titles.", role: "user" }]
@@ -1549,6 +1567,16 @@ for (const { name, scenario } of [
           threadId: "acquisition-assistant"
         });
         await attempts[0].requested.promise;
+        if (scenario === "assistant-acquiring") {
+          const closing = service.closeAssistantsForSession(input.sessionId);
+          attempts[0].acquire.resolve(attempts[0].connection);
+          await closing;
+          assert.equal((await assistant).ok, false);
+          assert.deepEqual(attempts[0].statements, []);
+          assert.deepEqual(released, [attempts[0].connection]);
+          assert.deepEqual(providerDeletions, ["acquisition-assistant"]);
+          return;
+        }
         attempts[0].acquire.resolve(attempts[0].connection);
         await attempts[0].started.promise;
         await service.close();
@@ -1670,6 +1698,96 @@ for (const { name, scenario } of [
   });
 }
 
+test("database copilot keeps failed cleanup for restart and closes a late cancelled helper without rerunning inference", async (t) => {
+  const runtime = await databaseHelperRuntime(t);
+  const store = {
+    readSession: async (sessionId) => ({ sessionId, metadata: { assistant_selection: JSON.stringify({
+      ...sharedDatabaseSelection, engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra"
+    }) } }),
+    readArtifact: async () => JSON.stringify(testSchema())
+  };
+  const endpoint = { database: "catalogue", host: "127.0.0.1", username: "reader", password: "private-password", port: 5432 };
+  const projectService = { createSessionStore: async () => store, createRuntime: async () => runtime,
+    sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
+      contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: endpoint, write: endpoint
+    } }) };
+  let starts = 0;
+  let deletes = 0;
+  let resolutions = 0;
+  let cleanupFailure = true;
+  let waiting = null;
+  let runningOptions;
+  let helperScope;
+  const terminalService = {
+    async resolveAssistantPurpose(input, options) {
+      resolutions += 1;
+      assert.equal(input.workflowEngineId, "codex");
+      assert.equal(options.vibe64User.role, "member");
+      return { available: true, effectiveSelection: sharedDatabaseSelection, connectionIdentity: "shared-connection" };
+    },
+    resolveEphemeralAgentExecutionProfile: async () => databaseExecutionProfile(),
+    async runEphemeralAgentChatTurn(scope, input, options) {
+      starts += 1;
+      helperScope = scope;
+      runningOptions = options;
+      assert.equal(options.session, undefined);
+      assert.equal(options.assistantSelection.engineId, "opencode");
+      assert.deepEqual(scope.environment, {});
+      if (waiting) await waiting.promise;
+      await options.onEvent({ type: "helper-execution", executionId: "managed-database-helper" });
+      await options.onEvent({ type: "thread", threadId: "scoped-database-thread" });
+      await options.onEvent({ type: "turn", turnId: "scoped-database-turn" });
+      return { ok: true, threadId: "scoped-database-thread", executionProfile: databaseExecutionProfile(),
+        text: JSON.stringify({ action: "answer", answer: "Private answer", intent: "explain", schema: "", sql: "" }) };
+    },
+    async deleteEphemeralAgentConversation(scope, input, options) {
+      deletes += 1;
+      assert.equal(scope.id, helperScope.id);
+      assert.equal(input.conversationId, "scoped-database-thread");
+      assert.equal(input.cleanupExecutionId, "managed-database-helper");
+      assert.equal(options.assistantSelection.modelProviderId, "deepseek");
+      return cleanupFailure ? { ok: false, error: "Native cleanup unavailable" } : { ok: true };
+    }
+  };
+  const makeService = () => createDatabaseService({ projectService, terminalService });
+  let service = makeService();
+  const request = { sessionId: "copilot-session", vibe64User: { username: "member", role: "member" },
+    messages: [{ role: "user", content: "Private question" }] };
+  const failed = await service.askAssistant(request);
+  assert.equal(failed.ok, false);
+  assert.match(failed.error, /Native cleanup unavailable/);
+  assert.equal(starts, 1);
+  const directory = path.join(runtime.stateRoot, "artifacts/database/assistant-tasks");
+  const [file] = await readdir(directory);
+  const record = await readFile(path.join(directory, file), "utf8");
+  assert.match(record, /scoped-database-thread/);
+  assert.doesNotMatch(record, /Private question|Private answer|private-password|public.books/);
+  await access(helperScope.runtimeRoot);
+  assert.equal((await service.askAssistant(request)).ok, false);
+  assert.equal(starts, 1);
+  assert.equal(deletes, 2);
+  service = makeService();
+  cleanupFailure = false;
+  const priorResolutions = resolutions;
+  await service.closeAssistantsForSession(request.sessionId);
+  assert.equal(resolutions, priorResolutions, "Recovery uses the captured destination without fresh inference admission");
+  assert.deepEqual(await readdir(directory), []);
+  await assert.rejects(access(helperScope.runtimeRoot), { code: "ENOENT" });
+
+  waiting = Promise.withResolvers();
+  runningOptions = null;
+  const pending = service.askAssistant(request);
+  while (!runningOptions) await new Promise((resolve) => setTimeout(resolve, 1));
+  const closing = service.closeAssistantsForSession(request.sessionId);
+  assert.equal(runningOptions.signal.aborted, true);
+  waiting.resolve();
+  assert.equal((await pending).ok, false);
+  await closing;
+  assert.equal(starts, 2);
+  assert.equal(deletes, 4);
+  assert.deepEqual(await readdir(directory), []);
+});
+
 test("database assistant denial happens before schema inspection or its read-query loop", async () => {
   let artifactReads = 0;
   let databaseConnections = 0;
@@ -1730,15 +1848,15 @@ test("database assistant denial happens before schema inspection or its read-que
       }
     },
     terminalService: {
-      async deleteDetachedAgentChatThread() {
+      async deleteEphemeralAgentConversation() {
         providerCalls += 1;
       },
-      async requireAssistantAccess(sessionId, options) {
-        assert.equal(sessionId, "service-session");
+      async resolveAssistantPurpose(input, options) {
+        assert.equal(input.purpose, "database_assistant");
         assert.equal(options.vibe64User.username, "member");
         throw denied;
       },
-      async runDetachedAgentChatTurn() {
+      async runEphemeralAgentChatTurn() {
         providerCalls += 1;
       }
     },

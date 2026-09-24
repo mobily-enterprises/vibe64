@@ -5,7 +5,7 @@ function aiConnectionError(code, message, statusCode = 400) {
   return Object.assign(new Error(message), { code, statusCode });
 }
 
-function createAiConnectionService({ aiConnections, readAssistantCapabilities } = {}) {
+function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting } = {}) {
   function requireConnectionStore() {
     if (!aiConnections) {
       throw aiConnectionError(
@@ -187,21 +187,16 @@ function createAiConnectionService({ aiConnections, readAssistantCapabilities } 
       requireAssistantCatalog();
       const { provider } = await readOpenCodeProvider(modelProviderId, vibe64User);
       const connection = await aiConnections.upsertConnection({ ...input, modelProviderId }, { provider });
-      return { connection, ok: true };
+      // The connection is already saved. Report setup separately so a routing
+      // conflict never tells the person that their working key was rejected.
+      const routing = typeof initializeModelRouting === "function"
+        ? await initializeModelRouting({ engineIds: ["opencode"], vibe64User }).catch((error) => ({ ok: false, error: error.message }))
+        : { ok: false, error: "Open Model routing to finish choosing models for this connection." };
+      return { connection, ok: true, routing };
     },
     remove({ modelProviderId } = {}) {
       requireConnectionStore();
       return aiConnections.removeConnection(modelProviderId);
-    },
-    async helperModel({ modelProviderId, vibe64User, ...input } = {}) {
-      requireAssistantCatalog();
-      const { rows: models } = await readOpenCodeCapabilityPages({ currentUser: vibe64User, modelProviderId });
-      if (Object.hasOwn(input, "modelId") && typeof input.modelId !== "string") {
-        throw aiConnectionError("vibe64_helper_model_invalid", "Choose a helper model or Recommended.");
-      }
-      return aiConnections.helperModelSettings(modelProviderId, {
-        models, ...(Object.hasOwn(input, "modelId") ? { modelId: input.modelId } : {})
-      });
     },
     async modelAccess({ modelProviderId, ...input } = {}) {
       requireConnectionStore();

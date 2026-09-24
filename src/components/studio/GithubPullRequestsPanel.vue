@@ -112,7 +112,7 @@ async function published(source) {
       </v-btn>
       <v-btn
         v-if="available && createAvailable" color="primary" variant="tonal" rounded="pill" size="small" height="48" :prepend-icon="mdiPlus"
-        :disabled="dashboardContext.sourceOperationsSuspended || dashboardContext.assistantDirectAllowed === false" @click="createDialog = true"
+        :disabled="dashboardContext.sourceOperationsSuspended" @click="createDialog = true"
       >
         Create from session
       </v-btn>

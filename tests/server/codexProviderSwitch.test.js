@@ -51,15 +51,20 @@ test("native DeepSeek and GLM switches preserve history, tools and another conve
     fetch(`http://127.0.0.1:${server.address().port}/openai/responses`, options) });
   await writeFile(path.join(root, "config.toml"), "check_for_update_on_startup = false\n");
   const socket = path.join(root, "server.sock");
-  const child = spawn("codex", ["app-server", "--listen", `unix://${socket}`, "-c", "features.remote_control=false"], {
-    env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: root, LANG: "C.UTF-8" }, stdio: ["ignore", "ignore", "pipe"]
+  const child = spawn("codex", ["app-server", "--listen", `unix://${socket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false"], {
+    env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: root, LANG: "C.UTF-8" }, stdio: ["ignore", "ignore", "pipe"], detached: true
   });
   child.stderr.resume();
   let client;
   let observer;
+  let nextChild;
+  let nextClient;
   t.after(async () => {
-    observer?.close(); client?.close(); child.kill();
-    await new Promise((resolve) => child.exitCode !== null ? resolve() : child.once("exit", resolve));
+    observer?.close(); client?.close(); nextClient?.close();
+    for (const ownedChild of [child, nextChild].filter(Boolean)) {
+      try { process.kill(-ownedChild.pid, "SIGTERM"); } catch (error) { if (error.code !== "ESRCH") throw error; }
+      await new Promise((resolve) => ownedChild.exitCode !== null || ownedChild.signalCode !== null ? resolve() : ownedChild.once("exit", resolve));
+    }
     await adapter.close();
     server.closeAllConnections(); await new Promise((resolve) => server.close(resolve));
     await rm(root, { recursive: true, force: true });
@@ -176,16 +181,11 @@ test("native DeepSeek and GLM switches preserve history, tools and another conve
   const nextHome = path.join(root, "next-home");
   await mkdir(nextHome, { mode: 0o700 });
   const nextSocket = path.join(nextHome, "server.sock");
-  const nextChild = spawn("codex", ["app-server", "--listen", `unix://${nextSocket}`, "-c", "features.remote_control=false"], {
-    env: { PATH: process.env.PATH, HOME: nextHome, CODEX_HOME: nextHome, LANG: "C.UTF-8" }, stdio: ["ignore", "ignore", "pipe"]
+  nextChild = spawn("codex", ["app-server", "--listen", `unix://${nextSocket}`, "-c", "features.remote_control=false", "-c", "features.plugins=false"], {
+    env: { PATH: process.env.PATH, HOME: nextHome, CODEX_HOME: nextHome, LANG: "C.UTF-8" }, stdio: ["ignore", "ignore", "pipe"], detached: true
   });
   let nextDiagnostic = "";
   nextChild.stderr.on("data", (chunk) => { nextDiagnostic += chunk; });
-  let nextClient;
-  t.after(async () => {
-    nextClient?.close(); nextChild.kill();
-    await new Promise((resolve) => nextChild.exitCode !== null ? resolve() : nextChild.once("exit", resolve));
-  });
   const nextDeadline = Date.now() + 10_000;
   while (true) {
     try { await access(nextSocket); break; } catch {

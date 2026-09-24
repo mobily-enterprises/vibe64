@@ -1,5 +1,7 @@
 import {
   computed,
+  hasInjectionContext,
+  inject,
   unref
 } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
@@ -7,6 +9,8 @@ import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { VIBE64_DATABASE_LAYOUT_CHANGED_EVENT } from "../../shared/events.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
 
 const DATABASE_API_SUFFIX = "/vibe64/database";
 const DATABASE_SURFACE = "app";
@@ -25,9 +29,11 @@ function useVibe64DatabaseTools({
   sessionId = ""
 } = {}) {
   const paths = usePaths();
+  const viewer = hasInjectionContext() ? inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" }) : { actorKey: "local" };
+  const actorKey = computed(() => unref(viewer)?.actorKey || "");
   const normalizedSessionId = computed(() => String(unref(sessionId) || "").trim());
   const normalizedProjectSlug = computed(() => String(unref(projectSlug) || "").trim());
-  const enabled = computed(() => Boolean(unref(active) && normalizedSessionId.value));
+  const enabled = computed(() => Boolean(unref(active) && normalizedSessionId.value && actorKey.value));
   const apiPath = computed(() => paths.api(DATABASE_API_SUFFIX, {
     surface: DATABASE_SURFACE
   }));
@@ -37,10 +43,11 @@ function useVibe64DatabaseTools({
     enabled,
     fallbackLoadError: "The session database workspace could not be loaded.",
     path: computed(() => enabled.value ? sessionPath.value : ""),
-    queryKey: computed(() => ["vibe64", "database", normalizedProjectSlug.value, normalizedSessionId.value, "state"]),
+    queryKey: computed(() => ["vibe64", "database", normalizedProjectSlug.value, normalizedSessionId.value, actorKey.value, "state"]),
     realtime: {
-      event: VIBE64_DATABASE_LAYOUT_CHANGED_EVENT,
-      matches: ({ payload = {} } = {}) => (
+      events: [VIBE64_DATABASE_LAYOUT_CHANGED_EVENT, VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT],
+      matches: ({ event, payload = {} } = {}) => (
+        event !== VIBE64_DATABASE_LAYOUT_CHANGED_EVENT ||
         payload.projectSlug === normalizedProjectSlug.value && payload.sessionId === normalizedSessionId.value
       )
     },
@@ -261,7 +268,7 @@ function useVibe64DatabaseTools({
     saveOverview,
     saveSnippet,
     searchLookup,
-    state: computed(() => stateResource.data.value || null),
+    state: computed(() => actorKey.value ? stateResource.data.value || null : null),
     updateCell,
     updating: computed(() => updateCommand.isRunning === true)
   };

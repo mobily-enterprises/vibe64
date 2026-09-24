@@ -80,6 +80,14 @@ const cachedExplanation = {
 };
 
 describe("source explanation Material interaction", () => {
+  it("attributes answers to the effective helper model", async () => {
+    const html = await renderExplanationPanel({ explanation: { ...cachedExplanation,
+      executionProfile: { providerId: "opencode", model: "deepseek-chat" }
+    } });
+    expect(html).toContain("OpenCode · deepseek-chat");
+    expect(html).not.toContain("Codex ·");
+  });
+
   it.each([
     { answer: "body", explanation: cachedExplanation },
     {

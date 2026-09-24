@@ -28,11 +28,13 @@ const apiKey = ref("");
 const visible = ref(false);
 const confirmRemove = ref(false);
 const routingProposal = ref(false);
+const routingSetupError = ref("");
 watch(providerId, () => {
   apiKey.value = "";
   visible.value = false;
   confirmRemove.value = false;
   routingProposal.value = false;
+  routingSetupError.value = "";
 }, { immediate: true });
 async function save(remove = false) {
   try {
@@ -42,7 +44,10 @@ async function save(remove = false) {
     visible.value = false;
     confirmRemove.value = false;
     emit("changed");
-    if (!remove) routingProposal.value = true;
+    if (!remove) {
+      routingSetupError.value = result.routing?.ok === false ? result.routing.error : "";
+      routingProposal.value = true;
+    }
   } catch {
     // The shared command feedback owns errors; retain the form for retry.
   }
@@ -52,7 +57,7 @@ async function save(remove = false) {
 <template>
   <section aria-label="Codex providers" class="codex-providers">
     <ModelRoutingForm
-      v-if="routingProposal" :connection-id="providerId" :connection-label="provider?.label || providerId"
+      v-if="routingProposal" :connection-id="providerId" :connection-label="provider?.label || providerId" :connection-engines="['codex', 'claude']" :setup-error="routingSetupError"
       @busy="emit('busy', $event)" @close="routingProposal = false; emit('close')"
       @saved="routingProposal = false; emit('changed'); emit('close')"
     />

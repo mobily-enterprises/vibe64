@@ -1336,6 +1336,32 @@ test("Codex changeover restores its saved conversation and pauses its goal befor
   assert.ok(runtime.writes.some((write) => write.name === "codex_changeover_pause_goal" && write.value === ""));
 });
 
+for (const routed of [true, false]) {
+  test(`returning to DeepSeek in Codex preserves ${routed ? "the routed workflow's" : "legacy provider-specific"} native history`, async () => {
+    const runtime = fakeRuntime();
+    const resumed = [];
+    const provider = {
+      async ensureRuntime() { return { ...appServerRuntime(), modelProviderId: routed ? "openai" : "deepseek" }; },
+      async resumeThread(id) { resumed.push(id); return { id }; },
+      async startThread() { assert.fail("Returning to Codex must resume its retained history"); }
+    };
+    const result = await ensureCodexAppServerThreadForSession({ provider, runtime, workdir: "/repo/worktree",
+      observeThread() {},
+      session: { sessionId: "session-1", metadata: {
+        assistant_selection: JSON.stringify({ schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
+          modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` }),
+        ...(routed ? { codex_routing_home_provider: "openai" } : {}),
+        agent_identity_provider: "opencode", agent_identity_conversation_id: "ses_other",
+        agent_transport_id: "opencode_server", codex_conversation_id: "original-codex",
+        codex_conversation_workdir: "/repo/worktree", codex_deepseek_conversation_id: "legacy-deepseek",
+        codex_deepseek_conversation_workdir: "/repo/worktree"
+      } }
+    });
+    assert.equal(result.threadId, routed ? "original-codex" : "legacy-deepseek");
+    assert.deepEqual(resumed, [result.threadId]);
+  });
+}
+
 test("codex app-server bridge refreshes project hook trust when resuming a thread", async () => {
   const runtime = fakeRuntime();
   const providerCalls = [];

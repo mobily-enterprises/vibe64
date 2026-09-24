@@ -4,16 +4,22 @@ People can open one or more clearly separate, short-lived AI tasks for focused
 help without adding those exchanges to the main project conversation or
 session history.
 
+A host-provided conversation appears in the tab strip only while selected.
+Its host owns the entry point; ordinary chat headers and temporary-chat tabs
+do not keep a permanent shortcut. Returning to Main chat or a temporary chat
+hides the host conversation without deleting its saved history.
+
 ## Sources
 
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
+- `packages/vibe64-runtime/src/server/assistantRoutingStateUpgrade.js`
+- `tests/server/assistantRoutingStateUpgrade.unit.test.js`
 - `src/components/studio/vibe64-session/Vibe64ChatModeControls.vue`
 
 - `src/lib/vibe64AssistantHost.js`
 - `src/components/studio/Vibe64SessionPanel.vue`
 
 - `packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js`
-- `packages/vibe64-core/src/server/nativeHelperModel.js`
 
 - `packages/vibe64-runtime/src/server/codexAppServerProvider.js`
 - `packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js`
@@ -49,13 +55,63 @@ session history.
 ## Public contract
 
 Ordinary persistent temporary chats offer the same Plan, Code, Economy, Auto
-and optional review controls as main chat. Each keeps its own selection, routing
-preferences, pending request and native conversation. The shared routing
-coordinator uses the temporary conversation's existing write lock and transcript;
-it does not write main-chat history or alter main-chat selection. Native idle
+and optional review controls as main chat, through one icon in the bottom
+composer toolbar. Owners can open the shared Model routing overlay directly
+from its menu. Each keeps its own selection, routing
+preferences, pending request and retained native conversations. Creating an ordinary
+draft starts in Plan with review off, inherits only its parent's workflow, and
+does not require inference access to the parent's last model. The first routed Send resolves the submitting
+actor's destination. App-generated implementation and repair drafts explicitly
+select Code with review off, preserving the parent's workflow. Dedicated repairs
+retain their instructions and cannot change mode.
+The authenticated actor supplied by the HTTP turn action is captured with the
+routing request, so later automatic review retains the submitting user's access
+even when an owner reads the conversation or triggers reconciliation.
+The shared routing coordinator uses the temporary conversation's existing write
+lock and transcript; it does not write main-chat history or alter its selection. Native idle
 events and read-time reconciliation recover one eligible review after normal
-Code completion. Closing or stopping a chat cancels pending routing and review.
+Code completion. Polling can schedule it when the current coordinator admitted
+that Code request, even if its native idle event arrives later. After a backend
+restart, a completed Code request instead offers explicit review Retry/Skip.
+Closing or stopping a chat cancels pending routing and review.
+When routing stops before delivery, the local prompt returns to the composer;
+its next explicit Send uses a new message ID. Newer draft text and attachments
+are retained, and a clean cancellation does not appear as a failed message.
 Dedicated repair requests keep their own instructions and do not expose modes.
+
+Each ordinary temporary chat reads availability from the same central resolver as
+Send, using its own workflow, mode and custom override. Its menu labels the user's
+effective destination and Shared backup, rather than using the main chat's last
+model or an account-wide preview. Mode changes return refreshed decisions without
+inference. Explicit model/thinking edits update that mode's saved override; their
+availability is validated against the current catalogue. Auto requires choosing
+an explicit mode before customizing its model. A foreign backup cannot turn a
+Plan/Code override into a split-orchestrator pair. Configuration and connection changes refresh existing chats' decisions
+without replacing unsent drafts. Actor changes clear the old view and reload it;
+late responses from that view cannot alter the newly loaded chat with the same ID.
+Opening this workspace and restoring its history do not require access to the
+main chat's last model. An active turn reports its separate native steering
+permission; a collaborator may be unable to steer that turn while still having a
+shared route for the next request.
+
+Foreign Economy and Backup turns use the same changeover preparation and Send
+owner as Main chat, scoped to this chat's metadata and visible transcript. The
+previous native conversation is stopped and retained before selection changes;
+a failed stop leaves that selection unchanged. Returning resumes the recorded
+native conversation and sends missed or corrected visible messages with the
+ordinary authored request. No separate handover inference is added. Each retained
+binding stores its native ID, exact selection, settings and last message/run IDs.
+Codex routed histories retain their home; legacy external-provider histories keep
+their compatibility restriction even after an intervening foreign-engine turn.
+The manager keys temporary bindings separately from Main chat while providers
+continue to receive the real project session and exact native conversation ID.
+Close verifies stop and deletion for every visited binding, saving each successful
+removal. During routing it waits for a late native start and helper cleanup before
+removing the chat. Failed helper cleanup retains the parent record for another
+Close; Renew and Archive also retain sessions that still own helper cleanup.
+A failed later deletion remains retryable without repeating earlier
+successful deletions. Scoped receipt checks recover uncertain native admission,
+including while the accepted turn is still active.
 
 Each temporary task has its own model settings, attachments and message stream.
 User-facing temporary chats have the same capabilities, tools and project access
@@ -75,15 +131,12 @@ from sending the same work again. Native history reconciles replies completed
 while the browser was absent; incomplete replies remain visible as they arrive.
 Temporary conversation requests wait briefly for that coordinator instead of
 failing immediately on contention. A still-busy draft save retries automatically;
-a later successful save clears the earlier save error. Restoration observes
-`useVibe64MountedSessionData`'s shared `agentConnectionStatus` and starts only
-when it is `connected`, after provider preparation or reconnect reconciliation.
-It reads the current readiness on mount and watches later changes, so mounting
-after initialization needs no new notification. The session layer owns connection
-recovery; restoration has no separate socket-connect handler. A new session
-stays on main chat while its assistant prepares. Any assistant-operation
-contention after readiness still retries automatically without opening an empty
-temporary workspace or showing an error. Losing readiness cancels restoration
+a later successful save clears the earlier save error. Restoration starts when
+the session is available, independently of the main model's connection. It reads
+current readiness on mount and watches later changes; scoped native read errors
+remain attached to the affected conversation. Restoration has no separate
+socket-connect handler. Assistant-operation contention still retries without
+opening an empty temporary workspace or showing an error. Losing readiness cancels restoration
 retries and invalidates pending responses; recovery restores again. Changing
 sessions or unmounting also retires pending restoration. Genuine restoration
 failures retain the explicit retry action.
@@ -166,6 +219,7 @@ Long progress cannot push Stop or the composer out of view. The temporary
 workspace leaves the project session tabs and shared Save/Update activity
 available above it. Main chat stays outside the horizontally scrolling temporary
 tabs, so selecting or scrolling a task cannot cover the Main chat control.
+Main chat aligns with the other tab buttons above their horizontal scrollbar.
 Activity notices have a bounded height, and the temporary composer keeps its
 buttons visible while long drafts scroll within the input. Repair details start
 collapsed. The open Update repair replaces the duplicate repository error panel.
@@ -177,7 +231,9 @@ in the composer while retaining the full request and message identity for retry.
 Every product-owned repair entry, including project setup warnings, uses the
 shared Fix it with AI control and temporary-task sender. It opens, selects, and
 focuses a separate Temporary AI task immediately, even while the main assistant
-is working. Onboarding's create, inspect and adoption actions use that same
+is working. These entries and subsystem generation check the viewer's effective
+Code access, independently of the main chat's mode or personal connection.
+Onboarding's create, inspect and adoption actions use that same
 temporary-chat path. Each onboarding request opens a fresh chat. The task
 shows a concise user-facing repair request and a compact status heading while
 the AI works. Completion and verification results appear after the task stops.
@@ -268,7 +324,12 @@ project, session, worktree, History, or Genesis project conversation kind.
 The host can opt into native persistent retention without relaxing this scope;
 its own storage still owns discovery, transcript and explicit clearing.
 Codex runs that scope read-only with dynamic tools and inherited facilities
-disabled; OpenCode uses its hidden deny-all agent. Stop, read, wait, deletion,
+disabled; OpenCode retains its native tool definitions with approval required,
+and the session plugin rejects every host-conversation tool call before native
+execution. The guard also refuses unregistered conversations and applies through
+verified native ancestry. Without that plugin, the host agent remains deny-all.
+This preserves Zen's native request format without granting shell, filesystem,
+network, or subagent execution. Stop, read, wait, deletion,
 provider cleanup, and unchanged authored turns reuse the ordinary provider
 lifecycle. Codex deletion detaches the exact thread/provider from a shared
 process or requires verified exit when that runtime is no longer shared; it
@@ -276,6 +337,26 @@ retains the exact binding for retry when exit cannot be proven. The shared
 ephemeral message presentation and parameterized model selector let a composing
 product present that lifecycle without changing Temporary AI's project-writing
 contract.
+
+Router now uses the generic non-project seam with its existing bounded workload.
+Scoped Codex, Claude and OpenCode profiles use the exact resolved model; profile
+provenance covers scope, actor, connection and destination and cannot be restored
+as inference authority from a saved JSON snapshot. Input/output limits, deadlines
+and tool restrictions remain provider-enforced. Lifecycle operations carry the
+same scope and provider settings, without the parent session's runtime or binding.
+Codex wait retains the original deadline and interrupts the exact turn on timeout;
+OpenCode wait retains bounded-output validation even with an explicit timeout.
+Claude reports its managed execution ID before inference so the parent request
+can retain it for restart cleanup. Cleanup uses the captured native reference and
+must verify stop; it does not authorize another inference. Cancellation before
+native thread creation also releases any catalogue runtime owned by that scope.
+The manager also composes these scoped operations into one bounded helper turn,
+awaiting the parent's native-identity event before starting. Abort during startup
+stops the late native turn; abort while waiting stops that same scoped turn.
+Save naming now resolves effective Economy through this seam, with durable
+cleanup references in the existing Save task. Suggestions, source explanations
+and database callers still need migration from their older per-account settings
+and detached operations.
 
 Prompt suggestions, commit subjects, database help, and source explanations
 use the bounded low-cost execution profile in a private non-project workspace.
@@ -338,14 +419,16 @@ selection to the native temporary conversation without changing main metadata.
 OpenCode applies the selection only to the temporary native session; its shared
 process retains the main session's configuration. Catalogue failures are shown
 with Retry, and unavailable selections cannot be applied or executed.
+An unfinished native goal fixes the temporary chat's mode and model and suppresses
+automatic review. Its observed goal reaches the mode menu after restoration and
+polling; an omitted goal in a failed read cannot clear an earlier observation.
+Changing modes or models requires a successful native read. Configuration changes
+cannot move a paused native goal to another model on its next Send.
 
-Bounded Codex and Claude economy tasks resolve the connection's saved helper model before
-starting. Recommended selects the default; explicit models must remain available
-and support low thinking. An unavailable choice does not fall back to the main
-chat model. The resolved execution profile retains the model for that task.
-
-Claude Recommended selects Haiku. A chosen Claude model must be present in the
-live native catalogue and either support low effort or have no effort control.
-Its tool-free process uses the account's private home, without the project's
-command environment, Genesis prompt or driver. Changing the saved preference
-only affects new tasks; the selected model stays captured in an existing profile.
+Bounded tasks use the central resolver's exact destination. Their provider
+profiles validate that model and enforce workload limits without consulting a
+per-account helper preference or choosing an implicit fallback. The profile
+retains the model for that task. Codex requires low thinking; Claude validates
+low effort when the model exposes effort controls. Claude's tool-free process
+uses the selected account's private home without the project's command
+environment, Genesis prompt or driver. Routing changes affect new tasks.

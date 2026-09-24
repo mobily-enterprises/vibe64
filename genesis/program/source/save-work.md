@@ -9,6 +9,7 @@ Git commands.
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-runtime/src/server/agentWriteLock.js`
 - `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/sessionSaveCommitMessage.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
 - `packages/vibe64-terminals/src/server/sessionWorkSave.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
@@ -26,17 +27,27 @@ Git commands.
 ## Public contract
 
 Save captures tracked, staged, unstaged, and relevant untracked session work,
-asks the session's selected assistant to give that exact checkpoint a concise
+asks the workflow's effective Economy model to give that exact checkpoint a concise
 commit subject, and publishes one ordinary commit to the exact configured
 GitHub, managed-Git, or local-source authority. It refuses ambiguous authority,
 changed session history, dirty local authority, or a moving canonical branch.
 Assistant naming is optional: provider, account, invalid-title, or cleanup failures
 produce a visible fallback notice and a deterministic checkpoint-based subject.
-Members can Save when the selected AI connection is personal-only. The AI access
-check applies before generating the optional commit name; denied naming
-uses the same fallback. Repository authorization and write admission still apply.
-Failed temporary-thread ownership remains intact for safe cleanup; it does not
-prevent repository persistence. Git authority and checkpoint checks still apply.
+Members can Save when the main chat's current connection is personal-only.
+Repository Save and manual pull-request creation do not require AI access;
+their source-operation and GitHub permissions still apply.
+The chat-header Save control also remains usable after AI access is denied or
+startup fails. It still waits while assistant activity is unknown or being
+reconciled, and while a turn or repository operation is running.
+Naming resolves Economy, including an eligible shared Backup, before requesting
+its bounded tool-free profile. Its scoped conversation never changes the main
+chat's binding or history. Repository authorization and write admission still apply.
+The existing Save task retains the helper scope, exact selection, connection
+identity, native conversation/turn IDs and managed execution ID until deletion
+is confirmed. A new Save preserves that reference across its task reset and
+retries cleanup before another naming request; session close also retries it.
+Failed cleanup does not prevent repository persistence. Git authority and
+checkpoint checks still apply.
 Worktree edits made after capture are left as unsaved work on top of the named
 checkpoint. The non-force publication itself rejects a stale concurrent
 publisher; Save does not inspect sibling worktrees first. Progress and bounded

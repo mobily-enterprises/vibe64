@@ -214,6 +214,7 @@ function legacyCodexAssistantSelection() {
 }
 
 function createService({
+  initializeModelRouting,
   project,
   publishSessionChanged = async () => null,
   renewalActorResolver = null,
@@ -354,7 +355,7 @@ function createService({
     project,
     publishSessionChanged,
     resolveRenewalActor,
-    resolveSuccessorAssistantSelection,
+    resolveSuccessorAssistant: resolveSessionStart,
     setupRunner,
     terminals
   });
@@ -378,31 +379,26 @@ function createService({
     return legacyCodexAssistantSelection();
   }
 
-  async function resolveSuccessorAssistantSelection(input = {}, {
-    session = null,
-    vibe64User = null
-  } = {}) {
-    const requested = record(input);
-    const explicitlySelected = Object.keys(requested).length > 0;
-    const current = explicitlySelected
-      ? requested
-      : vibe64AssistantSelectionFromMetadata(session?.metadata);
-    const selection = await resolveAssistantSelection(
-      explicitlySelected
-        ? current
-        : {
-            agentId: current.agentId,
-            engineId: current.engineId,
-            modelId: current.modelId,
-            modelProviderId: current.modelProviderId,
-            variantId: current.variantId
-          },
-      vibe64User
-    );
-    await terminals.requireAssistantSelectionAccess(selection, {
-      vibe64User
+  async function resolveSessionStart(input = {}, { session = null, vibe64User = null } = {}) {
+    const explicitSelection = Object.keys(input.assistantSelection || {}).length
+      ? await resolveAssistantSelection(input.assistantSelection, vibe64User, { configuredOnly: true })
+      : null;
+    const previous = session ? assistantRoutingFromMetadata(session.metadata) : null;
+    const preferences = assistantRoutingPreferences({ mode: "plan", review: false,
+      workflowEngineId: input.workflowEngineId || explicitSelection?.engineId || previous?.workflowEngineId || "opencode",
+      ...(explicitSelection ? { override: explicitSelection } : {}) });
+    if (explicitSelection && explicitSelection.engineId !== preferences.workflowEngineId) {
+      throw new Error("The starting Plan model must use the chosen workflow orchestrator.");
+    }
+    const routingSetup = await initializeModelRouting({ engineIds: [preferences.workflowEngineId], vibe64User });
+    if (routingSetup?.ok === false) throw Object.assign(new Error(routingSetup.error), { code: routingSetup.code, statusCode: routingSetup.statusCode });
+    const decision = await terminals.resolveAssistantPurpose({ purpose: "plan", workflowEngineId: preferences.workflowEngineId,
+      ...(explicitSelection ? { override: { role: "plan", selection: explicitSelection } } : {}) }, { vibe64User });
+    if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
+    await terminals.requireAssistantSelectionAccess(decision.effectiveSelection, {
+      vibe64User, expectedConnectionIdentity: decision.connectionIdentity
     });
-    return selection;
+    return { assistantSelection: decision.effectiveSelection, assistantRouting: preferences };
   }
 
   async function sessionsOccupyingPolicySlots(runtime, openSessions = null) {
@@ -666,6 +662,12 @@ function createService({
       available: access.available === true,
       canRequestMessage: access.canRequestMessage === true,
       canUse: access.canUse === true,
+      nativeCanUse: access.nativeCanUse === true,
+      canUseAny: access.canUseAny === true,
+      currentMode: text(access.currentMode),
+      steering: access.steering === true,
+      purposes: JSON.parse(JSON.stringify(access.purposes || {}, (key, value) =>
+        ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value)),
       endpointCode: text(access.endpointCode),
       engineId: text(access.engineId),
       modelProviderId: text(access.modelProviderId),
@@ -708,7 +710,6 @@ function createService({
         const runtime = await project.createRuntime({ inspectSource: false });
         const prepared = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
           const context = await suggestionTerminalContext(runtime, sessionId, vibe64User);
-          await terminals.requireAssistantAccess(sessionId, context);
           const state = await readSessionMessageSuggestionState(runtime.store, sessionId);
           const current = suggestionById(state, suggestionId);
           if (current.status === "delivered") {
@@ -854,6 +855,14 @@ function createService({
         const currentSession = await runtime.getSession(sessionId, {
           inspectSource: false
         });
+        const conversations = await runtime.store.listSessionConversations(sessionId);
+        const routingRequests = [currentSession.metadata, ...conversations.map((record) => record.routingMetadata || {})]
+          .map((metadata) => JSON.parse(metadata?.assistant_routing_request || "null"));
+        if (routingRequests.some((request) => assistantRoutingStatusIsPending(request?.status) || request?.helper)) {
+          throw Object.assign(new Error("Finish or cancel pending chat routing and its cleanup before archiving this session."), {
+            code: "vibe64_assistant_routing_pending", retryable: true
+          });
+        }
         const renewalSessions = await runtime.store.listSessionsForRenewal();
         const reservedSuccessor = renewalSessions.find((session) => (
           ["renewal_pending", "renewal_activating"].includes(text(session.status)) &&
@@ -1043,14 +1052,7 @@ function createService({
         const pullRequest = input.pullRequestNumber == null ? null : await project.resolvePullRequestSource({
           number: input.pullRequestNumber, vibe64User
         });
-        const assistantSelection = await resolveAssistantSelection(
-          input.assistantSelection,
-          vibe64User,
-          { configuredOnly: true }
-        );
-        await terminals.requireAssistantSelectionAccess(assistantSelection, {
-          vibe64User
-        });
+        const { assistantSelection, assistantRouting } = await resolveSessionStart(input, { vibe64User });
         const runtime = await project.createRuntime(sessionRuntimeOptions(terminals));
         if (
           typeof project.developmentDatabasePolicy !== "function" ||
@@ -1070,6 +1072,7 @@ function createService({
           const session = await runtime.createSession({
             metadata: {
               ...(pullRequest ? { github_pull_request: JSON.stringify(pullRequest) } : {}),
+              [ASSISTANT_ROUTING_METADATA]: JSON.stringify(assistantRouting),
               [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(
                 assistantSelection
               ),
@@ -1322,6 +1325,7 @@ function createService({
             onRepositoryWriteAcquired: async () => {
               operationStarted = true;
               activeSaveOperations.set(sessionId, operationId);
+              const previous = await runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID);
               await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_SAVE_TASK_ID, {
                 event: {
                   kind: "save-started",
@@ -1329,6 +1333,7 @@ function createService({
                   status: "running"
                 },
                 patch: {
+                  assistantHelper: previous?.assistantHelper || null,
                   operationId,
                   status: "running"
                 },
@@ -1698,10 +1703,6 @@ function createService({
     async skipIntegrationSetupRequest(sessionId, input = {}) {
       return sessionResult(async () => {
         const runtime = await project.createRuntime({ inspectSource: false });
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
-        await terminals.requireAssistantAccess(sessionId, {
-          runtime, session, vibe64User: trustedAssistantUser(input)
-        });
         const integrationSetup = await runtime.store.skipIntegrationSetupRequest(sessionId, {
           turnId: input.turnId, requestId: input.requestId
         });
@@ -2049,8 +2050,11 @@ function createService({
           const session = await runtime.getSession(sessionId, { inspectSource: false });
           const current = vibe64AssistantSelectionFromMetadata(session.metadata);
           if (input.assistantRouting) {
-            const preferences = assistantRoutingPreferences(input.assistantRouting);
-            if (preferences.override?.engineId && preferences.override.engineId !== current.engineId) throw new Error("A mode override must use the current assistant.");
+            const previous = assistantRoutingFromMetadata(session.metadata);
+            const preferences = assistantRoutingPreferences({ ...input.assistantRouting,
+              workflowEngineId: previous?.workflowEngineId || current.engineId });
+            if (["plan", "code"].includes(preferences.mode) && preferences.override?.engineId &&
+                preferences.override.engineId !== preferences.workflowEngineId) throw new Error("Plan and Code overrides must use the workflow orchestrator.");
             if (preferences.mode === "auto") {
               const goal = await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User });
               if (goal?.goal && !["complete", "completed"].includes(goal.goal.status)) throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
@@ -2077,10 +2081,12 @@ function createService({
             turnActive: agentSession?.turn?.active === true
           });
           const routing = assistantRoutingFromMetadata(session.metadata);
-          if (routing && current.engineId === next.engineId && routing.mode === "auto") throw new Error("Choose Plan, Code, or Economy before selecting a custom model.");
+          const changingWorkflow = routing && (routing.workflowEngineId || current.engineId) !== next.engineId;
+          if (routing && !changingWorkflow && routing.mode === "auto") throw new Error("Choose Plan, Code, or Economy before selecting a custom model.");
           const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
-          if (current.engineId !== next.engineId && assistantRoutingStatusIsPending(routingRequest?.status)) {
-            throw new Error("Finish or cancel the pending request before changing orchestrators.");
+          if (assistantRoutingStatusIsPending(routingRequest?.status) ||
+              routingRequest?.status === "sent" && routingRequest.review && routingRequest.resolvedMode === "code") {
+            throw new Error("Finish or cancel the pending request and review before changing assistants.");
           }
           if (current.engineId !== next.engineId ||
               current.engineId === "codex" && !session.metadata.codex_routing_home_provider && current.modelProviderId !== next.modelProviderId) {
@@ -2091,7 +2097,8 @@ function createService({
           }
           if (routing) await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify({
             mode: routing.mode, review: routing.review,
-            ...(current.engineId === next.engineId ? { override: next } : {})
+            workflowEngineId: next.engineId,
+            ...(!changingWorkflow ? { override: next } : {})
           }));
           await runtime.store.writeMetadataValue(
             sessionId,

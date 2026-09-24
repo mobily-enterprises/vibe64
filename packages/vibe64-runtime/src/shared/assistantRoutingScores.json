@@ -1,0 +1,20 @@
+{
+  "defaultScores": { "plan": 2, "code": 2, "economy": 2, "router": 2 },
+  "models": [
+    { "engineId": "codex", "modelProviderId": "openai", "modelId": "gpt-6-astra", "scores": { "plan": 10, "code": 8, "economy": 3, "router": 3 } },
+    { "engineId": "codex", "modelProviderId": "openai", "modelId": "gpt-6-sol", "scores": { "plan": 9, "code": 9, "economy": 5, "router": 5 } },
+    { "engineId": "codex", "modelProviderId": "openai", "modelId": "gpt-6-luna", "scores": { "plan": 6, "code": 6, "economy": 8, "router": 8 } },
+    { "engineId": "codex", "modelProviderId": "deepseek", "modelId": "deepseek-flash", "scores": { "plan": 8, "code": 10, "economy": 10, "router": 10 } },
+    { "engineId": "codex", "modelProviderId": "zai-coding-plan", "modelId": "glm-5.3", "scores": { "plan": 7, "code": 7, "economy": 6, "router": 6 } },
+    { "engineId": "claude", "modelProviderId": "anthropic", "modelId": "opus", "scores": { "plan": 10, "code": 8, "economy": 3, "router": 3 } },
+    { "engineId": "claude", "modelProviderId": "anthropic", "modelId": "sonnet", "scores": { "plan": 9, "code": 9, "economy": 5, "router": 5 } },
+    { "engineId": "claude", "modelProviderId": "anthropic", "modelId": "haiku", "scores": { "plan": 6, "code": 6, "economy": 8, "router": 8 } },
+    { "engineId": "claude", "modelProviderId": "deepseek", "modelId": "deepseek-flash", "scores": { "plan": 8, "code": 10, "economy": 10, "router": 10 } },
+    { "engineId": "claude", "modelProviderId": "zai-coding-plan", "modelId": "glm-5.3", "scores": { "plan": 7, "code": 7, "economy": 6, "router": 6 } },
+    { "engineId": "opencode", "modelProviderId": "opencode", "modelId": "big-pickle", "scores": { "plan": 1, "code": 1, "economy": 1, "router": 1 } },
+    { "engineId": "opencode", "modelProviderId": "deepseek", "modelId": "deepseek-flash", "scores": { "plan": 8, "code": 10, "economy": 10, "router": 10 } },
+    { "engineId": "opencode", "modelProviderId": "anthropic", "modelId": "claude-haiku-4-5", "scores": { "plan": 6, "code": 6, "economy": 8, "router": 8 } },
+    { "engineId": "opencode", "modelProviderId": "zai", "modelId": "glm-4.7-flash", "scores": { "plan": 7, "code": 7, "economy": 6, "router": 6 } },
+    { "engineId": "opencode", "modelProviderId": "zai-coding-plan", "modelId": "glm-5.3-flash", "scores": { "plan": 7, "code": 7, "economy": 6, "router": 6 } }
+  ]
+}

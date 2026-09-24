@@ -9,6 +9,7 @@ vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
 }));
 
 import { useVibe64TemporaryAi } from "../../src/composables/useVibe64TemporaryAi.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
 const SESSION_PATH = "/api/app/project-a/vibe64/sessions/session-1";
 const CONVERSATION_PATH = `${SESSION_PATH}/temporary-conversations/conversation-1`;
@@ -24,6 +25,7 @@ function mountTemporaryAi({
   assistantReady = ref(true),
   socket = new EventEmitter(),
   openTask = true,
+  viewer = ref({ actorKey: "owner" }),
   sessionId = () => "session-1"
 } = {}) {
   let temporary;
@@ -46,6 +48,7 @@ function mountTemporaryAi({
     }
   });
   app.provide("jskit.realtime.runtime.client.socket", socket);
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
   app.provide(routeLocationKey, { params: { slug: "project-a" } });
   app.mount({});
   mountedApps.add(app);
@@ -82,6 +85,34 @@ describe("temporary AI mounted lifetime", () => {
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("reloads per-conversation access for a new actor and ignores the old actor's late turn", async () => {
+    const viewer = ref({ actorKey: "owner" });
+    const started = Promise.withResolvers();
+    const record = { conversationId: "conversation-1", status: "ready", messages: [],
+      routingMetadata: { assistant_routing: '{"mode":"code","workflowEngineId":"codex"}' },
+      purposes: { code: { available: true, effectiveSelection: { engineId: "codex", modelId: "deepseek-flash" } } } };
+    http.request.mockImplementation(async (_path, options) => {
+      if (options?.method === "POST") return started.promise;
+      return { conversations: [{ ...record, purposes: viewer.value.actorKey === "owner" ? record.purposes : {
+        code: { available: true, effectiveSelection: { engineId: "opencode", modelId: "big-pickle" } }
+      } }] };
+    });
+    const { temporary } = mountTemporaryAi({ viewer, openTask: false });
+    await vi.waitFor(() => expect(temporary.tasks.value).toHaveLength(1));
+    temporary.updateDraft("conversation-1", "Implement the agreed design");
+    const sending = temporary.send("conversation-1");
+    await vi.waitFor(() => expect(http.request.mock.calls.some(([, options]) => options?.method === "POST")).toBe(true));
+    viewer.value = { actorKey: "member" };
+    expect(temporary.tasks.value).toEqual([]);
+    await vi.waitFor(() => expect(temporary.tasks.value[0]?.purposes.code.effectiveSelection.modelId).toBe("big-pickle"));
+    started.resolve({ ok: true, status: "inProgress", runId: "owner-run" });
+    expect(await sending).toBe(false);
+    expect(temporary.tasks.value[0].runId).toBeUndefined();
+    expect(temporary.tasks.value[0].messages).toEqual([]);
+    viewer.value = { actorKey: "" };
+    expect(temporary.tasks.value).toEqual([]);
   });
 
   it("shows a pending message throughout conversation creation and turn startup, then reconciles it once", async () => {
@@ -167,7 +198,7 @@ describe("temporary AI mounted lifetime", () => {
     await temporary.send(task.id);
     const messageId = temporary.activeTask.value.delivery.state.messages[0].id;
     temporary.updateDraft(task.id, "My next question.");
-    expect(temporary[action](task.id, messageId)).toBe(true);
+    expect(await temporary[action](task.id, messageId)).toBe(true);
     expect(temporary.activeTask.value.delivery.state.messages).toEqual([]);
     expect(temporary.activeTask.value.draft).toBe(action === "editMessage"
       ? "Repair this conflict.\n\nMy next question." : "My next question.");
@@ -480,6 +511,7 @@ describe("temporary AI mounted lifetime", () => {
     expect(http.request.mock.calls.some(([, options]) => options.method === "DELETE")).toBe(false);
     http.request.mockResolvedValueOnce({ ok: true, conversations: [{
       conversationId: "conversation-1", title: "Saved task", status: "inProgress", runId: "turn-1",
+      goal: { status: "active", objective: "Finish the repair" },
       draft: "My next question", messages: [{ id: "user", role: "user", text: "Repair this conflict." }]
     }] });
     http.request.mockResolvedValueOnce({ ok: true, status: "inProgress", runId: "turn-1", messages: [
@@ -490,8 +522,9 @@ describe("temporary AI mounted lifetime", () => {
     await vi.advanceTimersByTimeAsync(0);
     const chat = restored.temporary.tasks.value.find((candidate) => candidate.conversationId === "conversation-1");
     expect(chat).toMatchObject({ busy: true, draft: "My next question", title: "Saved task" });
+    expect(chat.goal).toMatchObject({ status: "active", objective: "Finish the repair" });
     expect(chat.messages.at(-1).text).toBe("Working on");
-    http.request.mockResolvedValueOnce({ ok: true, status: "completed", messages: [
+    http.request.mockResolvedValueOnce({ ok: true, status: "completed", goal: null, messages: [
       { id: "user", role: "user", text: "Repair this conflict." },
       { id: "reply", role: "assistant", text: "Work finished." }
     ] });
@@ -500,6 +533,7 @@ describe("temporary AI mounted lifetime", () => {
     await vi.advanceTimersByTimeAsync(650);
     expect(restored.temporary.activeTask.value.messages.at(-1).text).toBe("Work finished.");
     expect(restored.temporary.activeTask.value.busy).toBe(false);
+    expect(restored.temporary.activeTask.value.goal).toBeNull();
     expect(restored.temporary.activeTask.value.draft).toBe("My next question");
   });
 

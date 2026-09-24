@@ -568,7 +568,7 @@ describe("useVibe64SessionRenewal", () => {
     const { controller, scope } = mountRenewal();
     controller.draftText.value = "Reviewed handover";
 
-    await controller.confirm(ASSISTANT_SELECTION);
+    await controller.confirm("codex");
 
     expect(renewalHarness.patchRun).toHaveBeenCalledWith(expect.objectContaining({
       body: expect.objectContaining({
@@ -579,7 +579,7 @@ describe("useVibe64SessionRenewal", () => {
     }));
     expect(renewalHarness.postRun).toHaveBeenCalledWith(expect.objectContaining({
       body: expect.objectContaining({
-        assistantSelection: ASSISTANT_SELECTION,
+        workflowEngineId: "codex",
         expectedHash: SAVED_HASH,
         expectedRevision: 2
       }),

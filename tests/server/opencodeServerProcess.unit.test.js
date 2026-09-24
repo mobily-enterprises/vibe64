@@ -10,6 +10,7 @@ import {
 
 import {
   OPENCODE_ECONOMY_AGENT_ID,
+  OPENCODE_EPHEMERAL_AGENT_ID,
   OPENCODE_EXPECTED_VERSION,
   createOpenCodeServerProcess,
   openCodeInlineConfig,
@@ -273,6 +274,18 @@ test("OpenCode process environment is minimal and injects Vibe64's deny-all help
     }
   });
   assert.equal(config.snapshot, false);
+});
+
+test("non-project OpenCode tools stay behind approval and require the execution guard", () => {
+  const unguarded = JSON.parse(openCodeInlineConfig());
+  assert.equal(unguarded.agent[OPENCODE_EPHEMERAL_AGENT_ID].permission["*"], "deny");
+  assert.equal(unguarded.plugin, undefined);
+
+  const guarded = JSON.parse(openCodeInlineConfig({ sessionEnvironmentRegistry: "/private/sessions.json" }));
+  assert.equal(guarded.agent[OPENCODE_EPHEMERAL_AGENT_ID].permission["*"], "ask");
+  assert.equal(guarded.plugin.length, 1);
+  assert.match(guarded.plugin[0], /opencodeSessionEnvironmentPlugin\.js$/u);
+  assert.equal(guarded.agent[OPENCODE_ECONOMY_AGENT_ID].permission["*"], "deny");
 });
 
 test("OpenCode forces Z.AI API and Coding Plan through distinct canonical billing routes", () => {

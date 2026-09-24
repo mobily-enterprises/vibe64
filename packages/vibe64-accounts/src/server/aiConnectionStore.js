@@ -182,7 +182,7 @@ function normalizedState(value = null) {
       apiKey: key,
       billingLabel: text(candidate.billingLabel) || policy?.billingLabel || "",
       createdAt: text(candidate.createdAt),
-      helperModelId: text(candidate.helperModelId),
+      ...(Object.hasOwn(candidate, "helperModelId") ? { helperModelId: candidate.helperModelId } : {}),
       economyModelId: text(candidate.economyModelId) || policy?.economyModelId || "",
       endpointCode: OPENCODE_NATIVE_ENDPOINT_CODE,
       fingerprint: connectionFingerprint(id, key),
@@ -275,7 +275,6 @@ function publicConnection(connection = {}, id = "", options = {}) {
     canonicalUrl: "",
     builtIn,
     connected: Boolean(route),
-    helperModelId: text(connection.helperModelId),
     economyModelId: route?.economyModelId || "",
     endpointCode: text(connection.endpointCode),
     fingerprint: text(connection.fingerprint),
@@ -446,7 +445,14 @@ function createAiConnectionStore({
   }
 
   function mutate(operation) {
-    const pending = mutation.catch(() => null).then(operation);
+    const pending = mutation.catch(() => null).then(async () => {
+      const state = await readState();
+      if (Object.values(state.connections).some((connection) => Object.hasOwn(connection, "helperModelId"))) {
+        throw connectionVerificationError("vibe64_ai_routing_upgrade_required",
+          "Stop the services and run the application state upgrade before changing AI connections.", 409);
+      }
+      return operation();
+    });
     mutation = pending.catch(() => null);
     return pending;
   }
@@ -594,20 +600,16 @@ function createAiConnectionStore({
         activeZenCheck: zenModelChecks.has(id)
       }) : null;
       const requestedModelId = text(modelId);
-      const helperModelId = connection
-        ? text(connection.helperModelId) || assistantProviderPolicy({ id, defaultModelId: connection.economyModelId }).economyModelId
-        : "";
       const enabledModelIds = new Set(modelIds([
         access?.recommendedModelId,
         ...modelIds(access?.enabledModelIds)
       ]));
       const modelAvailable = !requestedModelId || !access || access.mode === "all" ||
         enabledModelIds.has(requestedModelId);
-      return route && modelAvailable ? {
+      return route ? {
         accessLabel: route.accessLabel,
-        available: true,
-        economyModelId: !access || access.mode === "all" || enabledModelIds.has(helperModelId)
-          ? helperModelId : "",
+        available: modelAvailable,
+        connectionIdentity: `opencode:${id}:${connection.fingerprint}`,
         endpointCode: route.endpointCode,
         ownerOnly: route.ownerOnly
       } : {
@@ -615,60 +617,6 @@ function createAiConnectionStore({
         ownerOnly: true
       };
     },
-    async helperModelSettings(value = "", { models = [], modelId } = {}) {
-      const id = providerId(value);
-      return mutate(async () => {
-        const state = await readState();
-        const connection = stateConnection(state, id);
-        if (!connection) {
-          throw connectionVerificationError(
-            "vibe64_helper_model_disconnected",
-            "Connect this AI account before choosing its helper model.",
-            400
-          );
-        }
-        const access = connectionModelAccess(connection, id);
-        const enabledModelIds = new Set(modelIds([
-          access?.recommendedModelId,
-          ...modelIds(access?.enabledModelIds)
-        ]));
-        const availableModels = models.filter((model) => (
-          model.status === "available" &&
-          (!access || access.mode === "all" || enabledModelIds.has(model.id))
-        ));
-        if (modelId !== undefined) {
-          if (typeof modelId !== "string" || modelId.length > 200 ||
-              (modelId && !availableModels.some((model) => model.id === modelId))) {
-            throw connectionVerificationError(
-              "vibe64_helper_model_invalid",
-              "Choose an available, enabled helper model or Recommended.",
-              400
-            );
-          }
-          if (connection.builtIn && modelId) {
-            throw connectionVerificationError(
-              "vibe64_helper_model_included",
-              "The included connection uses its recommended helper model. Add an API key to choose other models.",
-              400
-            );
-          }
-          if (!connection.builtIn) {
-            connection.helperModelId = modelId;
-            connection.updatedAt = new Date().toISOString();
-            state.connections[id] = connection;
-            await writeState(state);
-            await onConnectionChanged({ modelProviderId: id, reason: "helper-model-updated" });
-          }
-        }
-        return {
-          ok: true,
-          modelId: text(connection.helperModelId),
-          recommendedModelId: assistantProviderPolicy({ id, defaultModelId: connection.economyModelId }).economyModelId,
-          models: connection.builtIn ? [] : availableModels.map(({ id: modelId, label }) => ({ id: modelId, label }))
-        };
-      });
-    },
-
     async removeConnection(value = "") {
       const id = providerId(value);
       return mutate(async () => {
@@ -773,7 +721,6 @@ function createAiConnectionStore({
           apiKey: key,
           billingLabel: route.billingLabel,
           createdAt: text(previous?.createdAt) || now,
-          helperModelId: text(previous?.helperModelId),
           economyModelId: route.economyModelId,
           endpointCode: route.endpointCode,
           fingerprint,

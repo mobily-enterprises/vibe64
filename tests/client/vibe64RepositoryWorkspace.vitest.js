@@ -622,23 +622,23 @@ describe("Vibe64 Repository workspace", () => {
     ]);
 
     expect(repositoryWorkspace).toContain("Vibe64TemporaryAiFixAction");
-    expect(repositoryWorkspace).toContain(':disabled="resolvingUpdateProblem || dashboard.assistantDirectAllowed === false"');
-    expect(repositoryWorkspace).toContain("dashboard.assistantRestrictionMessage");
+    expect(repositoryWorkspace).toContain(':disabled="resolvingUpdateProblem || dashboard.assistantCodeAllowed === false"');
+    expect(repositoryWorkspace).toContain("dashboard.assistantCodeRestrictionMessage");
     expect(repositoryWorkspace).not.toMatch(/resolve conflict manually|accept incoming|accept current/iu);
     expect(autopilotView).toContain("requestTemporaryAi: fixRepositoryError");
     expect(autopilotView).toContain("workspace.startTask(options)");
     expect(autopilotView).toContain('emit("chat-attention")');
   });
 
-  it("disables AI-backed Save for restricted members without restricting native Update", async () => {
+  it("uses Code for AI repair without restricting native Save and Update", async () => {
     const [repositoryWorkspace, repositoryComposable] = await Promise.all([
       source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
       source("src/composables/useVibe64RepositoryWorkspace.js")
     ]);
 
-    expect(repositoryWorkspace).toContain("dashboard.value.assistantDirectAllowed === false");
-    expect(repositoryWorkspace).toContain("return dashboard.value.assistantRestrictionMessage");
-    expect(repositoryComposable).toContain("context.value.assistantDirectAllowed === false");
+    expect(repositoryWorkspace).toContain("dashboard.value.assistantCodeAllowed === false");
+    expect(repositoryWorkspace).toContain("dashboard.assistantCodeRestrictionMessage");
+    expect(repositoryComposable).not.toContain("assistantDirectAllowed");
     expect(repositoryWorkspace).toContain(':disabled="repositoryOperationBusy"');
     expect(repositoryWorkspace).not.toContain('assistantDirectAllowed === false || repositoryOperationBusy');
   });

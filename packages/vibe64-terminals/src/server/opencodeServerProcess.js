@@ -198,9 +198,19 @@ function openCodeInlineConfig({
   const economySubagents = openCodeEconomySubagents(providerConnections);
   return JSON.stringify({
     ...OPENCODE_INLINE_CONFIG_BASE,
-    ...(Object.keys(economySubagents).length > 0
-      ? { agent: { ...OPENCODE_INLINE_CONFIG_BASE.agent, ...economySubagents } }
-      : {}),
+    agent: {
+      ...OPENCODE_INLINE_CONFIG_BASE.agent,
+      ...economySubagents,
+      ...(text(sessionEnvironmentRegistry) ? {
+        // Preserve OpenCode's native tool definitions. The session plugin rejects
+        // every ephemeral tool call before execution; "deny" removes the tools
+        // from the provider request and Zen rejects that request on its free tier.
+        [OPENCODE_EPHEMERAL_AGENT_ID]: {
+          ...OPENCODE_INLINE_CONFIG_BASE.agent[OPENCODE_EPHEMERAL_AGENT_ID],
+          permission: { "*": "ask" }
+        }
+      } : {})
+    },
     ...(text(sessionEnvironmentRegistry)
       ? { plugin: [OPENCODE_SESSION_ENVIRONMENT_PLUGIN_URL] }
       : {}),

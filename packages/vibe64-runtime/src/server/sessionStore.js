@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { parseIntegrationSetupRequest } from "../shared/integrationSetupRequest.js";
 import { defineVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "../shared/assistantSelection.js";
-import { copyFile, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, cp, lstat, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import {
@@ -1521,8 +1521,8 @@ function createVibe64SessionStore({
     };
   }
 
-  async function withExtractedSessionArchive(record, operation) {
-    const extractionRoot = path.join(paths().sessionsRoot, ".archive-read", `${record.sessionId}-${randomUUID()}`);
+  async function withExtractedSessionArchive(record, operation, { temporaryRoot = "" } = {}) {
+    const extractionRoot = path.join(temporaryRoot || path.join(paths().sessionsRoot, ".archive-read"), `${record.sessionId}-${randomUUID()}`);
     const extractedSessionRoot = path.join(extractionRoot, record.sessionId);
     try {
       await mkdir(extractionRoot, {
@@ -4777,6 +4777,134 @@ function createVibe64SessionStore({
     ));
   }
 
+  // The stopped-service upgrade owns backups and publication. This operation
+  // only stages routing changes, using this store's native/archive layout.
+  async function prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform }) {
+    const relativeScratch = path.relative(normalizedStateRoot, temporaryRoot || normalizedStateRoot);
+    if (!path.isAbsolute(temporaryRoot || "") || typeof transform !== "function" ||
+        !(relativeScratch === ".." || relativeScratch.startsWith(`..${path.sep}`))) {
+      throw new Error("Routing upgrade requires a transform and scratch directory outside project state.");
+    }
+    const checkedPath = async (filePath, directory = false) => {
+      let info;
+      try { info = await lstat(filePath); } catch (error) {
+        if (isMissingPathError(error)) return false;
+        throw error;
+      }
+      if (directory ? !info.isDirectory() : !info.isFile()) {
+        throw new Error(`Routing upgrade requires a regular ${directory ? "directory" : "file"}: ${filePath}`);
+      }
+      return true;
+    };
+    const inventory = async (root) => {
+      if (!await checkedPath(root, true)) return [];
+      const entries = await readDirectoryEntries(root);
+      if (entries.some((entry) => entry.isSymbolicLink())) {
+        throw new Error(`Routing upgrade inventory contains a symbolic link: ${root}. Inspect it before upgrading.`);
+      }
+      return entries.sort((left, right) => left.name.localeCompare(right.name));
+    };
+    const readRegularText = async (filePath) => await checkedPath(filePath) ? readTextIfExists(filePath) : "";
+    await checkedPath(temporaryRoot, true);
+    const updates = [];
+    const inspect = async (sessionPaths) => {
+      await checkedPath(sessionPaths.sessionRoot, true);
+      await checkedPath(sessionPaths.manifestPath);
+      await readManifestFromPaths(sessionPaths);
+      await inventory(sessionPaths.metadataRoot);
+      const metadata = await readMetadataFromPaths(sessionPaths);
+      const conversations = [];
+      for (const entry of await inventory(sessionPaths.conversationsRoot)) {
+        if (!entry.isDirectory()) continue;
+        const filePath = path.join(conversationPaths(sessionPaths, entry.name).conversationRoot, "conversation.json");
+        const original = await readRegularText(filePath);
+        if (original) {
+          let record;
+          try { record = JSON.parse(original); }
+          catch { throw new Error(`Invalid temporary conversation record: ${filePath}. Inspect it before upgrading routing.`); }
+          if (!isPlainObject(record)) throw new Error(`Invalid temporary conversation record: ${filePath}.`);
+          if (record.conversationId !== entry.name) throw new Error(`Temporary conversation identity does not match ${filePath}.`);
+          conversations.push({ filePath, original, record });
+        }
+      }
+      const next = await transform({ sessionId: sessionPaths.sessionId, metadata: { ...metadata },
+        conversations: conversations.map(({ record }) => structuredClone(record)) });
+      if (!isPlainObject(next)) throw new Error("Routing upgrade transform must return metadata/conversation patches.");
+      const changes = [];
+      for (const [name, value] of Object.entries(next.metadata || {})) {
+        if (!["assistant_routing", "assistant_routing_request", "assistant_routing_goal"].includes(name) || typeof value !== "string") {
+          throw new Error("Routing upgrade cannot change unrelated session metadata.");
+        }
+        if (value === metadata[name]) continue;
+        const filePath = metadataFilePath(sessionPaths, name);
+        changes.push({ filePath, original: await checkedPath(filePath) ? await readRegularText(filePath) : null, contents: `${value}\n` });
+      }
+      for (const record of next.conversations || []) {
+        const previous = conversations.find((entry) => entry.record.conversationId === record.conversationId);
+        if (!previous) throw new Error("Routing upgrade cannot create or replace an unknown temporary conversation.");
+        if (JSON.stringify(previous.record) === JSON.stringify(record)) continue;
+        changes.push({ filePath: previous.filePath, original: previous.original, contents: `${JSON.stringify(record)}\n` });
+      }
+      return changes;
+    };
+    const rootPaths = paths();
+    await checkedPath(normalizedStateRoot, true);
+    await checkedPath(rootPaths.sessionsRoot, true);
+    for (const root of [rootPaths.activeSessionsRoot, rootPaths.closingSessionsRoot]) {
+      for (const name of sortedDirectoryNames(await inventory(root), isValidVibe64SessionId)) {
+        updates.push(...await inspect(pathsForSessionRoot(name, path.join(root, name))));
+      }
+    }
+    const inspectArchives = async (root) => {
+      for (const entry of await inventory(root)) {
+        const filePath = path.join(root, entry.name);
+        if (entry.isDirectory()) { await inspectArchives(filePath); continue; }
+        if (!entry.isFile() || !entry.name.endsWith(".tar.gz")) continue;
+        const sessionId = assertValidVibe64SessionId(entry.name.slice(0, -".tar.gz".length));
+        const metadataPath = filePath.slice(0, -".tar.gz".length) + ".json";
+        const rawRecord = await readRegularText(metadataPath);
+        if (!rawRecord) throw new Error(`Session archive ${sessionId} is incomplete. Finish archive recovery before upgrading.`);
+        let parsed;
+        try { parsed = JSON.parse(rawRecord); }
+        catch { throw new Error(`Invalid session archive record: ${metadataPath}. Inspect it before upgrading routing.`); }
+        const record = sessionArchiveRecordFromJson(parsed, { archivePath: filePath, metadataPath });
+        if (record.sessionId !== sessionId) throw new Error(`Session archive identity does not match ${filePath}.`);
+        await validateSessionArchive(filePath);
+        await withExtractedSessionArchive(record, async (sessionPaths) => {
+          const changes = await inspect(sessionPaths);
+          if (!changes.length) return;
+          for (const change of changes) {
+            await mkdir(path.dirname(change.filePath), { recursive: true, mode: 0o700 });
+            await writeFile(change.filePath, change.contents, { mode: 0o600 });
+          }
+          const replacementPath = path.join(temporaryRoot, `${randomUUID()}.tar.gz`);
+          const result = await runCommand("tar", ["-czf", replacementPath, "-C", path.dirname(sessionPaths.sessionRoot), "."], {
+            allowedRoots: [temporaryRoot], cwd: normalizedProjectContextRoot
+          });
+          if (!result.ok) throw new Error(`Cannot stage upgraded archive for ${sessionId}.`);
+          await validateSessionArchive(replacementPath);
+          updates.push({ filePath, replacementPath });
+        }, { temporaryRoot });
+      }
+    };
+    for (const entry of await inventory(renewalStateRoot())) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const sessionId = assertValidVibe64SessionId(entry.name.slice(0, -".json".length));
+      const filePath = renewalStatePath(sessionId);
+      const original = await readRegularText(filePath);
+      let renewal;
+      try { renewal = JSON.parse(original); }
+      catch { throw new Error(`Invalid session renewal record: ${filePath}. Inspect it before upgrading routing.`); }
+      if (!isPlainObject(renewal) || renewal.sessionId !== sessionId) throw new Error(`Session renewal identity does not match ${filePath}.`);
+      const next = await transform({ sessionId, metadata: {}, conversations: [], renewal: structuredClone(renewal) });
+      if (next.renewal && JSON.stringify(next.renewal) !== JSON.stringify(renewal)) {
+        updates.push({ filePath, original, contents: `${JSON.stringify(next.renewal)}\n` });
+      }
+    }
+    await inspectArchives(rootPaths.archivedSessionsRoot);
+    return updates;
+  }
+
   return {
     createSession,
     createRenewalPendingSession,
@@ -4785,6 +4913,7 @@ function createVibe64SessionStore({
     commitRenewalSuccessor,
     publishSessionArchive,
     prepareRenewalSessionArchive,
+    prepareAssistantRoutingStateUpgrade,
     conversationMessageIdExists,
     deleteMetadataValue,
     deleteMetadataValues,

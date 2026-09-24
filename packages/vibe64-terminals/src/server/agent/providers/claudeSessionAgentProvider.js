@@ -16,7 +16,6 @@ import {
   resizeTerminalSession, subscribeTerminalSession, writeTerminalSessionText
 } from "@local/vibe64-execution/server/terminalSessions";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
-import { createNativeHelperModelStore, CLAUDE_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/nativeHelperModel";
 import { resolveVibe64SystemRoot } from "@local/vibe64-core/server/studioRoots";
 import { STUDIO_MANAGED_CLAUDE_COMMAND } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeFlagSettings, createClaudeCodeProcess } from "../../claudeCodeProcess.js";
@@ -345,7 +344,7 @@ function createClaudeSessionAgentProvider({
     }
   }
 
-  async function entryFor(context, conversationId = "", { create = false } = {}) {
+  async function entryFor(context, conversationId = "", { create = false, cleanupExecutionId } = {}) {
     const ctx = await contextFor(context);
     const main = !conversationId || conversationId === ctx.session?.metadata?.claude_conversation_id;
     const id = conversationId || text(ctx.session?.metadata?.claude_conversation_id) ||
@@ -358,11 +357,12 @@ function createClaudeSessionAgentProvider({
       return entry;
     }
     const saved = ctx.session?.metadata?.[`claude_conversation_${id}`];
-    if (!main && !saved && !create) throw error("This Claude conversation is unavailable.");
+    const recoveringCleanup = ctx.assistantScope && cleanupExecutionId !== undefined;
+    if (!main && !saved && !create && !recoveringCleanup) throw error("This Claude conversation is unavailable.");
     const state = saved ? JSON.parse(saved) : {};
-    const entry = { id, key, main, persistent: state.persistent === true, context: ctx, process: null, executionId: state.executionId || "",
+    const entry = { id, key, main, persistent: state.persistent === true, context: ctx, process: null, executionId: state.executionId || (recoveringCleanup ? cleanupExecutionId : ""),
       accountIdentities: state.accountIdentities || (state.accountIdentity ? { anthropic: state.accountIdentity } : {}),
-      accountIdentity: state.accountIdentity || "", sent: state.sent === true, nativeWorkdir: state.nativeWorkdir || ctx.workdir,
+      accountIdentity: state.accountIdentity || "", sent: state.sent === true, nativeWorkdir: state.nativeWorkdir || (ctx.assistantScope ? credentialHome.home : ctx.workdir),
       messages: new Map(), admissions: new Map(), inFlight: new Set(), tasks: new Set(), result: "",
       lastMessageId: state.lastMessageId || "", turn: state.turnId ? {
         id: state.turnId, active: [RUN.STARTING, RUN.ACTIVE, RUN.FINALIZING].includes(state.state),
@@ -513,6 +513,7 @@ function createClaudeSessionAgentProvider({
         onStarted: async (executionId) => {
           entry.executionId = executionId;
           await save(entry);
+          if (ctx.assistantScope) await ctx.onEvent?.({ type: "helper-execution", conversationId: entry.id, executionId });
         },
         onEvent: (frame) => receive(entry, frame),
         onFailure: async (failure) => {
@@ -663,6 +664,10 @@ function createClaudeSessionAgentProvider({
 
   async function startConversationTurn(context, input = {}) {
     const entry = await entryFor(context, input.conversationId || input.threadId);
+    if (context.assistantScope && JSON.stringify(entry.profile || null) !==
+        JSON.stringify(input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null)) {
+      throw error("The scoped helper profile changed. Start a new helper.");
+    }
     entry.persistent ||= input.persistent === true;
     if (entry.turn?.active && entry.process && input.steer !== true) throw error("This conversation is still working.");
     await send(entry, input);
@@ -690,8 +695,10 @@ function createClaudeSessionAgentProvider({
   }
   async function runDetachedChatTurn(context, input = {}) {
     const conversationId = input.conversationId || input.threadId || randomUUID();
-    await entryFor(context, conversationId, { create: !input.conversationId && !input.threadId });
+    const created = !input.conversationId && !input.threadId;
+    const entry = await entryFor(context, conversationId, { create: created });
     const executionProfile = input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
+    if (created && context.assistantScope) entry.profile = executionProfile;
     if (executionProfile) await context.onEvent?.({ type: "execution-profile", executionProfile });
     await startConversationTurn(context, { ...input, conversationId });
     const result = await waitForConversationTurn(context, { ...input, conversationId });
@@ -743,9 +750,22 @@ function createClaudeSessionAgentProvider({
 
   const provider = {
     id: ENGINE, transportId: TRANSPORT, executionProfiles: ["economy"],
-    async capabilities(context) {
+    async assistantAccess(context) {
+      const external = curatedCodexProvider(context.assistantSelection?.modelProviderId);
+      if (external) {
+        const connection = (await providerConnections.list()).find(({ id }) => id === external.id);
+        return { available: connection?.connected === true && connection?.claudeReady === true,
+          connectionIdentity: connection?.connectionIdentity || "", endpointCode: external.id,
+          ownerOnly: external.ownerOnly };
+      }
+      const available = await connectionStatus(context);
+      return { available, ownerOnly: true, endpointCode: "claude_subscription",
+        connectionIdentity: available ? await accountIdentity(context) : "" };
+    },
+    async capabilities(context, input = {}) {
       const connected = await connectionStatus(context);
       const connections = await providerConnections.list();
+      if (input.modelProviderId && input.modelProviderId !== "anthropic") return claudeCapabilities({}, connected, connections);
       if (!connected) return claudeCapabilities({}, false, connections);
       if (closing) throw error("Claude is reconnecting.");
       const nativeContext = { ...context, assistantSelection: null, selection: null };
@@ -902,18 +922,19 @@ function createClaudeSessionAgentProvider({
     },
     async createConversation(context, input = {}) {
       const entry = await entryFor(context, randomUUID(), { create: true });
+      if (context.assistantScope && input.executionProfile) entry.profile = vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile);
       return { ok: true, conversationId: entry.id, ephemeral: input.ephemeral === true, status: "ready" };
     },
     readConversation, startConversationTurn, waitForConversationTurn, runDetachedChatTurn,
     streamDetachedChatTurn: runDetachedChatTurn,
     async stopConversation(context, input) {
-      const entry = await entryFor(context, input.conversationId || input.threadId);
+      const entry = await entryFor(context, input.conversationId || input.threadId, { cleanupExecutionId: input.cleanupExecutionId });
       await stopEntry(entry);
       return { ok: true, stopped: true, conversationId: entry.id };
     },
     async interruptDetachedChatTurn(context, input) { return provider.stopConversation(context, input); },
     async deleteConversation(context, input) {
-      const entry = await entryFor(context, input.conversationId || input.threadId);
+      const entry = await entryFor(context, input.conversationId || input.threadId, { cleanupExecutionId: input.cleanupExecutionId });
       if (entry.main) throw error("The main Claude conversation cannot be deleted as a temporary chat.");
       await stopEntry(entry);
       const file = await claudeHistoryPath({ configRoot, workdir: entry.nativeWorkdir, conversationId: entry.id });
@@ -931,10 +952,11 @@ function createClaudeSessionAgentProvider({
     async resolveExecutionProfile(context, request) {
       const limits = VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS[request.workloadId];
       if (request.profileId !== "economy" || !limits) throw error("Unsupported Claude helper execution profile.");
-      const modelId = request.workloadId === "request_routing" ? context.assistantSelection.modelId
-        : await createNativeHelperModelStore({ systemRoot, providerId: ENGINE }).read() || CLAUDE_RECOMMENDED_HELPER_MODEL;
-      const catalog = await provider.capabilities(context);
-      const model = catalog.modelProviders.flatMap((provider) => provider.models).find((model) => model.id === modelId);
+      const modelId = context.assistantSelection?.modelId;
+      const modelProviderId = context.assistantSelection?.modelProviderId;
+      const catalog = await provider.capabilities(context, { modelProviderId });
+      const model = catalog.modelProviders.filter((provider) => provider.connected && (!modelProviderId || provider.id === modelProviderId))
+        .flatMap((provider) => provider.models).find((model) => model.id === modelId);
       if (!model || (model.variants.length && !model.variants.some((variant) => variant.id === "low"))) {
         throw error("The selected Claude helper model is unavailable. Choose another in AI Accounts.");
       }

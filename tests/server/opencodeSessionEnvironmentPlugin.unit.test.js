@@ -90,14 +90,35 @@ test("tool-free non-project conversations receive their own current system conte
   const authored = structuredClone(messages);
   await plugin["experimental.chat.messages.transform"]({}, messages);
   assert.deepEqual(messages, authored);
-  const tool = { args: { command: "ls -la /private/conversation" } };
-  await plugin["tool.execute.before"]({ sessionID: "private-conversation", tool: "bash" }, tool);
-  assert.match(tool.args.command, /vibe64_agent_control_unavailable/u);
-  assert.match(tool.args.command, /exit 126/u);
+  for (const tool of ["bash", "shell", "read", "glob", "grep", "edit", "write", "apply_patch", "task", "webfetch", "websearch", "skill", "todowrite", "question", "future-tool"]) {
+    const output = { args: { command: "ls -la /private/conversation", subagent_type: "general" } };
+    const before = structuredClone(output);
+    await assert.rejects(
+      plugin["tool.execute.before"]({ sessionID: "private-conversation", tool }, output),
+      /Tools are unavailable in this host conversation/u
+    );
+    assert.deepEqual(output, before);
+  }
+  await plugin["tool.execute.before"]({ sessionID: "project-conversation", tool: "read" }, {});
+  const childPlugin = await Vibe64SessionEnvironment({ client: { session: {
+    async get() { return { data: { parentID: "private-conversation" } }; }
+  } } });
+  await assert.rejects(
+    childPlugin["tool.execute.before"]({ sessionID: "native-child", tool: "read" }, {}),
+    /Tools are unavailable in this host conversation/u
+  );
+  for (const sessionID of ["unregistered-conversation", ""]) {
+    await assert.rejects(
+      plugin["tool.execute.before"]({ sessionID, tool: "read" }, {}),
+      /could not verify this conversation's tool access/u
+    );
+  }
 
   scope.stableContext = "";
   await writeFile(registryPath, JSON.stringify({ sessions }));
   await assert.rejects(transform({ sessionID: "private-conversation" }, output), /bounded stableContext/u);
+  await writeFile(registryPath, "unreadable registry");
+  await assert.rejects(plugin["tool.execute.before"]({ sessionID: "private-conversation", tool: "read" }, {}), SyntaxError);
 });
 
 test("OpenCode binds shell commands once and hides the session wrapper from model history", async () => {
@@ -207,12 +228,11 @@ test("OpenCode binds shell commands once and hides the session wrapper from mode
     const unknown = {
       args: { command: "pwd" }
     };
-    await plugin["tool.execute.before"]({
+    await assert.rejects(plugin["tool.execute.before"]({
       sessionID: "another-session",
       tool: "bash"
-    }, unknown);
-    assert.match(unknown.args.command, /vibe64_agent_control_unavailable/u);
-    assert.match(unknown.args.command, /exit 126/u);
+    }, unknown), /could not verify this conversation's tool access/u);
+    assert.equal(unknown.args.command, "pwd");
   } finally {
     if (previousRegistry === undefined) {
       delete process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY;
@@ -287,8 +307,8 @@ test("native child helpers inherit only their registered parent's account, comma
   assert.equal(owner.message.model.providerID, "zai-coding-plan");
   for (const sessionID of ["unknown", "loop"]) {
     const output = { args: { command: "pwd" } };
-    await plugin["tool.execute.before"]({ sessionID, tool: "bash" }, output);
-    assert.match(output.args.command, /exit 126/u);
+    await assert.rejects(plugin["tool.execute.before"]({ sessionID, tool: "bash" }, output), /could not verify this conversation's tool access/u);
+    await assert.rejects(plugin["tool.execute.before"]({ sessionID, tool: "read" }, {}), /could not verify this conversation's tool access/u);
     await assert.rejects(plugin["chat.message"]({ sessionID, agent: "vibe64-economy-deepseek" }, { message: {} }), /selected AI account/u);
   }
   await assert.rejects(plugin["tool.execute.before"]({ sessionID: "broken", tool: "bash" }, { args: { command: "pwd" } }), /could not verify/u);

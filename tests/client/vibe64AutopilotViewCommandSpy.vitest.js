@@ -104,9 +104,9 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain('class="studio-autopilot__activity"');
     expect(component).toContain(".studio-autopilot__activity:empty");
     expect(composable).toContain("Vibe64—not Temporary AI—owns every repository operation");
-    expect(component).toContain(':disabled="repositoryRecoverySending || !assistantDirectAllowed"');
-    expect(component).toContain(":title=\"assistantDirectAllowed ? 'Open temporary AI to resolve this repository problem' : assistantRestrictionMessage\"");
-    expect(component).toContain(":title=\"assistantDirectAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantRestrictionMessage\"");
+    expect(component).toContain(':disabled="repositoryRecoverySending || !assistantCodeAllowed"');
+    expect(component).toContain(":title=\"assistantCodeAllowed ? 'Open temporary AI to resolve this repository problem' : assistantCodeRestrictionMessage\"");
+    expect(component).toContain(":title=\"assistantCodeAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantCodeRestrictionMessage\"");
     expect(component).toContain("assistantDirectAllowed: assistantDirectAllowed.value");
     expect(component).toContain("assistantRestrictionMessage: assistantRestrictionMessage.value");
     expect(composable).toContain("Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase");
@@ -123,7 +123,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain('@dismiss="dismissSaveWorkActivity"');
     expect(composable).toContain("SHORT_ACTION_DISMISSALS_STORAGE_PREFIX");
     expect(component).toContain('v-if="savedCommitDeslop"');
-    expect(component).toMatch(/v-if="savedCommitDeslop"[\s\S]{0,160}color="surface-variant"/u);
+    expect(component).toMatch(/v-if="savedCommitDeslop"[^>]*color="surface"/u);
     expect(component).toContain('@click="startSavedCommitDeslop"');
     expect(component).toContain('@click="dismissSavedCommitDeslop"');
     expect(composable).toContain('genesisTask: "deslop"');
@@ -197,8 +197,8 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAi).toContain("previewAttachmentState.capture?.()");
     expect(temporaryAi).toContain("previewAttachmentState.attachDiagnostics?.()");
     expect(temporaryAiComposable).not.toContain("beforeunload");
-    expect(temporaryAiComposable).toContain("watch([currentSessionId, currentSessionsApiPath, () => readRefOrGetterValue(assistantReady)]");
-    expect(temporaryAiComposable).toContain("void restoreTasks();\n  }, { immediate: true });");
+    expect(temporaryAiComposable).toContain("watch([currentSessionId, currentSessionsApiPath, actorKey, () => readRefOrGetterValue(assistantReady)]");
+    expect(temporaryAiComposable).toContain("() => void restoreTasks(), { immediate: true });");
     expect(temporaryAiComposable).toContain("for (const taskId of saveTimers.keys()) void saveTask(taskId);");
     expect(temporaryAiComposable).toContain("attachmentIds: task.attachments.map((attachment) => attachment.attachmentId)");
     expect(temporaryAiComposable).toContain("restoredAttachments: record.attachments || []");
@@ -207,7 +207,6 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAiComposable).toContain("if (tasks.value.length === 0)");
     expect(temporaryAiComposable).toContain("progressUpdates: temporaryAiProgressUpdates(response.progressUpdates)");
     expect(temporaryAiComposable).toContain("task.displayMessage || draftPayload.displayMessage");
-    expect(temporaryAiComposable).toContain('status: "failed"');
     expect(temporaryAiComposable).not.toMatch(/localStorage|sessionStorage/gu);
   });
 
@@ -250,11 +249,11 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain(':disabled="!agentStopEnabled"');
     expect(component).toContain(':aria-label="composerSubmitActionAriaLabel"');
     expect(component).toContain("composerSubmitMode === 'send' ? mdiSend");
-    expect(component).toContain('"Request message from workspace owner"');
-    expect(component).toContain(':aria-busy="composerSending ? \'true\' : undefined"');
+    expect(component).toContain('"Send for approval"');
+    expect(component).toContain(':aria-busy="composerSending && !composerCanSubmit ? \'true\' : undefined"');
     expect(component).toContain('@click="sendComposerMessage"');
     expect(component).toContain('@click="requestAgentInterrupt"');
-    expect(composerActions).toContain(':aria-busy="state.pending ? \'true\' : undefined"');
+    expect(composerActions).toContain(':aria-busy="state.pending && !state.canSend ? \'true\' : undefined"');
     expect(composerActions).toContain(':aria-busy="state.stopPending ? \'true\' : undefined"');
     expect(composerActions).not.toContain(":loading=");
     expect(composerActions).toContain('v-if="state.canStop"');
@@ -348,7 +347,7 @@ describe("Vibe64 direct session view", () => {
       "utf8"
     );
 
-    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"assistantDirectAllowed ? askCodexToFixPreviewIdentity : null\"");
+    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"assistantCodeAllowed ? askCodexToFixPreviewIdentity : null\"");
     expect(launchControls).toContain("previewIdentityFixAvailable");
     expect(launchControls).toContain("<Vibe64TemporaryAiFixAction");
     expect(launchControls).toContain("previewIdentityFixSending");

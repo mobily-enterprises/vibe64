@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, inject, ref, unref, watch } from "vue";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
 import { AssistantGoalControl } from "@jskit-ai/assistant-core/client/conversation";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -7,6 +8,8 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { VIBE64_SESSION_CHANGED_EVENT, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 
 const props = defineProps({
   active: Boolean,
@@ -14,19 +17,24 @@ const props = defineProps({
   sessionsApiPath: { type: [Function, Object, String], default: "" }
 });
 const projectSlug = useVibe64ProjectSlug();
+const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+const actorKey = computed(() => unref(viewer)?.actorKey || "");
 const sessionId = computed(() => props.session?.sessionId || "");
 const sessionsPath = computed(() => String(readRefOrGetterValue(props.sessionsApiPath) || "").trim());
 const engineId = computed(() => props.session?.assistantSelection?.engineId || "");
 const engineLabel = computed(() => engineId.value === "claude" ? "Claude" : "Codex");
 const claudeObjective = ref("");
 const claudeGoalOpen = ref(false);
-const enabled = computed(() => props.active && Boolean(sessionId.value && sessionsPath.value) &&
-  ["codex", "claude"].includes(engineId.value));
+const goalEnabled = computed(() => props.active && Boolean(sessionId.value && sessionsPath.value && actorKey.value));
+const enabled = computed(() => goalEnabled.value && ["codex", "claude"].includes(engineId.value));
+const scopeKey = computed(() => JSON.stringify([projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]));
+const connectionsRealtime = { events: [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT], matches: () => true };
 const path = computed(() => vibe64SessionPath(sessionsPath.value, sessionId.value, "/agent-plan-usage"));
 const usage = useEndpointResource({
   enabled,
   path,
-  queryKey: computed(() => ["vibe64-agent-plan-usage", engineId.value, projectSlug.value, sessionsPath.value, sessionId.value]),
+  queryKey: computed(() => ["vibe64-agent-plan-usage", engineId.value, projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]),
+  realtime: connectionsRealtime,
   fallbackLoadError: "Plan allowance is unavailable.",
   queryOptions: {
     meta: { jskit: { requestRecovery: false } },
@@ -48,9 +56,10 @@ useRealtimeEvent({
 });
 const goalPath = computed(() => vibe64SessionPath(sessionsPath.value, sessionId.value, "/agent-goal"));
 const goalResource = useEndpointResource({
-  enabled,
+  enabled: goalEnabled,
   path: goalPath,
-  queryKey: computed(() => ["vibe64-agent-goal", engineId.value, projectSlug.value, sessionsPath.value, sessionId.value]),
+  queryKey: computed(() => ["vibe64-agent-goal", engineId.value, projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]),
+  realtime: connectionsRealtime,
   fallbackLoadError: "Goal status is unavailable.",
   queryOptions: {
     meta: { jskit: { requestRecovery: false } },
@@ -65,32 +74,37 @@ const goalResource = useEndpointResource({
   }
 });
 useRealtimeEvent({
-  enabled,
+  enabled: goalEnabled,
   event: VIBE64_SESSION_CHANGED_EVENT,
   matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value &&
-    payload.sessionId === sessionId.value && payload.reason === `${engineId.value}-goal`,
+    payload.sessionId === sessionId.value && ["codex-goal", "claude-goal", "assistant-routing-changed"].includes(payload.reason),
   onEvent: () => { if (!globalThis.document?.hidden) void goalResource.reload(); }
 });
-const goal = computed(() => goalResource.data.value?.goal || null);
+const goal = computed(() => goalEnabled.value ? goalResource.data.value?.goal || null : null);
+const goalEngineId = computed(() => goalResource.data.value?.routing?.selection?.engineId || engineId.value);
 const fullGoalOpen = ref(false);
 const goalPreview = computed(() => {
   const objective = String(goal.value?.objective || "").trim();
   return objective.length > 140 ? `${objective.slice(0, 140).trimEnd()}…` : objective;
 });
 watch([sessionId, () => goal.value?.objective], () => { fullGoalOpen.value = false; });
-const goalAvailable = computed(() => !goalResource.loadError.value && goalResource.data.value?.status === "available");
+const goalAvailable = computed(() => goalEnabled.value && !goalResource.loadError.value && goalResource.data.value?.status === "available");
 const changingGoal = ref(false);
+let goalChange = 0;
 const goalError = ref("");
-watch([sessionId, sessionsPath], () => {
+watch(scopeKey, () => {
+  goalChange++;
+  changingGoal.value = false;
   goalError.value = "";
   claudeObjective.value = "";
   claudeGoalOpen.value = false;
-});
+}, { flush: "sync" });
 async function changeGoal(action, input = {}) {
   if (changingGoal.value || !goalAvailable.value) {
     return;
   }
-  const targetSession = sessionId.value;
+  const targetScope = scopeKey.value;
+  const change = ++goalChange;
   changingGoal.value = true;
   goalError.value = "";
   try {
@@ -107,20 +121,20 @@ async function changeGoal(action, input = {}) {
     if (result.ok === false) {
       throw new Error(result.error || "Could not change the goal.");
     }
-    if (targetSession === sessionId.value && action === "set") claudeObjective.value = "";
+    if (targetScope === scopeKey.value && action === "set") claudeObjective.value = "";
   } catch (error) {
-    if (targetSession === sessionId.value) {
+    if (targetScope === scopeKey.value) {
       goalError.value = error.message || "Could not change the goal.";
     }
   } finally {
-    changingGoal.value = false;
-    if (targetSession === sessionId.value) {
+    if (change === goalChange) changingGoal.value = false;
+    if (targetScope === scopeKey.value) {
       await goalResource.reload();
     }
   }
 }
 const weekly = computed(() => usage.data.value?.windows?.find((window) => window.windowDurationMins === 10080 && (engineId.value !== "claude" || window.id === "seven_day")) || null);
-const available = computed(() => !usage.loadError.value && usage.data.value?.status === "available" && weekly.value &&
+const available = computed(() => enabled.value && !usage.loadError.value && usage.data.value?.status === "available" && weekly.value &&
   (!weekly.value.resetsAt || weekly.value.resetsAt * 1000 > Date.now()));
 const summary = computed(() => available.value ? `${Math.floor(weekly.value.remainingPercent)}%` : "");
 const details = computed(() => {
@@ -141,7 +155,7 @@ const details = computed(() => {
   return lines.join("\n");
 });
 const goalState = computed(() => ({
-  enabled: enabled.value && Boolean(goalAvailable.value || goalError.value),
+  enabled: goalEnabled.value && Boolean(goalAvailable.value || goalError.value),
   goal: goalAvailable.value && goal.value ? {
     ...goal.value,
     objective: goalPreview.value,
@@ -158,7 +172,7 @@ const goalState = computed(() => ({
 </script>
 
 <template>
-  <AssistantGoalControl v-if="engineId === 'codex'" :state="goalState">
+  <AssistantGoalControl v-if="goalEngineId === 'codex'" :state="goalState">
     <v-btn
       v-if="goalAvailable && goal && goal.status !== 'complete'"
       class="mt-2" color="error" size="small" variant="text"
@@ -173,7 +187,7 @@ const goalState = computed(() => ({
       Cancel removes this goal. Use Stop to interrupt a turn already running.
     </p>
   </AssistantGoalControl>
-  <v-menu v-if="engineId === 'claude' && goalState.enabled" v-model="claudeGoalOpen" location="top" :close-on-content-click="false">
+  <v-menu v-if="goalEngineId === 'claude' && goalState.enabled" v-model="claudeGoalOpen" location="top" :close-on-content-click="false">
     <template #activator="{ props: menuProps }">
       <v-btn v-bind="menuProps" size="small" variant="text" :aria-label="goal ? `Goal ${goal.status}` : 'Set goal'">
         {{ goal ? 'Goal' : 'Set goal' }}

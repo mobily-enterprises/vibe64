@@ -1,7 +1,6 @@
 import {
   modelRoutingInputValidator,
   codexProviderInputValidator,
-  helperModelInputValidator,
   accountIdInputValidator,
   accountAuthSessionInputValidator,
   accountAuthStartInputValidator,
@@ -18,10 +17,9 @@ import {
 const ACTION_READ_CODEX_PROVIDERS = "vibe64.accounts.codex-providers.read";
 const ACTION_READ_MODEL_ROUTING = "vibe64.accounts.model-routing.read";
 const ACTION_SAVE_MODEL_ROUTING = "vibe64.accounts.model-routing.save";
+const ACTION_PREVIEW_MODEL_ROUTING = "vibe64.accounts.model-routing.preview";
 const ACTION_SAVE_CODEX_PROVIDER = "vibe64.accounts.codex-providers.save";
 const ACTION_REMOVE_CODEX_PROVIDER = "vibe64.accounts.codex-providers.remove";
-const ACTION_READ_HELPER_MODEL = "vibe64.accounts.helper-model.read";
-const ACTION_SAVE_HELPER_MODEL = "vibe64.accounts.helper-model.save";
 const ACTION_READ_ACCOUNTS = "vibe64.accounts.read";
 const ACTION_START_ACCOUNT_AUTH = "vibe64.accounts.auth.start";
 const ACTION_LOGOUT_ACCOUNT = "vibe64.accounts.logout";
@@ -40,6 +38,11 @@ function createActions({ accounts } = {}) {
       id: ACTION_READ_MODEL_ROUTING, version: 1, kind: "query", input: accountsReadInputValidator,
       output: null, idempotency: "none", audit: { actionName: ACTION_READ_MODEL_ROUTING }, observability: {},
       execute: (input) => accounts.readModelRouting(input)
+    },
+    {
+      id: ACTION_PREVIEW_MODEL_ROUTING, version: 1, kind: "query", input: modelRoutingInputValidator,
+      output: null, idempotency: "none", audit: { actionName: ACTION_PREVIEW_MODEL_ROUTING }, observability: {},
+      execute: (input) => accounts.previewModelRouting(input)
     },
     {
       id: ACTION_SAVE_MODEL_ROUTING, version: 1, kind: "command", input: modelRoutingInputValidator,
@@ -81,28 +84,6 @@ function createActions({ accounts } = {}) {
       observability: {},
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
       execute: (input) => accounts.removeCodexProvider(input)
-    },
-    {
-      id: ACTION_READ_HELPER_MODEL,
-      version: 1,
-      kind: "query",
-      input: accountsReadInputValidator,
-      output: null,
-      idempotency: "none",
-      audit: { actionName: ACTION_READ_HELPER_MODEL },
-      observability: {},
-      execute: (input) => accounts.readHelperModel(input)
-    },
-    {
-      id: ACTION_SAVE_HELPER_MODEL,
-      version: 1,
-      kind: "command",
-      input: helperModelInputValidator,
-      output: null,
-      idempotency: "optional",
-      audit: { actionName: ACTION_SAVE_HELPER_MODEL },
-      observability: {},
-      execute: (input) => accounts.saveHelperModel(input)
     },
     {
       id: ACTION_READ_ACCOUNTS,
@@ -229,12 +210,11 @@ function createActions({ accounts } = {}) {
 }
 
 export {
+  ACTION_PREVIEW_MODEL_ROUTING,
   ACTION_READ_MODEL_ROUTING, ACTION_SAVE_MODEL_ROUTING,
   ACTION_READ_CODEX_PROVIDERS,
   ACTION_SAVE_CODEX_PROVIDER,
   ACTION_REMOVE_CODEX_PROVIDER,
-  ACTION_READ_HELPER_MODEL,
-  ACTION_SAVE_HELPER_MODEL,
   ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
   ACTION_LOGOUT_ACCOUNT,
   ACTION_READ_ACCOUNTS,

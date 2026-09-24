@@ -7,13 +7,17 @@ import { promisify } from "node:util";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runStateUpgrades } from "../../packages/vibe64-core/src/server/stateUpgrades.js";
+import { upgradeAssistantRouting } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
 import { readCodexLoginId } from "../../packages/vibe64-core/src/server/codexAuthState.js";
 import { CodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
+import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import { buildNodeBundle } from "../../tooling/release/server-build.mjs";
 import { RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
 
 const exec = promisify(execFile);
 const id = "20260923-codex-login-id";
+const routingId = "20260923-routing-v2";
+const upgradeIds = [id, routingId];
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
 async function fixture(t) {
@@ -29,13 +33,13 @@ async function fixture(t) {
       await mkdir(path.dirname(markerPath), { recursive: true });
       await writeFile(markerPath, typeof value === "string" ? value : JSON.stringify(value));
     },
-    run: (apply = false) => runStateUpgrades({ systemRoot, apply, report: (level, message) => messages.push({ level, message }) })
+    run: (apply = false) => runStateUpgrades({ systemRoot, apply, upgradeAssistantRouting, report: (level, message) => messages.push({ level, message }) })
   };
 }
 
 test("check is read-only, including on an installation that has never created state", async t => {
   const f = await fixture(t);
-  assert.deepEqual((await f.run()).pending, [id]);
+  assert.deepEqual((await f.run()).pending, upgradeIds);
   await assert.rejects(stat(f.systemRoot), { code: "ENOENT" });
   await f.marker();
   const original = await readFile(f.markerPath, "utf8");
@@ -54,7 +58,7 @@ test("apply backs up and upgrades the connection without changing credentials or
   const credentials = '{"tokens":{"account_id":null,"access_token":"DO-NOT-LOG"}}';
   await writeFile(nativeAuth, credentials);
   await writeFile(transition, '{"status":"reconnect_required"}');
-  assert.deepEqual((await f.run(true)).applied, [id]);
+  assert.deepEqual((await f.run(true)).applied, upgradeIds);
   assert.ok(await readCodexLoginId(f.systemRoot));
   const { loginId, ...remaining } = JSON.parse(await readFile(f.markerPath, "utf8"));
   assert.equal(typeof loginId, "string");
@@ -106,13 +110,13 @@ test("upgrading a legacy connection restores the AI controls identity lookup wit
   assert.equal(await readFile(authPath, "utf8"), credentials, "native account_id remains null and credentials are untouched");
 });
 
-test("fresh and disconnected installations record a successful no-op", async t => {
+test("fresh and disconnected installations preserve login state and record the ordered upgrades", async t => {
   for (const disconnected of [false, true]) {
     const f = await fixture(t);
     if (disconnected) await f.marker({ ...legacyMarker, connected: false });
     await f.run(true);
     assert.equal(await readCodexLoginId(f.systemRoot), "");
-    assert.equal(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied.length, 1);
+    assert.equal(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied.length, 2);
   }
 });
 
@@ -166,6 +170,17 @@ test("conflicting backups block repair instead of silently replacing the recover
 test("the packaged standalone CLI checks, applies and reports failure without source dependencies", async t => {
   const f = await fixture(t);
   await f.marker();
+  const routingPath = path.join(f.systemRoot, "ai-connections/routing.json");
+  await mkdir(path.dirname(routingPath), { recursive: true });
+  await writeFile(routingPath, JSON.stringify({ schemaVersion: 1, revision: 4, orchestrators: {} }));
+  const store = createVibe64SessionStore({ projectContextRoot: f.root, projectRuntimeRoot: path.join(f.systemRoot, "projects/example") });
+  await store.createSession({ runtimeKind: "genesis", sessionId: "archived" });
+  await store.writeMetadataValue("archived", "assistant_selection", JSON.stringify({ schema: "vibe64.assistant-selection.v1",
+    engineId: "opencode", agentId: "build", modelProviderId: "opencode", modelId: "big-pickle", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` }));
+  await store.writeStatus("archived", "archived");
+  await store.publishSessionArchive("archived");
+  const archivePath = path.join(store.paths().archivedSessionsRoot, "archived.tar.gz");
+  const originalArchive = await readFile(archivePath);
   const entry = "bin/upgrade-state.js";
   assert.ok(RUNTIME_ENTRIES.includes(entry));
   const outfile = path.join(f.root, "release/upgrade-state.mjs");
@@ -173,9 +188,46 @@ test("the packaged standalone CLI checks, applies and reports failure without so
   const args = [outfile, `--system-root=${f.systemRoot}`];
   await exec(process.execPath, [...args, "--check"], { cwd: f.root });
   assert.equal(await readCodexLoginId(f.systemRoot), "");
+  assert.equal(JSON.parse(await readFile(routingPath, "utf8")).schemaVersion, 1);
+  assert.deepEqual(await readFile(archivePath), originalArchive);
   await exec(process.execPath, [...args, "--apply"], { cwd: f.root });
   assert.ok(await readCodexLoginId(f.systemRoot));
+  const routing = JSON.parse(await readFile(routingPath, "utf8"));
+  assert.equal(routing.schemaVersion, 2);
+  assert.equal(routing.orchestrators.opencode.code.modelId, "big-pickle");
+  assert.equal(JSON.parse(await store.readMetadataValue("archived", "assistant_routing")).workflowEngineId, "opencode");
   await assert.rejects(exec(process.execPath, args), error => error.code === 1 && error.stderr.includes("Usage:"));
   await writeFile(f.ledgerPath, "{invalid");
   await assert.rejects(exec(process.execPath, [...args, "--apply"]), error => error.code === 1 && error.stderr.includes("ERROR:"));
+});
+
+test("routing preflight failure blocks earlier identity writes as well", async t => {
+  const f = await fixture(t);
+  await f.marker();
+  const routingPath = path.join(f.systemRoot, "ai-connections/routing.json");
+  await mkdir(path.dirname(routingPath), { recursive: true });
+  await writeFile(routingPath, "broken");
+  await assert.rejects(f.run(true), /Model routing is invalid/u);
+  assert.equal(await readCodexLoginId(f.systemRoot), "");
+  await assert.rejects(stat(f.ledgerPath), { code: "ENOENT" });
+});
+
+test("a crash after routing publication but before its ledger entry resumes the same upgrade", async t => {
+  const f = await fixture(t);
+  await f.marker();
+  const routingPath = path.join(f.systemRoot, "ai-connections/routing.json");
+  await mkdir(path.dirname(routingPath), { recursive: true });
+  const original = JSON.stringify({ schemaVersion: 1, revision: 4, orchestrators: {} });
+  await writeFile(routingPath, original);
+  await assert.rejects(runStateUpgrades({ systemRoot: f.systemRoot, apply: true, report: () => {},
+    upgradeAssistantRouting: (context) => upgradeAssistantRouting({ ...context, report: (_level, message) => {
+      if (message.startsWith("Published routing state:")) throw new Error("lost before ledger commit");
+    } })
+  }), /lost before ledger commit/u);
+  assert.deepEqual(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied.map((entry) => entry.id), [id]);
+  const published = await readFile(routingPath, "utf8");
+  assert.deepEqual((await f.run(true)).applied, [routingId]);
+  assert.equal(await readFile(routingPath, "utf8"), published);
+  assert.equal(await readFile(path.join(f.systemRoot, "upgrades/backups", routingId, "before/ai-connections/routing.json"), "utf8"), original);
+  assert.equal(JSON.parse(published).revision, 5);
 });

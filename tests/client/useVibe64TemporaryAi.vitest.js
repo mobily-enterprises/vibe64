@@ -805,6 +805,34 @@ describe("useVibe64TemporaryAi", () => {
     });
   });
 
+  it("restores a stopped Router draft and uses a fresh identity on the next Send", async () => {
+    const finish = deferredPromise();
+    mocks.responses.push(
+      { conversationId: "conversation-1", ok: true },
+      async () => {
+        await finish.promise;
+        throw Object.assign(new Error("Routing cancelled."), { code: "vibe64_assistant_routing_cancelled" });
+      }
+    );
+    const { temporary, task } = await temporaryAiWithDraft();
+    const sending = temporary.send(task.id);
+    await flushPromises();
+    const originalMessageId = temporary.activeTask.value.pendingMessageId;
+    temporary.updateDraft(task.id, "Also explain the constraints.");
+    finish.resolve();
+    await expect(sending).resolves.toBe(false);
+    expect(temporary.activeTask.value).toMatchObject({
+      busy: false, status: "interrupted", pendingMessageId: "", error: "",
+      draft: "Explain this conflict.\n\nAlso explain the constraints."
+    });
+    expect(temporary.activeTask.value.delivery.state.messages).toEqual([]);
+    mocks.responses.push({ ok: true, status: "completed", messages: [] });
+    await expect(temporary.send(task.id)).resolves.toBe(true);
+    const sends = mocks.requests.filter(([path]) => path.endsWith("/turns"));
+    expect(sends).toHaveLength(2);
+    expect(sends[1][1].body.messageId).not.toBe(originalMessageId);
+  });
+
   it("reuses the created conversation and message identity after an ambiguous turn failure", async () => {
     mocks.responses.push(
       { conversationId: "conversation-1", ok: true },

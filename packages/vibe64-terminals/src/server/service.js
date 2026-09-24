@@ -1,7 +1,7 @@
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createClaudeSessionAgentProvider } from "./agent/providers/claudeSessionAgentProvider.js";
-import { createNativeHelperModelStore, CLAUDE_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/nativeHelperModel";
+import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { createCodexTerminalController } from "./codexTerminal.js";
 import { createAssistantRouting } from "./assistantRouting.js";
@@ -41,6 +41,7 @@ import {
   updateSessionWork as updateManagedSessionWork
 } from "./sessionWorkSave.js";
 import {
+  cleanupSessionSaveCommitMessage,
   generateSessionSaveCommitMessage
 } from "./sessionSaveCommitMessage.js";
 import {
@@ -424,6 +425,8 @@ function createService({
   const projectRuntimeOpenOperations = new Map();
   let assistantRouting;
   let sessionConversations;
+  const turnCompletions = new Set();
+  let closing = false;
 
   const assistantRuntime = {
     claudeConnectionStatus: async () => (await readClaudeCodeAuthStatus({ env })).loggedIn === true,
@@ -434,6 +437,8 @@ function createService({
     updateModelAccess: null
   };
 
+  let databaseToolsProvider = null;
+  let sourceEditorProvider = null;
   const workspaceSetup = createWorkspaceSetupRunner({
     projectService
   });
@@ -442,10 +447,15 @@ function createService({
     if (typeof publisher === "function") {
       await publisher(sessionId, payload);
     }
+    if (closing) return;
     if (payload.reason === "temporary-agent-turn-idle") {
-      void sessionConversations?.afterTemporaryTurn(sessionId, payload.payload).catch((error) => {
+      const completion = sessionConversations?.afterTemporaryTurn(sessionId, payload.payload).catch((error) => {
         logOperationalEvent(logger, "warn", { component: "vibe64.assistant_routing", event: "vibe64.assistant_routing.temporary_review_deferred", sessionId, code: error.code }, "Temporary chat review needs attention.");
       });
+      if (completion) {
+        turnCompletions.add(completion);
+        void completion.finally(() => turnCompletions.delete(completion));
+      }
       return;
     }
     if (!["claude-stream-turn-idle", "codex-app-server-turn-idle", "opencode-server-turn-idle"].includes(
@@ -453,17 +463,21 @@ function createService({
     )) {
       return;
     }
-    void assistantRouting?.afterTurn(sessionId, payload, {}).catch((error) => {
-      logOperationalEvent(logger, "warn", { component: "vibe64.assistant_routing", event: "vibe64.assistant_routing.review_deferred", sessionId, code: error.code }, "Automatic review needs attention.");
-    });
-    void prepareWorkspaceSetup(sessionId, {
-      publish: true
-    }).catch((error) => {
-      vibe64SessionDebugLog("server.terminals.workspaceSetup.afterTurn.error", {
-        error: vibe64SessionDebugError(error),
-        sessionId
-      });
-    });
+    const completion = Promise.all([
+      assistantRouting?.afterTurn(sessionId, payload, {}).catch((error) => {
+        logOperationalEvent(logger, "warn", { component: "vibe64.assistant_routing", event: "vibe64.assistant_routing.review_deferred", sessionId, code: error.code }, "Automatic review needs attention.");
+      }),
+      prepareWorkspaceSetup(sessionId, {
+        publish: true
+      }).catch((error) => {
+        vibe64SessionDebugLog("server.terminals.workspaceSetup.afterTurn.error", {
+          error: vibe64SessionDebugError(error),
+          sessionId
+        });
+      })
+    ]);
+    turnCompletions.add(completion);
+    void completion.finally(() => turnCompletions.delete(completion));
   };
 
   const codexGitCommand = createCodexGitCommandService({
@@ -527,22 +541,24 @@ function createService({
     codexGitCommand,
     command: opencodeTerminalController.command || env.VIBE64_OPENCODE_COMMAND || "opencode",
     env,
+    getAssistantManager: () => sessionAgent,
     listConnections: (context) => assistantRuntime.listConnections(context),
-    readAssistantAccess: (context) => assistantRuntime.readAssistantAccess(context),
     projectService,
     publishSessionChanged: publishAgentSessionChanged,
     resolveConnection: (context) => assistantRuntime.resolveConnection(context)
   });
   const sessionAttachments = createSessionAttachments({ projectService, env });
+  const claudeProvider = createClaudeSessionAgentProvider({
+    env, projectService, publishSessionChanged: publishAgentSessionChanged,
+    systemRoot: codexProviderOptions.systemRoot,
+    codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
+    connectionStatus: (context) => assistantRuntime.claudeConnectionStatus(context)
+  });
   const sessionAgent = createSessionAgentManager({
     attachments: sessionAttachments,
+    readRoutingConfiguration: () => createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read(),
     providers: [
-      createClaudeSessionAgentProvider({
-        env, projectService, publishSessionChanged: publishAgentSessionChanged,
-        systemRoot: codexProviderOptions.systemRoot,
-        codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
-        connectionStatus: (context) => assistantRuntime.claudeConnectionStatus(context)
-      }),
+      claudeProvider,
       createCodexSessionAgentProvider({
         listConnections: codexProviderConnections.list,
         connectionStatus: (context) => assistantRuntime.codexConnectionStatus(context),
@@ -554,36 +570,33 @@ function createService({
     ],
     async readAssistantAccess(context) {
       if (context.engineId === "claude") {
-        const external = curatedCodexProvider(context.assistantSelection?.modelProviderId);
-        return { available: external ? (await codexProviderConnections.list()).some((item) => item.id === external.id && item.connected)
-          : await assistantRuntime.claudeConnectionStatus(context), ownerOnly: true,
-          economyModelId: await createNativeHelperModelStore({ systemRoot: codexProviderOptions.systemRoot, providerId: "claude" }).read() || CLAUDE_RECOMMENDED_HELPER_MODEL };
+        return claudeProvider.assistantAccess(context);
       }
       if (context.engineId !== "codex") {
         return assistantRuntime.readAssistantAccess(context);
       }
       const curated = curatedCodexProvider(context.assistantSelection?.modelProviderId || context.modelProviderId);
       if (curated) {
-        const connected = (await codexProviderConnections.list()).find(({ id }) => id === curated.id)?.connected === true;
+        const connection = (await codexProviderConnections.list()).find(({ id }) => id === curated.id);
         return {
-          available: connected,
+          available: connection?.connected === true,
+          connectionIdentity: connection?.connectionIdentity || "",
           ownerOnly: curated.ownerOnly,
-          endpointCode: curated.id,
-          economyModelId: curated.models[0].id
+          endpointCode: curated.id
         };
       }
-      if (!await assistantRuntime.codexConnectionStatus(context)) {
-        return { available: false, ownerOnly: true };
+      const available = await assistantRuntime.codexConnectionStatus(context);
+      try {
+        return { ...await codex.assistantAccess(context), available };
+      } catch (error) {
+        if (available) throw error;
+        return { available: false, ownerOnly: true, connectionIdentity: "" };
       }
-      return codex.assistantAccess(context);
     }
   });
   const sessionPromptHints = createSessionPromptHintsService({
     publishSessionChanged: publishAgentSessionChanged,
-    deleteAgentThread: (sessionId, input, options) => (
-      sessionAgent.deleteDetachedChatThread(sessionId, input, options)
-    ),
-    describeProvider: (options) => sessionAgent.describeProvider(options),
+    agent: sessionAgent,
     diagnostic: (event = {}) => logOperationalEvent(logger, "warn", {
       code: event.code,
       component: "vibe64.prompt_hints",
@@ -591,20 +604,40 @@ function createService({
       error: event.error,
       event: event.event
     }, "Vibe64 prompt hints were unavailable."),
-    interruptAgentTurn: (sessionId, input, options) => (
-      sessionAgent.interruptDetachedChatTurn(sessionId, input, options)
-    ),
-    requireAssistantAccess: (sessionId, options) => (
-      sessionAgent.requireAssistantAccess(sessionId, options)
-    ),
-    projectService,
-    resolveExecutionProfile: (sessionId, input, options) => (
-      sessionAgent.resolveExecutionProfile(sessionId, input, options)
-    ),
-    runAgentTurn: (sessionId, input, options) => (
-      sessionAgent.streamDetachedChatTurn(sessionId, input, options)
-    )
+    projectService
   });
+
+  async function prepareAssistantChangeover(sessionId, context) {
+    requireCompletedConversationRewind(context.session);
+    const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
+    const metadata = context.session.metadata;
+    if (engineId === "codex" && metadata.agent_identity_provider === "codex" && metadata.agent_identity_conversation_id) {
+      const modelProviderId = metadata.agent_identity_model_provider || "openai";
+      const prefix = modelProviderId === "openai" ? "codex" : `codex_${modelProviderId}`;
+      await context.runtime.store.writeMetadataValue(sessionId, `${prefix}_conversation_id`, metadata.agent_identity_conversation_id);
+      await context.runtime.store.writeMetadataValue(sessionId, `${prefix}_conversation_workdir`, metadata.agent_identity_workdir);
+      // Resuming a Codex thread can resume an active native goal. Pause it
+      // before that resume so only the user's next Send starts work.
+      await context.runtime.store.writeMetadataValue(sessionId, "codex_changeover_pause_goal", "yes");
+    }
+    const closed = await sessionAgent.closeSession(sessionId, { ...context, changeover: true });
+    if (closed?.ok === false) return closed;
+    const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
+    await rememberAssistantBeforeChangeover(context, vibe64AssistantConversationKey(selection));
+    logOperationalEvent(logger, "info", {
+      event: "vibe64.assistant_changeover.previous_stopped", component: "vibe64.agent_message", sessionId, engineId
+    }, "Previous assistant stopped; its conversation is retained.");
+    return { ok: true };
+  }
+
+  async function prepareRoutingSelection(sessionId, selection, context) {
+    const previous = vibe64AssistantSelectionFromMetadata(context.session.metadata);
+    if (previous.engineId !== selection.engineId) {
+      const result = await prepareAssistantChangeover(sessionId, context);
+      if (result?.ok === false) throw Object.assign(new Error(result.error || "The previous assistant could not stop."), result);
+    }
+    if (selection.engineId === "codex") await codex.prepareModelRouting(sessionId, selection, context);
+  }
 
   assistantRouting = createAssistantRouting({
     systemRoot: codexProviderOptions.systemRoot, agent: sessionAgent,
@@ -615,8 +648,7 @@ function createService({
       return result;
     },
     publish: publishAgentSessionChanged,
-    prepareSelection: (sessionId, selection, context) => selection.engineId === "codex"
-      ? codex.prepareModelRouting(sessionId, selection, context) : null,
+    prepareSelection: prepareRoutingSelection,
     async dispatch(sessionId, input, context) {
       requireCompletedConversationRewind(context.session);
       await prepareAgentSkillsInsideAgentWrite(sessionId, context);
@@ -861,22 +893,8 @@ function createService({
     };
     let commitTitle;
     try {
-      await sessionAgent.requireAssistantAccess(normalizedSessionId, agentContext);
-      const providerDescription = await sessionAgent.describeProvider(agentContext);
       commitTitle = await generateSessionSaveCommitMessage({
-        agentContext,
-        changes: saveMessageInput.changes,
-        deleteThread: (threadInput, options) => sessionAgent.deleteDetachedChatThread(
-          normalizedSessionId,
-          threadInput,
-          options
-        ),
-        runAgentTurn: (turnInput, options) => sessionAgent.streamDetachedChatTurn(
-          normalizedSessionId,
-          turnInput,
-          options
-        ),
-        expectedAccountIdentitySignature: providerDescription.accountIdentitySignature
+        agent: sessionAgent, agentContext, changes: saveMessageInput.changes
       });
     } catch (error) {
       // Naming is optional. Leave failed thread ownership intact and let the
@@ -1312,6 +1330,21 @@ function createService({
 
   function closeAllSessionTerminals(sessionId, controllerOptions = {}) {
     return closeAgentSessionCommandEnvironment(sessionId, () => closeTerminalControllersForSession(sessionId, [
+      {
+        controller: { closeAllForSession: async (id, options) => {
+          await cleanupSessionSaveCommitMessage({ agent: sessionAgent, agentContext: await assistantSessionOptions(id, options) });
+          return { ok: true };
+        } },
+        label: "Save naming helper"
+      },
+      {
+        controller: { closeAllForSession: (id) => sessionPromptHints.cancelSessionPromptHintsForSession(id) },
+        label: "Prompt suggestions"
+      },
+      { controller: { closeAllForSession: (id) => databaseToolsProvider?.closeAssistantsForSession(id) },
+        label: "Database copilot" },
+      { controller: { closeAllForSession: (id) => sourceEditorProvider?.closeExplanationsForSession(id) },
+        label: "Source explanations" },
       { controller: outputTarget, label: "outputTarget" },
       ...(!controllerOptions.renewalCleanup && controllerOptions.session?.sourceReady !== false ? [{
         controller: { closeAllForSession: (id) => sessionAgent.interruptTurn(id) },
@@ -1693,7 +1726,12 @@ function createService({
       }, { operation: "session-source-create" });
     },
 
+    setSourceEditorProvider(provider = null) {
+      sourceEditorProvider = provider;
+    },
+
     setDatabaseToolsProvider(provider = null) {
+      databaseToolsProvider = provider;
       agentDatabaseCommand.setDatabaseToolsProvider(provider);
     },
 
@@ -1718,6 +1756,8 @@ function createService({
     },
 
     async close() {
+      closing = true;
+      await Promise.allSettled(turnCompletions);
       const [agentClose, outputTargetClose] = await Promise.allSettled([
         Promise.resolve().then(() => sessionAgent.invalidateRuntimes({
           reason: "server-shutdown"
@@ -2334,6 +2374,14 @@ function createService({
       }, options);
     },
 
+    resolveEphemeralAgentExecutionProfile(scope = {}, input = {}, options = {}) {
+      return sessionAgent.resolveEphemeralExecutionProfile(scope, input, options);
+    },
+
+    runEphemeralAgentChatTurn(scope = {}, input = {}, options = {}) {
+      return sessionAgent.runEphemeralChatTurn(scope, input, options);
+    },
+
     deleteAgentConversation(sessionId, input = {}, options = {}) {
       return sessionAgent.deleteConversation(sessionId, input, options);
     },
@@ -2380,10 +2428,19 @@ function createService({
     },
 
     async inspectAssistantAccess(sessionId, options = {}) {
-      return sessionAgent.assistantAccess(
-        sessionId,
-        await assistantSessionOptions(sessionId, options)
-      );
+      const context = await assistantSessionOptions(sessionId, options);
+      const preferences = assistantRoutingFromMetadata(context.session.metadata);
+      const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
+      const native = await sessionAgent.assistantAccess(sessionId, context);
+      const purposes = await sessionAgent.inspectAssistantPurposes({ ...preferences,
+        workflowEngineId: preferences?.workflowEngineId || selection.engineId
+      }, context);
+      const currentMode = preferences?.mode || "";
+      const steering = sessionHasActiveAgentRun(context.session);
+      const available = currentMode && !steering ? purposes[currentMode]?.available === true : native.available;
+      const canUse = currentMode && !steering ? purposes[currentMode]?.available === true : native.canUse;
+      return { ...native, available, canUse, nativeCanUse: native.canUse, steering, canUseAny: Object.values(purposes).some(({ available }) => available),
+        canRequestMessage: !canUse && native.canRequestMessage, currentMode, purposes };
     },
 
     async requireAssistantAccess(sessionId, options = {}) {
@@ -2399,6 +2456,14 @@ function createService({
 
     listAssistantCapabilities(input = {}, options = {}) {
       return sessionAgent.listCapabilities(input, options);
+    },
+
+    resolveAssistantPurpose(input = {}, options = {}) {
+      return sessionAgent.resolveAssistantPurpose(input, options);
+    },
+
+    inspectAssistantRoutingConfiguration(configuration, options = {}) {
+      return sessionAgent.inspectRoutingConfiguration(configuration, options);
     },
 
     updateAssistantModelAccess(input = {}, options = {}) {
@@ -2495,9 +2560,26 @@ function createService({
     },
 
     async resumeIntegrationContinuation(sessionId, input = {}, options = {}) {
-      return runMainAgentWrite(sessionId, options, async (context) => {
+      const inspectConfiguration = async (saved) => {
+        if (typeof options.readIntegrationConfiguration !== "function") {
+          return { ok: false, code: "vibe64_integration_configuration_unavailable",
+            error: "Integration configuration cannot be checked before continuing.", integrationSetup: saved };
+        }
+        const current = await options.readIntegrationConfiguration();
+        if (current?.ok === false) return current;
+        if (current?.baseHash !== saved.configurationHash ||
+            !Object.hasOwn(current?.configuration?.integrations || {}, saved.integrationId)) {
+          return { ok: false, code: "vibe64_integration_configuration_changed",
+            error: "Integration configuration changed after verification. Return to chat and request setup for the updated configuration.",
+            integrationSetup: saved };
+        }
+        return null;
+      };
+      const unconfirmed = (saved) => ({ ok: false, code: "vibe64_integration_continuation_unconfirmed",
+        error: "Assistant delivery could not be confirmed. Check again to inspect delivery; this will not send a duplicate message.",
+        integrationSetup: saved });
+      const prepared = await runMainAgentWrite(sessionId, options, async (context) => {
         requireCompletedConversationRewind(context.session);
-        const access = await sessionAgent.requireAssistantAccess(sessionId, context);
         const store = context.runtime.store;
         const saved = await store.readIntegrationSetupRequest(sessionId, input.turnId);
         if (!saved || saved.requestId !== input.requestId || saved.outcome !== "completed") {
@@ -2507,74 +2589,69 @@ function createService({
         if (saved.continuation.status === "accepted") {
           return { ok: true, integrationSetup: saved };
         }
-        const state = await sessionAgent.sessionState(sessionId, context);
-        if (state.ok === false) return state;
-        const delivery = {
-          turnId: input.turnId, requestId: saved.requestId,
-          continuationMessageId: saved.continuationMessageId,
-          engineId: access.engineId, threadId: state.thread?.id
-        };
-        // Prepare before claiming: a setup failure here has not contacted the
-        // provider and must not leave an uncertain delivery record.
-        if (saved.continuation.status === "pending") {
-          await prepareAgentSkillsInsideAgentWrite(sessionId, context);
-          if (typeof options.readIntegrationConfiguration !== "function") {
-            return { ok: false, code: "vibe64_integration_configuration_unavailable",
-              error: "Integration configuration cannot be checked before continuing.", integrationSetup: saved };
-          }
-          const current = await options.readIntegrationConfiguration();
-          if (current?.ok === false) return current;
-          if (current?.baseHash !== saved.configurationHash ||
-              !Object.hasOwn(current?.configuration?.integrations || {}, saved.integrationId)) {
-            return { ok: false, code: "vibe64_integration_configuration_changed",
-              error: "Integration configuration changed after verification. Return to chat and request setup for the updated configuration.",
-              integrationSetup: saved };
-          }
-        }
-        const claim = await store.claimIntegrationContinuation(sessionId, delivery);
-        let delivered = false;
-        if (claim.changed) {
-          try {
-            const result = await sendWithAssistantChangeover(sessionId, {
-              messageId: saved.continuationMessageId,
-              message: `Integration setup completed for slot ${JSON.stringify(saved.integrationId)}. Continue the implementation from your integration setup request. Read the project's saved integration configuration; do not request or expose credentials in chat.`
-            }, context, sessionAgent);
-            delivered = result.ok !== false && result.delivered === true;
-            if (!delivered) {
-              logOperationalEvent(logger, "warn", {
-                code: result.code, component: "vibe64.integration_continuation",
-                event: "vibe64.integration_continuation.delivery_unconfirmed",
-                sessionId, messageId: saved.continuationMessageId
-              }, "Integration continuation delivery was not confirmed.");
+        const route = JSON.parse(context.session.metadata.assistant_routing_request || "null");
+        // A previously claimed delivery without a routing request is only
+        // inspected. Never turn its old receipt into a fresh routed Send.
+        if (saved.continuation.status === "sending" && route?.messageId !== saved.continuationMessageId) {
+          let delivered = await store.conversationMessageIdExists(sessionId, saved.continuationMessageId);
+          if (!delivered && vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId === saved.continuation.engineId) {
+            try {
+              const admission = await sessionAgent.inspectMessageAdmission(sessionId, {
+                messageId: saved.continuationMessageId, threadId: saved.continuation.threadId
+              }, context);
+              delivered = admission.ok !== false && admission.admission === "accepted";
+            } catch {
+              // Keep the original receipt for another read after reconnection.
             }
-          } catch (error) {
-            logOperationalEvent(logger, "warn", {
-              code: error?.code, component: "vibe64.integration_continuation",
-              event: "vibe64.integration_continuation.delivery_failed",
-              sessionId, messageId: saved.continuationMessageId
-            }, "Integration continuation delivery failed; checking provider admission.");
-            // The provider may have accepted before local persistence failed.
-            // Inspect its exact message identity instead of resending.
           }
+          if (!delivered) return unconfirmed(saved);
+          const accepted = await store.acceptIntegrationContinuation(sessionId, {
+            ...input, continuationMessageId: saved.continuationMessageId, ...saved.continuation
+          });
+          return { ok: true, integrationSetup: accepted.integrationSetup };
         }
-        if (!delivered) {
-          try {
-            const admission = await sessionAgent.inspectMessageAdmission(sessionId, {
-              messageId: saved.continuationMessageId, threadId: delivery.threadId
-            }, context);
-            delivered = admission.ok !== false && admission.admission === "accepted";
-          } catch {
-            // An unavailable provider leaves the durable claim uncertain.
-          }
+        if (saved.continuation.status === "pending") {
+          const failure = await inspectConfiguration(saved);
+          if (failure) return failure;
         }
-        if (!delivered) {
-          return { ok: false, code: "vibe64_integration_continuation_unconfirmed",
-            error: "Assistant delivery could not be confirmed. Check again to inspect delivery; this will not send a duplicate message.",
-            integrationSetup: claim.integrationSetup };
-        }
-        const accepted = await store.acceptIntegrationContinuation(sessionId, delivery);
-        return { ok: true, integrationSetup: accepted.integrationSetup };
+        return { saved, runtime: context.runtime };
       }, { operation: "resume-integration-continuation", waitMs: AGENT_WRITE_WAIT_MS });
+      if (!prepared.saved) return prepared;
+      const { saved, runtime } = prepared;
+      let delivered = false;
+      let failure;
+      try {
+        const result = await assistantRouting.send(sessionId, {
+          messageId: saved.continuationMessageId, submissionKind: "send",
+          message: `Integration setup completed for slot ${JSON.stringify(saved.integrationId)}. Continue the implementation from your integration setup request. Read the project's saved integration configuration; do not request or expose credentials in chat.`
+        }, { ...options, runtime, purpose: "code",
+          onPromptSending: async ({ threadId, assistantSelection }) => {
+            const changed = await inspectConfiguration(saved);
+            if (changed) throw Object.assign(new Error(changed.error), { code: changed.code });
+            await runtime.store.claimIntegrationContinuation(sessionId, {
+              ...input, continuationMessageId: saved.continuationMessageId, engineId: assistantSelection.engineId, threadId
+            });
+          }
+        });
+        delivered = result?.ok !== false && result?.delivered === true;
+      } catch (error) {
+        failure = { ok: false, code: error.code, error: error.message };
+        logOperationalEvent(logger, "warn", {
+          code: error.code, component: "vibe64.integration_continuation",
+          event: "vibe64.integration_continuation.delivery_failed", sessionId, messageId: saved.continuationMessageId
+        }, "Integration continuation delivery failed; its request remains available for recovery.");
+      }
+      return runMainAgentWrite(sessionId, { ...options, runtime }, async () => {
+        const current = await runtime.store.readIntegrationSetupRequest(sessionId, input.turnId);
+        if (!current || current.requestId !== saved.requestId) return unconfirmed(current);
+        if (current.continuation.status === "accepted") return { ok: true, integrationSetup: current };
+        if (current.continuation.status === "pending") return failure || unconfirmed(current);
+        if (!delivered) return unconfirmed(current);
+        const accepted = await runtime.store.acceptIntegrationContinuation(sessionId, {
+          ...input, continuationMessageId: current.continuationMessageId, ...current.continuation
+        });
+        return { ok: true, integrationSetup: accepted.integrationSetup };
+      }, { operation: "complete-integration-continuation", waitMs: AGENT_WRITE_WAIT_MS });
     },
 
     async readConversationRewindState(sessionId, options = {}) {
@@ -2597,7 +2674,10 @@ function createService({
     async sendAgentMessage(sessionId, input = {}, options = {}) {
       const startedAt = Date.now();
       const username = (currentProjectRequestContext()?.vibe64User || options.vibe64User)?.username || null;
-      void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId);
+      void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId).catch((error) => {
+        logOperationalEvent(logger, "warn", { event: "vibe64.prompt_hints.cleanup_failed", error: error.message, sessionId },
+          "Prompt suggestion cleanup will be retried on session close.");
+      });
       try {
         const result = await assistantRouting.send(sessionId, input, options);
         if (result?.ok === false) {
@@ -2637,7 +2717,7 @@ function createService({
       const context = await assistantSessionOptions(sessionId, options);
       const result = await sessionAgent.readGoal(sessionId, context);
       const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
-      if (pinned && result.status !== "unavailable") {
+      if (pinned && result.status === "available") {
         const status = result.goal?.status || "complete";
         if (pinned.status !== status) {
           await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({ ...pinned, status }));
@@ -2658,7 +2738,7 @@ function createService({
             return { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Plan, Code, or Economy before starting or resuming a goal." };
           }
           const pendingRoute = JSON.parse(context.session.metadata.assistant_routing_request || "null");
-          if (assistantRoutingStatusIsPending(pendingRoute?.status)) {
+          if (assistantRoutingStatusIsPending(pendingRoute?.status) || pendingRoute?.helper) {
             return { ok: false, error: "Finish or cancel the pending request before starting a goal." };
           }
           const changeover = JSON.parse(context.session.metadata?.assistant_changeover || "null");
@@ -2677,8 +2757,15 @@ function createService({
       }
       const context = await assistantSessionOptions(sessionId, input);
       const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
-      return sessionAgent.updateGoal(sessionId, pinned && input.objective === pinned.objective
+      const result = await sessionAgent.updateGoal(sessionId, pinned && input.objective === pinned.objective
         ? { ...input, objective: assistantModePrompt(pinned.mode, input.objective) } : input, context);
+      if (result?.ok !== false && result.status === "available" && pinned) {
+        await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({
+          ...pinned, status: result.goal?.status || "complete"
+        }));
+        await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed" });
+      }
+      return result;
     },
 
     async readAgentPlanUsage(sessionId, options = {}) {
@@ -2729,7 +2816,7 @@ function createService({
       const records = await runtime.store.listSessionConversations(sessionId);
       const requests = [session.metadata, ...records.map((record) => record.routingMetadata || {})]
         .map((metadata) => JSON.parse(metadata.assistant_routing_request || "null"));
-      if (requests.some((request) => assistantRoutingStatusIsPending(request?.status))) {
+      if (requests.some((request) => assistantRoutingStatusIsPending(request?.status) || request?.helper)) {
         throw Object.assign(new Error("Finish or cancel pending chat routing and reviews before renewing this session."), { code: "vibe64_assistant_routing_pending", retryable: true });
       }
       const conversation = await sessionAgent.hasActiveTemporaryConversation(
@@ -2789,28 +2876,7 @@ function createService({
 
     // Called inside the selection writer's existing session lock. Closing a
     // controller stops observation/execution, never deletes native history.
-    async prepareAssistantChangeover(sessionId, context) {
-      requireCompletedConversationRewind(context.session);
-      const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
-      const metadata = context.session.metadata;
-      if (engineId === "codex" && metadata.agent_identity_provider === "codex" && metadata.agent_identity_conversation_id) {
-        const modelProviderId = metadata.agent_identity_model_provider || "openai";
-        const prefix = modelProviderId === "openai" ? "codex" : `codex_${modelProviderId}`;
-        await context.runtime.store.writeMetadataValue(sessionId, `${prefix}_conversation_id`, metadata.agent_identity_conversation_id);
-        await context.runtime.store.writeMetadataValue(sessionId, `${prefix}_conversation_workdir`, metadata.agent_identity_workdir);
-        // Resuming a Codex thread can resume an active native goal. Pause it
-        // before that resume so only the user's next Send starts work.
-        await context.runtime.store.writeMetadataValue(sessionId, "codex_changeover_pause_goal", "yes");
-      }
-      const closed = await sessionAgent.closeSession(sessionId, { ...context, changeover: true });
-      if (closed?.ok === false) return closed;
-      const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
-      await rememberAssistantBeforeChangeover(context, vibe64AssistantConversationKey(selection));
-      logOperationalEvent(logger, "info", {
-        event: "vibe64.assistant_changeover.previous_stopped", component: "vibe64.agent_message", sessionId, engineId
-      }, "Previous assistant stopped; its conversation is retained.");
-      return { ok: true };
-    },
+    prepareAssistantChangeover,
 
     globalCodexTerminalState() {
       return codex.globalTerminalState();
@@ -2885,7 +2951,10 @@ function createService({
     },
 
     startAgentConversationTurn(sessionId, input = {}, options = {}) {
-      void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId);
+      void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId).catch((error) => {
+        logOperationalEvent(logger, "warn", { event: "vibe64.prompt_hints.cleanup_failed", error: error.message, sessionId },
+          "Prompt suggestion cleanup will be retried on session close.");
+      });
       return runMainAgentWrite(sessionId, options, async (context) => {
         await prepareAgentSkillsInsideAgentWrite(sessionId, context);
         return sessionAgent.startConversationTurn(sessionId, input, context);
@@ -2981,7 +3050,8 @@ function createService({
 
     writeAgentTerminal(sessionId, terminalSessionId, data, input = {}, options = {}) {
       // A terminal write targets an already-open, namespace-owned PTY. It is
-      // transport, not a new assistant operation: putting raw input through
+      // transport authorized against its captured connection by the manager.
+      // Putting raw input through
       // runMainAgentWrite() hydrates the complete session and acquires
       // the assistant-operation lock for every WebSocket input chunk—often
       // every keystroke. Long-lived sessions therefore became progressively

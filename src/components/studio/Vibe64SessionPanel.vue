@@ -138,7 +138,6 @@
               button-class="studio-ai-sessions__preview-create-button"
               :icon-only="false"
               label="Create session"
-              menu-location="bottom center"
               :toolbar="emptyToolbar"
             />
           </div>

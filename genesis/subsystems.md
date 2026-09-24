@@ -45,8 +45,10 @@ Consumes JSKIT conversation presentation, provider primitives and transcript
 policy; Vibe64 owns the adapters, filesystem history, access and execution.
 It also owns switching the main conversation between engines, preserving native
 identities and adding missed or corrected history to the next ordinary Send.
-Within an orchestrator it owns chat modes, request classification and delivery,
-per-turn destination attribution, cancellation, and optional automatic review.
+It owns workflow chat modes, actor-aware destination resolution, isolated request
+classification and delivery, per-turn attribution, cancellation, and optional
+automatic review. Plan and Code retain one effective orchestrator per actor;
+foreign Economy and Backup chat turns reuse ordinary changeover.
 Temporary conversation discovery and explicit-close cleanup belong here too;
 these chats survive view removal and stay separate from main History.
 
@@ -66,7 +68,7 @@ these chats survive view removal and stay separate from main History.
 ## `accounts` Agent connections
 
 Owns AI account setup, provider-key storage and validation, connection selection,
-helper-model preferences, per-orchestrator model routing and recommendations,
+per-orchestrator model routing and recommendations,
 and connection health. Standalone and hosted editors
 share these operations; hosts supply credential context and access policy.
 
@@ -154,8 +156,9 @@ filename and content indexes for each working session.
 ## `database` Database exploration
 
 Owns inspection, diagram exploration, agent-assisted layout changes and query execution for a selected project database.
-Its transient copilot consumes the shared JSKIT conversation UI with
-server-owned configuration and database-specific actions.
+Its transient copilot consumes the shared JSKIT conversation UI and central Economy
+resolution. It owns its bounded database loop and durable helper-cleanup references;
+the shared runtime owns scoped native conversations and their execution.
 
 ### Program
 

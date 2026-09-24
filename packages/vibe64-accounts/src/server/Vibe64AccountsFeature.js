@@ -145,7 +145,8 @@ const Vibe64AccountsFeature = defineFeature({
     const accounts = createService({
       accountRuntime: resolvedAccountRuntime,
       personalProfileStore,
-      listAssistantCapabilities,
+      inspectRoutingConfiguration: typeof terminals?.inspectAssistantRoutingConfiguration === "function"
+        ? (configuration, options) => terminals.inspectAssistantRoutingConfiguration(configuration, options) : null,
       invalidateAgentRuntimes: async (input = {}) => {
         if (typeof terminals?.invalidateAgentRuntimes === "function") {
           return terminals.invalidateAgentRuntimes(input);
@@ -181,6 +182,7 @@ const Vibe64AccountsFeature = defineFeature({
     const aiConnectionService = aiConnections
       ? createAiConnectionService({
           aiConnections,
+          initializeModelRouting: accounts.initializeModelRouting,
           readAssistantCapabilities: (input, vibe64User) => terminals.listAssistantCapabilities({ ...input, vibe64User })
         })
       : null;

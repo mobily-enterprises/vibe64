@@ -28,6 +28,7 @@ test("project and sessions expose only named Feature capabilities", () => {
 
   assert.equal(Vibe64SessionsProvider.id, "vibe64.sessions");
   assert.deepEqual(Vibe64SessionsProvider.requires, {
+    accounts: "vibe64.accounts",
     events: "runtime.events",
     http: "runtime.http",
     project: "vibe64.project",
@@ -83,7 +84,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.project.settings.read",
     "vibe64.project.templates.apply"
   ]);
-  assert.equal(projectRoutes.length, projectActions[0].actions.length + 14);
+  assert.equal(projectRoutes.length, projectActions[0].actions.length + 15);
   assert.equal(
     projectRoutes.some(([method, path]) => method === "POST" && path.endsWith("/env/reveal")),
     true,

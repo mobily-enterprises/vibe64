@@ -1,8 +1,13 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, rm } from "node:fs/promises";
+import path from "node:path";
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   defineVibe64AgentExecutionProfileRequest,
-  vibe64AgentExecutionProfileAuditSnapshot
+  vibe64AgentExecutionProfileAuditSnapshot,
+  vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
 
 const MAX_COMMIT_SUBJECT_LENGTH = 72;
@@ -131,131 +136,91 @@ function normalizeSessionSaveCommitMessage(value = "") {
   return subject;
 }
 
-async function cleanupSessionSaveCommitMessageThread({
-  agentContext = {},
-  deleteThread,
-  executionProfile = null,
-  threadId = ""
-} = {}) {
-  const normalizedThreadId = text(threadId);
-  if (!normalizedThreadId) {
-    return { ok: true, status: "notFound" };
+async function cleanupSessionSaveCommitMessage({ agent, agentContext = {} } = {}) {
+  const { runtime, session, vibe64User } = agentContext;
+  const sessionId = session.sessionId || session.id;
+  const helper = (await runtime.store.readBackgroundTask(sessionId, "save-work"))?.assistantHelper;
+  if (!helper) return;
+  const root = path.join(runtime.stateRoot, "assistant-helpers", helper.scope.id);
+  if (!/^naming_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(root, "workdir") ||
+      helper.scope.runtimeRoot !== path.join(root, "runtime")) {
+    throw commitMessageError("The saved naming task has invalid cleanup paths.");
   }
-  if (typeof deleteThread !== "function") {
-    throw new TypeError("Commit-message cleanup requires the existing ephemeral assistant lifecycle.");
-  }
-  const cleanup = await deleteThread({
-    executionProfile: sessionSaveExecutionProfileSnapshot(executionProfile) ||
-      { ...SESSION_SAVE_COMMIT_EXECUTION_PROFILE },
-    threadId: normalizedThreadId
-  }, agentContext);
-  if (cleanup?.ok !== true) {
-    const detail = text(cleanup?.error);
-    throw commitMessageError(
-      [
-        "The temporary naming conversation could not be removed.",
-        detail,
-        "Cleanup will be retried on the next helper operation; Save can use a checkpoint-based name."
-      ].filter(Boolean).join(" "),
-      text(cleanup?.code) || "vibe64_session_save_message_cleanup_failed"
-    );
-  }
-  return cleanup;
+  const deleted = await agent.deleteEphemeralConversation(helper.scope, {
+    conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
+    ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
+  }, { assistantSelection: helper.selection, vibe64User });
+  if (deleted?.ok !== true) throw commitMessageError(
+    deleted?.error || "The naming helper could not be closed. Cleanup will be retried on the next Save or session close.",
+    deleted?.code || "vibe64_session_save_message_cleanup_failed"
+  );
+  await runtime.store.writeBackgroundTaskEvent(sessionId, "save-work", {
+    event: { kind: "naming-helper-closed" }, patch: { assistantHelper: null }
+  });
+  await rm(root, { recursive: true, force: true });
 }
 
-async function generateSessionSaveCommitMessage({
-  agentContext = {},
-  changes = {},
-  deleteThread,
-  expectedAccountIdentitySignature = "",
-  runAgentTurn
-} = {}) {
-  if (typeof runAgentTurn !== "function" || typeof deleteThread !== "function") {
-    throw new TypeError("Commit-message generation requires the existing ephemeral assistant lifecycle.");
-  }
-  const accountIdentitySignature = text(expectedAccountIdentitySignature);
-  if (!accountIdentitySignature) {
-    throw commitMessageError(
-      "Save needs a verified assistant account to name this work. Sign in to or reconnect the selected assistant provider, then retry.",
-      "vibe64_session_save_message_account_unverified"
-    );
-  }
-  let failure = null;
-  let result = null;
-  let observedExecutionProfile = null;
-  let threadId = "";
-  try {
-    result = await runAgentTurn({
-      ephemeral: true,
-      executionProfile: { ...SESSION_SAVE_COMMIT_EXECUTION_PROFILE },
-      expectedAccountIdentitySignature: accountIdentitySignature,
-      outputSchema: SESSION_SAVE_COMMIT_OUTPUT_SCHEMA,
-      prompt: sessionSaveCommitMessagePrompt(changes),
-      promptLabel: "Name saved work"
-    }, {
-      ...agentContext,
-      onEvent(event = {}) {
-        observedExecutionProfile ||= sessionSaveExecutionProfileSnapshot(event.executionProfile);
-        if (event.type === "thread") {
-          threadId = text(event.threadId);
-        }
-      }
+async function generateSessionSaveCommitMessage({ agent, agentContext = {}, changes = {} } = {}) {
+  const { runtime, session, vibe64User } = agentContext;
+  const sessionId = session.sessionId || session.id;
+  let helper;
+  async function retain() {
+    await runtime.store.writeBackgroundTaskEvent(sessionId, "save-work", {
+      event: { kind: "naming-helper" }, patch: { assistantHelper: helper }
     });
-    observedExecutionProfile ||= sessionSaveExecutionProfileSnapshot(result?.executionProfile);
-    threadId = text(result?.threadId) || threadId;
-    if (result?.ok === false) {
-      throw commitMessageError(
-        text(result.error) || "The assistant could not name this work. Save was not started.",
-        text(result.code) || "vibe64_session_save_message_failed"
-      );
-    }
-  } catch (error) {
-    failure = error instanceof Error
-      ? error
-      : commitMessageError("The assistant could not name this work. Save was not started.");
   }
-
-  if (threadId) {
-    try {
-      await cleanupSessionSaveCommitMessageThread({
-        agentContext,
-        deleteThread,
-        executionProfile: observedExecutionProfile,
-        threadId
-      });
-    } catch (error) {
-      const cleanupFailure = error instanceof Error
-        ? error
-        : commitMessageError("The temporary naming conversation could not be removed. Save was not started.");
-      if (failure && cleanupFailure !== failure) {
-        cleanupFailure.cause = failure;
-      }
-      failure = cleanupFailure;
-    }
-  }
-
-  if (failure) {
-    throw failure;
-  }
+  const cleanup = () => cleanupSessionSaveCommitMessage({ agent, agentContext });
+  // The Save task owns failed cleanup across restarts. Do not lose that record
+  // or start another helper until its exact native conversation is closed.
+  await cleanup();
+  const workflowEngineId = assistantRoutingFromMetadata(session.metadata)?.workflowEngineId ||
+    vibe64AssistantSelectionFromMetadata(session.metadata).engineId;
+  const decision = await agent.resolveAssistantPurpose({ purpose: "commit_title", workflowEngineId }, agentContext);
+  if (!decision.available) throw commitMessageError(decision.message, decision.reasonCode);
+  const id = `naming_${randomUUID()}`;
+  const root = path.join(runtime.stateRoot, "assistant-helpers", id);
+  helper = { scope: { id, environment: {}, runtimeRoot: path.join(root, "runtime"), workdir: path.join(root, "workdir"),
+    stableContext: "Write only a commit subject from supplied changes. You have no tools or project access." },
+    selection: decision.effectiveSelection, connectionIdentity: decision.connectionIdentity,
+    conversationId: "", runId: "", executionId: "" };
+  await retain();
+  const options = { assistantSelection: helper.selection, vibe64User, expectedConnectionIdentity: helper.connectionIdentity,
+    async onEvent(event) {
+      if (event.type === "thread") helper.conversationId = text(event.threadId);
+      else if (event.type === "turn") helper.runId = text(event.turnId);
+      else if (event.type === "helper-execution") helper.executionId = text(event.executionId);
+      else return;
+      await retain();
+    } };
+  let result;
+  let failure;
+  try {
+    await mkdir(helper.scope.workdir, { recursive: true });
+    await mkdir(helper.scope.runtimeRoot, { recursive: true });
+    const executionProfile = await agent.resolveEphemeralExecutionProfile(helper.scope, SESSION_SAVE_COMMIT_EXECUTION_PROFILE, options);
+    helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
+    await retain();
+    result = await agent.runEphemeralChatTurn(helper.scope, {
+      executionProfile, outputSchema: SESSION_SAVE_COMMIT_OUTPUT_SCHEMA,
+      prompt: sessionSaveCommitMessagePrompt(changes), promptLabel: "Name saved work"
+    }, options);
+    if (result?.ok !== true) throw commitMessageError(result?.error || "The assistant could not name this work.", result?.code);
+  } catch (error) { failure = error; }
+  try { await cleanup(); }
+  catch (error) { if (failure && error !== failure) error.cause = failure; failure = error; }
+  if (failure) throw failure;
   const executionProfile = sessionSaveExecutionProfileSnapshot(result?.executionProfile);
-  if (
-    !executionProfile ||
-    executionProfile.profileId !== SESSION_SAVE_COMMIT_EXECUTION_PROFILE.profileId ||
-    executionProfile.workloadId !== SESSION_SAVE_COMMIT_EXECUTION_PROFILE.workloadId
-  ) {
-    throw commitMessageError(
-      "The low-cost assistant required to name this work did not provide a verified execution profile. Check the selected assistant provider and retry Save.",
-      "vibe64_session_save_message_execution_profile_missing"
-    );
+  if (!executionProfile || executionProfile.profileId !== SESSION_SAVE_COMMIT_EXECUTION_PROFILE.profileId ||
+      executionProfile.workloadId !== SESSION_SAVE_COMMIT_EXECUTION_PROFILE.workloadId) {
+    throw commitMessageError("The naming helper did not provide a verified execution profile.",
+      "vibe64_session_save_message_execution_profile_missing");
   }
-  return {
-    executionProfile,
-    subject: parseSessionSaveCommitMessage(result?.text)
-  };
+  return { executionProfile, subject: parseSessionSaveCommitMessage(result.text) };
 }
 
 export {
   MAX_COMMIT_SUBJECT_LENGTH,
+  cleanupSessionSaveCommitMessage,
   generateSessionSaveCommitMessage,
   normalizeSessionSaveCommitMessage,
   sessionSaveCommitMessagePrompt

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
 import { execFile } from "node:child_process";
 import {
   access,
@@ -45,6 +46,8 @@ import {
 } from "../../packages/vibe64-genesis/src/server/index.js";
 
 const execFileAsync = promisify(execFile);
+const CODEX_SELECTION = { engineId: "codex", agentId: "codex", modelProviderId: "openai",
+  modelId: "gpt-6-sol", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` };
 
 function deferred() {
   let resolve;
@@ -115,6 +118,7 @@ function agentWriteLockHarness({ holdFirst = false, secondValue = null } = {}) {
 }
 
 async function terminalServiceFixture(t, lock, {
+  assistantSelection = null,
   logger = null,
   opencodeTerminalController = {},
   publishSessionChanged = {}
@@ -134,6 +138,8 @@ async function terminalServiceFixture(t, lock, {
   await writeFile(path.join(codexToolHomeSource, ".codex", "auth.json"), JSON.stringify({ auth_mode: "apikey" }));
   const session = {
     metadata: {
+      ...(assistantSelection ? { assistant_selection: JSON.stringify(assistantSelection) } : {}),
+      ...(assistantSelection?.engineId === "codex" ? { agent_identity_conversation_id: "pre-existing-thread" } : {}),
       repository_mode: "local_source",
       source_kind: "session_clone",
       source_path: sourcePath,
@@ -168,6 +174,7 @@ async function terminalServiceFixture(t, lock, {
       ...sessionStore,
       ...lock.store,
       async writeMetadataValue(_sessionId, name, value) {
+        await sessionStore.writeMetadataValue(_sessionId, name, value);
         session.metadata[name] = value;
         if (name === "workspace_setup") {
           session.workspaceSetup = JSON.parse(value);
@@ -215,6 +222,7 @@ async function terminalServiceFixture(t, lock, {
     },
     env: {
       [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: attachmentRoot,
+      VIBE64_SYSTEM_ROOT: path.join(root, "system"),
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
@@ -383,11 +391,14 @@ test("integration continuation recovers provider acceptance after local write fa
     await rm(provider.root, { recursive: true, force: true });
   });
   const lock = { store: {} };
-  const { service, runtime, session } = await terminalServiceFixture(t, lock, {
+  const { service, runtime, session, root } = await terminalServiceFixture(t, lock, {
     opencodeTerminalController: provider.controllerOptions
   });
   session.metadata.assistant_selection = provider.session.metadata.assistant_selection;
+  const code = { ...JSON.parse(session.metadata.assistant_selection), selectionSource: "explicit" };
+  await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({ opencode: { plan: code, code } }, 0);
   service.configureAssistantRuntime({
+    readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "shared-deepseek" }),
     resolveConnection: provider.controllerOptions.resolveConnection,
     listConnections: provider.controllerOptions.listConnections
   });
@@ -437,6 +448,56 @@ test("integration continuation recovers provider acceptance after local write fa
   assert.equal(recovered.integrationSetup.continuationMessageId, completion.continuationMessageId);
   assert.equal((await service.resumeIntegrationContinuation(session.sessionId, input)).ok, true);
   assert.equal(provider.promptCalls.length, 1);
+});
+
+test("integration continuation uses a member's shared Code destination without changing Plan preferences or adding review", async (t) => {
+  const provider = await controllerHarness();
+  t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });
+  const completed = Promise.withResolvers();
+  const { service, runtime, session, root } = await terminalServiceFixture(t, { store: {} }, {
+    opencodeTerminalController: provider.controllerOptions,
+    publishSessionChanged: { agentTerminal: async (_id, event) => {
+      if (event.payload?.assistantRoutingRequest?.status === "done") completed.resolve();
+    } }
+  });
+  const shared = { ...JSON.parse(provider.session.metadata.assistant_selection), selectionSource: "explicit" };
+  const personal = { ...shared, modelProviderId: "personal", modelId: "personal-model" };
+  session.metadata.assistant_selection = JSON.stringify(shared);
+  const preferences = JSON.stringify({ mode: "plan", workflowEngineId: "opencode", review: true, override: personal });
+  await runtime.store.writeMetadataValue(session.sessionId, "assistant_routing", preferences);
+  await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({ opencode: {
+    plan: personal, code: personal, sharedBackup: shared
+  } }, 0);
+  service.configureAssistantRuntime({
+    listConnections: provider.controllerOptions.listConnections,
+    resolveConnection: provider.controllerOptions.resolveConnection,
+    readAssistantAccess: async ({ modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "personal", connectionIdentity: `connection:${modelProviderId}` })
+  });
+  runtime.renderPrompt = async (_id, input) => ({ prompt: input.request });
+  await runtime.store.writeConversationUserMessage(session.sessionId, { text: "Configure mail." });
+  const turn = await runtime.store.writeConversationAssistantMessage(session.sessionId, {
+    text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
+  });
+  const input = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId };
+  await runtime.store.completeIntegrationSetupRequest(session.sessionId, {
+    ...input, configurationHash: "a".repeat(64), verifiedAt: "2026-09-11T08:00:00Z"
+  });
+  const result = await service.resumeIntegrationContinuation(session.sessionId, input, {
+    vibe64User: { username: "member", role: "member" },
+    readIntegrationConfiguration: async () => ({ ok: true, baseHash: "a".repeat(64), configuration: { integrations: { mail: {} } } })
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.integrationSetup.continuation.status, "accepted");
+  await completed.promise;
+  assert.equal(provider.promptCalls.length, 1);
+  assert.deepEqual(provider.promptCalls[0].input.model, { providerID: "deepseek", id: "deepseek-chat", variant: "high" });
+  assert.match(provider.promptCalls[0].input.prompt.text, /Vibe64 mode: code/);
+  const route = JSON.parse(session.metadata.assistant_routing_request);
+  assert.equal(route.resolvedMode, "code");
+  assert.equal(route.review, false);
+  assert.equal(route.decision.backupUsed, true);
+  assert.equal(route.submittedBy.username, "member");
+  assert.equal(session.metadata.assistant_routing, preferences);
 });
 
 test("integration continuation cannot execute for an archived or renewal-quiesced session", async (t) => {
@@ -522,14 +583,17 @@ test("workspace setup admission uses the session agent-write lock", async (t) =>
 });
 
 test("foreground chat waits for workspace setup admission instead of failing", async (t) => {
+  const provider = await controllerHarness();
+  t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });
   const lock = agentWriteLockHarness({
-    holdFirst: true,
-    secondValue: {
-      delivered: true,
-      ok: true
-    }
+    holdFirst: true
   });
-  const { service, session } = await terminalServiceFixture(t, lock);
+  const { service, session, runtime } = await terminalServiceFixture(t, lock, {
+    assistantSelection: provider.selection, opencodeTerminalController: provider.controllerOptions
+  });
+  runtime.renderPrompt = async (_id, input) => ({ prompt: input.request });
+  service.configureAssistantRuntime({ listConnections: provider.controllerOptions.listConnections,
+    resolveConnection: provider.controllerOptions.resolveConnection });
 
   const preparing = service.prepareWorkspaceSetup(session.sessionId, {
     retry: true
@@ -549,8 +613,9 @@ test("foreground chat waits for workspace setup admission instead of failing", a
   await preparing;
   const result = await sending;
 
-  assert.notEqual(result.code, "vibe64_agent_write_mode_busy");
-  assert.deepEqual(lock.attempts, [
+  assert.equal(result.delivered, true, JSON.stringify(result));
+  assert.equal(provider.promptCalls.length, 1);
+  assert.deepEqual(lock.attempts.slice(0, 2), [
     { operationName: "agent-write-mode", sessionId: session.sessionId },
     {
       operationName: "agent-write-mode",
@@ -565,7 +630,7 @@ test("assistant preparation waits for overlapping admission instead of reporting
     holdFirst: true,
     secondValue: { ok: true }
   });
-  const { service, session } = await terminalServiceFixture(t, lock);
+  const { service, session } = await terminalServiceFixture(t, lock, { assistantSelection: CODEX_SELECTION });
   const preparing = service.prepareWorkspaceSetup(session.sessionId, { retry: true });
   await lock.firstEntered;
   let settled = false;
@@ -587,6 +652,7 @@ test("assistant reconciliation retains structured failure diagnostics", async (t
   const warnings = [];
   const lock = agentWriteLockHarness();
   const { service, runtime, session } = await terminalServiceFixture(t, lock, {
+    assistantSelection: CODEX_SELECTION,
     logger: { warn(fields) { warnings.push(fields); } }
   });
   runtime.store.runSessionExclusive = async () => ({ acquired: false });
@@ -620,6 +686,7 @@ test("assistant reconciliation retains structured failure diagnostics", async (t
 test("assistant reconciliation identifies the member rejected by an owner-only connection", async (t) => {
   const warnings = [];
   const { service, session } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    assistantSelection: { ...CODEX_SELECTION, engineId: "opencode", agentId: "build", modelProviderId: "personal" },
     logger: { warn(fields) { warnings.push(fields); } }
   });
   service.configureAssistantRuntime({ readAssistantAccess: async () => ({ ownerOnly: true }) });
@@ -637,11 +704,11 @@ test("message failure logs identify the authenticated actor without copying mess
     logger: { warn(fields) { warnings.push(fields); } }
   });
   runtime.store.runSessionExclusive = async () => ({ acquired: false });
-  await runWithProjectRequestContext({ vibe64User: { username: "matt", role: "member" } }, () => (
+  await assert.rejects(runWithProjectRequestContext({ vibe64User: { username: "matt", role: "member" } }, () => (
     service.sendAgentMessage(session.sessionId, {
       message: "private-message-text", username: "spoofed-user"
     }, { vibe64User: { username: "merc" } })
-  ));
+  )), { code: "vibe64_agent_write_mode_busy" });
   const event = warnings.find((entry) => entry.event === "vibe64.agent_message.delivery_failed");
   assert.equal(event.username, "matt");
   assert.doesNotMatch(JSON.stringify(event), /private-message-text|spoofed-user/u);
@@ -725,7 +792,7 @@ test("Save preparation timeout returns an actionable retry without starting repo
 
 test("rebase, assistant preparation and temporary repair identify their lock requests", async (t) => {
   const lock = agentWriteLockHarness();
-  const { service, runtime, session } = await terminalServiceFixture(t, lock);
+  const { service, runtime, session } = await terminalServiceFixture(t, lock, { assistantSelection: CODEX_SELECTION });
   const operations = [];
   runtime.store.runSessionExclusive = async (_sessionId, _lockName, _operation, options) => {
     operations.push(options.operation);
@@ -1230,7 +1297,7 @@ test("an active attachment upload finishes before renewal can freeze and cleanup
 });
 
 for (const personalMember of [false, true]) {
-  test(`Save publishes captured work when assistant naming is ${personalMember ? "personal-only" : "unavailable"}`, async (t) => {
+  test(`Save publishes captured work with unconfigured Economy and ${personalMember ? "a member's personal main chat" : "unavailable AI"}`, async (t) => {
     const events = [];
     const { projectService, root, service, session } = await terminalServiceFixture(t, { store: {} });
     if (personalMember) {
@@ -1284,8 +1351,43 @@ for (const personalMember of [false, true]) {
       `Save work ${checkpoint.checkpointTree.slice(0, 12)}`);
     assert.ok(events.some((event) => event.stage === "message-fallback"));
     if (personalMember) {
-      assert.equal(events.find((event) => event.stage === "message-fallback").code, "vibe64_assistant_owner_required");
+      assert.equal(events.find((event) => event.stage === "message-fallback").code, "vibe64_assistant_routing_invalid");
     }
     assert.equal(saved.commitTitleExecutionProfile, null);
   });
 }
+
+
+test("purpose access enables a member's configured chat after a personal turn while keeping steering on its native connection", async (t) => {
+  const provider = await controllerHarness();
+  t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });
+  const { service, session, root } = await terminalServiceFixture(t, { store: {} }, { opencodeTerminalController: provider.controllerOptions });
+  const shared = { ...JSON.parse(provider.session.metadata.assistant_selection), selectionSource: "explicit" };
+  const personal = { ...shared, modelProviderId: "personal", modelId: "personal-model" };
+  session.metadata.assistant_selection = JSON.stringify(personal);
+  session.metadata.assistant_routing = JSON.stringify({ mode: "code", workflowEngineId: "opencode", review: true });
+  await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({ opencode: {
+    plan: personal, code: shared, router: shared, economy: shared, sharedBackup: shared
+  } }, 0);
+  service.configureAssistantRuntime({
+    listConnections: provider.controllerOptions.listConnections,
+    resolveConnection: provider.controllerOptions.resolveConnection,
+    readAssistantAccess: async ({ modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "personal", connectionIdentity: `connection:${modelProviderId}` })
+  });
+  const options = { vibe64User: { username: "member", role: "member" } };
+  session.agentRuns = [{ active: true }];
+  const active = await service.inspectAssistantAccess(session.sessionId, options);
+  assert.equal(active.steering, true);
+  assert.equal(active.canUse, false, "steering cannot substitute another model while a personal native turn is active");
+  assert.equal(active.canRequestMessage, true);
+  assert.equal(active.purposes.code.available, true, active.purposes.code.message);
+  assert.equal(active.purposes.prompt_hint.available, true);
+  assert.equal(active.purposes.auto.available, false);
+  session.agentRuns = [];
+  const idle = await service.inspectAssistantAccess(session.sessionId, options);
+  assert.equal(idle.steering, false);
+  assert.equal(idle.canUse, true, idle.purposes.code.message);
+  assert.equal(idle.canRequestMessage, false);
+  assert.equal(idle.purposes.review.effectiveSelection.modelId, shared.modelId);
+  assert.equal(provider.promptCalls.length, 0, "availability never sends work to a provider");
+});

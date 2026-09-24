@@ -80,6 +80,7 @@ function createVibe64SessionsFeature() {
     id: "vibe64.sessions",
     domain: "vibe64-sessions",
     requires: {
+      accounts: "vibe64.accounts",
       events: "runtime.events",
       http: "runtime.http",
       project: "vibe64.project",
@@ -93,7 +94,7 @@ function createVibe64SessionsFeature() {
       channels: ["api", "automation", "internal"],
       surfaces: ["app"]
     },
-    setup({ events, http, project, sourceEditor, terminals }) {
+    setup({ accounts, events, http, project, sourceEditor, terminals }) {
       const sessionPresence = createSessionPresenceService({
         onPublishError: (error) => {
           vibe64SessionDebugLog("server.sessions.presence.publish.error", {
@@ -103,6 +104,7 @@ function createVibe64SessionsFeature() {
         publishPresence: createSessionPresencePublisher(events)
       });
       const sessions = createService({
+        initializeModelRouting: (input) => accounts.initializeModelRouting(input),
         project,
         publishSessionChanged: createSessionChangedPublisher(events),
         sessionPresence,

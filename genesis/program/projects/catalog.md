@@ -12,6 +12,7 @@ workspace.
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `packages/vibe64-core/src/server/studioProjectContext.js`
+- `tests/server/assistantRoutingStateInventory.unit.test.js`
 - `src/composables/useVibe64ProjectsResource.js`
 - `src/composables/useProjectSelectionGate.js`
 - `src/composables/useVibe64AppPage.js`

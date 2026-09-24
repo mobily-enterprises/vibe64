@@ -70,7 +70,7 @@ vi.mock("vuetify/components/VTextarea", () => ({
 vi.mock("@/components/studio/StudioErrorNotice.vue", () => ({
   default: passthroughComponent("section")
 }));
-vi.mock("@/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue", () => ({
+vi.mock("@/components/studio/vibe64-session/Vibe64WorkflowSelector.vue", () => ({
   default: defineComponent({
     props: {
       active: Boolean
@@ -78,7 +78,7 @@ vi.mock("@/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue",
     emits: ["update:ready", "update:selection"],
     setup(props, { emit }) {
       if (props.active) {
-        emit("update:selection", renewalUiHarness.assistantSelection);
+        emit("update:workflow", "codex");
         emit("update:ready", renewalUiHarness.assistantReady);
       }
       return () => h("section", "AI for the fresh session");
@@ -415,7 +415,7 @@ describe("session renewal dialog", () => {
     expect(confirmButton).toBeTruthy();
     expect(confirmButton.disabled).toBe(false);
     confirmButton.onClick();
-    expect(renewal.confirm).toHaveBeenCalledWith(renewalUiHarness.assistantSelection);
+    expect(renewal.confirm).toHaveBeenCalledWith("codex");
   });
 
   it("cannot confirm while the fresh-session assistant choice is unresolved", async () => {
@@ -568,15 +568,16 @@ describe("session renewal dialog", () => {
   });
 
   it("makes the advisory available by tap with full-size header targets", () => {
-    expect(autopilotSource).toContain(":title=\"assistantDirectAllowed ? sessionRenewalActionPresentation.reason : assistantRestrictionMessage\"");
+    expect(autopilotSource).toContain(":title=\"sessionRenewalActionPresentation.reason\"");
     expect(autopilotSource).toContain('ref="sessionActionsTrigger"');
     expect(autopilotSource).toContain('@click="requestSessionRenewal(sessionActionsTrigger)"');
     expect(autopilotSource).toContain('@click="requestSessionRenewal($event.currentTarget)"');
     expect(autopilotSource).toContain("returnFocusTarget: returnFocusTarget?.$el || returnFocusTarget");
     expect(autopilotSource).toMatch(/height="48"[\s\S]*?:icon="mdiAutorenew"[\s\S]*?width="48"/u);
-    expect(autopilotSource).toMatch(/aria-label="Open temporary AI"[\s\S]*?height="48"[\s\S]*?width="48"/u);
+    expect(autopilotSource).toMatch(/:aria-label="temporaryAiHasUnreadMessages[^"\n]+"[\s\S]*?height="48"[\s\S]*?width="48"/u);
     expect(autopilotSource).toContain(":aria-label=\"sessionActionsLabel\"");
-    expect(autopilotSource).toContain("Session actions: ${sessionRenewalActionPresentation.value.label}");
+    expect(autopilotSource).toContain('sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : ""');
+    expect(autopilotSource).toContain('].filter(Boolean).join(": ")');
     expect(autopilotSource).toContain(':icon="mdiDotsVertical"');
     expect(autopilotSource).toContain('title="Temporary AI"');
     expect(autopilotSource).toContain("studio-autopilot__session-action-item");

@@ -126,13 +126,17 @@ describe("useVibe64AssistantAccess", () => {
     expect(access.canSubmitMainChat.value).toBe(true);
     expect(endpointMocks.options[0].realtime.events).toEqual([
       "vibe64.session.changed",
-      "vibe64.connections.changed"
+      "vibe64.connections.changed",
+      "vibe64.accounts.changed"
     ]);
     expect(endpointMocks.options[0].realtime.matches({
       event: "vibe64.connections.changed",
       payload: { connectionId: "openai" }
     })).toBe(true);
 
+    expect(endpointMocks.options[0].realtime.matches({
+      event: "vibe64.accounts.changed", payload: { reason: "model-routing-updated" }
+    })).toBe(true);
     sessionId.value = "session-b";
     await nextTick();
     expect(endpointMocks.options[0].path.value).toBe(
@@ -158,7 +162,40 @@ describe("useVibe64AssistantAccess", () => {
         reason: "opencode-server-turn-idle",
         sessionId: "session-b"
       }
-    })).toBe(false);
+    })).toBe(true);
+    scope.stop();
+  });
+
+  it("keeps chat, helpers, Auto and approval availability independent", () => {
+    endpointMocks.resources = [resource({
+      ok: true, available: true, canUse: true, nativeCanUse: false, canUseAny: true, currentMode: "code", canRequestMessage: false,
+      purposes: {
+        code: { available: true, backupUsed: true, effectiveSelection: { engineId: "opencode", modelId: "big-pickle" } },
+        auto: { available: false, message: "Auto requires direct access to Plan, Code and Router." },
+        prompt_hint: { available: false, message: "Review the migrated helper settings." }
+      }
+    }), resource({ ok: true, canManage: false, suggestions: [] })];
+    const scope = effectScope();
+    const access = scope.run(() => useVibe64AssistantAccess({ sessionId: "session-a", sessionsApiPath: "/api/vibe64/sessions" }));
+    expect(access.canUseChat.value).toBe(true);
+    expect(access.canUseNative.value).toBe(false);
+    expect(access.canRouteChat.value).toBe(true);
+    expect(access.canUseAi.value).toBe(true);
+    expect(access.canUsePurpose("code")).toBe(true);
+    expect(access.canUsePurpose("auto")).toBe(false);
+    expect(access.canUsePurpose("prompt_hint")).toBe(false);
+    expect(access.canRequestMessage.value).toBe(false);
+    expect(access.accessLabel.value).toBe("Shared backup");
+    expect(access.restrictionMessage.value).toBe("");
+    endpointMocks.resources[0].data.value = {
+      ...endpointMocks.resources[0].data.value, currentMode: "auto", canUse: false, nativeCanUse: true
+    };
+    expect(access.canUseChat.value).toBe(false);
+    expect(access.canUseNative.value).toBe(true);
+    expect(access.canRouteChat.value).toBe(false);
+    expect(access.canUseAi.value).toBe(true);
+    expect(access.canSubmitMainChat.value).toBe(false);
+    expect(access.restrictionMessage.value).toContain("Auto requires direct access");
     scope.stop();
   });
 
@@ -343,20 +380,7 @@ describe("useVibe64AssistantAccess", () => {
     expect(assistantMenuSource).toContain('Configure more AIs');
     expect(assistantMenuSource).not.toContain("Vibe64AssistantSessionDialog");
     expect(assistantMenuSource).not.toContain("disabledReason");
-    expect(assistantDialog).toContain('configuredOnly: true');
-    expect(assistantDialog).toContain('active: true');
-    expect(assistantDialog).toContain('aria-label="Connected AI"');
-    expect(assistantDialog).toContain('<v-radio-group');
-    expect(assistantDialog).toContain('label: engine.engineId === "codex" ? `Codex - ${provider.label}` : engine.engineId === "claude" ? "Claude" : model.label');
-    expect(assistantDialog).toContain('Claude account · ${model.label}');
-    expect(assistantDialog).not.toContain('Recommended');
-    expect(assistantDialog).toContain('preferred: provider.preferred === true');
-    expect(assistantDialog).toContain('Number(right.preferred) - Number(left.preferred)');
-    expect(assistantDialog).toContain('available.find((choice) => choice.preferred)?.id');
-    expect(assistantDialog).toContain('selectedChoiceId.value = defaultChoiceId();');
-    expect(assistantDialog).toContain('type="list-item-two-line"');
-    expect(assistantDialog).toContain('No AI is connected');
-    expect(assistantDialog).not.toContain('Search providers');
-    expect(assistantDialog).not.toContain('Customize');
+    expect(assistantDialog).toContain('Vibe64WorkflowSelector');
+    expect(assistantDialog).toContain('Start in Plan. Choose Code or Auto from chat.');
   });
 });

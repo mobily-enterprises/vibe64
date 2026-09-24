@@ -192,6 +192,25 @@ test("message suggestions retain preferred-name attribution and attachments thro
   });
 });
 
+test("owner approval authorizes the routed delivery without requiring the previous native connection", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = await createSuggestionRuntime(targetRoot);
+    const harness = queueHarness(runtime);
+    const created = await harness.service.suggestAgentMessage("session-1", {
+      message: "Implement the change through the available Code destination.",
+      vibe64User: { role: "member", username: "member" }
+    });
+    harness.terminals.requireAssistantAccess = async () => { throw new Error("The previous native connection is unavailable."); };
+    const approved = await harness.service.approveMessageSuggestion("session-1", {
+      suggestionId: created.suggestion.id, vibe64User: { role: "owner", username: "owner" }
+    });
+    assert.equal(approved.ok, true);
+    assert.equal(approved.suggestion.status, "delivered");
+    assert.equal(harness.deliveries.length, 1);
+    assert.equal(harness.deliveries[0].vibe64User.role, "owner");
+  });
+});
+
 test("coalesced suggestion approvals still authorize each caller", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = await createSuggestionRuntime(targetRoot);
@@ -519,5 +538,35 @@ test("pending suggestions remain readable after the session is archived", async 
     assert.equal(archived.entries.length, 1);
     assert.equal(archived.entries[0].id, created.suggestion.id);
     assert.equal(archived.entries[0].status, "pending");
+  });
+});
+
+test("assistant access exposes separate purpose decisions without private connection identities", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = await createSuggestionRuntime(targetRoot);
+    const harness = queueHarness(runtime);
+    harness.terminals.inspectAssistantAccess = async (_sessionId, context) => {
+      assert.equal(context.vibe64User.username, "member");
+      return {
+        available: true, canUse: true, nativeCanUse: false, canUseAny: true, canRequestMessage: false, currentMode: "code",
+        purposes: {
+          code: { available: true, effectiveSelection: { ...selection, modelId: "deepseek-flash" },
+            connectionIdentity: "private-connection", planCodePair: {
+              plan: { connectionIdentity: "private-plan" }, code: { connectionIdentity: "private-code" }
+            } },
+          prompt_hint: { available: false, reasonCode: "helper_review_required", message: "Review helper routing." },
+          auto: { available: false, routerConnectionIdentity: "private-router", reasonCode: "personal_roles" }
+        }
+      };
+    };
+    const result = await harness.service.inspectAssistantAccess("session-1", { vibe64User: { username: "member", role: "member" } });
+    assert.equal(result.ok, true);
+    assert.equal(result.currentMode, "code");
+    assert.equal(result.canUse, true);
+    assert.equal(result.nativeCanUse, false);
+    assert.equal(result.purposes.prompt_hint.available, false);
+    assert.equal(result.purposes.code.effectiveSelection.modelId, "deepseek-flash");
+    assert.doesNotMatch(JSON.stringify(result), /private-|connectionIdentity|routerConnectionIdentity/u);
+    assert.equal(harness.deliveries.length, 0);
   });
 });

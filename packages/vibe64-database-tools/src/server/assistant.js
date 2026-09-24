@@ -6,8 +6,7 @@ import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   defineVibe64AgentExecutionProfileRequest,
-  vibe64AgentExecutionProfileAuditSnapshot,
-  vibe64AssistantSelectionFromMetadata
+  vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 
 import {
@@ -61,18 +60,14 @@ function text(value = "") {
   return String(value ?? "").trim();
 }
 
-function databaseAssistantAvailability(session = {}) {
-  const selection = vibe64AssistantSelectionFromMetadata(session?.metadata, {
-    required: false
-  });
-  const engineId = text(
-    selection?.engineId ||
-    session?.metadata?.agent_identity_provider
-  );
+function databaseAssistantAvailability(decision = {}) {
+  const selection = decision.effectiveSelection;
   return {
-    available: Boolean(selection || engineId),
-    engineId,
-    model: text(selection?.modelId) || (engineId ? "Selected assistant" : "")
+    available: decision.available === true,
+    engineId: text(selection?.engineId),
+    model: text(selection?.modelId),
+    backupUsed: decision.backupUsed === true,
+    message: text(decision.message)
   };
 }
 
@@ -321,6 +316,7 @@ async function runDatabaseAssistant({
 
   try {
     for (let round = 0; round < MAX_ASSISTANT_TOOL_TURNS; round += 1) {
+      agentContext.signal?.throwIfAborted();
       const result = await runAgentTurn({
         ...(threadId ? { conversationId: threadId, threadId } : {}),
         ephemeral: true,
@@ -331,16 +327,17 @@ async function runDatabaseAssistant({
         timeoutMs: DATABASE_ASSISTANT_TURN_TIMEOUT_MS
       }, {
         ...agentContext,
-        onEvent(event = {}) {
+        async onEvent(event = {}) {
           if (event.type === "thread") {
             threadId = text(event.threadId) || threadId;
           }
           observedExecutionProfile ||= executionProfileSnapshot(event.executionProfile);
-          agentContext.onEvent?.(event);
+          await agentContext.onEvent?.(event);
         }
       });
       threadId = text(result?.threadId || result?.conversationId) || threadId;
       observedExecutionProfile ||= executionProfileSnapshot(result?.executionProfile);
+      agentContext.signal?.throwIfAborted();
       if (result?.ok === false) {
         throw vibe64Error(
           text(result.error) || "The database assistant could not complete this request.",
@@ -430,6 +427,7 @@ async function runDatabaseAssistant({
 }
 
 export {
+  DATABASE_ASSISTANT_EXECUTION_PROFILE,
   DATABASE_ASSISTANT_OUTPUT_SCHEMA,
   DATABASE_ASSISTANT_SCHEMA_SEARCH_MAX_CHARACTERS,
   DATABASE_ASSISTANT_TURN_TIMEOUT_MS,

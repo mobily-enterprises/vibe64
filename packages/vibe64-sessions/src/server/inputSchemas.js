@@ -66,6 +66,7 @@ const renewalDraftFields = {
 
 const renewalConfirmationFields = {
   ...renewalDraftGuardFields,
+  workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
   assistantSelection: {
     type: "object",
     additionalProperties: true,
@@ -300,6 +301,7 @@ const sessionPullRequestInputValidator = patchSchema({
 });
 
 const sessionCreateInputValidator = patchSchema({
+  workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
   pullRequestNumber: { type: "integer", min: 1, required: false },
   assistantSelection: {
     type: "object",

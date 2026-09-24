@@ -2793,6 +2793,15 @@ test("Codex access distinguishes account authentication from API keys without ex
     assert.equal(account.ownerOnly, true);
     assert.equal(account.endpointCode, "codex_subscription");
     assert.doesNotMatch(JSON.stringify(account), /first-private-access-token/u);
+    const systemRoot = path.join(root, "system");
+    await writeCodexAuthMarker(systemRoot);
+    const identified = await readCodexSelectedAccountAccess({ toolHomeSource: chatgptHome, systemRoot });
+    assert.equal(identified.connectionIdentity, await currentCodexAccountIdentitySignature({
+      toolHomeSource: chatgptHome, systemRoot
+    }, { includeInteractive: true }));
+    await writeCodexAuthMarker(systemRoot, { loginId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" });
+    assert.notEqual((await readCodexSelectedAccountAccess({ toolHomeSource: chatgptHome, systemRoot })).connectionIdentity,
+      identified.connectionIdentity);
 
     await writeChatgptAuth(chatgptHome, {
       accessToken: "refreshed-private-access-token",

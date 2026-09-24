@@ -107,6 +107,7 @@ test("renewal inputs require durable operation and optimistic draft guards", () 
 
   const confirmation = sessionRenewalConfirmationActionInputValidator.schema.create({
     assistantSelection: ASSISTANT_SELECTION,
+    workflowEngineId: "codex",
     expectedHash: DRAFT_HASH,
     expectedRevision: 3,
     operationKey: "renewal:session-1:one",
@@ -190,6 +191,7 @@ test("renewal actions use server action context identity and domain-native idemp
   };
   const base = {
     assistantSelection: ASSISTANT_SELECTION,
+    workflowEngineId: "codex",
     expectedHash: DRAFT_HASH,
     expectedRevision: 2,
     operationKey: "renewal:session-1:one",
@@ -232,6 +234,7 @@ test("renewal actions use server action context identity and domain-native idemp
     }],
     ["confirm", "session-1", {
       assistantSelection: ASSISTANT_SELECTION,
+    workflowEngineId: "codex",
       expectedHash: DRAFT_HASH,
       expectedRevision: 2,
       operationKey: "renewal:session-1:one",
@@ -317,6 +320,7 @@ test("renewal HTTP routes expose the six state transitions without accepting bod
           actionId: ACTION_CONFIRM_SESSION_RENEWAL,
           body: {
             assistantSelection: ASSISTANT_SELECTION,
+    workflowEngineId: "codex",
             expectedHash: DRAFT_HASH,
             expectedRevision: 2,
             operationKey: "renewal:session-1:one",

@@ -594,9 +594,16 @@ shared tool route; a retained hidden host waits until reactivation to reconsider
 its source and the current route.
 
 A source explanation is temporary assistance for a selected code range or file.
+The server resolves `source_explanation` to the actor's effective Economy before
+requesting a profile or consulting the answer cache. This can use a shared
+foreign orchestrator while the working conversation uses a personal connection.
+The editor's explanation controls use this purpose's availability; ordinary file
+access remains independent. Answers name the actual orchestrator and model.
 A matching cached answer can appear without starting a provider conversation;
 its first follow-up starts an independently owned conversation through the same
-verified low-cost execution profile. The server retains source, account, profile,
+verified low-cost execution profile. A retained native conversation is reusable
+only for the same actor, connection and effective selection; a changed destination
+requires regeneration. The server retains source, account, profile,
 and conversation authorization. The browser submits the explanation identity
 and question, not a provider thread or model configuration. Failed conversations
 offer regeneration instead of another follow-up; unavailable assistants leave
@@ -668,17 +675,26 @@ its own scrolling, so reaching a lower section does not shift the page content.
   request generation, streamed messages and acknowledged Close state;
   `Vibe64SourceExplanationPanel` presents the answer, follow-up, cancellation
   and recovery controls. An answered cache record does not need a thread id to
-  enable its first follow-up.
+  enable its first follow-up. Each explanation owns its manager scope and uses
+  the exact captured selection, connection identity and branded execution profile.
+  Its cleanup ledger stores scope/native identifiers and profile snapshots, not
+  questions, source contents or answers. Ownership is retained before native work
+  and before acknowledging new native identifiers. Confirmed deletion removes the
+  reference and scope; failure keeps them for explicit Close or session-close retry,
+  including after restart. Old thread-only references retain their cleanup path.
 - Source explanations use a lock for their own conversation rather than holding
   the session source lock while awaiting an answer. Source edits, previews and
   other explanations can proceed; a second turn in the same explanation receives
   an explanation-specific busy response. Session renewal admission still applies.
-- Server interruption stays outside the conversation lock. If a new message
-  has not received its provider turn identity, Stop waits for that exact message's
-  identity or startup failure; it never reuses the previous message's turn. After
-  its provider acknowledgement, Stop compares the targeted assistant message and
-  provider turn before publishing state; it cannot overwrite a newer turn or restore an
-  explanation that has already been deleted.
+- The existing explanation task map owns an AbortController and completion
+  promise per active explanation. Stop, Close and session shutdown abort and await
+  that task, including a late native startup. The manager interrupts the current
+  native turn; startup or Stop failure remains an error. Successful cancellation
+  preserves a stopped answer and its exact turn identity. A delayed Stop response
+  still checks the targeted message and native turn before publishing state, so
+  it cannot overwrite a newer follow-up or reopen a removed explanation.
+  `Vibe64SourceEditorProvider` connects explanation cleanup to terminal session
+  shutdown; failed cleanup blocks a successful shutdown acknowledgement.
 - `runSessionWorkOperation()` admits each Current Changes, file-diff, work-state,
   or update-check request as one managed job. Canonical Save uses one managed
   checkpoint-and-summary job before commit naming and one managed
@@ -877,8 +893,8 @@ uses the project service outside that lock; the service then reacquires the lock
 and repeats inspection before executing the application command. Missing declarations remain
 unconfigured. Personal account connect/cancel/disconnect belongs to the
 application and is refused here.
-When an editor request is supplied, the service checks normal assistant access,
-its saved slot/request identity and configuration hash both before Env preparation
+When an editor request is supplied, the service checks its saved slot/request
+identity and configuration hash both before Env preparation
 and before command execution. An already-decided request cannot run another connect command. Status can reread
 the application's live state and return the original saved decision. A connected result must include an application verification timestamp
 before the session store records completion. A concurrent Skip remains Skipped.
@@ -889,6 +905,11 @@ does not deliver an assistant continuation. The Configure card supplies this ass
 Integrations model attaches it only to the matching development slot and session,
 never production. A returned decision reloads the conversation. Subsequent
 explicit account reconnection omits a decided request association.
+Connecting or checking an application integration, and dismissing its saved chat
+request, do not invoke AI and do not require access to the chat's personal model.
+Project access and the separate owner gates for payments, advertising and OAuth
+client registration still apply. AI preparation buttons only fill the main-chat
+draft; the selected chat mode or owner-approval path handles sending it.
 
 `runApplicationIntegrationSetup` also accepts a host-selected release source root
 and private Env-file reference. It reuses the same file policy, provider

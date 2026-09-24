@@ -244,12 +244,12 @@
           >
             Unsaved edits are kept in this browser tab if you close this window or switch sessions.
           </p>
-          <Vibe64RenewalAssistantSelector
+          <Vibe64WorkflowSelector
             :active="renewal.open && renewal.phase === 'review'"
             :disabled="dialogBusy"
-            :initial-selection="renewal.assistantSelection"
+            :initial-engine-id="renewal.workflowEngineId"
             @update:ready="assistantSelectionReady = $event"
-            @update:selection="successorAssistantSelection = $event"
+            @update:workflow="successorWorkflowEngineId = $event"
           />
           <p class="studio-session-renewal__supporting text-body-small">
             Renewing will stop this session’s tools, create and prepare a fresh session, deliver the handover, then archive this one.
@@ -453,7 +453,7 @@ import {
   mdiRefresh
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
-import Vibe64RenewalAssistantSelector from "@/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue";
+import Vibe64WorkflowSelector from "@/components/studio/vibe64-session/Vibe64WorkflowSelector.vue";
 import {
   sessionRenewalFailureSupportingMessage
 } from "@/lib/vibe64SessionRenewalViewModel.js";
@@ -468,7 +468,7 @@ const props = defineProps({
 const { smAndDown } = useDisplay();
 const renewalTitleId = `vibe64-session-renewal-title-${useId()}`;
 const assistantSelectionReady = ref(false);
-const successorAssistantSelection = ref(null);
+const successorWorkflowEngineId = ref("");
 const dialogBusy = computed(() => Boolean(
   props.renewal.successorSelectionPending || (
     props.renewal.busy && props.renewal.phase !== "progress"
@@ -487,7 +487,7 @@ const renewalProgress = computed(() => {
 const canConfirmRenewal = computed(() => Boolean(
   props.renewal.canConfirm &&
   assistantSelectionReady.value &&
-  successorAssistantSelection.value
+  successorWorkflowEngineId.value
 ));
 const manualDraft = computed(() => props.renewal.renewal?.draft?.origin === "manual");
 const failedSupportingMessage = computed(() => (
@@ -525,7 +525,7 @@ function closeFromModel(value) {
 
 function confirmRenewal() {
   if (canConfirmRenewal.value) {
-    props.renewal.confirm?.(successorAssistantSelection.value);
+    props.renewal.confirm?.(successorWorkflowEngineId.value);
   }
 }
 </script>

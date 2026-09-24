@@ -127,11 +127,15 @@ function createCodexProviderConnectionStore({
       const saved = await read(provider.id);
       const paths = codexProviderPaths(systemRoot, provider.id);
       const status = saved ? await readCodexAuthStatus(paths.systemRoot) : null;
+      const marker = saved ? await readFile(codexAuthMarkerPath(paths.systemRoot), "utf8")
+        .then(JSON.parse).catch((error) => { if (error.code === "ENOENT") return null; throw error; }) : null;
       return {
         id: provider.id,
         label: provider.label,
         connected: Boolean(saved && !status),
         claudeReady: Boolean(saved?.claudeReady && !status),
+        connectionIdentity: marker?.connected === true && typeof marker.generation === "string"
+          ? `curated:${provider.id}:${marker.generation}` : "",
         status: status?.status || (saved ? "connected" : "not_connected")
       };
     }));

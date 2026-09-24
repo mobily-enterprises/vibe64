@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import crypto from "node:crypto";
 import path from "node:path";
-import { spawn as spawnPty } from "node-pty";
+import { createRequire } from "node:module";
 
 import {
   drainProcessGroup
@@ -25,6 +25,7 @@ const TERMINAL_KEY_INPUTS = Object.freeze({
   "tab": "\t"
 });
 const stores = new Map();
+const requirePty = createRequire(import.meta.url);
 const namespaceAdmissions = new Map();
 const namespaceOperationCounts = new Map();
 
@@ -848,7 +849,8 @@ function startTerminalSession({
       namespace
     })
     : metadata;
-  const terminal = spawnPty(command, resolvedArgs, {
+  // Offline state upgrades share command capture, but never need a native PTY.
+  const terminal = requirePty("node-pty").spawn(command, resolvedArgs, {
     cols: DEFAULT_TERMINAL_COLS,
     cwd,
     env: {

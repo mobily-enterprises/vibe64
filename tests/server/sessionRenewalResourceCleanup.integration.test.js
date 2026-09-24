@@ -532,12 +532,12 @@ async function renewalHarness(targetRoot, {
         return projectService.releaseSessionResources(input);
       }
     },
-    async resolveSuccessorAssistantSelection(requested, { session, vibe64User }) {
-      assert.equal(requested, undefined);
+    async resolveSuccessorAssistant(input, { session, vibe64User }) {
+      assert.equal(input.assistantSelection, undefined);
       assert.equal(session.sessionId, PREDECESSOR_ID);
       assert.equal(session.metadata.assistant_selection, serializeVibe64AssistantSelection(ASSISTANT_SELECTION));
       assert.deepEqual(vibe64User, { id: "resource-proof-owner", name: "Resource proof owner" });
-      return ASSISTANT_SELECTION;
+      return { assistantSelection: ASSISTANT_SELECTION, assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId } };
     },
     setupRunner: {
       isRunning() {

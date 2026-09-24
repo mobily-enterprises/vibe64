@@ -9,7 +9,7 @@ const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
   }),
   deepseek: Object.freeze({
     billingLabel: "Usage-based API billing",
-    economyModelId: "deepseek-v4-flash",
+    economyModelId: "deepseek-flash",
     managementUrl: "https://platform.deepseek.com/top_up",
     ownerOnly: false
   }),

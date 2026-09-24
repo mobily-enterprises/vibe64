@@ -344,7 +344,9 @@ async function readCodexSelectedAccountAccess(options = {}) {
   }
   const ownerOnly = authMode === "chatgpt";
   const endpointCode = ownerOnly ? "codex_subscription" : "openai_api";
+  const loginId = options.systemRoot ? await readCodexLoginId(options.systemRoot) : "";
   return Object.freeze({
+    connectionIdentity: loginId ? codexAccountIdentitySignature("vibe64-login", loginId) : "",
     endpointCode,
     ownerOnly
   });
@@ -3599,7 +3601,18 @@ class CodexAppServerAgentProvider {
 
   async withHistoryAdapter(params, client, options = {}) {
     if (!this.runtime?.historyAdapterBaseUrl) return params;
-    if ((params.modelProvider || this.options.modelProviderId || "openai") !== "openai") return params;
+    const modelProvider = params.modelProvider || this.options.modelProviderId || "openai";
+    if (modelProvider === "deepseek") {
+      const configKey = "model_providers.deepseek";
+      const config = params.config?.[configKey];
+      // Only the curated route owns these credentials. Do not redirect an
+      // unrelated custom provider to our fixed upstream.
+      if (config?.base_url !== curatedCodexProvider(modelProvider).baseUrl) return params;
+      return { ...params, config: { ...params.config,
+        [configKey]: { ...config, base_url: `${this.runtime.historyAdapterBaseUrl}/deepseek` }
+      } };
+    }
+    if (modelProvider !== "openai") return params;
     const { account } = await client.request("account/read", { refreshToken: false }, options);
     if (!["chatgpt", "apiKey"].includes(account?.type)) {
       throw new Error("Reconnect the OpenAI account before using this model.");

@@ -83,6 +83,19 @@ test("bad keys leave the previous connection intact; unverified process exit blo
   assert.match(await readFile(codexProviderPaths(other.root, "deepseek").connectionPath, "utf8"), /original/);
 });
 
+test("curated connection identity changes on replacement and disappears on disconnect", async (t) => {
+  const f = await fixture(t);
+  const first = (await f.store.change("deepseek", { apiKey: "first-secret" }))[0];
+  assert.match(first.connectionIdentity, /^curated:deepseek:[a-f0-9-]+$/);
+  assert.equal((await f.store.list())[0].connectionIdentity, first.connectionIdentity);
+  const next = (await f.store.change("deepseek", { apiKey: "second-secret" }))[0];
+  assert.notEqual(next.connectionIdentity, first.connectionIdentity);
+  assert.doesNotMatch(JSON.stringify(next), /first-secret|second-secret/);
+  const removed = (await f.store.change("deepseek", { remove: true }))[0];
+  assert.equal(removed.connectionIdentity, "");
+  assert.equal(removed.connected, false);
+});
+
 test("disconnect removes credentials after stopping only their owner and retains native conversations", async (t) => {
   const f = await fixture(t);
   await f.store.change("deepseek", { apiKey: "original" });

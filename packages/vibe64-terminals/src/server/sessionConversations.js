@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { normalizeVibe64AgentTaskResult, serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
-import { assistantRoutingPreferences, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createAssistantRouting } from "./assistantRouting.js";
+import { rememberAssistantBeforeChangeover, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
 
 const textFields = [
   "title", "draft", "displayMessage", "completionMessage", "dedupeKey", "failureMessage", "nextStepMessage",
@@ -73,13 +74,38 @@ function createSessionConversations({
 
   function selectedContext(ctx, record) {
     const selection = record.assistantSelection || vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
-    return { ...ctx, assistantSelection: selection, session: { ...ctx.session, metadata: {
-      ...ctx.session.metadata, assistant_selection: serializeVibe64AssistantSelection(selection),
-      ...(record.routingMetadata || {})
-    } } };
+    const metadata = { ...ctx.session.metadata };
+    for (const key of ["assistant_routing", "assistant_routing_request", "assistant_routing_goal", "codex_routing_home_provider", "assistant_changeover"]) delete metadata[key];
+    Object.assign(metadata, record.routingMetadata || {}, {
+      assistant_selection: serializeVibe64AssistantSelection(selection),
+      agent_identity_provider: record.providerConversationId ? selection.engineId : "",
+      agent_identity_conversation_id: record.providerConversationId || "",
+      agent_identity_model_provider: record.providerConversationId ? selection.modelProviderId : ""
+    });
+    return { ...ctx, routingConversationId: record.conversationId, assistantSelection: selection,
+      session: { ...ctx.session, metadata } };
   }
 
-  async function snapshot(ctx, record) {
+  function nativeBinding(record) {
+    return { conversationId: record.providerConversationId, assistantSelection: record.assistantSelection,
+      agentSettings: record.agentSettings || {}, runId: record.runId || "", messageId: record.messageId || "" };
+  }
+
+  function bindingKey(ctx, record) {
+    return sessionConversationKey(selectedContext(ctx, record).session);
+  }
+
+  async function purposes(ctx, record) {
+    const selected = selectedContext(ctx, record);
+    const preferences = assistantRoutingFromMetadata(selected.session.metadata);
+    const decisions = await sessionAgent.inspectAssistantPurposes({ ...preferences,
+      workflowEngineId: preferences?.workflowEngineId || record.assistantSelection.engineId
+    }, selected);
+    return JSON.parse(JSON.stringify(decisions, (key, value) =>
+      ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value));
+  }
+
+  async function snapshot(ctx, record, includePurposes = false) {
     ctx = selectedContext(ctx, record);
     const sessionId = ctx.session.sessionId;
     const scope = { sessionId, conversationId: record.conversationId };
@@ -139,6 +165,9 @@ function createSessionConversations({
       ...record,
       ...response,
       outcome,
+      ...(includePurposes ? { purposes: await purposes(ctx, record),
+        canSteer: ["starting", "inProgress"].includes(response.status)
+          ? (await sessionAgent.assistantAccess(sessionId, ctx)).canUse : null } : {}),
       conversationId: record.conversationId,
       messages,
       ok: true,
@@ -164,13 +193,7 @@ function createSessionConversations({
     const record = await recordFor(ctx, conversationId);
     if (record.state === "closing") throw Object.assign(new Error("This conversation is closing."), { code: "vibe64_conversation_closing" });
     const selected = selectedContext(ctx, record);
-    const metadata = { ...selected.session.metadata };
-    for (const key of ["assistant_routing", "assistant_routing_request", "assistant_routing_goal", "codex_routing_home_provider", "assistant_changeover"]) delete metadata[key];
-    Object.assign(metadata, record.routingMetadata || {});
-    // A pre-existing temporary native thread keeps its original provider home.
-    metadata.agent_identity_provider = record.providerConversationId ? selected.assistantSelection.engineId : "";
-    metadata.agent_identity_conversation_id = record.providerConversationId || "";
-    metadata.agent_identity_model_provider = record.providerConversationId ? selected.assistantSelection.modelProviderId : "";
+    const metadata = selected.session.metadata;
     const store = ctx.runtime.store;
     const scope = { sessionId: ctx.session.sessionId, conversationId };
     const scopedStore = { ...store,
@@ -178,13 +201,37 @@ function createSessionConversations({
       writeMetadataValue: async (_id, key, value) => {
         const current = await recordFor(ctx, conversationId);
         if (current.state === "closing") throw new Error("This conversation is closing.");
-        await save(ctx, current, { routingMetadata: { ...current.routingMetadata, [key]: value },
-          ...(key === "assistant_selection" ? { assistantSelection: JSON.parse(value) } : {}) });
+        const routingMetadata = { ...current.routingMetadata, [key]: value };
+        const patch = { routingMetadata };
+        if (key === "codex_routing_home_provider") {
+          const legacyKey = `codex/${value}`;
+          const legacy = current.nativeBindings?.[legacyKey];
+          if (legacy) {
+            const nativeBindings = { ...current.nativeBindings };
+            if (nativeBindings.codex && nativeBindings.codex.conversationId !== legacy.conversationId) {
+              throw new Error("This Codex conversation already has another retained native history.");
+            }
+            nativeBindings.codex = legacy;
+            delete nativeBindings[legacyKey];
+            patch.nativeBindings = nativeBindings;
+          }
+        }
+        if (key === "assistant_selection") {
+          patch.assistantSelection = JSON.parse(value);
+          const nextKey = bindingKey(ctx, { ...current, ...patch });
+          if (nextKey !== bindingKey(ctx, current)) {
+            const retained = current.nativeBindings?.[nextKey];
+            Object.assign(patch, { providerConversationId: retained?.conversationId || "", runId: retained?.runId || "",
+              messageId: retained?.messageId || "", status: "ready", error: "",
+              agentSettings: { model: patch.assistantSelection.modelId, thinking: patch.assistantSelection.variantId } });
+          }
+        }
+        await save(ctx, current, patch);
         metadata[key] = value;
       }
     };
     scopedStore.readConversationTail = async () => (await store.readConversationLog(scope)).slice(-12);
-    for (const name of ["conversationMessageIdExists", "writeConversationUserMessage"]) {
+    for (const name of ["readConversationLog", "conversationMessageIdExists", "writeConversationUserMessage"]) {
       scopedStore[name] = (_id, ...args) => store[name](scope, ...args);
     }
     return { ...selected, routingConversationId: conversationId, conversationContext: ctx,
@@ -199,10 +246,10 @@ function createSessionConversations({
   const routingAgent = {
     listCapabilities: (input, ctx) => sessionAgent.listCapabilities(input, nativeContext(ctx)),
     requireAssistantAccessForSelection: (input, ctx) => sessionAgent.requireAssistantAccessForSelection(input, nativeContext(ctx)),
-    resolveExecutionProfile: (id, input, ctx) => sessionAgent.resolveExecutionProfile(id, input, nativeContext(ctx)),
-    streamDetachedChatTurn: (id, input, ctx) => sessionAgent.streamDetachedChatTurn(id, input, nativeContext(ctx)),
-    interruptDetachedChatTurn: (id, input, ctx) => sessionAgent.interruptDetachedChatTurn(id, input, nativeContext(ctx)),
-    deleteDetachedChatThread: (id, input, ctx) => sessionAgent.deleteDetachedChatThread(id, input, nativeContext(ctx)),
+    resolveAssistantPurpose: (input, ctx) => sessionAgent.resolveAssistantPurpose(input, nativeContext(ctx)),
+    ...Object.fromEntries(["resolveEphemeralExecutionProfile", "createEphemeralConversation", "startEphemeralConversationTurn",
+      "waitForEphemeralConversationTurn", "stopEphemeralConversation", "deleteEphemeralConversation"]
+      .map((name) => [name, (...args) => sessionAgent[name](...args)])),
     async sessionState(id, ctx) {
       const state = await nativeState(id, ctx);
       return { turn: { id: state.runId, active: ["starting", "inProgress"].includes(state.status) } };
@@ -211,6 +258,8 @@ function createSessionConversations({
       return { goal: (await nativeState(id, ctx)).goal };
     },
     async inspectMessageAdmission(id, input, ctx) {
+      const record = await recordFor(ctx.conversationContext, ctx.routingConversationId);
+      if (input.threadId && input.threadId !== record.providerConversationId) return { admission: "unknown", turnId: "" };
       const state = await nativeState(id, ctx, input.messageId);
       return { admission: state.admitted ? "accepted" : "unknown", turnId: state.runId };
     }
@@ -221,11 +270,36 @@ function createSessionConversations({
       if (result?.code === "vibe64_agent_write_mode_busy") throw Object.assign(new Error(result.error), result);
       return result;
     },
-    prepareSelection,
-    dispatch: (id, input, ctx) => startInsideWrite(id, {
-      ...input, conversationId: ctx.routingConversationId,
-      ...(input.turnMetadata?.assistantRouting ? { agentSettings: { model: ctx.assistantSelection.modelId, thinking: ctx.assistantSelection.variantId } } : {})
-    }, nativeContext(ctx))
+    prepareSelection: async (id, selection, ctx) => {
+      let record = await recordFor(ctx.conversationContext, ctx.routingConversationId);
+      if (record.assistantSelection.engineId !== selection.engineId) {
+        const observed = await snapshot(nativeContext(ctx), record);
+        if (observed.readError) throw new Error(observed.error);
+        if (["starting", "inProgress"].includes((await nativeState(id, ctx)).status)) throw new Error("Stop this temporary conversation before changing its AI.");
+        record = await recordFor(ctx.conversationContext, ctx.routingConversationId);
+        if (record.providerConversationId) {
+          requireSuccess(await sessionAgent.stopConversation(id, providerInput(record, { runId: record.runId }), nativeContext(ctx)));
+          record = await save(ctx, record, { nativeBindings: { ...record.nativeBindings, [bindingKey(ctx, record)]: nativeBinding(record) } });
+        }
+        await rememberAssistantBeforeChangeover(ctx, sessionConversationKey(ctx.session));
+      }
+      let preparation = ctx;
+      if (selection.engineId === "codex" && !ctx.session.metadata.codex_routing_home_provider && record.assistantSelection.engineId !== "codex") {
+        const retained = Object.values(record.nativeBindings || {}).find((binding) => binding.assistantSelection.engineId === "codex");
+        if (retained) preparation = { ...ctx, session: { ...ctx.session, metadata: { ...ctx.session.metadata,
+          agent_identity_provider: "codex", agent_identity_conversation_id: retained.conversationId,
+          agent_identity_model_provider: retained.assistantSelection.modelProviderId } } };
+      }
+      await prepareSelection(id, selection, preparation);
+    },
+    dispatch: (id, input, ctx) => sendWithAssistantChangeover(id, input, ctx, {
+      inspectMessageAdmission: routingAgent.inspectMessageAdmission,
+      sendMessage: (sessionId, message, context) => startInsideWrite(sessionId, {
+        ...message, conversationId: context.routingConversationId,
+        ...(message.turnMetadata?.assistantRouting ? { agentSettings: {
+          model: context.assistantSelection.modelId, thinking: context.assistantSelection.variantId } } : {})
+      }, nativeContext(context))
+    })
   });
 
   async function startInsideWrite(sessionId, input, ctx) {
@@ -245,12 +319,14 @@ function createSessionConversations({
       variantId: settings.thinking || ""
     }, { ...ctx, vibe64User: input.vibe64User || ctx.vibe64User });
     ctx = { ...ctx, assistantSelection };
-    if (!steering) await prepareAgentSkills(sessionId, { ...ctx, vibe64User: input.vibe64User });
+    if (!steering) await prepareAgentSkills(sessionId, { ...ctx, vibe64User: input.vibe64User || ctx.vibe64User });
     if (!record.providerConversationId) {
       const created = requireSuccess(await sessionAgent.createConversation(sessionId, {
         agentSettings: input.agentSettings || record.agentSettings, persistent: true, vibe64User: input.vibe64User
       }, ctx));
-      record = await save(ctx, record, { providerConversationId: created.conversationId });
+      record = await save(ctx, record, { providerConversationId: created.conversationId,
+        nativeBindings: { ...record.nativeBindings, [bindingKey(ctx, { ...record, assistantSelection })]:
+          nativeBinding({ ...record, providerConversationId: created.conversationId, assistantSelection, agentSettings: settings }) } });
     }
     const prepared = await attachments.prepareMessage({ ...ctx, sessionId }, input, {
       durable: true, conversationId: record.conversationId
@@ -272,7 +348,8 @@ function createSessionConversations({
       const result = requireSuccess(await sessionAgent.startConversationTurn(sessionId,
         providerInput(record, { ...input, ...prepared, steer: steering }), { ...ctx, attachmentsPrepared: true }));
       if (input.turnMetadata?.assistantRouting) await writeReceipt();
-      await save(ctx, record, { runId: result.runId, status: result.status || "inProgress", draft: "", attachments: [] });
+      await save(ctx, record, { runId: result.runId, status: result.status || "inProgress", draft: "", attachments: [],
+        nativeBindings: { ...record.nativeBindings, [bindingKey(ctx, record)]: nativeBinding({ ...record, runId: result.runId }) } });
       return { ...result, delivered: true, turnId: result.runId, conversationId: record.conversationId };
     } catch (error) {
       const observed = await snapshot(ctx, record);
@@ -289,20 +366,26 @@ function createSessionConversations({
   return {
     async createTemporaryConversation(sessionId, input = {}, options = {}) {
       return write(sessionId, options, async (ctx) => {
-        await sessionAgent.requireAssistantAccess(sessionId, { ...ctx, vibe64User: input.vibe64User });
         const conversationId = input.conversationId || randomUUID();
         const existing = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
-        if (existing) return snapshot(ctx, existing);
+        if (existing) return snapshot(ctx, existing, true);
+        const parentPreferences = assistantRoutingFromMetadata(ctx.session.metadata);
+        const requestedPreferences = input.presentation?.recoveryOperation ? { mode: "code", review: false }
+          : input.assistantRouting || { mode: "plan", review: false };
+        const preferences = assistantRoutingPreferences({ ...requestedPreferences,
+          workflowEngineId: parentPreferences?.workflowEngineId || vibe64AssistantSelectionFromMetadata(ctx.session.metadata).engineId
+        });
         const record = await ctx.runtime.store.writeSessionConversation(sessionId, conversationId, {
           ...presentation(input.presentation),
+          ...(preferences ? { routingMetadata: { assistant_routing: JSON.stringify(preferences) } } : {}),
           agentSettings: input.agentSettings || {},
           assistantSelection: vibe64AssistantSelectionFromMetadata(ctx.session.metadata),
-          providerConversationId: "",
+          providerConversationId: "", nativeBindings: {},
           state: "open",
           status: "ready",
           attachments: []
         });
-        return snapshot(ctx, record);
+        return snapshot(ctx, record, true);
       });
     },
 
@@ -310,14 +393,14 @@ function createSessionConversations({
       return write(sessionId, options, async (ctx) => {
         const records = await ctx.runtime.store.listSessionConversations(sessionId);
         const conversations = [];
-        for (const record of records) conversations.push(await snapshot(ctx, record));
+        for (const record of records) conversations.push(await snapshot(ctx, record, true));
         return { ok: true, conversations };
       });
     },
 
     async readTemporaryConversation(sessionId, input = {}, options = {}) {
       await routing.reconcile(sessionId, { ...options, conversationId: input.conversationId });
-      return write(sessionId, options, async (ctx) => snapshot(ctx, await recordFor(ctx, input.conversationId)));
+      return write(sessionId, options, async (ctx) => snapshot(ctx, await recordFor(ctx, input.conversationId), true));
     },
 
     async updateTemporaryConversation(sessionId, input = {}, options = {}) {
@@ -325,12 +408,31 @@ function createSessionConversations({
         const record = await recordFor(ctx, input.conversationId);
         if (record.state === "closing") throw new Error("This conversation is closing.");
         const fields = presentation(input.presentation);
+        const settingsChanged = input.agentSettings && ["model", "thinking"].some((key) =>
+          input.agentSettings[key] !== record.agentSettings?.[key]);
+        if (input.assistantRouting || settingsChanged) {
+          const current = await snapshot(ctx, record);
+          if (current.readError) throw new Error("Reconnect this conversation before changing its mode or model.");
+          if (current.goal && !["complete", "completed"].includes(current.goal.status)) throw new Error("Finish this goal before changing chat modes or models.");
+        }
         if (input.assistantRouting) {
           if (record.recoveryOperation) throw new Error("Repair conversations keep their dedicated instructions and model settings.");
-          const preferences = assistantRoutingPreferences(input.assistantRouting);
-          const current = await snapshot(ctx, record);
-          if (current.goal && !["complete", "completed"].includes(current.goal.status)) throw new Error("Finish this goal before changing chat modes.");
+          const preferences = assistantRoutingPreferences({ ...input.assistantRouting,
+            workflowEngineId: JSON.parse(record.routingMetadata?.assistant_routing || "null")?.workflowEngineId || record.assistantSelection.engineId });
           fields.routingMetadata = { ...record.routingMetadata, assistant_routing: JSON.stringify(preferences) };
+        }
+        if (settingsChanged && !input.assistantRouting) {
+          const preferences = assistantRoutingFromMetadata(record.routingMetadata);
+          if (preferences.mode === "auto") throw new Error("Choose Plan, Code or Economy before customizing its model.");
+          const selection = record.assistantSelection;
+          if (["plan", "code"].includes(preferences.mode) && selection.engineId !== preferences.workflowEngineId) {
+            throw new Error("Plan and Code model overrides must use the workflow orchestrator. Configure its shared backup in Model routing.");
+          }
+          const override = await sessionAgent.resolveSelection({ engineId: selection.engineId, modelProviderId: selection.modelProviderId,
+            agentId: selection.agentId, modelId: input.agentSettings.model || selection.modelId,
+            variantId: input.agentSettings.thinking || "" }, ctx);
+          fields.routingMetadata = { ...record.routingMetadata,
+            assistant_routing: JSON.stringify(assistantRoutingPreferences({ ...preferences, override })) };
         }
         if (Object.hasOwn(input, "attachmentIds")) {
           const prepared = await attachments.prepareMessage({ ...ctx, sessionId }, {
@@ -338,19 +440,21 @@ function createSessionConversations({
           }, { durable: true, conversationId: record.conversationId });
           fields.attachments = prepared.displayAttachments;
         }
-        await save(ctx, record, { ...fields, ...(input.agentSettings ? { agentSettings: input.agentSettings } : {}) });
+        const saved = await save(ctx, record, { ...fields, ...(input.agentSettings ? { agentSettings: input.agentSettings } : {}) });
         if (fields.recoveryOutcome === "succeeded") {
           await ctx.runtime.store.writeConversationSystemMessage({ sessionId, conversationId: record.conversationId }, {
             messageId: `recovery_${record.runId || record.conversationId}`,
             text: fields.recoveryOutcomeMessage || "Repair verified."
           });
         }
-        return { ok: true, ...(fields.routingMetadata ? { routingMetadata: fields.routingMetadata } : {}) };
+        return { ok: true, ...(fields.routingMetadata ? { routingMetadata: fields.routingMetadata, purposes: await purposes(ctx, saved) } : {}) };
       });
     },
 
     async startTemporaryConversationTurn(sessionId, input = {}, options = {}) {
-      return routing.send(sessionId, input, { ...options, conversationId: input.conversationId });
+      return routing.send(sessionId, input, {
+        ...options, conversationId: input.conversationId, vibe64User: input.vibe64User || options.vibe64User
+      });
     },
 
     async stopTemporaryConversation(sessionId, input = {}, options = {}) {
@@ -365,19 +469,29 @@ function createSessionConversations({
     },
 
     async deleteTemporaryConversation(sessionId, input = {}, options = {}) {
-      try { await routing.cancel(sessionId, { ...options, conversationId: input.conversationId }); }
+      try { await routing.cancel(sessionId, { ...options, conversationId: input.conversationId }, { waitForCleanup: true }); }
       catch (error) { if (!["vibe64_conversation_closed", "vibe64_conversation_closing"].includes(error.code)) throw error; }
       const result = await write(sessionId, options, async (ctx) => {
         let record = await ctx.runtime.store.readSessionConversation(sessionId, input.conversationId);
         if (!record) return { ok: true, deleted: true };
+        if (JSON.parse(record.routingMetadata?.assistant_routing_request || "null")?.helper) {
+          throw new Error("The routing helper could not be closed. Retry closing this conversation to finish cleanup.");
+        }
         record = await save(ctx, record, { state: "closing", error: "" });
         ctx = selectedContext(ctx, record);
         try {
-          if (record.providerConversationId) {
-            requireSuccess(await sessionAgent.stopConversation(sessionId, providerInput(record, { runId: record.runId }), ctx));
-            requireSuccess(await sessionAgent.deleteConversation(sessionId, providerInput(record), ctx));
-            record = await save(ctx, record, { providerConversationId: "" });
+          for (const [key, binding] of Object.entries(record.nativeBindings || {})) {
+            const retained = { ...record, assistantSelection: binding.assistantSelection, providerConversationId: binding.conversationId,
+              agentSettings: binding.agentSettings || {}, runId: binding.runId || "", messageId: binding.messageId || "" };
+            const selected = selectedContext(ctx, retained);
+            requireSuccess(await sessionAgent.stopConversation(sessionId, providerInput(retained, { runId: retained.runId }), selected));
+            requireSuccess(await sessionAgent.deleteConversation(sessionId, providerInput(retained), selected));
+            const nativeBindings = { ...record.nativeBindings };
+            delete nativeBindings[key];
+            record = await save(ctx, record, { nativeBindings,
+              ...(record.providerConversationId === binding.conversationId ? { providerConversationId: "" } : {}) });
           }
+          if (record.providerConversationId) throw new Error("This conversation's native history has not been upgraded for cleanup. Run the state upgrade before closing it.");
           await attachments.deleteConversationAttachments({ ...ctx, sessionId }, {
             conversationId: record.conversationId
           });

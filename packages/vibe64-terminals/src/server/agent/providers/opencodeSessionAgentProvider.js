@@ -38,7 +38,7 @@ function resolveOpenCodeEconomyExecutionProfile(context = {}, request = {}) {
     );
   }
   const selection = context.assistantSelection || {};
-  const economyModelId = String(executionProfile.workloadId === "request_routing" ? selection.modelId : context.assistantAccess?.economyModelId || "").trim();
+  const economyModelId = String(selection.modelId || "").trim();
   if (
     selection.engineId !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE ||
     !String(selection.modelProviderId || "").trim() ||
@@ -46,7 +46,7 @@ function resolveOpenCodeEconomyExecutionProfile(context = {}, request = {}) {
   ) {
     throw openCodeExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE,
-      "The selected OpenCode endpoint has no configured helper model."
+      "Choose an Economy model in Model routing."
     );
   }
   const thinking = "";
@@ -110,6 +110,7 @@ function createOpenCodeSessionAgentProvider({ controller } = {}) {
     },
     async closeSession(context) {
       return controller.closeAllForSession(context.sessionId, {
+        assistantScope: context.assistantScope,
         runtime: context.runtime,
         session: context.session
       });
@@ -283,6 +284,7 @@ function createOpenCodeSessionAgentProvider({ controller } = {}) {
         onEvent: context.onEvent,
         runtime: context.runtime,
         session: context.session,
+        signal: context.signal,
         vibe64User: context.vibe64User
       });
     },

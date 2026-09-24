@@ -5,7 +5,6 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  CODEX_ECONOMY_MODEL_CANDIDATES,
   CODEX_ECONOMY_PROFILE_REVISION,
   resolveCodexEconomyExecutionProfile
 } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
@@ -23,7 +22,7 @@ async function readCorpus() {
 
 function lunaCatalog() {
   return {
-    data: CODEX_ECONOMY_MODEL_CANDIDATES.map(({ model, thinking }) => ({
+    data: [{ model: "gpt-5.6-luna", thinking: "low" }].map(({ model, thinking }) => ({
       hidden: false,
       model,
       supportedReasoningEfforts: [{ reasoningEffort: thinking }]
@@ -31,13 +30,13 @@ function lunaCatalog() {
   };
 }
 
-test("recorded Codex economy corpus stays on the current provider-owned profile", async () => {
+test("recorded Codex economy corpus retains its evidence and fits the current bounded policy", async () => {
   const corpus = await readCorpus();
 
   assert.equal(corpus.schemaVersion, 1);
   assert.match(corpus.appServer.userAgent, /^vibe64\/0\.149\.0\b/u);
   assert.equal(corpus.profile.profileId, "economy");
-  assert.equal(corpus.profile.revision, CODEX_ECONOMY_PROFILE_REVISION);
+  assert.equal(corpus.profile.revision, "codex-economy-luna-low-v2");
   assert.equal(corpus.profile.model, "gpt-5.6-luna");
   assert.equal(corpus.profile.thinking, "low");
   assert.equal(corpus.cases.length, 2);
@@ -46,8 +45,8 @@ test("recorded Codex economy corpus stays on the current provider-owned profile"
     const profile = resolveCodexEconomyExecutionProfile({
       profileId: corpus.profile.profileId,
       workloadId: corpusCase.workloadId
-    }, lunaCatalog());
-    assert.equal(profile.revision, corpus.profile.revision, corpusCase.id);
+    }, lunaCatalog(), corpus.profile.model);
+    assert.equal(profile.revision, CODEX_ECONOMY_PROFILE_REVISION, corpusCase.id);
     assert.equal(profile.model, corpus.profile.model, corpusCase.id);
     assert.equal(profile.thinking, corpus.profile.thinking, corpusCase.id);
     assert.ok(corpusCase.prompt.length <= profile.limits.maxInputCharacters, corpusCase.id);
@@ -99,7 +98,7 @@ test("recorded 0.149 bridge probe proves adversarial instructions cannot reach t
     passed: true
   });
   assert.equal(probe.profile.model, "gpt-5.6-luna");
-  assert.equal(probe.profile.revision, CODEX_ECONOMY_PROFILE_REVISION);
+  assert.equal(probe.profile.revision, "codex-economy-luna-low-v2");
   assert.equal(probe.profile.thinking, "low");
   assert.match(probe.prompt, /create proof\.txt/u);
   assert.deepEqual(output, { label: "ok" });

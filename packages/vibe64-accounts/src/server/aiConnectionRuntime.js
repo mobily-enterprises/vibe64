@@ -8,7 +8,7 @@ function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionCha
     async onConnectionChanged(change) {
       const removed = change.reason === "removed";
       const [invalidation] = await Promise.all([
-        change.reason === "helper-model-updated" ? null : terminals.invalidateAgentRuntimes({
+        terminals.invalidateAgentRuntimes({
           ...change,
           provider: "opencode"
         }),

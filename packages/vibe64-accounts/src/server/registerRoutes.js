@@ -1,8 +1,6 @@
 import {
-  ACTION_READ_MODEL_ROUTING, ACTION_SAVE_MODEL_ROUTING,
+  ACTION_READ_MODEL_ROUTING, ACTION_SAVE_MODEL_ROUTING, ACTION_PREVIEW_MODEL_ROUTING,
   ACTION_READ_CODEX_PROVIDERS, ACTION_SAVE_CODEX_PROVIDER, ACTION_REMOVE_CODEX_PROVIDER,
-  ACTION_READ_HELPER_MODEL,
-  ACTION_SAVE_HELPER_MODEL,
   ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
   ACTION_LOGOUT_ACCOUNT,
   ACTION_READ_ACCOUNTS,
@@ -14,7 +12,6 @@ import {
 import {
   modelRoutingInputValidator,
   codexProviderInputValidator,
-  helperModelInputValidator,
   accountIdInputValidator,
   accountAuthSessionParamsValidator,
   accountAuthStartInputValidator,
@@ -25,6 +22,13 @@ import {
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/terminalWebSocketRoutes";
+
+const retiredHelperModelResponse = Object.freeze({
+  ok: false,
+  statusCode: 410,
+  code: "vibe64_helper_model_retired",
+  error: "Helper settings have moved to Model routing. Reload the app and choose Economy there."
+});
 
 function registerRoutes(
   http,
@@ -100,13 +104,6 @@ function registerRoutes(
     summary: "Disconnect a curated Codex provider."
   });
 
-  routes.actionRoute("GET", "/helper-model", {
-    actionId: ACTION_READ_HELPER_MODEL,
-    buildInput: (request) => withVibe64User(request, { providerId: request.query?.providerId || "codex" }),
-    query: accountsReadInputValidator,
-    summary: "Read the native assistant helper model preference and available models."
-  });
-
   routes.actionRoute("GET", "/model-routing", {
     actionId: ACTION_READ_MODEL_ROUTING,
     buildInput: (request) => withVibe64User(request),
@@ -117,13 +114,16 @@ function registerRoutes(
     buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
     summary: "Save the workspace's model routing assignments."
   });
-  routes.actionRoute("PATCH", "/helper-model", {
-    actionId: ACTION_SAVE_HELPER_MODEL,
-    body: helperModelInputValidator,
+  routes.actionRoute("POST", "/model-routing/preview", {
+    actionId: ACTION_PREVIEW_MODEL_ROUTING, body: modelRoutingInputValidator,
     buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
-    summary: "Save the native assistant helper model preference."
+    summary: "Preview owner and collaborator routing without saving or running AI."
   });
-
+  for (const method of ["GET", "PATCH"]) {
+    routes.serviceRoute(method, "/helper-model", {
+      summary: "Direct older clients to Model routing."
+    }, async () => retiredHelperModelResponse);
+  }
   routes.actionRoute("POST", "/auth", {
     actionId: ACTION_START_ACCOUNT_AUTH,
     body: accountAuthStartInputValidator,
@@ -193,19 +193,23 @@ function registerRoutes(
 }
 
 function registerAiConnectionRoutes(service, register) {
+  for (const method of ["GET", "PATCH"]) {
+    register(method, "/:providerId/helper-model", () => {
+      throw Object.assign(new Error(retiredHelperModelResponse.error), {
+        code: retiredHelperModelResponse.code, statusCode: retiredHelperModelResponse.statusCode
+      });
+    });
+  }
   for (const [method, suffix, operation] of [
     ["GET", "", "list"],
     ["GET", "/catalog", "catalog"],
     ["PATCH", "/:providerId", "save"],
     ["POST", "/:providerId/remove", "remove"],
-    ["GET", "/:providerId/helper-model", "helperModel"],
-    ["PATCH", "/:providerId/helper-model", "helperModel"],
     ["PATCH", "/:providerId/model-access", "modelAccess"]
   ]) {
     register(method, suffix, (request, vibe64User) => service[operation]({
       ...(method === "GET" ? (operation === "catalog" ? request.query : {}) : request.body),
       ...(request.params?.providerId ? { modelProviderId: request.params.providerId } : {}),
-      ...(method === "PATCH" && operation === "helperModel" ? { modelId: request.body?.modelId } : {}),
       vibe64User
     }));
   }
@@ -222,13 +226,13 @@ function sessionInput(request) {
 }
 
 function withVibe64User(request, input = {}) {
+  const safeInput = { ...input };
+  delete safeInput.vibe64User;
   if (!request.vibe64User) {
-    return {
-      ...input
-    };
+    return safeInput;
   }
   return {
-    ...input,
+    ...safeInput,
     vibe64User: request.vibe64User
   };
 }

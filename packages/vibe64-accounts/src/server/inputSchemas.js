@@ -75,23 +75,11 @@ const gitIdentityInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const helperModelInputValidator = deepFreeze({
-  schema: createSchema({
-    providerId: { type: "string", enum: ["codex", "claude"], required: false },
-    ...vibe64UserInputSchema,
-    modelId: {
-      type: "string",
-      required: true,
-      maxLength: 200
-    }
-  }),
-  mode: "patch"
-});
-
 const modelRoutingInputValidator = deepFreeze({
   schema: createSchema({
     ...vibe64UserInputSchema,
     revision: { type: "integer", min: 0, required: true },
+    reviewedHelperWorkflows: { type: "array", items: { type: "string", enum: ["codex", "claude", "opencode"] }, required: false },
     orchestrators: { type: "object", additionalProperties: true, required: true }
   }), mode: "patch"
 });
@@ -157,7 +145,6 @@ const codexProviderInputValidator = deepFreeze({
 export {
   modelRoutingInputValidator,
   codexProviderInputValidator,
-  helperModelInputValidator,
   accountIdInputValidator,
   accountAuthSessionParamsValidator,
   accountAuthSessionInputValidator,

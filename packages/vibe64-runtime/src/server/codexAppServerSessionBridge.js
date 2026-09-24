@@ -928,6 +928,7 @@ function codexAppServerEconomyTurnSettings({
 
 async function prepareCodexAppServerEconomyThreadStartSettings({
   developerInstructions = "",
+  ephemeral = false,
   executionProfile = null,
   provider = null
 } = {}) {
@@ -939,12 +940,12 @@ async function prepareCodexAppServerEconomyThreadStartSettings({
   return Object.freeze({
     enforcement,
     executionProfile: profile,
-    settings: codexAppServerEconomyThreadStartSettings({
+    settings: { ...codexAppServerEconomyThreadStartSettings({
       config: enforcement.config,
       cwd: enforcement.executionCwd,
       developerInstructions,
       executionProfile: profile
-    })
+    }), ...(ephemeral ? { ephemeral: true } : {}) }
   });
 }
 
@@ -1972,7 +1973,7 @@ async function startFreshCodexAppServerThreadForSession({
 function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   const metadata = session.metadata || {};
   const selection = vibe64AssistantSelectionFromMetadata(metadata, { required: false });
-  const providerId = selection?.engineId === "codex" ? selection.modelProviderId : "openai";
+  const providerId = metadata.codex_routing_home_provider || (selection?.engineId === "codex" ? selection.modelProviderId : "openai");
   const prefix = providerId === "openai" ? "codex" : `codex_${providerId}`;
   const identityProvider = metadata.agent_identity_model_provider || "openai";
   if (metadata.agent_identity_provider !== "codex" || !metadata.codex_routing_home_provider && identityProvider !== providerId) {

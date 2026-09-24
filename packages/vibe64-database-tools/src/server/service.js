@@ -1,3 +1,9 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, readdir, rm } from "node:fs/promises";
+import path from "node:path";
+import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
@@ -13,6 +19,7 @@ import {
 } from "@local/vibe64-project/server/resourceEnvironment";
 import {
   databaseAssistantAvailability,
+  DATABASE_ASSISTANT_EXECUTION_PROFILE,
   runDatabaseAssistant
 } from "./assistant.js";
 import {
@@ -34,6 +41,7 @@ import {
 } from "./queryExecutor.js";
 import {
   deleteSnippet as deleteStoredSnippet,
+  actorKey,
   readErdLayout,
   readSchemaSnapshot,
   readWorkspace,
@@ -123,9 +131,53 @@ function createService({
   }
 
   const activeQueries = new Map();
+  const activeAssistants = new Set();
+
+  async function assistantDecision(context) {
+    const workflowEngineId = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId ||
+      vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
+    return terminalService.resolveAssistantPurpose({ purpose: "database_assistant", workflowEngineId }, {
+      session: context.session, vibe64User: context.vibe64User
+    });
+  }
+
+  async function cleanupAssistant(runtime, sessionId, artifact, vibe64User) {
+    const saved = await runtime.store.readArtifact(sessionId, artifact);
+    const helper = saved ? JSON.parse(saved) : null;
+    if (!helper) return;
+    const root = path.join(runtime.stateRoot, "assistant-helpers", helper.scope.id);
+    if (!/^database_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(root, "workdir") ||
+        helper.scope.runtimeRoot !== path.join(root, "runtime")) throw new Error("The database helper has invalid cleanup paths.");
+    const result = await terminalService.deleteEphemeralAgentConversation(helper.scope, {
+      conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
+      ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
+    }, { assistantSelection: helper.selection, vibe64User });
+    if (result?.ok !== true) throw databaseError(result?.error || "The database helper could not be closed. Retry cleanup before asking again.",
+      result?.code || "vibe64_database_assistant_cleanup_failed");
+    await runtime.store.mutateSession(sessionId, (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true }));
+    await rm(root, { recursive: true, force: true });
+  }
+
+  async function closeAssistantsForSession(sessionId) {
+    const scope = currentProjectScopeKey();
+    const tasks = [...activeAssistants].filter((task) => task.sessionId === sessionId && task.projectScope === scope);
+    for (const task of tasks) task.controller.abort();
+    const queries = activeQueries.get(`${scope}\0${normalizeText(sessionId)}`);
+    await Promise.allSettled([...(queries?.values() || [])].filter((query) => query.cancel).map((query) => query.cancel()));
+    await Promise.allSettled(tasks.map((task) => task.promise));
+    const runtime = await projectService.createRuntime({ inspectSource: false });
+    const files = await runtime.store.withReadableSessionPaths(sessionId, async (paths) => {
+      try { return await readdir(path.join(paths.artifactsRoot, "database/assistant-tasks")); }
+      catch (error) { if (error.code === "ENOENT") return []; throw error; }
+    });
+    for (const file of files) if (/^[a-f0-9]{20}\.json$/u.test(file)) {
+      await cleanupAssistant(runtime, sessionId, `database/assistant-tasks/${file}`, null);
+    }
+    return { ok: true };
+  }
 
   function sessionQueries(sessionId = "") {
-    const key = normalizeText(sessionId);
+    const key = `${currentProjectScopeKey()}\0${normalizeText(sessionId)}`;
     if (!activeQueries.has(key)) {
       activeQueries.set(key, new Map());
     }
@@ -133,13 +185,13 @@ function createService({
   }
 
   function releaseSessionQueries(sessionId = "", queries) {
-    const key = normalizeText(sessionId);
+    const key = `${currentProjectScopeKey()}\0${normalizeText(sessionId)}`;
     if (queries?.size === 0 && activeQueries.get(key) === queries) {
       activeQueries.delete(key);
     }
   }
 
-  function executeSessionQuery(context, { queryId, readOnly = true, schema, sql }) {
+  function executeSessionQuery(context, { queryId, readOnly = true, schema, sql, signal }) {
     const endpoint = readOnly ? context.readEndpoint : context.writeEndpoint;
     return withKnex(endpoint, async ({ connection, knex }) => {
       const queries = sessionQueries(context.sessionId);
@@ -149,6 +201,7 @@ function createService({
           connection,
           knex,
           queryId,
+          signal,
           readOnly,
           schema,
           sql
@@ -336,8 +389,11 @@ function createService({
           readWorkspace(context.store, context.sessionId, context.vibe64User),
           readDataOverview(context.session, schema)
         ]);
+        let decision;
+        try { decision = await assistantDecision(context); }
+        catch (error) { decision = { available: false, message: error.message }; }
         return {
-          assistant: databaseAssistantAvailability(context.session),
+          assistant: databaseAssistantAvailability(decision),
           connection: safeConnectionDescriptor(context.writeConnection, context),
           defaultQuery: schema.tables[0]
             ? defaultQuery(schema.tables[0], schema.engine)
@@ -609,70 +665,116 @@ function createService({
       });
     },
 
-    async askAssistant(input = {}) {
-      return databaseResult(async () => {
+    askAssistant(input = {}) {
+      const task = { sessionId: normalizeText(input.sessionId), projectScope: currentProjectScopeKey(),
+        actor: actorKey(input.vibe64User), controller: new AbortController() };
+      task.promise = databaseResult(async () => {
         if (
-          typeof terminalService?.deleteDetachedAgentChatThread !== "function" ||
-          typeof terminalService?.requireAssistantAccess !== "function" ||
-          typeof terminalService?.runDetachedAgentChatTurn !== "function"
+          typeof terminalService?.deleteEphemeralAgentConversation !== "function" ||
+          typeof terminalService?.resolveAssistantPurpose !== "function" ||
+          typeof terminalService?.runEphemeralAgentChatTurn !== "function"
         ) {
           throw databaseError(
             "The selected session assistant is not available for the database copilot.",
             "vibe64_database_assistant_unavailable"
           );
         }
-        const context = await sessionContext(input);
-        await terminalService.requireAssistantAccess(context.sessionId, {
-          session: context.session,
-          vibe64User: context.vibe64User
-        });
-        const schema = await currentSchema(context);
-        const startedAt = Date.now();
-        try {
-          const result = await runDatabaseAssistant({
-            agentContext: {
-              vibe64User: context.vibe64User
-            },
-            assistant: databaseAssistantAvailability(context.session),
-            deleteThread: (threadInput, options) => terminalService.deleteDetachedAgentChatThread(
-              context.sessionId,
-              threadInput,
-              options
-            ),
-            executeReadQuery: (sql) => executeSessionQuery(context, { schema, sql }),
-            messages: input.messages,
-            runAgentTurn: (turnInput, options) => terminalService.runDetachedAgentChatTurn(
-              context.sessionId,
-              turnInput,
-              options
-            ),
-            schema
-          });
-          logOperation(context, {
-            durationMs: Date.now() - startedAt,
-            model: result.model,
-            operation: "assistant.ask",
-            queryCount: result.queries.length,
-            schemaLookupCount: result.schemaLookups.length,
-            status: "succeeded"
-          });
-          return result;
-        } catch (error) {
-          logOperation(context, {
-            code: error?.code,
-            durationMs: Date.now() - startedAt,
-            operation: "assistant.ask",
-            status: "failed"
-          }, "warn");
-          throw error;
+        if ([...activeAssistants].some((other) => other !== task && other.sessionId === task.sessionId &&
+            other.projectScope === task.projectScope && other.actor === task.actor)) {
+          throw databaseError("Wait for your current database question to finish.", "vibe64_database_assistant_busy");
         }
-      });
+        const context = await sessionContext(input);
+        task.controller.signal.throwIfAborted();
+        const decision = await assistantDecision(context);
+        if (!decision.available) throw databaseError(decision.message, decision.reasonCode);
+        const runtime = await projectService.createRuntime({ inspectSource: false });
+        const admitted = await runtime.store.runSessionExclusive(context.sessionId, `database-assistant-${task.actor}`, async () => {
+          const schema = await currentSchema(context);
+          const artifact = `database/assistant-tasks/${task.actor}.json`;
+          await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
+          task.controller.signal.throwIfAborted();
+          const id = `database_${randomUUID()}`;
+          const root = path.join(runtime.stateRoot, "assistant-helpers", id);
+          const helper = { scope: { id, environment: {}, runtimeRoot: path.join(root, "runtime"), workdir: path.join(root, "workdir"),
+            stableContext: "Answer only from the supplied database information. You have no tools or project access." },
+            selection: decision.effectiveSelection, connectionIdentity: decision.connectionIdentity,
+            conversationId: "", runId: "", executionId: "" };
+          const retain = () => runtime.store.writeJsonArtifact(context.sessionId, artifact, helper);
+          await retain();
+          let cleanupAttempted = false;
+          const cleanup = async () => {
+            cleanupAttempted = true;
+            await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
+            return { ok: true };
+          };
+          const options = { assistantSelection: helper.selection, vibe64User: context.vibe64User,
+            expectedConnectionIdentity: helper.connectionIdentity, signal: task.controller.signal,
+            async onEvent(event) {
+              if (event.type === "thread") helper.conversationId = event.threadId;
+              else if (event.type === "turn") helper.runId = event.turnId;
+              else if (event.type === "helper-execution") helper.executionId = event.executionId;
+              else return;
+              await retain();
+            } };
+          const startedAt = Date.now();
+          try {
+            await mkdir(helper.scope.workdir, { recursive: true, mode: 0o700 });
+            await mkdir(helper.scope.runtimeRoot, { recursive: true, mode: 0o700 });
+            const profile = await terminalService.resolveEphemeralAgentExecutionProfile(helper.scope, { ...DATABASE_ASSISTANT_EXECUTION_PROFILE }, options);
+            helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(profile);
+            await retain();
+            task.controller.signal.throwIfAborted();
+            const result = await runDatabaseAssistant({
+              agentContext: options,
+              assistant: databaseAssistantAvailability(decision),
+              deleteThread: cleanup,
+              executeReadQuery: (sql) => {
+                task.controller.signal.throwIfAborted();
+                return executeSessionQuery(context, { schema, sql, signal: task.controller.signal });
+              },
+              messages: input.messages,
+              runAgentTurn: (turnInput, turnOptions) => terminalService.runEphemeralAgentChatTurn(helper.scope,
+                { ...turnInput, executionProfile: profile }, turnOptions),
+              schema
+            });
+            logOperation(context, {
+              durationMs: Date.now() - startedAt,
+              model: result.model,
+              operation: "assistant.ask",
+              queryCount: result.queries.length,
+              schemaLookupCount: result.schemaLookups.length,
+              status: "succeeded"
+            });
+            return result;
+          } catch (error) {
+            logOperation(context, {
+              code: error?.code,
+              durationMs: Date.now() - startedAt,
+              operation: "assistant.ask",
+              status: "failed"
+            }, "warn");
+            throw error;
+          } finally {
+            if (!cleanupAttempted) await cleanup();
+          }
+        });
+        if (!admitted.acquired) throw databaseError(admitted.value?.error || "The session is unavailable for a database question.",
+          admitted.value?.code || "vibe64_database_assistant_busy");
+        return admitted.value;
+      }).finally(() => activeAssistants.delete(task));
+      activeAssistants.add(task);
+      return task.promise;
     },
 
+    closeAssistantsForSession,
+
     async close() {
+      const tasks = [...activeAssistants];
+      for (const task of tasks) task.controller.abort();
       const queries = [...activeQueries.values()].flatMap((session) => [...session.values()]);
       await Promise.allSettled(queries.filter((query) => query.cancel).map((query) => query.cancel()));
       activeQueries.clear();
+      await Promise.allSettled(tasks.map((task) => task.promise));
     }
   });
 }

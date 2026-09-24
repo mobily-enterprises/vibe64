@@ -1,3 +1,4 @@
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
@@ -636,7 +637,7 @@ function useVibe64SessionRenewal({
     }
   }
 
-  async function confirm(successorAssistantSelection = null) {
+  async function confirm(workflowEngineId = "") {
     if (!canConfirm.value) {
       return null;
     }
@@ -650,8 +651,8 @@ function useVibe64SessionRenewal({
       return await runAction("confirm", "Renewing…", () => postCommand.run({
         body: {
           ...draftGuard(),
-          ...(successorAssistantSelection
-            ? { assistantSelection: successorAssistantSelection }
+          ...(workflowEngineId
+            ? { workflowEngineId }
             : {})
         },
         path: `${renewalPath.value}/confirm`
@@ -922,7 +923,7 @@ function useVibe64SessionRenewal({
   return {
     actionPresentation,
     actionLabel,
-    assistantSelection: computed(() => session.value?.assistantSelection || null),
+    workflowEngineId: computed(() => assistantRoutingFromMetadata(session.value?.metadata || {})?.workflowEngineId || session.value?.assistantSelection?.engineId || ""),
     acceptLatestDraft,
     advisory,
     advisoryPresentation,

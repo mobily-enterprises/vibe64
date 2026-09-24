@@ -86,7 +86,7 @@
           }
         ]"
       >
-        <strong>{{ message.role === "user" ? "You" : "Vibe64" }}</strong>
+        <strong>{{ message.role === "user" ? "You" : assistantLabel }}</strong>
         <div
           v-if="message.status === 'thinking'"
           class="vibe64-source-explanation__thinking"
@@ -221,6 +221,7 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
+import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
 import {
   mdiChevronRight,
   mdiClose,
@@ -290,6 +291,13 @@ const emit = defineEmits([
 const threadElement = ref(null);
 const threadBottomElement = ref(null);
 const followingLatest = ref(true);
+const assistantLabel = computed(() => {
+  const profile = props.explanation?.executionProfile;
+  if (!profile?.providerId || !profile?.model) return "Assistant";
+  const engine = VIBE64_AGENT_PROVIDERS.find(({ id }) => id === profile.providerId)?.label || profile.providerId;
+  return `${engine} · ${profile.model}`;
+});
+
 const chatMessages = computed(() => (
   Array.isArray(props.explanation?.messages) && props.explanation.messages.length
     ? props.explanation.messages

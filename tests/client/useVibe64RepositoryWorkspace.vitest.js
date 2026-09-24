@@ -108,7 +108,7 @@ describe("useVibe64RepositoryWorkspace", () => {
     mocks.requestCalls.length = 0;
   });
 
-  it("does not enter AI-backed Save when direct assistant use is restricted", async () => {
+  it("allows deterministic Save when all inference is unavailable", async () => {
     mocks.changes = { unsaved: true };
     const requestSaveWork = vi.fn(async () => ({ ok: true }));
     const { useVibe64RepositoryWorkspace } = await import(
@@ -116,6 +116,7 @@ describe("useVibe64RepositoryWorkspace", () => {
     );
     const workspace = useVibe64RepositoryWorkspace(ref({
       assistantDirectAllowed: false,
+      assistantCodeAllowed: false,
       requestSaveWork,
       sessionId: "session-1",
       sessionsApiPath: "/api/app/sample/vibe64/sessions"
@@ -124,8 +125,8 @@ describe("useVibe64RepositoryWorkspace", () => {
     await nextTick();
     await flushPromises();
 
-    await expect(workspace.saveWork()).resolves.toBe(false);
-    expect(requestSaveWork).not.toHaveBeenCalled();
+    await expect(workspace.saveWork()).resolves.toEqual({ ok: true });
+    expect(requestSaveWork).toHaveBeenCalledTimes(1);
   });
 
   it("unwraps the runtime's ref-backed session API path without cross-loading destinations", async () => {

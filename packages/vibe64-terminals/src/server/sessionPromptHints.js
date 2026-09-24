@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { open, realpath } from "node:fs/promises";
+import { mkdir, open, readdir, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -19,8 +19,10 @@ import {
   VIBE64_PROMPT_HINT_STATIC_STARTERS,
   normalizedPromptHintDraft,
   normalizedPromptHintSuggestions,
-  vibe64AgentExecutionProfileAuditSnapshot
+  vibe64AgentExecutionProfileAuditSnapshot,
+  vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
   vibe64AgentRunStateIsActive
 } from "@local/vibe64-runtime/server/sessionStore";
@@ -32,6 +34,7 @@ import {
 } from "./terminalShared.js";
 
 const PROMPT_HINT_CONTEXT_VERSION = "vibe64.prompt-hints.context.v2";
+const PROMPT_HINT_TASK_DIRECTORY = "assistant/prompt-hint-tasks";
 const SHARED_PROMPT_HINTS_ARTIFACT = "assistant/shared-prompt-hints.json";
 const PROMPT_HINT_CACHE_TTL_MS = 5 * 60 * 1000;
 const PROMPT_HINT_CACHE_MAX_ENTRIES = 128;
@@ -382,33 +385,19 @@ async function readPromptHintBlueprint(sourceRoot = "") {
 function createSessionPromptHintsService({
   cacheMaxEntries = PROMPT_HINT_CACHE_MAX_ENTRIES,
   cacheTtlMs = PROMPT_HINT_CACHE_TTL_MS,
-  deleteAgentThread,
-  describeProvider,
+  agent,
   diagnostic = null,
-  interruptAgentTurn,
   now = () => Date.now(),
-  requireAssistantAccess,
   projectService,
   publishSessionChanged = async () => {},
   readBlueprintText = readPromptHintBlueprint,
-  resolveExecutionProfile,
-  runAgentTurn,
   sessionSourcePath = terminalWorktreePath
 } = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
     throw new TypeError("Prompt hints require the Vibe64 project service.");
   }
-  for (const [name, dependency] of Object.entries({
-    deleteAgentThread,
-    describeProvider,
-    interruptAgentTurn,
-    requireAssistantAccess,
-    resolveExecutionProfile,
-    runAgentTurn
-  })) {
-    if (typeof dependency !== "function") {
-      throw new TypeError(`Prompt hints require ${name}().`);
-    }
+  if (!agent || typeof agent.resolveAssistantPurpose !== "function") {
+    throw new TypeError("Prompt hints require the session assistant manager.");
   }
 
   const completedCache = new Map();
@@ -524,50 +513,51 @@ function createSessionPromptHintsService({
       return null;
     }
     const options = agentOptions(context, vibe64User);
-    const provider = await describeProvider(options);
-    if (cancelled()) {
-      return null;
-    }
-    const executionProfile = await resolveExecutionProfile(
-      normalizeText(context.session?.sessionId || context.session?.id),
-      PROMPT_HINT_EXECUTION_PROFILE_REQUEST,
-      options
-    );
-    if (cancelled()) {
-      return null;
-    }
-    const profile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
-    if (
-      normalizeText(provider?.providerId) !== profile.providerId ||
-      !/^sha256:[a-f0-9]{64}$/u.test(normalizeText(provider?.accountIdentitySignature))
-    ) {
-      throw new Error("The selected assistant provider identity is unavailable.");
-    }
+    const workflowEngineId = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId ||
+      vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
+    const decision = await agent.resolveAssistantPurpose({ purpose: "prompt_hint", workflowEngineId }, options);
+    if (cancelled()) return null;
+    if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode });
     return {
-      accountIdentitySignature: provider.accountIdentitySignature,
-      executionProfile,
-      profile,
-      providerId: provider.providerId
+      selection: decision.effectiveSelection,
+      connectionIdentity: decision.connectionIdentity,
+      settingsRevision: decision.settingsRevision
     };
   }
 
-  function jobCacheKey({
-    actorId = "",
-    basis = {},
-    identity = {},
-    projectScope = "",
-    sessionId = ""
-  } = {}) {
-    return canonicalHash({
-      accountIdentitySignature: identity.accountIdentitySignature,
-      actorId,
-      basis,
-      contextVersion: PROMPT_HINT_CONTEXT_VERSION,
-      executionProfile: identity.profile,
-      projectScope,
-      providerId: identity.providerId,
-      sessionId
+  function jobCacheKey({ actorId = "", basis = {}, identity = {}, projectScope = "", sessionId = "" } = {}) {
+    return canonicalHash({ actorId, basis, identity, contextVersion: PROMPT_HINT_CONTEXT_VERSION, projectScope, sessionId });
+  }
+
+  function helperOptions(job) {
+    return {
+      assistantSelection: job.identity.selection,
+      expectedConnectionIdentity: job.identity.connectionIdentity,
+      vibe64User: job.vibe64User
+    };
+  }
+
+  async function cleanupHelper(context, artifact, vibe64User) {
+    const sessionId = context.session.sessionId || context.session.id;
+    const saved = await context.runtime.store.readArtifact(sessionId, artifact);
+    const helper = saved ? JSON.parse(saved) : null;
+    if (!helper) return;
+    const root = path.join(context.runtime.stateRoot, "assistant-helpers", helper.scope.id);
+    if (!/^hints_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(root, "workdir") ||
+        helper.scope.runtimeRoot !== path.join(root, "runtime")) {
+      throw new Error("The saved prompt hint task has invalid cleanup paths.");
+    }
+    const result = await agent.deleteEphemeralConversation(helper.scope, {
+      conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
+      ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
+    }, { assistantSelection: helper.selection, vibe64User });
+    if (result?.ok !== true) throw Object.assign(new Error(result?.error || "Prompt hint cleanup was not confirmed."), {
+      code: result?.code, details: result?.details
     });
+    // Retire ownership after native cleanup, before removing the workdir needed
+    // for a cleanup retry. No draft or prompt is ever stored in this record.
+    await context.runtime.store.mutateSession(sessionId, (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true }));
+    await rm(root, { recursive: true, force: true });
   }
 
   function rememberOwnerJob(job) {
@@ -630,32 +620,9 @@ function createSessionPromptHintsService({
     cancelJob(job);
   }
 
-  async function interruptJob(job) {
-    if (!job.cancelRequested || job.turnFinished || !job.threadId || !job.turnId ||
-        job.retiredThreadId === job.threadId || job.interruptPromise) {
-      return job.interruptPromise || null;
-    }
-    job.interruptPromise = Promise.resolve(interruptAgentTurn(job.sessionId, {
-      executionProfile: PROMPT_HINT_EXECUTION_PROFILE_REQUEST,
-      threadId: job.threadId,
-      turnId: job.turnId
-    }, agentOptions(job.context, job.vibe64User))).then((result) => {
-      if (result?.ok !== true) {
-        const error = new Error(result?.error || "Prompt hint interruption was not confirmed.");
-        error.code = result?.code || "vibe64_prompt_hints_interrupt_unconfirmed";
-        throw error;
-      }
-      return result;
-    }).catch((error) => {
-      job.interruptError = error;
-      return null;
-    });
-    return job.interruptPromise;
-  }
-
   function cancelJob(job) {
     job.cancelRequested = true;
-    void interruptJob(job);
+    job.abort.abort();
   }
 
   async function runJob(job) {
@@ -665,70 +632,74 @@ function createSessionPromptHintsService({
     let result = null;
     let runError = null;
     let cleanupError = null;
+    let profile;
+    // Superseded requests already belong to this feature's per-actor job set.
+    // Finish their cleanup before reusing that actor's durable task record.
+    await Promise.all(job.previous.map((previous) => previous.promise));
+    if (job.cancelRequested) return promptHintResponse("cancelled", { basis: job.snapshot.basis });
+    const artifact = `${PROMPT_HINT_TASK_DIRECTORY}/${job.ownerKey.slice(7)}.json`;
+    try { await cleanupHelper(job.context, artifact, job.vibe64User); }
+    catch (error) {
+      reportDiagnostic("vibe64_prompt_hints_cleanup_failed", error, { sessionId: job.sessionId });
+      return promptHintResponse("unavailable", { basis: job.snapshot.basis });
+    }
     try {
+      const id = `hints_${crypto.randomUUID()}`;
+      const root = path.join(job.context.runtime.stateRoot, "assistant-helpers", id);
+      const helper = {
+        scope: { id, workdir: path.join(root, "workdir"), runtimeRoot: path.join(root, "runtime"), environment: {},
+          stableContext: "Suggest next prompts only from the supplied conversation and draft. You have no tools or project access." },
+        selection: job.identity.selection, connectionIdentity: job.identity.connectionIdentity,
+        conversationId: "", runId: "", executionId: ""
+      };
+      const retain = () => job.context.runtime.store.writeJsonArtifact(job.sessionId, artifact, helper);
+      await retain();
+      await mkdir(helper.scope.workdir, { recursive: true });
+      await mkdir(helper.scope.runtimeRoot, { recursive: true });
+      job.abort.signal.throwIfAborted();
+      const executionProfile = await agent.resolveEphemeralExecutionProfile(
+        helper.scope, PROMPT_HINT_EXECUTION_PROFILE_REQUEST, helperOptions(job)
+      );
+      profile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
+      helper.executionProfile = profile;
+      await retain();
+      job.abort.signal.throwIfAborted();
       const prompt = promptHintPrompt({
         blueprint: job.snapshot.blueprint,
         conversation: job.snapshot.conversation,
         draft: job.snapshot.draft,
         sessionState: job.context.sessionState
       });
-      if (Array.from(prompt).length > job.identity.profile.limits.maxInputCharacters) {
+      if (Array.from(prompt).length > profile.limits.maxInputCharacters) {
         throw new Error("Prompt hint context exceeds the selected economy profile limit.");
       }
-      result = await runAgentTurn(job.sessionId, {
-        executionProfile: job.identity.executionProfile,
-        expectedAccountIdentitySignature: job.identity.accountIdentitySignature,
+      result = await agent.runEphemeralChatTurn(helper.scope, {
+        executionProfile,
         outputSchema: VIBE64_PROMPT_HINT_OUTPUT_SCHEMA,
         prompt,
         promptLabel: "Vibe64 prompt hints"
-      }, agentOptions(job.context, job.vibe64User, (event = {}) => {
-        if (event.type === "thread-retired") {
-          job.retiredThreadId = normalizeText(event.threadId);
-          return;
+      }, {
+        ...helperOptions(job), signal: job.abort.signal,
+        async onEvent(event = {}) {
+          if (event.type === "thread") helper.conversationId = normalizeText(event.threadId);
+          else if (event.type === "turn") {
+            helper.conversationId = normalizeText(event.threadId);
+            helper.runId = normalizeText(event.turnId);
+          } else if (event.type === "helper-execution") helper.executionId = normalizeText(event.executionId);
+          else return;
+          await retain();
         }
-        if (normalizeText(event.threadId)) {
-          job.threadId = normalizeText(event.threadId);
-        }
-        if (normalizeText(event.turnId)) {
-          job.turnId = normalizeText(event.turnId);
-        }
-        if (job.cancelRequested) {
-          void interruptJob(job);
-        }
-      }));
-      job.threadId ||= normalizeText(result?.threadId);
-      job.turnId ||= normalizeText(result?.turnId);
+      });
+      if (result?.ok === true && !helper.conversationId) {
+        throw new Error("The prompt hint turn did not identify its native conversation.");
+      }
     } catch (error) {
       runError = error;
     } finally {
-      job.turnFinished = true;
-      if (job.threadId) {
-        try {
-          await job.interruptPromise;
-          if (job.retiredThreadId !== job.threadId) {
-            const cleanup = await deleteAgentThread(job.sessionId, {
-              executionProfile: PROMPT_HINT_EXECUTION_PROFILE_REQUEST,
-              threadId: job.threadId
-            }, agentOptions(job.context, job.vibe64User));
-            if (cleanup?.ok !== true) {
-              cleanupError = new Error(cleanup?.error || "Prompt hint thread cleanup was not confirmed.");
-              cleanupError.code = normalizeText(cleanup?.code);
-              cleanupError.details = isRecord(cleanup?.details) ? cleanup.details : null;
-            }
-          }
-        } catch (error) {
-          cleanupError = error;
-        }
-      } else if (!runError && result?.ok === true) {
-        cleanupError = new Error("Prompt hint thread could not be identified for cleanup.");
-      }
+      try { await cleanupHelper(job.context, artifact, job.vibe64User); }
+      catch (error) { cleanupError = error; }
     }
 
-    if (job.interruptError && job.retiredThreadId !== job.threadId) {
-      reportDiagnostic("vibe64_prompt_hints_interrupt_failed", job.interruptError, {
-        sessionId: job.sessionId
-      });
-    }
     if (cleanupError) {
       reportDiagnostic("vibe64_prompt_hints_cleanup_failed", cleanupError, {
         ...(isRecord(cleanupError.details) ? cleanupError.details : {}),
@@ -755,7 +726,7 @@ function createSessionPromptHintsService({
     } catch {
       observedProfile = null;
     }
-    if (JSON.stringify(observedProfile) !== JSON.stringify(job.identity.profile)) {
+    if (JSON.stringify(observedProfile) !== JSON.stringify(profile)) {
       reportDiagnostic("vibe64_prompt_hints_profile_mismatch", null, {
         sessionId: job.sessionId
       });
@@ -772,6 +743,10 @@ function createSessionPromptHintsService({
     let current = null;
     try {
       current = await readContext(job.sessionId);
+      const identity = await resolvedAgentIdentity(current, job.vibe64User, () => job.cancelRequested);
+      if (identity && canonicalHash(identity) !== canonicalHash(job.identity)) {
+        return promptHintResponse("stale", { basis: job.snapshot.basis });
+      }
     } catch (error) {
       if (job.cancelRequested) {
         return promptHintResponse("cancelled", { basis: job.snapshot.basis });
@@ -828,28 +803,25 @@ function createSessionPromptHintsService({
     }
     let startJob = false;
     if (!job) {
-      for (const previous of jobsByOwner.get(request.ownerKey) || []) {
+      const previousJobs = [...(jobsByOwner.get(request.ownerKey) || [])];
+      for (const previous of previousJobs) {
         if (previous.key !== key) {
           cancelJobSubscribers(previous);
         }
       }
       job = {
         actorId: request.actorId,
+        abort: new AbortController(),
+        previous: previousJobs,
         cancelRequested: false,
         context,
         identity,
-        interruptError: null,
-        interruptPromise: null,
         key,
         ownerKey: request.ownerKey,
         projectScope: request.projectScope,
-        retiredThreadId: "",
         sessionId,
         snapshot,
         subscribers: new Set(),
-        threadId: "",
-        turnFinished: false,
-        turnId: "",
         vibe64User
       };
       jobsByKey.set(key, job);
@@ -914,37 +886,22 @@ function createSessionPromptHintsService({
       });
     }
 
-    try {
-      await requireAssistantAccess(sessionId, agentOptions(context, vibe64User));
-    } catch (error) {
-      if (request.cancelled) {
-        return promptHintResponse("cancelled", { basis: snapshot.basis });
-      }
-      if (error?.code === "vibe64_assistant_owner_required") {
-        if (!snapshot.draft) {
-          try {
-            const source = await context.runtime.store.readArtifact(sessionId, SHARED_PROMPT_HINTS_ARTIFACT);
-            const shared = source ? JSON.parse(source) : null;
-            const suggestions = normalizedPromptHintSuggestions(shared?.suggestions);
-            if (!request.cancelled && suggestions.length && samePromptHintBasis(shared?.basis, snapshot.basis)) {
-              return promptHintResponse("ready", { basis: snapshot.basis, cached: true, suggestions });
-            }
-          } catch (readError) {
-            reportDiagnostic("vibe64_prompt_hints_share_read_failed", readError, { sessionId });
-          }
-        }
-        return promptHintResponse("unavailable", { basis: snapshot.basis });
-      }
-      reportDiagnostic("vibe64_prompt_hints_access_restricted", error, { sessionId });
-      return promptHintResponse("unavailable", { basis: snapshot.basis });
-    }
-
     let identity = null;
     try {
       identity = await resolvedAgentIdentity(context, vibe64User, () => request.cancelled);
     } catch (error) {
-      if (request.cancelled) {
-        return promptHintResponse("cancelled", { basis: snapshot.basis });
+      if (request.cancelled) return promptHintResponse("cancelled", { basis: snapshot.basis });
+      if (!snapshot.draft) {
+        try {
+          const source = await context.runtime.store.readArtifact(sessionId, SHARED_PROMPT_HINTS_ARTIFACT);
+          const shared = source ? JSON.parse(source) : null;
+          const suggestions = normalizedPromptHintSuggestions(shared?.suggestions);
+          if (!request.cancelled && suggestions.length && samePromptHintBasis(shared?.basis, snapshot.basis)) {
+            return promptHintResponse("ready", { basis: snapshot.basis, cached: true, suggestions });
+          }
+        } catch (readError) {
+          reportDiagnostic("vibe64_prompt_hints_share_read_failed", readError, { sessionId });
+        }
       }
       reportDiagnostic("vibe64_prompt_hints_profile_unavailable", error, { sessionId });
       return promptHintResponse("unavailable", { basis: snapshot.basis });
@@ -1075,16 +1032,21 @@ function createSessionPromptHintsService({
       sessionId: normalizedSessionId
     });
     const requests = [...(requestsBySession.get(sessionKey) || [])];
-    const jobs = new Set();
     for (const request of requests) {
-      if (request.job) {
-        jobs.add(request.job);
-      }
       cancelRequest(request);
     }
-    await Promise.all([...jobs].map((job) => (
-      Promise.resolve(job.promise).catch(() => null)
-    )));
+    await Promise.all(requests.map((request) => request.promise.catch(() => null)));
+    const runtime = await projectService.createRuntime({ inspectSource: false });
+    const session = await runtime.getSession(normalizedSessionId, { inspectSource: false });
+    const artifacts = await runtime.store.withReadableSessionPaths(normalizedSessionId, async (paths) => {
+      try { return await readdir(path.join(paths.artifactsRoot, PROMPT_HINT_TASK_DIRECTORY)); }
+      catch (error) { if (isMissingPathError(error)) return []; throw error; }
+    });
+    for (const filename of artifacts) {
+      if (/^[a-f0-9]{64}\.json$/u.test(filename)) {
+        await cleanupHelper({ runtime, session }, `${PROMPT_HINT_TASK_DIRECTORY}/${filename}`, null);
+      }
+    }
     return {
       cancelled: requests.length,
       ok: true

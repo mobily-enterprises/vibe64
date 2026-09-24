@@ -1198,11 +1198,12 @@ function fixture({
     project,
     publishSessionChanged: async (_sessionId, event) => events.push(event),
     resolveRenewalActor,
-    resolveSuccessorAssistantSelection: async (requested, options) => {
-      calls.selectionRequests.push({ requested, ...options });
-      return requested && Object.keys(requested).length > 0
-        ? requested
-        : successorAssistantSelection;
+    resolveSuccessorAssistant: async (input, options) => {
+      const requested = input.assistantSelection;
+      calls.selectionRequests.push({ requested, workflowEngineId: input.workflowEngineId, ...options });
+      const selected = requested && Object.keys(requested).length > 0 ? requested : successorAssistantSelection;
+      return { assistantSelection: selected, assistantRouting: { mode: "plan", review: false,
+        workflowEngineId: input.workflowEngineId || selected.engineId } };
     },
     setupRunner,
     terminals,
@@ -1860,6 +1861,8 @@ test("a failed predecessor model becomes an explicit editable manual draft", asy
 });
 
 for (const code of [
+  "vibe64_assistant_owner_required",
+  "vibe64_assistant_connection_unavailable",
   "vibe64_codex_app_server_start_failed",
   "vibe64_opencode_start_failed",
   "vibe64_opencode_start_timeout"
@@ -2104,6 +2107,7 @@ test("a confirmation replay resumes a durably approved workflow that was never s
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
+          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       replacementCeiling: 2
     }
@@ -2532,7 +2536,7 @@ test("an unavailable successor assistant is rejected before the predecessor is s
   const selectionError = new Error("The selected assistant is unavailable.");
   selectionError.code = "vibe64_assistant_selection_unavailable";
   const controller = context.newController({
-    resolveSuccessorAssistantSelection: async () => {
+    resolveSuccessorAssistant: async () => {
       throw selectionError;
     }
   });
@@ -3077,6 +3081,7 @@ test("restart resumes successor discard after predecessor restore and after stat
         status: SESSION_RENEWAL_STATUS.RUNNING,
         successor: {
           assistantSelection: ASSISTANT_SELECTION,
+          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
           attempt,
           replacementCeiling: 2
         }
@@ -3547,6 +3552,7 @@ test("restart completes durable failure restoration before exposing FAILED", asy
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
+          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       sessionId: "renewal-restart-successor"
     }
@@ -3590,6 +3596,7 @@ test("restart never restores a predecessor quiesced by another renewal", async (
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
+          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       sessionId: "renewal-foreign-successor"
     }
@@ -4164,6 +4171,7 @@ test("automatic recovery resolves the persisted confirmer through the trusted ho
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
+          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4203,6 +4211,7 @@ test("automatic recovery prefers the last trusted collaborator who continued the
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
+          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4252,6 +4261,7 @@ test("active OLD_QUIESCING recovery never closes predecessor work that is not id
         status: SESSION_RENEWAL_STATUS.RUNNING,
         successor: {
           assistantSelection: ASSISTANT_SELECTION,
+          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
           attempt: 1,
           replacementCeiling: 2
         }
@@ -4291,6 +4301,7 @@ test("unavailable automatic actor recovery pauses durably until an explicit retr
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
+          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4407,6 +4418,7 @@ test("collaborator continuation after boot recovery cannot race a newly active p
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
+          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4912,4 +4924,22 @@ test("eligibility rejects active work, dirty source, and stale canonical source"
       { code: "vibe64_session_renewal_source_not_ready" }
     );
   });
+});
+
+test("renewal retains the requested workflow through backup creation and replacement", async () => {
+  const selected = { ...ASSISTANT_SELECTION, agentId: "build", engineId: "opencode", modelProviderId: "opencode", modelId: "big-pickle", variantId: "" };
+  const invalidThread = Object.assign(new Error("Successor history is not fresh"), { code: "vibe64_session_renewal_fresh_thread_required", retryable: true });
+  const context = fixture({ successorAssistantSelection: selected, seedErrors: [invalidThread] });
+  const reviewed = await reviewedRenewal(context);
+  await context.controller.confirmSessionRenewal(OLD_SESSION_ID, {
+    workflowEngineId: "codex", expectedHash: reviewed.draft.hash,
+    expectedRevision: reviewed.draft.revision, operationKey: reviewed.operationKey
+  });
+  const completed = await eventually(() => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED);
+  assert.equal(completed.successor.assistantSelection.engineId, "opencode");
+  assert.deepEqual(completed.successor.assistantRouting, { mode: "plan", review: false, workflowEngineId: "codex" });
+  assert.deepEqual(JSON.parse(context.calls.createMetadata.assistant_routing), completed.successor.assistantRouting);
+  assert.equal(context.calls.selectionRequests[0].workflowEngineId, "codex");
+  assert.equal(completed.successor.attempt, 2);
 });

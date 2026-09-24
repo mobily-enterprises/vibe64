@@ -4,6 +4,7 @@ import test from "node:test";
 import { setImmediate } from "node:timers/promises";
 
 import {
+  ACTION_PREVIEW_MODEL_ROUTING,
   ACTION_READ_ACCOUNTS,
   ACTION_READ_ACCOUNT_AUTH_SESSION,
   ACTION_SAVE_GIT_IDENTITY,
@@ -327,6 +328,27 @@ test("curated Codex routes use trusted request identity and accept only curated 
       }, testReply());
       assert.deepEqual(action.input.vibe64User, member);
       assert.ok(action.actionId);
+    }
+  });
+});
+
+test("routing draft preview uses trusted request identity and carries explicit helper review", async () => {
+  await withLocalRequestBypass(async () => {
+    const runtime = testAccountRouteRuntime();
+    registerRoutes(runtime.http, { accounts: runtime.accounts, fastify: runtime.fastify,
+      projectScoped: false, routeRelativePath: "vibe64/accounts", routeSurface: "app" });
+    const route = findRegisteredRoute(runtime, { method: "POST", path: "/api/vibe64/accounts/model-routing/preview" });
+    assert.ok(route);
+    const body = { revision: 4, orchestrators: {}, reviewedHelperWorkflows: ["codex"], vibe64User: { role: "owner" } };
+    assert.deepEqual(route.options.body.schema.patch(body).errors, {});
+    for (const vibe64User of [{ role: "member", username: "member" }, undefined]) {
+      let action;
+      await route.handler({ vibe64User, input: { body },
+        async executeAction(value) { action = value; return { ok: true }; }
+      }, testReply());
+      assert.equal(action.actionId, ACTION_PREVIEW_MODEL_ROUTING);
+      assert.deepEqual(action.input.reviewedHelperWorkflows, ["codex"]);
+      assert.deepEqual(action.input.vibe64User, vibe64User);
     }
   });
 });

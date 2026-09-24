@@ -368,7 +368,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 <v-alert v-if="connectionError" type="error" variant="tonal" role="alert">{{ connectionError }}</v-alert>
                 <v-btn height="48" variant="text" :disabled="dirty || disabled" @click="runSetup('status')">{{ setupCommand.isRunning ? 'Checking…' : 'Check connection' }}</v-btn>
               </template>
-              <template v-if="!production && dashboardContext.requestAssistantDraft && dashboardContext.assistantDirectAllowed &&
+              <template v-if="!production && dashboardContext.requestAssistantDraft && dashboardContext.assistantDraftAvailable &&
                 (configurationOnly || selected.accountMode === 'per-user' || (connection?.status === 'unconfigured' && !connection.setupIssue))">
                 <v-btn height="48" variant="tonal" :disabled="dirty || disabled"
                   @click="dashboardContext.requestAssistantDraft(setupPrompt)">{{ selected.accountMode === 'per-user' ? 'Prepare app user connection request' : 'Prepare setup request' }}</v-btn>
@@ -384,13 +384,13 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               :integration-id="selectedId" :disabled="production || disabled" :application-public-url="dashboardContext.applicationPublicUrl"
               :result="adsResult" :error="adsError" :loading="setupCommand.isRunning"
               :management-disabled="production || dirty || disabled || dashboardContext.owner === false"
-              :can-prepare="!production && Boolean(dashboardContext.requestAssistantDraft) && dashboardContext.assistantDirectAllowed && dashboardContext.owner !== false"
+              :can-prepare="!production && Boolean(dashboardContext.requestAssistantDraft) && dashboardContext.assistantDraftAvailable && dashboardContext.owner !== false"
               @manage="runAdsOperation" @prepare="dashboardContext.requestAssistantDraft(setupPrompt)" />
             <PaymentConfigurationPanel v-if="['stripe', 'paddle'].includes(provider?.id)" v-model="configuration"
               :integration-id="selectedId" :disabled="production || disabled" :application-public-url="dashboardContext.applicationPublicUrl"
               @set-env="openPaymentEnv" :management="paymentResult" :management-error="paymentError" :management-loading="setupCommand.isRunning" :management-operation="paymentOperation"
               :management-disabled="dirty || disabled || dashboardContext.owner === false || (production && !releaseId)"
-              :can-prepare="!production && Boolean(dashboardContext.requestAssistantDraft) && dashboardContext.assistantDirectAllowed && dashboardContext.owner !== false"
+              :can-prepare="!production && Boolean(dashboardContext.requestAssistantDraft) && dashboardContext.assistantDraftAvailable && dashboardContext.owner !== false"
               @prepare="dashboardContext.requestAssistantDraft(setupPrompt)"
               @manage="runPaymentOperation" />
             <section v-if="provider?.id === 'n8n' && !production" aria-label="n8n OAuth discovery" class="mt-4">

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtempSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 import {
   createSessionPromptHintsService,
@@ -15,6 +16,10 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 
+const fixtureRoots = [];
+after(async () => { for (const root of fixtureRoots) await rm(root, { recursive: true, force: true }); });
+
+const CODEX_SELECTION = { engineId: "codex", modelProviderId: "openai", modelId: "gpt-5.6-luna", agentId: "codex", catalogRevision: `sha256:${"c".repeat(64)}`, variantId: "low" };
 const ACCOUNT_SIGNATURE = `sha256:${"a".repeat(64)}`;
 
 function resolvedPromptHintProfile() {
@@ -181,26 +186,29 @@ function createFixture({
   cacheMaxEntries = 128,
   cacheTtlMs = 300_000,
   conversation = conversationPage(),
+  fixtureRoot = null,
   deleteResult = { ok: true, status: "deleted" },
-  describeProvider = null,
   interruptResult = { ok: true, status: "interrupted" },
   now = () => Date.now(),
   promptHints = projectPromptHints(),
-  requireAssistantAccess = null,
+  resolvePurpose = null,
   readBlueprintText = null,
   resolveExecutionProfile = null,
   runAgentTurn = null,
   sessionSourcePath = () => "/managed/project/sessions/active/session-1/source"
 } = {}) {
+  const root = fixtureRoot || mkdtempSync(path.join(os.tmpdir(), "vibe64-hints-fixture-"));
+  fixtureRoots.push(root);
+  const scopeSessions = new Map();
+  const pathsFor = (sessionId) => ({ artifactsRoot: path.join(root, "sessions", encodeURIComponent(currentProjectScopeKey()), sessionId, "artifacts") });
   const calls = {
     blueprint: [],
     delete: [],
-    describe: [],
     diagnostic: [],
     interrupt: [],
     promptHints: [],
     published: [],
-    access: [],
+    purpose: [],
     resolve: [],
     run: [],
     session: []
@@ -210,6 +218,7 @@ function createFixture({
   let currentSession = {
     metadata: {
       agent_identity_provider: "codex",
+      assistant_selection: JSON.stringify(CODEX_SELECTION),
       source_kind: "session_clone",
       source_path: "/managed/project/sessions/active/session-1/source",
       source_path_authority: "managed_session_source"
@@ -220,9 +229,22 @@ function createFixture({
     status: "active"
   };
   const runtime = {
+    stateRoot: root,
     store: {
-      async readArtifact(sessionId, name) { return artifacts.get(`${currentProjectScopeKey()}:${sessionId}:${name}`) || ""; },
-      async writeJsonArtifact(sessionId, name, value) { artifacts.set(`${currentProjectScopeKey()}:${sessionId}:${name}`, JSON.stringify(value)); }
+      async readArtifact(sessionId, name) {
+        if (name === "assistant/shared-prompt-hints.json") return artifacts.get(`${currentProjectScopeKey()}:${sessionId}:${name}`) || "";
+        try { return await readFile(path.join(pathsFor(sessionId).artifactsRoot, name), "utf8"); }
+        catch (error) { if (error.code === "ENOENT") return ""; throw error; }
+      },
+      async writeJsonArtifact(sessionId, name, value) {
+        if (value?.scope) scopeSessions.set(value.scope.id, sessionId);
+        if (name === "assistant/shared-prompt-hints.json") artifacts.set(`${currentProjectScopeKey()}:${sessionId}:${name}`, JSON.stringify(value));
+        const file = path.join(pathsFor(sessionId).artifactsRoot, name);
+        await mkdir(path.dirname(file), { recursive: true });
+        await writeFile(file, JSON.stringify(value));
+      },
+      mutateSession: (sessionId, operation) => operation(pathsFor(sessionId)),
+      withReadableSessionPaths: (sessionId, operation) => operation(pathsFor(sessionId))
     },
     async getSession(sessionId) {
       calls.session.push(sessionId);
@@ -244,44 +266,8 @@ function createFixture({
     publishSessionChanged: (sessionId, payload) => { calls.published.push({ sessionId, payload }); },
     cacheMaxEntries,
     cacheTtlMs,
-    async deleteAgentThread(sessionId, input, options) {
-      calls.delete.push({ input, options, sessionId });
-      return typeof deleteResult === "function"
-        ? deleteResult({ input, options, sessionId })
-        : deleteResult;
-    },
-    async describeProvider(options) {
-      calls.describe.push(options);
-      if (describeProvider) {
-        return describeProvider({ options });
-      }
-      return {
-        accountIdentitySignature: typeof accountIdentitySignature === "function"
-          ? accountIdentitySignature()
-          : accountIdentitySignature,
-        providerId: "codex",
-        transportId: "codex_app_server"
-      };
-    },
-    diagnostic(event) {
-      calls.diagnostic.push(event);
-    },
-    async interruptAgentTurn(sessionId, input, options) {
-      calls.interrupt.push({
-        input,
-        options,
-        projectScope: currentProjectScopeKey(),
-        sessionId
-      });
-      return typeof interruptResult === "function" ? interruptResult() : interruptResult;
-    },
+    diagnostic(event) { calls.diagnostic.push(event); },
     now,
-    async requireAssistantAccess(sessionId, options) {
-      calls.access.push({ options, sessionId });
-      return requireAssistantAccess
-        ? requireAssistantAccess({ options, sessionId })
-        : { ok: true };
-    },
     projectService: {
       async createRuntime() {
         return runtime;
@@ -303,37 +289,60 @@ function createFixture({
         "PRIVATE PATH /home/example/must/not/be-invented"
       ].join("\n");
     }),
-    async resolveExecutionProfile(sessionId, input, options) {
-      calls.resolve.push({ input, options, sessionId });
-      if (resolveExecutionProfile) {
-        return resolveExecutionProfile({ input, options, sessionId });
+    agent: {
+      async resolveAssistantPurpose(input, options) {
+        const sessionId = options.session.sessionId;
+        calls.purpose.push({ input, options, sessionId });
+        const decision = resolvePurpose ? await resolvePurpose({ input, options, sessionId }) : null;
+        return decision?.available !== undefined ? decision : {
+          available: true,
+          effectiveSelection: CODEX_SELECTION,
+          connectionIdentity: typeof accountIdentitySignature === "function" ? accountIdentitySignature() : accountIdentitySignature,
+          settingsRevision: "routing-1"
+        };
+      },
+      async resolveEphemeralExecutionProfile(scope, input, options) {
+        const sessionId = scopeSessions.get(scope.id);
+        calls.resolve.push({ input, options, scope, sessionId });
+        return resolveExecutionProfile ? resolveExecutionProfile({ input, options, scope, sessionId }) : resolvedPromptHintProfile();
+      },
+      async deleteEphemeralConversation(scope, input, options) {
+        const sessionId = scopeSessions.get(scope.id);
+        calls.delete.push({ input, options, scope, sessionId });
+        return typeof deleteResult === "function" ? deleteResult({ input, options, scope, sessionId }) : deleteResult;
+      },
+      async runEphemeralChatTurn(scope, input, options) {
+        const sessionId = scopeSessions.get(scope.id);
+        calls.run.push({ input, options, scope, projectScope: currentProjectScopeKey(), sessionId });
+        options.signal.throwIfAborted();
+        let threadId = "";
+        let turnId = "";
+        let stopped;
+        const interrupt = () => {
+          if (!threadId || !turnId || stopped) return;
+          calls.interrupt.push({ input: { conversationId: threadId, runId: turnId, executionProfile: input.executionProfile },
+            options, scope, projectScope: currentProjectScopeKey(), sessionId });
+          stopped = Promise.resolve(typeof interruptResult === "function" ? interruptResult() : interruptResult);
+        };
+        options.signal.addEventListener("abort", interrupt, { once: true });
+        const turnOptions = { ...options, async onEvent(event) {
+          if (["thread", "turn"].includes(event.type)) {
+            threadId = event.threadId || threadId;
+            turnId = event.turnId || turnId;
+          }
+          await options.onEvent(event);
+          if (options.signal.aborted) interrupt();
+        } };
+        try {
+          if (runAgentTurn) return await runAgentTurn({ input, options: turnOptions, scope, sessionId });
+          await turnOptions.onEvent({ type: "thread", threadId: "thread-hints-1" });
+          await turnOptions.onEvent({ type: "turn", threadId: "thread-hints-1", turnId: "turn-hints-1" });
+          return agentResult || readyAgentResult();
+        } finally {
+          options.signal.removeEventListener("abort", interrupt);
+          await stopped;
+        }
       }
-      return resolvedPromptHintProfile();
-    },
-    async runAgentTurn(sessionId, input, options) {
-      calls.run.push({
-        input,
-        options,
-        projectScope: currentProjectScopeKey(),
-        sessionId
-      });
-      if (runAgentTurn) {
-        return runAgentTurn({ input, options, sessionId });
-      }
-      options.onEvent({
-        executionProfile: resolvedPromptHintProfile(),
-        type: "execution-profile"
-      });
-      options.onEvent({
-        threadId: "thread-hints-1",
-        type: "thread"
-      });
-      options.onEvent({
-        threadId: "thread-hints-1",
-        turnId: "turn-hints-1",
-        type: "turn"
-      });
-      return agentResult || readyAgentResult();
     },
     sessionSourcePath
   });
@@ -350,7 +359,9 @@ function createFixture({
       currentPromptHints = value;
     },
     setSession(value) {
-      currentSession = value;
+      currentSession = typeof value === "function" ? value : {
+        ...value, metadata: { assistant_selection: JSON.stringify(CODEX_SELECTION), ...value.metadata }
+      };
     }
   };
 }
@@ -482,7 +493,6 @@ test("unsafe Blueprint filesystem entries fail hints closed before provider work
         );
 
         assert.equal(result.status, "unavailable");
-        assert.equal(fixture.calls.describe.length, 0);
         assert.equal(fixture.calls.resolve.length, 0);
         assert.equal(fixture.calls.run.length, 0);
         assert.equal(
@@ -508,7 +518,6 @@ test("prompt hints stop at the toggle and use static starters only without any c
   assert.deepEqual(disabledResult.suggestions, []);
   assert.equal(disabledResult.basis.promptHints, false);
   assert.equal(typeof disabledResult.basis.conversationRevision, "string");
-  assert.equal(disabled.calls.describe.length, 0);
   assert.equal(disabled.calls.resolve.length, 0);
   assert.equal(disabled.calls.run.length, 0);
 
@@ -534,8 +543,7 @@ test("prompt hints stop at the toggle and use static starters only without any c
   assert.equal(blankResult.cached, false);
   assert.equal(blankResult.suggestions.length, 3);
   assert.equal(blankResult.suggestions.every(({ label, prompt }) => label && prompt), true);
-  assert.equal(blank.calls.describe.length, 0);
-  assert.equal(blank.calls.access.length, 0);
+  assert.equal(blank.calls.purpose.length, 0);
   assert.equal(blank.calls.resolve.length, 0);
   assert.equal(blank.calls.run.length, 0);
 });
@@ -554,7 +562,7 @@ test("an empty conversation uses its Blueprint or draft instead of generic start
       assert.equal(result.status, "ready");
       assert.equal(fixture.calls.run.length, 1);
       assert.match(fixture.calls.run[0].input.prompt, draft ? /Make appointments easier to cancel/u : /dog grooming appointment manager/u);
-      assert.equal(fixture.calls.access.length, 1);
+      assert.equal(fixture.calls.purpose.length, 2);
     });
   }
 });
@@ -598,7 +606,7 @@ test("a newer draft supersedes in-flight suggestions for the older intent", asyn
     async runAgentTurn({ options }) {
       const number = ++generations;
       const threadId = `draft-thread-${number}`;
-      options.onEvent({ threadId, turnId: `draft-turn-${number}`, type: "turn" });
+      await options.onEvent({ threadId, turnId: `draft-turn-${number}`, type: "turn" });
       if (number === 1) {
         started.resolve();
         await release.promise;
@@ -610,14 +618,15 @@ test("a newer draft supersedes in-flight suggestions for the older intent", asyn
     ...generateInput("hint:draft-old"), draft: "Remove payments"
   });
   await started.promise;
-  const second = await fixture.service.generateSessionPromptHints("session-1", {
+  const second = fixture.service.generateSessionPromptHints("session-1", {
     ...generateInput("hint:draft-new"), draft: "Actually keep payments"
   });
+  await new Promise((resolve) => setImmediate(resolve));
   release.resolve();
-  assert.equal(second.status, "ready");
+  assert.equal((await second).status, "ready");
   assert.equal((await first).status, "cancelled");
   assert.equal(fixture.calls.interrupt.length, 1);
-  assert.equal(fixture.calls.interrupt[0].input.threadId, "draft-thread-1");
+  assert.equal(fixture.calls.interrupt[0].input.conversationId, "draft-thread-1");
   const latest = await fixture.service.generateSessionPromptHints("session-1", {
     ...generateInput("hint:draft-latest"), draft: "Actually keep payments"
   });
@@ -628,7 +637,7 @@ test("a newer draft supersedes in-flight suggestions for the older intent", asyn
 test("restricted members read shared conversation suggestions without provider inspection", async () => {
   let restricted = false;
   const fixture = createFixture({
-    requireAssistantAccess({ options, sessionId }) {
+    resolvePurpose({ options, sessionId }) {
       assert.equal(sessionId, "session-1");
       assert.equal(options.vibe64User.username, "member");
       if (restricted) {
@@ -646,7 +655,6 @@ test("restricted members read shared conversation suggestions without provider i
     generateInput("hint:access-cache:1", vibe64User)
   );
   assert.equal(first.status, "ready");
-  assert.equal(fixture.calls.describe.length, 1);
   assert.equal(fixture.calls.resolve.length, 1);
   assert.equal(fixture.calls.run.length, 1);
 
@@ -660,8 +668,7 @@ test("restricted members read shared conversation suggestions without provider i
   assert.equal(denied.status, "ready");
   assert.equal(denied.cached, true);
   assert.deepEqual(denied.suggestions, first.suggestions);
-  assert.equal(fixture.calls.access.length, 2);
-  assert.equal(fixture.calls.describe.length, 1);
+  assert.equal(fixture.calls.purpose.length, 3);
   assert.equal(fixture.calls.resolve.length, 1);
   assert.equal(fixture.calls.run.length, 1);
   assert.equal(
@@ -672,7 +679,7 @@ test("restricted members read shared conversation suggestions without provider i
   );
 });
 
-test("prompt hints use only the selected account's prompt_hint economy profile and clean the detached thread", async () => {
+test("prompt hints resolve Economy before creating an independent bounded scope", async () => {
   const fixture = createFixture({
     promptHints: {
       customNote: "Never suggest tests.",
@@ -709,16 +716,12 @@ test("prompt hints use only the selected account's prompt_hint economy profile a
     },
     sessionId: "session-1"
   }]);
-  assert.equal(fixture.calls.describe.length, 1);
-  assert.equal(fixture.calls.describe[0].runtime, fixture.runtime);
-  assert.equal(fixture.calls.describe[0].session.sessionId, "session-1");
-  assert.deepEqual(fixture.calls.describe[0].vibe64User, input.vibe64User);
 
   assert.equal(fixture.calls.run.length, 1);
   const agentCall = fixture.calls.run[0];
   assert.equal(agentCall.sessionId, "session-1");
   assert.deepEqual(agentCall.input.executionProfile, resolvedPromptHintProfile());
-  assert.equal(agentCall.input.expectedAccountIdentitySignature, ACCOUNT_SIGNATURE);
+  assert.equal(agentCall.options.expectedConnectionIdentity, ACCOUNT_SIGNATURE);
   assert.equal(agentCall.input.promptLabel, "Vibe64 prompt hints");
   assert.equal(agentCall.input.agentSettings, undefined);
   assert.equal(agentCall.input.outputSchema.type, "object");
@@ -743,20 +746,18 @@ test("prompt hints use only the selected account's prompt_hint economy profile a
   assert.match(agentCall.input.prompt, /Build a shared team task tracker\./u);
   assert.match(agentCall.input.prompt, /The task list is now visible\./u);
   assert.doesNotMatch(agentCall.input.prompt, /SECRET SYSTEM|SECRET COMMENTARY|SECRET REASONING/u);
-  assert.equal(agentCall.options.runtime, fixture.runtime);
-  assert.equal(agentCall.options.session.sessionId, "session-1");
+  assert.equal(agentCall.options.runtime, undefined);
+  assert.equal(agentCall.options.session, undefined);
+  assert.match(agentCall.scope.id, /^hints_/u);
   assert.deepEqual(agentCall.options.vibe64User, input.vibe64User);
 
   assert.equal(fixture.calls.delete.length, 1);
   assert.deepEqual(fixture.calls.delete[0].input, {
-    executionProfile: {
-      profileId: "economy",
-      workloadId: "prompt_hint"
-    },
-    threadId: "thread-hints-1"
+    executionProfile: resolvedPromptHintProfile(),
+    conversationId: "thread-hints-1", cleanupExecutionId: ""
   });
-  assert.equal(fixture.calls.delete[0].options.runtime, fixture.runtime);
-  assert.equal(fixture.calls.delete[0].options.session.sessionId, "session-1");
+  assert.equal(fixture.calls.delete[0].options.runtime, undefined);
+  assert.equal(fixture.calls.delete[0].scope.id, agentCall.scope.id);
 });
 
 test("prompt hint parsing preserves normalized Unicode pairs and rejects noncanonical envelopes", () => {
@@ -874,14 +875,14 @@ test("prompt hints reject malformed, duplicate, multiline, and overlong model su
     await t.test(invalid.name, async () => {
       let agentCalls = 0;
       const fixture = createFixture({
-        runAgentTurn({ options }) {
+        async runAgentTurn({ options }) {
           agentCalls += 1;
           const threadId = `thread-invalid-${agentCalls}`;
-          options.onEvent({
+          await options.onEvent({
             executionProfile: resolvedPromptHintProfile(),
             type: "execution-profile"
           });
-          options.onEvent({ threadId, type: "thread" });
+          await options.onEvent({ threadId, type: "thread" });
           const result = readyAgentResult({
             suggestions: invalid.suggestions,
             threadId,
@@ -922,11 +923,11 @@ test("prompt hints coalesce identical work, invalidate on conversation, and igno
     async runAgentTurn({ options }) {
       agentCalls += 1;
       const threadId = `thread-cache-${agentCalls}`;
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId, type: "thread" });
+      await options.onEvent({ threadId, type: "thread" });
       if (agentCalls === 1) {
         started.resolve();
         await release.promise;
@@ -997,14 +998,14 @@ test("prompt-hint cache identity follows the selected provider account and expir
     accountIdentitySignature: () => accountIdentitySignature,
     cacheTtlMs: 50,
     now: () => nowMs,
-    runAgentTurn({ options }) {
+    async runAgentTurn({ options }) {
       agentCalls += 1;
       const threadId = `thread-account-cache-${agentCalls}`;
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId, type: "thread" });
+      await options.onEvent({ threadId, type: "thread" });
       return readyAgentResult({
         threadId,
         turnId: `turn-account-cache-${agentCalls}`
@@ -1044,10 +1045,10 @@ test("prompt-hint cache evicts the least-recently-used entry at its configured b
   let agentCalls = 0;
   const fixture = createFixture({
     cacheMaxEntries: 2,
-    runAgentTurn({ options }) {
+    async runAgentTurn({ options }) {
       agentCalls += 1;
       const threadId = `thread-bounded-cache-${agentCalls}`;
-      options.onEvent({ threadId, type: "thread" });
+      await options.onEvent({ threadId, type: "thread" });
       return readyAgentResult({
         threadId,
         turnId: `turn-bounded-cache-${agentCalls}`
@@ -1092,11 +1093,11 @@ test("prompt hints discard a completed turn when the conversation changes during
   const release = deferred();
   const fixture = createFixture({
     async runAgentTurn({ options }) {
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId: "thread-stale", type: "thread" });
+      await options.onEvent({ threadId: "thread-stale", type: "thread" });
       started.resolve();
       await release.promise;
       return readyAgentResult({
@@ -1130,11 +1131,11 @@ test("prompt hints ignore the temporary agent lifecycle's opaque session revisio
   const release = deferred();
   const fixture = createFixture({
     async runAgentTurn({ options }) {
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId: "thread-session-revision", type: "thread" });
+      await options.onEvent({ threadId: "thread-session-revision", type: "thread" });
       started.resolve();
       await release.promise;
       return readyAgentResult({
@@ -1173,11 +1174,11 @@ test("prompt hints discard a completed turn when relevant session state changes"
   const release = deferred();
   const fixture = createFixture({
     async runAgentTurn({ options }) {
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId: "thread-session-state", type: "thread" });
+      await options.onEvent({ threadId: "thread-session-state", type: "thread" });
       started.resolve();
       await release.promise;
       return readyAgentResult({
@@ -1219,7 +1220,6 @@ test("prompt-hint cancellation can win before preparation starts and never start
   assert.equal((await cancellation).status, "cancelled");
   assert.equal((await generation).status, "cancelled");
   assert.equal(fixture.calls.session.length, 0);
-  assert.equal(fixture.calls.describe.length, 0);
   assert.equal(fixture.calls.resolve.length, 0);
   assert.equal(fixture.calls.run.length, 0);
 });
@@ -1248,7 +1248,6 @@ test("prompt-hint cancellation during context preparation never resolves or star
 
   assert.equal(cancellation.status, "cancelled");
   assert.equal(result.status, "cancelled");
-  assert.equal(fixture.calls.describe.length, 0);
   assert.equal(fixture.calls.resolve.length, 0);
   assert.equal(fixture.calls.run.length, 0);
 });
@@ -1277,7 +1276,6 @@ test("prompt-hint cancellation during profile resolution never starts Luna", asy
 
   assert.equal(cancellation.status, "cancelled");
   assert.equal(result.status, "cancelled");
-  assert.equal(fixture.calls.describe.length, 1);
   assert.equal(fixture.calls.resolve.length, 1);
   assert.equal(fixture.calls.run.length, 0);
 });
@@ -1289,12 +1287,12 @@ test("prompt-hint cancellation interrupts the exact detached turn, cleans it, an
   const fixture = createFixture({
     async runAgentTurn({ options }) {
       agentCalls += 1;
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId: "thread-cancel", type: "thread" });
-      options.onEvent({
+      await options.onEvent({ threadId: "thread-cancel", type: "thread" });
+      await options.onEvent({
         threadId: "thread-cancel",
         turnId: "turn-cancel",
         type: "turn"
@@ -1320,12 +1318,9 @@ test("prompt-hint cancellation interrupts the exact detached turn, cleans it, an
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(fixture.calls.interrupt.length, 1);
   assert.deepEqual(fixture.calls.interrupt[0].input, {
-    executionProfile: {
-      profileId: "economy",
-      workloadId: "prompt_hint"
-    },
-    threadId: "thread-cancel",
-    turnId: "turn-cancel"
+    executionProfile: resolvedPromptHintProfile(),
+    conversationId: "thread-cancel",
+    runId: "turn-cancel"
   });
   interrupted.resolve();
   const [cancelResult, generationResult] = await Promise.all([cancellation, generation]);
@@ -1349,12 +1344,12 @@ test("cancelling one coalesced subscriber leaves the shared generation available
   const fixture = createFixture({
     async runAgentTurn({ options }) {
       agentCalls += 1;
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId: "thread-shared", type: "thread" });
-      options.onEvent({
+      await options.onEvent({ threadId: "thread-shared", type: "thread" });
+      await options.onEvent({
         threadId: "thread-shared",
         turnId: "turn-shared",
         type: "turn"
@@ -1388,21 +1383,23 @@ test("cancelling one coalesced subscriber leaves the shared generation available
 test("cancellation requested before thread ids arrive interrupts as soon as the exact turn is known", async () => {
   const runStarted = deferred();
   const publishIds = deferred();
+  const idsPublished = deferred();
   const interrupted = deferred();
   const fixture = createFixture({
     async runAgentTurn({ options }) {
       runStarted.resolve();
       await publishIds.promise;
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId: "thread-late-ids", type: "thread" });
-      options.onEvent({
+      await options.onEvent({ threadId: "thread-late-ids", type: "thread" });
+      await options.onEvent({
         threadId: "thread-late-ids",
         turnId: "turn-late-ids",
         type: "turn"
       });
+      idsPublished.resolve();
       await interrupted.promise;
       return {
         code: "vibe64_agent_turn_cancelled",
@@ -1421,15 +1418,12 @@ test("cancellation requested before thread ids arrive interrupts as soon as the 
   assert.equal(fixture.calls.interrupt.length, 0);
 
   publishIds.resolve();
-  await new Promise((resolve) => setImmediate(resolve));
+  await idsPublished.promise;
   assert.equal(fixture.calls.interrupt.length, 1);
   assert.deepEqual(fixture.calls.interrupt[0].input, {
-    executionProfile: {
-      profileId: "economy",
-      workloadId: "prompt_hint"
-    },
-    threadId: "thread-late-ids",
-    turnId: "turn-late-ids"
+    executionProfile: resolvedPromptHintProfile(),
+    conversationId: "thread-late-ids",
+    runId: "turn-late-ids"
   });
   interrupted.resolve();
   const result = await generation;
@@ -1445,14 +1439,14 @@ test("prompt hints fail silently and retain no cache entry when detached-thread 
       error: "Cleanup failed.",
       ok: false
     },
-    runAgentTurn({ options }) {
+    async runAgentTurn({ options }) {
       agentCalls += 1;
       const threadId = `thread-cleanup-${agentCalls}`;
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId, type: "thread" });
+      await options.onEvent({ threadId, type: "thread" });
       return readyAgentResult({
         threadId,
         turnId: `turn-cleanup-${agentCalls}`
@@ -1472,7 +1466,7 @@ test("prompt hints fail silently and retain no cache entry when detached-thread 
   assert.equal(first.status, "unavailable");
   assert.deepEqual(first.suggestions, []);
   assert.equal(second.status, "unavailable");
-  assert.equal(agentCalls, 2);
+  assert.equal(agentCalls, 1);
   assert.equal(fixture.calls.delete.length, 2);
 });
 
@@ -1482,14 +1476,14 @@ test("prompt hints require an explicit successful cleanup acknowledgement", asyn
     deleteResult() {
       return undefined;
     },
-    runAgentTurn({ options }) {
+    async runAgentTurn({ options }) {
       agentCalls += 1;
       const threadId = `thread-cleanup-unacknowledged-${agentCalls}`;
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId, type: "thread" });
+      await options.onEvent({ threadId, type: "thread" });
       return readyAgentResult({
         threadId,
         turnId: `turn-cleanup-unacknowledged-${agentCalls}`
@@ -1508,13 +1502,13 @@ test("prompt hints require an explicit successful cleanup acknowledgement", asyn
 
   assert.equal(first.status, "unavailable");
   assert.equal(second.status, "unavailable");
-  assert.equal(agentCalls, 2, "an unacknowledged cleanup must never produce a cache entry");
+  assert.equal(agentCalls, 1, "unconfirmed cleanup blocks another inference until cleanup succeeds");
 });
 
 test("prompt hints fail closed when a successful detached turn exposes no thread to clean up", async () => {
   let agentCalls = 0;
   const fixture = createFixture({
-    runAgentTurn() {
+    async runAgentTurn() {
       agentCalls += 1;
       return readyAgentResult({
         threadId: "",
@@ -1535,9 +1529,9 @@ test("prompt hints fail closed when a successful detached turn exposes no thread
   assert.equal(first.status, "unavailable");
   assert.equal(second.status, "unavailable");
   assert.equal(agentCalls, 2, "an uncleanable detached turn must never enter the cache");
-  assert.equal(fixture.calls.delete.length, 0);
+  assert.equal(fixture.calls.delete.length, 2);
   assert.equal(
-    fixture.calls.diagnostic.some((event) => event.code === "vibe64_prompt_hints_cleanup_failed"),
+    fixture.calls.diagnostic.some((event) => event.code === "vibe64_prompt_hints_generation_failed"),
     true
   );
 });
@@ -1545,10 +1539,10 @@ test("prompt hints fail closed when a successful detached turn exposes no thread
 test("prompt hints reject a result that does not prove the resolved economy profile was used", async () => {
   let agentCalls = 0;
   const fixture = createFixture({
-    runAgentTurn({ options }) {
+    async runAgentTurn({ options }) {
       agentCalls += 1;
       const threadId = `thread-profile-unverified-${agentCalls}`;
-      options.onEvent({ threadId, type: "thread" });
+      await options.onEvent({ threadId, type: "thread" });
       return {
         ok: true,
         text: JSON.stringify({
@@ -1581,6 +1575,7 @@ test("prompt hints reject a result that does not prove the resolved economy prof
 
 test("the same client operation id remains isolated between sessions", async () => {
   const sessionOneStarted = deferred();
+  const sessionTwoStarted = deferred();
   const releaseSessionOne = deferred();
   const agentSessions = [];
   const fixture = createFixture({
@@ -1592,15 +1587,16 @@ test("the same client operation id remains isolated between sessions", async () 
     async runAgentTurn({ options, sessionId }) {
       agentSessions.push(sessionId);
       const threadId = `${sessionId}-thread-hints`;
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId, type: "thread" });
+      await options.onEvent({ threadId, type: "thread" });
       if (sessionId === "session-1") {
         sessionOneStarted.resolve();
         await releaseSessionOne.promise;
       }
+      if (sessionId === "session-2") sessionTwoStarted.resolve();
       return readyAgentResult({
         suggestions: [
           promptHint(`First ${sessionId} step`, `First suggestion for ${sessionId}`),
@@ -1616,7 +1612,7 @@ test("the same client operation id remains isolated between sessions", async () 
   const first = fixture.service.generateSessionPromptHints("session-1", sharedClientInput);
   await sessionOneStarted.promise;
   const second = fixture.service.generateSessionPromptHints("session-2", sharedClientInput);
-  await new Promise((resolve) => setImmediate(resolve));
+  await sessionTwoStarted.promise;
 
   assert.deepEqual(agentSessions, ["session-1", "session-2"]);
   releaseSessionOne.resolve();
@@ -1635,12 +1631,12 @@ test("equal session and operation ids stay isolated by canonical project scope a
       const username = options.vibe64User?.username || "local";
       const identity = `${projectScope.replace(":", "-")}-${username}`;
       const threadId = `thread-${identity}`;
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId, type: "thread" });
-      options.onEvent({
+      await options.onEvent({ threadId, type: "thread" });
+      await options.onEvent({
         threadId,
         turnId: `turn-${identity}`,
         type: "turn"
@@ -1778,10 +1774,11 @@ test("session-wide Send cancellation covers preparing requests only in its canon
   ));
   await allContextsStarted.promise;
 
-  const cancellation = await runWithProjectRequestContext(alpha, () => (
+  const cancellation = runWithProjectRequestContext(alpha, () => (
     fixture.service.cancelSessionPromptHintsForSession("session-shared")
   ));
-  assert.deepEqual(cancellation, {
+  releaseContext.resolve(conversationPage());
+  assert.deepEqual(await cancellation, {
     cancelled: 2,
     ok: true
   });
@@ -1805,12 +1802,12 @@ test("internal session cancellation settles optional hint generation", async () 
   const interrupted = deferred();
   const fixture = createFixture({
     async runAgentTurn({ options }) {
-      options.onEvent({
+      await options.onEvent({
         executionProfile: resolvedPromptHintProfile(),
         type: "execution-profile"
       });
-      options.onEvent({ threadId: "thread-send-priority", type: "thread" });
-      options.onEvent({
+      await options.onEvent({ threadId: "thread-send-priority", type: "thread" });
+      await options.onEvent({
         threadId: "thread-send-priority",
         turnId: "turn-send-priority",
         type: "turn"
@@ -1850,7 +1847,7 @@ test("prompt hint cleanup waits for pending interruption before deleting the thr
   const fixture = createFixture({
     interruptResult: () => finishInterrupt.promise,
     async runAgentTurn({ options }) {
-      options.onEvent({ threadId: "thread-wait", turnId: "turn-wait", type: "turn" });
+      await options.onEvent({ threadId: "thread-wait", turnId: "turn-wait", type: "turn" });
       started.resolve();
       await finishTurn.promise;
       return readyAgentResult({ threadId: "thread-wait", turnId: "turn-wait" });
@@ -1888,17 +1885,17 @@ test("cancelling a completed hint while deletion is pending does not interrupt i
   assert.equal(fixture.calls.delete.length, 1);
 });
 
-test("verified retirement supersedes a delayed interruption error for that exact helper", async () => {
+test("native retirement still closes the independently owned helper scope", async () => {
   const started = deferred();
   const finishTurn = deferred();
   const finishInterrupt = deferred();
   const fixture = createFixture({
     interruptResult: () => finishInterrupt.promise,
     async runAgentTurn({ options }) {
-      options.onEvent({ threadId: "thread-retiring", turnId: "turn-retiring", type: "turn" });
+      await options.onEvent({ threadId: "thread-retiring", turnId: "turn-retiring", type: "turn" });
       started.resolve();
       await finishTurn.promise;
-      options.onEvent({ threadId: "thread-retiring", type: "thread-retired" });
+      await options.onEvent({ threadId: "thread-retiring", type: "thread-retired" });
       return { ok: false, code: "vibe64_agent_turn_cancelled" };
     }
   });
@@ -1909,23 +1906,23 @@ test("verified retirement supersedes a delayed interruption error for that exact
   finishTurn.resolve();
   finishInterrupt.resolve({ ok: false, error: "Thread no longer exists." });
   assert.equal((await pending).status, "cancelled");
-  assert.equal(fixture.calls.delete.length, 0);
+  assert.equal(fixture.calls.delete.length, 1);
   assert.deepEqual(fixture.calls.diagnostic, []);
 });
 
 test("another helper's retirement does not acknowledge this hint's failed cleanup", async () => {
   const fixture = createFixture({
     deleteResult: { ok: false, error: "Deletion unconfirmed." },
-    runAgentTurn({ options }) {
-      options.onEvent({ threadId: "thread-owned", turnId: "turn-owned", type: "turn" });
-      options.onEvent({ threadId: "thread-other", type: "thread-retired" });
+    async runAgentTurn({ options }) {
+      await options.onEvent({ threadId: "thread-owned", turnId: "turn-owned", type: "turn" });
+      await options.onEvent({ threadId: "thread-other", type: "thread-retired" });
       return readyAgentResult({ threadId: "thread-owned", turnId: "turn-owned" });
     }
   });
   const result = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:exact-retirement"));
   assert.equal(result.status, "unavailable");
   assert.equal(fixture.calls.delete.length, 1);
-  assert.equal(fixture.calls.delete[0].input.threadId, "thread-owned");
+  assert.equal(fixture.calls.delete[0].input.conversationId, "thread-owned");
   assert.ok(fixture.calls.diagnostic.some(({ code }) => code === "vibe64_prompt_hints_cleanup_failed"));
 });
 
@@ -1936,14 +1933,13 @@ test("shared hints survive restart, exclude drafts and stale conversations, and 
   const hints = await owner.service.generateSessionPromptHints("session-1", generateInput("hint:owner"));
   assert.equal(hints.status, "ready");
   assert.equal(owner.calls.published.length, 1);
-  const member = createFixture({ artifacts, requireAssistantAccess() {
+  const member = createFixture({ artifacts, resolvePurpose() {
     const error = new Error("Personal connection");
     error.code = "vibe64_assistant_owner_required";
     throw error;
   } });
   const shared = await member.service.generateSessionPromptHints("session-1", generateInput("hint:member"));
   assert.deepEqual(shared.suggestions, hints.suggestions);
-  assert.equal(member.calls.describe.length, 0);
   assert.equal(member.calls.resolve.length, 0);
   assert.equal(member.calls.run.length, 0);
   const privateDraft = await member.service.generateSessionPromptHints("session-1", {
@@ -1959,4 +1955,106 @@ test("shared hints survive restart, exclude drafts and stale conversations, and 
   await owner.service.generateSessionPromptHints("session-1", { ...generateInput("hint:owner-draft"), draft: "Private owner draft" });
   assert.deepEqual([...artifacts.values()], original);
   assert.equal(owner.calls.published.length, 1);
+});
+
+test("a member's hints use foreign shared Economy independently of a personal working chat", async () => {
+  const economy = { ...CODEX_SELECTION, engineId: "opencode", agentId: "build", modelProviderId: "opencode", modelId: "big-pickle", variantId: "" };
+  const profile = { ...resolvedPromptHintProfile(), providerId: "opencode", model: "opencode/big-pickle" };
+  const member = { username: "collaborator", role: "member" };
+  const fixture = createFixture({
+    resolvePurpose({ input, options }) {
+      assert.deepEqual(input, { purpose: "prompt_hint", workflowEngineId: "codex" });
+      assert.deepEqual(JSON.parse(options.session.metadata.assistant_selection), CODEX_SELECTION);
+      assert.deepEqual(options.vibe64User, member);
+      return { available: true, effectiveSelection: economy, connectionIdentity: "shared-pickle", settingsRevision: "routing-1" };
+    },
+    resolveExecutionProfile({ options, scope }) {
+      assert.deepEqual(options.assistantSelection, economy);
+      assert.equal(options.expectedConnectionIdentity, "shared-pickle");
+      assert.match(scope.workdir, /assistant-helpers\/hints_[^/]+\/workdir$/u);
+      assert.deepEqual(scope.environment, {});
+      return profile;
+    },
+    async runAgentTurn({ options }) {
+      assert.deepEqual(options.assistantSelection, economy);
+      assert.equal(options.runtime, undefined);
+      assert.equal(options.session, undefined);
+      await options.onEvent({ type: "thread", threadId: "pickle-hints" });
+      await options.onEvent({ type: "turn", threadId: "pickle-hints", turnId: "pickle-turn" });
+      return { ...readyAgentResult({ threadId: "pickle-hints", turnId: "pickle-turn" }), executionProfile: profile };
+    }
+  });
+  const result = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:shared-economy", member));
+  assert.equal(result.status, "ready");
+  assert.equal(fixture.calls.run.length, 1);
+  assert.equal(fixture.calls.delete.length, 1);
+  assert.deepEqual(fixture.calls.delete[0].options.assistantSelection, economy);
+  assert.deepEqual(fixture.calls.delete[0].input.executionProfile, profile);
+  assert.deepEqual(JSON.parse((await fixture.runtime.getSession("session-1")).metadata.assistant_selection), CODEX_SELECTION);
+});
+
+test("changed routing during generation discards the result and the next request uses the new route", async () => {
+  let modelId = "gpt-5.6-luna";
+  let settingsRevision = "routing-1";
+  const fixture = createFixture({
+    resolvePurpose() {
+      return { available: true, effectiveSelection: { ...CODEX_SELECTION, modelId }, connectionIdentity: ACCOUNT_SIGNATURE, settingsRevision };
+    },
+    async runAgentTurn({ options }) {
+      await options.onEvent({ type: "thread", threadId: "hint-changing-route" });
+      modelId = "gpt-6-luna";
+      settingsRevision = "routing-2";
+      return readyAgentResult({ threadId: "hint-changing-route" });
+    }
+  });
+  const first = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:routing-before"));
+  assert.equal(first.status, "stale");
+  assert.equal(fixture.calls.delete[0].options.assistantSelection.modelId, "gpt-5.6-luna");
+  const next = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:routing-after"));
+  assert.equal(next.status, "ready");
+  assert.equal(next.cached, false);
+  assert.equal(fixture.calls.run[1].options.assistantSelection.modelId, "gpt-6-luna");
+});
+
+test("failed hint cleanup survives restart without retaining a private draft or resolving another route", async () => {
+  const draft = "PRIVATE DRAFT NEVER PERSISTED IN TASK";
+  const first = createFixture({
+    deleteResult: { ok: false, error: "The process has not stopped." },
+    async runAgentTurn({ options }) {
+      await options.onEvent({ type: "helper-execution", executionId: "execution-claude-hints" });
+      await options.onEvent({ type: "thread", threadId: "retained-hint" });
+      await options.onEvent({ type: "turn", threadId: "retained-hint", turnId: "retained-turn" });
+      return readyAgentResult({ threadId: "retained-hint", turnId: "retained-turn" });
+    }
+  });
+  assert.equal((await first.service.generateSessionPromptHints("session-1", {
+    ...generateInput("hint:retained"), draft
+  })).status, "unavailable");
+  const taskDirectory = await first.runtime.store.withReadableSessionPaths("session-1", (paths) => path.join(paths.artifactsRoot, "assistant/prompt-hint-tasks"));
+  const files = await readdir(taskDirectory);
+  assert.equal(files.length, 1);
+  const recordText = await readFile(path.join(taskDirectory, files[0]), "utf8");
+  assert.doesNotMatch(recordText, /PRIVATE DRAFT|shared task tracker/u);
+  const retained = JSON.parse(recordText);
+  assert.equal(retained.conversationId, "retained-hint");
+  assert.equal(retained.runId, "retained-turn");
+  assert.equal(retained.executionId, "execution-claude-hints");
+
+  const restarted = createFixture({
+    fixtureRoot: first.runtime.stateRoot,
+    resolvePurpose() { assert.fail("Cleanup must not resolve a route or start inference."); },
+    deleteResult({ scope, input, options }) {
+      assert.equal(scope.id, retained.scope.id);
+      assert.equal(input.conversationId, "retained-hint");
+      assert.equal(input.cleanupExecutionId, "execution-claude-hints");
+      assert.deepEqual(input.executionProfile, retained.executionProfile);
+      assert.deepEqual(options.assistantSelection, retained.selection);
+      return { ok: true };
+    }
+  });
+  await restarted.service.cancelSessionPromptHintsForSession("session-1");
+  assert.equal(restarted.calls.delete.length, 1);
+  assert.equal(restarted.calls.run.length, 0);
+  assert.deepEqual(await readdir(taskDirectory), []);
+  await assert.rejects(readdir(path.dirname(retained.scope.workdir)), { code: "ENOENT" });
 });

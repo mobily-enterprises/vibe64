@@ -33,9 +33,11 @@ const Vibe64SourceEditorProvider = defineFeature({
       routeSurface: "app",
       sourceEditor
     });
+    terminals.setSourceEditorProvider(sourceEditor);
     return { sourceEditor };
   },
-  shutdown(_dependencies, { outputs }) {
+  shutdown({ terminals }, { outputs }) {
+    terminals.setSourceEditorProvider(null);
     return outputs.sourceEditor.close();
   }
 });

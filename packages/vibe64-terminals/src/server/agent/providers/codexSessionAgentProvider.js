@@ -1,5 +1,4 @@
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
-import { CODEX_RECOMMENDED_HELPER_MODEL } from "@local/vibe64-core/server/nativeHelperModel";
 import { createHash } from "node:crypto";
 
 import {
@@ -26,13 +25,7 @@ const CODEX_PRODUCT_PROVIDER_ID = "codex";
 const CODEX_APP_SERVER_TRANSPORT_ID = "codex_app_server";
 const CODEX_ATTACHMENT_MAX_ITEMS = 10;
 const CODEX_ATTACHMENT_RENEW_RETRY_DELAYS_MS = Object.freeze([500, 1_000, 2_000, 5_000]);
-const CODEX_ECONOMY_PROFILE_REVISION = "codex-economy-luna-low-v2";
-const CODEX_ECONOMY_MODEL_CANDIDATES = Object.freeze([
-  Object.freeze({
-    model: CODEX_RECOMMENDED_HELPER_MODEL,
-    thinking: "low"
-  })
-]);
+const CODEX_ECONOMY_PROFILE_REVISION = "codex-economy-low-v3";
 const CODEX_ECONOMY_WORKLOAD_LIMITS = VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS;
 const acceptedAttachmentRenewalTimers = new WeakMap();
 
@@ -186,7 +179,7 @@ function resolveCodexEconomyExecutionProfile(request = {}, catalog = null, model
   const models = codexCatalogRows(catalog);
   let unsupportedReasoningModel = "";
   let selected = null;
-  const candidates = modelId ? [{ model: modelId, thinking: "low" }] : CODEX_ECONOMY_MODEL_CANDIDATES;
+  const candidates = modelId ? [{ model: modelId, thinking: "low" }] : [];
   for (const candidate of candidates) {
     const model = models.find((row) => (
       row?.hidden !== true && normalizeText(row?.model) === candidate.model
@@ -546,6 +539,7 @@ function createCodexSessionAgentProvider({
     },
     async closeSession(context) {
       return controller.closeAllForSession(context.sessionId, {
+        ...(context.assistantScope ? { assistantScope: context.assistantScope } : {}),
         changeover: context.changeover === true,
         preserveProcessExitProof: context.preserveProcessExitProof === true,
         renewalCleanup: context.renewalCleanup,
@@ -589,7 +583,7 @@ function createCodexSessionAgentProvider({
       });
     },
     async deleteConversation(context, input = {}) {
-      return controller.deleteConversation(context.sessionId, input, {
+      return controller.deleteConversation(context.sessionId, { ...input, agentSettings: codexAssistantSettings(context, input) }, {
         assistantScope: context.assistantScope,
         runtime: context.runtime,
         session: context.session
@@ -657,7 +651,7 @@ function createCodexSessionAgentProvider({
       return controller.readPlanUsage(context.sessionId, { runtime: context.runtime, session: context.session });
     },
     async readConversation(context, input = {}) {
-      return controller.readConversation(context.sessionId, input, {
+      return controller.readConversation(context.sessionId, { ...input, agentSettings: codexAssistantSettings(context, input) }, {
         assistantScope: context.assistantScope,
         runtime: context.runtime,
         session: context.session
@@ -674,11 +668,12 @@ function createCodexSessionAgentProvider({
         executionProfile,
         limits
       } = codexEconomyExecutionProfileRequest(input);
-      const helperModelId = input.workloadId === "request_routing"
-        ? context.assistantSelection.modelId : await controller.readHelperModel(context);
+      const helperModelId = context.assistantSelection?.modelId;
       return resolveCodexEconomyExecutionProfile(
         executionProfile,
         await controller.executionProfileModelCatalog(context.sessionId, {
+          ...(context.assistantScope ? { assistantScope: context.assistantScope,
+            agentSettings: codexAssistantSettings(context) } : {}),
           runtime: context.runtime,
           session: context.session,
           signal: context.signal,
@@ -774,6 +769,7 @@ function createCodexSessionAgentProvider({
       };
       const result = await controller.startConversationTurn(context.sessionId, message, {
         assistantScope: context.assistantScope,
+        onEvent: context.onEvent,
         runtime: context.runtime,
         session: context.session
       });
@@ -783,7 +779,7 @@ function createCodexSessionAgentProvider({
       return controller.startTerminal(context.sessionId, input);
     },
     async stopConversation(context, input = {}) {
-      return controller.stopConversation(context.sessionId, input, {
+      return controller.stopConversation(context.sessionId, { ...input, agentSettings: codexAssistantSettings(context, input) }, {
         assistantScope: context.assistantScope,
         runtime: context.runtime,
         session: context.session
@@ -813,7 +809,7 @@ function createCodexSessionAgentProvider({
       return controller.unsubscribeKnownAppServerThreads(sessions);
     },
     async waitForConversationTurn(context, input = {}) {
-      return controller.waitForConversationTurn(context.sessionId, input, {
+      return controller.waitForConversationTurn(context.sessionId, { ...input, agentSettings: codexAssistantSettings(context, input) }, {
         assistantScope: context.assistantScope,
         onEvent: context.onEvent
       });
@@ -855,7 +851,6 @@ function createCodexSessionAgentProvider({
 export {
   CODEX_APP_SERVER_TRANSPORT_ID,
   CODEX_ATTACHMENT_MAX_ITEMS,
-  CODEX_ECONOMY_MODEL_CANDIDATES,
   CODEX_ECONOMY_PROFILE_REVISION,
   CODEX_ECONOMY_WORKLOAD_LIMITS,
   CODEX_PRODUCT_PROVIDER_ID,

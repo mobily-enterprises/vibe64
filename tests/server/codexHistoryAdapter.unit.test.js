@@ -33,7 +33,33 @@ test("history translation preserves every ordinary item, plaintext and native hi
   assert.throws(() => translateCodexHistory({ input: [{ ...foreign, content: [{ type: "unknown", text: "keep me" }] }] }), /not supported/);
 });
 
-test("adapter forwards bounded compressed requests only to fixed OpenAI routes and streams responses", async (t) => {
+test("DeepSeek receives unsupported exec history as context while keeping tools, images and native state intact", () => {
+  const call = { type: "custom_tool_call", name: "exec", call_id: "exec-1", input: "text(await tools.exec_command({cmd: 'pwd'}));" };
+  const image = { type: "input_image", image_url: "data:image/png;base64,fixture", detail: "original" };
+  const output = { type: "custom_tool_call_output", call_id: "exec-1", output: [
+    { type: "input_text", text: "Exact output\n  with whitespace" }, image
+  ] };
+  const previousFailure = { type: "function_call", name: "exec", call_id: "exec-bad", arguments: '{"input":"text(42)"}' };
+  const ordinary = { type: "function_call", name: "exec_command", call_id: "shell-1", arguments: '{"cmd":"pwd"}' };
+  const patch = { type: "custom_tool_call", name: "apply_patch", call_id: "patch-1", input: "*** Begin Patch\n*** End Patch" };
+  const body = { tools: [{ type: "function", name: "exec_command" }], input: [foreign, call, output,
+    previousFailure, { type: "function_call_output", call_id: "exec-bad", output: "unsupported call: exec" }, ordinary, patch] };
+  const saved = structuredClone(body);
+  const translated = translateCodexHistory(body, "deepseek");
+  assert.deepEqual(body, saved);
+  assert.equal(translated.tools, body.tools);
+  for (const index of [0, 5, 6]) assert.equal(translated.input[index], body.input[index]);
+  assert.match(translated.input[1].content[0].text, /context only, not an available tool/);
+  assert.ok(translated.input[1].content[0].text.includes(JSON.stringify(call)));
+  assert.equal(translated.input[2].content[1], output.output[0]);
+  assert.equal(translated.input[2].content[2], image);
+  assert.ok(translated.input[3].content[0].text.includes(JSON.stringify(previousFailure)));
+  assert.equal(translated.input[4].content[1].text, "unsupported call: exec");
+  assert.equal(translateCodexHistory(body).input[1], call);
+  assert.throws(() => translateCodexHistory({ input: [call, { ...output, output: [{ type: "unknown" }] }] }, "deepseek"), /history is not supported/);
+});
+
+test("adapter forwards bounded compressed requests only to fixed provider routes and streams responses", async (t) => {
   const calls = [];
   const adapter = await startCodexHistoryAdapter({ token: randomUUID(), fetchImpl: async (url, options) => {
     calls.push({ url, ...options });
@@ -60,6 +86,18 @@ test("adapter forwards bounded compressed requests only to fixed OpenAI routes a
   const models = await fetch(`${adapter.baseUrl}/chatgpt/models?client_version=1`);
   await models.text();
   assert.equal(calls.at(-1).url, "https://chatgpt.com/backend-api/codex/models?client_version=1");
+  const deepseek = await fetch(`${adapter.baseUrl}/deepseek/responses`, { method: "POST",
+    headers: { authorization: "Bearer deepseek-key" }, body: JSON.stringify({ input: [foreign,
+      { type: "custom_tool_call", name: "exec", call_id: "exec-1", input: "text(42)" },
+      { type: "custom_tool_call_output", call_id: "exec-1", output: "42" }
+    ] }) });
+  assert.equal(await deepseek.text(), "data: one\n\ndata: two\n\n");
+  assert.equal(calls.at(-1).url, "https://api.deepseek.com/responses");
+  assert.equal(calls.at(-1).headers.get("authorization"), "Bearer deepseek-key");
+  const deepseekHistory = JSON.parse(calls.at(-1).body).input;
+  assert.deepEqual(deepseekHistory[0], foreign);
+  assert.equal(deepseekHistory[1].type, "message");
+  assert.equal(deepseekHistory[2].content[1].text, "42");
   const count = calls.length;
   for (const url of ["/chatgpt/arbitrary", "/https://example.com/responses", "/chatgpt/responses?redirect=https://example.com"]) {
     const result = await fetch(`${adapter.baseUrl}${url}`);
@@ -133,6 +171,14 @@ test("native OpenAI account selects its upstream without changing provider or ex
   }
   const external = { modelProvider: "deepseek", config: { "model_providers.deepseek": { experimental_bearer_token: "external-key" } } };
   assert.equal(await provider.withHistoryAdapter(external, { request() { throw new Error("must not read OpenAI auth"); } }), external);
+  const curated = { modelProvider: "deepseek", config: { "model_providers.deepseek": {
+    base_url: "https://api.deepseek.com/", experimental_bearer_token: "external-key", wire_api: "responses"
+  }, web_search: "disabled" } };
+  const translated = await provider.withHistoryAdapter(curated, { request() { throw new Error("must not read OpenAI auth"); } });
+  assert.equal(translated.config["model_providers.deepseek"].base_url, `${provider.runtime.historyAdapterBaseUrl}/deepseek`);
+  assert.equal(translated.config["model_providers.deepseek"].experimental_bearer_token, "external-key");
+  assert.equal(translated.config.web_search, "disabled");
+  assert.equal(curated.config["model_providers.deepseek"].base_url, "https://api.deepseek.com/");
   await assert.rejects(provider.withHistoryAdapter({ modelProvider: "openai" }, { request: async () => ({ account: null }) }), /Reconnect/);
 });
 

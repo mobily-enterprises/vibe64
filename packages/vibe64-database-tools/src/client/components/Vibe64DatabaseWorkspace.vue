@@ -533,6 +533,7 @@
 </template>
 
 <script setup>
+import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import {
@@ -717,21 +718,19 @@ const databaseScopeLabel = computed(() => (
       : "Resolved database"
 ));
 const assistantConfigured = computed(() => Boolean(state.value?.assistant?.available));
-const assistantCanRun = computed(() => assistantConfigured.value && props.assistantAvailable);
+const assistantCanRun = computed(() => assistantConfigured.value);
 const assistantStatusLabel = computed(() => {
-  if (!assistantConfigured.value) return "Not configured";
-  if (!props.assistantAvailable) return "Owner only";
-  return state.value?.assistant?.model || "Available";
+  const assistant = state.value?.assistant;
+  if (!assistantConfigured.value) return "Unavailable";
+  const engine = VIBE64_AGENT_PROVIDERS.find(({ id }) => id === assistant.engineId)?.label || assistant.engineId;
+  return `${engine} · ${assistant.model}${assistant.backupUsed ? ' · Shared backup' : ''}`;
 });
 const assistantUnavailableTitle = computed(() => {
   if (props.assistantRequestAvailable) return "Get help through the owner";
-  return assistantConfigured.value ? "Copilot is owner-only for this connection." : "Copilot is optional.";
+  return "Copilot is unavailable";
 });
 const assistantUnavailableCopy = computed(() => {
-  if (assistantConfigured.value) {
-    return props.assistantUnavailableMessage || "This Personal AI connection can only be used by the workspace owner. Database browsing and editing remain available.";
-  }
-  return "Choose an available AI connection for this session to enable Copilot. Database browsing and editing work without AI.";
+  return state.value?.assistant?.message || "Ask the owner to configure Economy in Model routing. Database browsing and editing work without AI.";
 });
 const selectedTable = computed(() => schema.value.tables.find((table) => table.qualifiedName === selectedTableName.value) || null);
 const assistantTableName = computed(() => {

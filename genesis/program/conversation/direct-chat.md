@@ -3,8 +3,9 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 The Settings cog stays on the same horizontal centerline as the neighboring icons.
-It labels the next recipient underneath without shifting the icon, increasing
-the button height or adding a tooltip. The session store
+It labels the next recipient underneath in a compact, bordered rectangle with
+theme-aware contrast. The label extends beyond the button circle without
+shifting the icon, increasing the button height or adding a tooltip. The session store
 snapshots the assistant selection on a new turn. History preserves that snapshot
 through normalization, and the adapter supplies per-turn labels and hover details
 to the shared transcript. Replies without a saved selection display "agent";
@@ -16,6 +17,20 @@ OpenCode waits for its project event connection before sending, allowing cold
 initialization up to two minutes. A pre-send connection timeout is retryable.
 Each attempt retains its own failure notice, so resending the same message
 cannot hide a later provider rejection behind the earlier connection failure.
+The main chat retains unsent composer text, uploaded attachment references and
+unconfirmed deliveries in browser session storage, scoped to the authenticated
+viewer, project and conversation. Reload never resends
+them automatically: canonical message receipts remove delivered entries, an
+active durable routing request owns its status, and other unconfirmed messages
+offer explicit Retry/Edit/Cancel with their original message ID. This also
+preserves a failed request rejected before server admission. Blocked/full browser
+storage leaves the normal in-memory delivery controls usable. Uploads still in
+progress must finish before their attachment references can be retained.
+Stopping routing before delivery restores the local prompt to the composer,
+preserving newer draft text and uploaded attachments. Reload recovers the same
+cancelled draft without resending it; the next explicit Send gets a fresh ID.
+A provider abort after successful helper cleanup is reported as cancellation,
+while failed cleanup and uncertain native delivery keep their failure controls.
 Existing assistant status and message-delivery diagnostics include the requesting
 user's authenticated username when supplied by the host. Request context takes
 precedence over operation options; background work without an actor records
@@ -179,23 +194,74 @@ so retaining a different provider does not skip the selected provider's cleanup.
 
 ## Public contract
 
+The session manager exposes a purpose resolver for callers migrating to unified
+routing. It loads saved or server-supplied draft configuration, trusted actor
+and connection facts, and the exact required catalogue models before invoking
+the shared deterministic policy. It does not authorize against the last chat
+selection or change a conversation binding. Plan/Code decisions capture the
+whole effective pair; independent Router/Economy decisions read only their own
+dependencies. OpenCode model pages must share one catalogue revision. Unknown
+credentials and unavailable catalogues produce unavailable decisions rather
+than provider-failure substitution. Execution retains the direct provider
+access check, including the captured connection identity at inference admission.
+The chat coordinator, Save naming and prompt hints use this resolver. The
+session access response now resolves each chat/helper purpose from one saved
+configuration snapshot, sharing connection and catalogue reads within that
+response only. The response omits private connection identities. Dispatch still
+rechecks access. Source explanations and Database Copilot use their own resolved
+Economy destination too.
+
 Main chat can save Plan, Code, Economy or Auto plus an optional review preference
 in the existing conversation metadata. A role resolves to a live, available
-selection in that same orchestrator. Existing concrete selections remain usable
-until a mode is chosen. Exact model overrides apply only to explicit modes.
+selection using its saved workflow, independently of the last native engine.
+Plan and Code resolve as a pair even when review is off. A member's foreign
+shared Backup replaces both roles; same-engine Backup replaces restricted roles.
+Auto requires direct access to Router, Plan and Code and never uses Backup.
+Exact model overrides apply only to explicit modes. Mode changes preserve the
+workflow; a deliberate assistant-selection change adopts its selected workflow.
+One icon beside Settings opens the mode choices, assigned models and review
+switch; these controls occupy no separate row above the composer. Its icon and
+accessible label reflect the selected mode. Owners open the shared Model routing
+form directly in an overlay, initially selecting this chat's orchestrator.
+Other users have no configuration action. The mode icon remains reachable when
+the current mode is unavailable. Its menu shows the actor's effective destination,
+Shared backup and pair-preservation reasons, and explains unavailable choices.
+Main-chat availability uses the selected mode; steering checks the bound native
+connection. Members regain direct chat after an owner's personal turn finishes
+when their configured explicit mode is accessible. Suggestions independently use
+`prompt_hint` availability, allowing private drafts through accessible Economy.
+An idle routed Send does not require the previous native connection to start.
+Unresolved activity or a running turn still prevents changing its destination.
+Access and approval query caches separate actor/role, project and session; user
+switches also invalidate hint requests and pending queue controls. Account/routing
+changes and native turn boundaries refresh access without refreshing on every
+streamed message. Missing assignments explain where
+to configure them or direct the user to the owner.
 
-Auto snapshots its three role assignments and settings revision before invoking
-the existing tool-free Economy workload. The classifier sees the submitted text,
-attachment labels and bounded recent visible exchanges; it returns only a mode
-and reason. Vibe64 validates this result and sends the original request through
-ordinary native delivery with a scoped Plan or Code instruction. It does not
-change orchestrators or use conversation changeover for model routing.
+Auto captures Router and the effective Plan–Code pair, the actor, connection
+identities and configuration revision before invoking the existing tool-free
+classification workload in a separate non-project scope. Economy is not an Auto
+dependency. The classifier sees the submitted text, attachment labels and bounded
+recent visible exchanges; it returns only a mode and reason. Its native reference
+and any managed execution ID stay in the parent request until verified cleanup.
+Helper callbacks merge that reference under the ordinary lock without overwriting
+cancellation. A late native start is stopped before delivery; failed cleanup
+blocks new work and is retried during reconciliation or explicit cancellation.
+Vibe64 then rechecks the captured decision and sends the original request through
+ordinary native delivery with a Plan or Code instruction. Main chat uses both
+existing changeover preparation and Send when Economy or a member Backup selects
+another orchestrator. The workflow stays fixed across that excursion. Returning
+to routed Codex looks up its retained native history by the workflow's storage
+provider, even when the next turn selects a different model provider. Legacy
+Codex chats without a routing home retain their separate provider histories. Temporary
+chat scopes the same owner to its own transcript and retained native bindings.
 
 One durable request record owns preparation, admission uncertainty and an optional
 review continuation. Stop cancels preparation and suppresses its late result;
 after native admission it uses ordinary interruption. Native receipts prevent
 duplicate delivery after a lost HTTP response. A failed classifier is retryable;
-uncertain delivery checks acceptance before any resend. Unfinished preparation
+uncertain delivery checks acceptance before any resend, including while the
+accepted native turn is active. It cannot become an accidental steering request. Unfinished preparation
 after a server restart becomes visibly retryable. A new request cannot overtake
 an unresolved pending request. Active-turn steering bypasses classification.
 
@@ -203,13 +269,26 @@ After the matching Code turn completes normally, review uses one preallocated
 message identity and the snapshotted Plan selection. The visible automatic
 request permits scoped fixes. Structured waiting, failure, interruption, active
 goals and Stop suppress continuation; a reviewer never schedules another review.
+If a read sees completion before the idle event, the coordinator may review a
+Code request it admitted in the current process. After a server restart, the
+same recovered completion requires explicit Retry/Skip instead.
 Preparation failures retain Retry and Skip. A review stopped after admission is
 incomplete and needs a new explicit request; even a late native success cannot
 overwrite its cancellation. Completion must match the exact admitted turn,
 recovering that identity from its receipt when necessary. Unknown completion
 skips review visibly. Backend recovery offers an unsent review for Retry/Skip
-instead of launching it. Goal mode and selection are pinned only after native
-goal acceptance.
+instead of launching it. Review retries use the original submitting actor even
+when an owner triggers Retry. Replaced connections cannot receive a captured
+request; changed configuration does not retarget it. Goal mode, workflow and
+selection are resolved centrally and pinned only after native goal acceptance.
+An unfinished native goal without a saved routing pin also prevents a new Send
+from changing its AI after configuration or access changes.
+A foreign-engine goal destination still requires an ordinary Send for history
+catch-up before native goal admission.
+Service shutdown joins completion bookkeeping already in progress and prevents
+new idle events from starting follow-ups. OpenCode also joins the active turn's
+final status write before releasing its native process record. Deferred review
+still requires explicit Retry after recovery.
 
 Codex prepares private per-thread provider configuration, detaches and resumes
 the same idle native thread, and checks the provider acknowledgement. A native
@@ -226,6 +305,15 @@ history in the same position. Original rollout records, opaque provider state,
 tool calls/results and valid OpenAI reasoning remain unchanged. This preserves
 detailed text without a summarization call and lets DeepSeek or GLM consume its
 original history on the return trip. Unknown incompatible reasoning fails visibly.
+
+For the curated DeepSeek route, the same adapter preserves historical Codex
+JavaScript `exec` calls as labelled context and retains their exact text/image
+results. DeepSeek supports ordinary shell functions but rejects this custom
+tool; retaining it as executable-looking tool history caused repeated
+`unsupported call: exec` failures after Astra planning. The outgoing translation
+also covers those failed historical calls. Current tool definitions and streamed
+responses are unchanged, and the original rollout remains intact for Astra.
+DeepSeek credentials stay on its fixed upstream; they never use the OpenAI route.
 
 The adapter bounds and decodes request bodies, forwards streamed HTTP responses,
 aborts upstream when native delivery disconnects, and adds no inference retry.
@@ -282,8 +370,9 @@ Cancel stops work and clears the native goal. Claude's form omits token budgets
 because the CLI does not provide Codex's hard token-budget control. The pinned
 CLI's experimental `get_usage` JSON control supplies current five-hour, weekly,
 and available model-specific windows. Missing or expired data is never presented
-as a refreshed allowance. Both controls retain the assistant's access boundary;
-plan allowance is owner-only. Passive goal and allowance lookup failures stay
+as a refreshed allowance. Goal start/resume retains the assistant's access
+boundary; reads and pause/cancel remain available without inference admission.
+Plan allowance is owner-only. Passive goal and allowance lookup failures stay
 local to those controls and do not report an app-wide network outage.
 
 The shared command environment installs `vibe64-helper` beside the existing
@@ -449,6 +538,9 @@ boundary. Closure drains admitted preparation and rejects overlapping acquisitio
 stops the assistant before retiring its controls, and uses retained provider identity
 rather than preparing controls during cleanup. Browser reconnect checks reuse a
 healthy binding. Restricted helpers retain their explicitly empty environment.
+Their provider callbacks use the supplied scope and connection without reading a
+project session, installing project command controls, or refreshing project
+instructions during resume. Catalogue authentication uses the selected provider.
 The focused managed-control regression includes the actual native CLI with a local
 model fixture, a second subscriber, interrupted goals and preserved files/history.
 
@@ -564,8 +656,8 @@ The store also supports an internal completed decision containing a configuratio
 hash, verification time and one stable continuation message ID. Concurrent
 completion retries return the saved identity; a different configuration is
 rejected. Completion cannot overwrite Skip, and Skip cannot erase completion.
-Recording it does not send an assistant message. The setup-command service can now supply completion after checking assistant
-access, the exact saved request and configuration, and an application-reported
+Recording it does not send an assistant message. The setup-command service supplies completion after checking
+the exact saved request and configuration, and an application-reported
 connected result with a verification time. Configure carries the request fingerprint through the project route. Integrations
 attaches it only for the matching development session and slot, together with the
 loaded configuration hash. Confirmed decisions reload the server conversation;
@@ -581,21 +673,27 @@ sends no prompt and returns no conversation content. Integration continuation us
 controller after a failed local write and inspects the accepted message with a
 fresh controller using the same provider history. Full browser and process-restart recovery remain unverified. Codex can likewise inspect the current bound native
 thread for an exact user-message client ID, keeping missing or unreadable history
-unknown. The session manager exposes admission inspection through both provider
-adapters and requires normal assistant access before dispatch.
+unknown. Admission inspection remains available without inference access; it
+only checks the original receipt and cannot start or redirect a turn.
 The completed decision also owns continuation delivery state. A serialized claim
-records the original engine and native thread before delivery. Only the first
-claim can send; reopening a sending record requires admission inspection. An
+records the original engine and native thread before delivery. An uncertain
+delivery requires admission inspection before any other action. An
 accepted record cannot be claimed again or rebound to another thread. These
 store operations do not themselves contact the assistant. The terminal service
-claims and delivers under the existing main assistant write lock. Before the first
+uses the ordinary routing coordinator for generated Code, with automatic review
+off and unchanged chat preferences. It resolves the submitting actor's effective
+Code destination, including shared Backup and ordinary history changeover.
+Its internal pre-send callback claims the domain receipt before native inference;
+both transitions use the existing main assistant write lock. Before the first
 claim, the sessions feature supplies the source editor's configuration reader;
 the terminal service requires the completed configuration hash and slot to still
 match. Source edits use that same write lock. A missing reader or changed
 configuration leaves the continuation pending without a prompt. Recovery of an
-existing claim does not depend on current configuration. It sends a fixed
+uncertain claim does not depend on current configuration. It sends a fixed
 continuation containing only the slot ID, checks provider history after uncertain
-delivery, and never resends a claimed message. The session action takes its actor
+delivery, and never resends an uncertain message. A known pre-send failure remains
+retryable; a cancelled request cannot be revived. Old claimed deliveries without
+a corresponding routing request can only be inspected. The session action takes its actor
 from authenticated context and exposes only request identity as input. A controlled
 OpenCode service test proves later admission recovery after local persistence fails
 and provider history is temporarily unavailable. Two competing service calls
@@ -841,6 +939,8 @@ message unchanged; its visible attribution names the author and approving owner.
 Each approval checks its current caller, including requests that arrive while
 an owner's delivery is already pending. Duplicate owner approvals share that
 delivery; a failed delivery remains retryable with the same provider message id.
+Approval preserves its owner check, then sends through ordinary routing without
+requiring the previously selected native connection first.
 
 The main composer clearly labels this mode Send for approval, allows attachments
 while the assistant is working, and accepts a request while its connection is
@@ -1087,6 +1187,17 @@ OpenCode terminal. A person starts the interactive terminal explicitly and
 sees the complete terminal rather than a collapsed status line. Closing it
 terminates and hides the terminal, and a clean terminal exit such as Ctrl-D
 hides it without affecting the durable conversation.
+Terminal availability checks the conversation's native connection, independently
+of the next routed chat mode. Each open terminal retains the connection it was
+started with; input rechecks the current viewer's access and connection identity
+without loading full chat history. A changed connection requires closing and
+reopening the terminal. Shared Backup never receives raw terminal input. Reading,
+resizing and closing remain available after AI access is lost.
+Goal reads and pause/cancel controls likewise target the saved goal's connection
+independently of the last visible chat selection; starting or resuming still
+checks the effective destination's access. An unavailable goal observation never
+marks a saved goal complete or unlocks Auto. Goal and allowance caches separate
+viewers, and a late goal response cannot update another viewer's controls.
 
 Opening the selected session view prepares that session's chosen provider and
 native thread without sending a model prompt or loading the provider catalogue.
@@ -1114,21 +1225,27 @@ ordinary provider command boundaries, and closing that session drains those
 descendants.
 The shared OpenCode configuration defines economy subagents for connected
 providers, while task admission and native chat/model hooks restrict use to the
-registered parent's selected provider and configured Helper model. Resuming a
+registered parent's selected provider and effective Economy model. A foreign
+Economy choice is not exposed as a native subagent. Resuming a
 helper from another parent is rejected. The plugin resolves native child
 `parentID` ancestry for command control, history unwrapping and host capabilities;
 unknown or unverifiable ancestry fails closed. Helpers gain no extra account or
 command permissions.
 OpenCode progress broadcasts coalesce to at most one per second per session,
 with the first state published immediately. A meaningful reasoning sentence or
-completed part can queue one bounded, tool-free summary through the selected
-Helper model. Streaming and final projection share turn-owned entries, so
+completed part can queue one bounded, tool-free summary through effective Economy
+using the common scoped manager and the submitting actor. This helper may run
+under another orchestrator without changing the working OpenCode model. Streaming and final projection share turn-owned entries, so
 replayed parts never submit duplicate requests and initial partial words do not
 consume a part. The existing completion reader waits for the helper's finished
 answer. Main completion persists any missing mechanical headlines before its
 answer without waiting for a model request. Turn closure cancels outstanding
-summaries and deletes the native helper session; failed deletion remains tracked
-for retry on session closure. Full provider reasoning is not persisted.
+summaries and deletes the native helper session. The native run retains only its
+exact helper scope, destination, connection identity and execution reference;
+failed cleanup is retried before another summary or on session closure, including
+by a fresh controller after restart. A restored turn without an evidenced actor
+uses mechanical headlines instead of requesting a model summary. Full provider
+reasoning is not persisted.
 
 Tool-free economy turns run without the session source lock, while provider
 thread ownership and terminal admission still protect cleanup and renewal.
@@ -1152,14 +1269,26 @@ intent without inventing requirements or repeating finished or declined work.
 The browser waits for a short typing pause, cancels superseded requests and
 rejects late responses. Draft context is bounded to its latest 4,000 characters;
 it is sent only to the tool-free suggestion helper, not saved as a chat message.
-Cache identity includes the draft alongside the Blueprint and conversation.
+The server resolves the saved workflow's effective Economy destination for the
+requesting actor before creating a provider profile; a personal main-chat
+selection does not block an accessible shared helper. Cache identity includes
+the actor, exact destination and connection generation, routing revision, draft,
+Blueprint and conversation. Routing is rechecked before publishing a result.
+Each actual generation uses an independent tool-free scope. Its native
+conversation/turn and managed execution IDs are retained in a feature-owned
+session artifact until verified cleanup; those records never contain the draft.
+Superseding work waits for the old job's cleanup before reusing that actor's
+record. A failed cleanup blocks new hint inference for that actor and is retried
+by the next request or session close, including after restart. Cancelling a
+session also waits for requests still preparing their context.
 Successful generation without a draft also stores a shared suggestion snapshot
 in the session's private assistant artifact and publishes a session refresh hint.
-A member denied personal AI access may read that snapshot only while its complete
-conversation/Blueprint basis still matches; this path does not inspect or invoke
-a provider. Draft suggestions remain actor-specific and are never persisted in
-this shared artifact. A member's browser requests only conversation suggestions,
-leaves their draft local, and rereads on the shared-hint realtime event. Missing,
+When effective Economy is unavailable, the server may return that snapshot
+only while its complete conversation/Blueprint basis still matches; this path
+does not invoke inference. Draft suggestions remain actor-specific and are never persisted in
+this shared artifact. The browser sends the person's draft only when effective
+`prompt_hint` is available; otherwise it requests conversation-only suggestions
+and rereads on the shared-hint realtime event. Missing,
 stale or unreadable shared hints stay absent until authorized generation succeeds.
 An empty conversation still uses its Blueprint or draft; generic starters are
 reserved for a session with none of those inputs.

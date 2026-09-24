@@ -23,7 +23,7 @@ const selection = Object.freeze({
   variantId: "high"
 });
 const assistantAccess = Object.freeze({
-  economyModelId: "deepseek-chat"
+  economyModelId: "retired-setting-must-not-override-routing"
 });
 
 test("OpenCode resolves every Vibe64 helper workload to the selected model and a deny-all policy", () => {

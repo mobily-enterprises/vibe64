@@ -448,6 +448,24 @@ test("OpenCode runtime invalidation preserves its credential-free catalog snapsh
   assert.equal(harness.catalogReadCalls.length, 1);
 });
 
+test("OpenCode refreshes the same clean catalogue after a managed process starts", async (t) => {
+  const harness = await controllerHarness();
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const before = await harness.controller.capabilities({ engineId: "opencode" });
+  await harness.controller.ensureSession("session-1");
+  const later = Date.now() + 11 * 60 * 1000;
+  const clock = t.mock.method(Date, "now", () => later);
+  try {
+    const after = await harness.controller.capabilities({ engineId: "opencode" });
+    assert.equal(harness.catalogReadCalls.length, 2);
+    assert.equal(after.modelProviders[0].definitionRevision, before.modelProviders[0].definitionRevision);
+    assert.equal(after.modelProviders[0].connected, true);
+  } finally { clock.mock.restore(); }
+});
+
 test("OpenCode exposes a finite connection verifier through its controller", async (t) => {
   const harness = await controllerHarness();
   t.after(async () => {
@@ -1203,6 +1221,34 @@ test("OpenCode fails explicitly after two reasoning-only completions", async (t)
   assert.deepEqual(harness.assistantMessages, []);
 });
 
+test("OpenCode close waits for the main turn's final durable write", { timeout: 10_000 }, async (t) => {
+  const harness = await controllerHarness({ assistantResponses: [{ pending: true, text: "Working" }] });
+  const writing = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const write = harness.runtime.store.writeAgentRunEvent;
+  harness.runtime.store.writeAgentRunEvent = async (...args) => {
+    if (args[2].patch.state === "cancelled") {
+      writing.resolve();
+      await release.promise;
+    }
+    return write(...args);
+  };
+  t.after(async () => {
+    release.resolve();
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  await harness.controller.sendMessage("session-1", { messageId: "close-during-code", message: "Implement this." });
+  let closed = false;
+  const closing = harness.controller.closeAllForSession("session-1").then((result) => { closed = true; return result; });
+  await writing.promise;
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(closed, false, "close must retain the session until its final write settles");
+  release.resolve();
+  assert.equal((await closing).ok, true);
+  assert.equal(harness.agentRunEvents.at(-1).run.state, "cancelled");
+});
+
 test("OpenCode shares one lazy server across open sessions and stops it after the last closes", async (t) => {
   const harness = await controllerHarness();
   const secondSourceRoot = path.join(
@@ -1876,7 +1922,7 @@ test("OpenCode helper turns use the hidden deny-all agent and bounded structured
   assert.equal(harness.processStarts.length, startsBeforeRejectedInput);
 });
 
-test("non-project ephemeral conversations use OpenCode's deny-all agent without project state", async (t) => {
+test("non-project ephemeral conversations use OpenCode's guarded host agent without project state", async (t) => {
   const harness = await controllerHarness({
     helperResponse: "The trusted host snapshot needs attention."
   });
@@ -1943,6 +1989,45 @@ test("non-project ephemeral conversations use OpenCode's deny-all agent without 
   assert.equal(deleted.ok, true, JSON.stringify(deleted));
   assert.equal(deleted.providerExit.ok, true);
   assert.equal(harness.processStops.length, 1);
+});
+
+test("scoped OpenCode helpers retain bounded policy and cleanup without rebinding main chat", async (t) => {
+  const harness = await controllerHarness({ helperResponse: "x".repeat(600) });
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  await harness.controller.ensureSession("session-1");
+  const before = structuredClone(harness.session);
+  const assistantScope = { id: "router_scope", environment: {}, workdir: harness.root,
+    runtimeRoot: path.join(harness.root, "router-runtime"), stableContext: "Classify supplied text." };
+  const options = { assistantScope, assistantSelection: { ...harness.selection, modelId: "deepseek-reasoner",
+    schema: "vibe64.assistant-selection.v1" } };
+  const executionProfile = resolveOpenCodeEconomyExecutionProfile({ ...options,
+    assistantAccess: { economyModelId: "legacy-helper-model" }
+  }, { profileId: "economy", workloadId: "request_routing" });
+  assert.equal(executionProfile.model, "deepseek-reasoner");
+  const created = await harness.controller.createConversation(assistantScope.id, { ephemeral: true, executionProfile }, options);
+  const input = { ephemeral: true, conversationId: created.conversationId, executionProfile, message: "Classify" };
+  const started = await harness.controller.startConversationTurn(assistantScope.id, input, options);
+  assert.equal(started.ok, true);
+  await assert.rejects(harness.controller.waitForConversationTurn(assistantScope.id, { ...input, timeoutMs: 60_000 }, options),
+    /output exceeded/, "an explicit wait timeout cannot bypass the stored workload's bounded completion");
+  await assert.rejects(harness.controller.readConversation(assistantScope.id, input, options), /output exceeded/);
+  const helper = harness.createdSessions.find(({ id }) => id === created.conversationId);
+  assert.equal(helper.agent, OPENCODE_ECONOMY_AGENT_ID);
+  assert.equal(helper.model.id, "deepseek-reasoner");
+  assert.equal(harness.promptCalls.at(-1).input.agent, OPENCODE_ECONOMY_AGENT_ID);
+  const registry = JSON.parse(await readFile(harness.processStarts.at(-1).options.sessionEnvironmentRegistry, "utf8"));
+  const environment = registry.sessions.find(({ sessionId }) => sessionId === assistantScope.id);
+  assert.deepEqual(environment.env, {});
+  assert.deepEqual(environment.pathEntries, []);
+  assert.deepEqual(environment.promptContext, { scope: "ephemeral", stableContext: assistantScope.stableContext },
+    "the scope receives only its supplied context, without project guidance");
+  await assert.rejects(harness.controller.startConversationTurn(assistantScope.id, { ...input, executionProfile: undefined }, options), /profile changed/);
+  const deleted = await harness.controller.deleteConversation(assistantScope.id, input, options);
+  assert.equal(deleted.ok, true);
+  assert.deepEqual(harness.session, before);
+  await harness.controller.sendMessage("session-1", { message: "Main continues", messageId: "main-continues" });
+  await harness.controller.waitForTurn("session-1");
+  assert.equal(harness.promptCalls.at(-1).input.model.id, harness.selection.modelId);
 });
 
 test("OpenCode receives the same complete session command boundary as Codex", async (t) => {

@@ -149,6 +149,11 @@ starts with an empty Drop Zone.
 Files refreshes after the assistant finishes a turn without discarding the
 person's place or unsaved edits. People can download individual files and keep
 personal project-wide stars, reachable from chat and the file browser in any session.
+Code explanations use the workflow's Economy model and show which AI answered.
+A collaborator can ask for explanations when that model or its shared backup is
+available, even when the main conversation uses the owner's personal account.
+Changing the effective AI connection or user requires a new explanation before
+follow-ups can continue. Stop and Close remain available without AI access.
 Opening a binary or oversized file from chat or Files keeps its filename visible
 and offers Download without placing it in the text editor.
 Supported bitmap images open directly in the file pane, scaled to its width
@@ -183,15 +188,33 @@ requests show a short description instead of internal agent instructions.
 The main chat composer keeps Add, Settings, Goal, plan allowance, and icon-only
 Send together, with Stop beside Send while needed. Goal and available allowance
 stay visible when menus are closed. Add holds left-aligned attachment actions.
-The Settings cog stays aligned with the neighboring icons, with a tiny Codex,
-Claude Code or OpenCode label underneath. The label does not move the icon or
-increase the button height, and the button has no tooltip. New replies retain their
+The Settings cog stays aligned with the neighboring icons, with its assistant
+and model named in a small shaded rectangle underneath, readable in light and
+dark themes. The label can extend beyond the circle without moving the icon or
+increasing the button height, and the button has no tooltip. New replies retain their
 answering AI when the selection changes: Codex, Claude Code or OpenCode with its model.
 Hovering a reply's name shows its saved model, provider and thinking choice.
 Older replies without a saved AI identity simply say "agent".
-Main and ordinary temporary chats offer Plan, Code, Economy and Auto directly
-above the composer. Each assistant application has its own saved models for
-the three explicit modes. Auto asks Economy to choose Plan or Code when a
+Main and ordinary temporary chats offer Plan, Code, Economy and Auto from one
+compact icon in the composer's bottom toolbar. The icon reflects the selected
+mode; its menu shows model assignments, the selected mode and automatic review.
+Recommendations rank compatible models for each job, favouring Astra for planning
+and DeepSeek for economical implementation. They preserve saved choices rather
+than silently changing models when the catalogue or recommendation policy changes.
+Connecting a newly usable assistant fills missing routing roles with compatible
+recommendations and opens them for review. Repeating setup preserves saved
+choices, including roles the owner deliberately left empty. New ordinary chats
+start in Plan with review off. Creation and renewal share a workflow picker that
+previews the user's effective Plan and Code models, including Shared backup.
+Creating the first chat explicitly fills missing defaults, so included OpenCode
+works without a credential-setup step. Reading those defaults does not save them.
+Owners can open Model routing directly over the chat, with its saved workflow
+selected, without visiting account settings. The form separates Plan/Code from
+independent Router/Economy and Shared backup. It previews what owners and
+collaborators will use before Save; a foreign Backup keeps planning and coding
+together there, including when review is off. Missing assignments point to this
+setup; other users are directed to the owner. Each assistant application has its own saved models for
+the explicit modes and Router. Auto asks Router to choose Plan or Code when a
 message is sent; discussion, mixed requests and unresolved decisions go to Plan.
 Routing is visible before delivery, and each routed exchange retains its mode
 and answering model. Plan is instructed not to edit files. Code implements
@@ -203,12 +226,13 @@ one visible follow-up asks the Plan model to inspect the implementation and fix
 in-scope defects. Its findings state what was checked; completion is not a
 guarantee of correctness. Stop cancels pending review, and an interrupted review
 remains incomplete. Goals require a concrete mode and model, with Auto and
-automatic review unavailable. Background helpers retain their separate settings.
+automatic review unavailable. Background helpers use the independent Economy role.
 AI controls includes a Close button that remains available while the assistant
 is working, so dismissing the panel does not require tapping outside it.
 The Settings cog opens AI model and access controls directly, with recovery
-guidance and pending message requests in the same panel. Optional companion controls sit immediately to the right of the
-Settings cog, followed by the starred-files icon. These controls remain accessible
+guidance and pending message requests in the same panel. The chat-mode icon sits
+to the right of Settings, followed by optional companion controls and the
+starred-files icon. These controls remain accessible
 while the menu is closed. Icons sit close together in narrow chat panes, with
 spacing increasing gently as the pane widens. Gaps close in narrow panes so
 Send and Stop stay alongside the icons, goal and allowance in one row on mobile.
@@ -217,6 +241,9 @@ the existing touch-target height.
 The desktop chat pane can shrink to 320 pixels, keeping Send and the working
 assistant's Stop button on the same row as the other controls. Narrow screens
 use the full-width chat.
+Host-provided conversations enter chat only when explicitly opened through the
+host's own navigation. Their tab disappears when returning to another chat;
+ordinary chat controls do not retain a permanent shortcut.
 On narrow screens, swiping left shows the selected Preview or Dashboard and
 swiping right returns to chat. The header supports either gesture, including
 above an embedded preview; ordinary chat and dashboard areas support them too.
@@ -291,8 +318,9 @@ and cleanup.
 Save and Update wait for active assistant preparation to finish. Save can proceed
 without assistant naming, using a checkpoint-based version name and a visible
 notice when naming is unavailable. Members can Save and create pull requests
-with a personal-only AI connection; the access restriction applies to optional
-AI naming, while ordinary repository permissions still apply. A request that
+when the main chat uses a personal connection. Optional naming uses effective
+Economy or its eligible shared Backup; ordinary repository permissions still
+apply. A request that
 overlaps preparation waits briefly at the server and explains a timeout. Failed
 requests remain readable and dismissible even before an operation starts;
 their recovery controls fit the chat pane, including on small screens.
@@ -322,7 +350,10 @@ including persistent SQLite databases as well as MySQL and PostgreSQL. SQLite
 uses the project's declared filename, enforces read-only inspection, and supports
 deliberate row edits through the same explicit unlock and confirmation controls.
 Project members can browse and work with the database regardless of AI access.
-Only AI assistance checks whether the selected connection is personal.
+Database Copilot uses the workflow's Economy model and checks that destination
+for the person asking. A shared Economy model remains usable when the main chat
+last used an owner's personal subscription. The Copilot names its effective
+model; unavailable AI does not prevent database browsing or editing.
 The diagram lets people explore their data,
 starting with its keys and expanding detail when needed. Large diagrams load
 without blocking typing or navigation while their connections are calculated.
@@ -413,12 +444,16 @@ conversation. Opening it selects that session's development integration; a
 removed slot is explained instead of opening an unrelated account. The card
 survives returning to the conversation and reload. Opening it does not grant
 consent, connect an account or automatically resume the assistant. People with
-assistant access can skip a saved request; its Skipped state survives reload.
+project access can skip a saved request; its Skipped state survives reload.
+Connecting or checking an application integration and skipping its request do
+not require AI access. Existing owner-only integration operations remain restricted.
 Skipping leaves the application account connected and does not automatically
 resume the assistant. When the application's setup command confirms the requested
 connection, the saved card shows Setup completed. That records the setup decision;
 later reconnecting or disconnecting the account does not rewrite the old request.
-Completion does not yet automatically resume the assistant.
+After setup, continuation uses the actor's effective Code model, including a
+configured shared backup, without changing their selected chat mode or adding
+automatic review. Uncertain delivery can be checked without sending twice.
 If configuration changes while an application connection command runs, its result
 is rejected and people are asked to reload and check the account before retrying.
 The command is not automatically repeated.
@@ -478,8 +513,12 @@ source. Those choices apply when a conversation next establishes stable
 context; they do not rewrite past conversation or get repeated with every
 message. Personal names and prompt suggestions remain separate Vibe64 conveniences
 and are not added to agent prompts.
-When a personal AI connection is selected, members compose messages and attach
-files in the normal chat, using Send for approval. Requests remain visible above
+Members can choose an accessible explicit mode even when the latest answer used
+the owner's personal AI. Plan and Code show the actor's effective model and any
+Shared backup. Auto remains unavailable when its required roles need personal
+access substitution. While a personal turn is active, steering stays with that
+turn's connection. Members who cannot send directly can compose messages and
+attach files in normal chat using Send for approval. Requests remain visible above
 the composer while the owner reviews them, even when the assistant is busy.
 Owners see the author, full text and previewable attachments with Approve & send
 and Decline actions directly in chat. Members can withdraw pending requests and
@@ -488,9 +527,12 @@ retries a failed delivery.
 When the owner switches to a connection available to the workspace, members'
 open browsers immediately return to direct AI use without reloading or losing
 drafts and attachments. Switching back restores Send for approval in real time.
-Conversation-based suggestions are shared with members without invoking AI on
-their behalf. They survive reloads, follow the current conversation and Blueprint,
-and never include another person's unsent draft suggestions.
+The suggestion service can use the actor's effective Economy model independently
+of the personal connection answering in main chat. Conversation-based suggestions
+are also shared without another inference when no helper is available. They
+survive reloads, follow the current conversation and Blueprint, and never include
+another person's unsent draft. The browser sends a private draft to the helper
+only when that purpose is available, independently of the selected chat mode.
 
 Prompt suggestions follow the person's current draft first, then the latest
 conversation, grounded in the project's purpose. They help express the current
@@ -499,8 +541,8 @@ intent instead of repeating finished work or proposing unrelated generic tasks.
 Standalone Vibe64 and hosted Vibe64 use the same AI Accounts screen and provider
 configuration. Account settings offers Codex with GPT, DeepSeek and GLM, Claude
 Code, and OpenCode's provider catalogue. OpenCode Big Pickle is included without
-sign-in. Provider credentials and helper-model preferences belong to the editor's
-account storage, outside the project. Native Codex and Claude credentials keep
+sign-in. Provider credentials and shared model-routing assignments belong to the
+editor's account storage, outside the project. Native Codex and Claude credentials keep
 using the host's existing account context, including in a nested development
 preview. Hosts supply account storage and management permissions; they do not
 maintain a separate provider setup implementation.
@@ -524,6 +566,10 @@ Existing installations receive historical metadata repairs through numbered
 deployment upgrades with read-only preflight, warnings, backups and a record of
 completion. Errors block activation. Ordinary account reads do not repair old
 formats, and the Codex identity upgrade does not rewrite project source.
+Routing upgrades preserve saved destinations, conversation identities and
+delivery evidence, including archived and temporary conversations. Conflicting
+old helper choices remain visible for owner review. Interrupted publication
+resumes from the same prepared changes and retains the original backups.
 
 Codex code sign-in presents preparation and authorization as two clear steps.
 The full one-time code stays on one line beside Copy, with one primary action
@@ -573,7 +619,7 @@ Compatibility pending. The Codex runtime preserves native history and translates
 recognized foreign reasoning into readable historical context when OpenAI needs
 it. Handoffs do not add a summarization call.
 Undo cannot cross a Codex provider switch.
-Helper work uses the selected provider's default model and credentials.
+Helper work uses the actor's effective Economy model and its connection.
 The GPT models and thinking choices come from the connected Codex service,
 so newly available GPT models appear without an editor update.
 After Codex login or logout, an unfinished account transition automatically
@@ -688,8 +734,9 @@ serve only that view, returning
 to a view refreshes it promptly, and repeated failures slow recovery checks.
 Open sessions that choose the same coding-assistant application
 share one running assistant service, and that service stops when its final
-session is archived. Short-lived suggestions and focused helper tasks reuse the
-session's chosen service instead of keeping another assistant service running.
+session is archived. Suggestions and focused helpers use their configured
+Economy destination in independent scopes; cleanup ends their native work without
+rebinding or stopping the working chat. A helper may use another orchestrator.
 Suggestions and tool-free helper conversations can run alongside preview and
 foreground work. Only operations that change shared source or prepare its
 environment require the source lock. A ready preview replaces any stale error
@@ -752,7 +799,8 @@ Remaining conflicts return to the same repair conversation instead of opening
 another task. Automatic repair is bounded and pauses on repeated failure. A
 persistent Check Update action lets the person verify prepared edits themselves;
 the header's Update action checks the existing repair too. Update progress stays
-visible above both main and temporary chats, and conversation tabs never overlap.
+visible above both main and temporary chats. Conversation tab buttons align above
+their scrollbar, and Main chat remains visible while the other tabs scroll.
 Only a successful Update is presented as finished; it does not publish work.
 When updated source needs workspace preparation, a direct Prepare workspace
 action runs the project's declared setup steps. The notice does not claim the
@@ -927,8 +975,10 @@ the current turn continues until it finishes or the person presses Stop.
 Cancel removes an unfinished goal, including a blocked or budget-limited one,
 so another goal can be set. It preserves the conversation and project work;
 an already running turn still uses Stop for interruption.
-Goal controls are separate from plan allowance and are available to authorized
-Codex users even when no weekly allowance is reported.
+Goal controls are separate from plan allowance. Starting or resuming checks the
+goal's effective model access. Reading and stopping remain available after
+personal access is lost, using the saved goal's connection. An unavailable goal
+read never marks it complete or permits Auto or automatic review.
 Automatic Codex goal turns retain managed command access after the assistant
 process restarts.
 Browser reconnects preserve healthy server-side work. When managed tool connections
@@ -943,17 +993,17 @@ guided browser-and-code flow in AI Accounts. The official CLI owns credentials,
 and Vibe64 confirms the connected account automatically. Native Claude goals
 appear in the chat toolbar: Pause stops the current turn and preserves the goal,
 Resume continues it, and Cancel clears it. Claude goals have no token-budget
-field. Each account also has a separate configurable Economy/helper model in
-AI Accounts; Claude Recommended uses Haiku. New helper tasks capture that choice
-without changing main chat or tasks already running.
+field. Tool-free helpers use the workflow's independent Economy role. New tasks
+capture that choice without changing main chat or tasks already running.
 
 Main conversation, temporary assistance, and database copilot share the same
 conversation presentation. User-facing temporary chats have main chat's tools,
 capabilities and project access in Codex, Claude Code and OpenCode, without separate permission
 modes.
 Temporary model and thinking choices come from the connected service's current
-catalogue, including new Codex models and OpenCode models. Each chat can select
-its own model within the session's AI connection without changing main chat.
+catalogue, including new Codex models and OpenCode models. Each chat retains its own workflow and selected model without changing Main chat.
+An Economy or shared Backup turn can use another assistant application; returning
+to Plan or Code retains the conversation already held by its effective assistant.
 The server keeps their conversations, settings, drafts and sent attachments
 until explicit Close. Reloading or navigating away does not stop their work;
 returning restores the same chats. A server restart retains their history and
@@ -999,17 +1049,17 @@ the editor or replacing the conversation. Recovery never repeats a sent message.
 The composer updates from external state without losing
 focus or selection.
 
-People can choose a helper model for their Codex connection in AI Accounts.
-The installation-wide choice is separate from each session's chat model and
-is used by new hints, commit naming and other bounded helper tasks. Recommended
-uses Vibe64's default; explicit choices must support the helper's low thinking
-profile. Changing the setting does not interrupt running work.
-OpenCode can delegate inexpensive work through the session's selected AI
-account and its configured Helper model. Helpers inherit their parent session's
-command control and cannot switch to another connected account. Compact
-reasoning summaries use that same Helper preference. Incomplete fragments do
-not suppress later reasoning, and finishing the main answer never waits for a
-summary model. Temporary summary conversations are stopped and deleted.
+People configure Router and Economy independently in Model routing. Hints,
+commit naming and other bounded helpers capture the actor's effective Economy
+choice, which may use another orchestrator, without retargeting the working chat.
+The old per-account Helper model preference is retired. Existing choices are
+backed up and incorporated or presented for review by the state upgrade.
+OpenCode's native Economy subagent is available only when the resolved choice
+uses the same OpenCode account; it inherits its parent's command controls.
+Compact progress summaries use isolated, tool-free Economy tasks. Incomplete
+fragments do not suppress later reasoning, and finishing the main answer never
+waits for a summary model. Cancellation suppresses late results. Failed cleanup
+retains its exact reference for retry, including after a service restart.
 A project-guidance hook failure reports its timing, exit or signal and bounded
 diagnostic output when available, with a retry instruction and preserved project
 changes. Older hooks explicitly report when the cause is unknown.

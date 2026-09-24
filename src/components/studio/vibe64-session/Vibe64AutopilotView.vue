@@ -93,8 +93,6 @@
               </v-badge>
             </template>
             <v-list aria-label="Session actions" density="compact" min-width="17rem">
-              <v-list-item v-if="hostConversation" :title="hostConversation.label"
-                :prepend-icon="hostConversation.icon" @click="hostConversation.open()" />
               <v-list-item
                 :disabled="rewindDisabled" :prepend-icon="mdiUndo" title="Undo last turn"
                 :subtitle="rewindHint" min-height="48" @click="openConversationRewind"
@@ -108,17 +106,16 @@
                 v-if="props.sessionRenewal?.visible"
                 class="studio-autopilot__session-action-item"
                 data-vibe64-session-renew-action
-                :disabled="!assistantDirectAllowed"
                 :prepend-icon="mdiAutorenew"
-                :subtitle="assistantDirectAllowed ? sessionRenewalActionPresentation.reason : assistantRestrictionMessage"
+                :subtitle="sessionRenewalActionPresentation.reason"
                 :title="sessionRenewalActionPresentation.label"
                 @click="requestSessionRenewal(sessionActionsTrigger)"
               />
               <v-list-item
                 class="studio-autopilot__session-action-item"
                 data-vibe64-temporary-ai-action
-                :disabled="!sessionId || !assistantDirectAllowed"
-                :subtitle="assistantDirectAllowed ? (temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a separate short-lived conversation') : assistantRestrictionMessage"
+                :disabled="!sessionId || props.sessionSelectionArchived"
+                :subtitle="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a separate short-lived conversation'"
                 title="Temporary AI"
                 @click="openTemporaryAi"
               >
@@ -132,8 +129,6 @@
           </v-menu>
         </div>
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--expanded">
-          <v-btn v-if="hostConversation" :aria-label="hostConversation.label" :title="hostConversation.label"
-            :color="hostConversation.color" :icon="hostConversation.icon" size="48" variant="text" @click="hostConversation.open()" />
           <v-btn
             aria-label="Undo last turn" :title="rewindHint" :disabled="rewindDisabled"
             :icon="mdiUndo" size="48" variant="text" @click="openConversationRewind"
@@ -155,10 +150,9 @@
               :aria-label="sessionRenewalActionPresentation.label"
               :color="sessionRenewalActionPresentation.color"
               data-vibe64-session-renew-action
-              :disabled="!assistantDirectAllowed"
               height="48"
               :icon="mdiAutorenew"
-              :title="assistantDirectAllowed ? sessionRenewalActionPresentation.reason : assistantRestrictionMessage"
+              :title="sessionRenewalActionPresentation.reason"
               type="button"
               variant="text"
               width="48"
@@ -168,10 +162,10 @@
           <v-badge color="primary" dot :model-value="temporaryAiHasUnreadMessages" offset-x="5" offset-y="5">
             <v-btn
               :aria-label="temporaryAiHasUnreadMessages ? 'Open temporary AI: unread messages' : 'Open temporary AI'"
-              :disabled="!sessionId || !assistantDirectAllowed"
+              :disabled="!sessionId || props.sessionSelectionArchived"
               height="48"
               :icon="mdiIncognito"
-              :title="assistantDirectAllowed ? (temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a temporary AI conversation') : assistantRestrictionMessage"
+              :title="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a temporary AI conversation'"
               type="button"
               variant="text"
               width="48"
@@ -254,9 +248,9 @@
         >
           <template v-if="saveWorkError && saveWorkCanResolveWithTemporaryAi" #error-actions>
             <Vibe64TemporaryAiFixAction
-              :disabled="repositoryRecoverySending || !assistantDirectAllowed"
+              :disabled="repositoryRecoverySending || !assistantCodeAllowed"
               :pending="repositoryRecoverySending"
-              :title="assistantDirectAllowed ? 'Open temporary AI to resolve this repository problem' : assistantRestrictionMessage"
+              :title="assistantCodeAllowed ? 'Open temporary AI to resolve this repository problem' : assistantCodeRestrictionMessage"
               @click="fixRepositoryActionError"
             />
           </template>
@@ -342,7 +336,7 @@
               v-else
               :disabled="workspaceSetupAskDisabled"
               :pending="workspaceSetupFixSending"
-              :title="assistantDirectAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantRestrictionMessage"
+              :title="assistantCodeAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantCodeRestrictionMessage"
               @click="askCodexToFixWorkspaceSetup"
             />
           </template>
@@ -402,9 +396,7 @@
             class="studio-autopilot__composer"
             @focusout="handleComposerRegionFocusOut"
           >
-            <Vibe64ChatModeControls v-if="assistantDirectAllowed" :session="props.session" :sessions-api-path="props.sessionsApiPath"
-              :disabled="composerDisabled" :active="agentActive" :can-configure="assistantSuggestionsCanManage" />
-            <v-alert v-if="routingStatusLabel" variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status">
+            <v-alert v-if="routingStatusLabel && (routingBusy || routingRequest?.error)" variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status">
               {{ routingStatusLabel }}
               <p v-if="routingRequest?.error" class="text-body-small mt-1">{{ routingRequest.error }}</p>
               <div v-if="['review_pending', 'review_uncertain'].includes(routingRequest?.status)" class="d-flex flex-wrap ga-1">
@@ -522,7 +514,7 @@
                     :aria-label="`Chat settings for ${conversationAssistantLabel}${composerAccessHint && !assistantCanRequestMessage ? ': attention required' : ''}`"
                     aria-haspopup="menu" :aria-expanded="composerSettingsOpen"
                     icon size="small" variant="text"
-                    class="studio-autopilot__composer-action"
+                    class="studio-autopilot__composer-action overflow-visible"
                     @click="composerSettingsOpen = !composerSettingsOpen"
                   >
                     <span class="studio-autopilot__assistant-button">
@@ -559,6 +551,10 @@
                       </div>
                     </template>
                   </Vibe64SessionAssistantMenu>
+                  <Vibe64ChatModeControls
+                    v-if="!props.sessionSelectionArchived" :session="props.session" :sessions-api-path="props.sessionsApiPath"
+                    :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantSuggestionsCanManage"
+                  />
                   <div ref="composerToolsTarget" class="studio-autopilot__composer-tools" />
                   <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
                   <Vibe64AgentPlanUsage
@@ -595,8 +591,8 @@
         ref="temporaryAiWorkspace"
         :active="props.active && !chatCollapsed"
         :assistant-selection="props.session?.assistantSelection"
-        :assistant-ready="props.agentConnectionStatus === 'connected'"
-        :connection-unavailable="connectionRecoveryVisible"
+        :assistant-ready="Boolean(sessionId) && !props.sessionSelectionArchived"
+        :can-configure-routing="assistantSuggestionsCanManage"
         :preview-attachment-state="previewAttachmentState"
         :project-slug="projectSlug"
         :session-id="sessionId"
@@ -698,13 +694,14 @@
           </v-btn>
         </header>
         <Vibe64SessionFiles
+          :key="assistantAccessScopeKey"
           :repo-available="Boolean(sessionSourceRoot)"
           v-if="rightPaneTabMounted('editor')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
           :agent-active="agentActive"
           :file-bookmarks="fileBookmarks"
-          :assistant-available="assistantDirectAllowed"
-          :assistant-unavailable-message="assistantRestrictionMessage"
+          :assistant-available="assistantCanUsePurpose('source_explanation')"
+          :assistant-unavailable-message="assistantPurposes.source_explanation?.message || 'Source explanations are unavailable.'"
           :ask-codex-available="sourceEditorAskCodexAvailable"
           class="studio-autopilot__session-tool-content"
           :open-request="sourceEditorOpenRequest"
@@ -732,17 +729,18 @@
           </v-btn>
         </header>
         <Vibe64DatabaseWorkspace
+          :key="assistantAccessScopeKey"
           :open-request="databaseOpenRequest"
           v-if="rightPaneTabMounted('database')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
-          :assistant-available="assistantDirectAllowed"
+          :assistant-available="assistantCanUsePurpose('code')"
           :assistant-request-available="assistantCanRequestMessage"
           :assistant-unavailable-message="assistantRestrictionMessage"
           class="studio-autopilot__session-tool-content"
           :project-slug="projectSlug"
           :session-id="sessionId"
           :sessions-api-path="props.sessionsApiPath"
-          @request-overview-assistant="assistantCanRequestMessage ? prefillComposer($event.message, { append: true }) : startTemporaryAiTask($event)"
+          @request-overview-assistant="assistantCanUsePurpose('code') ? startTemporaryAiTask($event) : prefillComposer($event.message, { append: true })"
           @request-message="prefillComposer($event, { append: true })"
         />
       </section>
@@ -764,7 +762,7 @@
           </v-btn>
         </header>
         <Vibe64SubsystemsView
-          :assistant-available="assistantDirectAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
+          :assistant-available="assistantCodeAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
           v-if="rightPaneTabMounted('system')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
           class="studio-autopilot__session-tool-content"
@@ -797,12 +795,12 @@
           :active="props.active && props.projectPane === 'preview'"
           :archived="props.sessionSelectionArchived"
           :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
-          :can-ask="assistantDirectAllowed"
+          :can-ask="assistantCodeAllowed"
           :request-temporary-ai="startTemporaryAiTask"
           :session-id="selectedAssistantSessionId"
         >
           <Vibe64OutputControls
-            :ask-codex-to-fix-preview-identity="assistantDirectAllowed ? askCodexToFixPreviewIdentity : null"
+            :ask-codex-to-fix-preview-identity="assistantCodeAllowed ? askCodexToFixPreviewIdentity : null"
             :attach-preview-file="attachPreviewFile"
             :prepare-preview-file="attachPreviewFileProducer"
             :auto-start-managed-preview="!props.sessionSelectionArchived"
@@ -879,7 +877,7 @@ import {
   createAssistantTextSubmission,
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
-import { VIBE64_ASSISTANT_HOST_KEY, VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_HOST_KEY } from "@/lib/vibe64AssistantHost.js";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -988,7 +986,6 @@ const composerSettingsButton = ref(null);
 const mainChat = ref(null);
 const sessionActionsTrigger = ref(null);
 const temporaryAiWorkspace = ref(null);
-const hostConversation = inject(VIBE64_HOST_CONVERSATION_KEY, null);
 const temporaryAiHasUnreadMessages = computed(() => temporaryAiWorkspace.value?.hasUnreadMessages === true);
 const sessionActionsLabel = computed(() => [
   "Session actions",
@@ -1071,7 +1068,12 @@ const {
   approveSuggestion: approveAssistantSuggestion,
   canManage: assistantSuggestionsCanManage,
   canRequestMessage: assistantCanRequestMessage,
-  canUseAi: assistantCanUseAiState,
+  canUseChat: assistantCanUseAiState,
+  canRouteChat: assistantCanRouteChat,
+  canUseNative: assistantCanUseNative,
+  canUsePurpose: assistantCanUsePurpose,
+  purposes: assistantPurposes,
+  scopeKey: assistantAccessScopeKey,
   discardSuggestion: discardAssistantSuggestion,
   initialAccessLoading: assistantAccessLoading,
   pendingAction: assistantPendingAction,
@@ -1101,6 +1103,7 @@ async function sendMainChatMessage(input = {}) {
 const {
   Vibe64OutputControls,
   assistantDirectAllowed,
+  assistantCodeAllowed,
   agentActive,
   agentObservationLost,
   agentStopEnabled,
@@ -1130,6 +1133,7 @@ const {
   composerPlaceholder,
   composerSending,
   routingRequest,
+  routingBusy,
   routingStatusLabel,
   composerSubmitAriaLabel,
   composerSubmitMode,
@@ -1238,7 +1242,9 @@ const {
   assistantAccessLoading,
   assistantCanRequestMessage,
   assistantCanUseAi: assistantCanUseAiState,
-  assistantRestrictionMessage,
+  assistantCanRouteChat,
+  assistantCanUseCode: computed(() => assistantCanUsePurpose("code")),
+  assistantCanUseNative,
   onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds }),
   requestTemporaryAi: startTemporaryAiTask,
   sendMainChatMessage
@@ -1356,8 +1362,7 @@ const promptHintsCanRequest = computed(() => Boolean(
   !sourceOperationsSuspended.value &&
   (
     promptHintsBlankConversation.value || (
-      props.agentConnectionStatus === "connected" &&
-      (assistantDirectAllowed.value || assistantCanRequestMessage.value)
+      (assistantCanUsePurpose("prompt_hint") || assistantCanRequestMessage.value)
     )
   ) &&
   !structuredQuestionActive.value &&
@@ -1368,7 +1373,7 @@ const promptHintsCanRequest = computed(() => Boolean(
   !previewAttachmentState.value.diagnosticsBusy
 ));
 const promptHintsConversationKey = computed(() => (
-  promptHintConversationFingerprint(chatTurns.value)
+  JSON.stringify([promptHintConversationFingerprint(chatTurns.value), assistantAccessScopeKey.value, assistantPurposes.value.prompt_hint])
 ));
 const promptHintsExistingProject = computed(() => workspaceSetupStatus.value !== "unconfigured");
 const {
@@ -1387,7 +1392,7 @@ const {
   canRequest: promptHintsCanRequest,
   conversationKey: promptHintsConversationKey,
   draft: composerDraft,
-  sharedOnly: assistantCanRequestMessage,
+  sharedOnly: computed(() => !assistantCanUsePurpose("prompt_hint")),
   projectSlug,
   existingProject: promptHintsExistingProject,
   onSelect: applyPromptHint,
@@ -1413,9 +1418,13 @@ const composerSupportStatusVisible = computed(() => Boolean(
 const createPullRequestOpen = ref(false);
 const sessionPullRequest = computed(() => vibe64SessionPullRequest(props.session));
 const githubProject = computed(() => githubProjectAvailable(props.projectContext));
+const assistantCodeRestrictionMessage = computed(() => assistantPurposes.value.code?.message || "Code is unavailable. Review model routing.");
 const dashboardContext = computed(() => ({
   ...(dashboardSessionContext.value || {}),
   assistantDirectAllowed: assistantDirectAllowed.value,
+  assistantDraftAvailable: sourceEditorAskCodexAvailable.value,
+  assistantCodeAllowed: assistantCodeAllowed.value,
+  assistantCodeRestrictionMessage: assistantCodeRestrictionMessage.value,
   assistantRestrictionMessage: assistantRestrictionMessage.value,
   requestAssistantDraft: (text) => prefillComposer(text, { append: true }),
   requestUpdateWork: props.updateSessionWork,
@@ -1519,7 +1528,7 @@ function copyActivityOutput(output = "") {
 }
 
 function openTemporaryAi() {
-  if (!assistantDirectAllowed.value) {
+  if (!sessionId.value || props.sessionSelectionArchived) {
     return false;
   }
   temporaryAiWorkspace.value?.showWorkspace?.();
@@ -1527,7 +1536,7 @@ function openTemporaryAi() {
 }
 
 async function startTemporaryAiTask(options = {}) {
-  if (!assistantDirectAllowed.value) {
+  if (!assistantCanUsePurpose("code") || props.sessionSelectionArchived) {
     return false;
   }
   emit("chat-attention");
@@ -1633,9 +1642,6 @@ async function attachPreviewFileProducer(options = {}) {
 }
 
 function requestSessionRenewal(returnFocusTarget = null) {
-  if (!assistantDirectAllowed.value) {
-    return false;
-  }
   props.sessionRenewal?.request?.({
     returnFocusTarget: returnFocusTarget?.$el || returnFocusTarget
   });
@@ -1928,13 +1934,20 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__assistant-button-label {
   position: absolute;
+  z-index: 1;
   top: 100%;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(max(-50%, -2.5rem));
+  padding: 0 4px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.25);
+  border-radius: 3px;
+  background: rgb(var(--v-theme-surface-light));
+  color: rgb(var(--v-theme-on-surface));
   white-space: nowrap;
-  font-size: 8px;
+  font-size: 9px;
+  font-weight: 600;
   letter-spacing: 0;
-  line-height: 10px;
+  line-height: 11px;
   text-transform: none;
 }
 

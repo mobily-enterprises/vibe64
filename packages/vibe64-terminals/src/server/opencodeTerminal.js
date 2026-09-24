@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { openCodeAssistantMessageText as assistantMessageText } from "@jskit-ai/assistant-core/server/opencode-client";
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -18,11 +18,13 @@ import {
 } from "@local/vibe64-genesis/server";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
+  VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   VIBE64_ASSISTANT_ENGINE_IDS,
   defineVibe64AssistantSelection,
   vibe64AgentExecutionProfileAuditSnapshot,
   vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
@@ -560,11 +562,11 @@ function createOpenCodeTerminalController({
   command = "opencode",
   createServerProcess = createOpenCodeServerProcess,
   env = process.env,
+  getAssistantManager = () => null,
   listConnections = async () => [],
   prepareCommandEnvironment = prepareAgentSessionCommandEnvironment,
   projectService,
   publishSessionChanged = async () => null,
-  readAssistantAccess = null,
   readCatalogCommand = readOpenCodeCatalog,
   readZenModelsCommand = readOpenCodeZenModelIds,
   recordGitActor = recordSessionGitCommandActor,
@@ -603,43 +605,82 @@ function createOpenCodeTerminalController({
   }
 
   async function requestReasoningSummary(state, value = "") {
-    const target = state.target;
-    if (!target.economyModelId) return "";
+    const agent = getAssistantManager();
+    if (!agent || !state.actorKnown) return "";
+    const context = state.context;
+    for (const previous of temporaryConversations.values()) {
+      if (previous.reasoningSummary && previous !== state && previous.context.key === context.key) {
+        await disposeReasoningSummary(previous);
+      }
+    }
+    await cleanupReasoningSummary(context);
     const signal = AbortSignal.any([
-      target.abortController.signal,
+      state.target.abortController.signal,
       state.abortController.signal,
       AbortSignal.timeout(OPENCODE_REASONING_SUMMARY_TIMEOUT_MS)
     ]);
     signal.throwIfAborted();
-    if (!state.conversationId) {
-      const created = await target.server.client.createSession({
-        agent: OPENCODE_ECONOMY_AGENT_ID,
-        location: { directory: target.workdir },
-        model: { id: target.economyModelId, providerID: target.modelProviderId }
-      }, { signal });
-      state.conversationId = created.id;
-    }
-    const promptId = upstreamMessageId(randomUUID());
-    state.active = true;
+    const workflowEngineId = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId || context.selection.engineId;
+    const decision = await agent.resolveAssistantPurpose({ purpose: "conversation_summary", workflowEngineId }, context);
+    if (!decision.available) return "";
+    signal.throwIfAborted();
+    const id = `reasoning_${randomUUID()}`;
+    const root = path.join(context.runtime.stateRoot, "assistant-helpers", id);
+    const helper = { selection: decision.effectiveSelection, connectionIdentity: decision.connectionIdentity,
+      conversationId: "", runId: "", executionId: "",
+      scope: { id, environment: {}, workdir: path.join(root, "workdir"), runtimeRoot: path.join(root, "runtime"),
+        stableContext: "Return only a short progress summary of the supplied text. You have no tools or project access." } };
+    const retain = () => context.runtime.store.writeAgentRunEvent(context.sessionId, OPENCODE_AGENT_RUN_ID, {
+      event: { kind: "reasoning-helper" }, patch: { reasoningSummaryHelper: helper }
+    });
+    await retain();
+    const options = { assistantSelection: helper.selection, vibe64User: context.vibe64User,
+      expectedConnectionIdentity: helper.connectionIdentity, signal,
+      async onEvent(event) {
+        if (event.type === "thread") helper.conversationId = text(event.threadId);
+        else if (event.type === "turn") helper.runId = text(event.turnId);
+        else if (event.type === "helper-execution") helper.executionId = text(event.executionId);
+        else return;
+        await retain();
+      } };
+    let result;
+    let failure;
     try {
-      await target.server.client.prompt(state.conversationId, {
-        agent: OPENCODE_ECONOMY_AGENT_ID,
-        delivery: "queue",
-        id: promptId,
-        model: { id: target.economyModelId, providerID: target.modelProviderId },
-        prompt: { text: reasoningSummaryInstruction(value) }
-      }, { signal });
-      const { result } = await waitForOpenCodeMessages(
-        target.server.client, state.conversationId, promptId, { signal }
-      );
-      state.active = false;
-      if (result?.error) throw new Error(result.error);
-      return text(result?.text);
-    } catch (error) {
-      await stopUnobservedOpenCodeSession(target, state.conversationId);
-      state.active = false;
-      throw error;
-    }
+      await mkdir(helper.scope.workdir, { recursive: true });
+      await mkdir(helper.scope.runtimeRoot, { recursive: true });
+      const executionProfile = await agent.resolveEphemeralExecutionProfile(helper.scope, {
+        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY, workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.CONVERSATION_SUMMARY
+      }, options);
+      helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
+      await retain();
+      result = await agent.runEphemeralChatTurn(helper.scope, {
+        executionProfile, prompt: reasoningSummaryInstruction(value), promptLabel: "Summarize progress"
+      }, options);
+      if (result?.ok !== true) throw new Error(result?.error || "The progress summary did not complete.");
+    } catch (error) { failure = error; }
+    try { await cleanupReasoningSummary(context); }
+    catch (error) { if (failure && error !== failure) error.cause = failure; failure = error; }
+    if (failure) throw failure;
+    return text(result.text);
+  }
+
+  async function cleanupReasoningSummary(context) {
+    const agent = getAssistantManager();
+    if (!agent) return;
+    const helper = (await context.runtime.store.readAgentRun(context.sessionId, OPENCODE_AGENT_RUN_ID))?.reasoningSummaryHelper;
+    if (!helper) return;
+    const root = path.join(context.runtime.stateRoot, "assistant-helpers", helper.scope.id);
+    if (!/^reasoning_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(root, "workdir") ||
+        helper.scope.runtimeRoot !== path.join(root, "runtime")) throw new Error("The progress summary has invalid cleanup paths.");
+    const result = await agent.deleteEphemeralConversation(helper.scope, {
+      conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
+      ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
+    }, { assistantSelection: helper.selection, vibe64User: context.vibe64User });
+    if (result?.ok !== true) throw new Error(result?.error || "The progress summary could not be closed.");
+    await context.runtime.store.writeAgentRunEvent(context.sessionId, OPENCODE_AGENT_RUN_ID, {
+      event: { kind: "reasoning-helper-closed" }, patch: { reasoningSummaryHelper: null }
+    });
+    await rm(root, { recursive: true, force: true });
   }
 
   function disposeReasoningSummary(state) {
@@ -648,16 +689,7 @@ function createOpenCodeTerminalController({
     state.abortController.abort();
     state.disposal = Promise.resolve().then(async () => {
       await state.completion;
-      if (state.active) {
-        await stopUnobservedOpenCodeSession(state.target, state.conversationId);
-        state.active = false;
-      }
-      if (state.conversationId) {
-        await state.target.server.client.deleteSession(state.conversationId, {
-          signal: AbortSignal.timeout(OPENCODE_INTERRUPT_TIMEOUT_MS)
-        });
-        state.conversationId = "";
-      }
+      await cleanupReasoningSummary(state.context);
       state.entries.clear();
       temporaryConversations.delete(state.key);
     }).finally(() => { state.disposal = null; });
@@ -981,27 +1013,18 @@ function createOpenCodeTerminalController({
       return catalogRead;
     }
     catalogRead = Promise.resolve().then(async () => {
-      const nativeCatalog = async () => {
-        if (sharedProcess) {
-          const server = sharedProcess.server;
-          const [providers, agents] = await Promise.all([
-            server.client.providers({ directory: server.workdir }),
-            server.client.agents({ directory: server.workdir })
-          ]);
-          return { agents, providers };
-        }
-        const roots = sharedRoots();
-        return readCatalogCommand({
+      const roots = sharedRoots();
+      // The managed process changes model defaults and output limits. Always
+      // fingerprint the same credential-free catalogue used during connection setup.
+      const [catalog, zenModelIds] = await Promise.all([
+        readCatalogCommand({
           cacheRoot: roots.cacheRoot,
           command,
           createServerProcess,
           env,
           privateRoot: path.join(roots.root, `catalog-${randomUUID()}`),
           workdir: roots.workdir
-        });
-      };
-      const [catalog, zenModelIds] = await Promise.all([
-        nativeCatalog(),
+        }),
         readZenModelsCommand()
       ]);
       catalogSnapshot = {
@@ -1184,6 +1207,8 @@ function createOpenCodeTerminalController({
     }
     for (const threadId of activeThreads) await stopUnobservedOpenCodeSession(target, threadId);
     target.abortController.abort();
+    turns.get(target.key)?.admission?.resolve();
+    await monitors.get(target.key)?.catch(() => null);
     await Promise.all([...temporaryConversations.values()]
       .filter((entry) => entry.target?.abortController === target.abortController)
       .map((entry) => entry.completion?.catch(() => null)));
@@ -1220,15 +1245,17 @@ function createOpenCodeTerminalController({
     }
     const projectContextRoot = path.resolve(context.runtime.projectContextRoot);
     const start = Promise.resolve().then(async () => {
-      const access = readAssistantAccess ? await readAssistantAccess({
-        assistantSelection: context.selection,
-        engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
-        modelProviderId: context.selection.modelProviderId,
-        session: context.session,
-        sessionId: context.sessionId,
-        vibe64User: options.vibe64User || null
-      }) : connection;
-      const economyModelId = access?.available === false ? "" : text(access?.economyModelId);
+      let economyModelId = "";
+      if (!context.assistantScope && getAssistantManager()) {
+        const workflowEngineId = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId || context.selection.engineId;
+        const economy = await getAssistantManager().resolveAssistantPurpose({ purpose: "economy", workflowEngineId }, {
+          ...context, vibe64User: options.vibe64User || null
+        }).catch(() => null);
+        if (economy?.available && economy.effectiveSelection.engineId === VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE &&
+            economy.effectiveSelection.modelProviderId === context.selection.modelProviderId) {
+          economyModelId = economy.effectiveSelection.modelId;
+        }
+      }
       const commands = await managedCommandEnvironment(context);
       sessionEnvironments.set(context.key, {
         economyModelId,
@@ -1637,6 +1664,7 @@ function createOpenCodeTerminalController({
         },
         patch: {
           engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
+          ...(Object.hasOwn(turn, "submittedBy") ? { submittedBy: turn.submittedBy } : {}),
           error,
           observationError: text(turn.observationError),
           model: context.selection.modelId,
@@ -1762,6 +1790,13 @@ function createOpenCodeTerminalController({
     if (existing) {
       return existing;
     }
+    const previous = context.session?.agentRuns?.find((run) => run.id === OPENCODE_AGENT_RUN_ID && run.turnId === admitted.id);
+    const route = JSON.parse(context.session?.metadata?.assistant_routing_request || "null");
+    const routed = route && [route.messageId, route.reviewMessageId].filter(Boolean).some((id) => upstreamMessageId(id) === admitted.id);
+    const actorKnown = !admitted.restored || Object.hasOwn(previous || {}, "submittedBy") || routed;
+    const actor = Object.hasOwn(previous || {}, "submittedBy") ? previous.submittedBy : routed ? route.submittedBy : options.vibe64User;
+    const submittedBy = actor ? Object.fromEntries(["id", "username", "role"].filter((key) => actor[key] !== undefined)
+      .map((key) => [key, actor[key]])) : null;
     const eventStartedAt = Number(admitted.eventStartedAt) || Date.now();
     const startedAt = text(admitted.startedAt) || new Date(eventStartedAt).toISOString();
     const turn = {
@@ -1774,20 +1809,20 @@ function createOpenCodeTerminalController({
       inputMessageId: text(admitted.id),
       startedAt,
       state: options.admission ? VIBE64_AGENT_RUN_STATE.STARTING : VIBE64_AGENT_RUN_STATE.ACTIVE,
+      ...(actorKnown ? { submittedBy } : {}),
       threadId: target.upstreamSessionId,
       updatedAt: startedAt
     };
-    const helperWorkdir = sharedRoots().workdir;
     const reasoning = {
       abortController: new AbortController(),
-      active: false,
+      actorKnown,
       closed: false,
       completion: Promise.resolve(),
-      conversationId: "",
+      context: { ...context, vibe64User: submittedBy },
       entries: new Map(),
       key: `${context.key}\0reasoning:${turn.id}`,
       reasoningSummary: true,
-      target: { ...target, server: openCodeServerForDirectory(target.server, helperWorkdir), workdir: helperWorkdir }
+      target
     };
     turn.reasoning = reasoning;
     temporaryConversations.set(reasoning.key, reasoning);
@@ -2270,6 +2305,7 @@ function createOpenCodeTerminalController({
     });
     temporaryConversations.set(`${context.key}\0${conversation.id}`, {
       active: false,
+      executionProfile,
       target
     });
     return {
@@ -2292,6 +2328,10 @@ function createOpenCodeTerminalController({
     context.selection = options.assistantSelection || context.selection;
     const agent = openCodeAgent(context.selection, executionProfile, context.assistantScope);
     let conversationId = text(input.conversationId || input.threadId);
+    const previous = conversationId ? temporaryConversations.get(`${context.key}\0${conversationId}`) : null;
+    if (context.assistantScope && previous && JSON.stringify(previous.executionProfile || null) !== JSON.stringify(executionProfile)) {
+      throw openCodeError("vibe64_opencode_execution_profile_changed", "The scoped helper profile changed. Start a new helper.", {}, 409);
+    }
     if (!conversationId) {
       if (!createIfMissing) {
         throw openCodeError(
@@ -2317,6 +2357,7 @@ function createOpenCodeTerminalController({
     const key = `${context.key}\0${conversationId}`;
     const tracked = temporaryConversations.get(key) || { active: false, target };
     tracked.target = target;
+    tracked.executionProfile = executionProfile;
     tracked.conversationId = conversationId;
     tracked.promptContext = executionProfile
       ? null
@@ -2414,7 +2455,7 @@ function createOpenCodeTerminalController({
     const inputMessageId = upstreamMessageId(input.messageId || input.operationId || randomUUID());
     const observedTarget = { ...target, upstreamSessionId: conversationId };
     const eventAbort = new AbortController();
-    const signal = AbortSignal.any([target.abortController.signal, turnAbort.signal]);
+    const signal = AbortSignal.any([target.abortController.signal, turnAbort.signal, ...(options.signal ? [options.signal] : [])]);
     const eventReady = Promise.withResolvers();
     const events = consumeEvents(observedTarget, context, null, {
       onEvent: options.onEvent,
@@ -2741,7 +2782,6 @@ function createOpenCodeTerminalController({
   }
 
   async function closeAllForSession(sessionId = "", options = {}) {
-    void options;
     const id = safeSessionId(sessionId);
     const terminalClose = await closeTerminalSessionsForNamespace(
       opencodeTerminalNamespace(id)
@@ -2752,6 +2792,10 @@ function createOpenCodeTerminalController({
     await Promise.all(pending);
     const targets = [...processes.values()].filter((target) => target.sessionId === id);
     const proofs = await Promise.all(targets.map((target) => stopProcessRecord(target)));
+    if (getAssistantManager() && !options.assistantScope) {
+      const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
+      await cleanupReasoningSummary({ sessionId: id, runtime, vibe64User: options.vibe64User || null });
+    }
     for (const key of [...turns.keys()]) {
       if (key.endsWith(`\0${id}`)) {
         turns.delete(key);
@@ -2806,7 +2850,7 @@ function createOpenCodeTerminalController({
     async deleteConversation(sessionId, input = {}, options = {}) {
       const { context, conversationId, target, tracked } = await existingDetachedTarget(
         sessionId,
-        input,
+        { ...input, persistent: input.persistent || Boolean(options.assistantScope) },
         options
       );
       if (!target) {
@@ -2817,7 +2861,7 @@ function createOpenCodeTerminalController({
       try {
         await target.server.client.deleteSession(conversationId);
       } catch (error) {
-        if (!input.persistent || error.statusCode !== 404) throw error;
+        if ((!input.persistent && !context.assistantScope) || error.statusCode !== 404) throw error;
       }
       if (tracked) {
         tracked.interrupted = true;
@@ -2827,7 +2871,7 @@ function createOpenCodeTerminalController({
       temporaryConversations.delete(`${context.key}\0${conversationId}`);
       await writeSessionEnvironmentRegistry();
       const providerExit = context.assistantScope
-        ? await closeAllForSession(context.sessionId)
+        ? await closeAllForSession(context.sessionId, context)
         : null;
       return {
         conversationId,
@@ -3090,7 +3134,8 @@ function createOpenCodeTerminalController({
       if (!target) {
         throw openCodeReadUnavailable();
       }
-      if (!input.persistent) return readDetachedConversation(target, conversationId, tracked);
+      if (!input.persistent) return boundedOpenCodeExecutionOutput(
+        await readDetachedConversation(target, conversationId, tracked), tracked?.executionProfile);
       let status = await target.server.client.sessionStatus(conversationId);
       if (!tracked && status.type !== "idle") {
         await stopUnobservedOpenCodeSession(target, conversationId);
@@ -3135,6 +3180,7 @@ function createOpenCodeTerminalController({
             await writeRun(context, { ...activeRun, id: activeRun.turnId }, VIBE64_AGENT_RUN_STATE.INTERRUPTED, activeRun.observationError);
           } else if (activeRun) {
             beginMonitor(target, context, {
+              restored: true,
               eventStartedAt: Date.parse(text(activeRun.startedAt)) || Date.now(),
               id: text(activeRun.turnId) || upstreamMessageId(randomUUID()),
               startedAt: text(activeRun.startedAt)
@@ -3215,7 +3261,7 @@ function createOpenCodeTerminalController({
       if (!target) {
         throw openCodeReadUnavailable();
       }
-      if (tracked?.completion && !input.timeoutMs) {
+      if (tracked?.completion && (tracked.executionProfile || !input.timeoutMs)) {
         return tracked.completion;
       }
       await waitForOpenCodeMessages(target.server.client, conversationId, tracked?.runId || "", {

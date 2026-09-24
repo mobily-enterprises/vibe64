@@ -11,6 +11,8 @@ Building a package leaves the development dependency installation intact.
 - `tooling/release/server-build.mjs`
 - `tooling/release/runtime-package.mjs`
 - `bin/upgrade-state.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20260923-routing-v2.js`
+- `packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20260923-codex-login-id.js`
 - `tests/server/stateUpgrades.unit.test.js`
@@ -43,6 +45,12 @@ currently owns discovery, backups and transformation through its `run` callback;
 the runner supplies the backup directory and records completion. It does not
 consume path declarations or create automatic snapshots. The guide separates
 the implemented contract from the proposed `prepare()`/`backupPaths` extension.
+The routing upgrade uses project/session-owned inventory, including restorable
+archives. Its private before/after copies and manifest preserve original choices
+across interrupted publication. The packaged command assembles the feature owner
+without making Core depend on Accounts, and archive maintenance does not require
+loading native PTY support. Normal routing reads reject the old format with an
+upgrade instruction instead of repairing it on demand.
 
 `npm run dev:example` starts both the editor backend and Vite, opening a working
 copy of `examples/hello-node` through the existing project startup contract.

@@ -173,12 +173,6 @@
             >
               {{ primaryAuthLabel(account) }}
             </v-btn>
-            <HelperModelSettings
-              v-if="['codex', 'claude'].includes(account.id) && account.connected"
-              :provider-id="account.id"
-              :account-label="account.id === 'claude' ? 'Claude Code' : 'Codex'"
-              :disabled="!accountsReadyForActions"
-            />
             <v-btn
               v-if="account.connected"
               :aria-busy="logoutAccountId === account.id ? 'true' : undefined"
@@ -467,7 +461,6 @@
 
 <script setup>
 import { computed } from "vue";
-import HelperModelSettings from "./HelperModelSettings.vue";
 import {
   mdiAccountCircleOutline,
   mdiArrowLeft,

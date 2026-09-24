@@ -15,7 +15,7 @@ function defineVibe64AssistantAccess(value = {}) {
   return Object.freeze({
     accessLabel: text(source.accessLabel) || (ownerOnly ? "Personal use" : "Workspace use"),
     available: source.available !== false,
-    economyModelId: text(source.economyModelId),
+    connectionIdentity: text(source.connectionIdentity),
     endpointCode: text(source.endpointCode),
     ownerOnly
   });

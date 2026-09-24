@@ -14,7 +14,6 @@ import {
   codexAppServerEconomyTurnSettings
 } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
 import {
-  CODEX_ECONOMY_MODEL_CANDIDATES,
   CODEX_ECONOMY_PROFILE_REVISION,
   CODEX_ECONOMY_WORKLOAD_LIMITS,
   createCodexSessionAgentProvider,
@@ -348,7 +347,7 @@ function retainedAttachmentLease(ids = []) {
 test("Codex economy resolves Luna-low from the live catalog with bounded tool-free policy", () => {
   const result = resolveCodexEconomyExecutionProfile(economyRequest(), {
     data: [catalogModel()]
-  });
+  }, "gpt-5.6-luna");
 
   assert.equal(result.model, "gpt-5.6-luna");
   assert.equal(result.thinking, "low");
@@ -377,7 +376,7 @@ test("Codex prompt-hint profile can enforce its complete three-suggestion schema
     workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.PROMPT_HINT
   }, {
     data: [catalogModel()]
-  });
+  }, "gpt-5.6-luna");
 
   const settings = codexAppServerEconomyTurnSettings({
     cwd: "/workspace/session",
@@ -395,7 +394,7 @@ test("Codex economy ignores catalog upgrade advice and never falls back to an in
       model: "gpt-5.6-sol",
       upgrade: "gpt-5.7-sol"
     })]
-  }), (error) => {
+  }, "gpt-5.6-luna"), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE);
     assert.match(error.message, /No interactive-model fallback was attempted/u);
     assert.deepEqual(error.candidates, ["gpt-5.6-luna"]);
@@ -406,14 +405,14 @@ test("Codex economy ignores catalog upgrade advice and never falls back to an in
 test("Codex economy fails closed when Luna-low is hidden or low reasoning is unavailable", () => {
   assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), {
     data: [catalogModel({ hidden: true })]
-  }), (error) => {
+  }, "gpt-5.6-luna"), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE);
     return true;
   });
 
   assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), {
     data: [catalogModel({ reasoning: ["medium", "high"] })]
-  }), (error) => {
+  }, "gpt-5.6-luna"), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.REASONING_UNSUPPORTED);
     assert.equal(error.model, "gpt-5.6-luna");
     assert.equal(error.thinking, "low");
@@ -424,7 +423,6 @@ test("Codex economy fails closed when Luna-low is hidden or low reasoning is una
 test("Codex declares one provider-owned economy capability with limits for every bounded workload", () => {
   const provider = createCodexSessionAgentProvider({
     controller: {
-      readHelperModel: async () => "",
       executionProfileModelCatalog: async () => ({ data: [catalogModel()] })
     }
   });
@@ -434,10 +432,7 @@ test("Codex declares one provider-owned economy capability with limits for every
     Object.keys(CODEX_ECONOMY_WORKLOAD_LIMITS).sort(),
     Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).sort()
   );
-  assert.deepEqual(CODEX_ECONOMY_MODEL_CANDIDATES, [{
-    model: "gpt-5.6-luna",
-    thinking: "low"
-  }]);
+
 });
 
 test("Codex adapter resolves the live profile before a detached run and returns only its audit snapshot", async () => {
@@ -446,7 +441,6 @@ test("Codex adapter resolves the live profile before a detached run and returns 
   const runtime = Object.freeze({ stateRoot: "/runtime/project-a" });
   const session = Object.freeze({ sessionId: "session-a" });
   const controller = {
-    readHelperModel: async () => "",
     async executionProfileModelCatalog(sessionId, options) {
       calls.push(["catalog", sessionId, options]);
       return {
@@ -463,6 +457,7 @@ test("Codex adapter resolves the live profile before a detached run and returns 
   };
   const provider = createCodexSessionAgentProvider({ controller });
   const resolution = await provider.resolveExecutionProfile({
+    assistantSelection: { modelId: "gpt-5.6-luna" },
     runtime,
     session,
     sessionId: "session-a",
@@ -494,19 +489,17 @@ test("Codex adapter resolves the live profile before a detached run and returns 
 });
 
 test("Codex helper changes affect the next task while an already resolved task keeps its model", async () => {
-  let helperModel = "chosen-helper";
   const provider = createCodexSessionAgentProvider({ controller: {
-    readHelperModel: async () => helperModel,
     executionProfileModelCatalog: async () => ({ data: [catalogModel(), catalogModel({ model: "chosen-helper" })] }),
     async runDetachedChatTurn(_sessionId, input) {
       assert.equal(input.executionProfile.model, "chosen-helper");
       return { ok: true, text: "Done" };
     }
   } });
-  const context = { sessionId: "session-a" };
+  const context = { sessionId: "session-a", assistantSelection: { modelId: "chosen-helper" } };
   const first = await provider.resolveExecutionProfile(context, economyRequest());
   assert.equal(first.model, "chosen-helper");
-  helperModel = "";
+  context.assistantSelection = { modelId: "gpt-5.6-luna" };
   const next = await provider.resolveExecutionProfile(context, economyRequest());
   assert.equal(next.model, "gpt-5.6-luna");
   const result = await provider.runDetachedChatTurn(context, { executionProfile: first, prompt: "Continue" });
@@ -535,7 +528,7 @@ test("Codex adapter publishes the resolved audit profile before a streamed detac
   const provider = createCodexSessionAgentProvider({ controller });
   const resolution = resolveCodexEconomyExecutionProfile(economyRequest(), {
     data: [catalogModel()]
-  });
+  }, "gpt-5.6-luna");
 
   const result = await provider.streamDetachedChatTurn({
     onEvent(event) {
@@ -1097,7 +1090,6 @@ test("Codex adapter accepts ten terminal attachments and rejects eleven", async 
 test("Codex adapter rejects consumer-supplied model knobs", async () => {
   const provider = createCodexSessionAgentProvider({
     controller: {
-      readHelperModel: async () => "",
       executionProfileModelCatalog: async () => ({ data: [catalogModel()] })
     }
   });
@@ -1107,7 +1099,7 @@ test("Codex adapter rejects consumer-supplied model knobs", async () => {
   }, {
     ...economyRequest(),
     model: "gpt-5.6-sol"
-  }), (error) => {
+  }, "gpt-5.6-luna"), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.INVALID);
     assert.equal(error.field, "request.model");
     return true;
@@ -1197,10 +1189,10 @@ test("Codex adapter propagates explicit runtime and session through detached cle
   assert.equal(calls[1][3].session, session);
 });
 
-test("Codex helper preference selects the exact model and never silently falls back", () => {
+test("Codex bounded profiles require the resolved model and never silently fall back", () => {
   const catalog = { data: [catalogModel(), { ...catalogModel(), model: "chosen-model" }] };
   assert.equal(resolveCodexEconomyExecutionProfile(economyRequest(), catalog, "chosen-model").model, "chosen-model");
-  assert.equal(resolveCodexEconomyExecutionProfile(economyRequest(), catalog, "").model, "gpt-5.6-luna");
+  assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), catalog, ""), /not available/);
   assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), catalog, "missing-model"), /not available/);
 });
 

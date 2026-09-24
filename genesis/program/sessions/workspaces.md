@@ -9,8 +9,10 @@ the canonical project and from other sessions.
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
+- `tests/server/assistantRoutingStateInventory.unit.test.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
-- `src/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue`
+- `src/components/studio/vibe64-session/Vibe64WorkflowSelector.vue`
+- `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
 - `src/components/studio/Vibe64SessionPanel.vue`
 - `src/lib/vibe64SessionInfo.js`
@@ -35,7 +37,14 @@ lease before archival can detach the session tree.
 
 
 People can create, select, inspect, and archive sessions. A new session receives
-its own Git source and stable identity. Its conversation, source location,
+its own Git source and stable identity. Creation starts in Plan with review off.
+The workflow picker previews the submitting user's Plan and Code destinations;
+owner configuration opens in the same overlay. Accounts initializes only missing
+roles as part of explicit creation. The central resolver chooses the user's
+accessible Plan destination before creating the workspace, and its credential
+identity is checked again. Native selection and the intended workflow are stored
+separately, including when a member starts on another orchestrator's Shared backup.
+Its conversation, source location,
 agent activity, workspace preparation, and repository status remain available
 across UI refreshes. Archiving stops active work, removes its active workspace,
 and preserves the read-only history needed to recover its conversation and
@@ -91,13 +100,14 @@ their details and cannot open pending tooltips. A new keyboard-visible focus als
 reenables the tooltip, while mouse-induced focus does not; the explicit info
 button still works.
 
-Renewal creates a fresh native assistant conversation. Its review step defaults
-to the current session's AI but can select another connected engine, provider,
-model, or thinking option. Confirmation resolves the live choice before the old
-session is stopped, then stores that canonical selection in the durable renewal
-record. Successor creation and every retry read that stored value rather than
-copying provider-specific metadata from the predecessor. If the predecessor's
-model fails while preparing the draft, renewal presents the canonical editable
+Renewal creates a fresh native assistant conversation. Its review step uses the
+same workflow picker as creation, initially selecting the previous workflow when
+available. Confirmation resolves its Plan destination for the confirming actor
+before stopping the old session. It saves that native selection and the intended
+workflow with Plan/review-off preferences in the durable renewal record. Successor
+creation and replacement retries retain both values. Explicit API model choices
+become Plan overrides in their chosen workflow. If the predecessor's model is
+inaccessible or fails while preparing the draft, renewal presents the canonical editable
 handover template so the person can still leave that provider. The fresh
 provider history is the handover boundary: after it accepts the exact handover
 prompt as its first turn, Vibe64 archives the predecessor and exposes the

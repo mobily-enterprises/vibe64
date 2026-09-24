@@ -204,8 +204,16 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => ({
     ].filter(Boolean).join(path.delimiter);
   },
   "tool.execute.before": async (input = {}, output = {}) => {
+    const selected = await sessionEnvironmentForUpstreamSession(
+      input.sessionID || input.sessionId, client
+    );
+    if (!selected) {
+      throw new Error("Vibe64 could not verify this conversation's tool access. Reconnect the assistant.");
+    }
+    if (selected.promptContext?.scope === "ephemeral") {
+      throw new Error("Tools are unavailable in this host conversation. Use only the supplied context.");
+    }
     if (input.tool === "task") {
-      const selected = await sessionEnvironmentForUpstreamSession(input.sessionID, client);
       if (text(output.args?.subagent_type).startsWith("vibe64-economy-") &&
           !isSelectedEconomyAgent(output.args.subagent_type, selected)) {
         throw new Error("Choose the helper belonging to this session's selected AI account.");
@@ -226,11 +234,6 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => ({
     if (!args || typeof args.command !== "string") {
       return;
     }
-    const selected = await sessionEnvironmentForUpstreamSession(
-      input.sessionID || input.sessionId, client
-    );
-    args.command = selected
-      ? sessionCommand(args.command, selected)
-      : unavailableCommand();
+    args.command = sessionCommand(args.command, selected);
   }
 });

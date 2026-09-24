@@ -1,4 +1,6 @@
-import { computed, ref } from "vue";
+import { computed, hasInjectionContext, inject, ref, unref, watch } from "vue";
+import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
+import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
@@ -26,8 +28,6 @@ const ASSISTANT_ACCESS_IGNORED_REALTIME_REASONS = new Set([
   "opencode-server-progress",
   "opencode-server-reasoning",
   "opencode-server-tool",
-  "opencode-server-turn-idle",
-  "claude-stream-turn-idle",
   "claude-stream-message",
   "claude-stream-message-delivered"
 ]);
@@ -42,6 +42,8 @@ function useVibe64AssistantAccess({
   sessionsApiPath = ""
 } = {}) {
   const projectSlug = useVibe64ProjectSlug();
+  const viewer = hasInjectionContext() ? inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" }) : { actorKey: "local" };
+  const actorKey = computed(() => unref(viewer)?.actorKey || "");
   const currentSessionId = computed(() => assistantAccessText(
     readRefOrGetterValue(sessionId)
   ));
@@ -51,7 +53,7 @@ function useVibe64AssistantAccess({
   const enabled = computed(() => Boolean(
     readRefOrGetterValue(active) !== false &&
     currentSessionId.value &&
-    currentSessionsApiPath.value
+    currentSessionsApiPath.value && actorKey.value
   ));
   const sessionPath = computed(() => enabled.value
     ? vibe64SessionPath(currentSessionsApiPath.value, currentSessionId.value)
@@ -66,12 +68,16 @@ function useVibe64AssistantAccess({
     : ""
   );
   const realtime = {
-    events: [VIBE64_SESSION_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT],
+    events: [VIBE64_SESSION_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT, VIBE64_ACCOUNTS_CHANGED_EVENT],
     matches: ({ event = "", payload = {} } = {}) => {
-      if (event === VIBE64_CONNECTIONS_CHANGED_EVENT) {
+      if (event === VIBE64_CONNECTIONS_CHANGED_EVENT || event === VIBE64_ACCOUNTS_CHANGED_EVENT) {
         return true;
       }
       const reason = assistantAccessText(payload.reason);
+      if (["codex-app-server-turn-active", "codex-app-server-turn-idle", "opencode-server-turn-active",
+        "opencode-server-turn-idle", "claude-stream-turn-active", "claude-stream-turn-idle"].includes(reason)) {
+        return mountedSessionRealtimeShouldRefresh({ payload: { ...payload, reason: "" } }, currentSessionId.value);
+      }
       return !ASSISTANT_ACCESS_IGNORED_REALTIME_REASONS.has(reason) &&
         mountedSessionRealtimeShouldRefresh({ payload }, currentSessionId.value);
     }
@@ -87,7 +93,7 @@ function useVibe64AssistantAccess({
         projectSlug.value
       ),
       currentSessionId.value,
-      "assistant-access"
+      "assistant-access", actorKey.value || "signed-out"
     ]),
     queryOptions: {
       refetchOnMount: "always",
@@ -109,7 +115,7 @@ function useVibe64AssistantAccess({
         projectSlug.value
       ),
       currentSessionId.value,
-      "message-suggestions"
+      "message-suggestions", actorKey.value || "signed-out"
     ]),
     queryOptions: {
       refetchOnMount: "always",
@@ -141,20 +147,30 @@ function useVibe64AssistantAccess({
     writeMethod: "POST"
   });
   const pendingAction = ref(null);
+  const scopeKey = computed(() => JSON.stringify([projectSlug.value, currentSessionId.value, actorKey.value]));
+  watch(scopeKey, () => { pendingAction.value = null; }, { flush: "sync" });
 
   const access = computed(() => {
     const value = accessResource.data.value;
-    return value && value.ok !== false ? value : null;
+    return actorKey.value && value && value.ok !== false ? value : null;
   });
-  const accessLabel = computed(() => assistantAccessText(
-    access.value?.accessLabel
-  ) || "Unavailable");
-  const canUseAi = computed(() => access.value?.canUse === true);
+  const purposes = computed(() => access.value?.purposes || {});
+  const currentPurpose = computed(() => purposes.value[access.value?.currentMode]);
+  const accessLabel = computed(() => {
+    const selection = currentPurpose.value?.effectiveSelection;
+    return currentPurpose.value?.backupUsed ? "Shared backup" : selection
+      ? `${selection.engineId} · ${selection.modelId}` : assistantAccessText(access.value?.accessLabel) || "Unavailable";
+  });
+  const canUseChat = computed(() => access.value?.canUse === true);
+  const canRouteChat = computed(() => !access.value?.steering && currentPurpose.value?.available === true);
+  const canUseNative = computed(() => access.value?.nativeCanUse === true);
+  const canUseAi = computed(() => access.value?.canUseAny ?? canUseChat.value);
+  const canUsePurpose = (purpose) => purposes.value[purpose]?.available === true;
   const canRequestMessage = computed(() => access.value?.canRequestMessage === true);
-  const canSubmitMainChat = computed(() => canUseAi.value || canRequestMessage.value);
-  const canManage = computed(() => suggestionsResource.data.value?.canManage === true);
+  const canSubmitMainChat = computed(() => canUseChat.value || canRequestMessage.value);
+  const canManage = computed(() => Boolean(actorKey.value) && suggestionsResource.data.value?.canManage === true);
   const suggestions = computed(() => (
-    Array.isArray(suggestionsResource.data.value?.suggestions)
+    actorKey.value && Array.isArray(suggestionsResource.data.value?.suggestions)
       ? suggestionsResource.data.value.suggestions
       : []
   ));
@@ -186,9 +202,11 @@ function useVibe64AssistantAccess({
     )
   ));
   const restrictionMessage = computed(() => {
+    if (canUseChat.value) return "";
     if (canRequestMessage.value) {
       return "Write a message and add any files you’d like to share. The owner reviews your request before sending it to the AI.";
     }
+    if (currentPurpose.value && !currentPurpose.value.available) return currentPurpose.value.message;
     if (access.value?.available === true && access.value?.ownerOnly === true) {
       return "Only the workspace owner can use this personal AI connection.";
     }
@@ -215,15 +233,17 @@ function useVibe64AssistantAccess({
       return null;
     }
     const actionSessionId = currentSessionId.value;
-    pendingAction.value = { name, sessionId: actionSessionId, suggestionId };
+    const actionScopeKey = scopeKey.value;
+    pendingAction.value = { name, sessionId: actionSessionId, suggestionId, scopeKey: actionScopeKey };
     try {
       const response = await suggestionCommand.run({ body, path });
+      if (scopeKey.value !== actionScopeKey) return null;
       if (currentSessionId.value === actionSessionId && response?.ok !== false) {
         await suggestionsResource.reload?.();
       }
       return response;
     } finally {
-      if (pendingAction.value?.sessionId === actionSessionId) {
+      if (pendingAction.value?.scopeKey === actionScopeKey) {
         pendingAction.value = null;
       }
     }
@@ -286,6 +306,12 @@ function useVibe64AssistantAccess({
     canRequestMessage,
     canSubmitMainChat,
     canUseAi,
+    canUseChat,
+    canRouteChat,
+    canUseNative,
+    canUsePurpose,
+    purposes,
+    scopeKey,
     discardSuggestion,
     initialAccessLoading,
     pendingAction,

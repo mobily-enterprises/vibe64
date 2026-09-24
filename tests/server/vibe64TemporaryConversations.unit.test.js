@@ -6,6 +6,8 @@ import { Readable } from "node:stream";
 import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
+import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import { VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
 import { createSessionConversations } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
@@ -114,7 +116,7 @@ async function conversationFixture(root, engineId = "codex") {
     agentId: engineId === "opencode" ? "build" : "codex", modelId: "main-model", variantId: "high",
     catalogRevision: `sha256:${"a".repeat(64)}` };
   const capabilities = {
-    engineId, transportId: engineId, revision: `sha256:${"b".repeat(64)}`, defaults: selection,
+    engineId, transportId: engineId === "codex" ? "codex_app_server" : "opencode_server", revision: `sha256:${"b".repeat(64)}`, defaults: selection,
     agents: [{ id: selection.agentId, mode: "primary" }],
     modelProviders: [{ id: selection.modelProviderId, connected: true, models: [
       ...["main-model", "chosen", "gpt-6-astra", "deepseek-reasoner"].map(id => ({
@@ -127,11 +129,13 @@ async function conversationFixture(root, engineId = "codex") {
   await store.createSession({ runtimeKind: "genesis", sessionId: "one", metadata: {
     ...sourceMetadata(root, "one"), assistant_selection: serializeVibe64AssistantSelection(selection)
   } });
-  const runtime = { store, getSession: (id) => store.readSession(id) };
+  const runtime = { store, stateRoot: projectRuntimeRoot(root), getSession: (id) => store.readSession(id) };
   const projectService = { createRuntime: async () => runtime };
   const attachments = createSessionAttachments({ projectService, env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") } });
   const native = { messages: [], status: "ready", runId: "", admitted: false, starts: 0, deletes: 0, stopError: "", deleteError: "" };
   const sessionAgent = {
+    async inspectAssistantPurposes() { return {}; },
+    async assistantAccess() { return { canUse: true }; },
     async requireAssistantAccess() {},
     async resolveSelection(input) { return resolveVibe64AssistantSelection(capabilities, input); },
     async createConversation(_id, input, options) {
@@ -142,6 +146,7 @@ async function conversationFixture(root, engineId = "codex") {
     },
     async readConversation() { return { ok: true, ...native }; },
     async startConversationTurn(_id, input, options) {
+      await input.onPromptSending?.({ threadId: input.conversationId });
       native.turnSelection = options.assistantSelection;
       native.lastInput = input;
       assert.equal(input.conversationId, "native");
@@ -164,40 +169,62 @@ async function conversationFixture(root, engineId = "codex") {
       return { ok: true };
     }
   };
+  const routingStore = createAssistantRoutingStore({ systemRoot: root });
+  const role = { ...resolveVibe64AssistantSelection(capabilities, { ...selection, catalogRevision: capabilities.revision }), selectionSource: "explicit" };
+  await routingStore.write({ [engineId]: { plan: role, code: role, economy: role, router: role } }, 0);
+  const manager = createSessionAgentManager({ providers: [{ id: engineId, transportId: capabilities.transportId, capabilities: async () => capabilities }],
+    readRoutingConfiguration: () => routingStore.read(),
+    readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "fixture-connection" }) });
+  Object.assign(sessionAgent, { resolveAssistantPurpose: (input, options) => manager.resolveAssistantPurpose(input, options),
+    requireAssistantAccessForSelection: async () => {} });
   const events = [];
   const restart = (overrides = {}) => createSessionConversations({
+    systemRoot: root,
     sessionAgent,
     attachments,
     prepareAgentSkills: async () => {},
-    runAgentWrite: async (sessionId, _options, operation, lockOptions) => {
+    runAgentWrite: async (sessionId, options, operation, lockOptions) => {
       const result = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
         const session = await runtime.getSession(sessionId);
-        return operation({ runtime, session });
+        return operation({ ...options, runtime, session });
       }, lockOptions);
       return result.value;
     },
     publishSessionChanged: async (...args) => { events.push(args); },
     ...overrides
   });
-  return { attachments, events, native, restart, service: restart(), store, selection, sessionAgent, capabilities };
+  return { attachments, events, native, restart, service: restart(), runtime, store, selection, sessionAgent, capabilities };
 }
 
 test("temporary Auto and one automatic review retain the native conversation without changing main chat", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
-    const role = (modelId) => resolveVibe64AssistantSelection(f.capabilities, { ...f.selection, modelId, catalogRevision: f.capabilities.revision });
+    const role = (modelId) => ({ ...resolveVibe64AssistantSelection(f.capabilities, { ...f.selection, modelId, catalogRevision: f.capabilities.revision }), selectionSource: "explicit" });
     await createAssistantRoutingStore({ systemRoot: root }).write({ codex: {
-      plan: role("gpt-6-astra"), code: role("chosen"), economy: role("main-model")
-    } }, 0);
+      plan: role("gpt-6-astra"), code: role("chosen"), economy: role("main-model"), router: role("main-model")
+    } }, 1);
     const admitted = new Set();
     const starts = [];
     const start = f.sessionAgent.startConversationTurn;
+    const manager = createSessionAgentManager({ providers: [{ id: "codex", transportId: "codex_app_server",
+      capabilities: async () => f.capabilities }],
+      readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "fixture-connection" }) });
     Object.assign(f.sessionAgent, {
+      resolveAssistantPurpose: (input, options) => manager.resolveAssistantPurpose(input, options),
       listCapabilities: async () => ({ engines: [f.capabilities] }),
       requireAssistantAccessForSelection: async () => {},
-      resolveExecutionProfile: async () => ({ model: "main-model" }),
-      streamDetachedChatTurn: async () => ({ ok: true, threadId: "helper", text: '{"mode":"code","reason":"explicit_implementation"}' }),
-      deleteDetachedChatThread: async () => ({ ok: true }),
+      resolveEphemeralExecutionProfile: async () => ({ model: "main-model", profileId: "economy", workloadId: "request_routing",
+        providerId: "codex", revision: "fixture", thinking: "low", limits: VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS.request_routing,
+        policy: { tools: "none", environmentAccess: false, networkAccess: false, repositoryWrite: false },
+        request: { reasoning: true, summary: false, allowProviderModelFallback: false } }),
+      createEphemeralConversation: async () => ({ ok: true, conversationId: "helper" }),
+      startEphemeralConversationTurn: async (scope, _input, ctx) => {
+        assert.notEqual(scope.id, "one");
+        assert.equal(ctx.session, undefined);
+        return { ok: true, runId: "helper-turn" };
+      },
+      waitForEphemeralConversationTurn: async () => ({ ok: true, text: '{"mode":"code","reason":"explicit_implementation"}' }),
+      deleteEphemeralConversation: async () => ({ ok: true }),
       readConversation: async (_id, input) => ({ ok: true, ...f.native, admitted: admitted.has(input.messageId) }),
       startConversationTurn: async (id, input, context) => {
         assert.equal(await f.store.conversationMessageIdExists({ sessionId: id, conversationId: "chat" }, input.messageId), false);
@@ -233,6 +260,62 @@ test("temporary Auto and one automatic review retain the native conversation wit
   });
 });
 
+test("Close waits for a starting Router and retains its parent when helper cleanup fails", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    const selection = { ...resolveVibe64AssistantSelection(f.capabilities, { ...f.selection, catalogRevision: f.capabilities.revision }), selectionSource: "explicit" };
+    await createAssistantRoutingStore({ systemRoot: root }).write({ codex: {
+      plan: selection, code: selection, router: selection
+    } }, 1);
+    const manager = createSessionAgentManager({ providers: [{ id: "codex", transportId: "codex_app_server",
+      capabilities: async () => f.capabilities }],
+      readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "fixture-connection" }) });
+    const starting = Promise.withResolvers();
+    const started = Promise.withResolvers();
+    const stopped = Promise.withResolvers();
+    const stops = [];
+    let cleanupSucceeds = false;
+    Object.assign(f.sessionAgent, {
+      resolveAssistantPurpose: (input, options) => manager.resolveAssistantPurpose(input, options),
+      resolveEphemeralExecutionProfile: async () => ({ model: "main-model", profileId: "economy", workloadId: "request_routing",
+        providerId: "codex", revision: "fixture", thinking: "low", limits: VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS.request_routing,
+        policy: { tools: "none", environmentAccess: false, networkAccess: false, repositoryWrite: false },
+        request: { reasoning: true, summary: false, allowProviderModelFallback: false } }),
+      createEphemeralConversation: async () => ({ ok: true, conversationId: "router-native" }),
+      startEphemeralConversationTurn: async () => {
+        starting.resolve();
+        await started.promise;
+        return { ok: true, runId: "late-router-turn" };
+      },
+      stopEphemeralConversation: async (_scope, input) => { stops.push(input.runId); stopped.resolve(); return { ok: true }; },
+      deleteEphemeralConversation: async () => ({ ok: cleanupSucceeds })
+    });
+    const service = f.restart({ systemRoot: root });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode: "auto" } });
+    const sending = service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "request", message: "Implement it." });
+    void sending.catch(() => {});
+    await starting.promise;
+    let closed = false;
+    const closing = service.deleteTemporaryConversation("one", { conversationId: "chat" });
+    void closing.then(() => { closed = true; }, () => {});
+    await stopped.promise;
+    assert.equal(closed, false);
+    assert.equal((await f.store.readSessionConversation("one", "chat")).state, "open");
+    started.resolve();
+    await assert.rejects(sending, /routing helper could not be closed/);
+    await assert.rejects(closing, /Retry closing/);
+    const retained = await f.store.readSessionConversation("one", "chat");
+    assert.equal(retained.state, "open");
+    assert.equal(JSON.parse(retained.routingMetadata.assistant_routing_request).helper.runId, "late-router-turn");
+    assert.deepEqual(stops, ["", "late-router-turn"]);
+    assert.equal(f.native.starts, 0);
+    cleanupSucceeds = true;
+    assert.equal((await service.deleteTemporaryConversation("one", { conversationId: "chat" })).deleted, true);
+    assert.equal(await f.store.readSessionConversation("one", "chat"), null);
+  });
+});
+
 for (const [engineId, model] of [["codex", "gpt-6-astra"], ["opencode", "deepseek-reasoner"]]) {
   test(`temporary ${engineId} validates and retains its own model without changing main chat`, async () => {
     await withTemporaryRoot(async (root) => {
@@ -260,8 +343,8 @@ test("temporary model and effort must be currently available before native work 
     for (const agentSettings of [
       { model: "missing-model" }, { model: "disabled-model" }, { model: "gpt-6-astra", thinking: "unsupported" }
     ]) {
-      await assert.rejects(service.startTemporaryConversationTurn("one", {
-        conversationId: "chat", messageId: "input", message: "Question", agentSettings
+      await assert.rejects(service.updateTemporaryConversation("one", {
+        conversationId: "chat", agentSettings
       }), { code: "vibe64_assistant_selection_unavailable" });
     }
     assert.equal(native.createdSelection, undefined);
@@ -324,7 +407,7 @@ test("temporary conversations survive a new service, stream and reconcile withou
     const restored = (await restart().listTemporaryConversations("one")).conversations[0];
     assert.equal(restored.title, "Investigate");
     assert.equal(restored.status, "inProgress");
-    assert.equal(restored.agentSettings.model, "chosen");
+    assert.equal(restored.agentSettings.model, "main-model", "a new Plan chat uses its configured role, not copied parent model settings");
     assert.deepEqual(restored.messages.map((message) => message.text), ["Edit this file", "Editing"]);
     native.messages[0] = { id: "answer", role: "assistant", text: "Edited.", complete: true };
     native.status = "completed";
@@ -364,7 +447,7 @@ test("Close retains a retryable record until stop, native deletion and attachmen
     native.stopError = "";
     native.deleteError = "Delete unavailable";
     await assert.rejects(restart().deleteTemporaryConversation("one", { conversationId: "chat" }), /Delete unavailable/);
-    assert.deepEqual(events, []);
+    assert.equal(events.some(([, event]) => event.reason === "temporary-conversation-closed"), false);
     await access(filePath);
     native.deleteError = "";
     await restart().deleteTemporaryConversation("one", { conversationId: "chat" });
@@ -417,5 +500,372 @@ test("temporary conversations steer active work without changing its model or pr
     assert.deepEqual(await store.readConversationLog("one"), []);
     await current.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "steer", message: "Focus on the logs" });
     assert.equal(native.starts, 2);
+  });
+});
+
+async function temporaryChangeoverFixture(root, actor = { role: "owner", username: "owner" }, review = false) {
+  const f = await conversationFixture(root);
+  f.capabilities.modelProviders.push({ id: "deepseek", connected: true, models: [
+    { id: "deepseek-flash", status: "available", variants: [{ id: "high" }, { id: "low" }] }
+  ] });
+  const sharedCatalog = { engineId: "opencode", transportId: "opencode_server", label: "OpenCode", revision: f.capabilities.revision,
+    agents: [{ id: "build", mode: "primary" }], defaults: { agentId: "build", modelProviderId: "opencode", modelId: "big-pickle", variantId: "" },
+    modelProviders: [{ id: "opencode", connected: true, models: [{ id: "big-pickle", status: "available", variants: [] }] }] };
+  const select = (catalog, input) => ({ ...resolveVibe64AssistantSelection(catalog, { ...catalog.defaults, ...input,
+    catalogRevision: catalog.revision }), selectionSource: "explicit" });
+  const plan = select(f.capabilities, { modelId: "gpt-6-astra" });
+  const code = select(f.capabilities, { modelProviderId: "deepseek", modelId: "deepseek-flash" });
+  const economy = select(sharedCatalog, {});
+  await createAssistantRoutingStore({ systemRoot: root }).write({ codex: { plan, code, economy, router: code, sharedBackup: economy } }, 1);
+  await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "code", review, workflowEngineId: "codex" }));
+  await f.store.writeMetadataValue("one", "assistant_changeover", '{"mainChatSentinel":true}');
+  const native = new Map();
+  const calls = { starts: [], stops: [], deletes: [] };
+  const failures = { stop: "", delete: "", loseAdmission: false, read: false };
+  let nextId = 0;
+  const manager = createSessionAgentManager({
+    readRoutingConfiguration: () => createAssistantRoutingStore({ systemRoot: root }).read(),
+    providers: [f.capabilities, sharedCatalog].map((catalog) => ({ id: catalog.engineId, transportId: catalog.transportId,
+      capabilities: async () => catalog,
+      async createConversation(ctx) {
+        const id = `${catalog.engineId}-${++nextId}`;
+        native.set(id, { id, engineId: ctx.assistantSelection.engineId, messages: [], accepted: new Set(), status: "ready", runId: "" });
+        return { ok: true, conversationId: id };
+      },
+      async readConversation(ctx, input) {
+        if (failures.read) throw new Error("Native receipt temporarily unreadable");
+        const row = native.get(input.conversationId);
+        assert.equal(row.engineId, ctx.assistantSelection.engineId);
+        return { ok: true, status: row.status, runId: row.runId, messages: row.messages, goal: row.goal || null, admitted: row.accepted.has(input.messageId) };
+      },
+      async startConversationTurn(ctx, input) {
+        const row = native.get(input.conversationId);
+        assert.equal(row.engineId, ctx.assistantSelection.engineId);
+        assert.equal(ctx.routingConversationId, "chat");
+        await input.onPromptSending?.({ threadId: row.id });
+        row.accepted.add(input.messageId);
+        row.runId = `turn-${calls.starts.length + 1}`;
+        row.status = "inProgress";
+        calls.starts.push({ input, selection: ctx.assistantSelection, conversationId: row.id });
+        if (failures.loseAdmission) { failures.read = true; throw new Error("Lost native admission reply"); }
+        return { ok: true, runId: row.runId, status: row.status };
+      },
+      async stopConversation(ctx, input) {
+        calls.stops.push(input.conversationId);
+        if (failures.stop === input.conversationId) throw new Error("Native stop not confirmed");
+        assert.equal(native.get(input.conversationId).engineId, ctx.assistantSelection.engineId);
+        native.get(input.conversationId).status = "interrupted";
+        return { ok: true };
+      },
+      async deleteConversation(ctx, input) {
+        calls.deletes.push(input.conversationId);
+        if (failures.delete === input.conversationId) throw new Error("Native deletion not confirmed");
+        assert.equal(native.get(input.conversationId).engineId, ctx.assistantSelection.engineId);
+        native.delete(input.conversationId);
+        return { ok: true };
+      }
+    })),
+    readAssistantAccess: async ({ engineId, modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "openai",
+      connectionIdentity: `${engineId}:${modelProviderId}` })
+  });
+  Object.assign(f.sessionAgent, manager);
+  const options = { vibe64User: actor };
+  const preparation = async (id, selection, ctx) => {
+    if (selection.engineId !== "codex" || ctx.session.metadata.codex_routing_home_provider) return;
+    const home = ctx.session.metadata.agent_identity_provider === "codex" && ctx.session.metadata.agent_identity_conversation_id
+      ? ctx.session.metadata.agent_identity_model_provider : "openai";
+    if (home !== "openai" && home !== selection.modelProviderId) throw new Error("Legacy Codex provider history cannot change home");
+    await ctx.runtime.store.writeMetadataValue(id, "codex_routing_home_provider", home);
+  };
+  let service = f.restart({ systemRoot: root, prepareSelection: preparation });
+  await manager.assistantAccess("one", { session: await f.store.readSession("one"), ...options });
+  await service.createTemporaryConversation("one", { conversationId: "chat" }, options);
+  return { ...f, native, calls, failures, manager, options, plan, code, economy,
+    get service() { return service; },
+    restart() { service = f.restart({ systemRoot: root, prepareSelection: preparation }); return service; },
+    record: () => f.store.readSessionConversation("one", "chat"),
+    async send(mode, messageId, message = `Request ${messageId}`) {
+      await service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode, review } }, options);
+      return service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId, message }, options);
+    },
+    async finish(reply) {
+      const record = await f.store.readSessionConversation("one", "chat");
+      const row = native.get(record.providerConversationId);
+      row.status = "completed";
+      row.messages.push({ role: "assistant", id: `reply-${row.runId}`, text: reply, complete: true });
+      await service.afterTemporaryTurn("one", { conversationId: row.id, temporaryRun: { active: false, state: "completed", providerTurnId: row.runId } }, options);
+    }
+  };
+}
+
+test("a temporary native goal fixes its mode and model, suppresses review, and remains visible after restoration", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root, undefined, true);
+    await f.send("code", "start-goal");
+    const record = await f.record();
+    const goal = { status: "paused", objective: "Finish this implementation" };
+    f.native.get(record.providerConversationId).goal = goal;
+    await f.finish("Paused the goal.");
+    assert.equal(f.calls.starts.length, 1, "a goal never starts automatic review");
+    const restored = (await f.restart().listTemporaryConversations("one", f.options)).conversations[0];
+    assert.deepEqual(restored.goal, goal);
+    for (const update of [{ assistantRouting: { mode: "auto", review: true } }, { agentSettings: { model: "gpt-6-astra" } }]) {
+      await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat", ...update }, f.options), /Finish this goal/);
+    }
+    const configuration = createAssistantRoutingStore({ systemRoot: root });
+    const saved = await configuration.read();
+    await configuration.write({ codex: { ...saved.orchestrators.codex, code: f.plan } }, saved.revision);
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", {
+      conversationId: "chat", messageId: "changed-coder", message: "Continue."
+    }, f.options), /Finish or cancel the current goal before changing its AI/);
+    assert.equal(f.calls.starts.length, 1);
+    f.failures.read = true;
+    await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
+      assistantRouting: { mode: "plan", review: false }
+    }, f.options), /Reconnect this conversation/);
+    assert.equal((await f.record()).routingMetadata.assistant_routing, record.routingMetadata.assistant_routing);
+  });
+});
+
+test("temporary availability uses its own override and actor without inferring or exposing connection identities", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root, { role: "member", username: "member" });
+    const initial = await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    assert.equal(initial.purposes.code.effectiveSelection.engineId, "opencode");
+    assert.equal(initial.purposes.code.backupReason, "keep_workflow_together");
+    assert.equal(initial.purposes.auto.available, false);
+    const updated = await f.service.updateTemporaryConversation("one", { conversationId: "chat",
+      assistantRouting: { mode: "plan", review: false, override: f.code }
+    }, f.options);
+    assert.equal(updated.purposes.plan.effectiveSelection.modelId, "deepseek-flash");
+    assert.equal(updated.purposes.plan.backupUsed, false);
+    assert.equal(updated.purposes.code.effectiveSelection.engineId, "opencode",
+      "Switching to Code clears the Plan-only override and resolves that request afresh");
+    assert.doesNotMatch(JSON.stringify(updated.purposes), /connectionIdentity/);
+    const owner = await f.service.readTemporaryConversation("one", { conversationId: "chat" }, {
+      vibe64User: { username: "owner", role: "owner" }
+    });
+    assert.equal(owner.purposes.code.effectiveSelection.engineId, "codex");
+    assert.equal(owner.purposes.auto.available, true);
+    assert.equal(f.calls.starts.length, 0);
+    assert.equal(f.native.size, 0);
+  });
+});
+
+test("generated and repair drafts explicitly choose Code while preserving the parent workflow", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root, { role: "member", username: "member" });
+    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true, workflowEngineId: "codex" }));
+    for (const input of [
+      { conversationId: "generated", assistantRouting: { mode: "code", review: false, workflowEngineId: "opencode" } },
+      { conversationId: "repair", presentation: { recoveryOperation: "update" } }
+    ]) {
+      const created = await f.service.createTemporaryConversation("one", input, f.options);
+      assert.deepEqual(JSON.parse(created.routingMetadata.assistant_routing), { mode: "code", review: false, workflowEngineId: "codex" });
+      assert.equal(created.purposes.code.effectiveSelection.engineId, "opencode");
+    }
+    assert.equal(f.calls.starts.length, 0);
+  });
+});
+
+test("a temporary personal turn restricts steering without blocking the member's next shared mode", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root);
+    await f.send("plan", "owner-plan");
+    const input = { conversationId: "chat" };
+    const member = { vibe64User: { username: "member", role: "member" } };
+    const during = await f.service.readTemporaryConversation("one", input, member);
+    assert.equal(during.canSteer, false);
+    assert.equal(during.purposes.plan.available, true);
+    assert.equal(during.purposes.plan.effectiveSelection.engineId, "opencode");
+    await f.finish("Here is the plan.");
+    const after = await f.service.readTemporaryConversation("one", input, member);
+    assert.equal(after.canSteer, null);
+    assert.equal(after.purposes.code.available, true);
+  });
+});
+
+test("temporary Economy changeover and return retain both native histories and leave Main chat untouched", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root);
+    const main = (await f.store.readSession("one")).metadata;
+    await f.send("code", "first", "Implement the agreed design");
+    await f.finish("Implemented the design in source files");
+    const coderId = (await f.record()).providerConversationId;
+    await f.send("economy", "second", "Explain the implementation");
+    const economyId = (await f.record()).providerConversationId;
+    assert.notEqual(coderId, economyId);
+    assert.match(f.calls.starts[1].input.message, /Vibe64 conversation changeover/);
+    assert.match(f.calls.starts[1].input.message, /Implemented the design in source files/);
+    assert.doesNotMatch(f.calls.starts[1].input.message, /mainChatSentinel/);
+    await f.finish("The design uses one validation function");
+    f.restart();
+    await f.send("code", "third", "Add the agreed check");
+    assert.equal((await f.record()).providerConversationId, coderId);
+    assert.match(f.calls.starts[2].input.message, /continuing your existing codex conversation/);
+    assert.match(f.calls.starts[2].input.message, /The design uses one validation function/);
+    const record = await f.record();
+    assert.deepEqual(Object.keys(record.nativeBindings).sort(), ["codex", "opencode"]);
+    assert.equal(record.nativeBindings.codex.conversationId, coderId);
+    assert.equal(record.nativeBindings.opencode.conversationId, economyId);
+    assert.equal(JSON.parse(record.routingMetadata.assistant_routing).workflowEngineId, "codex");
+    assert.equal(f.manager.binding("one"), "codex");
+    assert.equal(f.manager.binding("one", { routingConversationId: "chat" }), "codex");
+    assert.deepEqual((await f.store.readSession("one")).metadata, main);
+    assert.equal((await f.store.readConversationLog("one")).length, 0);
+    const turns = await f.store.readConversationLog({ sessionId: "one", conversationId: "chat" });
+    assert.deepEqual(turns.filter((turn) => turn.user).map((turn) => turn.user.text),
+      ["Implement the agreed design", "Explain the implementation", "Add the agreed check"]);
+    assert.deepEqual(turns.filter((turn) => turn.user).map((turn) => turn.metadata.assistantSelection.engineId), ["codex", "opencode", "codex"]);
+  });
+});
+
+test("a temporary read can observe live completion before its idle event without losing review", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root, { role: "member", username: "collaborator" }, true);
+    await f.send("code", "polled-code");
+    const record = await f.record();
+    const row = f.native.get(record.providerConversationId);
+    row.status = "completed";
+    await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    for (let attempt = 0; attempt < 100 && f.calls.starts.length < 2; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(f.calls.starts.length, 2);
+    await f.service.afterTemporaryTurn("one", { conversationId: row.id,
+      temporaryRun: { active: false, state: "completed", providerTurnId: record.runId } }, f.options);
+    assert.equal(f.calls.starts.length, 2);
+    assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).status, "reviewing");
+    assert.equal((await f.store.readConversationLog("one")).length, 0);
+  });
+});
+
+test("temporary HTTP turn input captures its authenticated actor for later review", async () => {
+  await withTemporaryRoot(async (root) => {
+    const member = { role: "member", username: "collaborator" };
+    const f = await temporaryChangeoverFixture(root, member, true);
+    await f.service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode: "code", review: true } }, f.options);
+    await f.service.startTemporaryConversationTurn("one", {
+      conversationId: "chat", messageId: "http-member-code", message: "Implement the agreed design", vibe64User: member
+    });
+    assert.deepEqual(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).submittedBy, member);
+    assert.equal(f.calls.starts[0].selection.engineId, "opencode");
+    f.options.vibe64User = { role: "owner", username: "owner" };
+    await f.finish("Implemented using the shared AI");
+    assert.equal(f.calls.starts.length, 2);
+    assert.equal(f.calls.starts[1].selection.engineId, "opencode");
+    assert.deepEqual(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).submittedBy, member);
+  });
+});
+
+test("a member can create a temporary chat from a personal parent and keeps its foreign Backup pair for review", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root, { role: "member", username: "collaborator" }, true);
+    await f.send("code", "member-code", "Implement the agreed design");
+    const id = (await f.record()).providerConversationId;
+    assert.equal(f.calls.starts[0].selection.engineId, "opencode");
+    assert.equal(f.manager.binding("one"), "codex");
+    assert.equal(f.manager.binding("one", { routingConversationId: "chat" }), "opencode");
+    await f.finish("Implemented using the shared AI");
+    assert.equal(f.calls.starts.length, 2);
+    assert.equal(f.calls.starts[1].selection.engineId, "opencode");
+    assert.equal(f.calls.starts[1].conversationId, id);
+    assert.match(f.calls.starts[1].input.message, /Vibe64 mode: review/);
+    await f.finish("Review completed");
+    await f.send("plan", "member-plan", "Discuss the next change");
+    assert.equal(f.calls.starts[2].conversationId, id);
+    assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing).workflowEngineId, "codex");
+    assert.equal((await f.store.readConversationLog("one")).length, 0);
+  });
+});
+
+test("temporary changeover stops before selection changes and Close retries only retained native histories", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root);
+    await f.send("code", "first");
+    await f.finish("Done");
+    const original = await f.record();
+    f.failures.stop = original.providerConversationId;
+    await assert.rejects(f.send("economy", "second"), /stop not confirmed/);
+    const failed = await f.record();
+    assert.equal(failed.providerConversationId, original.providerConversationId);
+    assert.deepEqual(failed.assistantSelection, original.assistantSelection);
+    assert.equal(f.native.size, 1);
+    f.failures.stop = "";
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "second", message: "Request second" }, f.options);
+    const sharedId = (await f.record()).providerConversationId;
+    f.failures.delete = sharedId;
+    await assert.rejects(f.service.deleteTemporaryConversation("one", { conversationId: "chat" }, f.options), /deletion not confirmed/);
+    const closing = await f.record();
+    assert.equal(closing.state, "closing");
+    assert.deepEqual(Object.keys(closing.nativeBindings), ["opencode"]);
+    f.failures.delete = "";
+    await f.restart().deleteTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    assert.equal(await f.record(), null);
+    assert.deepEqual(f.calls.deletes, [original.providerConversationId, sharedId, sharedId]);
+    assert.equal(f.manager.binding("one"), "codex");
+    assert.equal(f.manager.binding("one", { routingConversationId: "chat" }), "");
+  });
+});
+
+test("temporary foreign delivery recovers its exact receipt after restart without sending twice", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root);
+    await f.send("code", "first");
+    await f.finish("Done");
+    f.failures.loseAdmission = true;
+    await assert.rejects(f.send("economy", "second"), /Lost native admission reply/);
+    const pending = await f.record();
+    assert.equal(JSON.parse(pending.routingMetadata.assistant_routing_request).status, "uncertain");
+    f.failures.loseAdmission = false;
+    f.failures.read = false;
+    assert.equal(f.native.get(pending.providerConversationId).status, "inProgress");
+    const recovered = await f.restart().startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "second", message: "Request second" }, f.options);
+    assert.equal(recovered.delivered, true);
+    assert.equal(f.calls.starts.length, 2);
+    const turns = await f.store.readConversationLog({ sessionId: "one", conversationId: "chat" });
+    assert.equal(turns.filter((turn) => turn.user?.messageId === "second").length, 1);
+  });
+});
+
+test("returning to a legacy temporary Codex history preserves its provider home", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root);
+    await f.send("code", "original");
+    await f.finish("Original provider history");
+    const record = await f.record();
+    const routingMetadata = { ...record.routingMetadata };
+    delete routingMetadata.codex_routing_home_provider;
+    const changeover = JSON.parse(routingMetadata.assistant_changeover);
+    routingMetadata.assistant_changeover = JSON.stringify({ lastEngine: "codex/deepseek", engines: {
+      "codex/deepseek": changeover.engines.codex
+    } });
+    await f.store.writeSessionConversation("one", "chat", { routingMetadata,
+      nativeBindings: { "codex/deepseek": record.nativeBindings.codex } });
+    await f.send("economy", "explain");
+    await f.finish("Explanation from Economy");
+    await assert.rejects(f.send("plan", "incompatible-plan"), /Legacy Codex provider history cannot change home/);
+    assert.equal((await f.record()).assistantSelection.engineId, "opencode");
+    assert.equal(f.calls.starts.length, 2);
+    await f.send("code", "continue-code");
+    const returned = await f.record();
+    assert.equal(returned.providerConversationId, record.providerConversationId);
+    assert.equal(returned.routingMetadata.codex_routing_home_provider, "deepseek");
+    assert.equal(returned.nativeBindings.codex.conversationId, record.providerConversationId);
+    assert.equal(returned.nativeBindings["codex/deepseek"], undefined);
+    assert.equal(f.native.size, 2);
+  });
+});
+
+test("ordinary temporary chats start in Plan with review off and retain their parent's workflow", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true, workflowEngineId: "codex" }));
+    await f.service.createTemporaryConversation("one", { conversationId: "plan-chat" });
+    const record = await f.store.readSessionConversation("one", "plan-chat");
+    assert.deepEqual(JSON.parse(record.routingMetadata.assistant_routing), { mode: "plan", review: false, workflowEngineId: "codex" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "plan-chat", messageId: "discuss", message: "Discuss the design" });
+    assert.match(f.native.lastInput.message, /Vibe64 mode: plan/);
+    assert.equal(JSON.parse((await f.store.readSessionConversation("one", "plan-chat")).routingMetadata.assistant_routing_request).review, false);
   });
 });

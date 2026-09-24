@@ -371,14 +371,11 @@ test("chat Connect recovers pending consent instead of creating a replacement at
   assert.equal((await store.readIntegrationSetupRequest("one", turn.turnId)).outcome, "pending");
 });
 
-test("setup completes the authorized saved request using the application's verified result", async (t) => {
-  const actor = { username: "owner" };
+test("setup completes a member's saved request without access to the main personal AI", async (t) => {
+  const actor = { username: "member", role: "member" };
   const { source, store, service, calls, notifications } = await fixture(t, {
     setup: true, conversation: true,
-    authorize: async (id, context) => {
-      assert.equal(id, "one");
-      assert.deepEqual(context.vibe64User, actor);
-    },
+    authorize: async () => { throw new Error("No access to the main personal AI."); },
     commandResult: { status: "connected", verifiedAt: "2026-09-11T08:00:00.000Z" }
   });
   await writeFile(path.join(source, "integrations.json"), JSON.stringify(configuration()));
@@ -408,8 +405,7 @@ test("setup completes the authorized saved request using the application's verif
 
 test("setup refuses untrusted request association before application execution", async (t) => {
   const { source, store, service, calls, environmentCalls } = await fixture(t, {
-    setup: true, conversation: true,
-    authorize: async (_id, context) => { if (context.vibe64User?.username !== "owner") throw Object.assign(new Error("Denied"), { code: "access_denied", statusCode: 403 }); }
+    setup: true, conversation: true
   });
   await writeFile(path.join(source, "integrations.json"), JSON.stringify(configuration()));
   await store.writeConversationUserMessage("one", { text: "Configure calendar." });
@@ -421,7 +417,6 @@ test("setup refuses untrusted request association before application execution",
   const input = { sessionId: "one", environment: "development", integrationId: "calendar", operation: "connect",
     vibe64User: { username: "owner" }, setupRequest };
   for (const [patch, code] of [
-    [{ vibe64User: { username: "outsider" } }, "access_denied"],
     [{ integrationId: "another-slot" }, "vibe64_integration_setup_request_changed"],
     [{ setupRequest: { ...setupRequest, configurationHash: "a".repeat(64) } }, "vibe64_integration_configuration_changed"],
     [{ setupRequest: { ...setupRequest, requestId: "b".repeat(64) } }, "vibe64_integration_setup_request_changed"],

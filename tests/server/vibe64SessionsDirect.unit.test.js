@@ -90,6 +90,7 @@ function agentWriteLockHarness() {
     attempts,
     store: {
       async listSessionsForRenewal() { return []; },
+      async listSessionConversations() { return []; },
       async writeMetadataValue() {},
       async runSessionExclusive(sessionId, operationName, operation) {
         attempts.push({ operationName, sessionId });
@@ -113,19 +114,15 @@ function agentWriteLockHarness() {
   };
 }
 
-function assertDefaultCodexAssistantSelectionMetadata(metadata = {}, createdBy = "") {
+const initialPlanSelection = {
+  agentId: "build", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "opencode", modelId: "big-pickle",
+  modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: ""
+};
+
+function assertInitialPlanMetadata(metadata = {}, createdBy = "") {
   assert.equal(metadata.created_by, createdBy);
-  assert.deepEqual(vibe64AssistantSelectionFromMetadata(metadata), {
-    agentId: "codex",
-    catalogRevision: metadata.assistant_selection
-      ? JSON.parse(metadata.assistant_selection).catalogRevision
-      : "",
-    engineId: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
-    modelId: VIBE64_CODEX_DEFAULT_MODEL,
-    modelProviderId: "openai",
-    schema: "vibe64.assistant-selection.v1",
-    variantId: VIBE64_CODEX_DEFAULT_THINKING
-  });
+  assert.deepEqual(vibe64AssistantSelectionFromMetadata(metadata), initialPlanSelection);
+  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode: "plan", review: false, workflowEngineId: "opencode" });
 }
 
 async function requireAgentWrite(runtime, sessionId, operation) {
@@ -142,7 +139,10 @@ async function requireAgentWrite(runtime, sessionId, operation) {
 function sessionCreationPolicyHarness({
   beforeCreate = async () => {},
   initialSessions = [],
+  initializeModelRouting = async () => ({ ok: true }),
   managed = true,
+  resolveAssistantPurpose = async (input) => ({ available: true,
+    effectiveSelection: input.override?.selection || initialPlanSelection, connectionIdentity: "workspace-ai" }),
   requireAssistantSelectionAccess = async () => ({ ok: true }),
   publishSessionChanged = async () => {},
   projectRuntimeRoot: runtimeRoot,
@@ -203,10 +203,12 @@ function sessionCreationPolicyHarness({
     }
   };
   const service = createService({
+    initializeModelRouting,
     project,
     publishSessionChanged,
     terminals: {
       requireAssistantSelectionAccess,
+      resolveAssistantPurpose,
       ...(typeof resolveAssistantSelection === "function"
         ? { resolveAssistantSelection }
         : {})
@@ -1088,6 +1090,7 @@ test("members can Save and create pull requests independently of AI access", asy
       return { agentRuns: [], sessionId: "session-1", status: "active" };
     },
     store: {
+      async readBackgroundTask() { return null; },
       async writeBackgroundTaskEvent(...args) {
         taskEvents.push(args);
         return args[2].patch;
@@ -1147,6 +1150,7 @@ test("Save authority races become a ready update requirement rather than an AI f
       return { sessionId: "session-1", status: "active" };
     },
     store: {
+      async readBackgroundTask() { return null; },
       async writeBackgroundTaskEvent(_sessionId, taskId, input) {
         backgroundTask = {
           ...backgroundTask,
@@ -1211,6 +1215,7 @@ test("native Save persists bounded progress and advances the session base only a
       return [...sessions.values()];
     },
     store: {
+      async readBackgroundTask() { return { assistantHelper: { scope: { id: "pending-naming-cleanup" }, conversationId: "retained-native-id" } }; },
       async writeBackgroundTaskEvent(sessionId, taskId, input) {
         assert.equal(sessionId, "session-1");
         assert.equal(taskId, "save-work");
@@ -1267,6 +1272,7 @@ test("native Save persists bounded progress and advances the session base only a
     "saved"
   ]);
   assert.equal(taskEvents[0].reset, true);
+  assert.equal(taskEvents[0].patch.assistantHelper.conversationId, "retained-native-id");
   assert.equal(taskEvents[1].reset, undefined);
   assert.equal(taskEvents[2].reset, undefined);
   assert.deepEqual(publications.map((entry) => entry[1].reason), [
@@ -2245,6 +2251,24 @@ test("live workspace preparation prevents retry and archive races", async () => 
   assert.equal(retried.code, "vibe64_workspace_setup_running");
 });
 
+test("archiving retains main and temporary routing cleanup records", async () => {
+  for (const temporary of [false, true]) {
+    const lock = agentWriteLockHarness();
+    const metadata = { assistant_routing_request: JSON.stringify({ status: "cancelled", helper: { conversationId: "helper" } }) };
+    const session = { sessionId: "session-1", sourceReady: true, status: "active", metadata: temporary ? {} : metadata };
+    if (temporary) lock.store.listSessionConversations = async () => [{ conversationId: "chat", routingMetadata: metadata }];
+    let closed = false;
+    const service = createService({ project: { createRuntime: async () => ({ store: lock.store,
+      getSession: async () => session, markSessionClosing: async () => { closed = true; } }) },
+      terminals: {},
+      workspaceSetupRunner: { isRunning: () => false, wait: () => null } });
+    const result = await service.archiveSession("session-1");
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "vibe64_assistant_routing_pending");
+    assert.equal(closed, false);
+  }
+});
+
 test("an active Save keeps archiving out of its agent-write window", async () => {
   const lock = agentWriteLockHarness();
   let finishSave;
@@ -2520,7 +2544,7 @@ test("archiving a session releases its managed resources after terminals stop", 
     status: "active"
   };
   const runtime = {
-    store: { async writeMetadataValue() {}, async listSessionsForRenewal() { return []; } },
+    store: { async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; } },
     async archiveSession() {
       calls.push("archive");
       return { ...session, status: "archived" };
@@ -2570,7 +2594,7 @@ test("archiving a source-creation failure does not release resources that were n
     status: "blocked"
   };
   const runtime = {
-    store: { async writeMetadataValue() {}, async listSessionsForRenewal() { return []; } },
+    store: { async writeMetadataValue() {}, async listSessionsForRenewal() { return []; }, async listSessionConversations() { return []; } },
     async archiveSession() {
       calls.push("archive");
       return { ...session, status: "archived" };
@@ -2640,6 +2664,7 @@ test("session creation resolves a partial selection before checking access", asy
   });
 
   const result = await harness.service.createSession({
+    assistantSelection: { engineId: "codex" },
     vibe64User: { username: "member" }
   });
 
@@ -2649,6 +2674,44 @@ test("session creation resolves a partial selection before checking access", asy
   assert.equal(harness.runtimeCreations, 0);
   assert.equal(harness.creationInputs.length, 0);
   assert.equal(harness.openSessions.length, 0);
+});
+
+test("new chats initialize the chosen workflow and start in the actor's effective Plan", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const actor = { role: "member", username: "collaborator" };
+    const calls = [];
+    const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(targetRoot),
+      initializeModelRouting: async (input) => { calls.push(["setup", input]); return { ok: true }; },
+      resolveAssistantPurpose: async (input, options) => {
+        calls.push(["resolve", input, options]);
+        return { available: true, effectiveSelection: initialPlanSelection, backupUsed: true, connectionIdentity: "shared-key" };
+      },
+      requireAssistantSelectionAccess: async (selection, options) => { calls.push(["access", selection, options]); }
+    });
+    const result = await harness.service.createSession({ workflowEngineId: "codex", vibe64User: actor });
+    assert.equal(result.ok, true, result.error);
+    assert.deepEqual(calls, [
+      ["setup", { engineIds: ["codex"], vibe64User: actor }],
+      ["resolve", { purpose: "plan", workflowEngineId: "codex" }, { vibe64User: actor }],
+      ["access", initialPlanSelection, { vibe64User: actor, expectedConnectionIdentity: "shared-key" }]
+    ]);
+    assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.assistant_routing), { mode: "plan", review: false, workflowEngineId: "codex" });
+    assert.deepEqual(vibe64AssistantSelectionFromMetadata(harness.creationInputs[0].metadata), initialPlanSelection);
+  });
+});
+
+test("unavailable routing and failed initialization do not create a session", async () => {
+  for (const failedSetup of [true, false]) {
+    const harness = sessionCreationPolicyHarness({
+      initializeModelRouting: async () => failedSetup ? { ok: false, error: "Reload routing", code: "vibe64_assistant_routing_stale" } : { ok: true },
+      resolveAssistantPurpose: async () => ({ available: false, message: "Plan unavailable", reasonCode: "vibe64_assistant_routing_invalid" }),
+      requireAssistantSelectionAccess: async () => { assert.fail("No available destination to authorize"); }
+    });
+    const result = await harness.service.createSession();
+    assert.equal(result.ok, false);
+    assert.equal(result.code, failedSetup ? "vibe64_assistant_routing_stale" : "vibe64_assistant_routing_invalid");
+    assert.equal(harness.runtimeCreations, 0);
+  }
 });
 
 test("assistant selection can recover from an unavailable current choice before checking target access", async () => {
@@ -2958,7 +3021,7 @@ test("concurrent shared-database creation admits one request and leaves no rejec
       openSessionCount: 1
     });
     assert.equal(harness.creationInputs.length, 1);
-    assertDefaultCodexAssistantSelectionMetadata(harness.creationInputs[0].metadata, "ada");
+    assertInitialPlanMetadata(harness.creationInputs[0].metadata, "ada");
     assert.deepEqual(harness.openSessions.map(({ sessionId, status }) => ({ sessionId, status })), [{
       sessionId: "session-1",
       status: "active"
@@ -3142,6 +3205,7 @@ test("new sessions publish running workspace preparation and its eventual result
     };
   });
   const service = createService({
+    initializeModelRouting: async () => ({ ok: true }),
     project: {
       async createRuntime() {
         return runtime;
@@ -3160,6 +3224,7 @@ test("new sessions publish running workspace preparation and its eventual result
       publications.push(args);
     },
     terminals: {
+      async resolveAssistantPurpose() { return { available: true, effectiveSelection: initialPlanSelection, connectionIdentity: "workspace-ai" }; },
       async requireAssistantSelectionAccess() {
         return { ok: true };
       }
@@ -3192,7 +3257,7 @@ test("new sessions publish running workspace preparation and its eventual result
   });
   assert.equal(created.workspaceSetup.status, "running");
   assert.equal(sessionCreationInputs.length, 1);
-  assertDefaultCodexAssistantSelectionMetadata(sessionCreationInputs[0].metadata, "ada");
+  assertInitialPlanMetadata(sessionCreationInputs[0].metadata, "ada");
   assert.deepEqual(sessionCreationInputs[0].sourceContext, { vibe64User });
   assert.equal(publications[0][1].reason, "session-created");
   assert.equal(publications[0][1].session.workspaceSetup.status, "running");
@@ -3345,7 +3410,7 @@ test("integration continuation action forwards only request identity and authent
   assert.deepEqual(events, [["session-1", { reason: "integration-setup-completed", session: null }]]);
 });
 
-test("integration setup skip authorizes the actor before changing saved conversation state", async () => {
+test("integration setup skip needs no AI access and still validates the saved request", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createVibe64SessionStore({ projectContextRoot: targetRoot, projectRuntimeRoot: projectRuntimeRoot(targetRoot) });
     await store.createSession({ runtimeKind: "genesis", sessionId: "skip-request" });
@@ -3354,35 +3419,24 @@ test("integration setup skip authorizes the actor before changing saved conversa
       text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
     });
     const events = [];
-    const actors = [];
     const runtime = { store, async getSession(sessionId) { return { sessionId, status: "active" }; } };
     const sessions = createService({
       project: { async createRuntime() { return runtime; } },
-      terminals: { async requireAssistantAccess(sessionId, context) {
-        assert.equal(sessionId, "skip-request");
-        assert.equal(context.runtime, runtime);
-        actors.push(context.vibe64User?.username);
-        if (context.vibe64User?.username !== "owner") {
-          const error = new Error("Assistant access denied.");
-          error.code = "vibe64_assistant_owner_required";
-          error.statusCode = 403;
-          throw error;
-        }
-      } },
+      terminals: { async requireAssistantAccess() { throw new Error("AI is unavailable."); } },
       publishSessionChanged: async (...args) => events.push(args)
     });
     const action = createSessionActions({ sessions }).find((entry) => entry.id === ACTION_SKIP_INTEGRATION_SETUP);
     const input = { sessionId: "skip-request", turnId: turn.turnId, requestId: turn.integrationSetup.requestId,
       vibe64User: { username: "owner" } };
-    const denied = await action.execute(input, { requestMeta: { request: { vibe64User: { username: "member" } } } });
+    const context = { requestMeta: { request: { vibe64User: { username: "member", role: "member" } } } };
+    const denied = await action.execute({ ...input, requestId: "f".repeat(64) }, context);
     assert.equal(denied.ok, false);
-    assert.equal(denied.code, "vibe64_assistant_owner_required");
+    assert.equal(denied.code, "vibe64_integration_setup_request_changed");
     assert.equal((await store.readConversationLog("skip-request"))[0].integrationSetup.outcome, "pending");
     assert.equal(events.length, 0);
-    const accepted = await action.execute(input, { requestMeta: { request: { vibe64User: { username: "owner" } } } });
+    const accepted = await action.execute(input, context);
     assert.equal(accepted.ok, true);
     assert.equal(accepted.integrationSetup.outcome, "skipped");
-    assert.deepEqual(actors, ["member", "owner"]);
     assert.equal(events[0][0], "skip-request");
     assert.equal(events[0][1].reason, "integration-setup-skipped");
     assert.equal((await store.readConversationLog("skip-request")).length, 1);
@@ -3402,4 +3456,24 @@ test("PR session creation binds only the server-resolved source and exact head c
     assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.github_pull_request), source);
     assert.equal(harness.creationInputs[0].sourceContext.expectedCommit, source.headCommit);
   });
+});
+
+test("chat mode changes retain the workflow after a foreign Economy answer", async () => {
+  const lock = agentWriteLockHarness();
+  const current = { agentId: "build", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "opencode",
+    modelId: "big-pickle", modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: "" };
+  const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
+    assistant_selection: JSON.stringify(current), assistant_routing: JSON.stringify({ mode: "economy", review: false, workflowEngineId: "codex" }) } };
+  const runtime = { async getSession() { return session; }, store: { ...lock.store,
+    async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
+  const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {} });
+  const changed = await service.updateAssistantSelection(session.sessionId, {
+    assistantRouting: { mode: "plan", review: true }, vibe64User: { role: "member", username: "member" } });
+  assert.notEqual(changed.ok, false, JSON.stringify(changed));
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "plan", review: true, workflowEngineId: "codex" });
+  assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
+  const foreignOverride = await service.updateAssistantSelection(session.sessionId, {
+    assistantRouting: { mode: "code", override: current }, vibe64User: { role: "member", username: "member" } });
+  assert.equal(foreignOverride.ok, false);
+  assert.match(foreignOverride.error, /workflow orchestrator/);
 });

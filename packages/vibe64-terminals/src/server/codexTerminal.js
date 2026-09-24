@@ -1,6 +1,5 @@
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { codexProviderPaths, createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
-import { createNativeHelperModelStore } from "@local/vibe64-core/server/nativeHelperModel";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
   createCodexAppServerDetachedTurnWatcher,
@@ -2071,6 +2070,7 @@ function createCodexTerminalController({
           await providerConnections.threadConfig(requestedProvider);
           return "external";
         }
+        if (options.assistantScope) return "native";
         const runtime = await createRuntimeForSession();
         const session = await runtime.getSession(sessionId, { inspectSource: false });
         const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
@@ -2088,6 +2088,7 @@ function createCodexTerminalController({
       prepareThreadResumeParams: (threadId, params, { runtime: providerRuntime, processChanged }) =>
         runWithCodexAppServerProjectContext(projectContext, async () => {
           assertCodexAppServerControllerOpen();
+          if (options.assistantScope) return params;
           const runtime = await createRuntimeForSession();
           const session = await runtime.getSession(sessionId, { inspectSource: false });
           const previousExecutionId = normalizeText(session.metadata?.agent_transport_execution_id);
@@ -2130,6 +2131,7 @@ function createCodexTerminalController({
         }
         const admissionError = codexAppServerAdmissionError(sessionId);
         if (admissionError) throw admissionError;
+        if (options.assistantScope) return threadEnv;
         if (await agentSessionCommandEnvironmentIsHealthy(threadEnv)) return threadEnv;
         const runtime = await createRuntimeForSession();
         const session = await runtime.getSession(sessionId, { inspectSource: false });
@@ -2147,6 +2149,7 @@ function createCodexTerminalController({
           if (codexAppServerSessionClosures.has(codexTerminalNamespace(sessionId))) {
             throw new Error("The assistant session is closing.");
           }
+          if (options.assistantScope) return;
           const store = await createStoreForSession(sessionId);
           const run = await readCodexAppServerAgentRunForSession(store, sessionId);
           if (run?.providerThreadId === threadId && run.providerStatus === "observation_lost") {
@@ -10301,13 +10304,13 @@ function createCodexTerminalController({
     if (toolHome.ok === false) {
       return toolHome;
     }
-    const providerOptions = codexAppServerRuntimeOptions({
+    const providerOptions = { ...codexAppServerRuntimeOptions({
       session: { sessionId: normalizedSessionId },
       executionRoot: workdir,
       terminalEnv: scope.environment || {},
       toolHomeSource: toolHome.toolHomeSource,
       workdir
-    });
+    }), assistantScope: scope, routingModelProviderId: input.agentSettings?.modelProviderId || "openai" };
     const provider = await ensureCodexAppServerDaemonForSession(
       normalizedSessionId,
       providerOptions
@@ -10444,6 +10447,8 @@ function createCodexTerminalController({
   }
 
   async function codexAppServerExecutionProfileModelCatalog(sessionId = "", {
+    assistantScope = null,
+    agentSettings = {},
     runtime: resolvedRuntime = null,
     session: resolvedSession = null,
     signal = null
@@ -10453,10 +10458,9 @@ function createCodexTerminalController({
       error.code = "vibe64_codex_control_disabled";
       throw error;
     }
-    const context = await codexAppServerSessionContext(sessionId, {
-      runtime: resolvedRuntime,
-      session: resolvedSession
-    });
+    const context = assistantScope
+      ? await codexAppServerEphemeralScopeContext(sessionId, { agentSettings }, assistantScope)
+      : await codexAppServerSessionContext(sessionId, { runtime: resolvedRuntime, session: resolvedSession });
     if (context.ok === false) {
       const error = new Error(normalizeText(context.error) || "Codex session is unavailable.");
       Object.assign(error, context);
@@ -10469,10 +10473,10 @@ function createCodexTerminalController({
       toolHomeSource,
       workdir
     } = context;
-    assertCodexAppServerEconomyThreadsRestored(
+    if (!assistantScope) assertCodexAppServerEconomyThreadsRestored(
       await restoreCodexAppServerEconomyThreads({ runtime, session })
     );
-    const provider = await ensureCodexAppServerDaemonForSession(
+    const provider = context.provider || await ensureCodexAppServerDaemonForSession(
       sessionId,
       await codexAppServerEconomyRuntimeOptionsForSession(session, {
         runtime,
@@ -10589,7 +10593,8 @@ function createCodexTerminalController({
   }
 
   async function codexAppServerAssistantAccess() {
-    return readCodexSelectedAccountAccess({ toolHomeSource: codexToolHomeSource });
+    return readCodexSelectedAccountAccess({ toolHomeSource: codexToolHomeSource,
+      systemRoot: codexAppServerProviderOptions.systemRoot });
   }
 
   async function codexAppServerConversationThreadSettings(context = {}) {
@@ -11516,11 +11521,14 @@ function createCodexTerminalController({
       if (context.ok === false) {
         return context;
       }
-      const threadSettings = await codexAppServerConversationThreadSettings(context);
-      const thread = await context.provider.startThread({
-        ...threadSettings,
-        ...(input.ephemeral === true ? { ephemeral: true } : {})
-      });
+      const executionProfile = context.assistantScope && input.executionProfile
+        ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
+      if (executionProfile && input.ephemeral !== true) throw new Error("Scoped helpers require an ephemeral conversation.");
+      const thread = executionProfile
+        ? (await startCodexAppServerEconomyThread({ provider: context.provider, executionProfile,
+            developerInstructions: context.assistantScope.stableContext, ephemeral: true })).thread
+        : await context.provider.startThread({ ...await codexAppServerConversationThreadSettings(context),
+            ...(input.ephemeral === true ? { ephemeral: true } : {}) });
       const conversationId = normalizeText(thread.id || thread.response?.thread?.id);
       if (!conversationId) {
         throw new Error("Codex app-server did not return a conversation id.");
@@ -11531,6 +11539,7 @@ function createCodexTerminalController({
         const conversations = codexAppServerConversations.get(sessionKey) || new Map();
         conversations.set(conversationId, {
           conversationId,
+          executionProfile,
           provider: context.provider,
           error: "",
           message: "",
@@ -11578,6 +11587,12 @@ function createCodexTerminalController({
         return context;
       }
       const conversationState = codexAppServerConversation(sessionId, conversationId);
+      const executionProfile = context.assistantScope ? conversationState?.executionProfile : null;
+      if (executionProfile && (input.steer || input.attachments?.length)) throw new Error("Bounded helpers accept supplied text only.");
+      if (context.assistantScope && JSON.stringify(executionProfile || null) !==
+          JSON.stringify(input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null)) {
+        throw new Error("The scoped helper execution profile changed. Start a new helper.");
+      }
       if (input.ephemeral === true && !conversationState) {
         return {
           ...codexAppServerExpiredEphemeralConversation(conversationId, input),
@@ -11617,9 +11632,10 @@ function createCodexTerminalController({
           ok: false
         };
       }
-      if (!conversationState || input.persistent === true || context.assistantScope) {
-        const threadSettings = await codexAppServerConversationThreadSettings(context);
-        await context.provider.resumeThread(conversationId, threadSettings);
+      if (!conversationState || input.persistent === true) {
+        if (executionProfile) await resumeCodexAppServerEconomyThread({ provider: context.provider,
+          threadId: conversationId, executionProfile, developerInstructions: context.assistantScope.stableContext });
+        else await context.provider.resumeThread(conversationId, await codexAppServerConversationThreadSettings(context));
       }
       let watcher = null;
       let waitForResult = null;
@@ -11637,7 +11653,7 @@ function createCodexTerminalController({
         });
         watcher = createCodexAppServerDetachedTurnWatcher(context.provider, conversationId, {
           includeThreadHistory: false,
-          timeoutMs: 0,
+          timeoutMs: executionProfile?.limits.timeoutMs || 0,
           onEvent(classification = {}) {
             const current = codexAppServerConversation(sessionId, conversationId);
             if (!current || (classification.turnId && current.runId && classification.turnId !== current.runId)) {
@@ -11646,6 +11662,8 @@ function createCodexTerminalController({
             if (["live_progress", "thinking"].includes(classification.kind)) {
               appendCodexAppServerEphemeralProgress(current, classification);
             }
+            options.onEvent?.({ type: "notification", classification, threadId: conversationId,
+              turnId: classification.turnId, scopeId: context.assistantScope?.id || "" });
           }
         });
         waitForResult = watcher.wait();
@@ -11655,7 +11673,9 @@ function createCodexTerminalController({
       let delivery = null;
       try {
         await input.onPromptSending?.({ threadId: conversationId });
-        delivery = await sendCodexAppServerPromptForSession({
+        delivery = executionProfile ? await sendCodexAppServerEconomyTurn({
+          executionProfile, outputSchema: input.outputSchema, prompt, provider: context.provider, threadId: conversationId
+        }) : await sendCodexAppServerPromptForSession({
           agentSettings: context.agentSettings,
           clientUserMessageId: input.messageId,
           outputSchema: input.outputSchema,
@@ -11696,11 +11716,13 @@ function createCodexTerminalController({
         } else if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
           await watcher.completeNow(status);
         }
-        void waitForResult.then((result = {}) => {
+        conversationState.completion = waitForResult.then((result = {}) => {
           const current = codexAppServerConversation(sessionId, conversationId);
           if (!current || current.runId !== runId) {
             return;
           }
+          current.status = result.status || "completed";
+          if (executionProfile) assertCodexAppServerEconomyOutputWithinLimit({ executionProfile, rawOutput: result.text });
           const response = codexAppServerConversationResponse(result.text);
           Object.assign(current, {
             error: "",
@@ -11708,17 +11730,31 @@ function createCodexTerminalController({
             status: result.status || "completed",
             watcher: null
           });
-        }).catch((error) => {
+          return codexAppServerEphemeralConversationSnapshot(current);
+        }).catch(async (error) => {
           const current = codexAppServerConversation(sessionId, conversationId);
           if (!current || current.runId !== runId || current.status === "interrupted") {
-            return;
+            throw error;
+          }
+          if (executionProfile && codexAppServerConversationTurnIsActive(current.status)) {
+            try {
+              const interrupted = await context.provider.interruptTurn(conversationId, runId);
+              const failure = codexAppServerInterruptFailure(interrupted);
+              if (failure) throw new Error(failure.error);
+            } catch {
+              current.error = "The helper deadline ended, but Stop could not be confirmed. Retry Stop before reusing this helper.";
+              current.watcher = null;
+              throw new Error(current.error);
+            }
           }
           Object.assign(current, {
             error: errorMessage(error, "Temporary AI turn failed."),
             status: "failed",
             watcher: null
           });
+          throw error;
         });
+        void conversationState.completion.catch(() => null);
       }
       if (input.persistent && conversationState) Object.assign(conversationState, { runId, status, messageId });
       return { conversationId, messageId, ok: true, runId, status };
@@ -11790,6 +11826,12 @@ function createCodexTerminalController({
           ok: false
         };
       }
+      const scoped = assistantScope && codexAppServerConversation(sessionId, conversationId);
+      if (scoped?.executionProfile) {
+        if (scoped.runId !== runId || !scoped.completion) throw new Error("The scoped helper turn is unavailable.");
+        const result = await scoped.completion;
+        return { ...result, conversationId, ok: true, runId };
+      }
       const context = await codexAppServerConversationContext(sessionId, input, {
         assistantScope
       });
@@ -11859,6 +11901,7 @@ function createCodexTerminalController({
       return { ok: true, conversationId, status: "interrupted" };
     }
     const result = await interruptDetachedCodexAppServerChatTurn(sessionId, {
+      agentSettings: input.agentSettings,
       threadId: input.conversationId,
       turnId: input.runId
     }, options);
@@ -11878,7 +11921,8 @@ function createCodexTerminalController({
     const conversationId = normalizeText(input.conversationId);
     const sessionKey = codexTerminalNamespace(sessionId);
     const conversations = codexAppServerConversations.get(sessionKey);
-    const conversationExpired = input.ephemeral === true && !conversations?.has(conversationId);
+    const conversationExpired = input.ephemeral === true && !conversations?.has(conversationId) &&
+      !(options.assistantScope && input.executionProfile);
     let result;
     if (conversationExpired) {
       result = {
@@ -11886,6 +11930,7 @@ function createCodexTerminalController({
       };
     } else {
       result = await deleteDetachedCodexAppServerChatThread(sessionId, {
+        agentSettings: input.agentSettings,
         threadId: input.conversationId
       }, options);
       if (result.ok === false) {
@@ -13417,6 +13462,11 @@ function createCodexTerminalController({
 
     async closeAllForSession(sessionId, options = {}) {
       const normalizedSessionId = normalizeText(sessionId);
+      if (options.assistantScope) {
+        if (options.assistantScope.id !== normalizedSessionId) throw new TypeError("Codex helper scope does not match.");
+        const result = await stopCachedCodexAppServerProvidersForSession(normalizedSessionId, { requireStopped: true });
+        return { ...result, closed: result.stopped };
+      }
       const sessionKey = codexTerminalNamespace(normalizedSessionId);
       const renewalCleanup = renewalCleanupContext(normalizedSessionId, options);
       const preserveProcessExitProof = Boolean(
@@ -13640,12 +13690,6 @@ function createCodexTerminalController({
 
     createConversation(sessionId, input = {}, options = {}) {
       return createCodexAppServerConversation(sessionId, input, options);
-    },
-
-    readHelperModel(context = {}) {
-      const curated = curatedCodexProvider(context.assistantSelection?.modelProviderId);
-      if (curated) return Promise.resolve(curated.models[0].id);
-      return createNativeHelperModelStore({ systemRoot: codexAppServerProviderOptions.systemRoot }).read();
     },
 
     assistantAccess() {
@@ -13908,6 +13952,8 @@ function createCodexTerminalController({
     executionProfileModelCatalog(sessionId, options = {}) {
       return withCodexAppServerModelCatalogDeadline(
         (signal) => codexAppServerExecutionProfileModelCatalog(sessionId, {
+          assistantScope: options.assistantScope,
+          agentSettings: options.agentSettings,
           runtime: options.runtime,
           session: options.session,
           signal

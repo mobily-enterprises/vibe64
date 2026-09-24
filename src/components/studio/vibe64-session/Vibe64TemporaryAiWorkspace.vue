@@ -23,10 +23,10 @@
       </div>
       <div class="vibe64-temporary-ai__task-tabs">
         <v-btn
-          v-if="hostConversation" class="vibe64-temporary-ai__host-tab"
-          :color="hostConversation.color" :variant="hostConversation.selected ? 'flat' : 'tonal'"
-          :aria-current="hostConversation.selected ? 'page' : undefined"
-          :prepend-icon="hostConversation.icon" size="small" @click="hostConversation.open()"
+          v-if="hostConversation?.selected" class="vibe64-temporary-ai__host-tab"
+          :color="hostConversation.color" variant="flat"
+          aria-current="page"
+          :prepend-icon="hostConversation.icon" rounded="pill" height="32" size="small" @click="hostConversation.open()"
         >{{ hostConversation.label }}</v-btn>
         <div
           v-for="task in temporary.tasks.value"
@@ -175,10 +175,7 @@
           </div>
         </template>
         <template #composer>
-          <Vibe64ChatModeControls v-if="!activeTask.recoveryOperation" :session="modeSession"
-            :save-preferences="(preferences) => temporary.updateRouting(activeTask.id, preferences)"
-            :active="activeTask.busy" :disabled="props.repositoryBusy || activeTask.status === 'closing'" />
-          <v-alert v-if="routingLabel" variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status">
+          <v-alert v-if="routingLabel && (routingPending || routingRequest?.error)" variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status">
             {{ routingLabel }}
             <p v-if="routingRequest?.error" class="text-body-small">{{ routingRequest.error }}</p>
             <div v-if="['review_pending', 'review_uncertain'].includes(routingRequest?.status)" class="d-flex flex-wrap ga-1">
@@ -238,6 +235,13 @@
                   :assistant-selection="task.assistantSelection || props.assistantSelection"
                   :disabled="taskInputDisabled(task) || task.busy"
                   @update-setting="updateActiveAgentSetting"
+                />
+                <Vibe64ChatModeControls
+                  v-if="task.id === activeTask.id && !task.recoveryOperation" :session="modeSession"
+                  :save-preferences="(preferences) => temporary.updateRouting(task.id, preferences)"
+                  :active="task.busy" :disabled="props.repositoryBusy || task.status === 'closing'"
+                  :can-configure="props.canConfigureRouting"
+                  :purposes="task.purposes"
                 />
                 <v-btn
                   aria-label="Attach files"
@@ -341,6 +345,7 @@ const emit = defineEmits(["select-main-chat", "task-finished", "check-update"]);
 const props = defineProps({
   active: Boolean,
   assistantReady: Boolean,
+  canConfigureRouting: Boolean,
   connectionUnavailable: Boolean,
   projectSlug: { type: String, default: "" },
   previewAttachmentState: { type: Object, default: () => ({}) },
@@ -426,6 +431,7 @@ const routingLabel = computed(() => assistantRoutingStatusLabel(routingRequest.v
 const routingPending = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status));
 const modeSession = computed(() => ({ sessionId: props.sessionId,
   assistantSelection: activeTask.value?.assistantSelection || props.assistantSelection,
+  agentSession: { goal: activeTask.value?.goal || null },
   metadata: activeTask.value?.routingMetadata || {} }));
 const activeTaskError = computed(() => {
   if (activeTask.value?.delivery.state.messages.some((message) => (
@@ -434,7 +440,7 @@ const activeTaskError = computed(() => {
   if (props.connectionUnavailable && activeTask.value?.errorCode === "vibe64_agent_write_mode_busy") {
     return "";
   }
-  return activeTask.value?.error;
+  return activeTask.value?.error || taskAccessReason(activeTask.value);
 });
 const updateRepairVisible = computed(() => temporary.open.value &&
   activeTask.value?.recoveryOperation === "update" && activeTask.value.recoveryOutcome !== "succeeded");
@@ -579,8 +585,17 @@ async function stopTask(taskId) {
   }
 }
 
+function taskAccessReason(task) {
+  if (!task) return "";
+  if (task.busy) return task.canSteer === false
+    ? "You cannot steer this turn's AI connection. You can send a new request when it finishes." : "";
+  const mode = JSON.parse(task.routingMetadata?.assistant_routing || "null")?.mode;
+  const decision = task.purposes?.[mode];
+  return decision?.available === false ? decision.message || "This mode is unavailable. Choose another chat mode." : "";
+}
+
 function taskInputDisabled(task) {
-  return props.repositoryBusy || task.status === "closing" || task.recoveryOutcome === "checking";
+  return props.repositoryBusy || task.status === "closing" || task.recoveryOutcome === "checking" || Boolean(taskAccessReason(task));
 }
 
 function taskPrompt(taskId = "") {
@@ -617,6 +632,7 @@ async function sendTask(taskId = "", options = {}) {
     return;
   }
   const task = temporary.tasks.value.find((task) => task.id === taskId);
+  if (!task || taskInputDisabled(task)) return;
   const attachmentIds = options.retryMessageId
     ? task.delivery.find(options.retryMessageId)?.payload.attachmentIds || []
     : task.attachments.map((attachment) => attachment.attachmentId);
@@ -781,7 +797,7 @@ defineExpose({
 }
 
 .vibe64-temporary-ai__tabs {
-  align-items: center;
+  align-items: flex-start;
   background: rgba(var(--v-theme-tertiary), 0.06);
   border-bottom: 1px solid rgba(var(--v-theme-tertiary), 0.18);
   display: flex;

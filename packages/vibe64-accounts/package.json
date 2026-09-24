@@ -13,7 +13,8 @@
     "./server/service": "./src/server/service.js",
     "./bin/claude-auth-browser": "./bin/claude-auth-browser",
     "./server/aiConnectionService": "./src/server/aiConnectionService.js",
-    "./server/aiConnectionRuntime": "./src/server/aiConnectionRuntime.js"
+    "./server/aiConnectionRuntime": "./src/server/aiConnectionRuntime.js",
+    "./server/assistantRoutingUpgrade": "./src/server/assistantRoutingUpgrade.js"
   },
   "jskit": {
     "kind": "runtime",

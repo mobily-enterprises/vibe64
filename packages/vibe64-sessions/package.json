@@ -19,7 +19,8 @@
         "runtime.http",
         "vibe64.project",
         "vibe64.source-editor",
-        "vibe64.terminals"
+        "vibe64.terminals",
+        "vibe64.accounts"
       ]
     },
     "runtime": {
@@ -57,6 +58,7 @@
     "@local/vibe64-runtime": "0.1.0",
     "@local/vibe64-terminals": "0.1.0",
     "json-rest-schema": "^1.0.17",
-    "@local/vibe64-source-editor": "0.1.0"
+    "@local/vibe64-source-editor": "0.1.0",
+    "@local/vibe64-accounts": "0.1.0"
   }
 }

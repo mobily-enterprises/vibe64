@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import {
   normalizeText,
@@ -37,6 +38,8 @@ const SESSION_UPDATE_TASK_ID = "update-session";
 const SESSION_RENEWAL_THREAD_UNREADABLE_CODE =
   "vibe64_session_renewal_thread_unreadable";
 const SESSION_RENEWAL_MANUAL_DRAFT_CODES = new Set([
+  "vibe64_assistant_owner_required",
+  "vibe64_assistant_connection_unavailable",
   SESSION_RENEWAL_THREAD_UNREADABLE_CODE,
   "vibe64_codex_app_server_start_failed",
   "vibe64_opencode_start_failed",
@@ -202,6 +205,7 @@ function sessionHasActiveAgentRun(session = {}) {
 
 function renewalAssistantSelectionMetadata(state = {}) {
   return {
+    [ASSISTANT_ROUTING_METADATA]: JSON.stringify(assistantRoutingPreferences(state.successor?.assistantRouting)),
     [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(
       state.successor?.assistantSelection
     )
@@ -387,7 +391,7 @@ function createSessionRenewalController({
   project,
   publishSessionChanged = async () => null,
   resolveRenewalActor = null,
-  resolveSuccessorAssistantSelection = null,
+  resolveSuccessorAssistant = null,
   setTimeoutFn = setTimeout,
   setupRunner,
   terminals,
@@ -397,8 +401,8 @@ function createSessionRenewalController({
     throw new TypeError("Session renewal requires project, terminal, and setup services.");
   }
   if (
-    resolveSuccessorAssistantSelection !== null &&
-    typeof resolveSuccessorAssistantSelection !== "function"
+    resolveSuccessorAssistant !== null &&
+    typeof resolveSuccessorAssistant !== "function"
   ) {
     throw new TypeError("Session renewal assistant selection resolver must be a function or null.");
   }
@@ -839,6 +843,7 @@ function createSessionRenewalController({
         ? {
             successor: {
               assistantSelection: current.successor?.assistantSelection,
+              assistantRouting: current.successor?.assistantRouting,
               attempt: Math.max(1, Number(current.successor?.attempt) || 1) + 1,
               replacementCeiling: Math.max(
                 2,
@@ -1877,6 +1882,7 @@ function createSessionRenewalController({
         status: SESSION_RENEWAL_STATUS.RUNNING,
         successor: {
           assistantSelection: current.successor?.assistantSelection,
+          assistantRouting: current.successor?.assistantRouting,
           attempt,
           replacementCeiling
         }
@@ -2412,13 +2418,13 @@ function createSessionRenewalController({
           );
         }
         const idleSession = await assertPredecessorIdle(runtime, sessionId);
-        if (typeof resolveSuccessorAssistantSelection !== "function") {
+        if (typeof resolveSuccessorAssistant !== "function") {
           throw new TypeError(
             "Session renewal requires an assistant selection resolver before confirmation."
           );
         }
-        const successorAssistantSelection = await resolveSuccessorAssistantSelection(
-          input.assistantSelection,
+        const successorAssistant = await resolveSuccessorAssistant(
+          { assistantSelection: input.assistantSelection, workflowEngineId: input.workflowEngineId },
           {
             session: idleSession,
             vibe64User: input.vibe64User || null
@@ -2467,7 +2473,7 @@ function createSessionRenewalController({
               stage: SESSION_RENEWAL_STAGE.OLD_QUIESCING,
               status: SESSION_RENEWAL_STATUS.RUNNING,
               successor: {
-                assistantSelection: successorAssistantSelection,
+                ...successorAssistant,
                 attempt: 1,
                 replacementCeiling: 2
               }

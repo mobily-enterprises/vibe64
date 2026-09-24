@@ -131,10 +131,10 @@
         <template #actions>
           <Vibe64TemporaryAiFixAction
             v-if="canResolveUpdateWithTemporaryAi && typeof dashboard.requestTemporaryAi === 'function'"
-            :disabled="resolvingUpdateProblem || dashboard.assistantDirectAllowed === false"
+            :disabled="resolvingUpdateProblem || dashboard.assistantCodeAllowed === false"
             :pending="resolvingUpdateProblem"
-            :title="dashboard.assistantDirectAllowed === false
-              ? dashboard.assistantRestrictionMessage
+            :title="dashboard.assistantCodeAllowed === false
+              ? dashboard.assistantCodeRestrictionMessage
               : 'Open temporary AI to resolve this repository update'"
             @click="resolveUpdateProblem"
           />
@@ -470,7 +470,6 @@ const repositoryOperationBusy = computed(() => Boolean(
 ));
 const saveWorkDisabled = computed(() => Boolean(
   repositoryOperationBusy.value ||
-  dashboard.value.assistantDirectAllowed === false ||
   updates.canonicalChangePending ||
   updates.error ||
   !updates.payload ||
@@ -481,9 +480,6 @@ const saveWorkDisabled = computed(() => Boolean(
   typeof dashboard.value.requestSaveWork !== "function"
 ));
 const saveWorkTitle = computed(() => {
-  if (dashboard.value.assistantDirectAllowed === false) {
-    return dashboard.value.assistantRestrictionMessage;
-  }
   if (sourceOperationsSuspended.value) {
     return "Session renewal is safely using this session’s source";
   }
@@ -675,7 +671,7 @@ function versionButtonLabel(version = {}, index = -1) {
 async function resolveUpdateProblem() {
   if (
     resolvingUpdateProblem.value ||
-    dashboard.value.assistantDirectAllowed === false ||
+    dashboard.value.assistantCodeAllowed === false ||
     typeof dashboard.value.requestTemporaryAi !== "function"
   ) {
     return false;

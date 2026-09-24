@@ -264,6 +264,7 @@ function createSessionActions({ sessions } = {}) {
       input: sessionRenewalConfirmationActionInputValidator,
       execute: (input, context) => sessions.confirmSessionRenewal(input.sessionId, {
         assistantSelection: input.assistantSelection,
+        ...(input.workflowEngineId ? { workflowEngineId: input.workflowEngineId } : {}),
         expectedHash: input.expectedHash,
         expectedRevision: input.expectedRevision,
         operationKey: input.operationKey,

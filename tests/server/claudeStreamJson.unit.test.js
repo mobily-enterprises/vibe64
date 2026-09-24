@@ -9,7 +9,6 @@ import { claudeCodeArguments, createClaudeCodeProcess } from "../../packages/vib
 import { readClaudeHistory } from "../../packages/vibe64-terminals/src/server/claudeConversationHistory.js";
 import { claudeCapabilities, claudePlanUsage, createClaudeSessionAgentProvider, nativeMessageId } from "../../packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js";
 import { sessionRenewalManualHandoverTemplate, sessionRenewalHandoverHash } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
-import { createNativeHelperModelStore } from "../../packages/vibe64-core/src/server/nativeHelperModel.js";
 import { readClaudeCodeAuthStatus } from "../../packages/studio-terminal-core/src/server/claudeRuntime.js";
 import { defineVibe64AssistantCapabilities } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
 
@@ -347,8 +346,9 @@ test("Claude admission inspection uses the shared contract and native history pr
   assert.equal(f.processes[0].lastInput, undefined);
 });
 
-test("Claude bounded helpers use Haiku without tools or the project's command environment", async (t) => {
+test("Claude bounded helpers use the selected Haiku without tools or the project's command environment", async (t) => {
   const f = await fixture(t);
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku" };
   const executionProfile = await f.provider.resolveExecutionProfile(f.context, { profileId: "economy", workloadId: "commit_title" });
   f.behavior.afterSend = (native) => native.options.onEvent({ type: "result", subtype: "success", result: "Fix the title", uuid: "title" });
   const result = await f.provider.runDetachedChatTurn(f.context, { prompt: "Write a title", executionProfile });
@@ -653,18 +653,17 @@ test("Claude goals use native commands, preserve the goal on pause and reject st
 
 test("Claude economy choices apply to new tasks without changing an already resolved task", async (t) => {
   const f = await fixture(t);
-  const store = createNativeHelperModelStore({ systemRoot: f.providerOptions.systemRoot, providerId: "claude" });
-  await store.write("sonnet");
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "sonnet" };
   const selected = await f.provider.resolveExecutionProfile(f.context, { profileId: "economy", workloadId: "commit_title" });
   assert.equal(selected.model, "sonnet");
   assert.equal(selected.thinking, "low");
-  await store.write("");
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku" };
   assert.equal((await f.provider.resolveExecutionProfile(f.context, { profileId: "economy", workloadId: "commit_title" })).model, "haiku");
   f.behavior.afterSend = (native) => native.options.onEvent({ type: "result", subtype: "success", result: "Title", uuid: "title" });
   await f.provider.runDetachedChatTurn(f.context, { prompt: "Write a title", executionProfile: selected });
   assert.equal(f.processes.at(-1).options.model, "sonnet");
   assert.equal(f.processes.at(-1).options.toolFree, true);
-  await store.write("unavailable");
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "unavailable" };
   await assert.rejects(f.provider.resolveExecutionProfile(f.context, { profileId: "economy", workloadId: "commit_title" }), /helper model is unavailable/u);
 });
 
@@ -732,6 +731,64 @@ test("temporary Claude accepts active-turn steering in its existing native conve
 });
 
 
+test("Claude shared API access requires native verification and reports connection identity without inference", async (t) => {
+  const f = await fixture(t);
+  const native = await f.provider.assistantAccess(f.context);
+  assert.equal(native.ownerOnly, true);
+  assert.equal(native.available, true);
+  assert.match(native.connectionIdentity, /^sha256:[a-f0-9]{64}$/);
+  f.behavior.account.email = "different@example.test";
+  assert.notEqual((await f.provider.assistantAccess(f.context)).connectionIdentity, native.connectionIdentity);
+  for (const providerId of ["deepseek", "zai-coding-plan"]) {
+    const root = path.join(f.providerOptions.systemRoot, "ai-connections", "codex", providerId);
+    await mkdir(path.join(root, "auth", "codex"), { recursive: true });
+    await writeFile(path.join(root, "connection.json"), JSON.stringify({ apiKey: "private-key", claudeReady: false }));
+    await writeFile(path.join(root, "auth", "codex", "status.json"), JSON.stringify({ connected: true, generation: "fixture-generation" }));
+    const context = { ...f.context, assistantSelection: { ...f.context.assistantSelection, modelProviderId: providerId } };
+    const unchecked = await f.provider.assistantAccess(context);
+    assert.equal(unchecked.available, false, "Codex key verification does not prove the Claude endpoint works");
+    assert.equal(unchecked.ownerOnly, providerId !== "deepseek");
+    await writeFile(path.join(root, "connection.json"), JSON.stringify({ apiKey: "private-key", claudeReady: true }));
+    const verified = await f.provider.assistantAccess(context);
+    assert.equal(verified.available, true);
+    assert.equal(verified.connectionIdentity, `curated:${providerId}:fixture-generation`);
+    assert.doesNotMatch(JSON.stringify(verified), /private-key/);
+    const catalog = await f.provider.capabilities(context, { modelProviderId: providerId });
+    assert.equal(catalog.modelProviders.find(({ id }) => id === providerId).connected, true);
+  }
+  assert.equal(f.processes.length, 0, "access facts and external catalogues do not start an inference process");
+});
+
+test("scoped Claude helpers use the resolved model and can stop while main chat continues", async (t) => {
+  const f = await fixture(t);
+  await f.provider.sendMessage(f.context, { message: "Main task", messageId: "main-task" });
+  const main = f.processes[0];
+  const original = structuredClone(f.context.session);
+  const context = { assistantSelection: f.context.assistantSelection, sessionId: "router_job",
+    assistantScope: { id: "router_job", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "helper-runtime"),
+      stableContext: "Classify only the supplied text." } };
+  const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "economy", workloadId: "request_routing" });
+  assert.equal(executionProfile.model, f.context.assistantSelection.modelId);
+  assert.equal(executionProfile.thinking, "low");
+  const { conversationId } = await f.provider.createConversation(context, { ephemeral: true, executionProfile });
+  await f.provider.startConversationTurn(context, { conversationId, executionProfile, message: "Classify", messageId: "helper-turn" });
+  const helper = f.processes.at(-1);
+  assert.notEqual(helper, main);
+  assert.equal(helper.options.toolFree, true);
+  assert.equal(helper.options.model, executionProfile.model);
+  assert.equal(helper.options.effort, "low");
+  assert.equal(helper.options.systemPrompt, context.assistantScope.stableContext);
+  assert.equal(helper.options.appendSystemPrompt, undefined);
+  await f.provider.stopConversation(context, { conversationId });
+  assert.equal(helper.stopped, true);
+  assert.equal(main.stopped, false);
+  await f.provider.deleteConversation(context, { conversationId });
+  assert.deepEqual(f.context.session, original);
+  const continued = await f.provider.sendMessage(f.context, { message: "Continue main", messageId: "main-steer", steer: true });
+  assert.equal(continued.ok, true);
+  assert.equal(main.lastInput.message, "Continue main");
+});
+
 test("Claude changes provider controls before model and keeps the native conversation", async (t) => {
   const f = await fixture(t);
   const home = path.join(f.providerOptions.systemRoot, "ai-connections", "codex", "deepseek");
@@ -769,4 +826,35 @@ test("Claude does not send when a provider-settings acknowledgement fails", asyn
   await assert.rejects(f.provider.sendMessage(f.context, { message: "Second", messageId: "second" }), /Settings rejected/);
   assert.equal(native.lastInput.messageId, nativeMessageId("first"));
   assert.equal(native.stopped, true);
+});
+
+test("scoped Claude helper cleanup recovers the captured managed process after restart", async (t) => {
+  const f = await fixture(t);
+  let captured;
+  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions, async createProcess(options) {
+    const native = await f.providerOptions.createProcess(options);
+    await options.onStarted?.(native.executionId);
+    return native;
+  } });
+  const context = { assistantSelection: f.context.assistantSelection, sessionId: "router_cleanup",
+    assistantScope: { id: "router_cleanup", environment: {}, workdir: path.join(f.root, "work"), runtimeRoot: path.join(f.root, "runtime"),
+      stableContext: "Classify only the supplied text." },
+    async onEvent(event) { if (event.type === "helper-execution") captured = event; } };
+  const executionProfile = await provider.resolveExecutionProfile(context, { profileId: "economy", workloadId: "request_routing" });
+  const created = await provider.createConversation(context, { ephemeral: true, executionProfile });
+  await provider.startConversationTurn(context, { conversationId: created.conversationId, executionProfile, message: "Classify", messageId: "helper-turn" });
+  assert.equal(captured.conversationId, created.conversationId);
+  assert.equal(captured.executionId, f.processes.at(-1).executionId);
+  const stopped = [];
+  let confirmStop = false;
+  const restarted = createClaudeSessionAgentProvider({ ...f.providerOptions, async stopExecution(id) {
+    stopped.push(id);
+    return { scopeEmpty: confirmStop };
+  } });
+  const input = { conversationId: captured.conversationId, cleanupExecutionId: captured.executionId };
+  await assert.rejects(restarted.deleteConversation(context, input), /exit has not been confirmed/);
+  confirmStop = true;
+  assert.equal((await restarted.deleteConversation(context, input)).deleted, true);
+  assert.deepEqual(stopped, [captured.executionId, captured.executionId]);
+  assert.equal(f.context.session.metadata[`claude_conversation_${captured.conversationId}`], undefined);
 });

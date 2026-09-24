@@ -3,15 +3,12 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDisplay } from "vuetify";
 import CodexProviderConnections from "./CodexProviderConnections.vue";
-import HelperModelSettings from "./HelperModelSettings.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
 import ProviderAccountsSetup from "./ProviderAccountsSetup.vue";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
 import { useVibe64Accounts } from "../composables/useVibe64Accounts.js";
 import {
-  AI_CONNECTIONS_ENDPOINT,
-  VIBE64_ACCOUNTS_CHANGED_EVENT,
-  VIBE64_CONNECTIONS_CHANGED_EVENT
+  AI_CONNECTIONS_ENDPOINT
 } from "../lib/accountsGateApi.js";
 import {
   mdiAccountCircleOutline,
@@ -74,6 +71,7 @@ const editorOpen = ref(false);
 const routingOpen = ref(false);
 const routingSaving = ref(false);
 const editorRoutingPending = ref(false);
+const editorRoutingSetupError = ref("");
 const nativeRoutingReady = ref(false);
 const editorOrigin = ref("direct");
 const editorStarter = ref(null);
@@ -197,7 +195,7 @@ const configuredAiRows = computed(() => [
     kind: "claude",
     keyHint: "Connected",
     managementUrl: "https://claude.ai/settings/billing",
-    modelLabel: "Choose model and effort for each session · Configurable helper model",
+    modelLabel: "Choose model roles in Model routing",
     providerLabel: "Anthropic"
   }] : []),
   ...codexProviders.connections.value.filter((connection) => connection.status !== "not_connected").map((connection) => {
@@ -223,7 +221,7 @@ const configuredAiRows = computed(() => [
         ? "GLM-4.7 Flash is ready for new sessions"
         : connection.id === "opencode"
           ? "Zen key ready; choose model access below"
-        : `Helper model: ${connection.helperModelId || connection.economyModelId}`,
+        : "Choose model roles in Model routing",
     providerLabel: connection.productLabel || connection.label
   }))
 ]);
@@ -593,6 +591,7 @@ async function saveEditor() {
     return;
   }
   if (response?.ok !== false) {
+    editorRoutingSetupError.value = response?.routing?.ok === false ? response.routing.error : "";
     editorApiKey.value = "";
     editorApiKeyVisible.value = false;
     editorRoutingPending.value = true;
@@ -920,14 +919,6 @@ defineExpose({ openProvider });
                 </div>
 
                 <div class="vibe64-ai-connections__row-actions">
-                  <HelperModelSettings
-                    v-if="account.kind !== 'codex-provider'"
-                    :provider-id="account.kind"
-                    :account-label="account.kind === 'codex' ? 'Codex' : account.kind === 'claude' ? 'Claude Code' : account.providerLabel"
-                    :disabled="!isOwner"
-                    :endpoint="['codex', 'claude'].includes(account.kind) ? undefined : `${endpoint}/${encodeURIComponent(account.id)}/helper-model`"
-                    :changed-event="['codex', 'claude'].includes(account.kind) ? VIBE64_ACCOUNTS_CHANGED_EVENT : VIBE64_CONNECTIONS_CHANGED_EVENT"
-                  />
                   <v-btn
                     v-if="account.managementUrl"
                     :append-icon="mdiOpenInNew"
@@ -1260,7 +1251,7 @@ defineExpose({ openProvider });
     >
       <v-card :rounded="smAndDown ? 0 : 'xl'">
         <v-card-text class="vibe64-codex-setup__body">
-          <ModelRoutingForm v-if="nativeRoutingReady" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
+          <ModelRoutingForm v-if="nativeRoutingReady" :engine-id="nativeSetupProviderId" :connection-id="nativeSetupProviderId === 'codex' ? 'openai' : 'anthropic'" :connection-engines="[nativeSetupProviderId]" :connection-label="nativeSetupProviderId === 'codex' ? 'GPT' : 'Claude'" :setup-error="nativeSetupAccount?.routing?.ok === false ? nativeSetupAccount.routing.error : ''" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
           <CodexProviderConnections
             v-else-if="nativeSetupProviderId === 'codex'"
             v-model="codexModelProviderId"
@@ -1324,7 +1315,7 @@ defineExpose({ openProvider });
         </v-card-title>
 
         <v-card-text v-if="editorRoutingPending">
-          <ModelRoutingForm :connection-id="editorProviderId" :connection-label="editorLabel" @busy="routingSaving = $event" @close="finishConnectionRouting" @saved="finishConnectionRouting" />
+          <ModelRoutingForm :connection-id="editorProviderId" :connection-label="editorLabel" :connection-engines="['opencode']" :setup-error="editorRoutingSetupError" @busy="routingSaving = $event" @close="finishConnectionRouting" @saved="finishConnectionRouting" />
         </v-card-text>
         <v-card-text v-else-if="catalogPreparationError" class="vibe64-provider-editor__body">
           <v-alert

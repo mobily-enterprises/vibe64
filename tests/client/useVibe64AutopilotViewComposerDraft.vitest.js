@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { sessionRepositoryWorkState } from "../../src/composables/useVibe64SessionPanel.js";
 import { createVibe64SessionRepositoryStatusQueue } from "../../src/composables/useVibe64SessionRepositoryStatusRegistry.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
 const route = reactive({
   path: "/app/project/chat-test/dashboard/env"
@@ -97,12 +98,15 @@ async function createViewWithProps(overrides = {}, options = {}) {
   const emit = options.emit || vi.fn();
   const viewOptions = { ...options };
   delete viewOptions.emit;
+  delete viewOptions.viewer;
   const scope = effectScope();
   viewScopes.add(scope);
   const app = createApp({});
+  if (options.viewer) app.provide(VIBE64_ASSISTANT_VIEWER_KEY, options.viewer);
   return {
     emit,
     props,
+    scope,
     view: app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, emit, viewOptions)))
   };
 }
@@ -121,7 +125,8 @@ function memoryStorage() {
   const values = new Map();
   return {
     getItem: (key) => values.get(String(key)) ?? null,
-    setItem: (key, value) => values.set(String(key), String(value))
+    setItem: (key, value) => values.set(String(key), String(value)),
+    removeItem: (key) => values.delete(String(key))
   };
 }
 
@@ -137,6 +142,183 @@ describe("useVibe64AutopilotView direct chat", () => {
     router.push.mockReset();
     router.replace.mockReset();
     accountMocks.useVibe64Accounts.mockReset().mockReturnValue({ status: ref(null) });
+  });
+
+  it("keeps a pre-admission failure across reload and retries its original message id", async () => {
+    vi.stubGlobal("window", { sessionStorage: memoryStorage() });
+    const failedSend = vi.fn().mockRejectedValue(new Error("Router unavailable"));
+    const first = await createViewWithProps({ sendAgentMessage: failedSend });
+    first.view.composerDraft.value = "Keep this request.";
+    await expect(first.view.submitComposerMessage()).resolves.toBe(false);
+    const submitted = failedSend.mock.calls[0][0];
+    first.scope.stop();
+    const recovered = await createViewWithProps();
+    expect(recovered.view.chatTurns.value[0]).toMatchObject({
+      user: { text: "Keep this request.", messageId: submitted.messageId },
+      optimistic: { status: "failed", error: "Router unavailable" }
+    });
+    expect(recovered.props.sendAgentMessage).not.toHaveBeenCalled();
+    await expect(recovered.view.resendOptimisticMessage(submitted.messageId)).resolves.toBe(true);
+    expect(recovered.props.sendAgentMessage).toHaveBeenCalledWith(submitted);
+    recovered.props.conversationLog.turns = [{ user: { text: "Keep this request.", messageId: submitted.messageId } }];
+    await nextTick();
+    recovered.scope.stop();
+    expect((await createView()).chatTurns.value).toEqual([]);
+  });
+
+  it("recovers an unconfirmed send without resending and lets the durable route own its state", async () => {
+    vi.stubGlobal("window", { sessionStorage: memoryStorage() });
+    const delivery = deferredResult();
+    const first = await createViewWithProps({ sendAgentMessage: vi.fn(() => delivery.promise) });
+    first.view.composerDraft.value = "Still routing.";
+    const sending = first.view.submitComposerMessage();
+    const messageId = first.props.sendAgentMessage.mock.calls[0][0].messageId;
+    first.scope.stop();
+    const recovered = await createViewWithProps();
+    expect(recovered.view.chatTurns.value[0].optimistic).toMatchObject({ status: "failed" });
+    expect(recovered.props.sendAgentMessage).not.toHaveBeenCalled();
+    recovered.props.session.metadata.assistant_routing_request = JSON.stringify({
+      messageId, status: "routing", input: { message: "Still routing." }, assignments: {}
+    });
+    expect(recovered.view.chatTurns.value[0].optimistic.status).toBe("pending");
+    expect(await recovered.view.resendOptimisticMessage(messageId)).toBe(false);
+    delivery.resolve(true);
+    await sending;
+  });
+
+  it("keeps recovery messages separate across sessions and authenticated actors", async () => {
+    vi.stubGlobal("window", { sessionStorage: memoryStorage() });
+    const viewer = ref({ actorKey: "owner" });
+    const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn().mockResolvedValue(false) }, { viewer });
+    view.composerDraft.value = "Owner private draft.";
+    await view.submitComposerMessage();
+    props.session = { ...props.session, sessionId: "session-2" };
+    await nextTick();
+    expect(view.chatTurns.value).toEqual([]);
+    props.session = { ...props.session, sessionId: "session-1" };
+    await nextTick();
+    expect(view.chatTurns.value[0].user.text).toBe("Owner private draft.");
+    viewer.value = { actorKey: "member" };
+    await nextTick();
+    expect(view.chatTurns.value).toEqual([]);
+    view.composerDraft.value = "Member draft.";
+    await view.submitComposerMessage();
+    viewer.value = { actorKey: "owner" };
+    await nextTick();
+    expect(view.chatTurns.value.map((turn) => turn.user.text)).toEqual(["Owner private draft."]);
+    viewer.value = null;
+    await nextTick();
+    expect(view.chatTurns.value).toEqual([]);
+  });
+
+  it("returns a cancelled Router request to the draft without losing new text or retrying its id", async () => {
+    const delivery = deferredResult();
+    const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn(() => delivery.promise) });
+    view.composerDraft.value = "  Original prompt.  ";
+    view.composerAttachments.value = [{ attachmentId: "image-1", name: "layout.png" }];
+    const sending = view.submitComposerMessage();
+    const messageId = props.sendAgentMessage.mock.calls[0][0].messageId;
+    view.composerDraft.value = "New text.";
+    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "cancelled", helper: null });
+    await nextTick();
+    expect(view.composerDraft.value).toBe("Original prompt.\n\nNew text.");
+    delivery.reject(Object.assign(new Error("Routing cancelled."), { code: "vibe64_assistant_routing_cancelled" }));
+    await expect(sending).resolves.toBe(false);
+    expect(view.chatTurns.value).toEqual([]);
+    expect(view.composerAttachments.value[0].attachmentId).toBe("image-1");
+    expect(props.sendAgentMessage).toHaveBeenCalledOnce();
+    props.sendAgentMessage.mockResolvedValue(true);
+    await expect(view.submitComposerMessage()).resolves.toBe(true);
+    expect(props.sendAgentMessage.mock.calls[1][0].messageId).not.toBe(messageId);
+  });
+
+  it("recovers a cancelled Router draft after reload even when its cancellation event was missed", async () => {
+    vi.stubGlobal("window", { sessionStorage: memoryStorage() });
+    const first = await createViewWithProps({ sendAgentMessage: vi.fn().mockRejectedValue(new Error("Internal server error")) });
+    first.view.composerDraft.value = "Keep the stopped request.";
+    await first.view.submitComposerMessage();
+    const messageId = first.props.sendAgentMessage.mock.calls[0][0].messageId;
+    first.scope.stop();
+    const recovered = await createViewWithProps();
+    recovered.props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "cancelled", helper: null });
+    await nextTick();
+    expect(recovered.view.composerDraft.value).toBe("Keep the stopped request.");
+    expect(recovered.view.chatTurns.value).toEqual([]);
+    expect(recovered.props.sendAgentMessage).not.toHaveBeenCalled();
+  });
+
+  it.each([{ helper: { conversationId: "helper-1" } }, { attemptedMessageId: "native-attempt" }])(
+    "keeps a cancelled request's error when cleanup or delivery is unresolved: %j", async (pending) => {
+      const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn().mockRejectedValue(new Error("Check this request")) });
+      view.composerDraft.value = "Unresolved request.";
+      await view.submitComposerMessage();
+      const messageId = props.sendAgentMessage.mock.calls[0][0].messageId;
+      props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "cancelled", ...pending });
+      await nextTick();
+      expect(view.composerDraft.value).toBe("");
+      expect(view.chatTurns.value[0].optimistic).toMatchObject({ status: "failed", error: "Check this request" });
+    }
+  );
+
+  it("lets explicit Cancel discard a failed routing bubble without restoring its draft", async () => {
+    const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn().mockRejectedValue(new Error("Router failed")) });
+    view.composerDraft.value = "Discard this.";
+    await view.submitComposerMessage();
+    const messageId = props.sendAgentMessage.mock.calls[0][0].messageId;
+    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "failed", input: { message: "Discard this." } });
+    props.interruptAgentTurn.mockImplementation(async () => {
+      props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "cancelled", helper: null });
+      await nextTick();
+      return true;
+    });
+    await expect(view.cancelOptimisticMessage(messageId)).resolves.toBe(true);
+    expect(view.composerDraft.value).toBe("");
+    expect(view.chatTurns.value).toEqual([]);
+  });
+
+  it("keeps delivery usable when browser session storage is blocked", async () => {
+    vi.stubGlobal("window", { get sessionStorage() { throw new Error("Storage blocked"); } });
+    const { view, props } = await createViewWithProps();
+    view.composerDraft.value = "Send without storage.";
+    await expect(view.submitComposerMessage()).resolves.toBe(true);
+    expect(props.sendAgentMessage).toHaveBeenCalledOnce();
+  });
+
+  it("restores unsent text and uploaded attachment references without sharing them across sessions", async () => {
+    vi.stubGlobal("window", { sessionStorage: memoryStorage() });
+    const first = await createViewWithProps();
+    first.view.composerDraft.value = "  Keep whitespace\n\nand this draft.  ";
+    first.view.composerAttachments.value = [{ attachmentId: "uploaded-image", name: "layout.png" }, { name: "still-uploading.png" }];
+    first.scope.stop();
+    const recovered = await createViewWithProps();
+    expect(recovered.view.composerDraft.value).toBe("  Keep whitespace\n\nand this draft.  ");
+    expect(recovered.view.composerAttachments.value).toEqual([{ attachmentId: "uploaded-image", name: "layout.png" }]);
+    expect(recovered.props.sendAgentMessage).not.toHaveBeenCalled();
+    recovered.props.session = { ...recovered.props.session, sessionId: "another-session" };
+    await nextTick();
+    expect(recovered.view.composerDraft.value).toBe("");
+    expect(recovered.view.composerAttachments.value).toEqual([]);
+    recovered.props.session = { ...recovered.props.session, sessionId: "session-1" };
+    await nextTick();
+    expect(recovered.view.composerDraft.value).toBe("  Keep whitespace\n\nand this draft.  ");
+  });
+
+  it("does not restore the previous actor's failed steering into the next actor's composer", async () => {
+    vi.stubGlobal("window", { sessionStorage: memoryStorage() });
+    const viewer = ref({ actorKey: "owner" });
+    const delivery = deferredResult();
+    const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn(() => delivery.promise) }, { viewer });
+    props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
+    view.composerDraft.value = "Owner steering.";
+    const sending = view.submitComposerMessage();
+    viewer.value = { actorKey: "member" };
+    await nextTick();
+    view.composerDraft.value = "Member draft.";
+    await expect(sending).resolves.toBe(false);
+    delivery.reject(new Error("Disconnected"));
+    await nextTick();
+    expect(view.composerDraft.value).toBe("Member draft.");
+    expect(view.chatTurns.value).toEqual([]);
   });
 
   it("starts subsystem map work in a temporary task and preserves the main draft", async () => {
@@ -161,6 +343,64 @@ describe("useVibe64AutopilotView direct chat", () => {
       id: "other-task", sessionId: "session-2", dedupeKey: "subsystem-map:session-2", status: "completed"
     });
     expect(view.systemReloadVersion.value).toBe(1);
+  });
+
+  it("uses Code availability for generated work while the main personal chat is restricted", async () => {
+    const canCode = ref(true);
+    const requestTemporaryAi = vi.fn(async () => ({ ok: true, taskId: "shared-code-task" }));
+    const { view, props } = await createViewWithProps({ session: { ...viewProps().session,
+      workspaceSetup: { status: "failed", diagnostic: "Install failed." }
+    } }, { assistantCanUseAi: ref(false), assistantCanUseCode: canCode, requestTemporaryAi });
+    view.composerDraft.value = "Keep my draft.";
+    expect(view.assistantDirectAllowed.value).toBe(false);
+    expect(view.workspaceSetupAskDisabled.value).toBe(false);
+    expect(await view.askCodexToFixWorkspaceSetup()).toBe(true);
+    expect(await view.askCodexToFixPreviewIdentity({ error: "Login failed." })).toBe(true);
+    expect(await view.fixRepositoryError({ error: "Conflict" })).toBe(true);
+    expect(await view.describeSubsystems()).toBe(true);
+    expect(requestTemporaryAi).toHaveBeenCalledTimes(4);
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    expect(view.composerDraft.value).toBe("Keep my draft.");
+    canCode.value = false;
+    expect(view.workspaceSetupAskDisabled.value).toBe(true);
+    expect(await view.askCodexToFixPreviewIdentity({ error: "Login failed." })).toBe(false);
+    expect(await view.fixRepositoryError({ error: "Conflict" })).toBe(false);
+    expect(await view.describeSubsystems()).toBe(false);
+    expect(requestTemporaryAi).toHaveBeenCalledTimes(4);
+  });
+
+  it("checks the native connection for the AI terminal independently of routed chat access", async () => {
+    const canChat = ref(true);
+    const canNative = ref(false);
+    const { view } = await createViewWithProps({}, { assistantCanUseAi: canChat, assistantCanUseNative: canNative });
+    const terminal = () => view.sessionToolControls.value.find((tool) => tool.id === "ai-terminal");
+    expect(terminal().disabled).toBe(true);
+    expect(terminal().title).toContain("current connection");
+    canChat.value = false;
+    canNative.value = true;
+    expect(terminal().disabled).not.toBe(true);
+  });
+
+  it.each(["restricted", "unavailable", "failed"])("allows a resolved idle chat route when the previous native connection is %s", async (status) => {
+    const canRoute = ref(true);
+    const { props, view } = await createViewWithProps({ agentConnectionStatus: status }, {
+      assistantCanUseAi: ref(true), assistantCanRouteChat: canRoute, assistantCanUseNative: ref(false)
+    });
+    view.composerDraft.value = "Implement through my shared Code destination.";
+    expect(view.composerCanSubmit.value).toBe(true);
+    expect(view.composerSubmitMode.value).toBe("send");
+    expect(view.connectionRecoveryVisible.value).toBe(false);
+    expect(view.thinkingVisible.value).toBe(false);
+    expect(view.sessionToolControls.value.find((tool) => tool.id === "ai-terminal").disabled).toBe(true);
+    canRoute.value = false;
+    expect(view.composerCanSubmit.value).toBe(false);
+    canRoute.value = true;
+    props.session.agentSession = { turn: { active: true, id: "native-turn", state: "active" } };
+    expect(view.composerCanSubmit.value).toBe(false);
+    props.session.agentSession.turn.active = false;
+    await view.submitComposerMessage();
+    expect(props.sendAgentMessage).toHaveBeenCalledOnce();
+    expect(props.sendAgentMessage.mock.calls[0][0].submissionKind).toBe("send");
   });
 
   it("does not start subsystem map work without assistant access", async () => {
@@ -484,7 +724,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.thinkingVisible.value).toBe(false);
     expect(view.composerSubmitLabel.value).toBe("Connect AI");
     expect(view.composerCanSubmit.value).toBe(false);
-    expect(view.saveWorkTitle.value).toBe("Connect your AI account before saving or updating");
+    expect(view.saveWorkTitle.value).not.toContain("Connect your AI account");
     await view.submitComposerMessage();
     expect(props.sendAgentMessage).not.toHaveBeenCalled();
     props.session.assistantSelection = { engineId: "opencode" };
@@ -1619,7 +1859,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const failedMessageId = view.chatTurns.value.at(-1).optimistic.id;
     view.composerDraft.value = "New thought typed while delivery was pending.";
 
-    expect(view.editOptimisticMessage(failedMessageId)).toBe(true);
+    expect(await view.editOptimisticMessage(failedMessageId)).toBe(true);
     expect(view.composerDraft.value).toBe(
       "First message.\n\nNew thought typed while delivery was pending."
     );
@@ -1647,7 +1887,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     await expect(submission).resolves.toBe(false);
     const failedMessageId = view.chatTurns.value.at(-1).optimistic.id;
 
-    expect(view.editOptimisticMessage(failedMessageId)).toBe(true);
+    expect(await view.editOptimisticMessage(failedMessageId)).toBe(true);
     expect(view.composerDraft.value).toBe("Failed steer.\n\nNew suffix.");
   });
 
@@ -2178,7 +2418,17 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkOutput.value).toBe("");
   });
 
-  it.each(["initializing", "reconciling", "disconnected", "unknown", "failed"])("blocks Save and Update while the assistant connection is %s", async (connectionStatus) => {
+  it.each(["restricted", "unavailable", "failed"])("allows native Save when AI access is %s and no turn is running", async (connectionStatus) => {
+    const { props, view } = await createViewWithProps({ agentConnectionStatus: connectionStatus,
+      workState: { unsaved: true } }, { assistantCanUseAi: ref(false), assistantCanUseCode: ref(false) });
+    expect(view.saveWorkDisabled.value).toBe(false);
+    expect(view.requestSaveWork()).toBe(true);
+    await view.confirmSaveWork();
+    expect(props.saveSessionWork).toHaveBeenCalledOnce();
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+  });
+
+  it.each(["initializing", "reconciling", "disconnected", "unknown"])("blocks Save and Update while assistant activity is unsettled (%s)", async (connectionStatus) => {
     const { props, view } = await createViewWithProps({
       agentConnectionStatus: connectionStatus,
       workState: { unsaved: true }

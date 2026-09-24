@@ -102,6 +102,7 @@ async function controllerHarness({
   const systemMessages = [];
   const metadataWrites = [];
   const agentRunEvents = [];
+  const agentRuns = new Map();
   const renderPromptCalls = [];
   let runStartedAt = "";
   let queuedMessagesErrorAfterPrompt = messagesErrorAfterPrompt;
@@ -119,6 +120,7 @@ async function controllerHarness({
       return { prompt: `GENESIS ${input.task}: ${input.request}` };
     },
     store: {
+      async readAgentRun(sessionId, id) { return structuredClone(agentRuns.get(`${sessionId}:${id}`) || null); },
       readConversationStream: streams.read,
       updateConversationStream: streams.update,
       completeConversationStreamMessage: streams.complete,
@@ -137,12 +139,14 @@ async function controllerHarness({
           }
         };
       },
-      async writeAgentRunEvent(_sessionId, id, input = {}) {
+      async writeAgentRunEvent(sessionId, id, input = {}) {
         const updatedAt = new Date().toISOString();
         runStartedAt ||= updatedAt;
-        const state = input.patch?.state || input.event?.state || "active";
+        const previous = agentRuns.get(`${sessionId}:${id}`);
+        const state = input.patch?.state || input.event?.state || previous?.state || "active";
         const active = state === "active";
         const run = {
+          ...previous,
           ...input.patch,
           active,
           ...(active ? {} : { finishedAt: updatedAt }),
@@ -152,6 +156,7 @@ async function controllerHarness({
           updatedAt
         };
         agentRunEvents.push({ input, run });
+        agentRuns.set(`${sessionId}:${id}`, structuredClone(run));
         return run;
       },
       async writeConversationAssistantMessage(_sessionId, input) {

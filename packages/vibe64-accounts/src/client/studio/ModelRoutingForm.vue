@@ -1,133 +1,266 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useDisplay } from "vuetify";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { ASSISTANT_MODES, ASSISTANT_ROUTING_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
+import { defineVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
+import { ASSISTANT_ROUTING_ASSIGNMENTS, ASSISTANT_ROUTING_ROLE_DEFINITIONS } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useModelRouting } from "../composables/useModelRouting.js";
 import { ACCOUNTS_ENDPOINT } from "../lib/accountsGateApi.js";
 
-const props = defineProps({ connectionId: { type: String, default: "" }, connectionLabel: { type: String, default: "" }, readonly: Boolean });
+const props = defineProps({ connectionId: { type: String, default: "" }, connectionLabel: { type: String, default: "" },
+  connectionEngines: { type: Array, default: () => [] }, setupError: { type: String, default: "" },
+  engineId: { type: String, default: "" }, readonly: Boolean });
 const emit = defineEmits(["close", "saved", "busy"]);
-const { resource, engines, loadError } = useModelRouting();
+const { smAndDown } = useDisplay();
+const { resource, engines, scopeKey, loadError: resourceError } = useModelRouting();
+const refreshError = ref("");
+const loadError = computed(() => resourceError.value || refreshError.value);
 const draft = ref({});
 const baseRevision = ref(null);
-const selectedEngine = ref("");
+const selectedEngine = ref(props.engineId);
 const proposals = ref([]);
+const customizing = ref(false);
 const saving = ref(false);
-const saveError = ref("");
-const roleDefinitions = ASSISTANT_MODES.filter(({ id }) => ASSISTANT_ROUTING_ROLES.includes(id));
+const fieldErrors = ref({});
+const reviewedHelpers = ref([]);
+const preview = ref(null);
+const previewPending = ref(false);
+const previewError = ref("");
+const audience = ref("owner");
+const retryPreview = ref(0);
+const refreshingConnection = ref(Boolean(props.connectionId));
+let savedPayload = "";
+let savedAssignments = {};
+let hydratedDraft = "";
+const draftSnapshot = () => JSON.stringify({ draft: draft.value, proposals: proposals.value,
+  reviewedHelpers: reviewedHelpers.value, customizing: customizing.value });
+const canEdit = computed(() => !props.readonly && resource.data.value?.canConfigure === true);
+const proposalMode = computed(() => Boolean(props.connectionId) && !customizing.value);
 const engine = computed(() => engines.value.find(({ engineId }) => engineId === selectedEngine.value));
 const stale = computed(() => baseRevision.value !== null && resource.data.value?.revision !== baseRevision.value);
-const suggestedChanges = computed(() => engines.value.flatMap((item) => {
-  const role = item.roles.code;
-  const candidate = item.choices.find((choice) => choice.modelProviderId === props.connectionId &&
-    choice.modelId === role.recommendation?.modelId);
-  if (!candidate || role.assignment?.modelProviderId === props.connectionId && role.assignment.modelId === candidate.modelId) return [];
-  return [{ ...item, candidate, previous: role.assignment, proposed: role.recommendation }];
-}));
-
+const roles = [...ASSISTANT_ROUTING_ROLE_DEFINITIONS, { id: "sharedBackup", label: "Shared backup",
+  description: "Used when a collaborator cannot use a personal connection. Never used for outages or quota errors." }];
+const previewRows = [{ id: "plan", label: "Plan" }, { id: "code", label: "Code" }, { id: "review", label: "Review after coding" },
+  { id: "economy", label: "Economy chat" }, { id: "prompt_hint", label: "Suggestions and helpers" },
+  { id: "request_routing", label: "Router" }, { id: "auto", label: "Auto" }];
+function choiceId(selection) { return selection ? JSON.stringify([selection.engineId, selection.modelProviderId, selection.modelId]) : ""; }
+function sameChoice(left, right) { return choiceId(left) === choiceId(right) && left?.variantId === right?.variantId && left?.agentId === right?.agentId; }
+const suggestedChanges = computed(() => engines.value
+  .filter((item) => item.roles.plan.recommendation && item.roles.code.recommendation)
+  .flatMap((item) => ASSISTANT_ROUTING_ASSIGNMENTS.flatMap((role) => {
+  const { assignment, recommendation } = item.roles[role];
+  if (!recommendation || recommendation.modelProviderId !== props.connectionId ||
+      props.connectionEngines.length && !props.connectionEngines.includes(recommendation.engineId) || sameChoice(assignment, recommendation)) return [];
+  return [{ id: `${item.engineId}:${role}`, engineId: item.engineId,
+    role, label: roles.find(({ id }) => id === role).label, previous: assignment, proposed: recommendation }];
+})));
+function payload() {
+  const orchestrators = JSON.parse(JSON.stringify(draft.value));
+  if (proposalMode.value) for (const proposal of suggestedChanges.value) {
+    if (proposals.value.includes(proposal.id)) orchestrators[proposal.engineId][proposal.role] = proposal.proposed;
+  }
+  const changes = Object.fromEntries(Object.entries(orchestrators).map(([engineId, assignments]) => [engineId,
+    Object.fromEntries(Object.entries(assignments).filter(([role, selection]) => !sameChoice(selection, savedAssignments[engineId]?.[role])))
+  ]).filter(([, assignments]) => Object.keys(assignments).length));
+  return { revision: baseRevision.value, orchestrators: changes, reviewedHelperWorkflows: reviewedHelpers.value };
+}
 function hydrate(data) {
   if (!data?.ok) return;
   baseRevision.value = data.revision;
   draft.value = Object.fromEntries(data.engines.map((item) => [item.engineId,
-    Object.fromEntries(ASSISTANT_ROUTING_ROLES.map((role) => [role,
-      item.roles[role].assignment || (!props.connectionId ? item.roles[role].recommendation : null)]))]));
+    Object.fromEntries(ASSISTANT_ROUTING_ASSIGNMENTS.map((role) => [role, item.roles[role].assignment || null]))]));
+  reviewedHelpers.value = [];
+  fieldErrors.value = {};
+  savedAssignments = JSON.parse(JSON.stringify(draft.value));
+  savedPayload = JSON.stringify({ revision: data.revision, orchestrators: {}, reviewedHelperWorkflows: [] });
   if (!data.engines.some(({ engineId }) => engineId === selectedEngine.value)) selectedEngine.value = data.engines[0]?.engineId || "";
-  proposals.value = suggestedChanges.value.filter(({ previous }) => !previous || previous.selectionSource === "recommended").map(({ engineId }) => engineId);
+  proposals.value = suggestedChanges.value.filter(({ previous }) => !previous || previous.selectionSource === "recommended").map(({ id }) => id);
+  if (proposalMode.value && suggestedChanges.value.length) selectedEngine.value = suggestedChanges.value[0].engineId;
+  preview.value = data;
+  hydratedDraft = draftSnapshot();
 }
-watch(() => resource.data.value, (data) => { if (baseRevision.value === null) hydrate(data); }, { immediate: true });
+watch(scopeKey, () => {
+  baseRevision.value = null;
+  draft.value = {};
+  savedAssignments = {};
+  proposals.value = [];
+  preview.value = null;
+  reviewedHelpers.value = [];
+  fieldErrors.value = {};
+  customizing.value = false;
+}, { flush: "sync" });
+watch(() => resource.data.value, (data) => {
+  if (!refreshingConnection.value && !saving.value && (baseRevision.value === null || draftSnapshot() === hydratedDraft)) hydrate(data);
+}, { immediate: true });
+onMounted(async () => {
+  if (!refreshingConnection.value) return;
+  await reload();
+  refreshingConnection.value = false;
+});
 watch(saving, (value) => emit("busy", value));
-function choiceId(selection) { return selection ? `${selection.modelProviderId}/${selection.modelId}` : ""; }
-function label(item, selection) { return item.choices.find((choice) => choiceId(choice) === choiceId(selection))?.label || selection?.modelId || "Not configured"; }
+const previewPayload = computed(() => JSON.stringify(payload()));
+watch([previewPayload, retryPreview, canEdit, stale], ([serialized], _previous, cleanup) => {
+  previewPending.value = false;
+  if (baseRevision.value === null || !canEdit.value || stale.value) return;
+  previewError.value = "";
+  if (serialized === savedPayload) { preview.value = resource.data.value; return; }
+  const controller = new AbortController();
+  let current = true;
+  previewPending.value = true;
+  const timer = setTimeout(async () => {
+    try {
+      const result = await getHttpWebClient().request(`${ACCOUNTS_ENDPOINT}/model-routing/preview`, {
+        method: "POST", body: JSON.parse(serialized), signal: controller.signal
+      });
+      if (result?.ok !== true) throw new Error(result?.error || "Routing preview could not be loaded.");
+      if (current) preview.value = result;
+    } catch (error) { if (current) previewError.value = error.message; }
+    finally { if (current) previewPending.value = false; }
+  }, 250);
+  cleanup(() => { current = false; clearTimeout(timer); controller.abort(); });
+}, { immediate: true });
+const previewEngine = computed(() => preview.value?.engines?.find(({ engineId }) => engineId === selectedEngine.value));
+const decisions = computed(() => previewEngine.value?.preview?.[canEdit.value ? audience.value : "viewer"] || {});
+const hasEdits = computed(() => previewPayload.value !== savedPayload);
+function choiceFor(selection, role = "plan") {
+  return engines.value.flatMap((item) => item.roles[role]?.choices || []).find((item) => choiceId(item) === choiceId(selection));
+}
+function selectionLabel(selection) {
+  if (!selection) return "No model selected";
+  const choice = choiceFor(selection, "router");
+  return `${choice?.label || selection.modelId} · ${choice?.engineLabel || selection.engineId} / ${choice?.providerLabel || selection.modelProviderId}${selection.variantId ? ` · ${selection.variantId} thinking` : ""}`;
+}
+function items(role) {
+  const choices = (engine.value?.roles[role]?.choices || []).map((choice) => ({
+    id: choiceId(choice), label: `${choice.label} · ${choice.engineLabel} / ${choice.providerLabel}`,
+    props: { subtitle: `${choice.providerLabel} · ${choice.accessLabel}${choice.compatibilityError ? " · Compatibility pending" : ""}`,
+      disabled: !choice.available || Boolean(choice.compatibilityError) || ["code", "sharedBackup"].includes(role) && choice.capabilities?.toolcall === false }
+  }));
+  const current = draft.value[selectedEngine.value]?.[role];
+  if (current && !choices.some(({ id }) => id === choiceId(current))) choices.unshift({ id: choiceId(current), label: selectionLabel(current), props: { subtitle: "Unavailable saved choice", disabled: true } });
+  return [{ id: "", label: role === "sharedBackup" ? "No shared backup" : "Choose a model" }, ...choices];
+}
 function choose(role, id) {
-  const choice = engine.value.choices.find((item) => choiceId(item) === id);
-  draft.value[selectedEngine.value][role] = choice ? { ...choice, selectionSource: "explicit" } : null;
+  const choice = engine.value.roles[role].choices.find((item) => choiceId(item) === id);
+  draft.value[selectedEngine.value][role] = choice ? { ...defineVibe64AssistantSelection(choice), selectionSource: "explicit" } : null;
+  delete fieldErrors.value[`${selectedEngine.value}.${role}`];
 }
 function changeEffort(role, variantId) {
   draft.value[selectedEngine.value][role] = { ...draft.value[selectedEngine.value][role], variantId, selectionSource: "explicit" };
+  delete fieldErrors.value[`${selectedEngine.value}.${role}`];
 }
-const modelItems = computed(() => [
-  { id: "", label: "Choose a model" }, ...(engine.value?.choices || []).map((choice) => ({
-    id: choiceId(choice), label: `${choice.label} · ${choice.providerLabel}${choice.compatibilityError ? ' · Compatibility pending' : ''}`,
-    props: { disabled: Boolean(choice.compatibilityError) }
-  }))
-]);
-const compatibilityNotices = computed(() => engines.value.flatMap((item) => item.choices
-  .filter((choice) => choice.compatibilityError && (props.connectionId ? choice.modelProviderId === props.connectionId : item.engineId === selectedEngine.value))
-  .map((choice) => `${item.label}: ${choice.compatibilityError}`)));
-function variants(role) {
-  return engine.value?.choices.find((choice) => choiceId(choice) === choiceId(draft.value[selectedEngine.value]?.[role]))?.variants || [];
+function variants(role) { return choiceFor(draft.value[selectedEngine.value]?.[role], role)?.variants || []; }
+function roleHint(role) {
+  const scope = choiceFor(draft.value[selectedEngine.value]?.[role.id], role.id)?.accessLabel;
+  const description = role.id === "economy" ? "Economical chat, suggestions, explanations, and naming." : role.description;
+  return scope ? `${scope} · ${description}` : description;
 }
-function payload() {
-  const orchestrators = JSON.parse(JSON.stringify(draft.value));
-  if (props.connectionId) for (const proposal of suggestedChanges.value) {
-    if (proposals.value.includes(proposal.engineId)) orchestrators[proposal.engineId].code = proposal.proposed;
-  }
-  return { revision: baseRevision.value, orchestrators };
+function roleError(role) {
+  if (fieldErrors.value[`${selectedEngine.value}.${role}`]) return fieldErrors.value[`${selectedEngine.value}.${role}`];
+  const state = previewEngine.value?.roles[role];
+  return !previewPending.value && sameChoice(state?.assignment, draft.value[selectedEngine.value]?.[role]) ? state?.error || "" : "";
+}
+function useRecommendations() {
+  for (const role of ASSISTANT_ROUTING_ASSIGNMENTS) if (engine.value.roles[role].recommendation) draft.value[selectedEngine.value][role] = engine.value.roles[role].recommendation;
+}
+function customize() {
+  for (const [engineId, assignments] of Object.entries(payload().orchestrators)) Object.assign(draft.value[engineId], assignments);
+  customizing.value = true;
+}
+function decisionReason(role) {
+  const decision = decisions.value[role];
+  if (!decision?.available) return decision?.message || "Choose the models above to see the result.";
+  if (role === "review" && sameChoice(decision.effectiveSelection, decisions.value.code?.effectiveSelection)) return "Same model checks its coding work.";
+  if (decision.backupReason === "keep_workflow_together") return "Shared backup keeps Plan and Code in the same orchestrator.";
+  if (decision.backupUsed) return "Shared backup: the configured model uses a personal connection.";
+  return role === "review" ? "Uses Plan and may fix in-scope issues." : "";
 }
 const command = useCommand({
   access: "never", apiSuffix: "/vibe64/accounts/model-routing",
-  buildCommandOptions: () => ({ method: "PATCH", path: `${ACCOUNTS_ENDPOINT}/model-routing` }),
-  buildRawPayload: payload,
-  onRunSuccess(response) { if (response?.ok !== true) throw new Error(response?.error || "Model routing was not saved."); },
+  buildCommandOptions: () => ({ method: "PATCH", path: `${ACCOUNTS_ENDPOINT}/model-routing` }), buildRawPayload: payload,
+  onRunSuccess(response) {
+    fieldErrors.value = response?.fieldErrors || {};
+    if (response?.ok !== true) throw new Error(response?.error || "Model routing was not saved.");
+  },
   messages: { success: "Model routing saved. New requests will use these assignments.", error: "Model routing was not saved." },
   fallbackRunError: "Model routing was not saved.", ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
   placementSource: "vibe64.accounts.model-routing", surfaceId: "app", writeMethod: "PATCH"
 });
 async function save() {
-  if (saving.value || stale.value || props.readonly) return;
+  if (saving.value || stale.value || !canEdit.value || previewPending.value) return;
   saving.value = true;
-  saveError.value = "";
-  try {
-    const result = await command.run();
-    if (result?.ok === true) { await resource.reload(); emit("saved"); }
-  } catch (error) { saveError.value = error.message || "Model routing was not saved. Your draft is retained."; }
+  try { const result = await command.run(); if (result?.ok === true) { await resource.reload(); emit("saved"); } }
+  catch { /* Shared command feedback reports errors; keep this draft and its field errors. */ }
   finally { saving.value = false; }
 }
-async function reload() { await resource.reload(); hydrate(resource.data.value); }
+async function reload() {
+  refreshError.value = "";
+  try { await resource.reload(); if (!resourceError.value) hydrate(resource.data.value); }
+  catch (error) { refreshError.value = error.message || "Model routing could not be loaded."; }
+}
 </script>
 
 <template>
   <section class="model-routing" aria-label="Model routing">
     <div class="model-routing__body">
-      <p class="text-title-large mb-2">{{ connectionId ? `${connectionLabel || connectionId} connected` : 'Model routing' }}</p>
-      <p class="text-body-medium mb-4">{{ connectionId ? 'Use this connection for coding? Review the changes below.' : 'Choose the models each assistant uses for Plan, Code, and Economy.' }}</p>
-      <v-skeleton-loader v-if="resource.isInitialLoading.value || baseRevision === null && !loadError" type="list-item-two-line@3, actions" />
-      <v-alert v-else-if="loadError" type="error" variant="tonal">
-        {{ loadError }} <v-btn variant="text" @click="reload">Retry</v-btn>
-      </v-alert>
-      <template v-else>
-        <p v-for="notice in compatibilityNotices" :key="notice" class="text-body-small mb-3">{{ notice }}</p>
-        <v-alert v-if="stale" type="warning" variant="tonal" class="mb-3">
-          Routing changed in another tab. Your draft is retained.
-          <v-btn variant="text" @click="reload">Reload current choices</v-btn>
-        </v-alert>
-        <template v-if="connectionId">
-          <div v-for="proposal in suggestedChanges" :key="proposal.engineId" class="mb-3">
-            <v-checkbox v-model="proposals" :value="proposal.engineId" :label="`${proposal.label}: ${label(proposal, proposal.previous)} → ${proposal.candidate.label}`" :disabled="saving || readonly" hide-details />
-            <p class="text-body-small ms-4">{{ proposal.candidate.description || proposal.candidate.providerLabel }}. {{ proposal.previous?.selectionSource === 'explicit' ? 'Your custom choice is kept unless you select this change.' : 'Recommended for implementation.' }}</p>
-          </div>
-          <p v-if="!suggestedChanges.length" class="text-body-medium">Your current coding assignments remain preferred, or this connection has no ready coding route. You can change assignments in Model routing.</p>
-          <p class="text-body-small mt-3">Plan and Economy keep their current assignments. Applying these choices does not start an assistant.</p>
+      <p class="text-title-large mb-2">{{ proposalMode ? `${connectionLabel || connectionId} connected` : 'Model routing' }}</p>
+      <p class="text-body-medium mb-4">{{ proposalMode ? 'Review how this connection can help. Your existing choices stay until you apply changes.' : 'Choose who plans, codes, routes messages, and helps in the background.' }}</p>
+      <v-alert v-if="setupError" type="warning" variant="tonal" class="mb-4">Your AI is connected, but its routing defaults could not be saved. {{ setupError }} Review the choices below to finish setup.</v-alert>
+      <v-skeleton-loader v-if="resource.isInitialLoading.value || baseRevision === null && !loadError" type="list-item-two-line@5, actions" />
+      <v-alert v-else-if="loadError" type="error" variant="tonal">{{ loadError }} <v-btn variant="text" @click="reload">Retry</v-btn></v-alert>
+      <template v-else-if="engines.length">
+        <v-alert v-if="stale" type="warning" variant="tonal" class="mb-4">Routing changed in another tab. Your draft is retained. <v-btn variant="text" @click="reload">Reload current choices</v-btn></v-alert>
+        <template v-if="proposalMode">
+          <template v-for="workflow in engines.filter(item => suggestedChanges.some(change => change.engineId === item.engineId))" :key="workflow.engineId">
+            <p class="text-title-medium mt-4">{{ workflow.label }}</p>
+            <p v-if="!suggestedChanges.some(change => change.engineId === workflow.engineId && change.role === 'plan')" class="text-body-small">Plan stays {{ selectionLabel(workflow.roles.plan.assignment) }}.</p>
+            <v-checkbox v-for="proposal in suggestedChanges.filter(item => item.engineId === workflow.engineId)" :key="proposal.id" v-model="proposals" :value="proposal.id" :disabled="saving || !canEdit" hide-details>
+              <template #label><span class="text-body-medium"><strong>{{ proposal.label }}</strong><br>{{ selectionLabel(proposal.previous) }} → {{ selectionLabel(proposal.proposed) }}<br><span v-if="proposal.previous?.selectionSource === 'explicit'" class="text-body-small">Custom choice — change only if selected.</span></span></template>
+            </v-checkbox>
+          </template>
+          <p v-if="!suggestedChanges.length" class="text-body-medium">No recommended changes. Your current assignments remain preferred, or this connection has no compatible improvement.</p>
+          <v-btn v-if="canEdit" variant="text" class="my-3" @click="customize">Customize routing</v-btn>
         </template>
-        <template v-else-if="engines.length">
-          <v-select v-model="selectedEngine" :items="engines" item-title="label" item-value="engineId" label="Assistant" variant="outlined" hide-details class="mb-4" :disabled="saving" />
-          <div v-for="role in roleDefinitions" :key="`${selectedEngine}-${role.id}`" class="model-routing__role mb-4">
-            <v-select :model-value="choiceId(draft[selectedEngine]?.[role.id])" :items="modelItems" item-title="label" item-value="id" :label="role.label" variant="outlined" :disabled="saving || readonly" :hint="role.description" persistent-hint :error-messages="engine?.roles[role.id]?.error && choiceId(draft[selectedEngine]?.[role.id]) === choiceId(engine.roles[role.id].assignment) ? engine.roles[role.id].error : ''" @update:model-value="choose(role.id, $event)" />
-            <v-select v-if="variants(role.id).length" :model-value="draft[selectedEngine]?.[role.id]?.variantId || ''" :items="[{ id: '', label: 'Default thinking' }, ...variants(role.id)]" item-title="label" item-value="id" :label="`${role.label} thinking`" variant="outlined" hide-details :disabled="saving || readonly" @update:model-value="changeEffort(role.id, $event)" />
-          </div>
-          <p class="text-body-small">Auto sends your message and recent chat context to Economy, then sends the request to Plan or Code. Review after coding adds a Plan-model turn that may make fixes. Accounts use their own API credit or plan allowance.</p>
-          <p class="text-body-small mt-2">Background helpers for suggestions and naming keep their existing settings.</p>
+        <v-select v-model="selectedEngine" :items="engines" item-title="label" item-value="engineId" label="Workflow orchestrator" variant="outlined" hide-details class="my-4" :disabled="saving" />
+        <template v-if="!proposalMode">
+          <v-alert v-if="engine?.error" type="warning" variant="tonal" class="mb-4">{{ engine.error }}</v-alert>
+          <v-btn v-if="canEdit" variant="text" class="mb-3" :disabled="saving" @click="useRecommendations">Use recommended choices</v-btn>
+          <template v-for="role in roles" :key="`${selectedEngine}-${role.id}`">
+            <div v-if="role.id === 'plan'" class="mb-4"><p class="text-title-medium">Planning and coding</p><p class="text-body-small">One orchestrator keeps their working context together. Review uses Plan.</p></div>
+            <div v-if="role.id === 'economy'" class="mb-4"><p class="text-title-medium">Independent assistance</p><p class="text-body-small">These models can use any connected orchestrator.</p></div>
+            <div v-if="role.id === 'sharedBackup'" class="mb-4"><p class="text-title-medium">Collaborator access</p><p class="text-body-small">A backup on another orchestrator moves both Plan and Code there.</p></div>
+            <div class="model-routing__role mb-4" :class="{ 'model-routing__role--compact': smAndDown }">
+              <v-autocomplete :model-value="choiceId(draft[selectedEngine]?.[role.id])" :items="items(role.id)" item-title="label" item-value="id" :label="role.label" variant="outlined" :disabled="saving || !canEdit" :hint="roleHint(role)" persistent-hint :error-messages="roleError(role.id)" @update:model-value="choose(role.id, $event)" />
+              <v-select v-if="variants(role.id).length" :model-value="draft[selectedEngine]?.[role.id]?.variantId || ''" :items="[{ id: '', label: 'Default' }, ...variants(role.id)]" item-title="label" item-value="id" :label="`${role.label} thinking`" variant="outlined" hide-details :disabled="saving || !canEdit" @update:model-value="changeEffort(role.id, $event)" />
+            </div>
+            <v-alert v-if="role.id === 'economy' && engine?.helperRoutingReview" type="warning" variant="tonal" class="mb-4">
+              Older helpers used {{ engine.helperRoutingReview.previous.map(item => `${item.modelId} (${item.engineId})`).join(', ') }}. Choose Economy for future helpers.
+              <v-checkbox v-model="reviewedHelpers" :value="selectedEngine" label="I reviewed the Economy choice for helpers" :disabled="saving || !canEdit || !draft[selectedEngine]?.economy" hide-details />
+            </v-alert>
+          </template>
+          <p v-if="!draft[selectedEngine]?.sharedBackup" class="text-body-small mb-4">Connect a shared model and choose it as backup to allow collaborators to use personal Plan, Code, or Economy assignments.</p>
         </template>
-        <p v-else class="text-body-medium">Connect an assistant account to configure its modes.</p>
+        <div class="model-routing__preview mt-4" :aria-busy="previewPending ? 'true' : undefined">
+          <p class="text-title-medium mb-2">What people will use <span class="text-body-small">· {{ hasEdits ? 'Unsaved preview' : 'Saved routing' }}</span></p>
+          <v-btn-toggle v-if="canEdit" v-model="audience" mandatory variant="outlined" divided class="mb-3" aria-label="Preview audience"><v-btn value="owner">Owner</v-btn><v-btn value="collaborator">Collaborator</v-btn></v-btn-toggle>
+          <v-skeleton-loader v-if="previewPending" type="list-item-two-line@7" />
+          <v-alert v-else-if="previewError || stale" type="warning" variant="tonal">{{ stale ? 'Reload current choices to refresh this preview.' : previewError }} <v-btn v-if="!stale" variant="text" @click="retryPreview++">Retry preview</v-btn></v-alert>
+          <dl v-else class="model-routing__results">
+            <div v-for="row in previewRows" :key="row.id" class="py-2">
+              <dt class="text-label-large">{{ row.label }}</dt>
+              <dd class="text-body-medium">{{ decisions[row.id]?.available ? row.id === 'auto' ? 'Available · Router chooses Plan or Code' : selectionLabel(decisions[row.id].effectiveSelection) : 'Unavailable' }}<p v-if="decisionReason(row.id)" class="text-body-small">{{ decisionReason(row.id) }}</p></dd>
+            </div>
+          </dl>
+        </div>
+        <p class="text-body-small mt-4">Changes apply to new requests. Current turns keep their captured models. Each connection uses its own API credit or subscription allowance.</p>
       </template>
+      <p v-else class="text-body-medium">Connect an assistant account to configure its modes.</p>
     </div>
-    <v-alert v-if="saveError" type="error" variant="tonal" density="compact" class="mt-2">{{ saveError }}</v-alert>
-    <div class="d-flex justify-end flex-wrap ga-2 mt-4">
-      <v-btn variant="text" :disabled="saving" @click="emit('close')">{{ connectionId ? 'Not now' : 'Cancel' }}</v-btn>
-      <v-btn v-if="!readonly" variant="flat" color="primary" :disabled="saving || stale || Boolean(loadError) || baseRevision === null || !engines.length || Boolean(connectionId && !proposals.length)" @click="save">
-        {{ saving ? 'Saving…' : connectionId ? `Apply ${proposals.length} changes` : 'Save routing' }}
-      </v-btn>
+    <div class="d-flex justify-end flex-wrap ga-2 pt-4">
+      <v-btn variant="text" :disabled="saving" @click="emit('close')">{{ proposalMode ? suggestedChanges.length ? 'Keep current routing' : 'Done' : 'Cancel' }}</v-btn>
+      <v-btn v-if="canEdit && (!proposalMode || suggestedChanges.length)" variant="flat" color="primary" :disabled="saving || stale || previewPending || Boolean(loadError) || baseRevision === null || !engines.length || Boolean(proposalMode && !proposals.length)" @click="save">{{ saving ? 'Saving…' : proposalMode ? `Apply ${proposals.length} changes` : 'Save routing' }}</v-btn>
     </div>
   </section>
 </template>
@@ -136,7 +269,7 @@ async function reload() { await resource.reload(); hydrate(resource.data.value);
 .model-routing { min-width: 0; display: flex; flex-direction: column; max-height: calc(100dvh - 96px); }
 .model-routing__body { overflow-y: auto; min-height: 0; padding-top: 4px; }
 .model-routing__role { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .4fr); gap: 12px; align-items: start; }
-@media (max-width: 500px) {
-  .model-routing__role { grid-template-columns: minmax(0, 1fr); }
-}
+.model-routing__role--compact { grid-template-columns: minmax(0, 1fr); }
+.model-routing__results dd { margin: 0; overflow-wrap: anywhere; }
+.model-routing__preview { min-height: 26rem; }
 </style>

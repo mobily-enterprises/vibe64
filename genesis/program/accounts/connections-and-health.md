@@ -8,7 +8,9 @@ and see whether the Studio host is ready to support them.
 - `packages/vibe64-core/src/server/codexAuthState.js`
 
 - `packages/vibe64-core/src/server/assistantRoutingStore.js`
+- `packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
+- `packages/vibe64-runtime/src/shared/assistantRoutingScores.json`
 - `packages/vibe64-accounts/src/client/composables/useModelRouting.js`
 - `packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue`
 
@@ -28,10 +30,8 @@ and see whether the Studio host is ready to support them.
 - `packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js`
 - `src/components/studio/Vibe64AuthSettingsButton.vue`
 
-- `packages/vibe64-core/src/server/nativeHelperModel.js`
 - `packages/vibe64-accounts/bin/claude-auth-browser`
 - `packages/studio-terminal-core/src/server/claudeRuntime.js`
-- `packages/vibe64-accounts/src/client/studio/HelperModelSettings.vue`
 - `packages/vibe64-accounts/src/client/studio/ProviderAccountsSetup.vue`
 - `packages/vibe64-accounts/src/client/composables/useProviderAccountsSetup.js`
 
@@ -49,23 +49,76 @@ and see whether the Studio host is ready to support them.
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
 - `packages/vibe64-terminals/src/server/opencodeTerminal.js`
 - `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
 - `packages/studio-health/src/server/service.js`
 - `src/components/studio/StudioHealthScreen.vue`
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 
 ## Public contract
 
-Model routing is a shared Accounts surface, separate from Background helpers.
-For each orchestrator it saves Plan, Code and Economy selections with thinking
-choices, using the current connected catalogue and existing account access
-policy. Saves are atomic and revision-checked in private installation state at
+Model routing is a shared Accounts surface. Each workflow keeps Plan and Code
+in one orchestrator, with independent Economy and Router choices and a shared
+Backup across connected orchestrators. Thinking choices and Personal/Workspace
+scope appear with each exact route. Saves are atomic and revision-checked in private installation state at
 `ai-connections/routing.json`; unreadable settings are preserved for recovery.
-The server validates every saved model and execution validates it again.
+The store's version-2 format keeps independent Router and shared Backup fields
+and helper-conflict evidence alongside those choices. Plan/Code assignments
+must belong to their workflow engine. Old-format files require the explicit
+stopped-service upgrade; ordinary reads do not change them.
+The server validates changed assignments against their destination catalogue;
+an unrelated edit preserves unchanged unavailable references and their original
+recommendation provenance. Execution validates its actual destination again.
+The chat-mode menu also opens this same form in an owner-only overlay without
+navigating to AI Accounts. It initially selects the chat's saved workflow;
+the assignments remain shared across conversations.
 
-Recommendations prefer Astra for Codex planning and DeepSeek over GLM for
-coding. Claude prefers its available flagship for planning, DeepSeek over GLM
-for coding, and Haiku for Economy. Existing helper choices seed Economy when
-available. Native models remain fallbacks when external connections are absent.
+Accounts delegates saved and unsaved previews to the central terminal runtime,
+using the same connection facts and purpose resolver as Send. Owners see Owner
+and Collaborator results; member reads expose their own result and cannot save
+or evaluate drafts. A foreign Backup moves both effective Plan and Code even
+without review. Review uses effective Plan; Auto requires direct access to all
+three of Router, Plan and Code. Connection identities never enter this response.
+OpenCode catalogue refreshes always use the clean catalogue process, including
+when a managed chat process is running; runtime output limits and defaults must
+not invalidate a verified provider connection. Pages are combined only at one revision, including models
+outside the default provider page. A catalogue failure stays visible and does
+not erase saved choices. Neither reading nor previewing persists configuration.
+Successful native sign-in, API-key setup and explicit new-session creation
+initialize missing roles for usable orchestrators from the same recommendations.
+The read-only setup preview shows exactly those proposed assignments. First
+creation can be initiated by a collaborator using included OpenCode; this internal
+initialization accepts workflow IDs, never user assignments. Editing or disabling
+roles remains owner-only. Repeating setup
+preserves every saved choice, including an explicit empty role. A workflow needs
+usable Plan and Code before initialization; a disconnected engine does not get
+a profile merely because independent helpers are available elsewhere. Routing
+setup failures are reported separately from a successfully connected key.
+
+The form separates planning/coding, independent assistance and collaborator
+backup. Unsaved edits refresh a cancellable preview with a stable loading area;
+stale replies are ignored. Conflicting saves preserve the draft. Migrated helper
+conflicts require the owner's explicit acknowledgement of a valid Economy choice;
+an unrelated edit keeps the migration evidence. Economy and Router assignments
+replace the former per-account Helper model controls and endpoints. Native
+helpers receive the central resolver's exact model; they do not read the retired
+preferences or select an implicit model. Only the stopped-service upgrade reads
+old helper choices and removes them after backup. Connection mutations reject
+unupgraded helper settings rather than erasing that evidence.
+Late setup defaults refresh an untouched form, while edited roles or proposal
+checkboxes remain intact. Routing response caches include the host's actor,
+role and project identity; logout and actor switches cannot reuse another
+person's preview or configuration access. The standalone editor uses its local
+identity through the same optional public host injection.
+
+Recommendation values live in the checked-in `assistantRoutingScores.json`,
+keyed by exact orchestrator/provider/model route and role. The shared routing
+policy filters eligible choices before applying those scores. It prefers Astra
+for Codex planning and DeepSeek Flash for Code, Economy and Router. Sol ranks
+above GLM for Code; Luna ranks above GLM for economical assistance. Claude's
+listed native aliases use corresponding tiers. Other eligible models receive
+the JSON default scores, with included Pickle ranked last. Saved eligible
+choices win score ties; exact route ordering makes other ties stable. Scores
+change recommendations, never saved assignments or execution destinations.
 These priorities apply only to qualified routing choices. Codex currently admits
 native OpenAI models, DeepSeek Flash, and GLM 5.3 through Z.AI Coding Plan. Both
 external routes passed managed Astra → coding model → Astra tool-history and
@@ -75,15 +128,28 @@ cross-model history is verified. A saved
 unqualified route reports an actionable error and is never silently replaced.
 Credential connectivity and Claude's protocol check do not establish Codex
 round-trip history compatibility.
-New-credential success replaces the setup form with a routing proposal for
-compatible orchestrators. It preserves custom assignments and requires an
-explicit save; adding a lower-priority provider does not replace a better choice.
+New-credential success refreshes the catalogue and opens one proposal with
+independent checkboxes for each affected workflow/role. Native login and API-key
+setup identify the actual connected engines; credentials are never copied.
+Proposals include only workflows with eligible Plan and Code models.
+Changes to custom assignments start unchecked. Saves submit only actual edits,
+so untouched absent roles do not become deliberately disabled. Customize carries only selected
+proposals into the normal form; Keep current routing closes without saving.
+Adding a lower-priority provider does not replace a better choice.
 
 Curated external keys are checked separately against Responses for Codex and
 Messages for Claude Code. Claude readiness requires its successful protocol
 check; a failed Claude check leaves a working Codex connection usable. Older
 keys must be checked again before they become Claude-ready. Only readiness and
 redacted connection metadata reach the client. Provider URLs remain curated.
+Claude's access reader applies the connection's scope: DeepSeek API access is
+shared, while the GLM Coding Plan and native Claude subscription are personal.
+External catalogue and access reads do not start a native Claude inference
+process. Connection facts retain a safe identity from the existing owner:
+Codex's login identity, curated key generation, native Claude account identity,
+or OpenCode credential fingerprint. OpenCode retains scope and identity when a
+particular model is disabled; model availability cannot change personal/shared
+classification. Unknown or removed credentials have no usable identity.
 
 Standalone and hosted editors compose the same AI Accounts screen, catalogue
 validation, provider policy, connection store and runtime wiring. The local
@@ -103,10 +169,15 @@ The nested development editor preserves native credential context while keeping
 its own runtime state.
 
 The connection store supplies included OpenCode Big Pickle, with no Codex login
-required. New OpenCode keys are checked against the complete trusted provider
+required. Live native OpenCode checks show that its free provider rejects the
+restricted, tool-free profile used by Router and background helpers. Pickle remains
+eligible for Plan, Code, explicit Economy chat and shared Backup, but is not
+recommended for Economy or Router; previews reject those helper purposes before
+sending. Another connected model is needed for Auto and background assistance.
+New OpenCode keys are checked against the complete trusted provider
 catalogue and verified before replacing a working connection. The browser cannot
 supply a network route, verification model or access policy. Only redacted
-metadata is returned. Existing model-access restrictions, helper preferences,
+metadata is returned. Existing model-access restrictions,
 Zen checks and runtime invalidation apply equally in both editions. All account
 management routes use the host's management policy before reading or changing
 connection state; request bodies cannot supply the acting user.
@@ -308,14 +379,8 @@ the submitted secret, and the temporary credential state is removed on every
 outcome. No provider URL override is required: the pinned OpenCode runtime owns
 its native provider destinations.
 
-Native helper-model preferences belong to the connection, outside project source,
-at `<systemRoot>/ai-connections/<provider>-helper-model.json` for Codex and Claude.
-Claude's Recommended choice is Haiku. Both use the same Helper model dialog;
-Claude also accepts models without a thinking control. An empty model ID means
-Recommended and resolves the code default at execution time. Account management
-authorization also protects reads and writes of this preference. The account
-API offers live models supporting low thinking, rejects unavailable choices,
-and preserves unreadable settings instead of replacing them. Each new economy
-profile captures the saved choice; existing profiles and the main assistant are
-unchanged. The shared Helper model dialog is also available to hosts for their
-own connection-owned preferences through an explicit endpoint.
+Older clients reaching the retired native or OpenCode helper-setting endpoints
+receive HTTP 410 with a reload instruction pointing to Economy in Model routing.
+Those endpoints cannot recreate the retired preferences. Provider profiles
+continue validating the resolved model's availability and supported thinking
+controls; configuration changes do not rewrite already captured tasks.

@@ -16,6 +16,9 @@ registry imports scripts from `stateUpgrades/`. The release builder includes
 the standalone `bin/upgrade-state.js` command in every runtime package. Hosting
 operators own stopping services, invoking this command, and activating the
 candidate release. This command does not start or stop services itself.
+The CLI supplies the routing feature's upgrade operation to the Core runner;
+Core does not import Accounts or Runtime. Call the assembled CLI for deployment,
+so every registered upgrade has its owning implementation.
 
 ## Implemented API and backup responsibility
 
@@ -29,7 +32,7 @@ them. It does not sandbox a script's filesystem writes or provide automatic
 rollback. Review and focused tests must establish backup coverage and retry
 behavior for each upgrade.
 
-There is no supported directory manifest, `prepare()` callback or `backupPaths`
+There is no runner-level directory manifest, `prepare()` callback or `backupPaths`
 return value today. Returning such an object from `run()` has no effect on backup
 behavior. Follow the implemented API below when authoring an upgrade.
 
@@ -45,7 +48,9 @@ node /candidate/bin/upgrade-state.js --system-root=/absolute/vibe64/state --appl
 # Activate the candidate only after successful completion.
 ```
 
-`--check` does not create directories or change metadata. It inspects every
+`--check` does not create installation directories or change metadata. Archive
+inspection may use temporary scratch space outside the installation, removed
+after inspection. It inspects every
 pending upgrade and prints INFO and WARNING diagnostics. `--apply` holds an
 exclusive lock, checks pending work again, then applies it in order. It records
 each completed script atomically in `<systemRoot>/upgrades/applied.json`.
@@ -156,3 +161,43 @@ OpenAI account ID and is never written to native `auth.json` or sent as an
 OpenAI authentication field. All projects using that connection share it; this
 upgrade does not rewrite canonical project source or project metadata. New
 successful sign-ins create their ID through the ordinary login flow.
+
+`20260923-routing-v2` upgrades `ai-connections/routing.json` to workflow profiles
+with Plan, Code, Economy, Router and shared Backup. It preserves exact saved
+choices and seeds Router from the former classifier's Economy assignment. It
+records conflicting legacy helper destinations for owner review before retiring
+the native helper preference files and per-connection `helperModelId` fields.
+Unrelated connection fields and credentials are preserved. Missing routing on
+an existing installation receives included OpenCode defaults; additional workflow
+profiles use exact selections evidenced by saved sessions. A new installation
+with no saved state remains a no-op and uses ordinary explicit setup.
+
+Project and session owners enumerate closed projects, active/closing sessions,
+temporary chats, archives and prepared renewal archives. It also inventories the
+store's pending renewal records and backs up changed ones: an approved historical
+successor retains its exact model as a Code override, with review off and its own
+evidenced workflow. Completed and cancelled renewal records remain unchanged.
+Routing metadata gains
+workflow identity and captured Router references. Legacy direct conversations
+retain their exact model and editing behavior; temporary native IDs and scoped
+changeover state remain intact. Old unfinished requests retain their original
+actor, messages and receipts and require new admission before another inference.
+Conflicting unfinished workflow evidence or corrupt/incomplete archives block
+apply with a recovery error. No provider calls or native-history rewriting occur.
+
+This script owns `upgrades/backups/20260923-routing-v2/manifest.json`, plus `before/`
+and `after/` copies using paths relative to the system directory. All original
+and replacement files are prepared and checked before publication begins. The
+manifest records their checksums; a null original means the upgrade creates a
+new file, and a null replacement means it retires a preference file. The routing
+configuration is published first, session files next, and retired preferences
+last. Retries validate every backup and destination, accept only the original or
+prepared bytes, and finish the same conversion without selecting models again.
+The script's private manifest is recovery evidence, not a generic runner API or
+automatic rollback mechanism. Do not delete it to force a fresh migration after
+partial publication.
+
+Focused evidence: `assistantRoutingConfigurationUpgrade.unit.test.js`,
+`assistantRoutingStateInventory.unit.test.js`, `assistantRoutingStateUpgrade.unit.test.js`
+and `stateUpgrades.unit.test.js`, including the packaged CLI and interrupted
+publication before ledger commit.

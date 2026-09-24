@@ -78,6 +78,7 @@ const temporaryConversationUpdateInputValidator = validator({
   attachmentIds: attachmentIdsField
 });
 const temporaryConversationCreateActionInputValidator = validator({
+  assistantRouting: { type: "object", additionalProperties: true, required: false },
   conversationId: optionalText,
   presentation: temporaryConversationPresentationField,
   agentSettings: {

@@ -11,9 +11,9 @@ import { testRouteApp, findRegisteredRoute, testReply } from "./vibe64RouteTestH
 
 const revision = `sha256:${"a".repeat(64)}`;
 const provider = {
-  id: "deepseek", label: "DeepSeek", defaultModelId: "deepseek-v4-flash",
+  id: "deepseek", label: "DeepSeek", defaultModelId: "deepseek-flash",
   definitionRevision: revision, apiKeyCompatible: true,
-  models: [{ id: "deepseek-v4-flash", label: "Flash", status: "available" }]
+  models: [{ id: "deepseek-flash", label: "Flash", status: "available" }]
 };
 
 test("standalone connects an OpenCode provider and reopens its existing credentials through the shared runtime", async (t) => {
@@ -27,7 +27,7 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
     async invalidateAgentRuntimes(input) { invalidations.push(input); return { ok: true }; },
     async verifyAssistantConnection(input) {
       assert.equal(input.modelProviderId, "deepseek");
-      assert.equal(input.modelId, "deepseek-v4-flash");
+      assert.equal(input.modelId, "deepseek-flash");
       return { ok: true };
     },
     async listAssistantCapabilities() {
@@ -58,18 +58,19 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
   assert.equal(invalidations[0].provider, "opencode");
   assert.equal(events[0][0], "deepseek");
   assert.equal((await configured.resolveConnection({ modelProviderId: "deepseek" })).apiKey, "fixture-deepseek-private-key");
-  const readHelper = findRegisteredRoute(app, { method: "GET", path: "/api/vibe64/accounts/ai-connections/:providerId/helper-model" });
-  const helperReply = testReply();
-  await readHelper.handler({ hostname: "localhost", ip: "127.0.0.1", params: { providerId: "deepseek" },
-    query: { modelId: "deepseek-v4-flash" } }, helperReply);
-  assert.equal(helperReply.statusCode, 200);
-  assert.equal(helperReply.payload.modelId, "");
+  for (const path of ["/api/vibe64/accounts/helper-model", "/api/vibe64/accounts/ai-connections/:providerId/helper-model"]) {
+    const route = findRegisteredRoute(app, { method: "PATCH", path });
+    const retired = testReply();
+    await route.handler({ hostname: "localhost", ip: "127.0.0.1", params: { providerId: "deepseek" },
+      body: { modelId: "retired-setting" } }, retired);
+    assert.equal(retired.statusCode, 410);
+    assert.match(retired.payload.error, /Reload.*Economy/);
+  }
   const storedBefore = await readFile(aiConnections.filePath, "utf8");
   const reopened = createAiConnectionRuntime({ systemRoot, terminals });
   assert.equal((await reopened.resolveConnection("deepseek")).apiKey, "fixture-deepseek-private-key");
   assert.equal(await readFile(aiConnections.filePath, "utf8"), storedBefore);
-  await assert.rejects(service.helperModel({ modelProviderId: "deepseek", modelId: "forged",
-    models: [{ id: "forged", status: "available" }] }), /Choose an available/u);
+
 });
 
 test("provider management rejects a forged owner in the request body before touching connections", async () => {
@@ -87,6 +88,30 @@ test("provider management rejects a forged owner in the request body before touc
     vibe64User: { role: "member", username: "member" }, body: { vibe64User: { role: "owner" } } }, reply);
   assert.equal(reply.statusCode, 403);
   assert.equal(called, false);
+});
+
+test("connecting OpenCode initializes routing after saving and keeps connection success when routing needs review", async () => {
+  const owner = { role: "owner", username: "owner" };
+  let saved = false;
+  let inspected = 0;
+  const service = createAiConnectionService({
+    aiConnections: { async upsertConnection() { saved = true; return { id: "deepseek", connected: true }; } },
+    async readAssistantCapabilities() { return { engines: [{ engineId: "opencode", modelProviders: [provider] }] }; },
+    async initializeModelRouting(input) {
+      inspected++;
+      assert.equal(saved, true);
+      assert.deepEqual(input, { engineIds: ["opencode"], vibe64User: owner });
+      if (inspected === 1) return { ok: true, initialized: [{ engineId: "opencode", role: "plan" }] };
+      throw new Error("Model routing changed in another tab.");
+    }
+  });
+  const first = await service.save({ modelProviderId: "deepseek", apiKey: "unused", vibe64User: owner });
+  assert.equal(first.ok, true);
+  assert.equal(first.routing.ok, true);
+  const second = await service.save({ modelProviderId: "deepseek", apiKey: "unused", vibe64User: owner });
+  assert.equal(second.ok, true);
+  assert.equal(second.connection.connected, true);
+  assert.deepEqual(second.routing, { ok: false, error: "Model routing changed in another tab." });
 });
 
 test("project AI readiness accepts Claude or OpenCode without requiring Codex", async () => {

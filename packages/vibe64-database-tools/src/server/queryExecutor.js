@@ -351,12 +351,14 @@ async function executeDatabaseQuery({
   queryId = "",
   readOnly = true,
   schema = {},
-  sql = ""
+  sql = "",
+  signal
 } = {}) {
   if (!knex) {
     throw new TypeError("executeDatabaseQuery requires Knex.");
   }
   const statement = assertSingleStatement(sql, descriptor.engine);
+  signal?.throwIfAborted();
   const normalizedId = normalizeQueryId(queryId);
   if (activeQueries.has(normalizedId)) {
     throw vibe64Error(
@@ -371,16 +373,19 @@ async function executeDatabaseQuery({
   activeQueries.set(normalizedId, active);
   try {
     connection = await knex.client.acquireConnection();
+    signal?.throwIfAborted();
     active.cancel = () => knex.client.cancelQuery(connection);
     if (readOnly) {
       await beginReadOnly(knex, connection, descriptor.engine);
       readTransaction = true;
     }
     const options = databaseDialect(descriptor.engine).queryOptions;
+    signal?.throwIfAborted();
     const raw = await knex.raw(statement)
       .options(options)
       .connection(connection)
       .timeout(QUERY_TIMEOUT_MS, { cancel: true });
+    signal?.throwIfAborted();
     const result = normalizeRawResponse(raw, schema, descriptor);
     return {
       ...result,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -66,7 +66,8 @@ import {
 } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { installVibe64ManagedExecutionProvider, stableHash } from "@local/vibe64-execution/server";
 import { genesisCommandShimDirectory } from "../../packages/vibe64-genesis/src/server/index.js";
-import { createSessionPromptHintsService } from "../../packages/vibe64-terminals/src/server/sessionPromptHints.js";
+import { writeCodexAuthMarker } from "../../packages/vibe64-core/src/server/codexAuthState.js";
+import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
 import { sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 
 const TEST_ACCOUNT_IDENTITY_SIGNATURE = `sha256:${"a".repeat(64)}`;
@@ -418,36 +419,20 @@ test("repeated chat model discovery uses one short-lived runtime per auth genera
 });
 
 for (const outcome of ["cancelled", "provider failure", "account switch", "cleanup retry", "cleanup failure"]) {
-  test(`prompt hints acknowledge automatic thread retirement after ${outcome}`, async () => {
-    await withConversationController(async ({ captures, controller, projectService, projectRuntimeRoot, session, subscribers }) => {
+  test(`detached economy work reports automatic thread retirement after ${outcome}`, async () => {
+    await withConversationController(async ({ captures, controller, projectRuntimeRoot, session, subscribers }) => {
       const profile = sourceExplanationEconomyProfile({ workloadId: "prompt_hint" });
-      const diagnostics = [];
-      const runtime = {
-        ...projectService.createRuntime(),
-        async getSession() {
-          return { ...session, sourceReady: true, status: "active" };
-        },
-        async readConversationLogPage() {
-          return {
-            conversationLog: [{ turnId: "1", user: { text: "Explain the pickup reminder." } }],
-            pagination: { newestTurnId: "1", totalTurnCount: 1 }
-          };
-        }
-      };
-      const hints = createSessionPromptHintsService({
-        deleteAgentThread: controller.deleteDetachedChatThread,
-        describeProvider: (options) => controller.describeProvider(session.sessionId, options),
-        diagnostic: (event) => diagnostics.push(event),
-        interruptAgentTurn: controller.interruptDetachedChatTurn,
-        projectService: { ...projectService, createRuntime: () => runtime },
-        readBlueprintText: async () => "A dog grooming booking application.",
-        requireAssistantAccess: async () => ({ ok: true }),
-        resolveExecutionProfile: async () => profile,
-        runAgentTurn: controller.streamDetachedChatTurn
-      });
-      const input = { operationId: "hint:handover", originId: "tab:1", vibe64User: { username: "test" } };
-      const pending = hints.generateSessionPromptHints(session.sessionId, input);
-      await waitForCapturedTurns(captures, 1);
+      const retired = [];
+      const pending = controller.streamDetachedChatTurn(session.sessionId, {
+        executionProfile: profile, expectedAccountIdentitySignature: TEST_ACCOUNT_IDENTITY_SIGNATURE,
+        outputSchema: sourceExplanationOutputSchema(2500),
+        prompt: "Suggest a next step for the supplied conversation."
+      }, { onEvent(event) { if (event.type === "thread-retired") retired.push(event.threadId); } });
+      const startup = await Promise.race([
+        pending.then((result) => ({ result })),
+        waitForCapturedTurns(captures, 1).then(() => ({ started: true }))
+      ]);
+      assert.equal(startup.started, true, JSON.stringify(startup.result));
       await waitForEconomyLedgerLifecycle(projectRuntimeRoot, CODEX_ECONOMY_THREAD_LIFECYCLES.ACTIVE);
       if (outcome === "cleanup failure") captures.failDeletes = 100;
       if (outcome === "cleanup retry") {
@@ -465,14 +450,16 @@ for (const outcome of ["cancelled", "provider failure", "account switch", "clean
         captures.runtimeInfo.accountIdentitySignature = TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE;
       }
       if (outcome === "cancelled") {
-        await hints.cancelSessionPromptHints(session.sessionId, input);
+        await controller.interruptDetachedChatTurn(session.sessionId, {
+          executionProfile: profile, threadId: "conversation-1", turnId: "turn-1"
+        });
         await waitForSessionValue(() => captures.interrupts.length, (count) => count === 1, "helper interruption");
       }
       emitCodexNotification(subscribers, turnCompleted({ status: outcome === "provider failure" ? "failed" : "interrupted" }));
       const result = await pending;
-      assert.equal(result.status, outcome === "cancelled" ? "cancelled" : "unavailable");
+      assert.equal(result.ok, false);
       if (outcome === "cleanup failure") {
-        assert.ok(diagnostics.some(({ code }) => code === "vibe64_prompt_hints_cleanup_failed"));
+        assert.deepEqual(retired, [], "failed cleanup must retain ownership");
         const { records } = await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll();
         assert.equal(records.length, 1);
         assert.equal(records[0].lifecycle, CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED);
@@ -482,7 +469,7 @@ for (const outcome of ["cancelled", "provider failure", "account switch", "clean
         })).ok, true);
         return;
       }
-      assert.deepEqual(diagnostics.filter(({ code }) => code !== "vibe64_prompt_hints_generation_failed"), []);
+      assert.deepEqual(retired, ["conversation-1"]);
       assert.deepEqual(captures.deletes, outcome === "cleanup retry"
         ? ["conversation-1", "conversation-1"]
         : ["conversation-1"]);
@@ -680,6 +667,10 @@ test("source explanations preserve one pre-resolved profile through the terminal
       },
       projectService: terminalProjectService
     });
+    await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
+    await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ codex: {
+      economy: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
+    } }, 0);
     let firstResolvedProfile = null;
     let resolvedProfile = null;
     let resolutionCalls = 0;
@@ -689,9 +680,9 @@ test("source explanations preserve one pre-resolved profile through the terminal
     };
     const sourceTerminalService = {
       ...terminalService,
-      async resolveAgentExecutionProfile(...args) {
+      async resolveEphemeralAgentExecutionProfile(...args) {
         resolutionCalls += 1;
-        resolvedProfile = await terminalService.resolveAgentExecutionProfile(...args);
+        resolvedProfile = await terminalService.resolveEphemeralAgentExecutionProfile(...args);
         firstResolvedProfile ||= resolvedProfile;
         return resolvedProfile;
       }
@@ -701,6 +692,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
       temporaryRoot,
       terminalService: sourceTerminalService
     });
+    terminalService.setSourceEditorProvider(sourceEditor);
     await writeFile(
       path.join(session.metadata.source_path, "app.js"),
       "export function total(left, right) { return left + right; }\n"
@@ -731,7 +723,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
       assert.equal(response.ok, true, JSON.stringify(response));
       assert.equal(resolutionCallsWhenThreadStarted, 1);
       assert.equal(resolutionCalls, 2);
-      assert.equal(calls.filter(([operation]) => operation === "models").length, 1);
+      assert.equal(calls.filter(([operation]) => operation === "models").length, 2, "routing and the isolated scope each verify the model catalogue");
       assert.equal(Object.isFrozen(firstResolvedProfile), true);
       assert.deepEqual(response.explanation.executionProfile, auditProfile);
       assert.equal(captures.threads[0].model, auditProfile.model);
@@ -845,11 +837,18 @@ for (const startFails of [false, true]) {
         },
         projectService: terminalProjectService
       });
+      await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
+      await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ codex: {
+        economy: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
+      } }, 0);
       const sourceEditor = createSourceEditorService({
         projectService: terminalProjectService,
         temporaryRoot,
         terminalService
       });
+      terminalService.setSourceEditorProvider(sourceEditor);
+      const cleanupPath = path.join(temporaryRoot, "vibe64-source-editor",
+        createHash("sha256").update(session.sessionId).digest("hex").slice(0, 24), "source-editor-explanation-cleanup.json");
       const explanationId = "exp-stop-pending-followup";
       const events = [];
       const stream = {
@@ -881,20 +880,19 @@ for (const startFails of [false, true]) {
           startColumn: 1,
           startLine: 1
         }, stream);
-        await waitForSessionValue(
-          async () => events.find((event) => event.type === "source-explanation.turn" && event.turnId === "turn-1"),
-          Boolean,
-          "the initial source explanation turn identity"
-        );
+        await Promise.race([
+          first.then(() => assert.fail(`Initial explanation ended before native startup: ${JSON.stringify(events)}`)),
+          waitForSessionValue(
+            async () => events.find((event) => event.type === "source-explanation.turn" && event.turnId === "turn-1"),
+            Boolean, "the initial source explanation turn identity"
+          )
+        ]);
         completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: firstAnswer }) });
         await first;
         const firstFinished = events.find((event) => event.type === "source-explanation.finished");
         assert.equal(firstFinished?.explanation.body, firstAnswer, JSON.stringify(events));
         firstMessages = structuredClone(firstFinished.explanation.messages);
-        const firstRecord = await waitForEconomyLedgerLifecycle(
-          projectRuntimeRoot,
-          CODEX_ECONOMY_THREAD_LIFECYCLES.READY
-        );
+        const firstRecord = JSON.parse(await readFile(cleanupPath, "utf8")).records[0];
 
         const followup = sourceEditor.streamExplanationFollowup({
           assistantMessageId: "msg_pending_b_assistant",
@@ -909,13 +907,9 @@ for (const startFails of [false, true]) {
         assert.equal(started?.assistantMessageId, "msg_pending_b_assistant", JSON.stringify(events));
         assert.equal(started.explanation.agentTurnId, "");
         assert.equal(events.some((event) => event.type === "source-explanation.turn" && event.turnId === "turn-2"), false);
-        const startingRecord = await waitForEconomyLedgerLifecycle(
-          projectRuntimeRoot,
-          CODEX_ECONOMY_THREAD_LIFECYCLES.STARTING_TURN
-        );
-        assert.equal(startingRecord.threadId, firstRecord.threadId);
-        assert.equal(startingRecord.ownershipId, firstRecord.ownershipId);
-        assert.equal(startingRecord.turnId, "");
+        const startingRecord = JSON.parse(await readFile(cleanupPath, "utf8")).records[0];
+        assert.equal(startingRecord.helper.conversationId, firstRecord.helper.conversationId);
+        assert.equal(startingRecord.helper.scope.id, firstRecord.helper.scope.id);
         assert.equal((await store.runSessionExclusive(
           session.sessionId,
           "agent-write-mode",
@@ -969,16 +963,17 @@ for (const startFails of [false, true]) {
           "agent-write-mode",
           () => "released"
         )).value, "released");
-        const settledLedger = await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll();
-        assert.equal(settledLedger.records.some((record) => [
-          CODEX_ECONOMY_THREAD_LIFECYCLES.STARTING_TURN,
-          CODEX_ECONOMY_THREAD_LIFECYCLES.ACTIVE
-        ].includes(record.lifecycle)), false);
+        const cleanupRecords = await readFile(cleanupPath, "utf8").then((text) => JSON.parse(text).records,
+          (error) => { if (error.code === "ENOENT") return []; throw error; });
+        if (!startFails) {
+          assert.equal(cleanupRecords[0].helper.conversationId, "conversation-1");
+          assert.equal(cleanupRecords[0].helper.runId, "turn-2");
+        }
         assert.ifError(stopObservation.error);
         if (startFails) {
           assert.equal(events.some((event) => event.type === "source-explanation.turn" && event.turnId === "turn-2"), false);
           assert.deepEqual(captures.interrupts, []);
-          assert.deepEqual(settledLedger.records, []);
+          assert.deepEqual(cleanupRecords, []);
           assert.equal(finished.status, "failed");
           assert.equal(finished.messages.at(-1).status, "failed");
           assert.match(finished.messages.at(-1).text, /Follow-up B startup failed/u);
@@ -987,7 +982,7 @@ for (const startFails of [false, true]) {
           finalAnswer: finished.messages.at(-1).text,
           finalStatus: finished.status,
           interrupts: captures.interrupts,
-          ledgerLifecycle: settledLedger.records.map((record) => record.lifecycle),
+          retainedHelpers: cleanupRecords.length,
           stopBeforeAcknowledgement,
           stopResponse: stopObservation.response
         }));
@@ -997,9 +992,10 @@ for (const startFails of [false, true]) {
         await sourceEditor.close();
         await terminalService.closeSessionTerminals(session.sessionId);
       }
-      assert.deepEqual((await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll()).records, []);
-      assert.equal(stopObservation.response.ok, true, JSON.stringify(stopObservation.response));
-      assert.equal(stopObservation.response.explanation.status, startFails ? "failed" : "stopped");
+      await assert.rejects(readFile(cleanupPath), { code: "ENOENT" });
+      assert.ok(captures.deletes.includes("conversation-1"));
+      assert.equal(stopObservation.response.ok, !startFails, JSON.stringify(stopObservation.response));
+      if (!startFails) assert.equal(stopObservation.response.explanation.status, "stopped");
       assert.deepEqual(captures.interrupts, startFails ? [] : [{ threadId: "conversation-1", turnId: "turn-2" }]);
       assert.equal(finished.status, startFails ? "failed" : "stopped");
       assert.equal(finished.messages.at(-1).status, startFails ? "failed" : "stopped");
@@ -1037,6 +1033,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
       projectContextRoot: projectService.createRuntime().projectContextRoot,
       stateRoot: projectRuntimeRoot,
       store: {
+        ...projectService.createRuntime().store,
         async runSessionExclusive(sessionId, operationName, operation) {
           assert.equal(sessionId, session.sessionId);
           assert.equal(operationName, "agent-write-mode");
@@ -1182,7 +1179,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
     assert.equal(generated, cancelled);
     assert.equal(merged.code, "vibe64_session_renewal_source_invalid");
     assert.equal(seeded, cancelled);
-    assert.equal(normalReads, 3);
+    assert.equal(normalReads, 4, "session closure also discovers retained suggestion helpers");
     assert.equal(renewalReads, 1);
     assert.equal(lockDepth, 0);
   });
@@ -1668,6 +1665,10 @@ async function withConversationController(operation, {
         },
         projectContextRoot,
         store: {
+          async readBackgroundTask() { return null; },
+          async withReadableSessionPaths(sessionId, operation) {
+            return operation({ artifactsRoot: path.join(projectRuntimeRoot, "sessions", sessionId, "artifacts") });
+          },
           async writeBackgroundTaskEvent(sessionId, taskId, entry) {
             captures.cleanupEvents ||= [];
             captures.cleanupEvents.push({ sessionId, taskId, ...entry });
@@ -1897,6 +1898,7 @@ async function withAgentMessageController(operation, {
   const controllerOptions = {
     ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerActiveReconcileMs,
+    codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
     codexAppServerDaemonWellbeingMs: 60_000,
     logger: { warn: (event) => captures.onDiagnostic?.(event) },
     publishSessionChanged: async (sessionId, event) => captures.onSessionChanged?.(sessionId, event),
@@ -1931,6 +1933,15 @@ async function withAgentMessageController(operation, {
         },
         isAvailable() {
           return provider.closed === 0;
+        },
+        async listModels() {
+          return { data: [{ model: "gpt-5.5", hidden: false,
+            supportedReasoningEfforts: [{ reasoningEffort: "high", description: "High" }]
+          }], nextCursor: null };
+        },
+        isEconomyProvider() { return false; },
+        async currentRuntimeInfo() {
+          return { runtimeDir: path.join(temporaryRoot, "provider-runtime") };
         },
         async listLoadedThreads() {
           return {
@@ -2112,6 +2123,7 @@ async function withAgentMessageController(operation, {
     env: {
       VIBE64_AGENT_RUNTIME_DIR: path.join(temporaryRoot, "agent-runtimes"),
       VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(temporaryRoot, "attachments"),
+      VIBE64_SYSTEM_ROOT: path.join(temporaryRoot, "system"),
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
@@ -2761,8 +2773,15 @@ test("Codex admission inspection uses exact native user identity without sending
 
 test("Codex integration continuation recovers native acceptance with a fresh service after local persistence failure", async () => {
   await withAgentMessageController(async ({ captures, controllerOptions, projectService, terminalService, sessionId, store }) => {
+    const systemRoot = controllerOptions.env.VIBE64_SYSTEM_ROOT;
+    await writeCodexAuthMarker(systemRoot, { connected: true, loginId: randomUUID() });
+    const code = { ...JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection), selectionSource: "explicit" };
+    await createAssistantRoutingStore({ systemRoot }).write({ codex: { plan: code, code } }, 0);
+    const routingAccess = await terminalService.inspectAssistantAccess(sessionId);
+    assert.equal(routingAccess.purposes.code.available, true, JSON.stringify(routingAccess));
     const prepared = await terminalService.ensureAgentSession(sessionId);
     assert.equal(prepared.ok, true, JSON.stringify(prepared));
+    const mainProvider = captures.provider;
     await store.writeConversationUserMessage(sessionId, { text: "Configure mail." });
     const turn = await store.writeConversationAssistantMessage(sessionId, {
       text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
@@ -2773,7 +2792,7 @@ test("Codex integration continuation recovers native acceptance with a fresh ser
     });
     const writeUser = store.writeConversationUserMessage;
     store.writeConversationUserMessage = async () => {
-      captures.provider.readThread = async () => { throw new Error("History temporarily unavailable."); };
+      mainProvider.readThread = async () => { throw new Error("History temporarily unavailable."); };
       throw new Error("Local persistence failed.");
     };
     let restarted;
@@ -5273,6 +5292,16 @@ test("non-project ephemeral conversations disable Codex tools and network on a s
     }, options);
     assert.equal(conversation.ok, true, JSON.stringify(conversation));
 
+    const providerOptions = captures.providerOptions.at(-1);
+    assert.equal(providerOptions.routingModelProviderId, "openai");
+    assert.equal(await providerOptions.prepareAuth("openai"), "native");
+    assert.deepEqual(await providerOptions.prepareThreadEnvironment({}), {});
+    const resumeParams = { model: "gpt-5.6-luna", config: { tools: { shell: false } } };
+    assert.deepEqual(await providerOptions.prepareThreadResumeParams(conversation.conversationId, resumeParams, {
+      runtime: {}, processChanged: true
+    }), resumeParams);
+    await providerOptions.beforeResumeThread(conversation.conversationId);
+
     const turn = await controller.startConversationTurn(assistantScope.id, {
       conversationId: conversation.conversationId,
       ephemeral: true,
@@ -5302,6 +5331,117 @@ test("non-project ephemeral conversations disable Codex tools and network on a s
     assert.deepEqual(captures.deletes, [conversation.conversationId]);
     assert.equal(captures.stopRuntimes, 1);
     assert.equal(deleted.providerExit.stopped, true);
+  });
+});
+
+test("scoped Codex helper cancellation before thread creation releases its catalogue runtime", async () => {
+  await withConversationController(async ({ captures, controller, session, temporaryRoot }) => {
+    const scope = { id: "empty_helper", environment: {}, workdir: temporaryRoot,
+      runtimeRoot: path.join(temporaryRoot, "helper-runtime"), stableContext: "Supplied text only." };
+    const options = { assistantScope: scope };
+    const before = structuredClone(session);
+    await controller.executionProfileModelCatalog(scope.id, options);
+    assert.equal(captures.threads.length, 0);
+    const stopped = await controller.closeAllForSession(scope.id, options);
+    assert.equal(stopped.ok, true, JSON.stringify(stopped));
+    assert.equal(captures.stopRuntimes, 1);
+    assert.deepEqual(session, before);
+  });
+});
+
+test("scoped Codex helpers enforce the selected bounded profile without touching the main session", async () => {
+  await withConversationController(async ({ captures, controller, session, subscribers, temporaryRoot }) => {
+    const workdir = path.join(temporaryRoot, "helper-work");
+    await mkdir(workdir);
+    const scope = { id: "router_job", environment: {}, workdir, runtimeRoot: path.join(temporaryRoot, "helper-runtime"),
+      stableContext: "Classify only the supplied request." };
+    const options = { assistantScope: scope };
+    const before = structuredClone(session);
+    const executionProfile = sourceExplanationEconomyProfile({ workloadId: "request_routing",
+      limits: { maxInputCharacters: 24, maxOutputCharacters: 128, timeoutMs: 1000 } });
+    const catalog = await controller.executionProfileModelCatalog(scope.id, options);
+    assert.equal(catalog.data[0].model, executionProfile.model);
+    const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
+    assert.equal(created.ok, true, JSON.stringify(created));
+    assert.equal(captures.threads[0].ephemeral, true);
+    assert.equal(captures.threads[0].model, executionProfile.model);
+    assert.equal(captures.threads[0].config.features.shell_tool, false);
+    assert.equal(captures.threads[0].config.model_reasoning_effort, "low");
+    assert.equal(captures.threads[0].allowProviderModelFallback, false);
+    const input = { ephemeral: true, conversationId: created.conversationId, executionProfile,
+      message: "Classify this", outputSchema: sourceExplanationOutputSchema(8) };
+    const started = await controller.startConversationTurn(scope.id, input, options);
+    assert.equal(captures.resumes.length, 0, "a live ephemeral helper has no persisted rollout to resume");
+    assert.equal(started.ok, true, JSON.stringify(started));
+    assert.equal(captures.turns[0].settings.model, executionProfile.model);
+    assert.equal(captures.turns[0].settings.effort, "low");
+    assert.deepEqual(captures.turns[0].settings.sandboxPolicy, { networkAccess: false, type: "readOnly" });
+    const waiting = controller.waitForConversationTurn(scope.id, { ...input, runId: started.runId }, options);
+    completeDetachedTurn(subscribers, { text: '{"answer":"plan"}', threadId: created.conversationId, turnId: started.runId });
+    const completed = await waiting;
+    assert.equal(completed.ok, true, JSON.stringify(completed));
+    assert.equal(completed.rawText, '{"answer":"plan"}');
+    const tooLong = await controller.startConversationTurn(scope.id, { ...input, message: "x".repeat(25) }, options);
+    assert.equal(tooLong.ok, false);
+    assert.match(tooLong.error, /input limit/);
+    assert.equal(captures.turns.length, 1);
+    const changedProfile = await controller.startConversationTurn(scope.id, { ...input, executionProfile: {
+      ...executionProfile, model: "different-model"
+    } }, options);
+    assert.equal(changedProfile.ok, false);
+    assert.match(changedProfile.error, /profile changed/);
+    const deleted = await controller.deleteConversation(scope.id, input, options);
+    assert.equal(deleted.ok, true, JSON.stringify(deleted));
+    assert.deepEqual(captures.deletes, [created.conversationId]);
+    assert.deepEqual(session, before);
+  });
+});
+
+test("scoped Codex helpers reject oversized output and keep their original deadline when waiting", async () => {
+  for (const oversized of [true, false]) await withConversationController(async ({ captures, controller, subscribers, temporaryRoot }) => {
+    const scope = { id: "bounded_job", environment: {}, workdir: temporaryRoot, runtimeRoot: path.join(temporaryRoot, "helper-runtime"),
+      stableContext: "Use supplied text only." };
+    const options = { assistantScope: scope };
+    const executionProfile = sourceExplanationEconomyProfile({ limits: { maxOutputCharacters: 128, timeoutMs: oversized ? 1000 : 25 } });
+    const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
+    assert.equal(created.ok, true, JSON.stringify(created));
+    const input = { ephemeral: true, conversationId: created.conversationId, executionProfile, message: "Answer",
+      outputSchema: sourceExplanationOutputSchema(8) };
+    const started = await controller.startConversationTurn(scope.id, input, options);
+    assert.equal(started.ok, true, JSON.stringify(started));
+    const pending = controller.waitForConversationTurn(scope.id, { ...input, runId: started.runId, timeoutMs: 60_000 }, options);
+    if (oversized) completeDetachedTurn(subscribers, { text: "x".repeat(129), threadId: created.conversationId, turnId: started.runId });
+    const result = await pending;
+    assert.equal(result.ok, false, JSON.stringify(result));
+    assert.match(result.error, oversized ? /output limit/ : /timed out/i);
+    if (!oversized) assert.deepEqual(captures.interrupts.at(-1), { threadId: created.conversationId, turnId: started.runId },
+      "the workload deadline stops the exact native turn before returning");
+    const stopped = await controller.stopConversation(scope.id, { ...input, runId: started.runId }, options);
+    assert.equal(stopped.ok, true, JSON.stringify(stopped));
+    assert.deepEqual(captures.interrupts.at(-1), { threadId: created.conversationId, turnId: started.runId });
+    assert.equal((await controller.deleteConversation(scope.id, input, options)).ok, true);
+  });
+});
+
+test("scoped Codex helper cleanup after a restart deletes its captured native thread", async () => {
+  await withConversationController(async ({ captures, controller, projectService, temporaryRoot }) => {
+    const scope = { id: "restart_job", environment: {}, workdir: temporaryRoot, runtimeRoot: path.join(temporaryRoot, "helper-runtime"),
+      stableContext: "Use supplied text only." };
+    const options = { assistantScope: scope };
+    const executionProfile = sourceExplanationEconomyProfile();
+    const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
+    assert.equal(created.ok, true, JSON.stringify(created));
+    const after = restartedCaptures(captures);
+    const restarted = createRestartedController({ captures: after, projectService });
+    after.failDeletes = 1;
+    const input = { ephemeral: true, executionProfile, conversationId: created.conversationId };
+    const failed = await restarted.deleteConversation(scope.id, input, options);
+    assert.equal(failed.ok, false);
+    assert.equal(after.stopRuntimes, 0, "failed cleanup retains the runtime for retry");
+    const retried = await restarted.deleteConversation(scope.id, input, options);
+    assert.equal(retried.ok, true, JSON.stringify(retried));
+    assert.deepEqual(after.deletes, [created.conversationId, created.conversationId]);
+    await controller.deleteConversation(scope.id, input, options);
   });
 });
 

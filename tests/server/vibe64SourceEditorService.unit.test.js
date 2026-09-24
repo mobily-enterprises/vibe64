@@ -53,6 +53,12 @@ function resolvedSourceExplanationProfile() {
   };
 }
 
+function sourceRoutingDecision(engineId = "codex", connectionIdentity = "codex-account-fixture-v1") {
+  return { available: true, effectiveSelection: { engineId, modelId: "gpt-5.6-luna",
+    modelProviderId: "openai", agentId: "build", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}`,
+    schema: "vibe64.assistant-selection.v1" }, connectionIdentity };
+}
+
 function structuredExplanation(answer = "") {
   return JSON.stringify({ answer });
 }
@@ -127,47 +133,63 @@ async function createSourceEditorFixture({
     await writeFile(absolutePath, String(file?.text ?? ""));
   }
 
+  const helperScopes = [];
   const fixtureTerminalService = {
-    ...(terminalService || {}),
-    ...(typeof terminalService?.requireAssistantAccess === "function"
-      ? {}
-      : {
-          requireAssistantAccess() {
-            return { ok: true };
-          }
-        }),
-    ...(typeof terminalService?.describeAgentProvider === "function"
-      ? {}
-      : {
-          describeAgentProvider() {
-            const providerId = typeof agentProviderId === "function"
-              ? agentProviderId()
-              : agentProviderId;
-            const accountIdentitySignature = typeof agentAccountIdentitySignature === "function"
-              ? agentAccountIdentitySignature()
-              : agentAccountIdentitySignature;
-            return {
-              accountIdentitySignature,
-              providerId: providerId || "codex",
-              transportId: "test-agent"
-            };
-          }
-        }),
-    ...(Object.hasOwn(terminalService || {}, "resolveAgentExecutionProfile")
-      ? {}
-      : {
-          resolveAgentExecutionProfile() {
-            const providerId = typeof agentProviderId === "function"
-              ? agentProviderId()
-              : agentProviderId;
-            return {
-              ...resolvedSourceExplanationProfile(),
-              providerId: providerId || "codex"
-            };
-          }
-        })
+    async resolveAssistantPurpose() {
+      const providerId = typeof agentProviderId === "function" ? agentProviderId() : agentProviderId;
+      const connectionIdentity = typeof agentAccountIdentitySignature === "function"
+        ? agentAccountIdentitySignature() : agentAccountIdentitySignature;
+      return sourceRoutingDecision(providerId || "codex", connectionIdentity);
+    },
+    resolveEphemeralAgentExecutionProfile() {
+      const providerId = typeof agentProviderId === "function" ? agentProviderId() : agentProviderId;
+      return { ...resolvedSourceExplanationProfile(), providerId: providerId || "codex" };
+    },
+    async deleteEphemeralAgentConversation(_scope, input) {
+      return input.conversationId ? { ok: false, error: "No native cleanup mock supplied." } : { ok: true };
+    },
+    ...(terminalService || {})
   };
-  const service = createService({
+  for (const method of ["resolveEphemeralAgentExecutionProfile", "runEphemeralAgentChatTurn", "deleteEphemeralAgentConversation", "stopEphemeralAgentConversation"]) {
+    const operation = fixtureTerminalService[method];
+    if (typeof operation !== "function") continue;
+    fixtureTerminalService[method] = async (scope, input, options = {}) => {
+      assert.match(scope.id, /^source_[a-f0-9-]+$/u);
+      assert.equal(scope.workdir, path.join(root, "state/assistant-helpers", scope.id, "workdir"));
+      assert.deepEqual(scope.environment, {});
+      assert.equal(options.session, undefined);
+      assert.equal(options.runtime, undefined);
+      assert.equal(options.assistantSelection.engineId.length > 0, true);
+      helperScopes.push(scope);
+      if (method !== "runEphemeralAgentChatTurn") return operation(scope, input, options);
+      // This test boundary stands in for the manager: AbortSignal stops the exact
+      // observed native turn and settlement waits for its acknowledgement.
+      let conversationId = input.threadId || "";
+      let runId = "";
+      let stopping;
+      const abort = () => {
+        if (conversationId && runId) {
+          stopping = fixtureTerminalService.stopEphemeralAgentConversation(scope, {
+            conversationId, runId, executionProfile: input.executionProfile
+          }, options);
+          void stopping.catch(() => {});
+        }
+      };
+      options.signal?.addEventListener("abort", abort, { once: true });
+      try {
+        return await operation(scope, input, { ...options, async onEvent(event) {
+          if (event.type === "thread") conversationId = event.threadId;
+          if (event.type === "turn") runId = event.turnId;
+          await options.onEvent?.(event);
+        } });
+      } finally {
+        options.signal?.removeEventListener("abort", abort);
+        await stopping;
+        options.signal?.throwIfAborted();
+      }
+    };
+  }
+  const serviceOptions = {
     explanationCacheNow,
     explanationFollowupGenerator,
     explanationGenerator,
@@ -188,6 +210,7 @@ async function createSourceEditorFixture({
             return {
               ...currentSessionState,
               metadata: {
+                assistant_selection: JSON.stringify({ ...sourceRoutingDecision(providerId || "codex").effectiveSelection, modelId: "gpt-6-astra" }),
                 ...sourceMetadata(path.join(path.dirname(path.dirname(sourceRoot)), sessionId, "source")),
                 ...(providerId ? { agent_identity_provider: providerId } : {}),
                 ...(currentSessionState.metadata || {})
@@ -209,11 +232,14 @@ async function createSourceEditorFixture({
     sourceFileObserver,
     terminalService: fixtureTerminalService,
     temporaryRoot
-  });
+  };
+  const service = createService(serviceOptions);
 
   return {
     root,
     service,
+    helperScopes,
+    restartService: () => createService(serviceOptions),
     sourceEditorTempRoot,
     sourceRoot
   };
@@ -735,7 +761,7 @@ test("source editor rejects assistant-backed explanations before inspecting a qu
       status: "renewal_quiesced"
     },
     terminalService: {
-      describeAgentProvider() {
+      resolveAssistantPurpose() {
         providerInspections += 1;
         throw new Error("The provider must not be inspected after renewal quiescence.");
       }
@@ -767,7 +793,7 @@ test("source editor rejects explanation admission before provider inspection or 
   let providerInspections = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      describeAgentProvider() {
+      resolveAssistantPurpose() {
         providerInspections += 1;
         throw new Error("Provider inspection must stay behind session admission.");
       }
@@ -817,42 +843,38 @@ test("source editor keeps provider failure cleanup ownership inside its conversa
   const providerStages = [];
   fixture = await createSourceEditorFixture({
     terminalService: {
-      describeAgentProvider() {
+      resolveAssistantPurpose() {
         assert.equal(lockHeld, true);
         providerStages.push("describe");
-        return {
-          accountIdentitySignature: "codex-account-fixture-v1",
-          providerId: "codex",
-          transportId: "codex_app_server"
-        };
+        return sourceRoutingDecision("codex", "codex-account-fixture-v1");
       },
-      async deleteDetachedAgentChatThread(_sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         assert.equal(lockHeld, true);
         providerStages.push("cleanup");
         return {
           code: "unit_cleanup_failed",
           error: "Unit cleanup failed.",
           ok: false,
-          threadId: input.threadId
+          threadId: input.conversationId
         };
       },
-      resolveAgentExecutionProfile() {
+      resolveEphemeralAgentExecutionProfile() {
         assert.equal(lockHeld, true);
         providerStages.push("profile");
         return resolvedSourceExplanationProfile();
       },
-      async runDetachedAgentChatTurn(_sessionId, _input, options = {}) {
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
         assert.equal(lockHeld, true);
         providerStages.push("turn");
-        options.onEvent({
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-admission-failure",
           type: "thread"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-admission-failure",
           turnId: "agent-turn-admission-failure",
           type: "turn"
@@ -917,9 +939,9 @@ test("explanations overlap source work and exclude only a second turn in the sam
       return store.runSessionExclusive(...args);
     },
     terminalService: {
-      async streamDetachedAgentChatTurn(_sessionId, _input, options) {
-        options.onEvent({ threadId: "thread-concurrent", type: "thread" });
-        options.onEvent({ threadId: "thread-concurrent", turnId: "turn-concurrent", type: "turn" });
+      async runEphemeralAgentChatTurn(_sessionId, _input, options) {
+        await options.onEvent({ threadId: "thread-concurrent", type: "thread" });
+        await options.onEvent({ threadId: "thread-concurrent", turnId: "turn-concurrent", type: "turn" });
         entered.resolve();
         await finish.promise;
         return {
@@ -1057,15 +1079,14 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
       };
     },
     terminalService: {
-      async deleteDetachedAgentChatThread(sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(sessionId, input = {}) {
         deletedThreads.push({
-          sessionId,
-          threadId: input.threadId
+          threadId: input.conversationId
         });
         return {
           ok: true,
           status: "deleted",
-          threadId: input.threadId
+          threadId: input.conversationId
         };
       }
     }
@@ -1140,7 +1161,6 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
     assert.equal(deleteResponse.ok, true);
     assert.equal(deleteResponse.deleted, true);
     assert.deepEqual(deletedThreads, [{
-      sessionId: "session-1",
       threadId: "thread-1"
     }]);
 
@@ -1169,12 +1189,11 @@ test("source editor streams explanation chat events through the agent service", 
   const streamCalls = [];
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async streamDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
-        streamCalls.push(input);
-        assert.equal(sessionId, "session-1");
+      async runEphemeralAgentChatTurn(sessionId, input = {}, options = {}) {
+        streamCalls.push({ ...input, expectedConnectionIdentity: options.expectedConnectionIdentity });
         if (input.promptLabel === "Source code explanation follow-up") {
           assert.equal(input.threadId, "agent-thread-1");
-          options.onEvent({
+          await options.onEvent({
             status: "inProgress",
             threadId: "agent-thread-1",
             turnId: "agent-turn-followup",
@@ -1190,17 +1209,17 @@ test("source editor streams explanation chat events through the agent service", 
         }
         assert.equal(input.promptLabel, "Source code explanation");
         assert.match(input.prompt, /role in the system/u);
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-1",
           type: "thread"
         });
-        options.onEvent({
+        await options.onEvent({
           status: "inProgress",
           threadId: "agent-thread-1",
           turnId: "agent-turn-1",
           type: "turn"
         });
-        options.onEvent({
+        await options.onEvent({
           classification: {
             kind: "live_progress",
             text: "## Role\nStreaming"
@@ -1240,6 +1259,7 @@ test("source editor streams explanation chat events through the agent service", 
       }
     });
 
+    assert.equal(events.find((event) => event.type === "source-explanation.error"), undefined, JSON.stringify(events));
     assert.deepEqual(events.map((event) => event.type), [
       "source-explanation.started",
       "source-explanation.thread",
@@ -1260,7 +1280,7 @@ test("source editor streams explanation chat events through the agent service", 
     assert.equal(streamCalls[0].agentSettings, undefined);
     assert.deepEqual(streamCalls[0].executionProfile, resolvedSourceExplanationProfile());
     assert.equal(
-      streamCalls[0].expectedAccountIdentitySignature,
+      streamCalls[0].expectedConnectionIdentity,
       "codex-account-fixture-v1"
     );
     assert.deepEqual(streamCalls[0].outputSchema.required, ["answer"]);
@@ -1289,7 +1309,7 @@ test("source editor streams explanation chat events through the agent service", 
     assert.equal(streamCalls[1].outputSchema.properties.answer.maxLength, 4_000);
     assert.match(streamCalls[1].prompt, /4,000 characters/u);
     assert.equal(
-      streamCalls[1].expectedAccountIdentitySignature,
+      streamCalls[1].expectedConnectionIdentity,
       "codex-account-fixture-v1"
     );
     assert.deepEqual(streamCalls[1].executionProfile, resolvedSourceExplanationProfile());
@@ -1317,27 +1337,28 @@ test("source editor persists the resolved profile while running and through an i
   });
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async deleteDetachedAgentChatThread() {
+      async deleteEphemeralAgentConversation() {
         cleanupAttempts += 1;
         return { ok: true };
       },
-      async interruptDetachedAgentChatTurn(_sessionId, input = {}) {
+      async stopEphemeralAgentConversation(_sessionId, input = {}) {
         assert.deepEqual(input.executionProfile, resolvedSourceExplanationProfile());
+        releaseTurn();
         return {
           ok: true,
           status: "interrupted"
         };
       },
-      async streamDetachedAgentChatTurn(_sessionId, _input, options = {}) {
-        options.onEvent({
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-audited-stop",
           type: "thread"
         });
-        options.onEvent({
+        await options.onEvent({
           status: "inProgress",
           threadId: "agent-thread-audited-stop",
           turnId: "agent-turn-audited-stop",
@@ -1419,24 +1440,23 @@ test("source editor deletes announced streaming threads when the resulting expla
       const turnId = `agent-turn-stream-${outcome}`;
       const fixture = await createSourceEditorFixture({
         terminalService: {
-          async deleteDetachedAgentChatThread(sessionId, input = {}) {
+          async deleteEphemeralAgentConversation(sessionId, input = {}) {
             deletedThreads.push({
               executionProfile: input.executionProfile,
-              sessionId,
-              threadId: input.threadId
+              threadId: input.conversationId
             });
             return { ok: true };
           },
-          async streamDetachedAgentChatTurn(_sessionId, _input, options = {}) {
-            options.onEvent({
+          async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
+            await options.onEvent({
               executionProfile: resolvedSourceExplanationProfile(),
               type: "execution-profile"
             });
-            options.onEvent({
+            await options.onEvent({
               threadId,
               type: "thread"
             });
-            options.onEvent({
+            await options.onEvent({
               threadId,
               turnId,
               type: "turn"
@@ -1500,7 +1520,6 @@ test("source editor deletes announced streaming threads when the resulting expla
 
         assert.deepEqual(deletedThreads, [{
           executionProfile: resolvedSourceExplanationProfile(),
-          sessionId: "session-1",
           threadId
         }]);
         const failed = events.find((event) => event.type === "source-explanation.failed");
@@ -1529,16 +1548,16 @@ test("source editor retains streaming ownership unless cleanup explicitly succee
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async deleteDetachedAgentChatThread() {
+      async deleteEphemeralAgentConversation() {
         cleanupAttempts += 1;
         return cleanupAttempts === 1 ? undefined : { ok: true };
       },
-      async streamDetachedAgentChatTurn(_sessionId, _input, options = {}) {
-        options.onEvent({
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-stream-retry",
           type: "thread"
         });
@@ -1600,22 +1619,21 @@ test("source editor immediately cleans a non-stream result missing its final aud
   const deletedThreads = [];
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async deleteDetachedAgentChatThread(sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(sessionId, input = {}) {
         deletedThreads.push({
-          sessionId,
-          threadId: input.threadId
+          threadId: input.conversationId
         });
         return {
           ok: true,
           status: "deleted"
         };
       },
-      async runDetachedAgentChatTurn(_sessionId, _input, options = {}) {
-        options.onEvent({
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-invalid-cleaned",
           type: "thread"
         });
@@ -1642,7 +1660,6 @@ test("source editor immediately cleans a non-stream result missing its final aud
     assert.equal(response.ok, false);
     assert.equal(response.code, "vibe64_source_explanation_execution_profile_missing");
     assert.deepEqual(deletedThreads, [{
-      sessionId: "session-1",
       threadId: "agent-thread-invalid-cleaned"
     }]);
     await assert.rejects(
@@ -1657,7 +1674,7 @@ test("source editor immediately cleans a non-stream result missing its final aud
   }
 });
 
-test("source editor propagates the selected provider, runtime, session, and user to detached work", async () => {
+test("source editor isolates helper execution while retaining the selected connection and user", async () => {
   const operationOptions = [];
   const vibe64User = {
     email: "ada@example.test",
@@ -1667,17 +1684,13 @@ test("source editor propagates the selected provider, runtime, session, and user
     agentAccountIdentitySignature: "codex-account-ada-v1",
     agentProviderId: "codex",
     terminalService: {
-      describeAgentProvider(options = {}) {
+      resolveAssistantPurpose(_input, options = {}) {
         assert.equal(options.session.metadata.agent_identity_provider, "codex");
         assert.deepEqual(options.vibe64User, vibe64User);
         assert.equal(typeof options.runtime.getSession, "function");
-        return {
-          accountIdentitySignature: "codex-account-ada-v1",
-          providerId: "codex",
-          transportId: "codex_app_server"
-        };
+        return sourceRoutingDecision("codex", "codex-account-ada-v1");
       },
-      async deleteDetachedAgentChatThread(_sessionId, input, options = {}) {
+      async deleteEphemeralAgentConversation(_sessionId, input, options = {}) {
         assert.deepEqual(input.executionProfile, resolvedSourceExplanationProfile());
         operationOptions.push(options);
         return {
@@ -1685,14 +1698,14 @@ test("source editor propagates the selected provider, runtime, session, and user
           status: "deleted"
         };
       },
-      async runDetachedAgentChatTurn(_sessionId, input, options = {}) {
-        assert.equal(input.expectedAccountIdentitySignature, "codex-account-ada-v1");
+      async runEphemeralAgentChatTurn(_sessionId, input, options = {}) {
+        assert.equal(options.expectedConnectionIdentity, "codex-account-ada-v1");
         operationOptions.push(options);
-        options.onEvent({
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-provider-context",
           type: "thread"
         });
@@ -1725,9 +1738,9 @@ test("source editor propagates the selected provider, runtime, session, and user
     assert.equal(deleted.ok, true);
     assert.equal(operationOptions.length, 2);
     for (const options of operationOptions) {
-      assert.equal(options.providerId, "codex");
-      assert.equal(options.session.metadata.agent_identity_provider, "codex");
-      assert.equal(typeof options.runtime.getSession, "function");
+      assert.equal(options.assistantSelection.engineId, "codex");
+      assert.equal(options.session, undefined);
+      assert.equal(options.runtime, undefined);
       assert.deepEqual(options.vibe64User, vibe64User);
     }
   } finally {
@@ -1742,23 +1755,22 @@ test("source editor cleans a rejected non-stream agent result after its thread i
   const deletedThreads = [];
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async deleteDetachedAgentChatThread(sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(sessionId, input = {}) {
         deletedThreads.push({
           executionProfile: input.executionProfile,
-          sessionId,
-          threadId: input.threadId
+          threadId: input.conversationId
         });
         return {
           ok: true,
           status: "deleted"
         };
       },
-      async runDetachedAgentChatTurn(_sessionId, _input, options = {}) {
-        options.onEvent({
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-rejected-cleaned",
           type: "thread"
         });
@@ -1787,7 +1799,6 @@ test("source editor cleans a rejected non-stream agent result after its thread i
     assert.equal(response.code, "unit_agent_rejected");
     assert.deepEqual(deletedThreads, [{
       executionProfile: resolvedSourceExplanationProfile(),
-      sessionId: "session-1",
       threadId: "agent-thread-rejected-cleaned"
     }]);
     await assert.rejects(
@@ -1806,31 +1817,31 @@ test("source editor retains cleanup ownership when a non-stream agent throws aft
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async deleteDetachedAgentChatThread(_sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         cleanupAttempts += 1;
         return cleanupAttempts === 1
           ? {
               code: "unit_cleanup_failed",
               error: "Unit cleanup failed.",
               ok: false,
-              threadId: input.threadId
+              threadId: input.conversationId
             }
           : {
               ok: true,
               status: "deleted",
-              threadId: input.threadId
+              threadId: input.conversationId
             };
       },
-      async runDetachedAgentChatTurn(_sessionId, _input, options = {}) {
-        options.onEvent({
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-thrown-retry",
           type: "thread"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-thrown-retry",
           turnId: "agent-turn-thrown-retry",
           type: "turn"
@@ -1876,22 +1887,22 @@ test("source editor does not accept a missing cleanup acknowledgement for an inv
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async deleteDetachedAgentChatThread(_sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         cleanupAttempts += 1;
         return cleanupAttempts === 1
           ? undefined
           : {
               ok: true,
               status: "deleted",
-              threadId: input.threadId
+              threadId: input.conversationId
             };
       },
-      async runDetachedAgentChatTurn(_sessionId, _input, options = {}) {
-        options.onEvent({
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-invalid-retry",
           type: "thread"
         });
@@ -1959,29 +1970,23 @@ test("source editor cache invalidates on source or provider changes and force by
   const fixture = await createSourceEditorFixture({
     agentProviderId: () => providerId,
     terminalService: {
-      describeAgentProvider(options = {}) {
+      resolveAssistantPurpose(_input, options = {}) {
         assert.equal(options.session.metadata.agent_identity_provider, providerId);
         assert.deepEqual(options.vibe64User, vibe64User);
         assert.equal(typeof options.runtime.getSession, "function");
-        return {
-          accountIdentitySignature,
-          providerId,
-          transportId: `${providerId}-transport`
-        };
+        return sourceRoutingDecision(providerId, accountIdentitySignature);
       },
-      async streamDetachedAgentChatTurn(_sessionId, input = {}, options = {}) {
-        assert.equal(options.providerId, providerId);
-        assert.equal(options.session.metadata.agent_identity_provider, providerId);
+      async runEphemeralAgentChatTurn(_sessionId, input = {}, options = {}) {
+        assert.equal(options.assistantSelection.engineId, providerId);
         assert.deepEqual(options.vibe64User, vibe64User);
-        assert.equal(typeof options.runtime.getSession, "function");
         if (input.promptLabel === "Source code explanation follow-up") {
           followupCalls += 1;
           assert.equal(input.threadId, "");
-          options.onEvent({
+          await options.onEvent({
             executionProfile: resolvedSourceExplanationProfile(),
             type: "execution-profile"
           });
-          options.onEvent({
+          await options.onEvent({
             threadId: "agent-thread-cache-followup",
             type: "thread"
           });
@@ -1995,11 +2000,11 @@ test("source editor cache invalidates on source or provider changes and force by
         }
         initialCalls += 1;
         const threadId = `agent-thread-cache-${initialCalls}`;
-        options.onEvent({
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId,
           type: "thread"
         });
@@ -2099,7 +2104,7 @@ test("source editor cache invalidates on source or provider changes and force by
     await streamEvents(explanationRequest("exp_cache_provider_account_changed"));
     assert.equal(initialCalls, 6);
 
-    providerId = "another-agent-provider";
+    providerId = "opencode";
     await streamEvents(explanationRequest("exp_cache_provider_changed"));
     assert.equal(initialCalls, 7);
   } finally {
@@ -2130,14 +2135,10 @@ test("source editor cache identity follows the resolved economy profile revision
       };
     },
     terminalService: {
-      describeAgentProvider() {
-        return {
-          accountIdentitySignature: "codex-account-profile-cache",
-          providerId: "codex",
-          transportId: "codex_app_server"
-        };
+      resolveAssistantPurpose() {
+        return sourceRoutingDecision("codex", "codex-account-profile-cache");
       },
-      resolveAgentExecutionProfile() {
+      resolveEphemeralAgentExecutionProfile() {
         return executionProfile;
       }
     }
@@ -2209,27 +2210,16 @@ test("source explanation access denial precedes provider inspection, cache reuse
       };
     },
     terminalService: {
-      describeAgentProvider() {
-        providerCalls += 1;
-        return {
-          accountIdentitySignature: "codex-account-restricted-cache",
-          providerId: "codex",
-          transportId: "codex_app_server"
-        };
-      },
-      requireAssistantAccess(sessionId, options) {
+      resolveAssistantPurpose(input, options) {
         accessCalls += 1;
-        assert.equal(sessionId, "session-1");
+        assert.equal(input.purpose, "source_explanation");
         assert.equal(options.vibe64User.username, "member");
-        if (restricted) {
-          const error = new Error("Only the workspace owner can use this personal AI connection.");
-          error.code = "vibe64_assistant_owner_required";
-          error.statusCode = 403;
-          throw error;
-        }
-        return { ok: true };
+        if (restricted) return { available: false, reasonCode: "vibe64_assistant_owner_required",
+          message: "Only the workspace owner can use this personal AI connection." };
+        providerCalls += 1;
+        return sourceRoutingDecision("codex", "codex-account-restricted-cache");
       },
-      resolveAgentExecutionProfile() {
+      resolveEphemeralAgentExecutionProfile() {
         profileCalls += 1;
         return resolvedSourceExplanationProfile();
       }
@@ -2298,7 +2288,7 @@ test("source explanation access denial precedes provider inspection, cache reuse
     });
     assert.equal(followupEvents.at(-1).code, "vibe64_assistant_owner_required");
 
-    assert.equal(accessCalls, 6);
+    assert.equal(accessCalls, authorizedProviderCalls + 5);
     assert.equal(providerCalls, authorizedProviderCalls);
     assert.equal(profileCalls, authorizedProfileCalls);
     assert.equal(generationCalls, 1);
@@ -2344,14 +2334,10 @@ test("source editor never coalesces an in-flight explanation across resolved pro
       };
     },
     terminalService: {
-      describeAgentProvider() {
-        return {
-          accountIdentitySignature: "codex-account-profile-flight",
-          providerId: "codex",
-          transportId: "codex_app_server"
-        };
+      resolveAssistantPurpose() {
+        return sourceRoutingDecision("codex", "codex-account-profile-flight");
       },
-      resolveAgentExecutionProfile() {
+      resolveEphemeralAgentExecutionProfile() {
         return executionProfile;
       }
     }
@@ -2400,21 +2386,17 @@ test("source editor does not cache output across an account switch during genera
   let generationCalls = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      describeAgentProvider() {
-        return {
-          accountIdentitySignature,
-          providerId: "codex",
-          transportId: "codex_app_server"
-        };
+      resolveAssistantPurpose() {
+        return sourceRoutingDecision("codex", accountIdentitySignature);
       },
-      async streamDetachedAgentChatTurn(_sessionId, input, options = {}) {
+      async runEphemeralAgentChatTurn(_sessionId, input, options = {}) {
         generationCalls += 1;
-        expectedAccountIdentitySignatures.push(input.expectedAccountIdentitySignature);
-        options.onEvent({
+        expectedAccountIdentitySignatures.push(options.expectedConnectionIdentity);
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: `agent-thread-account-race-${generationCalls}`,
           type: "thread"
         });
@@ -2482,25 +2464,21 @@ test("source editor rechecks the account before serving a completed cache entry"
   let generationCalls = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      describeAgentProvider() {
+      resolveAssistantPurpose() {
         descriptionCalls += 1;
-        const description = {
-          accountIdentitySignature,
-          providerId: "codex",
-          transportId: "codex_app_server"
-        };
+        const description = sourceRoutingDecision("codex", accountIdentitySignature);
         if (descriptionCalls === 3) {
           accountIdentitySignature = "codex-account-b";
         }
         return description;
       },
-      async streamDetachedAgentChatTurn(_sessionId, _input, options = {}) {
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
         generationCalls += 1;
-        options.onEvent({
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: `agent-thread-cache-race-${generationCalls}`,
           type: "thread"
         });
@@ -2662,13 +2640,13 @@ test("source editor coalesces concurrent identical explanation requests", async 
   const fixture = await createSourceEditorFixture({
     agentAccountIdentitySignature: "",
     terminalService: {
-      async streamDetachedAgentChatTurn(_sessionId, _input, options = {}) {
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
         agentCalls += 1;
-        options.onEvent({
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-coalesced",
           type: "thread"
         });
@@ -2744,14 +2722,14 @@ test("source editor explanation cache evicts its least-recently-used entry at th
       text: `export const cachedValue${index} = ${index};\n`
     })),
     terminalService: {
-      async runDetachedAgentChatTurn(_sessionId, _input, options = {}) {
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
         agentCalls += 1;
         const threadId = `agent-thread-cache-bound-${agentCalls}`;
-        options.onEvent({
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId,
           type: "thread"
         });
@@ -2796,16 +2774,16 @@ test("source editor preserves failed explanation details for recovery", async ()
   const events = [];
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async streamDetachedAgentChatTurn(_sessionId, _input, options = {}) {
-        options.onEvent({
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           type: "execution-profile"
         });
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-failed",
           type: "thread"
         });
-        options.onEvent({
+        await options.onEvent({
           status: "failed",
           threadId: "agent-thread-failed",
           turnId: "agent-turn-failed",
@@ -2868,7 +2846,7 @@ test("source editor fails closed when the economy profile observation is missing
   const events = [];
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async streamDetachedAgentChatTurn() {
+      async runEphemeralAgentChatTurn() {
         return {
           ok: true,
           text: structuredExplanation("Unverified explanation."),
@@ -2912,8 +2890,8 @@ test("source editor fails closed before generation when economy profile resoluti
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      resolveAgentExecutionProfile: null,
-      async runDetachedAgentChatTurn() {
+      resolveEphemeralAgentExecutionProfile: null,
+      async runEphemeralAgentChatTurn() {
         agentCalls += 1;
         return { ok: true };
       }
@@ -2945,13 +2923,13 @@ test("source editor blocks required explanations when the selected assistant acc
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async describeAgentProvider() {
+      async resolveAssistantPurpose() {
         const error = new Error("Codex authentication is required.");
         error.code = "vibe64_codex_auth_required";
         error.statusCode = 401;
         throw error;
       },
-      async runDetachedAgentChatTurn() {
+      async runEphemeralAgentChatTurn() {
         agentCalls += 1;
         throw new Error("Unauthenticated source work must not start.");
       }
@@ -2969,10 +2947,9 @@ test("source editor blocks required explanations when the selected assistant acc
     });
 
     assert.equal(response.ok, false);
-    assert.equal(response.code, "vibe64_source_explanation_agent_auth_required");
-    assert.equal(response.statusCode, 503);
-    assert.match(response.error, /Sign in to or reconnect the selected assistant provider/u);
-    assert.equal(response.details.causeCode, "vibe64_codex_auth_required");
+    assert.equal(response.code, "vibe64_codex_auth_required");
+    assert.equal(response.statusCode, 401);
+    assert.match(response.error, /Codex authentication is required/u);
     assert.equal(agentCalls, 0);
   } finally {
     await rm(fixture.root, {
@@ -3001,7 +2978,7 @@ test("source editor surfaces economy availability blockers without an interactiv
       let agentCalls = 0;
       const fixture = await createSourceEditorFixture({
         terminalService: {
-          async runDetachedAgentChatTurn(_sessionId, input = {}) {
+          async runEphemeralAgentChatTurn(_sessionId, input = {}) {
             agentCalls += 1;
             assert.deepEqual(input.executionProfile, resolvedSourceExplanationProfile());
             assert.equal(input.agentSettings, undefined);
@@ -3051,7 +3028,7 @@ test("source editor never reuses an unverified explanation thread for follow-ups
       };
     },
     terminalService: {
-      async streamDetachedAgentChatTurn() {
+      async runEphemeralAgentChatTurn() {
         agentCalls += 1;
         throw new Error("Unverified thread reached the provider.");
       }
@@ -3096,7 +3073,7 @@ test("source editor asks for regeneration when an economy follow-up thread is un
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async streamDetachedAgentChatTurn() {
+      async runEphemeralAgentChatTurn() {
         agentCalls += 1;
         if (agentCalls > 1) {
           return {
@@ -3165,19 +3142,18 @@ test("source editor retires a non-stream economy thread after an invalid follow-
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async deleteDetachedAgentChatThread(sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(sessionId, input = {}) {
         deletedThreads.push({
           executionProfile: input.executionProfile,
-          sessionId,
-          threadId: input.threadId
+          threadId: input.conversationId
         });
         return {
           ok: true,
           status: "deleted",
-          threadId: input.threadId
+          threadId: input.conversationId
         };
       },
-      async runDetachedAgentChatTurn() {
+      async runEphemeralAgentChatTurn() {
         agentCalls += 1;
         return agentCalls === 1
           ? {
@@ -3218,7 +3194,6 @@ test("source editor retires a non-stream economy thread after an invalid follow-
     assert.equal(invalidFollowup.details.cleanupRequired, false);
     assert.deepEqual(deletedThreads, [{
       executionProfile: resolvedSourceExplanationProfile(),
-      sessionId: "session-1",
       threadId: "economy-followup-invalid"
     }]);
 
@@ -3244,17 +3219,17 @@ test("source editor preserves retryable ownership when a failed non-stream follo
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async deleteDetachedAgentChatThread(_sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         cleanupAttempts += 1;
         return cleanupAttempts === 1
           ? undefined
           : {
               ok: true,
               status: "deleted",
-              threadId: input.threadId
+              threadId: input.conversationId
             };
       },
-      async runDetachedAgentChatTurn(_sessionId, _input, options = {}) {
+      async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
         agentCalls += 1;
         if (agentCalls === 1) {
           return {
@@ -3265,7 +3240,7 @@ test("source editor preserves retryable ownership when a failed non-stream follo
             turnId: "economy-turn-initial"
           };
         }
-        options.onEvent({
+        await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
           threadId: "economy-followup-retry",
           turnId: "economy-turn-failed",
@@ -3324,18 +3299,17 @@ test("source editor cleans abandoned explanation chats from its disk cleanup led
   let streamCount = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async deleteDetachedAgentChatThread(sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(sessionId, input = {}) {
         deletedThreads.push({
-          sessionId,
-          threadId: input.threadId
+          threadId: input.conversationId
         });
         return {
           ok: true,
           status: "deleted",
-          threadId: input.threadId
+          threadId: input.conversationId
         };
       },
-      async streamDetachedAgentChatTurn() {
+      async runEphemeralAgentChatTurn() {
         streamCount += 1;
         return {
           executionProfile: resolvedSourceExplanationProfile(),
@@ -3384,6 +3358,7 @@ test("source editor cleans abandoned explanation chats from its disk cleanup led
         "agentThreadId",
         "agentTurnId",
         "createdAt",
+        "helper",
         "id",
         "originId",
         "sessionId",
@@ -3408,7 +3383,6 @@ test("source editor cleans abandoned explanation chats from its disk cleanup led
     assert.equal(cleanupResponse.ok, true);
     assert.deepEqual(cleanupResponse.cleaned.map((record) => record.id), ["exp_abandoned"]);
     assert.deepEqual(deletedThreads, [{
-      sessionId: "session-1",
       threadId: "agent-thread-1"
     }]);
 
@@ -3427,11 +3401,9 @@ test("source editor cleans abandoned explanation chats from its disk cleanup led
     assert.deepEqual(staleCleanupResponse.cleaned.map((record) => record.id), ["exp_active"]);
     assert.deepEqual(deletedThreads, [
       {
-        sessionId: "session-1",
         threadId: "agent-thread-1"
       },
       {
-        sessionId: "session-1",
         threadId: "agent-thread-2"
       }
     ]);
@@ -3460,25 +3432,25 @@ test("source editor stop is not overwritten by late streaming output", async () 
   });
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async interruptDetachedAgentChatTurn(sessionId, input = {}) {
+      async stopEphemeralAgentConversation(sessionId, input = {}) {
         interruptedTurns.push({
           executionProfile: input.executionProfile,
-          sessionId,
-          threadId: input.threadId,
-          turnId: input.turnId
+          threadId: input.conversationId,
+          turnId: input.runId
         });
+        releaseAgentTurn();
         return {
           ok: true,
           status: "interrupted"
         };
       },
-      async streamDetachedAgentChatTurn(_sessionId, input = {}, options = {}) {
+      async runEphemeralAgentChatTurn(_sessionId, input = {}, options = {}) {
         assert.equal(input.promptLabel, "Source code explanation");
-        options.onEvent({
+        await options.onEvent({
           threadId: "agent-thread-stop",
           type: "thread"
         });
-        options.onEvent({
+        await options.onEvent({
           status: "inProgress",
           threadId: "agent-thread-stop",
           turnId: "agent-turn-stop",
@@ -3525,11 +3497,7 @@ test("source editor stop is not overwritten by late streaming output", async () 
     assert.equal(stopResponse.ok, true);
     assert.equal(stopResponse.explanation.status, "stopped");
     assert.deepEqual(interruptedTurns, [{
-      executionProfile: {
-        profileId: "economy",
-        workloadId: "source_explanation"
-      },
-      sessionId: "session-1",
+      executionProfile: resolvedSourceExplanationProfile(),
       threadId: "agent-thread-stop",
       turnId: "agent-turn-stop"
     }]);
@@ -3572,27 +3540,27 @@ for (const stopBoundary of [
         return store.runSessionExclusive(...args);
       },
       terminalService: {
-        async deleteDetachedAgentChatThread(sessionId, input) {
-          deletedThreads.push({ sessionId, threadId: input.threadId });
+        async deleteEphemeralAgentConversation(sessionId, input) {
+          deletedThreads.push({ threadId: input.conversationId });
           return { ok: true };
         },
-        async interruptDetachedAgentChatTurn(sessionId, input) {
-          interruptedTurns.push({ sessionId, ...input });
+        async stopEphemeralAgentConversation(sessionId, input) {
+          interruptedTurns.push({ ...input });
           interruptReady.resolve();
           await interruptFinished.promise;
           return { ok: true, status: "interrupted" };
         },
-        async streamDetachedAgentChatTurn(_sessionId, input, options) {
+        async runEphemeralAgentChatTurn(_sessionId, input, options) {
           const turn = ["initial", "a", "b"][turnCount++];
           assert.ok(turn, "only the initial explanation and two follow-ups are generated");
           const threadId = "agent-thread-late-stop";
           const turnId = `agent-turn-${turn}`;
-          options.onEvent({ threadId, type: "thread" });
+          await options.onEvent({ threadId, type: "thread" });
           if (turn === "b" && stopBoundary === "a follow-up before its new provider turn") {
             secondReady.resolve();
             await secondFinished.promise;
           }
-          options.onEvent({ status: "inProgress", threadId, turnId, type: "turn" });
+          await options.onEvent({ status: "inProgress", threadId, turnId, type: "turn" });
           if (turn === "a") {
             assert.match(input.prompt, /Question A/u);
             firstReady.resolve();
@@ -3640,6 +3608,8 @@ for (const stopBoundary of [
       });
       operations.push(first);
       await firstReady.promise;
+      firstFinished.resolve();
+      await first;
       const stopping = fixture.service.stopExplanation({
         explanationId: "exp_late_stop",
         sessionId: "session-1"
@@ -3648,9 +3618,9 @@ for (const stopBoundary of [
       await interruptReady.promise;
       assert.deepEqual(interruptedTurns, [{
         executionProfile: resolvedSourceExplanationProfile(),
-        sessionId: "session-1",
-        threadId: "agent-thread-late-stop",
-        turnId: "agent-turn-a"
+        conversationId: "agent-thread-late-stop",
+        runId: "agent-turn-a",
+        cleanupExecutionId: ""
       }]);
       firstFinished.resolve();
       await first;
@@ -3672,7 +3642,6 @@ for (const stopBoundary of [
         });
         assert.equal(repeatedDelete.deleted, false);
         assert.deepEqual(deletedThreads, [{
-          sessionId: "session-1",
           threadId: "agent-thread-late-stop"
         }]);
         await assert.rejects(readFile(
@@ -3731,7 +3700,7 @@ for (const stopBoundary of [
 test("source editor allows whole-file explanations for files larger than selected-range limits", async () => {
   const fixture = await createSourceEditorFixture({
     terminalService: {
-      async streamDetachedAgentChatTurn(_sessionId, input = {}) {
+      async runEphemeralAgentChatTurn(_sessionId, input = {}) {
         assert.match(input.prompt, /Target: whole file/u);
         assert.match(input.prompt, /bounded excerpt may omit content/u);
         assert.doesNotMatch(input.prompt, /Inspect the repository file path/u);
@@ -3793,7 +3762,7 @@ test("source editor keeps temporary explanation chat retryable when agent cleanu
       };
     },
     terminalService: {
-      async deleteDetachedAgentChatThread(_sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         cleanupAttempts += 1;
         if (cleanupAttempts === 1) {
           return {
@@ -3801,13 +3770,13 @@ test("source editor keeps temporary explanation chat retryable when agent cleanu
             error: "Unit cleanup failed.",
             ok: false,
             statusCode: 502,
-            threadId: input.threadId
+            threadId: input.conversationId
           };
         }
         return {
           ok: true,
           status: "deleted",
-          threadId: input.threadId
+          threadId: input.conversationId
         };
       }
     }
@@ -3864,14 +3833,14 @@ test("source editor keeps temporary explanation chat retryable when cleanup is n
       };
     },
     terminalService: {
-      async deleteDetachedAgentChatThread(_sessionId, input = {}) {
+      async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         cleanupAttempts += 1;
         return cleanupAttempts === 1
           ? undefined
           : {
               ok: true,
               status: "deleted",
-              threadId: input.threadId
+              threadId: input.conversationId
             };
       }
     }
@@ -4231,4 +4200,274 @@ test("source editor rejects path traversal outside the session source", async ()
       recursive: true
     });
   }
+});
+
+test("source explanations use a member's shared Economy without the personal working conversation", async (t) => {
+  const member = { role: "member", username: "ada" };
+  const selection = { ...sourceRoutingDecision("opencode").effectiveSelection,
+    modelProviderId: "deepseek", modelId: "deepseek-chat" };
+  const profile = { ...resolvedSourceExplanationProfile(), providerId: "opencode", model: "deepseek-chat" };
+  const nativeScopes = [];
+  const deleted = [];
+  const fixture = await createSourceEditorFixture({
+    terminalService: {
+      requireAssistantAccess() { throw new Error("The working conversation must not authorize this helper."); },
+      resolveAssistantPurpose(input, options) {
+        assert.equal(input.purpose, "source_explanation");
+        assert.equal(input.workflowEngineId, "codex");
+        assert.deepEqual(options.vibe64User, member);
+        assert.equal(JSON.parse(options.session.metadata.assistant_selection).modelId, "gpt-6-astra");
+        return { available: true, effectiveSelection: selection, connectionIdentity: "workspace-deepseek" };
+      },
+      resolveEphemeralAgentExecutionProfile(_scope, input, options) {
+        assert.equal(input.workloadId, "source_explanation");
+        assert.deepEqual(options.assistantSelection, selection);
+        assert.equal(options.expectedConnectionIdentity, "workspace-deepseek");
+        return profile;
+      },
+      async runEphemeralAgentChatTurn(scope, input, options) {
+        nativeScopes.push(scope.id);
+        assert.equal(input.executionProfile, profile, "the manager's profile provenance survives until execution");
+        assert.deepEqual(options.assistantSelection, selection);
+        assert.deepEqual(options.vibe64User, member);
+        await options.onEvent({ type: "thread", threadId: "member-explanation" });
+        await options.onEvent({ type: "turn", turnId: `turn-${nativeScopes.length}` });
+        return { ok: true, text: structuredExplanation("Only bounded source context."), executionProfile: profile,
+          threadId: "member-explanation", turnId: `turn-${nativeScopes.length}` };
+      },
+      async deleteEphemeralAgentConversation(scope, input, options) {
+        deleted.push({ scope: scope.id, conversation: input.conversationId });
+        assert.deepEqual(options.assistantSelection, selection);
+        return { ok: true };
+      }
+    }
+  });
+  t.after(async () => { await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
+  const input = { sessionId: "session-1", explanationId: "exp_member_shared", path: "src/app.js", scope: "file", vibe64User: member };
+  const initial = await fixture.service.explainSelection(input);
+  assert.equal(initial.ok, true, JSON.stringify(initial));
+  const followup = await fixture.service.addExplanationFollowup({ ...input, message: "Why does it log?" });
+  assert.equal(followup.ok, true, JSON.stringify(followup));
+  assert.equal(followup.explanation.model, "deepseek-chat");
+  assert.equal(nativeScopes.length, 2);
+  assert.equal(nativeScopes[0], nativeScopes[1]);
+  assert.doesNotMatch(JSON.stringify(followup), /workspace-deepseek|assistant-helpers|actorIdentity|runtimeRoot/);
+  const ledgerPath = path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json");
+  const ledgerText = await readFile(ledgerPath, "utf8");
+  assert.doesNotMatch(ledgerText, /Why does it log|Only bounded source context|console\.log/);
+  const record = JSON.parse(ledgerText).records[0];
+  assert.equal(record.helper.selection.modelId, "deepseek-chat");
+  assert.equal((await fixture.service.deleteExplanation(input)).ok, true);
+  assert.deepEqual(deleted, [{ scope: nativeScopes[0], conversation: "member-explanation" }]);
+  await assert.rejects(lstat(path.dirname(record.helper.scope.runtimeRoot)), { code: "ENOENT" });
+  await assert.rejects(readFile(ledgerPath), { code: "ENOENT" });
+});
+
+for (const changed of ["connection", "model", "actor"]) {
+  test(`source follow-ups cannot reuse a native conversation after its ${changed} changes`, async (t) => {
+    let connectionIdentity = "connection-a";
+    let model = "gpt-5.6-luna";
+    let actor = { role: "member", username: "ada" };
+    let runs = 0;
+    const deleted = [];
+    const fixture = await createSourceEditorFixture({ terminalService: {
+      resolveAssistantPurpose() {
+        const decision = sourceRoutingDecision("codex", connectionIdentity);
+        return { ...decision, effectiveSelection: { ...decision.effectiveSelection, modelId: model } };
+      },
+      resolveEphemeralAgentExecutionProfile() { return { ...resolvedSourceExplanationProfile(), model }; },
+      async runEphemeralAgentChatTurn(scope, _input, options) {
+        runs += 1;
+        await options.onEvent({ type: "thread", threadId: `thread-${runs}` });
+        return { ok: true, text: structuredExplanation("Explanation."), threadId: `thread-${runs}`,
+          executionProfile: { ...resolvedSourceExplanationProfile(), model } };
+      },
+      async deleteEphemeralAgentConversation(scope, input) {
+        deleted.push({ scope: scope.id, thread: input.conversationId });
+        return { ok: true };
+      }
+    } });
+    t.after(async () => { await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
+    const input = { sessionId: "session-1", explanationId: `exp_changed_${changed}`, path: "src/app.js", scope: "file" };
+    assert.equal((await fixture.service.explainSelection({ ...input, vibe64User: actor })).ok, true);
+    const firstScope = fixture.helperScopes[0].id;
+    if (changed === "connection") connectionIdentity = "connection-b";
+    if (changed === "model") model = "gpt-5.4-nano";
+    if (changed === "actor") actor = { role: "member", username: "grace" };
+    const blocked = await fixture.service.addExplanationFollowup({ ...input, vibe64User: actor, message: "Continue" });
+    assert.equal(blocked.code, "vibe64_source_explanation_destination_changed");
+    assert.equal(runs, 1);
+    assert.deepEqual(deleted, []);
+    const regenerated = await fixture.service.explainSelection({ ...input, vibe64User: actor, force: true });
+    assert.equal(regenerated.ok, true, JSON.stringify(regenerated));
+    assert.equal(runs, 2);
+    assert.deepEqual(deleted, [{ scope: firstScope, thread: "thread-1" }]);
+    assert.notEqual(fixture.helperScopes.at(-1).id, firstScope);
+  });
+}
+
+for (const action of ["Close", "session close"]) {
+  test(`source ${action} waits for late native startup and removes its owned scope`, async (t) => {
+    const starting = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    let deletedScope;
+    const fixture = await createSourceEditorFixture({ terminalService: {
+      async runEphemeralAgentChatTurn(_scope, _input, options) {
+        starting.resolve();
+        await release.promise;
+        await options.onEvent({ type: "thread", threadId: "late-native-thread" });
+        options.signal.throwIfAborted();
+        throw new Error("No turn may start after cancellation.");
+      },
+      async deleteEphemeralAgentConversation(scope, input) {
+        deletedScope = scope;
+        assert.equal(input.conversationId, "late-native-thread");
+        return { ok: true };
+      }
+    } });
+    t.after(async () => { release.resolve(); await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
+    const input = { sessionId: "session-1", explanationId: "exp_late_start", path: "src/app.js", scope: "file" };
+    const generating = fixture.service.streamExplanation(input);
+    await starting.promise;
+    let closed = false;
+    const closing = (action === "Close" ? fixture.service.deleteExplanation(input)
+      : fixture.service.closeExplanationsForSession(input.sessionId)).then((result) => { closed = true; return result; });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(closed, false);
+    release.resolve();
+    const result = await closing;
+    assert.equal(result.ok, true, JSON.stringify(result));
+    await generating;
+    assert.ok(deletedScope);
+    await assert.rejects(lstat(path.dirname(deletedScope.runtimeRoot)), { code: "ENOENT" });
+    await assert.rejects(readFile(path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json")), { code: "ENOENT" });
+  });
+}
+
+test("source cleanup survives a restart and uses the captured destination without another inference", async (t) => {
+  let cleanupAvailable = false;
+  let routingAllowed = true;
+  let runs = 0;
+  const deletes = [];
+  const fixture = await createSourceEditorFixture({ terminalService: {
+    resolveAssistantPurpose() {
+      assert.equal(routingAllowed, true, "restart cleanup does not resolve new inference");
+      return sourceRoutingDecision();
+    },
+    async runEphemeralAgentChatTurn(_scope, _input, options) {
+      runs += 1;
+      await options.onEvent({ type: "thread", threadId: "restart-thread" });
+      return { ok: true, text: structuredExplanation("Ready."), threadId: "restart-thread",
+        executionProfile: resolvedSourceExplanationProfile() };
+    },
+    async deleteEphemeralAgentConversation(scope, input, options) {
+      deletes.push({ scope: scope.id, thread: input.conversationId, selection: options.assistantSelection });
+      return cleanupAvailable ? { ok: true } : { ok: false, code: "native_cleanup_failed", error: "Retry cleanup." };
+    }
+  } });
+  let restarted;
+  t.after(async () => { await fixture.service.close(); await restarted?.close(); await rm(fixture.root, { recursive: true, force: true }); });
+  const input = { sessionId: "session-1", explanationId: "exp_restart", path: "src/app.js", scope: "file" };
+  assert.equal((await fixture.service.explainSelection(input)).ok, true);
+  assert.equal((await fixture.service.deleteExplanation(input)).code, "native_cleanup_failed");
+  const ledgerPath = path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json");
+  const retained = JSON.parse(await readFile(ledgerPath, "utf8")).records[0];
+  assert.equal(retained.helper.conversationId, "restart-thread");
+  assert.equal((await fixture.service.closeExplanationsForSession(input.sessionId)).ok, false);
+  await fixture.service.close();
+  routingAllowed = false;
+  cleanupAvailable = true;
+  restarted = fixture.restartService();
+  assert.equal((await restarted.closeExplanationsForSession(input.sessionId)).ok, true);
+  assert.equal(runs, 1);
+  assert.equal(deletes.length, 3);
+  assert.deepEqual(deletes[0], deletes[1]);
+  assert.deepEqual(deletes[1], deletes[2]);
+  await assert.rejects(readFile(ledgerPath), { code: "ENOENT" });
+  await assert.rejects(lstat(path.dirname(retained.helper.scope.runtimeRoot)), { code: "ENOENT" });
+});
+
+test("source Stop reports a rejected provider acknowledgement and preserves cleanup ownership", async (t) => {
+  const ready = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const fixture = await createSourceEditorFixture({ terminalService: {
+    async runEphemeralAgentChatTurn(_scope, _input, options) {
+      await options.onEvent({ type: "thread", threadId: "unconfirmed-stop" });
+      await options.onEvent({ type: "turn", turnId: "unconfirmed-turn" });
+      ready.resolve();
+      await release.promise;
+      return { ok: true, text: structuredExplanation("Late answer."), threadId: "unconfirmed-stop",
+        executionProfile: resolvedSourceExplanationProfile() };
+    },
+    async stopEphemeralAgentConversation() {
+      release.resolve();
+      throw Object.assign(new Error("The provider could not stop."), { code: "native_stop_failed" });
+    },
+    async deleteEphemeralAgentConversation() { return { ok: false, error: "Still running." }; }
+  } });
+  t.after(async () => { release.resolve(); await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
+  const input = { sessionId: "session-1", explanationId: "exp_unconfirmed_stop", path: "src/app.js", scope: "file" };
+  const events = [];
+  const generating = fixture.service.streamExplanation(input, { emit: (event) => events.push(event) });
+  await ready.promise;
+  const stopped = await fixture.service.stopExplanation(input);
+  await generating;
+  assert.equal(stopped.ok, false);
+  assert.equal(stopped.code, "native_stop_failed");
+  assert.equal(events.some((event) => event.type === "source-explanation.finished"), false);
+  const retained = JSON.parse(await readFile(path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json"), "utf8"));
+  assert.equal(retained.records[0].helper.conversationId, "unconfirmed-stop");
+});
+
+test("source Stop can cancel before profile resolution without starting or leaking a native conversation", async (t) => {
+  const preparing = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  let runs = 0;
+  let cleanedScope;
+  const fixture = await createSourceEditorFixture({ terminalService: {
+    async resolveEphemeralAgentExecutionProfile() {
+      preparing.resolve();
+      await release.promise;
+      return resolvedSourceExplanationProfile();
+    },
+    async runEphemeralAgentChatTurn() { runs += 1; throw new Error("Cancelled preparation must not infer."); },
+    async deleteEphemeralAgentConversation(scope, input) {
+      cleanedScope = scope;
+      assert.equal(input.conversationId, "");
+      return { ok: true };
+    }
+  } });
+  t.after(async () => { release.resolve(); await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
+  const input = { sessionId: "session-1", explanationId: "exp_cancel_prepare", path: "src/app.js", scope: "file" };
+  const generating = fixture.service.streamExplanation(input);
+  await preparing.promise;
+  const stopping = fixture.service.stopExplanation(input);
+  await new Promise((resolve) => setImmediate(resolve));
+  release.resolve();
+  const stopped = await stopping;
+  await generating;
+  assert.equal(stopped.ok, true, JSON.stringify(stopped));
+  assert.equal(stopped.explanation.status, "stopped");
+  assert.equal(runs, 0);
+  await assert.rejects(lstat(path.dirname(cleanedScope.runtimeRoot)), { code: "ENOENT" });
+});
+
+test("source cleanup retires old thread-only references without resolving a new helper", async (t) => {
+  const deleted = [];
+  const fixture = await createSourceEditorFixture({ terminalService: {
+    resolveAssistantPurpose() { throw new Error("Cleanup must not resolve inference."); },
+    async deleteDetachedAgentChatThread(sessionId, input) {
+      deleted.push({ sessionId, threadId: input.threadId });
+      return { ok: true };
+    }
+  } });
+  t.after(async () => { await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
+  await mkdir(fixture.sourceEditorTempRoot, { recursive: true });
+  const cleanupPath = path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json");
+  await writeFile(cleanupPath, JSON.stringify({ records: [{ id: "exp_legacy", sessionId: "session-1",
+    agentThreadId: "old-native-thread", sourcePath: "src/app.js", updatedAt: "2000-01-01T00:00:00.000Z" }] }));
+  const closed = await fixture.service.closeExplanationsForSession("session-1");
+  assert.equal(closed.ok, true, JSON.stringify(closed));
+  assert.deepEqual(deleted, [{ sessionId: "session-1", threadId: "old-native-thread" }]);
+  await assert.rejects(readFile(cleanupPath), { code: "ENOENT" });
 });

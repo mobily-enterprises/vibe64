@@ -1,6 +1,7 @@
 import { createSSRApp, h, ref } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { expect, it, vi } from "vitest";
+import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 
 const mocks = vi.hoisted(() => ({
   resource: null,
@@ -59,13 +60,39 @@ vi.mock("vuetify/components/VTextField", async () => {
 });
 import PlanUsage from "../../src/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 
-async function render(data, props = {}) {
+async function render(data, props = {}, viewer = { actorKey: "local" }) {
   mocks.resource = { data: ref(data), loadError: ref(""), reload: vi.fn() };
   return renderToString(createSSRApp({ render: () => h(PlanUsage, {
     active: true, session: { sessionId: "one", assistantSelection: { engineId: "codex" } },
     sessionsApiPath: "/api/projects/fixture/sessions", ...props
-  }) }));
+  }) }).provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer));
 }
+
+it("separates cached goal and allowance data by viewer and disables both when signed out", async () => {
+  const viewer = ref({ actorKey: "owner" });
+  await render(null, {}, viewer);
+  const ownerUsage = [...mocks.options.queryKey.value];
+  const ownerGoal = [...mocks.goalOptions.queryKey.value];
+  viewer.value = { actorKey: "member" };
+  expect(mocks.options.queryKey.value).not.toEqual(ownerUsage);
+  expect(mocks.goalOptions.queryKey.value).not.toEqual(ownerGoal);
+  expect(mocks.options.queryKey.value.at(-1)).toBe("member");
+  expect(mocks.goalOptions.queryKey.value.at(-1)).toBe("member");
+  viewer.value = { actorKey: "" };
+  expect(mocks.options.enabled.value).toBe(false);
+  expect(mocks.goalOptions.enabled.value).toBe(false);
+});
+
+it("keeps retained goal controls on their own engine after a foreign chat turn", async () => {
+  mocks.goal = { status: "available", routing: { selection: { engineId: "claude" } },
+    goal: { status: "paused", objective: "Finish the implementation", threadId: "claude-goal" } };
+  const html = await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "opencode" } } });
+  expect(html).toContain("Resume goal");
+  expect(html).toContain("Cancel goal");
+  expect(mocks.goalOptions.enabled.value).toBe(true);
+  expect(mocks.options.enabled.value).toBe(false);
+  mocks.goal = null;
+});
 it("shows only the weekly percentage with explanatory details", async () => {
   const html = await render({ status: "available", windows: [
     { id: "primary", remainingPercent: 72, windowDurationMins: 300, resetsAt: 2000000000 },

@@ -69,6 +69,24 @@ test("Big Pickle is always available through the built-in public OpenCode connec
   assert.deepEqual(verificationCalls, []);
 });
 
+test("OpenCode access retains connection scope for disabled models and identifies credential replacement", async (t) => {
+  const { store } = await fixture(t);
+  const before = await store.assistantAccess("opencode", { modelId: "big-pickle" });
+  const disabled = await store.assistantAccess("opencode", { modelId: "other-model" });
+  assert.equal(before.ownerOnly, false);
+  assert.equal(disabled.ownerOnly, false);
+  assert.equal(disabled.available, false);
+  assert.equal(disabled.connectionIdentity, before.connectionIdentity);
+  assert.ok(before.connectionIdentity);
+  await store.upsertConnection({ apiKey: "replacement-secret", modelProviderId: "opencode", providerRevision: revisionA }, {
+    provider: provider("opencode", { defaultModelId: "big-pickle" })
+  });
+  const after = await store.assistantAccess("opencode", { modelId: "big-pickle" });
+  assert.notEqual(after.connectionIdentity, before.connectionIdentity);
+  assert.doesNotMatch(JSON.stringify(after), /replacement-secret/);
+  assert.equal((await store.assistantAccess("missing")).connectionIdentity, undefined);
+});
+
 test("a real Zen key starts with Big Pickle and supports explicit all-or-Pickle access", async (t) => {
   const changes = [];
   const { store } = await fixture(t, {
@@ -243,7 +261,7 @@ test("a running Zen model check reports restart interruption and can cancel befo
 test("AI connection store redacts keys and resolves native OpenCode connections server-side", async (t) => {
   const { filePath, store, verificationCalls } = await fixture(t);
   const definition = provider("deepseek", {
-    defaultModelId: "deepseek-v4-flash",
+    defaultModelId: "deepseek-flash",
     label: "DeepSeek"
   });
   const saved = await store.upsertConnection({
@@ -264,13 +282,13 @@ test("AI connection store redacts keys and resolves native OpenCode connections 
   assert.deepEqual(verificationCalls, [{
     apiKey: "deepseek-secret-value",
     engineId: "opencode",
-    modelId: "deepseek-v4-flash",
+    modelId: "deepseek-flash",
     modelProviderId: "deepseek"
   }]);
   assert.deepEqual(await store.resolveConnection("deepseek"), {
     apiKey: "deepseek-secret-value",
     canonicalUrl: "",
-    economyModelId: "deepseek-v4-flash",
+    economyModelId: "deepseek-flash",
     endpointCode: "opencode-native",
     fingerprint: saved.fingerprint,
     modelProviderId: "deepseek",
@@ -392,7 +410,7 @@ test("recognized connections replace legacy display labels with current trusted 
 
 test("mutations serialize replacements without losing other providers", async (t) => {
   const { store } = await fixture(t);
-  const deepseek = provider("deepseek", { defaultModelId: "deepseek-v4-flash" });
+  const deepseek = provider("deepseek", { defaultModelId: "deepseek-flash" });
   const anthropic = provider("anthropic", { defaultModelId: "claude-haiku-4-5" });
   await Promise.all([
     store.upsertConnection({
@@ -419,7 +437,7 @@ test("mutations serialize replacements without losing other providers", async (t
 
 test("store rejects invalid input and stale provider definitions", async (t) => {
   const { store } = await fixture(t);
-  const deepseek = provider("deepseek", { defaultModelId: "deepseek-v4-flash" });
+  const deepseek = provider("deepseek", { defaultModelId: "deepseek-flash" });
 
   await assert.rejects(
     store.upsertConnection({
@@ -465,7 +483,7 @@ test("failed and stale OpenCode verification never replace a working key", async
       return result;
     }
   });
-  const deepseek = provider("deepseek", { defaultModelId: "deepseek-v4-flash" });
+  const deepseek = provider("deepseek", { defaultModelId: "deepseek-flash" });
   await store.upsertConnection({
     apiKey: "working-key",
     modelProviderId: "deepseek",
@@ -552,7 +570,7 @@ test("replacement and removal publish runtime invalidation facts", async (t) => 
       changes.push(change);
     }
   });
-  const deepseek = provider("deepseek", { defaultModelId: "deepseek-v4-flash" });
+  const deepseek = provider("deepseek", { defaultModelId: "deepseek-flash" });
   await store.upsertConnection({
     apiKey: "first-secret",
     modelProviderId: "deepseek",
@@ -573,27 +591,24 @@ test("replacement and removal publish runtime invalidation facts", async (t) => 
   assert.match(await readFile(store.filePath, "utf8"), /"version": 5/u);
 });
 
-test("helper model preferences persist, respect model locks, and leave credential identity unchanged", async (t) => {
-  const changes = [];
-  const { store, filePath } = await fixture(t, { onConnectionChanged: (change) => changes.push(change) });
+test("retired helper settings never select a runtime model or disappear through ordinary connection writes", async (t) => {
+  const { store, filePath } = await fixture(t);
   const zai = provider("zai", { defaultModelId: "glm-4.7-flash" });
   await store.upsertConnection({ modelProviderId: "zai", apiKey: "test-key", providerRevision: revisionA }, { provider: zai });
   const before = await store.resolveConnection("zai");
-  const models = [{ id: "glm-4.7-flash", status: "available" }, { id: "chosen", status: "available" }];
-  await assert.rejects(store.helperModelSettings("zai", { models, modelId: "chosen" }), /available/);
-  await store.updateModelAccess("zai", { unlocked: true });
-  await store.helperModelSettings("zai", { models, modelId: "chosen" });
-  assert.equal(changes.at(-1).reason, "helper-model-updated");
-  const reopened = createAiConnectionStore({ filePath, verifyConnection: async () => ({ ok: true }) });
-  assert.equal((await reopened.helperModelSettings("zai", { models })).modelId, "chosen");
-  assert.equal((await reopened.assistantAccess("zai")).economyModelId, "chosen");
-  assert.equal((await reopened.resolveConnection("zai")).fingerprint, before.fingerprint);
-  assert.equal((await reopened.resolveConnection("zai")).economyModelId, before.economyModelId);
-  assert.equal((await reopened.listConnections()).find((row) => row.id === "zai").economyModelId, before.economyModelId);
-  await assert.rejects(store.helperModelSettings("zai", { models, modelId: "missing" }), /available/);
-  await store.updateModelAccess("zai", { unlocked: false });
-  assert.equal((await store.assistantAccess("zai")).economyModelId, "");
-  assert.equal((await store.helperModelSettings("zai", { models })).modelId, "chosen");
-  await store.helperModelSettings("zai", { models, modelId: "" });
-  assert.equal((await store.assistantAccess("zai")).economyModelId, "glm-4.7-flash");
+  const state = JSON.parse(await readFile(filePath, "utf8"));
+  assert.equal(Object.hasOwn(state.connections.zai, "helperModelId"), false);
+  state.connections.zai.helperModelId = "legacy-helper";
+  await writeFile(filePath, JSON.stringify(state));
+  const original = await readFile(filePath, "utf8");
+  assert.equal((await store.listConnections()).find(({ id }) => id === "zai").helperModelId, undefined);
+  assert.equal((await store.assistantAccess("zai", { modelId: "glm-4.7-flash" })).available, true);
+  assert.equal((await store.assistantAccess("zai")).economyModelId, undefined);
+  assert.equal((await store.resolveConnection("zai")).fingerprint, before.fingerprint);
+  for (const operation of [() => store.updateModelAccess("zai", { unlocked: true }),
+    () => store.removeConnection("zai"),
+    () => store.upsertConnection({ modelProviderId: "zai", apiKey: "replacement-key", providerRevision: revisionA }, { provider: zai })]) {
+    await assert.rejects(operation(), { code: "vibe64_ai_routing_upgrade_required" });
+    assert.equal(await readFile(filePath, "utf8"), original);
+  }
 });
