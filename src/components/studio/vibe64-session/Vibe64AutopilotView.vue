@@ -536,7 +536,7 @@
                     :target="composerSettingsButton?.$el"
                     :access-label="assistantAccessLabel"
                     :access-loading="assistantAccessLoading"
-                    :can-configure="assistantSuggestionsCanManage"
+                    :can-configure="assistantCanConfigureRouting"
                     :changes-disabled="composerSending || agentActive"
                     :session="props.session"
                     :sessions-api-path="props.sessionsApiPath"
@@ -560,7 +560,7 @@
                   </Vibe64SessionAssistantMenu>
                   <Vibe64ChatModeControls
                     v-if="!props.sessionSelectionArchived" :session="props.session" :sessions-api-path="props.sessionsApiPath"
-                    :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantSuggestionsCanManage"
+                    :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantCanConfigureRouting"
                     @saved="reloadAssistantAccess"
                   />
                   <div ref="composerToolsTarget" class="studio-autopilot__composer-tools" />
@@ -600,7 +600,7 @@
         :active="props.active && !chatCollapsed"
         :assistant-selection="props.session?.assistantSelection"
         :assistant-ready="Boolean(sessionId) && !props.sessionSelectionArchived"
-        :can-configure-routing="assistantSuggestionsCanManage"
+        :can-configure-routing="assistantCanConfigureRouting"
         :preview-attachment-state="previewAttachmentState"
         :project-slug="projectSlug"
         :session-id="sessionId"
@@ -938,6 +938,7 @@ import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.v
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
+import { useModelRouting } from "@local/vibe64-accounts/client";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 import Vibe64StarredFilesMenu from "@/components/studio/vibe64-session/Vibe64StarredFilesMenu.vue";
 import { useVibe64StarredFiles } from "@/composables/useVibe64StarredFiles.js";
@@ -1091,6 +1092,10 @@ watch([
 ], () => {
   openCodeProgressLabel.value = "";
 }, { immediate: true });
+const { resource: modelRoutingResource } = useModelRouting({
+  enabled: computed(() => props.active && !props.sessionSelectionArchived && Boolean(selectedAssistantSessionId.value))
+});
+const assistantCanConfigureRouting = computed(() => modelRoutingResource.data.value?.canConfigure === true);
 const {
   accessError: assistantAccessError,
   accessLabel: assistantAccessLabel,

@@ -368,7 +368,7 @@ describe("useVibe64AssistantAccess", () => {
     expect(autopilot).toContain("Send for approval");
     expect(autopilot).toContain(':access-label="assistantAccessLabel"');
     expect(autopilot).toContain(':access-loading="assistantAccessLoading"');
-    expect(autopilot).toContain(':can-configure="assistantSuggestionsCanManage"');
+    expect(autopilot).toContain(':can-configure="assistantCanConfigureRouting"');
     expect(autopilot).toContain(':changes-disabled="composerSending || agentActive"');
     expect(modelControlSource).toContain('aria-label="AI session selector"');
     expect(modelControlSource).toContain('AI choices are view-only while the assistant is working.');
