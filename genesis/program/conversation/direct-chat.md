@@ -409,6 +409,14 @@ subscriber retaining the old provider blocks delivery. It does not restart the
 shared app-server. New routed histories use the native home; older external-home
 histories are not silently moved into a different native home.
 
+Codex Stop also terminates native unified-exec commands started by that turn.
+The provider matches observed command items to the native terminal inventory and
+waits for the individual termination acknowledgement. Older background commands
+and other conversations remain running. A command reported after interruption
+is stopped through the same path; an empty inventory during startup is not exit
+proof. Unconfirmed termination invokes the existing verified runtime-stop owner,
+and the turn's interrupted status cannot hide that failure.
+
 The managed execution leader starts a local history adapter before Codex and
 stops both together. Browser/backend observer reconnects do not own its lifetime.
 The native account type selects a fixed OpenAI upstream through per-thread

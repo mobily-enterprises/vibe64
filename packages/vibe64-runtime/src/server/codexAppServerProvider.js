@@ -2894,6 +2894,9 @@ class CodexAppServerAgentProvider {
     this.goalChanges = new Map();
     this.threadEnvironmentGeneration = 0;
     this.threadControlProbes = new Map();
+    this.commandExecutions = new Map();
+    this.interruptedTurns = new Set();
+    this.commandStopFailure = null;
   }
 
   isEconomyProvider() {
@@ -3312,6 +3315,25 @@ class CodexAppServerAgentProvider {
 
   publishNotification(notification) {
     const threadId = notification.params?.threadId;
+    const turnId = notification.params?.turnId;
+    const item = notification.params?.item;
+    if (item?.type === "commandExecution" && item.processId && item.source === "unifiedExecStartup") {
+      const key = JSON.stringify([threadId, turnId, item.id]);
+      if (notification.method === "item/completed") {
+        const command = this.commandExecutions.get(key);
+        if (command) command.completed = true;
+        this.commandExecutions.delete(key);
+      } else if (notification.method === "item/started") {
+        const command = this.commandExecutions.get(key) || {
+          threadId, turnId, itemId: item.id, processId: item.processId, client: this.client
+        };
+        this.commandExecutions.set(key, command);
+        // Native startup may finish after turn/interrupt has already returned.
+        if (this.interruptedTurns.has(JSON.stringify([threadId, turnId]))) {
+          void this.#stopCommand(command).catch(() => null);
+        }
+      }
+    }
     const probe = this.threadControlProbes.get(threadId);
     const method = notification.method;
     if (probe && (/^(turn|item)\//u.test(method) || method === "thread/status/changed")) {
@@ -3502,6 +3524,7 @@ class CodexAppServerAgentProvider {
     // to find out whether the work we lost sight of has stopped.
     const client = this.client;
     if (!client?.isOpen()) throw new Error("Codex control connection is unavailable.");
+    if (this.commandStopFailure) throw this.commandStopFailure;
     const signal = AbortSignal.timeout(5_000);
     const request = (method, params) => client.request(method, params, { signal });
     const { goal } = await request("thread/goal/get", { threadId });
@@ -3521,7 +3544,7 @@ class CodexAppServerAgentProvider {
         turnId = page.data?.[0]?.id;
       }
       if (!turnId) throw new Error("Codex's running turn could not be identified.");
-      await request("turn/interrupt", { threadId, turnId });
+      await this.#interruptTurn(client, threadId, turnId, signal);
       if (await readStatus() !== "idle") throw new Error("Codex did not confirm that its turn stopped.");
     }
   }
@@ -4293,12 +4316,65 @@ class CodexAppServerAgentProvider {
   async interruptTurn(threadId = "", turnId = "") {
     const client = await this.activeClient();
     return this.runRequest(
-      () => client.request("turn/interrupt", {
-        threadId: normalizeAgentText(threadId),
-        turnId: normalizeAgentText(turnId)
-      }),
+      () => this.#interruptTurn(client, normalizeAgentText(threadId), normalizeAgentText(turnId)),
       "codex-app-server-turn-interrupt"
     );
+  }
+
+  async #interruptTurn(client, threadId, turnId, signal) {
+    this.interruptedTurns.add(JSON.stringify([threadId, turnId]));
+    const result = await client.request("turn/interrupt", { threadId, turnId }, { signal });
+    await Promise.all([...this.commandExecutions.values()]
+      .filter((command) => command.threadId === threadId && command.turnId === turnId)
+      .map((command) => this.#stopCommand(command)));
+    return result;
+  }
+
+  #stopCommand(command) {
+    if (command.stopTask) return command.stopTask;
+    command.stopTask = (async () => {
+      const signal = AbortSignal.timeout(5000);
+      const request = (method, params) => command.client.request(method, params, { signal });
+      while (!command.completed) {
+        signal.throwIfAborted();
+        let cursor;
+        let terminal;
+        const cursors = new Set();
+        do {
+          const page = await request("thread/backgroundTerminals/list", {
+            threadId: command.threadId, limit: 100, ...(cursor ? { cursor } : {})
+          });
+          if (!Array.isArray(page.data)) throw new Error("Codex returned no command inventory.");
+          terminal = page.data.find((entry) => entry.processId === command.processId);
+          cursor = page.nextCursor;
+          if (cursor && cursors.has(cursor)) throw new Error("Codex repeated its command inventory cursor.");
+          cursors.add(cursor);
+        } while (!terminal && cursor);
+        if (command.completed) return;
+        if (terminal) {
+          // A recycled process ID must never target a different command.
+          if (terminal.itemId !== command.itemId) throw new Error("The native command identity changed during Stop.");
+          const stopped = await request("thread/backgroundTerminals/terminate", {
+            threadId: command.threadId, processId: command.processId
+          });
+          if (stopped.terminated === true) return;
+        }
+        // Codex emits command-start before adding it to the process inventory.
+        // Absence during that interval is not proof that the command exited.
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    })().catch((cause) => {
+      const error = Object.assign(new Error("Codex could not confirm that the stopped turn's command exited.", { cause }), {
+        code: "vibe64_codex_command_stop_unconfirmed"
+      });
+      this.commandStopFailure = error;
+      // Reuse the existing verified-runtime-stop owner when native control fails.
+      // That owner may already be awaiting this command while stopping a lost
+      // observation. Do not make command cleanup wait on its own caller.
+      void Promise.resolve(this.failObservation(error)).catch(() => null);
+      throw error;
+    });
+    return command.stopTask;
   }
 
   nativeCliResumeCommand(threadId = "") {
@@ -4315,6 +4391,8 @@ class CodexAppServerAgentProvider {
     this.options.onClose?.();
     this.threadEnvironments.clear();
     this.threadControlProbes.clear();
+    this.commandExecutions.clear();
+    this.interruptedTurns.clear();
     this.planUsage = null;
     this.planUsagePending = null;
     this.notificationSubscribers.clear();

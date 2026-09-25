@@ -12821,6 +12821,7 @@ function createCodexTerminalController({
       try {
         result = await provider.interruptTurn(threadId, turnId);
       } catch (error) {
+        if (error?.code === "vibe64_codex_command_stop_unconfirmed") throw error;
         requestError = error;
       }
       const interruptFailure = requestError

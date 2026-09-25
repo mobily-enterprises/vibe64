@@ -125,6 +125,9 @@ Stopping a terminal or replacing Preview waits for confirmed process shutdown
 and required cleanup. Queued or slow cleanup stays visibly closing instead of
 becoming a failure solely because time elapsed. A replacement cannot start
 until that cleanup finishes; realtime notification delivery does not delay it.
+Stopping a Codex turn also stops the commands it started, including commands
+whose startup finishes after the interruption. Older background work and other
+conversations remain available when those commands stop successfully.
 After a server restart, admitted archives resume from durable progress. Failed
 recovery preserves the evidence and requires an explicit retry.
 Hosts can register preparation before ordinary archival removes resources and

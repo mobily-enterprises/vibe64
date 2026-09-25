@@ -2170,6 +2170,101 @@ test("codex provider keeps the session runtime after interrupting a turn", async
   }]);
 });
 
+test("Codex Stop waits for its current command to exit without stopping older or foreign commands", async () => {
+  const requests = [];
+  let confirmExit;
+  const exit = new Promise((resolve) => { confirmExit = resolve; });
+  const provider = new CodexAppServerAgentProvider({});
+  provider.client = {
+    async request(method, params) {
+      requests.push({ method, params });
+      if (method === "thread/backgroundTerminals/list") {
+        return params.cursor
+          ? { data: [{ processId: "current-process", itemId: "current-command" }], nextCursor: null }
+          : { data: [{ processId: "older-process", itemId: "older-command" }], nextCursor: "page-2" };
+      }
+      if (method === "thread/backgroundTerminals/terminate") {
+        assert.equal(params.processId, "current-process");
+        await exit;
+        return { terminated: true };
+      }
+      return {};
+    }
+  };
+  provider.activeClient = async () => provider.client;
+  for (const [threadId, turnId, id, processId] of [
+    ["thread", "prior", "older-command", "older-process"],
+    ["foreign", "current", "foreign-command", "foreign-process"],
+    ["thread", "current", "current-command", "current-process"]
+  ]) provider.publishNotification({ method: "item/started", params: {
+    threadId, turnId, item: { type: "commandExecution", id, processId, source: "unifiedExecStartup" }
+  } });
+  let settled = false;
+  const stopping = provider.interruptTurn("thread", "current").then(() => { settled = true; });
+  await waitForCondition(() => requests.some((entry) => entry.method.endsWith("/terminate")));
+  assert.equal(settled, false);
+  confirmExit();
+  await stopping;
+  assert.deepEqual(requests.filter((entry) => entry.method.endsWith("/terminate")), [{
+    method: "thread/backgroundTerminals/terminate", params: { threadId: "thread", processId: "current-process" }
+  }]);
+});
+
+test("Codex stops a command reported after interruption and waits for native startup registration", async () => {
+  let inventories = 0;
+  let terminated = false;
+  const provider = new CodexAppServerAgentProvider({});
+  provider.client = { async request(method) {
+    if (method === "thread/backgroundTerminals/list") {
+      inventories += 1;
+      return { data: inventories === 1 ? [] : [{ processId: "process", itemId: "late-command" }] };
+    }
+    if (method === "thread/backgroundTerminals/terminate") { terminated = true; return { terminated: true }; }
+    return {};
+  } };
+  provider.activeClient = async () => provider.client;
+  await provider.interruptTurn("thread", "turn");
+  provider.publishNotification({ method: "item/started", params: {
+    threadId: "thread", turnId: "turn", item: { type: "commandExecution", id: "late-command", processId: "process", source: "unifiedExecStartup" }
+  } });
+  await waitForCondition(() => terminated);
+  assert.equal(inventories, 2);
+});
+
+test("Codex command-stop failures reach the existing observation-stop owner", async () => {
+  const failures = [];
+  for (const data of [null, [{ processId: "process", itemId: "replacement-command" }]]) {
+    const provider = new CodexAppServerAgentProvider({ onObservationLost(error) { failures.push(error); } });
+    provider.client = { isOpen: () => true, async request(method) {
+      assert.notEqual(method, "thread/backgroundTerminals/terminate", "never stop an unverified command");
+      return method === "thread/backgroundTerminals/list" ? { data } : {};
+    } };
+    provider.activeClient = async () => provider.client;
+    provider.publishNotification({ method: "item/started", params: {
+      threadId: "thread", turnId: "turn", item: { type: "commandExecution", id: "command", processId: "process", source: "unifiedExecStartup" }
+    } });
+    await assert.rejects(provider.interruptTurn("thread", "turn"), { code: "vibe64_codex_command_stop_unconfirmed" });
+    await assert.rejects(provider.stopThreadForObservationLoss("thread", "turn"), { code: "vibe64_codex_command_stop_unconfirmed" });
+    assert.equal(provider.observationFailure?.code, "vibe64_codex_observation_lost");
+  }
+  assert.equal(failures.length, 2);
+});
+
+test("failed command cleanup does not wait on the observation-stop operation that called it", { timeout: 2000 }, async () => {
+  let stopping;
+  const provider = new CodexAppServerAgentProvider({ onObservationLost() { return stopping; } });
+  provider.client = { isOpen: () => true, async request(method) {
+    if (method === "thread/read") return { thread: { status: "active" } };
+    if (method === "thread/backgroundTerminals/list") throw new Error("Control unavailable");
+    return {};
+  } };
+  provider.publishNotification({ method: "item/started", params: {
+    threadId: "thread", turnId: "turn", item: { type: "commandExecution", id: "command", processId: "process", source: "unifiedExecStartup" }
+  } });
+  stopping = provider.stopThreadForObservationLoss("thread", "turn");
+  await assert.rejects(stopping, { code: "vibe64_codex_command_stop_unconfirmed" });
+});
+
 test("codex provider treats inaccessible stale app-server runtime directories as cleanup skips", async (t) => {
   if (typeof process.getuid === "function" && process.getuid() === 0) {
     t.skip("Root can traverse the permission-denied fixture.");

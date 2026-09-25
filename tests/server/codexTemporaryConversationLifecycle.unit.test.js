@@ -2165,6 +2165,20 @@ async function withAgentMessageController(operation, {
   }
 }
 
+test("Codex Stop reports unconfirmed command exit even when its native turn already became idle", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId }) => {
+    assert.equal((await controller.sendMessage(sessionId, { message: "Work", messageId: "command-stop-failure" })).ok, true);
+    captures.provider.interruptTurn = async () => {
+      captures.provider.status = "idle";
+      throw Object.assign(new Error("Command exit unconfirmed"), { code: "vibe64_codex_command_stop_unconfirmed" });
+    };
+    const stopped = await controller.interruptTurn(sessionId, { threadId: captures.provider.threadId });
+    assert.equal(stopped.ok, false, JSON.stringify(stopped));
+    assert.equal(stopped.code, "vibe64_codex_command_stop_unconfirmed");
+    assert.notEqual(stopped.operationOutcome, "already_idle");
+  });
+});
+
 test("Codex compaction phase follows native items and clears on completion and interruption", { timeout: 15_000 }, async () => {
   await withAgentMessageController(async ({ captures, controller, controllerOptions, sessionId, store }) => {
     const published = [];
