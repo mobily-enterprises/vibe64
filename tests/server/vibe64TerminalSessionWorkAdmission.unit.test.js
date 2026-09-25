@@ -327,6 +327,7 @@ test("native storage discovers and retires an archived native-only chat through 
   const f = await terminalServiceFixture(t, lock, { assistantSelection: selection, opencodeTerminalController: {
     createServerProcess: async () => ({
       client: { health: async () => ({ healthy: true }), sessionStatus: async () => ({ type: "idle" }),
+        messages: async () => ({ data: [{ id: "native-user", type: "user", content: [{ type: "text", text: "Native-only question" }] }] }),
         readSession: async (id) => {
           if (!ids.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 });
           return { id, location: { directory: workdir }, time: { updated: 1 } };
@@ -346,10 +347,16 @@ test("native storage discovers and retires an archived native-only chat through 
   assert.equal(candidate.tracked, false);
   assert.equal(inventory.conversations.find((row) => row.conversationId === "ses_original").tracked, true);
   const result = await f.service.retireAgentConversationHistory("session-1", candidate, { runtime: f.runtime,
-    beforeDelete: async ({ archived, session, conversations }) => {
+    beforeDelete: async ({ archived, session, conversations, exportConversation, publishArtifacts }) => {
       assert.equal(archived, true);
       assert.equal(session.status, "archived");
       assert.deepEqual(conversations.map((row) => row.conversationId), ["ses_nativeonly"]);
+      const records = [];
+      await exportConversation("ses_nativeonly", async (record) => records.push(...record.text));
+      const sourcePath = path.join(f.root, "native-text-staging.jsonl");
+      await writeFile(sourcePath, records.map(JSON.stringify).join("\n") + "\n");
+      await publishArtifacts([{ relativePath: "native/ses_nativeonly.chat.jsonl", sourcePath }]);
+      assert.match(await f.runtime.store.readArtifact("session-1", "native/ses_nativeonly.chat.jsonl"), /Native-only question/);
       preserved = true;
       return { preserved: true, exclusive: true };
     } });

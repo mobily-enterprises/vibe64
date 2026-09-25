@@ -98,7 +98,12 @@ The store's explicit `withArchivedSession(sessionId, operation)` serializes with
 archive publication, rejects remaining active/closing trees, validates the
 published archive and its archived status, and supplies full saved session
 metadata plus temporary recovery paths. Extraction is removed after success or
-failure; the original archive is unchanged. This is an archive access boundary,
+failure. A scoped batch artifact publication capability copies verified regular
+files into the extraction, validates and syncs a compressed replacement, and
+publishes it atomically under the already-held archive lock. Hosts can preserve
+native-only chat text in the canonical archive before provider retirement.
+The archive's metadata, messages, index and original archival time stay unchanged.
+This is an archive access boundary,
 not proof of native-provider ownership, writer shutdown, transcript completeness,
 or permission to delete provider history. Consumers retain those responsibilities.
 The API contract and retry constraints are in `docs/session-storage-lifecycle.md`.
@@ -107,6 +112,8 @@ and validates a compressed replacement, keeps text, descriptions and other
 artifacts, requires host confirmation, then publishes with one atomic rename.
 The archive index and original archival date remain unchanged. No automatic
 expiry policy or timer is installed.
+Exact-path artifact expiry reuses the same publication owner and confirmation
+boundary; hosts choose recovery files while retaining permanent text artifacts.
 
 The chat header shares its available width among up to three session tabs,
 reserving extra room for the selected tab's Archive action. The new-session

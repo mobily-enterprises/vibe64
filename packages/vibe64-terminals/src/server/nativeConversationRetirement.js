@@ -3,7 +3,7 @@ import path from "node:path";
 // Shared by the three native owners. The host must durably preserve customer
 // history, check references across projects and exclude external CLI writers.
 // This callback is trusted server code, never request data or a retention rule.
-export async function retireNativeConversation({ binding, inspect, remove, beforeDelete, readConversation }) {
+export async function retireNativeConversation({ binding, inspect, remove, beforeDelete, readConversation, exportConversation }) {
   if (typeof beforeDelete !== "function") throw new TypeError("Native retirement requires a host preservation callback.");
   if (!binding?.conversationId || !path.isAbsolute(binding.workdir || "")) {
     throw new TypeError("Native retirement requires an exact conversation and absolute native directory.");
@@ -22,9 +22,30 @@ export async function retireNativeConversation({ binding, inspect, remove, befor
       return readConversation(id);
     };
   }
-  const proof = await beforeDelete(inventory);
+  const exported = new Map();
+  let preserving = true;
+  if (exportConversation) {
+    inventory.exportConversation = async (id, onRecord) => {
+      if (!preserving || !ids.has(id)) throw new Error("Cannot export a conversation outside the inspected preservation scope.");
+      const result = await exportConversation(id, onRecord);
+      if (!/^[a-f0-9]{64}$/u.test(result?.revision || "")) throw new Error("Native export did not confirm a complete history revision.");
+      exported.set(id, result.revision);
+      return result;
+    };
+  }
+  let proof;
+  try { proof = await beforeDelete(inventory); }
+  finally { preserving = false; }
   if (proof?.preserved !== true || proof?.exclusive !== true) {
     throw new Error("The host did not confirm preserved history and exclusive ownership of every native conversation.");
+  }
+  if (exportConversation) {
+    if (exported.size !== ids.size) throw new Error("Preserve the complete native export of every inspected conversation before retirement.");
+    for (const id of ids) {
+      if ((await exportConversation(id, async () => {})).revision !== exported.get(id)) {
+        throw new Error("Native history changed during preservation. Export and preserve it again before retirement.");
+      }
+    }
   }
   if (JSON.stringify(await inspect()) !== snapshot) {
     throw new Error("Native history changed during preservation. Inspect and preserve it again before retirement.");

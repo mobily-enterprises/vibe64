@@ -3,6 +3,7 @@ import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
 import { retireNativeConversation } from "./nativeConversationRetirement.js";
 import { openCodeAssistantMessageText as assistantMessageText } from "@jskit-ai/assistant-core/server/opencode-client";
+import { createNativeHistoryExport } from "@local/vibe64-runtime/server/nativeHistoryExport";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -2921,7 +2922,9 @@ function createOpenCodeTerminalController({
               (await client.sessionStatus(conversationId)).type !== "idle") {
             throw new Error("OpenCode retirement requires an idle native family in the exact saved directory.");
           }
-          records.push({ conversationId, workdir: native.location.directory, updatedAt: native.time?.updated });
+          records.push({ conversationId, workdir: native.location.directory,
+            ...(Number.isFinite(native.time?.created) ? { createdAt: new Date(native.time.created).toISOString() } : {}),
+            ...(Number.isFinite(native.time?.updated) ? { updatedAt: new Date(native.time.updated).toISOString() } : {}) });
           const children = await target.server.listConversationChildren(conversationId);
           for (const child of children) {
             if (child.directory !== binding.workdir) throw new Error("OpenCode child directory differs from its saved owner.");
@@ -2932,6 +2935,32 @@ function createOpenCodeTerminalController({
       };
       return retireNativeConversation({ binding, inspect, beforeDelete: options.beforeDelete,
         readConversation: async (id) => ({ info: await client.readSession(id), messages: (await client.messages(id)).data }),
+        exportConversation: async (id, onRecord) => {
+          const deadline = AbortSignal.timeout(300_000);
+          const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+          const output = createNativeHistoryExport(onRecord, { signal });
+          const info = await client.readSession(id, { signal });
+          if (info?.id !== id || (await client.sessionStatus(id, { signal })).type !== "idle") {
+            throw new Error("OpenCode native export requires the exact idle conversation.");
+          }
+          await output.emit({ type: "thread", thread: info, text: [] });
+          // JSKIT bounds the complete native response at 2 MiB. Exceeding that
+          // limit is a preservation failure, never permission to truncate it.
+          const response = await client.messages(id, {}, { signal });
+          if (!Array.isArray(response?.data)) throw new Error("OpenCode did not return complete native messages.");
+          for (const message of openCodeMessageRows(response)) {
+            const content = ["user", "assistant"].includes(message.type) ? assistantMessageText(message) : "";
+            await output.emit({ type: "message", message, text: content ? [{ role: message.type, text: content,
+              branchId: id, messageId: message.id,
+              ...(message.parentID ? { parentMessageId: message.parentID } : {}),
+              ...(Number.isFinite(message.time?.created) ? { createdAt: new Date(message.time.created).toISOString() } : {}),
+              ...(Number.isFinite(message.time?.completed) ? { completedAt: new Date(message.time.completed).toISOString() } : {}),
+              ...(message.modelID || message.model?.modelID ? { modelId: message.modelID || message.model.modelID } : {}),
+              ...(message.providerID || message.model?.providerID ? { modelProviderId: message.providerID || message.model.providerID } : {}),
+              ...(message.agent ? { agent: message.agent } : {}) }] : [] });
+          }
+          return output.complete();
+        },
         remove: () => client.deleteSession(binding.conversationId) });
     },
     async deleteConversation(sessionId, input = {}, options = {}) {

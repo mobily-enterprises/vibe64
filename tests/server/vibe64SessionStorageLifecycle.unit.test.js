@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -7,6 +7,7 @@ import { createService } from "../../packages/vibe64-sessions/src/server/service
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { retireNativeConversation } from "../../packages/vibe64-terminals/src/server/nativeConversationRetirement.js";
 
 function archiveFixture(phase = "") {
   const calls = [];
@@ -225,6 +226,83 @@ test("attachment expiry atomically replaces a compressed archive while retaining
     });
     assert.deepEqual(await store.pruneArchivedSessionAttachments("session-a", { beforePrune: () => { throw new Error("already expired"); } }),
       { ok: true, attachmentIds: [] });
+  });
+});
+
+test("locked archive publication preserves native text before deletion without changing metadata or message history", async () => {
+  await withTemporaryRoot(async (root) => {
+    const store = await storedFixture(root);
+    const before = await store.readSession("session-a");
+    const metadata = await readFile(before.archiveMetadataPath);
+    const sourcePath = path.join(root, "preserved-chat.jsonl");
+    await writeFile(sourcePath, "native-only chat text\n");
+    let rows = [{ conversationId: "native" }];
+    let savedCapability;
+    await store.withArchivedSession("session-a", async (session, { publishArtifacts }) => {
+      savedCapability = publishArtifacts;
+      await retireNativeConversation({ binding: { conversationId: "native", workdir: root }, inspect: async () => rows,
+        beforeDelete: async () => {
+          assert.deepEqual(await publishArtifacts([{ relativePath: "native/native.chat.jsonl", sourcePath }]),
+            { ok: true, paths: ["native/native.chat.jsonl"] });
+          return { preserved: true, exclusive: true };
+        }, remove: async () => {
+          // A normal readable archive operation observes the published tar here;
+          // publication did not recursively acquire the archive mutation lock.
+          assert.equal(await store.readArtifact("session-a", "native/native.chat.jsonl"), "native-only chat text\n");
+          rows = [];
+        } });
+      assert.equal(await readFile(path.join(session.artifactsRoot, "native/native.chat.jsonl"), "utf8"), "native-only chat text\n");
+    });
+    await assert.rejects(savedCapability([{ relativePath: "late.txt", sourcePath }]), /outside/);
+    assert.deepEqual(await readFile(before.archiveMetadataPath), metadata);
+    assert.equal((await store.readSession("session-a")).archivedAt, before.archivedAt);
+    assert.equal((await store.readConversationLog("session-a"))[0].user.text, "Keep this history");
+  });
+});
+
+test("archive publication rejects unsafe sources and destinations without publishing partial work", async () => {
+  await withTemporaryRoot(async (root) => {
+    const store = await storedFixture(root);
+    const archived = await store.readSession("session-a");
+    const original = await readFile(archived.archivePath);
+    const sourcePath = path.join(root, "source.txt");
+    await writeFile(sourcePath, "preserved");
+    const link = path.join(root, "link.txt");
+    await symlink(sourcePath, link);
+    for (const file of [
+      { relativePath: "../outside.txt", sourcePath },
+      { relativePath: "native/link.txt", sourcePath: link },
+      { relativePath: "native/directory.txt", sourcePath: root }
+    ]) {
+      await assert.rejects(store.withArchivedSession("session-a", async (_session, { publishArtifacts }) => {
+        await publishArtifacts([{ relativePath: "native/first.txt", sourcePath }, file]);
+      }));
+      assert.deepEqual(await readFile(archived.archivePath), original);
+    }
+    await assert.rejects(store.withArchivedSession("session-a", async (session, { publishArtifacts }) => {
+      await symlink(root, path.join(session.artifactsRoot, "linked"));
+      await publishArtifacts([{ relativePath: "linked/outside.txt", sourcePath }]);
+    }), /regular directories/);
+    assert.deepEqual(await readFile(archived.archivePath), original);
+    await assert.rejects(readFile(path.join(root, "outside.txt")), { code: "ENOENT" });
+  });
+});
+
+test("exact archived artifact expiry keeps permanent text and leaves the original on failed confirmation", async () => {
+  await withTemporaryRoot(async (root) => {
+    const store = await storedFixture(root);
+    const archived = await store.readSession("session-a");
+    const original = await readFile(archived.archivePath);
+    await assert.rejects(store.pruneArchivedSessionArtifacts("session-a", { relativePaths: ["recovery.txt"], beforePrune: async () => ({ ok: false }) }), /did not confirm/);
+    assert.deepEqual(await readFile(archived.archivePath), original);
+    assert.deepEqual(await store.pruneArchivedSessionArtifacts("session-a", { relativePaths: ["recovery.txt"], beforePrune: async ({ relativePaths }) => {
+      assert.deepEqual(relativePaths, ["recovery.txt"]); return { ok: true };
+    } }), { ok: true, paths: ["recovery.txt"] });
+    assert.equal(await store.readArtifact("session-a", "recovery.txt"), "");
+    assert.equal((await store.readConversationLog("session-a"))[0].user.text, "Keep this history");
+    assert.equal((await store.readSession("session-a")).archivedAt, archived.archivedAt);
+    assert.deepEqual(await store.pruneArchivedSessionArtifacts("session-a", { relativePaths: ["recovery.txt"], beforePrune: () => assert.fail("already absent") }),
+      { ok: true, paths: [] });
   });
 });
 

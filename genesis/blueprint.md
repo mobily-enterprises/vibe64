@@ -136,6 +136,14 @@ replace idle native context using a supplied continuity briefing, and expire
 archived attachment payloads while keeping text. Native-only forks and new chats
 are discovered as candidates; hosts own preservation, exclusive ownership proof,
 retention dates and user-facing policy.
+Modern Codex retirement also requires a bounded export of native readable history
+and goals, alongside available rollout artifacts. The provider verifies the same
+content again before deletion. Hosts receive normalized chat text for durable
+retention; these exports do not promise a resumable native database backup.
+All three provider owners supply attachment-free readable text with available
+branch and message provenance. An archived host can atomically publish text and
+recovery artifacts in the existing session archive before native deletion, and
+later prune exact artifact paths through the same archive owner.
 Selecting a session shows incoming saved work as soon as its version check
 confirms it, while the file-change details continue loading in the background.
 The chat header gives three session tabs room to show their labels, hides the

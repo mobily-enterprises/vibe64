@@ -18,6 +18,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { exportCodexNativeHistory } from "./codexNativeHistoryExport.js";
 
 import {
   CODEX_AUTH_RECONNECTING_CODE,
@@ -3988,6 +3989,33 @@ class CodexAppServerAgentProvider {
       }),
       "codex-app-server-thread-turns-list"
     );
+  }
+
+  async exportThreadHistory(threadId, onRecord, { signal } = {}) {
+    const active = await this.activeClient();
+    // Oversized native items must fail preservation without disconnecting the
+    // shared conversation observer. Reuse JSKIT's transport on a separate socket.
+    const client = new CodexAppServerJsonRpcClient({
+      endpoint: active.endpoint,
+      maxMessageBytes: 64 * 1024 ** 2,
+      requestTimeoutMs: 30_000,
+      WebSocketImpl: this.options.WebSocketImpl
+    });
+    const deadline = AbortSignal.timeout(300_000);
+    const boundedSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    boundedSignal.throwIfAborted();
+    const abort = () => client.close();
+    boundedSignal.addEventListener("abort", abort, { once: true });
+    try {
+      await client.connect();
+      boundedSignal.throwIfAborted();
+      await client.initialize({ clientInfo: { name: "vibe64-history-export", title: "Vibe64", version: CODEX_APP_SERVER_CLIENT_VERSION } });
+      boundedSignal.throwIfAborted();
+      return await exportCodexNativeHistory(client, normalizeAgentText(threadId), onRecord, { signal: boundedSignal });
+    } finally {
+      boundedSignal.removeEventListener("abort", abort);
+      client.close();
+    }
   }
 
   async listLoadedThreads(params = {}) {
