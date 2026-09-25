@@ -270,7 +270,8 @@ assistant's Stop button on the same row as the other controls. Narrow screens
 use the full-width chat.
 Host-provided conversations enter chat only when explicitly opened through the
 host's own navigation. Their tab disappears when returning to another chat;
-ordinary chat controls do not retain a permanent shortcut.
+ordinary chat controls do not retain a permanent shortcut, including headers
+shown during archiving or after the last session closes.
 Main chat's optional companion controls detach while a temporary or host-provided
 conversation is selected. Pending voice input cannot send into hidden Main chat.
 On narrow screens, swiping left shows the selected Preview or Dashboard and

@@ -68,10 +68,6 @@
             :selection-archived="selection.isArchived"
             :toolbar="emptyToolbar"
           />
-          <v-btn
-            v-if="hostConversation" :color="hostConversation.color" variant="tonal"
-            @click="hostConversation.open()"
-          >{{ hostConversation.label }}</v-btn>
         </div>
         <Vibe64TemporaryAiWorkspace
           v-if="hostConversation" class="studio-ai-sessions__empty-host-conversation" active

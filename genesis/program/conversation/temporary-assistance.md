@@ -6,7 +6,8 @@ session history.
 
 A host-provided conversation appears in the tab strip only while selected.
 Its host owns the entry point; ordinary chat headers and temporary-chat tabs
-do not keep a permanent shortcut. Returning to Main chat or a temporary chat
+do not keep a permanent shortcut, including the header shown while archiving
+and after the last session closes. Returning to Main chat or a temporary chat
 hides the host conversation without deleting its saved history.
 The workspace exposes its selected visibility to the parent so Main chat's
 optional companions cannot keep targeting Main while another chat is selected.
