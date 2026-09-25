@@ -9,8 +9,8 @@ const MAX_REQUEST_BYTES = 32 * 1024 * 1024;
 const UPSTREAMS = Object.freeze({
   chatgpt: "https://chatgpt.com/backend-api/codex",
   apiKey: "https://api.openai.com/v1",
-  deepseek: "https://api.deepseek.com",
-  "zai-coding-plan": "https://api.z.ai/api/v1"
+  deepseek: curatedCodexProvider("deepseek").baseUrl.replace(/\/$/u, ""),
+  "zai-coding-plan": curatedCodexProvider("zai-coding-plan").baseUrl
 });
 const HOP_HEADERS = ["connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
   "te", "trailer", "transfer-encoding", "upgrade"];
@@ -109,7 +109,8 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
     }
     signal.throwIfAborted();
     const text = snapshot.toString("utf8");
-    rows = text.slice(0, text.lastIndexOf("\n")).split("\n").filter(Boolean).map((line) => JSON.parse(line));
+    const completeLines = text.slice(0, text.lastIndexOf("\n"));
+    rows = completeLines.split("\n").filter(Boolean).map((line) => JSON.parse(line));
     const metadata = rows.filter((row) => row.type === "session_meta");
     if (metadata.length !== 1 || metadata[0].payload?.id !== match[1] || metadata[0].payload?.forked_from_id) {
       throw compactionHistoryError("the saved history does not identify one supported conversation.");

@@ -3604,21 +3604,23 @@ class CodexAppServerAgentProvider {
   async withHistoryAdapter(params, client, options = {}) {
     if (!this.runtime?.historyAdapterBaseUrl) return params;
     const modelProvider = params.modelProvider || this.options.modelProviderId || "openai";
-    if (curatedCodexProvider(modelProvider)) {
+    const curatedProvider = curatedCodexProvider(modelProvider);
+    if (curatedProvider) {
       const configKey = `model_providers.${modelProvider}`;
       const config = params.config?.[configKey];
       // Only the curated route owns these credentials. Do not redirect an
       // unrelated custom provider to our fixed upstream.
       const baseUrl = `${this.runtime.historyAdapterBaseUrl}/${modelProvider}`;
-      if (config?.base_url !== curatedCodexProvider(modelProvider).baseUrl &&
+      if (config?.base_url !== curatedProvider.baseUrl &&
           config?.base_url !== baseUrl && !config?.base_url?.startsWith(`${baseUrl}/history/`)) return params;
       let historyPath = options.historyPath;
       if (!historyPath && options.threadId) {
         const { thread } = await client.request("thread/read", { threadId: options.threadId, includeTurns: false }, { signal: options.signal });
         historyPath = thread?.path;
       }
+      const historyUrl = historyPath ? `${baseUrl}/history/${Buffer.from(historyPath).toString("base64url")}` : baseUrl;
       return { ...params, config: { ...params.config,
-        [configKey]: { ...config, base_url: historyPath ? `${baseUrl}/history/${Buffer.from(historyPath).toString("base64url")}` : baseUrl }
+        [configKey]: { ...config, base_url: historyUrl }
       } };
     }
     if (modelProvider !== "openai") return params;
