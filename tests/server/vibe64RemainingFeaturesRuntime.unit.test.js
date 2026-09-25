@@ -42,6 +42,7 @@ function projectApi() {
 test("remaining Vibe64 features use named capabilities and register direct routes/actions", async (t) => {
   const routes = [];
   let actions = null;
+  let sourceEditor = null;
   const actionObserver = defineProvider({
     id: "test.remaining-feature-actions",
     requires: {
@@ -82,12 +83,15 @@ test("remaining Vibe64 features use named capabilities and register direct route
         }
       },
       "vibe64.project": projectApi(),
-      "vibe64.terminals": {}
+      "vibe64.terminals": {
+        setSourceEditorProvider(value) { sourceEditor = value; }
+      }
     }
   });
 
   t.after(() => runtime.shutdown());
   await runtime.start();
+  assert.equal(typeof sourceEditor.close, "function");
 
   assert.deepEqual(actions.listDefinitions().map((action) => action.id).sort(), [
     "vibe64.current-app.read",

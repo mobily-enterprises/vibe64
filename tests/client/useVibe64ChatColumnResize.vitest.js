@@ -137,7 +137,8 @@ describe("useVibe64ChatColumnResize", () => {
     expect(result.code).toMatch(/studio-autopilot__composer[^}]*box-sizing:\s*border-box/u);
     expect(result.code).toMatch(/studio-autopilot__project-panel[^}]*contain:\s*strict/u);
     expect(source).toContain('class="studio-autopilot__save-work"');
-    expect(source).toContain(':icon="saveWorkRequiresUpdate ? mdiSourcePull : mdiSourceCommit"');
+    expect(source).toMatch(/class="studio-autopilot__save-work"[\s\S]*?\n\s+icon\n/u);
+    expect(source).toContain('class="studio-autopilot__save-symbol" aria-hidden="true"');
     expect(source).not.toContain("studio-autopilot__save-work-label");
     expect(source).not.toContain("Answer the assistant's questions");
   });

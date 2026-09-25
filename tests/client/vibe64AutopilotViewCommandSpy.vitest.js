@@ -89,7 +89,6 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain(':aria-busy="saveWorkSending ? \'true\' : undefined"');
     expect(component).not.toContain(':loading="saveWorkSending"');
     expect(component).toContain(":icon=\"mdiIncognito\"");
-    expect(component).toContain("saveWorkRequiresUpdate ? mdiSourcePull : mdiSourceCommit");
     expect(component).toContain("@click=\"confirmSaveWork\"");
     expect(component).toContain("<Vibe64TemporaryActionTerminal");
     expect(component.indexOf("<Vibe64TemporaryActionTerminal")).toBeLessThan(
@@ -139,7 +138,10 @@ describe("Vibe64 direct session view", () => {
       component.indexOf("</header>")
     );
     expect(sessionHeader).toContain("studio-autopilot__save-work");
-    expect(sessionHeader).toContain(':icon="saveWorkRequiresUpdate ? mdiSourcePull : mdiSourceCommit"');
+    expect(sessionHeader).toContain('<v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourcePull" />');
+    expect(sessionHeader).toContain('v-else-if="props.workState?.destination?.mode === \'github\'"');
+    expect(sessionHeader).toContain('class="studio-autopilot__save-symbol-commit"');
+    expect(sessionHeader).toContain('<v-icon v-else :icon="mdiContentSaveOutline" />');
     expect(sessionHeader).toContain('height="48"');
     expect(sessionHeader).toContain('width="48"');
     expect(sessionHeader).not.toContain("studio-autopilot__save-work-label");

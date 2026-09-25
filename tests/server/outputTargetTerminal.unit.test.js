@@ -189,6 +189,18 @@ test("HTTP launch readiness allows slow startup and still enforces its deadline"
   }
 });
 
+test("HTTP readiness stops probing a launch that exited before the probe started", async () => {
+  const { stdout: launchPid } = await execFileAsync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"]);
+  const command = httpReadinessProbeCommand({ href: "http://127.0.0.1:9/api/health", timeoutSeconds: 30 });
+  await assert.rejects(execFileAsync("bash", ["-lc", command], {
+    env: { ...process.env, VIBE64_READINESS_LAUNCH_PID: launchPid }, timeout: 2000
+  }), (error) => {
+    assert.equal(error.killed, false, "The probe must observe launch exit without waiting for external termination.");
+    assert.equal(error.code, 1);
+    return true;
+  });
+});
+
 test("HTTP launch readiness stops immediately when the server exits", async () => {
   let markLaunchStarted;
   const launchStarted = new Promise((resolve) => {

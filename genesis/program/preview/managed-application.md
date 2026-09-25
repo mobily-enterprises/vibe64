@@ -144,7 +144,8 @@ reset fixture data. Fresh-schema proofs and production builds are separate from
 ordinary browser checks. Shared guidance asks agents to batch related cases and
 measure slow startup before retrying. The web readiness probe allows five minutes;
 the managed waiter has another thirty seconds to observe its final status and
-cleanup instead of racing the probe's deadline.
+cleanup instead of racing the probe's deadline. The probe stops when its launch
+process exits, including when that process exits before the probe starts.
 Host resource diagnostics also reach the browser command caller after a failed
 test. Shared guidance retains task-denial evidence and its incident ID, and asks
 for an operator capacity review before retrying or changing test timeouts.

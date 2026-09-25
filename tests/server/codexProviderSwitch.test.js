@@ -172,9 +172,14 @@ test("native provider switches preserve history without restarting, and cold rec
     restored.runtime = provider.runtime;
     restored.client = client;
     restored.activeClient = async () => client;
+    const stopObserving = client.subscribe((event) => restored.publishNotification(event));
     const beforeRead = requests.length;
-    await restored.ensureThreadControls(threadId);
-    await restored.readThreadStatus(threadId);
+    try {
+      await restored.ensureThreadControls(threadId);
+      await restored.readThreadStatus(threadId);
+    } finally {
+      stopObserving();
+    }
     assert.equal((await client.request("thread/read", { threadId })).thread.modelProvider, modelProvider);
     assert.equal(requests.length, beforeRead, "restoring history must not send an inference request");
     await provider.resumeThread(threadId, settings("openai"));
@@ -249,6 +254,7 @@ test("native provider switches preserve history without restarting, and cold rec
   coldObserver.runtime = provider.runtime;
   coldObserver.client = nextClient;
   coldObserver.activeClient = async () => nextClient;
+  nextClient.subscribe((event) => coldObserver.publishNotification(event));
   const coldCalls = [];
   const coldRequest = nextClient.request.bind(nextClient);
   nextClient.request = (method, ...args) => { coldCalls.push(method); return coldRequest(method, ...args); };

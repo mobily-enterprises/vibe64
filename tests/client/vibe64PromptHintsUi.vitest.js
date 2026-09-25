@@ -229,7 +229,7 @@ describe("Vibe64 prompt hints UI", () => {
     expect(autopilot).toContain('"opencode-server-turn-active"');
     expect(autopilot).toContain('"opencode-server-turn-idle"');
     expect(autopilot).toContain(
-      "openCodeProgressLabel.value ||"
+      "assistantProgressLabel: openCodeProgressLabel"
     );
     expect(autopilot).toMatch(
       /watch\(agentActive,[\s\S]{0,120}!active[\s\S]{0,120}openCodeProgressLabel\.value = ""[\s\S]{0,80}immediate: true/u

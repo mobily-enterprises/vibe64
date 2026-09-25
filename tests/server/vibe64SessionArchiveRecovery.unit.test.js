@@ -14,6 +14,7 @@ function fixture(operation = null) {
   const runtime = {
     store: {
       async listSessionsForRenewal() { return [structuredClone(session)]; },
+      async listSessionConversations() { return []; },
       async writeMetadataValue(_id, key, value) { session.metadata[key] = value; },
       async recoverSessionArchives() { return []; },
       async runSessionExclusive(_id, _name, run) {

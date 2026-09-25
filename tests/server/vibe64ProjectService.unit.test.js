@@ -621,6 +621,7 @@ test("scope saving and session creation share one project policy boundary", asyn
       }
     };
     const sessionsService = createSessionsService({
+      initializeModelRouting: async () => ({ ok: true }),
       project: {
         async createRuntime() {
           return runtime;
@@ -633,6 +634,12 @@ test("scope saving and session creation share one project policy boundary", asyn
         }
       },
       terminals: {
+        async resolveAssistantPurpose() {
+          return { available: true, connectionIdentity: "workspace-ai", effectiveSelection: {
+            engineId: "opencode", agentId: "build", modelProviderId: "opencode", modelId: "big-pickle",
+            variantId: "", catalogRevision: `sha256:${"a".repeat(64)}`
+          } };
+        },
         async requireAssistantSelectionAccess() {
           return { ok: true };
         }
@@ -656,7 +663,7 @@ test("scope saving and session creation share one project policy boundary", asyn
     const [saved, created] = await Promise.all([saving, creating]);
     assert.equal(saved.ok, true);
     assert.equal(saved.scope, "project");
-    assert.equal(created.ok, true);
+    assert.equal(created.ok, true, JSON.stringify(created));
     assert.equal(created.sessionId, "serialized-session");
     assert.equal(created.creation.canCreate, false);
     assert.deepEqual(created.limits, {

@@ -109,7 +109,7 @@ test("disconnect removes credentials after stopping only their owner and retains
   await assert.rejects(f.store.runtimeOptions("deepseek"), /Connect Codex/);
 });
 
-test("curated providers keep distinct runtime directories, thread identities and supported request settings", (t) => {
+test("curated provider settings keep credential runtimes separate and cannot retarget the recorded thread", (t) => {
   const previous = process.env.VIBE64_RUNTIME_NAMESPACE;
   process.env.VIBE64_RUNTIME_NAMESPACE = "curated-unit";
   t.after(() => { if (previous === undefined) delete process.env.VIBE64_RUNTIME_NAMESPACE; else process.env.VIBE64_RUNTIME_NAMESPACE = previous; });
@@ -132,7 +132,8 @@ test("curated providers keep distinct runtime directories, thread identities and
   }
   for (const [providerId, modelId] of [["openai", "gpt-5.6-sol"], ["deepseek", "deepseek-flash"], ["zai-coding-plan", "glm-5.3"]]) {
     const session = { metadata: { ...metadata, assistant_selection: serializeVibe64AssistantSelection(selection(providerId, modelId)) } };
-    assert.equal(codexAppServerThreadIdForSession(session, "/workspace"), `${providerId}-thread`);
+    assert.equal(codexAppServerThreadIdForSession(session, "/workspace"), metadata.agent_identity_conversation_id,
+      "Changing the selected model cannot restore a different provider's saved thread.");
     assert.equal(codexAppServerThreadIdForSession(session, "/different-workspace"), "");
   }
 });
