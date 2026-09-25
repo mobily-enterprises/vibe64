@@ -104,6 +104,27 @@ test("changeover accompanies the normal user prompt and keeps the authored bubbl
   assert.ok(h.logs.every((entry) => !Object.hasOwn(entry, "message")));
 });
 
+test("changeover preserves the recorded model behind each orchestrator's messages", async (t) => {
+  const h = await harness(t);
+  await h.send("Plan the green marker");
+  await h.select("codex", "deepseek");
+  const coder = { ...selection("codex", "deepseek"), modelId: "deepseek-flash", variantId: "high" };
+  await h.store.writeMetadataValue("changeover", "assistant_selection", serializeVibe64AssistantSelection(coder));
+  await h.send("Create the green marker");
+  const recorded = await h.history();
+  await h.select("opencode");
+  await h.send("What did DeepSeek create?");
+  const { messages } = JSON.parse(h.calls.at(-1).message.split("\n").find((line) => line.startsWith('{"messages":')));
+  for (const [index, request] of ["Plan the green marker", "Create the green marker"].entries()) {
+    const turn = messages.filter((message) => message.text.includes(request));
+    assert.deepEqual(turn.map((message) => message.role), ["user", "assistant"]);
+    for (const message of turn) {
+      assert.deepEqual(message.assistantSelection, recorded[index].metadata.assistantSelection);
+    }
+  }
+  assert.equal((await h.history()).at(-1).user.text, "What did DeepSeek create?");
+});
+
 test("switching repeatedly without sending never acknowledges missed history", async (t) => {
   const h = await harness(t);
   await h.send("Start here");

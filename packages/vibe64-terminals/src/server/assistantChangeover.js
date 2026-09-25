@@ -97,6 +97,7 @@ async function history(store, sessionId) {
       ...content,
       messageId: message.messageId,
       engineId: turnConversationKey(turn) || "",
+      assistantSelection: turn.metadata?.assistantSelection,
       originalVersion: turn.metadata?.nativeMessageVersions?.[id],
       version: conversationMessageVersion(content)
     };

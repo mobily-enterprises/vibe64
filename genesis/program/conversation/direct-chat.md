@@ -1101,7 +1101,7 @@ instruction. Genesis retains a generic bounded turn-context capability for
 hosts that need one, but Vibe64 deliberately does not use it. When Codex mirrors
 a user message entered through its native terminal into Vibe64 History, that
 history item inherits the actor metadata from the latest Vibe64 UI message.
-This attribution is internal conversation data and is never sent to the model.
+This human attribution is internal conversation data and is never sent to the model.
 
 Main and temporary chat share JSKIT's `createAssistantMessageDelivery` controller
 for optimistic entries, failed sends and canonical receipt matching. Vibe64
@@ -1187,7 +1187,10 @@ changeover context to that same user request. A new engine receives the latest
 30 visible messages; a returning engine receives every missed or corrected
 message and the identities of removed messages. User messages, answers,
 commentary and system notices supply the context; there is no separate summary
-or acknowledgement turn. The visible user bubble retains the authored text and
+or acknowledgement turn. Each message carries its recorded assistant selection
+when available, so the receiving agent can distinguish models such as Astra and
+DeepSeek within Codex. Missing historical model attribution stays unknown.
+The visible user bubble retains the authored text and
 attachments. The filesystem transcript preserves engine attribution and the
 original content fingerprints at message creation, so even an immediate edit
 before the engine's next Send is detectable. Corrections preserve those original
