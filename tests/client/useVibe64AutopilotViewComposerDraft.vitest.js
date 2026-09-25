@@ -445,6 +445,27 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.thinkingLabel.value).not.toContain("Compacting");
   });
 
+  it("keeps compaction and connection status ahead of streamed provider progress", async () => {
+    const assistantProgressLabel = ref("OpenCode is writing…");
+    const { props, view } = await createViewWithProps({}, { assistantProgressLabel });
+    props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
+    expect(view.thinkingLabel.value).toBe("OpenCode is writing…");
+    props.session.agentSession.turn.phase = "compacting";
+    expect(view.thinkingLabel.value).toBe("Compacting conversation context…");
+    assistantProgressLabel.value = "OpenCode is reasoning…";
+    expect(view.thinkingLabel.value).toBe("Compacting conversation context…");
+    props.session.agentSession.turn.status = "observation_lost";
+    expect(view.thinkingLabel.value).toContain("not yet confirmed");
+    props.session.agentSession.turn.status = "active";
+    props.agentConnectionStatus = "reconciling";
+    expect(view.thinkingLabel.value).not.toMatch(/Compacting|reasoning/);
+    props.agentConnectionStatus = "connected";
+    props.session.agentSession.turn.phase = "";
+    expect(view.thinkingLabel.value).toBe("OpenCode is reasoning…");
+    props.session.agentSession.turn.active = false;
+    expect(view.thinkingLabel.value).not.toContain("reasoning");
+  });
+
   it("presents personal AI access as approval mode without connection errors", async () => {
     const canUse = ref(false);
     const canRequest = ref(true);

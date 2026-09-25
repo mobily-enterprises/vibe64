@@ -1287,6 +1287,7 @@ const {
   assistantCanRouteChat,
   assistantCanUseCode: computed(() => assistantCanUsePurpose("code")),
   assistantCanUseNative,
+  assistantProgressLabel: openCodeProgressLabel,
   onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds }),
   requestTemporaryAi: startTemporaryAiTask,
   sendMainChatMessage
@@ -1325,7 +1326,7 @@ const {
   sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath))
 });
 const composerAssistantLabel = computed(() => (
-  (testApproval.value?.state === "waiting" ? "Waiting for memory approval" : "") || openCodeProgressLabel.value ||
+  (testApproval.value?.state === "waiting" ? "Waiting for memory approval" : "") ||
   (thinkingVisible.value ? thinkingLabel.value : typingLabel.value)
 ));
 watch(agentActive, (active) => {

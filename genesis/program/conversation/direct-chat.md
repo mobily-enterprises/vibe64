@@ -53,8 +53,9 @@ continuation and loading older history.
 Main chat shows “Compacting conversation context…” for native compaction in all
 three orchestrators: Codex's tracked compaction item, OpenCode's current unfinished
 summary message, or Claude's streamed compaction status. Completion, terminal
-outcomes and a new turn clear the phase; lost observation takes precedence. Browser
-reloads use the current provider/run state. Historical compaction counts never set
+outcomes and a new turn clear the phase; lost observation takes precedence.
+Streamed provider progress cannot hide compaction, lost observation or reconnection.
+Browser reloads use the current provider/run state. Historical compaction counts never set
 this indicator. OpenCode reuses its existing message polling, with no extra network
 request. This display does not trigger compaction or rewrite conversation history.
 OpenCode follows native automatic-compaction control messages and their continuation

@@ -360,6 +360,7 @@ function useVibe64AutopilotView(props, emit, {
   assistantCanRouteChat = null,
   assistantCanUseCode = null,
   assistantCanUseNative = null,
+  assistantProgressLabel = null,
   onAttachmentsAccepted = null,
   requestTemporaryAi = null,
   sendMainChatMessage = null
@@ -742,6 +743,7 @@ function useVibe64AutopilotView(props, emit, {
       status: composerConnectionStatus.value
     }) ||
     (agentActive.value && activeAgentTurn.value.phase === "compacting" ? "Compacting conversation context…" : "") ||
+    (agentActive.value ? unref(assistantProgressLabel) : "") ||
     (agentActive.value ? "Assistant is working..." : "") ||
     (composerSending.value ? "Sending to assistant..." : "")
   ));
