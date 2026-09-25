@@ -1791,7 +1791,7 @@ function createService({
       closing = true;
       await Promise.allSettled(turnCompletions);
       const [agentClose, outputTargetClose] = await Promise.allSettled([
-        Promise.resolve().then(() => sessionAgent.invalidateRuntimes({
+        Promise.resolve().then(() => service.invalidateAgentRuntimes({
           reason: "server-shutdown"
         })),
         Promise.resolve().then(() => outputTarget.close())
@@ -3008,7 +3008,18 @@ function createService({
       };
     },
 
-    invalidateAgentRuntimes(input = {}) {
+    async invalidateAgentRuntimes(input = {}) {
+      if (input.reason === "server-shutdown") {
+        closing = true;
+        const routing = await Promise.allSettled([assistantRouting.close(), sessionConversations.close()]);
+        await Promise.allSettled(turnCompletions);
+        const [native] = await Promise.allSettled([sessionAgent.invalidateRuntimes(input, {
+          providerId: normalizeAgentProviderId(input.provider)
+        })]);
+        const failures = [...routing, native].filter((result) => result.status === "rejected").map((result) => result.reason);
+        if (failures.length) throw new AggregateError(failures, "Assistant runtime shutdown did not complete successfully.");
+        return native.value;
+      }
       return sessionAgent.invalidateRuntimes(input, {
         providerId: normalizeAgentProviderId(input.provider)
       });

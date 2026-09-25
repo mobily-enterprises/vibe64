@@ -459,6 +459,28 @@ test("Claude shutdown cannot restore a closed temporary chat from a cached main 
   assert.equal(Object.hasOwn(f.context.session.metadata, key), false);
 });
 
+test("Claude shutdown retains its resolved selection after main chat moves to Codex", async (t) => {
+  const f = await fixture(t);
+  const context = { ...f.context, assistantSelection: undefined };
+  await f.provider.sendMessage(context, { message: "First", messageId: "before-changeover" });
+  await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done", uuid: "done" });
+  const claudeId = f.context.session.metadata.claude_conversation_id;
+  const selection = JSON.stringify({ ...f.context.assistantSelection, engineId: "codex", agentId: "codex",
+    modelProviderId: "deepseek", modelId: "deepseek-flash" });
+  Object.assign(f.context.session.metadata, { assistant_selection: selection,
+    agent_identity_provider: "codex", agent_identity_conversation_id: "retained-codex-thread" });
+  const messages = structuredClone(f.written);
+
+  assert.equal((await f.provider.invalidateRuntimes({}, { reason: "server-shutdown" })).ok, true);
+  assert.equal(f.processes[0].stopped, true);
+  assert.equal(JSON.parse(f.context.session.metadata[`claude_conversation_${claudeId}`]).executionId, "");
+  assert.equal(f.context.session.metadata.assistant_selection, selection);
+  assert.equal(f.context.session.metadata.agent_identity_provider, "codex");
+  assert.equal(f.context.session.metadata.agent_identity_conversation_id, "retained-codex-thread");
+  assert.deepEqual(f.written, messages);
+  assert.equal(f.processes.length, 1, "Shutdown does not start another provider process");
+});
+
 test("Claude recovery discovers saved processes created after its supplied snapshot", async (t) => {
   const f = await fixture(t);
   await f.provider.sessionState(f.context);

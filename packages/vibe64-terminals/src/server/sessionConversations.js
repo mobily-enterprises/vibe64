@@ -358,6 +358,7 @@ function createSessionConversations({
   }
 
   return {
+    close: routing.close,
     async createTemporaryConversation(sessionId, input = {}, options = {}) {
       return writeSnapshot(sessionId, options, async (ctx) => {
         const conversationId = input.conversationId || randomUUID();

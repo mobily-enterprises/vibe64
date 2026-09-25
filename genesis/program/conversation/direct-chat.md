@@ -47,6 +47,12 @@ Existing assistant status and message-delivery diagnostics include the requestin
 user's authenticated username when supplied by the host. Request context takes
 precedence over operation options; background work without an actor records
 `username: null`. Logs do not include the user's credentials or message text.
+Service shutdown closes the main and temporary routing coordinators before
+invalidating native providers. They reject new Send requests, cancel pending
+classification through its existing Stop owner, and await helper cleanup and the
+saved cancellation. A cleanup failure remains an explicit shutdown failure.
+Already admitted native turns keep their existing interruption/reconnect handling;
+shutdown does not start a review.
 
 The shared transcript groups adjacent reasoning summaries across storage rows.
 User messages, commentary, answers and system messages separate progress groups.
@@ -125,7 +131,10 @@ session read would reopen.
 Claude process restoration reads current saved session metadata, rather than a
 snapshot retained by another conversation. Closing a temporary chat cannot later
 recreate its deleted execution record during changeover or shutdown. Saved
-processes still require verified stop evidence.
+processes still require verified stop evidence. A Claude entry retains its resolved
+assistant selection for later cleanup, including when it originally read that
+selection from session metadata. Moving Main to Codex or OpenCode cannot make
+shutdown reinterpret the retained Claude process as the new engine.
 
 The conversation client overlays realtime upserts received during each pending
 history request before publishing that response to the query cache. Upserts
@@ -291,8 +300,12 @@ configuration snapshot, sharing connection and catalogue reads within that
 response only. The response omits private connection identities. Dispatch still
 rechecks access. An optional host user resolver refreshes the supplied actor
 before purpose resolution and native AI admission, and providers receive that
-current user. Hosted continuations with an explicitly missing actor cannot
-inherit the current viewer. Access responses omit the user record. Reads,
+current user. Hosted continuations with a missing actor cannot inherit the
+current viewer, including unsent requests from before the routing upgrade.
+Those requests retain their evidence and require cancellation followed by a
+new Send. Recorded submitters still receive fresh admission; inspecting a prior
+delivery receipt requires no new inference. Standalone admission without hosted
+users remains supported. Access responses omit the user record. Reads,
 Stop and cleanup remain separate from admission of new inference. Source
 explanations and Database Copilot use their own resolved Economy destination too.
 

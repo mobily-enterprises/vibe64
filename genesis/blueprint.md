@@ -254,6 +254,8 @@ mode and model, with Auto and automatic review unavailable. In Auto, the goal
 menu explains that a concrete
 mode must be selected before offering Start or Resume. Background helpers use
 the independent Economy role.
+When the service shuts down, pending routing is cancelled and its helper cleanup
+finishes before the assistant processes close. Restart does not send that request.
 AI controls includes a Close button that remains available while the assistant
 is working, so dismissing the panel does not require tapping outside it.
 The Settings cog opens AI model and access controls directly, with recovery
@@ -270,7 +272,8 @@ assistant's Stop button on the same row as the other controls. Narrow screens
 use the full-width chat.
 Host-provided conversations enter chat only when explicitly opened through the
 host's own navigation. Their tab disappears when returning to another chat;
-ordinary chat controls do not retain a permanent shortcut.
+ordinary chat controls do not retain a permanent shortcut, including headers
+shown during archiving or after the last session closes.
 Main chat's optional companion controls detach while a temporary or host-provided
 conversation is selected. Pending voice input cannot send into hidden Main chat.
 On narrow screens, swiping left shows the selected Preview or Dashboard and
@@ -563,7 +566,8 @@ the composer while the owner reviews them, even when the assistant is busy.
 Owners see the author, full text and previewable attachments with Approve & send
 and Decline actions directly in chat. Members can withdraw pending requests and
 see recent decisions. Approval retains the author's attribution and safely
-retries a failed delivery.
+retries a failed delivery. A migrated AI request with no recorded submitter cannot
+borrow the current viewer's identity on Retry; cancel it and send a new request.
 When the owner switches to a connection available to the workspace, members'
 open browsers immediately return to direct AI use without reloading or losing
 drafts and attachments. Switching back restores Send for approval in real time.
@@ -1079,6 +1083,8 @@ Their messages stay out of main History. Close stops the conversation and any
 active goal, confirms cleanup, and deletes its conversation data and attachments
 while preserving project edits. Failed cleanup remains visible and retryable.
 Closed Claude chats stay closed through assistant changeover and server shutdown.
+Shutdown can also stop retained Claude processes after Main moves to another AI,
+while preserving the new selection and conversation history.
 Successful Close removes that chat from other connected browsers; reconnecting
 reconciles missed closures. Draft saves wait for brief assistant-operation
 contention and retry automatically when it remains busy.

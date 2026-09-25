@@ -121,7 +121,7 @@ function createClaudeSessionAgentProvider({
     if (selection?.engineId !== ENGINE) throw error("This session does not have a Claude Code selection.");
     const workdir = scope?.workdir || terminalSessionSourceRoot(session);
     if (!path.isAbsolute(workdir || "") || !runtime.stateRoot) throw error("Claude requires a prepared session workspace.");
-    return { ...context, runtime, session, selection, sessionId, workdir,
+    return { ...context, runtime, session, assistantSelection: selection, selection, sessionId, workdir,
       key: `${path.resolve(runtime.stateRoot)}\0${sessionId}` };
   }
 

@@ -6,7 +6,8 @@ session history.
 
 A host-provided conversation appears in the tab strip only while selected.
 Its host owns the entry point; ordinary chat headers and temporary-chat tabs
-do not keep a permanent shortcut. Returning to Main chat or a temporary chat
+do not keep a permanent shortcut, including the header shown while archiving
+and after the last session closes. Returning to Main chat or a temporary chat
 hides the host conversation without deleting its saved history.
 The workspace exposes its selected visibility to the parent so Main chat's
 optional companions cannot keep targeting Main while another chat is selected.
@@ -94,6 +95,9 @@ Code completion. Polling can schedule it when the current coordinator admitted
 that Code request, even if its native idle event arrives later. After a backend
 restart, a completed Code request instead offers explicit review Retry/Skip.
 Closing or stopping a chat cancels pending routing and review.
+Service shutdown also drains pending routing through the same cancellation owner
+before closing native providers, so a stopped Router cannot leave a stale process
+reference after an orderly restart.
 Skipped, cancelled and incomplete reviews remain explained above the composer
 after reload, until the next request replaces their status. The notice does not
 restart work.
@@ -401,10 +405,10 @@ native thread creation also releases any catalogue runtime owned by that scope.
 The manager also composes these scoped operations into one bounded helper turn,
 awaiting the parent's native-identity event before starting. Abort during startup
 stops the late native turn; abort while waiting stops that same scoped turn.
-Save naming now resolves effective Economy through this seam, with durable
-cleanup references in the existing Save task. Suggestions, source explanations
-and database callers still need migration from their older per-account settings
-and detached operations.
+Save naming, suggestions, source explanations and database help resolve effective
+Economy through this seam. Each feature retains its own durable helper-cleanup
+references, exact destination and connection identity; the last main-chat model
+does not determine helper access.
 
 Prompt suggestions, commit subjects, database help, and source explanations
 use the bounded low-cost execution profile in a private non-project workspace.
