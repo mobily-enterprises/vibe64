@@ -62,7 +62,7 @@ function createVibe64FeatureRoutes(
       }),
       async function handleVibe64FeatureRoute(request, reply) {
         if (!requireLocalStudioRequest(request, reply, { message: localRequestMessage })) {
-          return;
+          return reply;
         }
 
         let response;
@@ -75,7 +75,7 @@ function createVibe64FeatureRoutes(
             : await handler(request, reply);
         } catch (error) {
           if (isProjectRequestError(error)) {
-            reply.code(projectRequestErrorStatusCode(error)).send({
+            return reply.code(projectRequestErrorStatusCode(error)).send({
               ok: false,
               errors: [
                 {
@@ -84,15 +84,14 @@ function createVibe64FeatureRoutes(
                 }
               ]
             });
-            return;
           }
           throw error;
         }
         if (response === undefined) {
-          return;
+          return reply;
         }
 
-        reply.code(responseStatusCode(response, options)).send(response);
+        return reply.code(responseStatusCode(response, options)).send(response);
       }
     );
   }

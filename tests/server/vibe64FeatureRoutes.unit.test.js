@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import Fastify from "fastify";
 
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import {
@@ -180,4 +181,32 @@ test("Vibe64 feature routes can register global routes without project params", 
       input: {}
     });
   });
+});
+
+test("feature errors retain their JSON body while response hooks are asynchronous", async () => {
+  await withLocalRequestBypass(async () => withRouteProject(async ({ apiBase, projectContext }) => {
+    const app = testRouteApp();
+    const routes = createVibe64FeatureRoutes(app.http, {
+      projectContext, routeRelativePath: "vibe64", routeSurface: "app"
+    });
+    const busy = { ok: false, code: "vibe64_agent_write_mode_busy",
+      error: "The assistant is still reconnecting. Wait until it is ready, then try again." };
+    routes.serviceRoute("GET", "/busy", { failureStatus: 400 }, () => busy);
+    const server = Fastify();
+    server.addHook("onSend", async (_request, _reply, payload) => {
+      if (payload) await new Promise((resolve) => setImmediate(resolve));
+      return payload;
+    });
+    for (const route of app.registeredRoutes) server.route({ method: route.method, url: route.path, handler: route.handler });
+    try {
+      const response = await server.inject({ method: "GET", url: `${apiBase}/vibe64/busy` });
+      assert.equal(response.statusCode, 400);
+      assert.equal(response.body, JSON.stringify(busy));
+      const invalidProject = await server.inject({ method: "GET", url: "/api/app/bad!/vibe64/busy" });
+      assert.equal(invalidProject.statusCode, 422);
+      assert.equal(invalidProject.json().errors[0].code, "vibe64_invalid_project_slug");
+    } finally {
+      await server.close();
+    }
+  }));
 });

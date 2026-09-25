@@ -11,6 +11,7 @@ hides the host conversation without deleting its saved history.
 
 ## Sources
 
+- `packages/vibe64-core/src/server/featureRoutes.js`
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
 - `packages/vibe64-runtime/src/server/assistantRoutingStateUpgrade.js`
 - `tests/server/assistantRoutingStateUpgrade.unit.test.js`
@@ -161,6 +162,8 @@ opening an empty temporary workspace or showing an error. Losing readiness cance
 retries and invalidates pending responses; recovery restores again. Changing
 sessions or unmounting also retires pending restoration. Genuine restoration
 failures retain the explicit retry action.
+Feature routes wait for response delivery, including asynchronous response hooks,
+so error codes and messages reach the client instead of an empty response.
 Typing presence reuses the session presence endpoint, realtime event, debounce,
 heartbeat and expiry with the saved conversation ID as an additional scope.
 The server takes the actor from authentication and checks that the chat belongs
