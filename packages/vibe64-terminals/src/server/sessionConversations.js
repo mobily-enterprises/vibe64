@@ -273,6 +273,12 @@ function createSessionConversations({
     },
     prepareSelection: async (id, selection, ctx) => {
       let record = await recordFor(ctx.conversationContext, ctx.routingConversationId);
+      if (selection.engineId === "codex" && Object.entries(record.nativeBindings || {}).some(([key, binding]) =>
+        binding.assistantSelection.engineId === "codex" && key !== "codex")) {
+        throw Object.assign(new Error("This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed."), {
+          code: "vibe64_codex_history_unsupported"
+        });
+      }
       if (record.assistantSelection.engineId !== selection.engineId) {
         const observed = await snapshot(nativeContext(ctx), record);
         if (observed.readError) throw new Error(observed.error);

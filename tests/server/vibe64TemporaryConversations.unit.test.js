@@ -914,6 +914,47 @@ test("temporary foreign delivery recovers its exact receipt after restart withou
   });
 });
 
+for (const pinned of [false, true]) {
+  test(`temporary Codex routing rejects unsupported retained bindings before changing native ownership (pinned: ${pinned})`, async () => {
+    await withTemporaryRoot(async (root) => {
+      const f = await temporaryChangeoverFixture(root);
+      await f.send("code", "original");
+      await f.finish("Original provider history");
+      const original = await f.record();
+      await f.send("economy", "explain");
+      await f.finish("Explanation from Economy");
+      const record = await f.record();
+      const routingMetadata = { ...record.routingMetadata };
+      if (!pinned) delete routingMetadata.codex_routing_home_provider;
+      const changeover = JSON.parse(routingMetadata.assistant_changeover);
+      changeover.engines["codex/deepseek"] = changeover.engines.codex;
+      delete changeover.engines.codex;
+      routingMetadata.assistant_changeover = JSON.stringify(changeover);
+      const nativeBindings = { ...record.nativeBindings, "codex/deepseek": record.nativeBindings.codex };
+      delete nativeBindings.codex;
+      await f.store.writeSessionConversation("one", "chat", { routingMetadata, nativeBindings });
+      const stops = [...f.calls.stops];
+      for (const mode of ["plan", "code"]) {
+        await assert.rejects(f.send(mode, `return-${mode}`), {
+          code: "vibe64_codex_history_unsupported",
+          message: /Start a new temporary chat/
+        });
+        const after = await f.record();
+        assert.deepEqual(after.assistantSelection, record.assistantSelection);
+        assert.equal(after.providerConversationId, record.providerConversationId);
+        assert.deepEqual(after.nativeBindings, nativeBindings);
+        assert.equal(after.routingMetadata.codex_routing_home_provider, routingMetadata.codex_routing_home_provider);
+        assert.equal(after.routingMetadata.assistant_changeover, routingMetadata.assistant_changeover);
+        assert.deepEqual(f.calls.stops, stops);
+        assert.equal(f.calls.starts.length, 2);
+        assert.deepEqual(f.calls.deletes, []);
+        assert.equal(f.native.size, 2);
+        assert.ok(f.native.has(original.providerConversationId));
+      }
+    });
+  });
+}
+
 test("ordinary temporary chats start in Plan with review off and retain their parent's workflow", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);

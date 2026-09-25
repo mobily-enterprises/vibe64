@@ -134,8 +134,11 @@ a failed stop leaves that selection unchanged. Returning resumes the recorded
 native conversation and sends missed or corrected visible messages with the
 ordinary authored request. No separate handover inference is added. Each retained
 binding stores its native ID, exact selection, settings and last message/run IDs.
-Codex routed histories retain their home; legacy external-provider histories keep
-their compatibility restriction even after an intervening foreign-engine turn.
+Codex routing accepts only its current shared native binding. A request to use
+Codex rejects unsupported retained bindings before stopping the current assistant,
+changing its selection or rewriting its home, including after an intervening
+foreign-engine turn. The error asks the user to start a new temporary chat and
+keeps the existing history intact; no binding conversion or adoption is attempted.
 The manager keys temporary bindings separately from Main chat while providers
 continue to receive the real project session and exact native conversation ID.
 Close verifies stop and deletion for every visited binding, saving each successful
