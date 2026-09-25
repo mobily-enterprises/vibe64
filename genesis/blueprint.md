@@ -251,6 +251,8 @@ together there, including when review is off. Missing assignments point to this
 setup; other users are directed to the owner. Each assistant application has its own saved models for
 the explicit modes and Router. Auto asks Router to choose Plan or Code when a
 message is sent; discussion, mixed requests and unresolved decisions go to Plan.
+Routing progress appears with the message, without a duplicate banner above the
+composer. Interrupted-review notices disappear; errors and recovery actions remain.
 Routing is visible before delivery, and each routed exchange retains its mode
 and answering model. Plan is instructed not to edit files. Code implements
 agreed work and stops for an unresolved architectural or product decision.

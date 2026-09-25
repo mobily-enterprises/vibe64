@@ -175,18 +175,12 @@
           </div>
         </template>
         <template #composer>
-            <v-alert
-              v-if="routingLabel && (routingPending || routingRequest?.error ||
-                (routingRequest?.status === 'done' && ['incomplete', 'skipped_incomplete', 'skipped_unconfirmed', 'cancelled', 'skipped_question'].includes(routingRequest.reviewStatus)))"
-              variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status"
-            >
-              {{ routingLabel }}
-              <p v-if="routingRequest?.error" class="text-body-small">{{ routingRequest.error }}</p>
-              <div v-if="['review_pending', 'review_uncertain'].includes(routingRequest?.status)" class="d-flex flex-wrap ga-1">
-                <v-btn variant="text" min-height="48" @click="temporary.retryReview(activeTask.id)">{{ routingRequest.status === 'review_uncertain' ? 'Check delivery' : 'Retry review' }}</v-btn>
-                <v-btn v-if="routingRequest.status === 'review_pending'" variant="text" min-height="48" @click="stopTask(activeTask.id)">Skip review</v-btn>
-              </div>
-            </v-alert>
+          <Vibe64RoutingNotice
+            :request="routingRequest"
+            :active="props.active && temporary.open.value"
+            @retry="temporary.retryReview(activeTask.id)"
+            @skip="stopTask(activeTask.id)"
+          />
           <Vibe64AutopilotPromptTextarea
             v-for="task in temporary.tasks.value"
             v-show="task.id === activeTask.id"
@@ -314,7 +308,8 @@
 
 <script setup>
 import { AssistantComposerActions } from "@jskit-ai/assistant-core/client/conversation";
-import { assistantRoutingStatusIsPending, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import { computed, inject, nextTick, ref, useId, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
@@ -424,7 +419,6 @@ const temporary = useVibe64TemporaryAi({
 });
 const activeTask = temporary.activeTask;
 const routingRequest = computed(() => JSON.parse(activeTask.value?.routingMetadata?.assistant_routing_request || "null"));
-const routingLabel = computed(() => assistantRoutingStatusLabel(routingRequest.value));
 const routingPending = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status));
 const modeSession = computed(() => ({ sessionId: props.sessionId,
   assistantSelection: activeTask.value?.assistantSelection || props.assistantSelection,

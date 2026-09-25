@@ -251,6 +251,7 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `src/components/studio/Vibe64NativeAgentSession.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
+- `src/components/studio/vibe64-session/Vibe64RoutingNotice.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationLog.vue`
 - `src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue`
 - `src/components/studio/vibe64-session/Vibe64AttachmentDialog.vue`
@@ -346,6 +347,11 @@ form directly in an overlay, initially selecting this chat's orchestrator.
 Other users have no configuration action. The mode icon remains reachable when
 the current mode is unavailable. Its menu shows the actor's effective destination,
 Shared backup and pair-preservation reasons, and explains unavailable choices.
+Routing progress stays on the message bubble, without a duplicate composer banner.
+Main and temporary chats share the routing notice component: errors and review
+recovery actions remain visible, while a newly interrupted or skipped coding review
+uses the shell's brief notification. Restoring a chat does not replay old notices.
+Auto choosing Plan completes without reporting a skipped coding review.
 Saving a mode refreshes main-chat access immediately so Send reflects the new
 destination without waiting for a later session event. Main-chat availability
 uses the selected mode; steering checks the bound native

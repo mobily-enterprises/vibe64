@@ -334,7 +334,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     ["skipped_unconfirmed", "Automatic review skipped: coding completion could not be confirmed."],
     ["cancelled", "Automatic review cancelled."],
     ["skipped_question", "Waiting for your answer. Automatic review was skipped."]
-  ])("explains restored %s review status without restarting work", async (reviewStatus, message) => {
+  ])("does not restore a permanent banner for %s review status", async (reviewStatus, message) => {
     const temporary = temporaryAiTestState(deferred());
     const request = { status: "done", reviewStatus, messageId: "request-1", resolvedMode: "code" };
     temporary.tasks.value = [{
@@ -350,7 +350,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     try {
       await flushWorkspaceReveal();
       const notice = findNode(container, (node) => node.props?.role === "status" && nodeText(node).includes(message));
-      expect(notice).toBeTruthy();
+      expect(notice).toBeFalsy();
       expect(temporary.send).not.toHaveBeenCalled();
       expect(temporary.tasks.value[0].draft).toBe("My next question");
       temporary.tasks.value[0].routingMetadata.assistant_routing_request = JSON.stringify({ ...request, reviewStatus: "completed" });

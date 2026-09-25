@@ -9,7 +9,7 @@ import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
-import { recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingStatusLabel, recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRouting";
 
 async function fixture(t, preferences = { mode: "auto", review: true }, { resolveAssistantUser, beforeExclusive } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-lifecycle-"));
@@ -110,6 +110,19 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
 }
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
 const completion = (turnId = "turn-1", state = "completed") => ({ payload: { agentRun: { active: false, state, providerTurnId: turnId } } });
+
+test("Auto choosing Plan does not report that coding stopped or a review was skipped", async (t) => {
+  const f = await fixture(t);
+  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"plan","reason":"discussion"}' });
+  await f.service.send("session-1", request, f.context);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.state().status, "done");
+  assert.equal(f.state().resolvedMode, "plan");
+  assert.equal(f.state().reviewStatus, undefined);
+  assert.equal(f.sends.length, 1);
+  assert.equal(assistantRoutingStatusLabel(f.state()), "plan · codex · gpt-6-astra");
+  assert.equal(assistantRoutingStatusLabel({ ...f.state(), reviewStatus: "skipped_incomplete" }), "plan · codex · gpt-6-astra");
+});
 
 test("generated Code preserves chat preferences and reports its destination before inference without routing or review", async (t) => {
   const f = await fixture(t, { mode: "plan", review: true });

@@ -98,9 +98,10 @@ Closing or stopping a chat cancels pending routing and review.
 Service shutdown also drains pending routing through the same cancellation owner
 before closing native providers, so a stopped Router cannot leave a stale process
 reference after an orderly restart.
-Skipped, cancelled and incomplete reviews remain explained above the composer
-after reload, until the next request replaces their status. The notice does not
-restart work.
+Skipped, cancelled and incomplete coding reviews use the shared five-second
+notification when they finish. Restoring a chat does not replay old notices.
+Ordinary routing progress stays in the message bubble; only errors and review
+recovery actions remain above the composer. Notices never restart work.
 When routing stops before delivery, the local prompt returns to the composer;
 its next explicit Send uses a new message ID. Newer draft text and attachments
 are retained, and a clean cancellation does not appear as a failed message.

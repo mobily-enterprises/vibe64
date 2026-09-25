@@ -418,18 +418,13 @@
             class="studio-autopilot__composer"
             @focusout="handleComposerRegionFocusOut"
           >
-            <v-alert
-              v-if="routingStatusLabel && (routingBusy || routingRequest?.error ||
-                (routingRequest?.status === 'done' && ['incomplete', 'skipped_incomplete', 'skipped_unconfirmed', 'cancelled', 'skipped_question'].includes(routingRequest.reviewStatus)))"
-              variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status"
-            >
-              {{ routingStatusLabel }}
-              <p v-if="routingRequest?.error" class="text-body-small mt-1">{{ routingRequest.error }}</p>
-              <div v-if="['review_pending', 'review_uncertain'].includes(routingRequest?.status)" class="d-flex flex-wrap ga-1">
-                <v-btn variant="text" min-height="48" :disabled="routingReviewRetrying" @click="retryAutomaticReview">{{ routingRequest.status === 'review_uncertain' ? 'Check delivery' : 'Retry review' }}</v-btn>
-                <v-btn v-if="routingRequest.status === 'review_pending'" variant="text" min-height="48" @click="props.interruptAgentTurn({ reason: 'skip-review' })">Skip review</v-btn>
-              </div>
-            </v-alert>
+            <Vibe64RoutingNotice
+              :request="routingRequest"
+              :active="props.active && conversationLogVisible"
+              :retrying="routingReviewRetrying"
+              @retry="retryAutomaticReview"
+              @skip="props.interruptAgentTurn({ reason: 'skip-review' })"
+            />
             <Vibe64AssistantAccessPanel
               :access-error="assistantAccessError"
               :assistant-busy="agentActive"
@@ -962,6 +957,7 @@ import Vibe64AssistantAccessPanel from "@/components/studio/vibe64-session/Vibe6
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
+import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import { useModelRouting } from "@local/vibe64-accounts/client";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
@@ -1195,8 +1191,6 @@ const {
   composerPlaceholder,
   composerSending,
   routingRequest,
-  routingBusy,
-  routingStatusLabel,
   composerSubmitAriaLabel,
   composerSubmitMode,
   composerSubmitTitle,

@@ -527,7 +527,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       if (!state.review || state.resolvedMode !== "code" || run.state !== "completed") {
         liveReviewRequests.delete(keyFor(sessionId, context));
         state.status = "done";
-        if (state.review) state.reviewStatus = "skipped_incomplete";
+        if (state.review && state.resolvedMode === "code") state.reviewStatus = "skipped_incomplete";
         await save(context, state); return;
       }
       const native = await agent.sessionState(sessionId, context);
