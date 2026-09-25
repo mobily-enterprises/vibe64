@@ -260,6 +260,7 @@ function createService({
   const activeRepositoryUpdateChecks = new Map();
   const activeWorkInspections = new Map();
   const activeSuggestionDeliveries = new Map();
+  let archivePreparation = null;
   let configuredRenewalActorResolver = renewalActorResolver;
   async function resolveRenewalActor(actor = {}, context = {}) {
     if (typeof configuredRenewalActorResolver !== "function") {
@@ -846,6 +847,9 @@ function createService({
   }
 
   async function archiveSession(sessionId, input = {}) {
+    // One attempt keeps the same host callback even if configuration changes
+    // while terminal shutdown is in progress.
+    const prepareArchive = archivePreparation;
     return sessionResult(async () => {
       if (setupRunner.isRunning(sessionId)) {
         const error = new Error("Wait for workspace preparation to finish before archiving this session.");
@@ -920,6 +924,20 @@ function createService({
             if (typeof terminals.removeOutputResultsForSession === "function") {
               await terminals.removeOutputResultsForSession(sessionId);
             }
+          }
+          if (prepareArchive) {
+            const prepared = await prepareArchive({
+              phase: operation.phase,
+              runtime,
+              session: await runtime.getSession(sessionId, { inspectSource: false })
+            });
+            if (prepared?.ok === false) {
+              throw Object.assign(new Error(prepared.error || "Session archive preparation failed."), {
+                code: prepared.code || "vibe64_session_archive_preparation_failed"
+              });
+            }
+          }
+          if (operation.phase === "stopping") {
             await advanceArchivePhase("resources");
           }
           if (operation.phase === "resources") {
@@ -966,6 +984,12 @@ function createService({
     ...renewal,
     closeSessionPresence() {
       sessionPresence?.close?.();
+    },
+    setArchivePreparation(prepare = null) {
+      if (prepare !== null && typeof prepare !== "function") {
+        throw new TypeError("Session archive preparation must be a function or null.");
+      }
+      archivePreparation = prepare;
     },
     setRenewalActorResolver(resolver = null) {
       configuredRenewalActorResolver = assertRenewalActorResolver(resolver);

@@ -127,6 +127,10 @@ becoming a failure solely because time elapsed. A replacement cannot start
 until that cleanup finishes; realtime notification delivery does not delay it.
 After a server restart, admitted archives resume from durable progress. Failed
 recovery preserves the evidence and requires an explicit retry.
+Hosts can register preparation before ordinary archival removes resources and
+source. Failed preparation stops that archive attempt. Fully published archives
+can be inspected through a guarded server operation. These extension points add
+no automatic history deletion or context rotation to the standalone editor.
 Selecting a session shows incoming saved work as soon as its version check
 confirms it, while the file-change details continue loading in the background.
 The chat header gives three session tabs room to show their labels, hides the

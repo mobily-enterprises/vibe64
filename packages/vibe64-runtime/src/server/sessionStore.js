@@ -1630,6 +1630,47 @@ function createVibe64SessionStore({
     });
   }
 
+  async function withArchivedSession(sessionId, operation) {
+    if (typeof operation !== "function") {
+      throw new TypeError("Archived session work requires an operation.");
+    }
+    const normalizedSessionId = assertValidVibe64SessionId(sessionId);
+    return runSessionArchiveExclusive(normalizedSessionId, async () => {
+      // A published renewal can still retain its predecessor until the source
+      // transaction commits. It is not yet eligible for post-archive work.
+      for (const sessionPaths of [paths(normalizedSessionId), closingSessionPaths(normalizedSessionId)]) {
+        if (await pathExists(sessionPaths.sessionRoot)) {
+          throw vibe64Error(
+            `Session archive is not finalized: ${normalizedSessionId}`,
+            "vibe64_session_archive_not_finalized"
+          );
+        }
+      }
+      const archiveRecord = await requireSessionArchiveRecord(paths(), normalizedSessionId);
+      if (archiveRecord.sessionId !== normalizedSessionId) {
+        throw vibe64Error(
+          `Session archive identity does not match: ${normalizedSessionId}`,
+          "vibe64_invalid_session_archive_metadata"
+        );
+      }
+      await validateSessionArchive(archiveRecord.archivePath);
+      return withExtractedSessionArchive(archiveRecord, async (sessionPaths, record) => {
+        const session = await readSessionFromPaths(sessionPaths, record);
+        if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED) {
+          throw vibe64Error(
+            `Session archive contains an unarchived session: ${normalizedSessionId}`,
+            "vibe64_session_archive_not_finalized"
+          );
+        }
+        return operation({
+          ...session,
+          artifactsRoot: sessionPaths.artifactsRoot,
+          sessionRoot: sessionPaths.sessionRoot
+        });
+      });
+    });
+  }
+
   async function withPreparedRenewalSession(sessionId, operation) {
     if (typeof operation !== "function") {
       throw new TypeError("Prepared renewal session work requires an operation.");
@@ -4994,6 +5035,7 @@ function createVibe64SessionStore({
     writeJsonArtifactForRenewal,
     writeSessionRenewalStateRecord,
     withPublishedRenewalSession,
+    withArchivedSession,
     writeSessionLabel,
     writeStatus
   };
