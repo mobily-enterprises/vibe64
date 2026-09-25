@@ -403,6 +403,9 @@ transcript. Native frame UUIDs keep thinking and answer blocks distinct when
 they share an API message ID, including after history reload. Tool commands
 enter the existing session command broker.
 Older session snapshots reuse the already-owned main Claude conversation.
+Restoring retained Claude entries for temporary-work checks, shutdown or restart
+does not select Claude as the main chat. A main-chat operation binds the selected
+Claude identity even when its entry was already restored in memory.
 The launcher identifies Claude's own PID for startup Git probes that leave stdin
 open, so those probes cannot stall session preparation or the first prompt.
 Shell-tool pipelines still forward their input through the normal Git broker.

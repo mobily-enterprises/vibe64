@@ -301,6 +301,52 @@ test("Claude reuses its main conversation when callers hold older session snapsh
   assert.equal(f.processes.length, 1);
 });
 
+test("restoring Claude conversations preserves another engine's main identity", async (t) => {
+  for (const operation of ["hasActiveTemporaryConversation", "closeSession", "reconcileSessions"]) {
+    await t.test(operation, async (t) => {
+      const f = await fixture(t);
+      const main = await f.provider.sessionState(f.context);
+      const temporary = await f.provider.createConversation(f.context);
+      await f.provider.startConversationTurn(f.context, {
+        conversationId: temporary.conversationId, message: "Temporary", messageId: "temp"
+      });
+      const identity = {
+        agent_identity_conversation_id: "codex-main", agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native", agent_identity_status: "ready",
+        agent_identity_workdir: f.context.session.metadata.source_path,
+        agent_transport_id: "codex_app_server", agent_transport_kind: "app-server"
+      };
+      Object.assign(f.context.session.metadata, identity, {
+        assistant_selection: JSON.stringify({ ...f.context.assistantSelection, engineId: "codex", agentId: "codex" })
+      });
+      // A temporary Claude operation receives a selection-specific snapshot;
+      // its store still writes to the parent session.
+      const context = { ...f.context, session: structuredClone(f.context.session) };
+      const stopped = [];
+      const restored = createClaudeSessionAgentProvider({ ...f.providerOptions,
+        stopExecution: async (id) => { stopped.push(id); return { scopeEmpty: true }; } });
+      if (operation === "reconcileSessions") {
+        await restored.reconcileSessions({}, [context.session], context);
+      } else {
+        const result = await restored[operation](context);
+        if (operation === "hasActiveTemporaryConversation") assert.equal(result.active, true);
+      }
+      for (const [key, value] of Object.entries(identity)) assert.equal(f.context.session.metadata[key], value, key);
+      assert.equal(f.context.session.metadata.claude_conversation_id, main.thread.id);
+      if (operation !== "hasActiveTemporaryConversation") assert.deepEqual(stopped, ["test-0"]);
+      assert.equal(f.processes.length, 1);
+
+      // Explicitly returning to Claude must activate the cached main entry.
+      const selected = { ...f.context, session: structuredClone(f.context.session) };
+      selected.session.metadata.assistant_selection = JSON.stringify(selected.assistantSelection);
+      assert.equal((await restored.sessionState(selected)).thread.id, main.thread.id);
+      assert.equal(f.context.session.metadata.agent_identity_provider, "claude");
+      assert.equal(f.context.session.metadata.agent_identity_conversation_id, main.thread.id);
+      assert.equal(f.context.session.metadata.agent_transport_id, "claude_stream_json");
+    });
+  }
+});
+
 test("Claude observation failure stops native work before publishing idle", async (t) => {
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "Go", messageId: "go" });

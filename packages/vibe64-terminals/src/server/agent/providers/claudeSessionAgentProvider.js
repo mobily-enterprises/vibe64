@@ -369,6 +369,17 @@ function createClaudeSessionAgentProvider({
     const id = conversationId || text(ctx.session?.metadata?.claude_conversation_id) ||
       [...entries.values()].find((entry) => entry.main && entry.context.key === ctx.key)?.id || randomUUID();
     requireClaudeSessionId(id);
+    // Restoring a retained entry is not a main-chat changeover. Only a main
+    // operation selects Claude, including when restoration already cached it.
+    if (!conversationId) {
+      const identity = { claude_conversation_id: id, agent_identity_conversation_id: id,
+        agent_identity_provider: ENGINE, agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready", agent_identity_workdir: ctx.workdir,
+        agent_transport_id: TRANSPORT, agent_transport_kind: "stream-json" };
+      if (Object.entries(identity).some(([name, value]) => ctx.session?.metadata?.[name] !== value)) {
+        await metadata(ctx, identity);
+      }
+    }
     const key = `${ctx.key}\0${id}`;
     if (entries.has(key)) {
       const entry = entries.get(key);
@@ -388,10 +399,6 @@ function createClaudeSessionAgentProvider({
         state: state.state, startedAt: now(), updatedAt: now()
       } : null };
     entries.set(key, entry);
-    if (main) await metadata(ctx, { claude_conversation_id: id, agent_identity_conversation_id: id,
-      agent_identity_provider: ENGINE, agent_identity_resume_strategy: "provider-native",
-      agent_identity_status: "ready", agent_identity_workdir: ctx.workdir,
-      agent_transport_id: TRANSPORT, agent_transport_kind: "stream-json" });
     await save(entry);
     return entry;
   }
