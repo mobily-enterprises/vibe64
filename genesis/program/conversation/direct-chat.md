@@ -153,6 +153,10 @@ exact previous execution owner's scope empty. A missing file by itself is never
 accepted as proof. Runtime sharing and shutdown follow the provider's runtime,
 so retaining a different provider does not skip the selected provider's cleanup.
 
+An archived attachment whose payload has been removed returns a Gone response.
+Its preview keeps the filename and explains that chat text and the attachment
+description remain, with no broken Download action. The host owns expiry policy.
+
 Saved composer attachments use the same visible queue as new uploads. The composer
 combines saved receipts with its pending upload queue, retains completed uploads
 when a saved view closes, and still cancels unfinished uploads. Restored files count
@@ -336,10 +340,12 @@ Vibe64 then rechecks the captured decision and sends the original request throug
 ordinary native delivery with a Plan or Code instruction. Main chat uses both
 existing changeover preparation and Send when Economy or a member Backup selects
 another orchestrator. The workflow stays fixed across that excursion. Returning
-to routed Codex looks up its retained native history by the workflow's storage
-provider, even when the next turn selects a different model provider. Legacy
-Codex chats without a routing home retain their separate provider histories. Temporary
-chat scopes the same owner to its own transcript and retained native bindings.
+to Codex looks up its retained native history in the shared workflow storage,
+even when the next turn selects a different model provider. Temporary chat scopes
+the same owner to its own transcript and retained native bindings. Old provider-specific
+bindings are not converted during routing. Failed native resumes retain their
+saved identity and expose recovery actions; they never start a replacement thread
+or send an automatic recovery prompt.
 
 One durable request record owns preparation, admission uncertainty and an optional
 review continuation. Stop cancels preparation and suppresses its late result.

@@ -79,6 +79,13 @@ for (const engine of ["codex", "opencode"]) {
       const archived = await restarted.readAttachment({ sessionId: "one" }, uploaded.attachmentId);
       assert.equal(await archived.fileHandle.readFile("utf8"), "attachment bytes");
       await archived.fileHandle.close();
+      await store.pruneArchivedSessionAttachments("one", { beforePrune: async () => ({ ok: true }) });
+      await assert.rejects(restarted.readAttachment({ sessionId: "one" }, uploaded.attachmentId), {
+        code: "vibe64_agent_attachment_expired", statusCode: 410
+      });
+      const retained = await store.readConversationLog("one");
+      assert.equal(retained[0].user.attachments[0].fileName, "screen.png");
+      assert.equal(retained[0].user.text, "Inspect [Image #1]");
     });
   });
 }

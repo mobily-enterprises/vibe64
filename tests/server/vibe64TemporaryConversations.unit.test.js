@@ -605,10 +605,7 @@ async function temporaryChangeoverFixture(root, actor = { role: "owner", usernam
   const options = { vibe64User: actor };
   const preparation = async (id, selection, ctx) => {
     if (selection.engineId !== "codex" || ctx.session.metadata.codex_routing_home_provider) return;
-    const home = ctx.session.metadata.agent_identity_provider === "codex" && ctx.session.metadata.agent_identity_conversation_id
-      ? ctx.session.metadata.agent_identity_model_provider : "openai";
-    if (home !== "openai" && home !== selection.modelProviderId) throw new Error("Legacy Codex provider history cannot change home");
-    await ctx.runtime.store.writeMetadataValue(id, "codex_routing_home_provider", home);
+    await ctx.runtime.store.writeMetadataValue(id, "codex_routing_home_provider", "openai");
   };
   let service = f.restart({ systemRoot: root, prepareSelection: preparation });
   await manager.assistantAccess("one", { session: await f.store.readSession("one"), ...options });
@@ -914,35 +911,6 @@ test("temporary foreign delivery recovers its exact receipt after restart withou
     assert.equal(f.calls.starts.length, 2);
     const turns = await f.store.readConversationLog({ sessionId: "one", conversationId: "chat" });
     assert.equal(turns.filter((turn) => turn.user?.messageId === "second").length, 1);
-  });
-});
-
-test("returning to a legacy temporary Codex history preserves its provider home", async () => {
-  await withTemporaryRoot(async (root) => {
-    const f = await temporaryChangeoverFixture(root);
-    await f.send("code", "original");
-    await f.finish("Original provider history");
-    const record = await f.record();
-    const routingMetadata = { ...record.routingMetadata };
-    delete routingMetadata.codex_routing_home_provider;
-    const changeover = JSON.parse(routingMetadata.assistant_changeover);
-    routingMetadata.assistant_changeover = JSON.stringify({ lastEngine: "codex/deepseek", engines: {
-      "codex/deepseek": changeover.engines.codex
-    } });
-    await f.store.writeSessionConversation("one", "chat", { routingMetadata,
-      nativeBindings: { "codex/deepseek": record.nativeBindings.codex } });
-    await f.send("economy", "explain");
-    await f.finish("Explanation from Economy");
-    await assert.rejects(f.send("plan", "incompatible-plan"), /Legacy Codex provider history cannot change home/);
-    assert.equal((await f.record()).assistantSelection.engineId, "opencode");
-    assert.equal(f.calls.starts.length, 2);
-    await f.send("code", "continue-code");
-    const returned = await f.record();
-    assert.equal(returned.providerConversationId, record.providerConversationId);
-    assert.equal(returned.routingMetadata.codex_routing_home_provider, "deepseek");
-    assert.equal(returned.nativeBindings.codex.conversationId, record.providerConversationId);
-    assert.equal(returned.nativeBindings["codex/deepseek"], undefined);
-    assert.equal(f.native.size, 2);
   });
 });
 

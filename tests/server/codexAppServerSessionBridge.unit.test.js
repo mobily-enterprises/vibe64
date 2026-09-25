@@ -1336,12 +1336,11 @@ test("Codex changeover restores its saved conversation and pauses its goal befor
   assert.ok(runtime.writes.some((write) => write.name === "codex_changeover_pause_goal" && write.value === ""));
 });
 
-for (const routed of [true, false]) {
-  test(`returning to DeepSeek in Codex preserves ${routed ? "the routed workflow's" : "legacy provider-specific"} native history`, async () => {
+test("returning to DeepSeek in Codex preserves the shared native history", async () => {
     const runtime = fakeRuntime();
     const resumed = [];
     const provider = {
-      async ensureRuntime() { return { ...appServerRuntime(), modelProviderId: routed ? "openai" : "deepseek" }; },
+      async ensureRuntime() { return { ...appServerRuntime(), modelProviderId: "openai" }; },
       async resumeThread(id) { resumed.push(id); return { id }; },
       async startThread() { assert.fail("Returning to Codex must resume its retained history"); }
     };
@@ -1350,17 +1349,16 @@ for (const routed of [true, false]) {
       session: { sessionId: "session-1", metadata: {
         assistant_selection: JSON.stringify({ schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
           modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` }),
-        ...(routed ? { codex_routing_home_provider: "openai" } : {}),
+        codex_routing_home_provider: "openai",
         agent_identity_provider: "opencode", agent_identity_conversation_id: "ses_other",
         agent_transport_id: "opencode_server", codex_conversation_id: "original-codex",
         codex_conversation_workdir: "/repo/worktree", codex_deepseek_conversation_id: "legacy-deepseek",
         codex_deepseek_conversation_workdir: "/repo/worktree"
       } }
     });
-    assert.equal(result.threadId, routed ? "original-codex" : "legacy-deepseek");
+    assert.equal(result.threadId, "original-codex");
     assert.deepEqual(resumed, [result.threadId]);
   });
-}
 
 test("codex app-server bridge refreshes project hook trust when resuming a thread", async () => {
   const runtime = fakeRuntime();
@@ -1486,124 +1484,21 @@ test("visible Codex terminals persist trust for the project hooks they already r
   }]);
 });
 
-test("codex app-server bridge replaces unreadable session threads after an invalid resume request", async () => {
-  const runtime = fakeRuntime({
-    conversationLog: [
-      {
-        assistant: {
-          at: "2026-06-15T01:02:05.000Z",
-          role: "assistant",
-          text: "Use the archive branch."
-        },
-        commentary: [
-          {
-            at: "2026-06-15T01:02:04.500Z",
-            role: "commentary",
-            text: "I found the archive branch and I’m checking its scope."
-          }
-        ],
-        thinking: [
-          {
-            at: "2026-06-15T01:02:04.000Z",
-            role: "thinking",
-            text: "Checked the issue draft."
-          }
-        ],
-        user: {
-          attachments: [{
-            fileName: "archive-map.png",
-            path: "/tmp/vibe64-attachments/session/archive-map.png",
-            size: 2048
-          }],
-          at: "2026-06-15T01:02:03.000Z",
-          role: "user",
-          text: "Can we talk about archive scope?"
-        }
-      }
-    ]
-  });
-  const providerCalls = [];
+test("codex app-server bridge preserves a missing binding and exposes resume failure without starting inference", async () => {
+  const runtime = fakeRuntime();
   const provider = {
-    ...contextTurnProviderParts(providerCalls),
-    async ensureRuntime() {
-      return appServerRuntime();
-    },
-    async resumeThread(threadId, params) {
-      providerCalls.push({
-        method: "resumeThread",
-        params,
-        threadId
-      });
-      throw Object.assign(new Error("invalid request"), {
-        code: -32600,
-        method: "thread/resume"
-      });
-    },
-    async readThread(threadId) {
-      providerCalls.push({
-        method: "readThread",
-        threadId
-      });
-      throw Object.assign(new Error("invalid request"), {
-        code: -32600,
-        method: "thread/read"
-      });
-    },
-    async startThread(params) {
-      providerCalls.push({
-        method: "startThread",
-        params
-      });
-      return {
-        id: "thread-replacement"
-      };
-    }
+    async ensureRuntime() { return appServerRuntime(); },
+    async resumeThread() { throw Object.assign(new Error("thread missing"), { code: -32600, method: "thread/resume" }); },
+    async startThread() { assert.fail("A missing thread must not silently replace context"); },
+    async sendTurn() { assert.fail("Recovery must not start inference"); }
   };
-
-  const result = await ensureCodexAppServerThreadForSession({
-    observeThread() {},
-    developerInstructions: "Vibe64 briefing",
-    provider,
-    runtime,
-    session: {
-      metadata: {
-        agent_identity_conversation_id: "thread-stale",
-        agent_identity_provider: "codex",
-        agent_identity_status: "ready",
-        agent_identity_workdir: "/repo/worktree",
-        agent_transport_id: "codex_app_server"
-      },
-      sessionId: "session-1"
-    },
-    workdir: "/repo/worktree"
-  });
-
-  assert.equal(result.threadId, "thread-replacement");
-  assert.equal(result.replacedThreadId, "thread-stale");
-  assert.equal(result.replacedThreadError?.code, -32600);
-  assert.deepEqual(providerCalls.map((call) => call.method), [
-    "resumeThread",
-    "readThread",
-    "startThread",
-    "sendTurn"
-  ]);
-  assert.equal(providerCalls[0].threadId, "thread-stale");
-  assert.equal(providerCalls[0].params.developerInstructions, "Vibe64 briefing");
-  assert.equal(providerCalls[2].params.cwd, "/repo/worktree");
-  assert.equal(providerCalls[3].threadId, "thread-replacement");
-  assert.match(providerCalls[3].input, /VIBE64_CONTEXT_RECOVERY/u);
-  assert.match(providerCalls[3].input, /Previous provider thread:\nthread-stale/u);
-  assert.match(providerCalls[3].input, /Fresh provider thread:\nthread-replacement/u);
-  assert.match(providerCalls[3].input, /Can we talk about archive scope\?/u);
-  assert.match(providerCalls[3].input, /Attached files:\n- archive-map\.png/u);
-  assert.doesNotMatch(providerCalls[3].input, /\/tmp\/vibe64-attachments/u);
-  assert.match(providerCalls[3].input, /Checked the issue draft/u);
-  assert.match(providerCalls[3].input, /Assistant Commentary 1/u);
-  assert.match(providerCalls[3].input, /I found the archive branch and I’m checking its scope/u);
-  assert.match(providerCalls[3].input, /Use the archive branch/u);
-  assert.equal(metadataValue(runtime, "agent_identity_conversation_id"), "thread-replacement");
-  assert.equal(metadataValue(runtime, "codex_app_server_replaced_thread_id"), "thread-stale");
-  assert.equal(metadataValue(runtime, "codex_app_server_replaced_thread_error"), "invalid request");
+  await assert.rejects(ensureCodexAppServerThreadForSession({ provider, runtime, observeThread() {},
+    session: { sessionId: "session-1", metadata: {
+      agent_identity_conversation_id: "thread-stale", agent_identity_provider: "codex",
+      agent_identity_status: "ready", agent_identity_workdir: "/repo/worktree", agent_transport_id: "codex_app_server"
+    } }, workdir: "/repo/worktree"
+  }), { code: -32600, method: "thread/resume" });
+  assert.deepEqual(runtime.writes, []);
 });
 
 test("codex app-server bridge preserves a readable thread after an invalid resume request", async () => {
@@ -1669,10 +1564,6 @@ test("codex app-server bridge preserves a readable thread after an invalid resum
   assert.deepEqual(providerCalls, [
     {
       method: "resumeThread",
-      threadId: "thread-readable"
-    },
-    {
-      method: "readThread",
       threadId: "thread-readable"
     }
   ]);

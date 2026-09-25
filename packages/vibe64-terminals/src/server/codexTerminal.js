@@ -215,7 +215,6 @@ import {
 const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
-const CODEX_CONTEXT_TASK_ID = "codex_context";
 const CODEX_SESSION_BRIEFING_FINGERPRINT_METADATA = "agent_briefing_fingerprint";
 const CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER = "\u001f";
 const CODEX_APP_SERVER_RESULT_PROCESSED_EVENT = "codex-app-server-result-processed";
@@ -1044,8 +1043,6 @@ function codexThreadIdForWorkdir(session = {}, workdir = "") {
 }
 
 function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
-  const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
-  if (!session.metadata?.codex_routing_home_provider && selection?.engineId === "codex" && selection.modelProviderId !== (session.metadata?.agent_identity_model_provider || "openai")) return "";
   if (!codexThreadIdForWorkdir(session, workdir)) {
     return "";
   }
@@ -1055,8 +1052,6 @@ function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
 }
 
 function codexReadyIdentityForWorkdir(session = {}, workdir = "") {
-  const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
-  if (!session.metadata?.codex_routing_home_provider && selection?.engineId === "codex" && selection.modelProviderId !== (session.metadata?.agent_identity_model_provider || "openai")) return null;
   const normalizedWorkdir = workdir ? path.resolve(workdir) : terminalWorktreePath(session);
   const identity = agentTerminalIdentityForWorkdir(session, {
     provider: CODEX_AGENT_PROVIDER,
@@ -8101,9 +8096,6 @@ function createCodexTerminalController({
       status: "ready",
       terminalSessionId
     });
-    await writeCodexContextReplacementReady(runtime, sessionId, {
-      terminalSessionId
-    });
     return task;
   }
 
@@ -8121,107 +8113,6 @@ function createCodexTerminalController({
       terminalSessionId
     });
     return result;
-  }
-
-  async function writeCodexContextReplacementWarning(runtime, sessionId, thread = {}) {
-    const replacedThreadId = normalizeText(thread.replacedThreadId);
-    if (!replacedThreadId || !thread.replacedThreadError) {
-      return null;
-    }
-    const message = "Previous Codex context could not be resumed. Vibe64 started a fresh Codex thread for this session.";
-    const userMessage = "Codex could not resume its previous internal thread, so Vibe64 started a fresh Codex thread and gave it this session's saved chat history.";
-    const task = await runtime.store.writeBackgroundTaskEvent(sessionId, CODEX_CONTEXT_TASK_ID, {
-      event: {
-        error: errorMessage(thread.replacedThreadError),
-        kind: "thread_replaced",
-        message,
-        replacedThreadId,
-        status: "failed",
-        threadId: normalizeText(thread.threadId)
-      },
-      patch: {
-        error: errorMessage(thread.replacedThreadError),
-        kind: "codex_context",
-        label: "Codex context",
-        message,
-        retry: null,
-        status: "failed",
-        terminalSessionId: ""
-      }
-    });
-    const currentSession = typeof runtime.getSession === "function"
-      ? await runtime.getSession(sessionId).catch(() => null)
-      : null;
-    if (
-      currentSession?.metadata?.codex_context_replacement_notice_thread_id !== replacedThreadId &&
-      typeof runtime.store?.writeConversationSystemMessage === "function"
-    ) {
-      await runtime.store.writeConversationSystemMessage(sessionId, {
-        text: userMessage
-      });
-      if (typeof runtime.store?.writeMetadataValue === "function") {
-        await runtime.store.writeMetadataValue(
-          sessionId,
-          "codex_context_replacement_notice_thread_id",
-          replacedThreadId
-        );
-      }
-    }
-    await publishSessionChanged(sessionId, {
-      reason: "codex-context-replaced"
-    });
-    return task;
-  }
-
-  async function writeCodexContextReplacementReady(runtime, sessionId, {
-    terminalSessionId = ""
-  } = {}) {
-    if (
-      typeof runtime.getSession !== "function" ||
-      typeof runtime.store?.writeBackgroundTaskEvent !== "function"
-    ) {
-      return null;
-    }
-    const currentSession = await runtime.getSession(sessionId).catch(() => null);
-    const replacedThreadId = normalizeText(currentSession?.metadata?.codex_context_replacement_notice_thread_id);
-    const currentThreadId = normalizeText(
-      currentSession?.metadata?.agent_identity_conversation_id
-    );
-    const currentTask = (Array.isArray(currentSession?.backgroundTasks)
-      ? currentSession.backgroundTasks
-      : [])
-      .find((task) => String(task?.id || "").trim() === CODEX_CONTEXT_TASK_ID) || null;
-    if (
-      !replacedThreadId ||
-      !currentThreadId ||
-      currentThreadId === replacedThreadId ||
-      currentTask?.status !== "failed"
-    ) {
-      return null;
-    }
-    const message = "Codex context recovered with a fresh Codex thread.";
-    const task = await runtime.store.writeBackgroundTaskEvent(sessionId, CODEX_CONTEXT_TASK_ID, {
-      event: {
-        kind: "thread_replacement_ready",
-        message,
-        replacedThreadId,
-        status: "ready",
-        threadId: currentThreadId
-      },
-      patch: {
-        error: "",
-        kind: "codex_context",
-        label: "Codex context",
-        message,
-        retry: null,
-        status: "ready",
-        terminalSessionId: normalizeText(terminalSessionId)
-      }
-    });
-    await publishSessionChanged(sessionId, {
-      reason: "codex-context-ready"
-    });
-    return task;
   }
 
   async function writeCodexAppServerBlocked(runtime, sessionId, result, {
@@ -8704,7 +8595,6 @@ function createCodexTerminalController({
         session,
         sessionId
       });
-      await writeCodexContextReplacementWarning(runtime, sessionId, thread);
       subscribeCodexAppServerEvents(sessionId, provider, thread.threadId, providerOptions);
       rememberCodexAppServerManagedSession(codexAppServerProviderKey(sessionId, providerOptions), {
         providerOptions,
@@ -8933,7 +8823,6 @@ function createCodexTerminalController({
         sessionId,
         stage: "startup-ready"
       });
-      await writeCodexContextReplacementWarning(runtime, sessionId, thread);
       activeThreadId = thread.threadId;
       subscribeCodexAppServerEvents(sessionId, provider, thread.threadId, providerOptions);
       rememberCodexAppServerManagedSession(codexAppServerProviderKey(sessionId, providerOptions), {
@@ -12109,7 +11998,6 @@ function createCodexTerminalController({
         : await codexAppServerConversationThreadSettings(context);
       const requestedThreadId = normalizeText(input.threadId || input.codexSessionId);
       let thread = null;
-      let replacedThreadId = "";
       let economyThreadRecord = null;
       if (requestedThreadId) {
         if (economyTurn) {
@@ -12171,17 +12059,7 @@ function createCodexTerminalController({
             throw error;
           }
         } else {
-          try {
-            thread = await provider.resumeThread(requestedThreadId, threadSettings);
-          } catch (error) {
-            if (
-              !codexAppServerRequestIsInvalid(error, "thread/resume") ||
-              await codexAppServerThreadHasReadableHistory(provider, requestedThreadId)
-            ) {
-              throw error;
-            }
-            replacedThreadId = requestedThreadId;
-          }
+          thread = await provider.resumeThread(requestedThreadId, threadSettings);
         }
       }
       if (!thread) {
@@ -12215,7 +12093,6 @@ function createCodexTerminalController({
         await retireCodexAppServerEconomyThread(economyThreadRecord);
       };
       emitDetachedEvent({
-        replacedThreadId,
         threadId,
         type: "thread"
       });
@@ -12394,7 +12271,6 @@ function createCodexTerminalController({
       });
       return {
         ok: true,
-        replacedThreadId,
         text: result.text,
         threadId,
         turnId: result.turnId || turnId,
@@ -13420,24 +13296,10 @@ function createCodexTerminalController({
   }
 
   return Object.freeze({
-    async prepareModelRouting(sessionId, selection, { runtime, session }) {
-      const existingProvider = session.metadata?.codex_routing_home_provider || (session.metadata?.agent_identity_provider === "codex" && session.metadata?.agent_identity_conversation_id
-        ? session.metadata?.agent_identity_model_provider || "openai" : "openai");
-      if (existingProvider !== "openai" && existingProvider !== selection.modelProviderId) {
-        throw Object.assign(new Error("This older Codex chat uses separate provider storage. Keep its current provider, or start a new chat to route across providers without losing native history."),
-          { code: "vibe64_codex_legacy_route_unavailable" });
-      }
-      if (session.metadata?.codex_routing_home_provider) return;
-      const changeover = JSON.parse(session.metadata?.assistant_changeover || "null");
-      const oldKey = existingProvider === "openai" ? "codex" : `codex/${existingProvider}`;
-      if (changeover && oldKey !== "codex" && changeover.engines?.[oldKey]) {
-        changeover.engines.codex = changeover.engines[oldKey];
-        delete changeover.engines[oldKey];
-        if (changeover.lastEngine === oldKey) changeover.lastEngine = "codex";
-        await runtime.store.writeMetadataValue(sessionId, "assistant_changeover", JSON.stringify(changeover));
-      }
-      await runtime.store.writeMetadataValue(sessionId, "codex_routing_home_provider", existingProvider);
-      session.metadata.codex_routing_home_provider = existingProvider;
+    async prepareModelRouting(sessionId, _selection, { runtime, session }) {
+      if (session.metadata?.codex_routing_home_provider === "openai") return;
+      await runtime.store.writeMetadataValue(sessionId, "codex_routing_home_provider", "openai");
+      session.metadata.codex_routing_home_provider = "openai";
     },
     async listNativeConversationStorage(sessionId, binding, options) {
       const { provider } = await nativeStorageProvider(sessionId, binding, options);

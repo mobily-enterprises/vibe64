@@ -2122,8 +2122,7 @@ function createService({
               routingRequest?.status === "sent" && routingRequest.review && routingRequest.resolvedMode === "code") {
             throw new Error("Finish or cancel the pending request and review before changing assistants.");
           }
-          if (current.engineId !== next.engineId ||
-              current.engineId === "codex" && !session.metadata.codex_routing_home_provider && current.modelProviderId !== next.modelProviderId) {
+          if (current.engineId !== next.engineId) {
             const changeover = await terminals.prepareAssistantChangeover(sessionId, {
               runtime, session, vibe64User
             });

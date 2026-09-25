@@ -4,8 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
-import { vibe64AssistantConversationKey, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
-import { readConversationRewindState, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedNativeConversationReplacement, rewindLastConversationTurn, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
+import { serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
+import { sessionConversationKey, readConversationRewindState, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedNativeConversationReplacement, rewindLastConversationTurn, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 
 function selection(engineId, providerId = "") {
   return { engineId, agentId: engineId === "codex" ? "codex" : "build",
@@ -41,9 +41,9 @@ async function harness(t) {
     async context() { return { runtime: { store }, session: await store.readSession(sessionId) }; },
     async select(engineId, providerId) {
       const context = await api.context();
-      const old = vibe64AssistantConversationKey(JSON.parse(context.session.metadata.assistant_selection));
+      const old = sessionConversationKey(context.session);
       const next = selection(engineId, providerId);
-      if (old !== vibe64AssistantConversationKey(next)) await rememberAssistantBeforeChangeover(context, old);
+      if (old !== sessionConversationKey({ metadata: { assistant_selection: JSON.stringify(next) } })) await rememberAssistantBeforeChangeover(context, old);
       await store.writeMetadataValue(sessionId, "assistant_selection", serializeVibe64AssistantSelection(next));
     },
     async send(message, messageId = `message-${++serial}`) {
@@ -52,7 +52,7 @@ async function harness(t) {
     async restart() { store = makeStore(); },
     async history() { return store.readConversationLog(sessionId); },
     async rewind(turnId) { return rewindLastConversationTurn(sessionId, { turnId }, await api.context(), agent); },
-    async rewindState() { return readConversationRewindState(store, sessionId, vibe64AssistantConversationKey(JSON.parse((await api.context()).session.metadata.assistant_selection))); },
+    async rewindState() { return readConversationRewindState(store, sessionId, sessionConversationKey((await api.context()).session)); },
     rewindCalls: [], rewindFailure: false,
     async editAnswer(turnId, text) { await store.upsertConversationAssistantMessage(sessionId, { turnId, text }); }
   };
@@ -76,7 +76,7 @@ async function harness(t) {
     async sendMessage(_id, input, context) {
       const selected = JSON.parse(context.session.metadata.assistant_selection);
       const { engineId } = selected;
-      const threadId = api.nativeThread || `${vibe64AssistantConversationKey(selected)}-original-thread`;
+      const threadId = api.nativeThread || `${sessionConversationKey(context.session)}-original-thread`;
       if (api.failure === "preflight") return { ok: false, delivered: false };
       await input.onPromptSending?.({ threadId });
       calls.push({ engineId, threadId, messageId: input.messageId, message: input.message });
@@ -350,34 +350,22 @@ test("Undo rejects stale targets and the currently selected different AI", async
 });
 
 
-test("Codex providers keep separate catch-up positions and resume original threads after restart", async (t) => {
+test("Codex models share one native history across providers and restart", async (t) => {
   const h = await harness(t);
-  await h.send("GPT background");
-  await h.select("codex", "deepseek");
-  await h.send("DeepSeek decision");
-  assert.match(h.calls.at(-1).message, /GPT background/);
-  await h.select("codex", "zai-coding-plan");
-  await h.send("GLM decision");
-  assert.match(h.calls.at(-1).message, /DeepSeek decision/);
-  await h.restart();
-  await h.select("codex", "openai");
-  await h.send("GPT return");
-  assert.equal(h.calls.at(-1).threadId, h.calls[0].threadId);
-  assert.match(h.calls.at(-1).message, /DeepSeek decision/);
-  assert.match(h.calls.at(-1).message, /GLM decision/);
-  assert.doesNotMatch(h.calls.at(-1).message, /GPT background/);
-  await h.select("codex", "deepseek");
-  await h.send("DeepSeek return");
-  assert.equal(h.calls.at(-1).threadId, h.calls[1].threadId);
-  assert.match(h.calls.at(-1).message, /GLM decision/);
-  assert.match(h.calls.at(-1).message, /GPT return/);
-  assert.doesNotMatch(h.calls.at(-1).message, /DeepSeek decision/);
+  for (const provider of ["openai", "deepseek", "zai-coding-plan", "openai"]) {
+    await h.select("codex", provider);
+    await h.send(`Request for ${provider}`);
+    assert.equal(h.calls.at(-1).message, `Request for ${provider}`);
+    assert.equal(h.calls.at(-1).threadId, h.calls[0].threadId);
+    await h.restart();
+  }
   assert.deepEqual((await h.history()).map((turn) => turn.metadata.assistantSelection.modelProviderId),
-    ["openai", "deepseek", "zai-coding-plan", "openai", "deepseek"]);
+    ["openai", "deepseek", "zai-coding-plan", "openai"]);
 });
 
-test("an uncertain Codex provider delivery does not block a different Codex provider", async (t) => {
+test("an uncertain Codex changeover blocks another model until its receipt is resolved", async (t) => {
   const h = await harness(t);
+  await h.select("opencode");
   await h.send("Background");
   await h.select("codex", "deepseek");
   h.failure = "lost-response";
@@ -385,32 +373,23 @@ test("an uncertain Codex provider delivery does not block a different Codex prov
   await h.restart();
   h.failure = "";
   h.inspectUnknown = true;
-  assert.equal((await h.send("Continue", "uncertain-deepseek")).code, "vibe64_changeover_delivery_unconfirmed");
   await h.select("codex", "zai-coding-plan");
-  assert.equal((await h.send("Continue with GLM")).delivered, true);
-  await h.select("codex", "deepseek");
+  assert.equal((await h.send("Continue", "uncertain-deepseek")).code, "vibe64_changeover_delivery_unconfirmed");
+  assert.equal(h.calls.length, 2);
   h.inspectUnknown = false;
   assert.equal((await h.send("Continue", "uncertain-deepseek")).delivered, true);
-  assert.equal(h.calls.length, 3, "recover receipt without sending a duplicate");
-  assert.equal((await h.history()).at(-1).metadata.assistantSelection.modelProviderId, "deepseek");
+  assert.equal(h.calls.length, 2, "Native receipt recovery must not duplicate delivery");
 });
 
-test("Undo stops at a Codex provider change and never targets another provider's native turn", async (t) => {
+test("Undo follows the shared Codex history across model providers", async (t) => {
   const h = await harness(t);
   await h.send("GPT first");
   await h.select("codex", "deepseek");
-  await h.send("DeepSeek first");
-  const boundary = (await h.history()).at(-1).turnId;
-  assert.equal(await h.rewindState(), null);
-  await assert.rejects(h.rewind(boundary), /same AI/);
   await h.send("DeepSeek second");
-  const second = (await h.history()).at(-1).turnId;
-  assert.equal((await h.rewindState()).turnId, second);
+  const latest = (await h.history()).at(-1).turnId;
   await h.select("codex", "zai-coding-plan");
-  assert.equal(await h.rewindState(), null);
-  await assert.rejects(h.rewind(second), /same AI/);
-  await h.select("codex", "deepseek");
-  assert.equal((await h.rewind(second)).text, "DeepSeek second");
+  assert.equal((await h.rewindState()).turnId, latest);
+  assert.equal((await h.rewind(latest)).text, "DeepSeek second");
   assert.equal(h.rewindCalls.length, 1);
 });
 

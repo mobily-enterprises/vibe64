@@ -4,11 +4,11 @@ import { conversationMessageIdentity, conversationMessageVersion } from "@local/
 const STATE_KEY = "assistant_changeover";
 function turnConversationKey(turn) {
   const selection = turn.metadata?.assistantSelection || turn.metadata;
-  return turn.metadata?.assistantRouting && selection?.engineId === "codex" ? "codex" : vibe64AssistantConversationKey(selection);
+  return selection?.engineId === "codex" ? "codex" : vibe64AssistantConversationKey(selection);
 }
 export function sessionConversationKey(session) {
   const selection = vibe64AssistantSelectionFromMetadata(session.metadata);
-  return session.metadata.codex_routing_home_provider && selection.engineId === "codex" ? "codex" : vibe64AssistantConversationKey(selection);
+  return selection.engineId === "codex" ? "codex" : vibe64AssistantConversationKey(selection);
 }
 
 export async function readConversationRewindState(store, sessionId, engineId) {

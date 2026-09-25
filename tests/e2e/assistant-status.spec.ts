@@ -732,3 +732,31 @@ test(`${provider} continuation groups saved reasoning rows and follows execution
   expect(server.state.messages).toHaveLength(0);
 });
 }
+
+test("expired archived attachments keep their description and offer no broken download", async ({ page }, info) => {
+  server.state.session.agentSession.turn.active = false;
+  server.state.conversationLog = [{ turnId: "saved-attachment", user: {
+    role: "user", at: new Date().toISOString(), text: "Keep the explanation for [Image #1].",
+    attachments: [{ attachmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", fileName: "archived-screen.png",
+      contentType: "image/png", size: 20, reference: "[Image #1]" }]
+  } }];
+  const methods: string[] = [];
+  await page.route("**/agent-attachments/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa*", async (route) => {
+    methods.push(route.request().method());
+    await route.fulfill({ status: 410, body: "" });
+  });
+  await openChat(page);
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 950 });
+    await page.getByRole("button", { name: /archived-screen.png/u }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText("This attachment is no longer retained.", { exact: false })).toBeVisible();
+    await expect(dialog.getByText("archived-screen.png", { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Download", exact: true })).toHaveCount(0);
+    await expect(dialog.locator("img")).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath(`attachment-expired-${width}.png`) });
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByText("Keep the explanation for", { exact: false })).toBeVisible();
+  }
+  expect(methods).toEqual(["HEAD", "HEAD"]);
+});

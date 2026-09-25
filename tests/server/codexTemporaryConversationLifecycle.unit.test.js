@@ -2918,7 +2918,7 @@ test("duplicate agent messages with the same message id call the provider once",
   });
 });
 
-test("an idle message replaces a provider thread that is no longer loaded", async () => {
+test("an idle message preserves a missing provider binding without silently replacing context", async () => {
   await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
     const prepared = await controller.ensureThread(sessionId);
     assert.equal(prepared.ok, true, JSON.stringify(prepared));
@@ -2979,33 +2979,12 @@ test("an idle message replaces a provider thread that is no longer loaded", asyn
       message: "Continue after the missing provider thread.",
       messageId: "message-after-missing-thread"
     });
-    assert.equal(result.ok, true, JSON.stringify(result));
-    assert.equal(result.deliveryMode, "new_turn");
-    assert.equal(result.codexThreadId, replacementThreadId);
-    assert.equal(result.turnId, "turn-2");
-    assert.equal(captures.turns.length, 2);
-    const recoveryInput = Array.isArray(captures.turns[0].input)
-      ? captures.turns[0].input[0]
-      : captures.turns[0].input;
-    assert.match(recoveryInput, /VIBE64_CONTEXT_RECOVERY:/u);
-    assert.equal(captures.turns[1].input[0], "Continue after the missing provider thread.");
-
-    const recoveredSession = await store.readSession(sessionId);
-    assert.equal(
-      recoveredSession.metadata.agent_identity_conversation_id,
-      replacementThreadId
-    );
-    assert.equal(
-      recoveredSession.metadata.codex_app_server_replaced_thread_id,
-      staleThreadId
-    );
-    assert.equal(
-      await store.conversationMessageIdExists(
-        sessionId,
-        "message-after-missing-thread"
-      ),
-      true
-    );
+    assert.equal(result.ok, false, JSON.stringify(result));
+    assert.match(result.error, /thread not loaded/);
+    assert.equal(captures.turns.length, 0);
+    assert.equal(captures.threadStarts.length, 1);
+    const unchanged = await store.readSession(sessionId);
+    assert.equal(unchanged.metadata.agent_identity_conversation_id, staleThreadId);
   });
 });
 

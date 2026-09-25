@@ -217,19 +217,6 @@ function createSessionConversations({
         if (current.state === "closing") throw new Error("This conversation is closing.");
         const routingMetadata = { ...current.routingMetadata, [key]: value };
         const patch = { routingMetadata };
-        if (key === "codex_routing_home_provider") {
-          const legacyKey = `codex/${value}`;
-          const legacy = current.nativeBindings?.[legacyKey];
-          if (legacy) {
-            const nativeBindings = { ...current.nativeBindings };
-            if (nativeBindings.codex && nativeBindings.codex.conversationId !== legacy.conversationId) {
-              throw new Error("This Codex conversation already has another retained native history.");
-            }
-            nativeBindings.codex = legacy;
-            delete nativeBindings[legacyKey];
-            patch.nativeBindings = nativeBindings;
-          }
-        }
         if (key === "assistant_selection") {
           patch.assistantSelection = JSON.parse(value);
           const nextKey = bindingKey(ctx, { ...current, ...patch });
@@ -297,14 +284,7 @@ function createSessionConversations({
         }
         await rememberAssistantBeforeChangeover(ctx, sessionConversationKey(ctx.session));
       }
-      let preparation = ctx;
-      if (selection.engineId === "codex" && !ctx.session.metadata.codex_routing_home_provider && record.assistantSelection.engineId !== "codex") {
-        const retained = Object.values(record.nativeBindings || {}).find((binding) => binding.assistantSelection.engineId === "codex");
-        if (retained) preparation = { ...ctx, session: { ...ctx.session, metadata: { ...ctx.session.metadata,
-          agent_identity_provider: "codex", agent_identity_conversation_id: retained.conversationId,
-          agent_identity_model_provider: retained.assistantSelection.modelProviderId } } };
-      }
-      await prepareSelection(id, selection, preparation);
+      await prepareSelection(id, selection, ctx);
     },
     dispatch: (id, input, ctx) => sendWithAssistantChangeover(id, input, ctx, {
       inspectMessageAdmission: routingAgent.inspectMessageAdmission,
