@@ -154,11 +154,12 @@ const attachments = useAgentAttachments({
   deleteAttachment: deleteUploadedFile,
   onError: attachmentFeedback.error,
   onUploaded: async (uploaded) => {
-    const labeled = labelComposerAttachments(uploadedAttachments.value);
     const textarea = textareaRef.value;
     const text = textarea?.value ?? props.modelValue;
     const position = textarea?.selectionEnd ?? text.length;
-    const references = uploaded.map((attachment) => labeled.find((item) => item.attachmentId === attachment.attachmentId).reference).join(" ");
+    const references = uploaded.map((attachment) =>
+      uploadedAttachments.value.find((item) => item.attachmentId === attachment.attachmentId).reference
+    ).join(" ");
     const before = text.slice(0, position);
     const after = text.slice(position);
     const inserted = `${before && !/\s$/u.test(before) ? " " : ""}${references} `;
