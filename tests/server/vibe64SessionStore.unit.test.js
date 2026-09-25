@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import fs, { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import path from "node:path";
 import test from "node:test";
 import { parseIntegrationSetupRequest } from "@local/vibe64-runtime/shared";
@@ -409,6 +410,63 @@ test("session locks retire an owner whose process is demonstrably absent", {
         value: "replacement-owner"
       }
     );
+  });
+});
+
+for (const writeMethod of ["writeMetadataValue", "writeMetadataValueForRenewal"]) {
+  test(`${writeMethod} keeps the complete previous selection readable until replacement`, async (t) => {
+    await withTemporaryRoot(async (targetRoot) => {
+      const store = createStore(targetRoot);
+      const previous = JSON.stringify({ engineId: "codex", modelId: "gpt-6-astra" });
+      const next = JSON.stringify({ engineId: "claude", modelId: "deepseek-flash" });
+      await store.createSession({ sessionId: "switching", metadata: { assistant_selection: previous } });
+      const metadataRoot = store.paths("switching").metadataRoot;
+      const originalWrite = fs.writeFile;
+      let observed;
+      const write = t.mock.method(fs, "writeFile", async (file, contents, options) => {
+        if (path.dirname(file) === metadataRoot) {
+          // Pause at the real truncate/write boundary while an ordinary reader runs.
+          await originalWrite(file, "", options);
+          observed = await store.readMetadata("switching");
+        }
+        return originalWrite(file, contents, options);
+      });
+      syncBuiltinESMExports();
+      try {
+        await store[writeMethod]("switching", "assistant_selection", next);
+        assert.deepEqual(observed, { assistant_selection: previous });
+        assert.equal(await store.readMetadataValue("switching", "assistant_selection"), next);
+        assert.deepEqual(await fs.readdir(metadataRoot), ["assistant_selection"]);
+      } finally {
+        write.mock.restore();
+        syncBuiltinESMExports();
+      }
+    });
+  });
+}
+
+test("failed metadata replacement preserves the saved value and removes the incomplete file", async (t) => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    await store.createSession({ sessionId: "switching", metadata: { assistant_selection: "previous" } });
+    const metadataRoot = store.paths("switching").metadataRoot;
+    const originalWrite = fs.writeFile;
+    const write = t.mock.method(fs, "writeFile", async (file, contents, options) => {
+      if (path.dirname(file) === metadataRoot) {
+        await originalWrite(file, "partial", options);
+        throw Object.assign(new Error("Simulated storage failure"), { code: "ENOSPC" });
+      }
+      return originalWrite(file, contents, options);
+    });
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(store.writeMetadataValue("switching", "assistant_selection", "next"), { code: "ENOSPC" });
+      assert.equal(await store.readMetadataValue("switching", "assistant_selection"), "previous");
+      assert.deepEqual(await fs.readdir(metadataRoot), ["assistant_selection"]);
+    } finally {
+      write.mock.restore();
+      syncBuiltinESMExports();
+    }
   });
 });
 

@@ -112,12 +112,13 @@ function configure() {
         <v-alert v-if="loadError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ loadError }} <v-btn variant="text" @click="resource.reload()">Retry</v-btn></v-alert>
         <v-skeleton-loader v-else-if="resource.isInitialLoading.value" type="list-item-two-line@4" />
         <template v-else>
-          <v-list aria-label="Choose chat mode" class="py-0">
+          <v-list aria-label="Choose chat mode" :lines="false" class="py-0">
             <v-list-item
               v-for="choice in ASSISTANT_MODES" :key="choice.id"
               :title="choice.label" :prepend-icon="modeIcons[choice.id]"
               :active="mode === choice.id" :aria-pressed="mode === choice.id" role="button"
               :disabled="disabled || saving || hasGoal || decisions[choice.id]?.available === false" color="primary" min-height="60"
+              :aria-disabled="disabled || saving || hasGoal || decisions[choice.id]?.available === false ? 'true' : undefined"
               @click="save(choice.id)"
             >
               <template #subtitle>

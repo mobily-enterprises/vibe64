@@ -411,20 +411,13 @@ async function readTextIfExists(filePath) {
 }
 
 async function writeTextFile(filePath, text) {
-  await mkdir(path.dirname(filePath), {
-    recursive: true
-  });
-  await writeFile(filePath, String(text), "utf8");
-}
-
-async function writeJsonFile(filePath, value) {
   const directory = path.dirname(filePath);
   const tempPath = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
   await mkdir(directory, {
     recursive: true
   });
   try {
-    await writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await writeFile(tempPath, String(text), "utf8");
     await rename(tempPath, filePath);
   } catch (error) {
     await rm(tempPath, {
@@ -432,6 +425,10 @@ async function writeJsonFile(filePath, value) {
     });
     throw error;
   }
+}
+
+async function writeJsonFile(filePath, value) {
+  await writeTextFile(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 async function runCommand(command, args = [], {

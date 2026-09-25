@@ -58,6 +58,10 @@ shows the most recently archived session first.
 Routine session-detail refreshes read session and agent state without launching
 Git source inspections. Source operations retain their explicit health checks;
 chat updates do not need a new managed Git process to report activity.
+Session text and metadata are replaced atomically, like the store's JSON records.
+Concurrent readers see a complete previous or next value during assistant changes;
+a failed replacement preserves the saved value. This does not make multiple
+metadata files one transaction or change their saved format.
 Live OpenCode messages and turn activity, like Codex progress, do not reload the
 project's session list. Routing progress refreshes the affected chat only. Durable
 session changes and explicit list-refresh hints still update the session tabs and

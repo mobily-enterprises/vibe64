@@ -207,6 +207,7 @@ Older replies without a saved AI identity simply say "agent".
 Main and ordinary temporary chats offer Plan, Code, Economy and Auto from one
 compact icon in the composer's bottom toolbar. The icon reflects the selected
 mode; its menu shows model assignments, the selected mode and automatic review.
+Unavailable modes explain why and are identified as disabled to screen readers.
 Recommendations rank compatible models for each job, favouring Astra for planning
 and DeepSeek for economical implementation. They preserve saved choices rather
 than silently changing models when the catalogue or recommendation policy changes.

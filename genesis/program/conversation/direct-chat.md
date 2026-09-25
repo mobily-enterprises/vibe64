@@ -9,6 +9,9 @@ Owner settings in main and temporary chat use the Model routing permission
 response independently of that queue, so they remain available in the local editor.
 The compact mode menu names the effective reviewer and states when it uses the
 same model as Code, including a collaborator's shared backup pair.
+Unavailable modes retain their explanation and expose their disabled state to
+assistive technology, including when Auto requires a personal connection.
+Model labels and restriction reasons wrap fully within the scrollable mode menu.
 The Settings cog stays on the same horizontal centerline as the neighboring icons.
 It labels the next recipient underneath in a compact, bordered rectangle with
 theme-aware contrast. The label extends beyond the button circle without
