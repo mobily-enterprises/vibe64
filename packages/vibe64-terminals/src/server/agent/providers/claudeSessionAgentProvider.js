@@ -1,5 +1,6 @@
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { checkpointSessionTurn } from "../../sessionTurnCheckpoint.js";
+import { requireCompletedNativeConversationReplacement } from "../../assistantChangeover.js";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
@@ -20,7 +21,7 @@ import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/cla
 import { resolveVibe64SystemRoot } from "@local/vibe64-core/server/studioRoots";
 import { STUDIO_MANAGED_CLAUDE_COMMAND } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeFlagSettings, createClaudeCodeProcess } from "../../claudeCodeProcess.js";
-import { claudeHistoryPath, claudeMessageBlocks, readClaudeHistory, requireClaudeSessionId } from "../../claudeConversationHistory.js";
+import { claudeHistoryPath, claudeMessageBlocks, readClaudeHistory, requireClaudeSessionId, retireClaudeConversationHistory, listClaudeConversationStorage } from "../../claudeConversationHistory.js";
 import { prepareAgentSessionCommandEnvironment } from "../../agentCommandEnvironment.js";
 import { recordSessionGitCommandActor } from "../../sessionGitCommandActor.js";
 import { conversationActorMetadata } from "../../conversationActor.js";
@@ -365,6 +366,7 @@ function createClaudeSessionAgentProvider({
 
   async function entryFor(context, conversationId = "", { create = false, cleanupExecutionId } = {}) {
     const ctx = await contextFor(context);
+    if (!conversationId) requireCompletedNativeConversationReplacement(ctx.session);
     const main = !conversationId || conversationId === ctx.session?.metadata?.claude_conversation_id;
     const id = conversationId || text(ctx.session?.metadata?.claude_conversation_id) ||
       [...entries.values()].find((entry) => entry.main && entry.context.key === ctx.key)?.id || randomUUID();
@@ -483,6 +485,7 @@ function createClaudeSessionAgentProvider({
   }
 
   async function ensureProcess(entry, input = {}) {
+    requireCompletedNativeConversationReplacement(entry.context.session);
     if (listTerminalSessions({ namespace: claudeTerminalNamespace(entry.context.sessionId), runningOnly: true }).length) {
       throw error("Close the Claude Code terminal before sending in chat.", "vibe64_claude_terminal_active");
     }
@@ -969,6 +972,20 @@ function createClaudeSessionAgentProvider({
       entries.delete(entry.key);
       return { ok: true, deleted: true, conversationId: entry.id };
     },
+    retireConversationHistory(context, binding) {
+      return retireClaudeConversationHistory({ configRoot, binding, beforeDelete: context.beforeDelete,
+        requireIdle: async () => {
+          const saved = JSON.parse(context.session.metadata[`claude_conversation_${binding.conversationId}`] || "null");
+          const active = [...entries.values()].some((entry) => entry.id === binding.conversationId &&
+            (entry.turn?.active || entry.process || entry.executionId));
+          if (saved?.executionId || active || listTerminalSessions({ namespace: claudeTerminalNamespace(context.sessionId), runningOnly: true }).length) {
+            throw error("Stop the saved Claude process and its terminal before retiring native history.");
+          }
+        } });
+    },
+    listNativeConversationStorage(_context, binding) {
+      return listClaudeConversationStorage({ configRoot, binding });
+    },
     async deleteDetachedChatThread(context, input) { return provider.deleteConversation(context, input); },
     async hasActiveTemporaryConversation(context) {
       const ctx = await contextFor(context);
@@ -1007,6 +1024,9 @@ function createClaudeSessionAgentProvider({
         const proofs = [];
         for (const entry of entries.values()) if (entry.context.key === ctx.key) proofs.push(await stopEntry(entry));
         const terminal = await closeTerminalSessionsForNamespace(claudeTerminalNamespace(ctx.sessionId));
+        if (terminal?.ok !== false && context.forgetConversationBinding === true) {
+          for (const [key, entry] of entries) if (entry.context.key === ctx.key) entries.delete(key);
+        }
         return { ok: terminal?.ok !== false, closed: proofs.length + Number(terminal?.closed || 0),
           processExitProof: proofs.at(-1) || { exited: true, scopeEmpty: true }, processExitProofs: proofs };
       } finally {

@@ -269,6 +269,94 @@ async function outdatedSkillFixture(projectRoot) {
   return { skillPath, original, expected };
 }
 
+test("native replacement uses the service's write lock and access gate without starting inference", async (t) => {
+  const lock = agentWriteLockHarness();
+  const selection = { engineId: "opencode", agentId: "build", modelProviderId: "deepseek", modelId: "deepseek-chat",
+    variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
+  const f = await terminalServiceFixture(t, lock, { assistantSelection: selection,
+    opencodeTerminalController: { createServerProcess() { throw new Error("Replacement must not start inference."); } } });
+  for (const [key, value] of Object.entries({ opencode_conversation_id: "ses_predecessor", agent_identity_provider: "opencode",
+    agent_identity_conversation_id: "ses_predecessor", agent_identity_workdir: f.session.metadata.source_path })) {
+    await f.runtime.store.writeMetadataValue("session-1", key, value);
+  }
+  const remove = f.runtime.store.deleteMetadataValue;
+  f.runtime.store.deleteMetadataValue = async (id, key) => { await remove(id, key); delete f.session.metadata[key]; };
+  f.service.configureAssistantRuntime({ readAssistantAccess: async () => {
+    assert.equal(lock.held, true); return { available: true, ownerOnly: false };
+  } });
+  const input = { operationId: "replacement-one", expectedConversationId: "ses_predecessor", handover: "Continue the saved task." };
+  const result = await f.service.replaceAgentConversation("session-1", input, { runtime: f.runtime });
+  assert.equal(result.replacement.status, "ready");
+  assert.equal(await f.runtime.store.readMetadataValue("session-1", "opencode_conversation_id"), "");
+  assert.equal(f.session.metadata.source_path, result.replacement.previous.workdir);
+  assert.equal(lock.held, false);
+  assert.equal((await f.service.replaceAgentConversation("session-1", input, { runtime: f.runtime })).replacement.status, "ready");
+});
+
+test("native replacement rejects active work and pending routing before changing bindings", async (t) => {
+  const lock = agentWriteLockHarness();
+  const f = await terminalServiceFixture(t, lock, { assistantSelection: CODEX_SELECTION });
+  const input = { operationId: "replace", expectedConversationId: "pre-existing-thread", handover: "Saved task" };
+  f.session.agentRuns = [{ id: "run", state: "active" }];
+  await assert.rejects(f.service.replaceAgentConversation("session-1", input, { runtime: f.runtime }), /idle, open session/);
+  f.session.agentRuns = [];
+  f.session.metadata.assistant_routing_request = JSON.stringify({ status: "routing" });
+  await assert.rejects(f.service.replaceAgentConversation("session-1", input, { runtime: f.runtime }), /pending routing/);
+  assert.equal(f.session.metadata.agent_identity_conversation_id, "pre-existing-thread");
+  assert.equal(f.session.metadata.assistant_changeover, undefined);
+});
+
+test("native retirement refuses a current open binding and requires the preservation callback", async (t) => {
+  const lock = agentWriteLockHarness();
+  const f = await terminalServiceFixture(t, lock, { assistantSelection: CODEX_SELECTION });
+  await f.runtime.store.writeMetadataValue("session-1", "codex_conversation_id", "pre-existing-thread");
+  const input = { engineId: "codex", conversationId: "pre-existing-thread" };
+  await assert.rejects(f.service.retireAgentConversationHistory("session-1", input, { runtime: f.runtime }), /callback/);
+  await assert.rejects(f.service.retireAgentConversationHistory("session-1", input, { runtime: f.runtime,
+    beforeDelete: () => { throw new Error("Current binding must never reach deletion."); } }), /not an archived binding or accepted predecessor/);
+  assert.deepEqual(await f.service.listAgentConversationStorage("session-1", { runtime: f.runtime }), []);
+});
+
+test("native storage discovers and retires an archived native-only chat through the proven saved scope", async (t) => {
+  const lock = agentWriteLockHarness();
+  const selection = { engineId: "opencode", agentId: "build", modelProviderId: "deepseek", modelId: "deepseek-chat",
+    variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
+  const ids = new Set(["ses_original", "ses_nativeonly"]);
+  let workdir;
+  let preserved = false;
+  const f = await terminalServiceFixture(t, lock, { assistantSelection: selection, opencodeTerminalController: {
+    createServerProcess: async () => ({
+      client: { health: async () => ({ healthy: true }), sessionStatus: async () => ({ type: "idle" }),
+        readSession: async (id) => {
+          if (!ids.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 });
+          return { id, location: { directory: workdir }, time: { updated: 1 } };
+        }, deleteSession: async (id) => { assert.equal(preserved, true); ids.delete(id); } },
+      listConversationsForDirectory: async (directory) => { assert.equal(directory, workdir); return [...ids].map((id) => ({ id })); },
+      listConversationChildren: async () => [], stop: async () => ({ exited: true })
+    })
+  } });
+  workdir = f.session.metadata.source_path;
+  await f.runtime.store.writeMetadataValue("session-1", "opencode_conversation_id", "ses_original");
+  await f.runtime.store.writeStatus("session-1", "archived");
+  await f.runtime.store.publishSessionArchive("session-1");
+  await rm(workdir, { recursive: true });
+  const inventory = await f.service.scanAgentConversationStorage("session-1", { runtime: f.runtime });
+  assert.equal(inventory.scopes.length, 1);
+  const candidate = inventory.conversations.find((row) => row.conversationId === "ses_nativeonly");
+  assert.equal(candidate.tracked, false);
+  assert.equal(inventory.conversations.find((row) => row.conversationId === "ses_original").tracked, true);
+  const result = await f.service.retireAgentConversationHistory("session-1", candidate, { runtime: f.runtime,
+    beforeDelete: async ({ archived, session, conversations }) => {
+      assert.equal(archived, true);
+      assert.equal(session.status, "archived");
+      assert.deepEqual(conversations.map((row) => row.conversationId), ["ses_nativeonly"]);
+      preserved = true;
+      return { preserved: true, exclusive: true };
+    } });
+  assert.equal(result.ok, true);
+  assert.deepEqual([...ids], ["ses_original"]);
+});
+
 for (const temporary of [false, true]) test(`${temporary ? "temporary" : "main"} assistant work refreshes skills under both write locks and preserves source customization`, async (t) => {
   const lock = agentWriteLockHarness();
   const events = [];

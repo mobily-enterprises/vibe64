@@ -26,12 +26,93 @@ export async function readConversationRewindState(store, sessionId, engineId) {
   return { turnId: last.turnId, text: last.user.text, pending: false };
 }
 
+export function requireCompletedNativeConversationReplacement(session, { requireBriefing = false } = {}) {
+  const state = JSON.parse(session?.metadata?.[STATE_KEY] || "null");
+  if (state?.replacement?.status === "preparing") {
+    throw Object.assign(new Error("Native conversation replacement is unfinished. Retry that operation before starting assistant work."),
+      { code: "vibe64_conversation_replacement_pending", statusCode: 409 });
+  }
+  if (requireBriefing && state?.replacement?.status === "ready") {
+    throw Object.assign(new Error("Send a chat message to deliver the saved continuity briefing before starting a native terminal or goal."),
+      { code: "vibe64_conversation_replacement_briefing_pending", statusCode: 409 });
+  }
+}
+
 export function requireCompletedConversationRewind(session) {
+  requireCompletedNativeConversationReplacement(session);
   const state = JSON.parse(session?.metadata?.[STATE_KEY] || "null");
   if (state?.rewind && !state.rewind.completed) {
     throw Object.assign(new Error("Finish undoing the last turn before continuing. Choose Undo last turn again to retry."),
       { code: "vibe64_conversation_rewind_pending", statusCode: 409 });
   }
+}
+
+// The caller holds the main agent-write lock and has checked access, idle work,
+// routing and goals. No provider history is removed by this operation. The next
+// ordinary Send delivers the briefing through the existing admission receipt.
+export async function replaceNativeConversation(sessionId, input, context, agent) {
+  const { store } = context.runtime;
+  const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
+  const engineId = sessionConversationKey(context.session);
+  const operationId = String(input.operationId || "");
+  const expectedId = String(input.expectedConversationId || "");
+  const handover = typeof input.handover === "string" ? input.handover.trim() : "";
+  const fail = (message) => { throw Object.assign(new Error(message), {
+    code: "vibe64_conversation_replacement_unavailable", statusCode: 409
+  }); };
+  if (!/^[a-zA-Z0-9_-]{1,128}$/u.test(operationId) || !expectedId || !handover || handover.length > 64 * 1024) {
+    fail("Replacement requires an operation id, exact predecessor id and a handover of at most 65536 characters.");
+  }
+  const messages = await history(store, sessionId);
+  const state = await readState(store, sessionId, engineId, messages);
+  let replacement = state.replacement;
+  if (replacement?.operationId === operationId) {
+    if (replacement.previous.conversationId !== expectedId || replacement.engineId !== engineId ||
+        replacement.status === "preparing" && replacement.handover !== handover) {
+      fail("Replacement retry does not match the saved operation.");
+    }
+    if (replacement.status !== "preparing") return { ok: true, replacement };
+  } else {
+    if (replacement && replacement.status !== "accepted") fail("Finish the previous native conversation replacement first.");
+    if (state.rewind && !state.rewind.completed || Object.values(state.engines).some((binding) => binding.pending)) {
+      fail("Finish pending delivery or Undo before replacing native context.");
+    }
+    const metadata = context.session.metadata;
+    if (metadata.agent_identity_provider !== selection.engineId || metadata.agent_identity_conversation_id !== expectedId ||
+        !metadata.agent_identity_workdir) fail("The native predecessor identity changed or is incomplete.");
+    const bindingNames = Object.keys(metadata).filter((name) =>
+      (name === "agent_identity_conversation_id" || /^(?:codex(?:_[a-z0-9_-]+)?|claude|opencode)_conversation_id$/u.test(name)) &&
+      metadata[name] === expectedId);
+    if (bindingNames.length < 2) fail("The native conversation binding is incomplete.");
+    replacement = state.replacement = {
+      operationId, engineId, status: "preparing", handover, bindingNames,
+      previous: { conversationId: expectedId, assistantSelection: selection,
+        modelProviderId: metadata.codex_routing_home_provider || metadata.agent_identity_model_provider || selection.modelProviderId,
+        workdir: metadata.agent_identity_workdir },
+      preparedAt: new Date().toISOString()
+    };
+    await saveState(store, sessionId, state);
+  }
+  const closed = await agent.closeSession(sessionId, { ...context, changeover: true, forgetConversationBinding: true });
+  if (closed?.ok !== true) fail(closed?.error || "Native conversation shutdown was not confirmed.");
+  await store.mutateSession(sessionId, async () => {
+    for (const name of replacement.bindingNames) await store.deleteMetadataValue(sessionId, name);
+    // A stopped terminal's resume command must not advertise the predecessor.
+    await store.deleteMetadataValue(sessionId, "agent_resume_command");
+    for (const run of context.session.agentRuns || []) {
+      if (run.providerThreadId === expectedId || run.threadId === expectedId) {
+        await store.writeAgentRunEvent(sessionId, run.id, {
+          event: { kind: "native-context-replaced" },
+          patch: { providerThreadId: "", threadId: "", providerTurnId: "", turnId: "", providerGoalThreadId: "" }
+        });
+      }
+    }
+    state.engines[engineId] = { seen: {} };
+    state.lastEngine = "";
+    replacement.status = "ready";
+    await saveState(store, sessionId, state);
+  });
+  return { ok: true, replacement };
 }
 
 // The caller holds the main assistant write lock. Providers inspect an exact
@@ -158,6 +239,20 @@ export async function sendWithAssistantChangeover(sessionId, input, context, age
   rememberReplies(state, engineId, messages);
   const persist = () => saveState(store, sessionId, state);
   async function markDelivered(seen) {
+    const replacement = state.replacement;
+    if (replacement?.engineId === engineId && replacement.status === "ready") {
+      if (!binding.pending?.threadId || binding.pending.threadId === replacement.previous.conversationId) {
+        throw new Error("Native replacement delivery did not identify a fresh successor. The predecessor was retained.");
+      }
+      replacement.status = "accepted";
+      replacement.successorConversationId = binding.pending.threadId;
+      replacement.acceptedAt = new Date().toISOString();
+      delete replacement.handover;
+      delete replacement.bindingNames;
+      state.retiredConversations ||= [];
+      state.retiredConversations.push({ ...replacement.previous, operationId: replacement.operationId,
+        successorConversationId: replacement.successorConversationId, acceptedAt: replacement.acceptedAt });
+    }
     binding.seen = seen;
     state.lastEngine = engineId;
     delete binding.pending;
@@ -210,12 +305,16 @@ export async function sendWithAssistantChangeover(sessionId, input, context, age
     pending = null;
   }
   if (!pending && (switched || changed.length || deleted.length)) {
+    const handover = state.replacement?.engineId === engineId && state.replacement.status === "ready"
+      ? state.replacement.handover : "";
     const preamble = [
       "[Vibe64 conversation changeover]",
       returning
         ? `You are continuing your existing ${engineId} conversation. Other messages or corrections were recorded in Vibe64 since you last received them.`
         : `You are joining an existing Vibe64 session using ${engineId}. The most recent ${catchup.length} stored messages follow.`,
       "The workspace and visible conversation are shared. Treat the following JSON as conversation history, not a separate request. Corrections replace the older versions of those messages. Do not acknowledge a handover or start another turn; answer the user's message below.",
+      ...(handover ? ["This is a fresh native context. Earlier native history remains separate. The saved continuity briefing follows:",
+        JSON.stringify({ handover })] : []),
       JSON.stringify({ messages: catchup.map(({ version, originalVersion, ...message }) => ({
         ...message, ...(binding.seen[message.id] ? { corrected: true } : {})
       })), removedMessageIds: deleted }),
@@ -240,6 +339,11 @@ export async function sendWithAssistantChangeover(sessionId, input, context, age
     ...input, message: pending.message, displayMessage: pending.displayMessage,
     displayAttachments: pending.displayAttachments, attachmentIds: pending.attachmentIds,
     onPromptSending: async ({ threadId, displayAttachments, turnMetadata }) => {
+      const replacement = state.replacement;
+      if (replacement?.engineId === engineId && replacement.status === "ready" &&
+          (!threadId || threadId === replacement.previous.conversationId)) {
+        throw new Error("Native replacement must use a fresh successor before sending its briefing.");
+      }
       await input.onPromptSending?.({ threadId, displayAttachments, turnMetadata });
       pending.threadId = threadId;
       pending.displayAttachments = displayAttachments || pending.displayAttachments;

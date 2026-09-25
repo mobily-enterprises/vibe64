@@ -13,6 +13,22 @@ import {
 
 const catalogRevision = `sha256:${"a".repeat(64)}`;
 
+test("native replacement blocks terminal and goal bypass while permitting ordinary chat admission after preparation", async () => {
+  const calls = [];
+  const manager = createSessionAgentManager({ providers: [{ id: "codex", transportId: "codex_app_server",
+    async sendMessage() { calls.push("send"); return { ok: true }; },
+    async startTerminal() { calls.push("terminal"); return { ok: true }; },
+    async updateGoal() { calls.push("goal"); return { ok: true }; }
+  }] });
+  const options = { session: { metadata: { assistant_changeover: JSON.stringify({ replacement: { status: "preparing" } }) } } };
+  await assert.rejects(manager.sendMessage("one", {}, options), { code: "vibe64_conversation_replacement_pending" });
+  options.session.metadata.assistant_changeover = JSON.stringify({ replacement: { status: "ready" } });
+  await assert.rejects(manager.startTerminal("one", {}, options), { code: "vibe64_conversation_replacement_briefing_pending" });
+  await assert.rejects(manager.updateGoal("one", { action: "resume" }, options), { code: "vibe64_conversation_replacement_briefing_pending" });
+  await manager.sendMessage("one", {}, options);
+  assert.deepEqual(calls, ["send"]);
+});
+
 function routingManagerFixture({ resolveAssistantUser } = {}) {
   const selection = (engineId, modelProviderId, modelId) => ({ schema: "vibe64.assistant-selection.v1",
     engineId, agentId: engineId, modelProviderId, modelId, variantId: "", catalogRevision });

@@ -3,9 +3,10 @@ import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import codexLoginId from "./stateUpgrades/20260923-codex-login-id.js";
 import routingV2 from "./stateUpgrades/20260923-routing-v2.js";
+import nativeConversationLifecycle from "./stateUpgrades/20260925-native-conversation-lifecycle.js";
 
 // Published entries are immutable. Append new upgrades in order; never remove one.
-const upgrades = [codexLoginId, routingV2];
+const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle];
 
 async function readLedger(ledgerPath) {
   let source;

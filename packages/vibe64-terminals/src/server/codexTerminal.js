@@ -1,4 +1,6 @@
 import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
+import { retireNativeConversation } from "./nativeConversationRetirement.js";
+import { requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { codexProviderPaths, createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
@@ -10,7 +12,7 @@ import {
   codexAppServerTurnStatusIsProviderFailure
 } from "@jskit-ai/assistant-core/server/codex-turn";
 import crypto from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { lstat, mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 
@@ -2583,6 +2585,20 @@ function createCodexTerminalController({
     // Resolve without provisioning, retaining the shared provider identity used
     // by interactive chat and durable helper-thread cleanup.
     return codexAppServerRuntimeOptionsForSession(session, options);
+  }
+
+  async function nativeStorageProvider(sessionId, binding, { runtime, session }) {
+    if (binding.modelProviderId !== "openai" && !curatedCodexProvider(binding.modelProviderId)) {
+      throw new Error("The saved Codex storage provider is unknown.");
+    }
+    const selectedSession = { ...session, metadata: { ...session.metadata,
+      codex_routing_home_provider: binding.modelProviderId } };
+    // Control requests neither resume native work nor require archived source.
+    const providerOptions = await codexAppServerRuntimeOptionsForSession(selectedSession, {
+      runtime, terminalEnv: {}, workdir: runtime.projectContextRoot, executionRoot: runtime.projectContextRoot
+    });
+    providerOptions.routingModelProviderId = binding.modelProviderId;
+    return { provider: await ensureCodexAppServerDaemonForSession(sessionId, providerOptions), toolHomeSource: providerOptions.toolHomeSource };
   }
 
   function sessionHasCodexAppServerRuntime(session = {}) {
@@ -8251,6 +8267,7 @@ function createCodexTerminalController({
     const session = providedSession?.sessionId === sessionId
       ? providedSession
       : await runtime.getSession(sessionId);
+    requireCompletedNativeConversationReplacement(session);
     if (sessionIsClosing(session) && !allowClosing) {
       const renewing = normalizeText(session.status) === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED;
       return {
@@ -13420,6 +13437,40 @@ function createCodexTerminalController({
       }
       await runtime.store.writeMetadataValue(sessionId, "codex_routing_home_provider", existingProvider);
       session.metadata.codex_routing_home_provider = existingProvider;
+    },
+    async listNativeConversationStorage(sessionId, binding, options) {
+      const { provider } = await nativeStorageProvider(sessionId, binding, options);
+      return (await provider.listNativeThreadsForCwd(binding.workdir)).map((conversationId) => ({ ...binding, conversationId }));
+    },
+    async retireConversationHistory(sessionId, binding, options) {
+      const { provider, toolHomeSource } = await nativeStorageProvider(sessionId, binding, options);
+      const inspect = async () => {
+        const ids = [...new Set([binding.conversationId, ...await provider.listThreadDescendants(binding.conversationId)])].sort();
+        const records = [];
+        for (const conversationId of ids) {
+          let thread;
+          try { thread = codexAppServerThreadRawValue(await provider.readThreadStatus(conversationId)); }
+          catch (error) {
+            if (codexAppServerThreadIsMissing(error, conversationId) && !normalizeText(error.message).toLowerCase().startsWith("thread not loaded:")) continue;
+            throw error;
+          }
+          if (thread.id !== conversationId || thread.cwd !== binding.workdir ||
+              !["idle", "notLoaded"].includes(thread.status?.type)) {
+            throw new Error("Codex retirement requires an idle native family in the exact saved directory.");
+          }
+          const relative = path.isAbsolute(thread.path || "") && toolHomeSource
+            ? path.relative(path.join(toolHomeSource, ".codex"), thread.path) : "";
+          if (!/^(?:sessions|archived_sessions)\//u.test(relative) || !thread.path.endsWith(".jsonl") ||
+              await realpath(thread.path) !== path.resolve(thread.path)) throw new Error("Codex returned an unsafe or unknown rollout path.");
+          const info = await lstat(thread.path);
+          if (!info.isFile() || info.isSymbolicLink()) throw new Error("Codex rollout is not a regular file.");
+          records.push({ conversationId, workdir: thread.cwd, path: thread.path,
+            inode: info.ino, size: info.size, modified: info.mtimeMs, updatedAt: thread.updatedAt, status: thread.status.type });
+        }
+        return records;
+      };
+      return retireNativeConversation({ binding, inspect, beforeDelete: options.beforeDelete,
+        remove: () => provider.deleteThread(binding.conversationId) });
     },
     closeGlobalTerminal(terminalSessionId) {
       return closeTerminalSession(terminalSessionId, {

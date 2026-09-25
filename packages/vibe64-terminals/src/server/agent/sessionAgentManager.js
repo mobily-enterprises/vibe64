@@ -1,5 +1,5 @@
 import path from "node:path";
-import { requireCompletedConversationRewind } from "../assistantChangeover.js";
+import { requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "../assistantChangeover.js";
 import { ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROUTING_ASSIGNMENTS, recommendedRoutingAssignments,
   routingAssignmentSelection, routingModelChoices, resolveAssistantPurpose } from "@local/vibe64-runtime/shared/assistantRouting";
 
@@ -453,6 +453,9 @@ function createSessionAgentManager({
       ...options,
       agentSettings: options?.agentSettings || input?.agentSettings || null
     };
+    if (AI_METHODS.has(method)) {
+      requireCompletedNativeConversationReplacement(options.session, { requireBriefing: method === "startTerminal" });
+    }
     if (["sendMessage", "startTerminal", "generateSessionRenewalHandover"].includes(method)) {
       requireCompletedConversationRewind(options.session);
     }
@@ -924,6 +927,7 @@ function createSessionAgentManager({
     const provider = bindSession(id, options);
     const context = {
       changeover: options.changeover === true,
+      forgetConversationBinding: options.forgetConversationBinding === true,
       preserveProcessExitProof: options.preserveProcessExitProof === true,
       providerId: provider.id,
       renewalCleanup: options.renewalCleanup || null,
@@ -1024,8 +1028,21 @@ function createSessionAgentManager({
       return provider.readGoal({ sessionId, runtime: options.runtime, session: options.session,
         assistantSelection: sessionAssistantSelection(options), vibe64User: assistantUser(options) });
     },
+    // Local storage work is explicitly invoked by trusted host code. It neither
+    // selects the current assistant nor authorizes a model inference.
+    retireConversationHistory(sessionId, binding, options = {}) {
+      const provider = providerById.get(binding.engineId);
+      if (typeof provider?.retireConversationHistory !== "function") throw new TypeError("Native history retirement is unavailable for this engine.");
+      return provider.retireConversationHistory({ ...options, sessionId }, binding);
+    },
+    listNativeConversationStorage(sessionId, binding, options = {}) {
+      const provider = providerById.get(binding.engineId);
+      if (typeof provider?.listNativeConversationStorage !== "function") throw new TypeError("Native history inventory is unavailable for this engine.");
+      return provider.listNativeConversationStorage({ ...options, sessionId }, binding);
+    },
     async updateGoal(sessionId, input = {}, options = {}) {
       const stopping = ["pause", "cancel"].includes(input.action);
+      if (!stopping) requireCompletedNativeConversationReplacement(options.session, { requireBriefing: true });
       if (stopping) options = goalOptions(options);
       const provider = stopping
         ? providerFor({ ...options, providerId: sessionAgentProviderId(options,

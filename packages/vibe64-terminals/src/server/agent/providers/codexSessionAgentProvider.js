@@ -590,6 +590,12 @@ function createCodexSessionAgentProvider({
         session: context.session
       });
     },
+    retireConversationHistory(context, binding) {
+      return controller.retireConversationHistory(context.sessionId, binding, context);
+    },
+    listNativeConversationStorage(context, binding) {
+      return controller.listNativeConversationStorage(context.sessionId, binding, context);
+    },
     async deleteDetachedChatThread(context, input = {}) {
       return controller.deleteDetachedChatThread(context.sessionId, input, {
         runtime: context.runtime,

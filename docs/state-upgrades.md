@@ -149,6 +149,18 @@ the implemented script-owned backup contract above remains authoritative.
 
 ## Catalog
 
+`20260925-native-conversation-lifecycle` records the additive native replacement
+journal release boundary. Existing `assistant_changeover` records and archives
+remain valid without the optional `replacement` and `retiredConversations`
+fields. Absence means no replacement; there is no historical conversion or lazy
+backfill. Check and apply change no application/native files, so this script
+needs no backups; the runner only appends its normal completion ledger entry.
+Retries are no-ops. The ledger lets an older candidate detect newer state rather
+than silently ignore a partially completed replacement. New explicit replacement
+operations journal their own transitions through ordinary metadata writes.
+Archive attachment expiry retains the existing archive/description format and
+is an explicit host lifecycle operation, not a historical metadata repair.
+
 `20260923-codex-login-id` adds a random local UUID to an existing connected
 `auth/codex/status.json` marker that lacks `loginId`. It preserves an existing
 valid ID, timestamps, unrelated fields and auth-transition state. Missing or

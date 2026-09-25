@@ -102,6 +102,11 @@ failure; the original archive is unchanged. This is an archive access boundary,
 not proof of native-provider ownership, writer shutdown, transcript completeness,
 or permission to delete provider history. Consumers retain those responsibilities.
 The API contract and retry constraints are in `docs/session-storage-lifecycle.md`.
+Explicit attachment expiry uses that same finalized archive boundary. It builds
+and validates a compressed replacement, keeps text, descriptions and other
+artifacts, requires host confirmation, then publishes with one atomic rename.
+The archive index and original archival date remain unchanged. No automatic
+expiry policy or timer is installed.
 
 The chat header shares its available width among up to three session tabs,
 reserving extra room for the selected tab's Archive action. The new-session

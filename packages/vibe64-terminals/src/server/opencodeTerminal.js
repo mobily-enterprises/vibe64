@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
+import { requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
+import { retireNativeConversation } from "./nativeConversationRetirement.js";
 import { openCodeAssistantMessageText as assistantMessageText } from "@jskit-ai/assistant-core/server/opencode-client";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -1250,6 +1252,7 @@ function createOpenCodeTerminalController({
   }
 
   async function ensureProcess(context = {}, options = {}) {
+    requireCompletedNativeConversationReplacement(context.session);
     if (closed) {
       throw openCodeError("vibe64_opencode_closed", "The OpenCode bridge is shutting down.", {}, 503);
     }
@@ -2894,6 +2897,43 @@ function createOpenCodeTerminalController({
     closeAllForSession,
     closeTerminal,
     createConversation,
+    async listNativeConversationStorage(sessionId, binding, options = {}) {
+      const target = await ensureSharedProcess({ sessionId, runtime: options.runtime, session: options.session }, options);
+      return (await target.server.listConversationsForDirectory(binding.workdir)).map((row) => ({ ...binding, conversationId: row.id }));
+    },
+    async retireConversationHistory(sessionId, binding, options = {}) {
+      const target = await ensureSharedProcess({ sessionId, runtime: options.runtime, session: options.session }, options);
+      // Native status is scoped to a project instance. The control server's
+      // own directory cannot establish whether this saved conversation is idle.
+      const client = openCodeServerForDirectory(target.server, binding.workdir).client;
+      const inspect = async () => {
+        const queue = [binding.conversationId];
+        const seen = new Set();
+        const records = [];
+        for (let index = 0; index < queue.length; index += 1) {
+          const conversationId = queue[index];
+          if (seen.has(conversationId) || queue.length > 1000) throw new Error("OpenCode native family is cyclic or exceeds its inventory limit.");
+          seen.add(conversationId);
+          let native;
+          try { native = await client.readSession(conversationId); }
+          catch (error) { if (error.statusCode === 404 && index === 0) return []; throw error; }
+          if (native?.id !== conversationId || native?.location?.directory !== binding.workdir ||
+              (await client.sessionStatus(conversationId)).type !== "idle") {
+            throw new Error("OpenCode retirement requires an idle native family in the exact saved directory.");
+          }
+          records.push({ conversationId, workdir: native.location.directory, updatedAt: native.time?.updated });
+          const children = await target.server.listConversationChildren(conversationId);
+          for (const child of children) {
+            if (child.directory !== binding.workdir) throw new Error("OpenCode child directory differs from its saved owner.");
+            queue.push(child.id);
+          }
+        }
+        return records.sort((left, right) => left.conversationId.localeCompare(right.conversationId));
+      };
+      return retireNativeConversation({ binding, inspect, beforeDelete: options.beforeDelete,
+        readConversation: async (id) => ({ info: await client.readSession(id), messages: (await client.messages(id)).data }),
+        remove: () => client.deleteSession(binding.conversationId) });
+    },
     async deleteConversation(sessionId, input = {}, options = {}) {
       const { context, conversationId, target, tracked } = await existingDetachedTarget(
         sessionId,

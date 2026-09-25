@@ -17,7 +17,7 @@ import { RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
 const exec = promisify(execFile);
 const id = "20260923-codex-login-id";
 const routingId = "20260923-routing-v2";
-const upgradeIds = [id, routingId];
+const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle"];
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
 async function fixture(t) {
@@ -116,7 +116,7 @@ test("fresh and disconnected installations preserve login state and record the o
     if (disconnected) await f.marker({ ...legacyMarker, connected: false });
     await f.run(true);
     assert.equal(await readCodexLoginId(f.systemRoot), "");
-    assert.equal(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied.length, 2);
+    assert.equal(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied.length, upgradeIds.length);
   }
 });
 
@@ -226,7 +226,7 @@ test("a crash after routing publication but before its ledger entry resumes the 
   }), /lost before ledger commit/u);
   assert.deepEqual(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied.map((entry) => entry.id), [id]);
   const published = await readFile(routingPath, "utf8");
-  assert.deepEqual((await f.run(true)).applied, [routingId]);
+  assert.deepEqual((await f.run(true)).applied, upgradeIds.slice(1));
   assert.equal(await readFile(routingPath, "utf8"), published);
   assert.equal(await readFile(path.join(f.systemRoot, "upgrades/backups", routingId, "before/ai-connections/routing.json"), "utf8"), original);
   assert.equal(JSON.parse(published).revision, 5);

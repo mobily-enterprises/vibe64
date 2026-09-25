@@ -136,6 +136,12 @@ function createOpenCodeSessionAgentProvider({ controller } = {}) {
         vibe64User: context.vibe64User
       });
     },
+    retireConversationHistory(context, binding) {
+      return controller.retireConversationHistory(context.sessionId, binding, context);
+    },
+    listNativeConversationStorage(context, binding) {
+      return controller.listNativeConversationStorage(context.sessionId, binding, context);
+    },
     async deleteDetachedChatThread(context, input = {}) {
       return controller.deleteConversation(context.sessionId, {
         conversationId: input.threadId || input.conversationId

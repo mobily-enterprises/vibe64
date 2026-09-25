@@ -131,6 +131,11 @@ Hosts can register preparation before ordinary archival removes resources and
 source. Failed preparation stops that archive attempt. Fully published archives
 can be inspected through a guarded server operation. These extension points add
 no automatic history deletion or context rotation to the standalone editor.
+Explicit host operations can inventory and retire verified native histories,
+replace idle native context using a supplied continuity briefing, and expire
+archived attachment payloads while keeping text. Native-only forks and new chats
+are discovered as candidates; hosts own preservation, exclusive ownership proof,
+retention dates and user-facing policy.
 Selecting a session shows incoming saved work as soon as its version check
 confirms it, while the file-change details continue loading in the background.
 The chat header gives three session tabs room to show their labels, hides the

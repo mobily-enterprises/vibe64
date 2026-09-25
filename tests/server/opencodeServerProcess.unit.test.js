@@ -423,6 +423,7 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   const privateRoot = path.join(root, "private");
   const requests = [];
   const stops = [];
+  let inventoryRows = [{ id: "ses_child", parentID: "ses_parent", directory: "/archived/source" }];
   const executionId = "11111111-1111-4111-8111-111111111111";
   t.after(() => rm(root, { force: true, recursive: true }));
 
@@ -457,7 +458,12 @@ test("OpenCode servers run and drain through one managed execution id", async (t
       sessionId: "session-1"
     },
     expectedVersion: OPENCODE_EXPECTED_VERSION,
-    fetchImpl: async (url) => {
+    fetchImpl: async (url, options) => {
+      if (new URL(url).pathname.startsWith("/session")) {
+        assert.equal(options.headers.authorization, `Basic ${Buffer.from(`opencode:${requests[0].baseEnv.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`);
+        assert.equal(options.method, "GET");
+        return new Response(JSON.stringify(inventoryRows), { status: 200 });
+      }
       assert.equal(new URL(url).pathname, "/global/health");
       return new Response(JSON.stringify({
         healthy: true,
@@ -501,6 +507,13 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   assert.equal(request.baseEnv.npm_config_cache, path.join(privateRoot, "cache", "npm"));
   assert.equal(request.credentialHome.home, path.join(privateRoot, "home"));
   assert.equal(server.executionId, executionId);
+  assert.deepEqual(await server.listConversationChildren("ses_parent"), inventoryRows);
+  assert.deepEqual(await server.listConversationsForDirectory("/archived/source"), inventoryRows);
+  await assert.rejects(server.listConversationChildren("../credentials"), /Invalid/);
+  inventoryRows = [{ id: "ses_child", parentID: "ses_foreign", directory: "/archived/source" }];
+  await assert.rejects(server.listConversationChildren("ses_parent"), /invalid child inventory/);
+  inventoryRows = Array.from({ length: 1001 }, (_, index) => ({ id: `ses_${index}`, directory: "/archived/source" }));
+  await assert.rejects(server.listConversationsForDirectory("/archived/source"), /incomplete or invalid/);
 
   const attached = await server.startAttachedTerminal({
     metadata: { sessionId: "session-1" },

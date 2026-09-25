@@ -192,6 +192,42 @@ test("archived access retains complete metadata and recovery while cleaning its 
   });
 });
 
+test("attachment expiry atomically replaces a compressed archive while retaining text, descriptions and its archival date", async () => {
+  await withTemporaryRoot(async (root) => {
+    const store = await storedFixture(root, { publish: false });
+    const id = "12345678-1234-4234-8234-123456789abc";
+    await store.writeArtifact("session-a", `attachments/${id}/file`, "attachment payload");
+    await store.writeArtifact("session-a", `attachments/${id}/attachment.json`, JSON.stringify({ attachmentId: id, fileName: "original.png" }));
+    await store.writeStatus("session-a", "archived");
+    await store.publishSessionArchive("session-a");
+    const archived = await store.readSession("session-a");
+    const before = await readFile(archived.archivePath);
+    await assert.rejects(store.pruneArchivedSessionAttachments("session-a"), /callback/u);
+    for (const beforePrune of [async () => ({ ok: false }), async () => { throw new Error("host failed"); }]) {
+      await assert.rejects(store.pruneArchivedSessionAttachments("session-a", { beforePrune }));
+      assert.deepEqual(await readFile(archived.archivePath), before);
+    }
+    const result = await store.pruneArchivedSessionAttachments("session-a", { beforePrune: async ({ session, attachmentIds, candidatePath }) => {
+      assert.equal(session.archivedAt, archived.archivedAt);
+      assert.deepEqual(attachmentIds, [id]);
+      assert.ok((await readFile(candidatePath)).length);
+      // Publication has not happened while the host records its receipt.
+      assert.deepEqual(await readFile(archived.archivePath), before);
+      return { ok: true };
+    } });
+    assert.deepEqual(result, { ok: true, attachmentIds: [id] });
+    assert.equal((await store.readSession("session-a")).archivedAt, archived.archivedAt);
+    assert.equal((await store.readConversationLog("session-a"))[0].user.text, "Keep this history");
+    await store.withArchivedSession("session-a", async (session) => {
+      await assert.rejects(readFile(path.join(session.artifactsRoot, "attachments", id, "file")), { code: "ENOENT" });
+      assert.match(await readFile(path.join(session.artifactsRoot, "attachments", id, "attachment.json"), "utf8"), /original.png/u);
+      assert.equal(await readFile(path.join(session.artifactsRoot, "recovery.txt"), "utf8"), "Keep this recovery");
+    });
+    assert.deepEqual(await store.pruneArchivedSessionAttachments("session-a", { beforePrune: () => { throw new Error("already expired"); } }),
+      { ok: true, attachmentIds: [] });
+  });
+});
+
 test("a failed archive operation releases its lock and temporary extraction for retry", async () => {
   await withTemporaryRoot(async (root) => {
     const store = await storedFixture(root);

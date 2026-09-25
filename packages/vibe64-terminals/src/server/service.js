@@ -1,4 +1,5 @@
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 import { assertSessionRepositoryReview, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createClaudeSessionAgentProvider } from "./agent/providers/claudeSessionAgentProvider.js";
@@ -8,7 +9,7 @@ import { createCodexTerminalController } from "./codexTerminal.js";
 import { createAssistantRouting } from "./assistantRouting.js";
 import { assistantModePrompt, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createSessionConversations } from "./sessionConversations.js";
-import { readConversationRewindState, rememberAssistantBeforeChangeover, requireCompletedConversationRewind, rewindLastConversationTurn, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
+import { readConversationRewindState, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, rewindLastConversationTurn, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
 import {
   createSessionAgentManager
@@ -672,6 +673,7 @@ function createService({
               inspectSource: false
             })
           : options.session;
+        if (lockOptions.operation !== "replace-agent-conversation") requireCompletedNativeConversationReplacement(session);
         return operation({
           ...options,
           runtime,
@@ -1292,10 +1294,19 @@ function createService({
   }
 
   async function reconcileAgentSessions(sessions = [], options = {}) {
-    const admittedSessions = sessions.filter((session) => (
-      String(session?.status || "").trim() !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED &&
-      !sessionIsClosing(session)
-    ));
+    const replacementFailures = [];
+    const admittedSessions = sessions.filter((session) => {
+      if (String(session?.status || "").trim() === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED || sessionIsClosing(session)) {
+        return false;
+      }
+      try {
+        requireCompletedNativeConversationReplacement(session);
+        return true;
+      } catch (error) {
+        replacementFailures.push({ sessionId: session.sessionId, code: error.code, error: error.message });
+        return false;
+      }
+    });
     const migration = await migrateLegacyAssistantSelections(admittedSessions, options);
     const sourceFailures = await ensureReconciledSessionSourcesSelfContained(migration.sessions);
     await resetKnownAgentSessionsBeforeReconcile();
@@ -1316,6 +1327,7 @@ function createService({
     }
     const result = await sessionAgent.reconcileSessions(migration.sessions, options);
     return reconcileResultWithSourceFailures(result, [
+      ...replacementFailures,
       ...temporaryFailures,
       ...migration.failed,
       ...sourceFailures
@@ -2400,6 +2412,125 @@ function createService({
       return runMainAgentWrite(sessionId, options, (context) => (
         sessionAgent.createConversation(sessionId, input, context)
       ), { operation: "create-agent-conversation" });
+    },
+
+    async listAgentConversationStorage(sessionId, options = {}) {
+      const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
+      const session = await runtime.store.readSession(sessionId);
+      if (session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
+        return runtime.store.withArchivedSession(sessionId, (archived) => nativeConversationBindings(archived));
+      }
+      return runMainAgentWrite(sessionId, { ...options, runtime }, ({ session }) =>
+        nativeConversationBindings(session, { retiredOnly: true }), { operation: "inspect-native-storage" });
+    },
+
+    async scanAgentConversationStorage(sessionId, options = {}) {
+      const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
+      const session = options.session || await runtime.store.readSession(sessionId);
+      const bindings = nativeConversationBindings(session);
+      const scopes = new Map();
+      for (const binding of bindings) {
+        if (!path.isAbsolute(binding.workdir || "")) throw new Error("Native storage ownership has no saved absolute directory.");
+        const scope = { engineId: binding.engineId, modelProviderId: binding.modelProviderId || "", workdir: binding.workdir };
+        scopes.set(JSON.stringify(scope), scope);
+      }
+      const conversations = [];
+      for (const scope of scopes.values()) {
+        const rows = await sessionAgent.listNativeConversationStorage(sessionId, scope, { ...options, runtime, session });
+        for (const row of rows) {
+          const tracked = bindings.some((binding) => binding.engineId === row.engineId &&
+            binding.conversationId === row.conversationId);
+          conversations.push({ ...row, tracked, discoveredIn: scope });
+        }
+      }
+      return { scopes: [...scopes.values()], conversations };
+    },
+
+    async retireAgentConversationHistory(sessionId, input = {}, options = {}) {
+      if (typeof options.beforeDelete !== "function") throw new TypeError("Native retirement requires a host preservation callback.");
+      const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
+      const retire = async (session, archived) => {
+        if (!archived && (session.status !== VIBE64_SESSION_STATUS.ACTIVE || sessionIsClosing(session) ||
+            sessionHasActiveAgentRun(session) || workspaceSetup.isRunning(sessionId))) {
+          throw new Error("Native history retirement requires an idle open session or a finalized archive.");
+        }
+        const bindings = nativeConversationBindings(session, { retiredOnly: !archived });
+        let binding = bindings.find((binding) =>
+          binding.engineId === input.engineId && binding.conversationId === input.conversationId);
+        // Native /new and forks may have no Vibe64 binding. Only a finalized
+        // archive can nominate an additional native id in an exact saved scope.
+        // The provider re-reads its real directory; the host must still prove
+        // exclusivity against every live project/session and preserve its text.
+        if (!binding && archived && input.discoveredIn) {
+          const scope = bindings.find((entry) => entry.engineId === input.engineId &&
+            entry.engineId === input.discoveredIn.engineId && entry.workdir === input.discoveredIn.workdir &&
+            (entry.modelProviderId || "") === input.discoveredIn.modelProviderId);
+          if (scope) binding = { ...scope, conversationId: input.conversationId, discovered: true };
+        }
+        if (!binding) throw new Error("The requested native conversation is not an archived binding or accepted predecessor.");
+        const currentBindings = archived ? [] : nativeConversationBindings(session).filter((entry) => !entry.retired);
+        const currentIds = new Set(currentBindings.map((entry) => entry.conversationId));
+        const result = await sessionAgent.retireConversationHistory(sessionId, binding, {
+          ...options, runtime, session,
+          beforeDelete: async (inventory) => {
+            if (inventory.conversations.some((entry) => currentIds.has(entry.conversationId))) {
+              throw new Error("Native deletion would include a current Vibe64 conversation.");
+            }
+            return options.beforeDelete({ ...inventory, session, archived });
+          }
+        });
+        if (!archived && result?.ok === true) {
+          const state = JSON.parse(await runtime.store.readMetadataValue(sessionId, "assistant_changeover"));
+          state.retiredConversations = state.retiredConversations.filter((entry) =>
+            entry.conversationId !== binding.conversationId || entry.assistantSelection.engineId !== binding.engineId);
+          await runtime.store.writeMetadataValue(sessionId, "assistant_changeover", JSON.stringify(state));
+        }
+        return result;
+      };
+      const session = await runtime.store.readSession(sessionId);
+      if (session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
+        return runtime.store.withArchivedSession(sessionId, (archived) => retire(archived, true));
+      }
+      return runMainAgentWrite(sessionId, { ...options, runtime }, ({ session }) => retire(session, false),
+        { operation: "retire-native-history" });
+    },
+
+    replaceAgentConversation(sessionId, input = {}, options = {}) {
+      return runMainAgentWrite(sessionId, options, async (context) => {
+        const fail = (message) => { throw Object.assign(new Error(message), {
+          code: "vibe64_conversation_replacement_unavailable", statusCode: 409
+        }); };
+        if (context.session.status !== VIBE64_SESSION_STATUS.ACTIVE || sessionIsClosing(context.session) ||
+            sessionHasActiveAgentRun(context.session) || workspaceSetup.isRunning(sessionId)) {
+          fail("Native context can be replaced only in an idle, open session.");
+        }
+        await sessionAgent.requireAssistantAccess(sessionId, context);
+        const conversations = await context.runtime.store.listSessionConversations(sessionId);
+        for (const metadata of [context.session.metadata, ...conversations.map((record) => record.routingMetadata || {})]) {
+          const routing = JSON.parse(metadata.assistant_routing_request || "null");
+          if (assistantRoutingStatusIsPending(routing?.status) || routing?.helper) fail("Finish pending routing and helper cleanup first.");
+        }
+        const saved = JSON.parse(context.session.metadata.assistant_changeover || "null");
+        if (saved?.replacement?.status !== "preparing") {
+          requireCompletedConversationRewind(context.session);
+          const goal = await sessionAgent.readGoal(sessionId, context);
+          if (!["available", "unsupported"].includes(goal?.status) ||
+              goal?.goal && !["complete", "completed", "cancelled"].includes(goal.goal.status)) {
+            fail("Finish the native goal before replacing its conversation.");
+          }
+          const pinnedGoal = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+          if (pinnedGoal && !["complete", "completed", "cancelled"].includes(pinnedGoal.status)) fail("Finish the routed goal first.");
+          const native = await sessionAgent.sessionState(sessionId, context);
+          if (native?.ok === false || native?.turn?.active || native?.terminal?.status === "running") {
+            fail("Stop native work and close its terminal before replacing context.");
+          }
+          const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
+          if (temporary?.ok === false || temporary?.active) fail("Finish temporary assistant work before replacing native context.");
+        }
+        const result = await replaceNativeConversation(sessionId, input, context, sessionAgent);
+        await publishAgentSessionChanged(sessionId, { reason: "native-conversation-replaced" });
+        return result;
+      }, { operation: "replace-agent-conversation" });
     },
 
     createEphemeralAgentConversation(scope = {}, input = {}, options = {}) {

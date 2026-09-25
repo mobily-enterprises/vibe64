@@ -2746,7 +2746,11 @@ function codexAppServerThreadInventoryError(errorCode, label, detail) {
   return error;
 }
 
+const CODEX_NATIVE_STORAGE_SOURCE_KINDS = ["cli", "vscode", "exec", "appServer", "subAgent", "subAgentReview",
+  "subAgentCompact", "subAgentThreadSpawn", "subAgentOther", "unknown"];
+
 async function listBoundedCodexAppServerThreadIds({
+  ancestorThreadId = "",
   archived = false,
   client,
   cwd = "",
@@ -2755,6 +2759,7 @@ async function listBoundedCodexAppServerThreadIds({
   requestLabel = "",
   runRequest,
   signal = null,
+  sourceKinds = ["appServer"],
   state,
   verifyCwd = false
 } = {}) {
@@ -2775,9 +2780,9 @@ async function listBoundedCodexAppServerThreadIds({
       () => client.request("thread/list", {
         archived,
         ...(cursor ? { cursor } : {}),
-        cwd,
+        ...(ancestorThreadId ? { ancestorThreadId } : { cwd }),
         limit: CODEX_APP_SERVER_THREAD_INVENTORY_PAGE_LIMIT,
-        sourceKinds: ["appServer"],
+        sourceKinds,
         useStateDbOnly: false
       }, { signal }),
       requestLabel
@@ -4011,6 +4016,40 @@ class CodexAppServerAgentProvider {
       cwd: normalizedCwd,
       threadIds: Object.freeze([...state.threadIds].sort())
     });
+  }
+
+  // Native thread/delete cascades through all spawned descendants, including
+  // archived and non-app-server threads. Never infer its scope from cwd alone.
+  async listThreadDescendants(threadId) {
+    const ancestorThreadId = normalizeAgentText(threadId);
+    if (!ancestorThreadId || ancestorThreadId.length > CODEX_APP_SERVER_THREAD_INVENTORY_ID_MAX_LENGTH ||
+        codexAppServerTextHasControlCharacters(ancestorThreadId)) {
+      throw new TypeError("Codex descendant inventory requires an exact thread id.");
+    }
+    const client = await this.activeClient();
+    const state = { entryCount: 0, threadIds: new Set(), totalBytes: 0 };
+    for (const archived of [false, true]) {
+      await listBoundedCodexAppServerThreadIds({
+        ancestorThreadId, archived, client, state,
+        sourceKinds: CODEX_NATIVE_STORAGE_SOURCE_KINDS,
+        errorCode: "vibe64_codex_retirement_inventory_invalid", label: "retirement",
+        requestLabel: "codex-app-server-descendant-list", runRequest: this.runRequest.bind(this)
+      });
+    }
+    return [...state.threadIds].sort();
+  }
+
+  async listNativeThreadsForCwd(cwd) {
+    if (!path.isAbsolute(cwd || "") || codexAppServerTextHasControlCharacters(cwd)) throw new TypeError("Native inventory requires an exact absolute directory.");
+    const client = await this.activeClient();
+    const state = { entryCount: 0, threadIds: new Set(), totalBytes: 0 };
+    for (const archived of [false, true]) {
+      await listBoundedCodexAppServerThreadIds({ archived, client, cwd, state, verifyCwd: true,
+        sourceKinds: CODEX_NATIVE_STORAGE_SOURCE_KINDS,
+        errorCode: "vibe64_codex_retirement_inventory_invalid", label: "native storage",
+        requestLabel: "codex-app-server-native-storage-list", runRequest: this.runRequest.bind(this) });
+    }
+    return [...state.threadIds].sort();
   }
 
   async listEconomyThreads({
