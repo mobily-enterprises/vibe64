@@ -102,7 +102,9 @@ inference. Explicit model/thinking edits update that mode's saved override; thei
 availability is validated against the current catalogue. Auto requires choosing
 an explicit mode before customizing its model. A foreign backup cannot turn a
 Plan/Code override into a split-orchestrator pair. Configuration and connection changes refresh existing chats' decisions
-without replacing unsent drafts. Only account and connection events reload the
+without replacing unsent drafts or switching away from Main chat or the selected
+temporary chat. Initial restoration still opens saved temporary chats.
+Only account and connection events reload the
 collection; unrelated progress events do not. Refreshes during a pending read
 share that wait, then the latest refresh reads one fresh snapshot. Actor changes
 clear the old view and reload it;

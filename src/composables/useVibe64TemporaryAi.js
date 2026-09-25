@@ -239,6 +239,7 @@ function useVibe64TemporaryAi({
     const ownerSessionId = currentSessionId();
     const apiPath = currentSessionsApiPath();
     if (!ownerSessionId || !apiPath) return;
+    const initiallyEmpty = tasks.value.length === 0;
     const persistedTasks = tasks.value.filter((task) => task.conversationId);
     try {
       const key = JSON.stringify([apiPath, ownerSessionId, actorKey.value]);
@@ -292,7 +293,7 @@ function useVibe64TemporaryAi({
         if (!activeTaskId.value) activeTaskId.value = task.id;
         if (task.busy) void pollTask(task.id);
       }
-      if (tasks.value.length) open.value = true;
+      if (initiallyEmpty && tasks.value.length) open.value = true;
     } catch (error) {
       if (disposed || generation !== restoreGeneration) return;
       if (error.code === "vibe64_agent_write_mode_busy") {

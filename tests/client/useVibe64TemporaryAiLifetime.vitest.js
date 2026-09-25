@@ -187,6 +187,51 @@ describe("temporary AI mounted lifetime", () => {
     expect(http.request).toHaveBeenCalledTimes(3);
   });
 
+  it.each(["vibe64.accounts.changed", "vibe64.connections.changed"])(
+    "refreshes access without reopening a hidden temporary chat on %s",
+    async (event) => {
+      const records = ["conversation-1", "conversation-2"].map((conversationId) => ({
+        conversationId, status: "ready", draft: "Saved draft", messages: [],
+        purposes: { plan: { available: true } }
+      }));
+      http.request.mockResolvedValueOnce({ conversations: records });
+      const { temporary, socket } = mountTemporaryAi({ openTask: false });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(temporary.open.value).toBe(true);
+      temporary.selectTask("conversation-2");
+      temporary.updateDraft("conversation-2", "Keep my unsent changes");
+
+      const refreshing = Promise.withResolvers();
+      http.request.mockReturnValueOnce(refreshing.promise);
+      if (event === "vibe64.accounts.changed") temporary.closeWorkspace();
+      socket.emit(event, {});
+      await vi.advanceTimersByTimeAsync(0);
+      expect(http.request).toHaveBeenCalledTimes(2);
+      // Returning to Main chat during the refresh must also be respected.
+      temporary.closeWorkspace();
+      refreshing.resolve({ conversations: records.map((record) => ({
+        ...record, purposes: { plan: { available: false, reason: "Connection removed" } }
+      })) });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(temporary.open.value).toBe(false);
+      expect(temporary.activeTask.value).toMatchObject({
+        id: "conversation-2", draft: "Keep my unsent changes",
+        purposes: { plan: { available: false, reason: "Connection removed" } }
+      });
+      expect(http.request.mock.calls.every(([, options]) => options.method === "GET")).toBe(true);
+
+      temporary.selectTask("conversation-2");
+      http.request.mockResolvedValueOnce({ conversations: records });
+      socket.emit(event, {});
+      await vi.advanceTimersByTimeAsync(0);
+      expect(temporary.open.value).toBe(true);
+      expect(temporary.activeTask.value.id).toBe("conversation-2");
+      expect(temporary.activeTask.value.draft).toBe("Keep my unsent changes");
+      expect(temporary.activeTask.value.purposes.plan.available).toBe(true);
+    }
+  );
+
   it("coalesces routing events while a conversation read is pending", async () => {
     const reading = Promise.withResolvers();
     http.request.mockImplementation(async (url) => url === CONVERSATION_PATH ? reading.promise : {
