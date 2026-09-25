@@ -354,6 +354,7 @@ function createService({
     );
   }
   const renewal = createSessionRenewalController({
+    prepareArchive: (context) => archivePreparation?.(context),
     project,
     publishSessionChanged,
     resolveRenewalActor,

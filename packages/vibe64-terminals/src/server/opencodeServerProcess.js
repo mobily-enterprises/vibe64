@@ -466,13 +466,24 @@ async function createOpenCodeServerProcess({
     return stopPromise;
   }
 
-  async function storageInventory(route) {
+  async function readStorageResponse(route, { signal, maxBytes = 4 * 1024 * 1024 } = {}) {
+    const deadline = AbortSignal.timeout(10_000);
+    const boundedSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    boundedSignal.throwIfAborted();
     const response = await fetchImpl(`http://${OPENCODE_HOST}:${selectedPort}${route}`, {
-      method: "GET", signal: AbortSignal.timeout(10_000),
+      method: "GET", signal: boundedSignal,
       headers: { accept: "application/json", authorization: `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}` }
     });
-    if (!response.ok) throw new Error(`OpenCode storage inventory returned HTTP ${response.status}.`);
-    const rows = JSON.parse(await readBoundedResponse(response, 4 * 1024 * 1024));
+    try {
+      if (!response.ok) throw new Error(`OpenCode storage request returned HTTP ${response.status}.`);
+      const result = JSON.parse(await readBoundedResponse(response, maxBytes));
+      boundedSignal.throwIfAborted();
+      return { data: result, headers: response.headers };
+    } finally { await response.body?.cancel().catch(() => {}); }
+  }
+
+  async function storageInventory(route, options) {
+    const { data: rows } = await readStorageResponse(route, options);
     if (!Array.isArray(rows) || rows.length > 1000 || rows.some((row) => !/^ses_[a-zA-Z0-9]+$/u.test(row?.id))) {
       throw new Error("OpenCode returned an incomplete or invalid storage inventory.");
     }
@@ -599,22 +610,35 @@ async function createOpenCodeServerProcess({
       pid: processHandle.pid,
       port: selectedPort,
       privateRoot: normalizedPrivateRoot,
-      async listConversationChildren(conversationId) {
+      async listConversationChildren(conversationId, { signal } = {}) {
         if (!/^ses_[a-zA-Z0-9]+$/u.test(conversationId)) throw new TypeError("Invalid OpenCode conversation id.");
-        const children = await storageInventory(`/session/${encodeURIComponent(conversationId)}/children`);
+        const children = await storageInventory(`/session/${encodeURIComponent(conversationId)}/children`, { signal });
         if (children.some((child) => child.parentID !== conversationId)) {
           throw new Error("OpenCode returned an incomplete or invalid child inventory.");
         }
         return children;
       },
-      async listConversationsForDirectory(directory) {
+      async listConversationsForDirectory(directory, { signal } = {}) {
         if (!path.isAbsolute(directory || "")) throw new TypeError("OpenCode inventory requires an absolute native directory.");
         // path filters the saved native directory without opening that source
         // as the control server's project. Request one beyond our limit so a
         // truncated result cannot be mistaken for a complete inventory.
-        const rows = await storageInventory(`/session?${new URLSearchParams({ path: directory, limit: "1001" })}`);
+        const rows = await storageInventory(`/session?${new URLSearchParams({ path: directory, limit: "1001" })}`, { signal });
         if (rows.some((row) => typeof row.directory !== "string")) throw new Error("OpenCode inventory has no native directory.");
         return rows.filter((row) => row.directory === directory);
+      },
+      async readConversationStoragePage(conversationId, { before = "", signal } = {}) {
+        if (!/^ses_[a-zA-Z0-9]+$/u.test(conversationId)) throw new TypeError("Invalid OpenCode conversation id.");
+        if (typeof before !== "string" || before.length > 8192) throw new TypeError("Invalid OpenCode storage cursor.");
+        const query = new URLSearchParams({ limit: "1", ...(before ? { before } : {}) });
+        const { data, headers } = await readStorageResponse(`/session/${encodeURIComponent(conversationId)}/message?${query}`, {
+          signal, maxBytes: 64 * 1024 * 1024
+        });
+        const nextCursor = headers.get("x-next-cursor");
+        if (!nextCursor && /rel="next"/u.test(headers.get("link") || "")) {
+          throw new Error("OpenCode omitted its native history continuation cursor.");
+        }
+        return { data, nextCursor };
       },
       readLogs() {
         return readLogs();

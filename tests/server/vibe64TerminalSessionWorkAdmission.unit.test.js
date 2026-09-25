@@ -332,7 +332,11 @@ test("native storage discovers and retires an archived native-only chat through 
           return { id, location: { directory: workdir }, time: { updated: 1 } };
         }, deleteSession: async (id) => { assert.equal(preserved, true); ids.delete(id); } },
       listConversationsForDirectory: async (directory) => { assert.equal(directory, workdir); return [...ids].map((id) => ({ id })); },
-      listConversationChildren: async () => [], stop: async () => ({ exited: true })
+      listConversationChildren: async () => [], stop: async () => ({ exited: true }),
+      readConversationStoragePage: async (id) => ({ nextCursor: null, data: [{
+        info: { id: "msg_nativeuser", sessionID: id, role: "user" },
+        parts: [{ type: "text", text: "Native-only question" }]
+      }] })
     })
   } });
   workdir = f.session.metadata.source_path;
@@ -346,10 +350,16 @@ test("native storage discovers and retires an archived native-only chat through 
   assert.equal(candidate.tracked, false);
   assert.equal(inventory.conversations.find((row) => row.conversationId === "ses_original").tracked, true);
   const result = await f.service.retireAgentConversationHistory("session-1", candidate, { runtime: f.runtime,
-    beforeDelete: async ({ archived, session, conversations }) => {
+    beforeDelete: async ({ archived, session, conversations, exportConversation, publishArtifacts }) => {
       assert.equal(archived, true);
       assert.equal(session.status, "archived");
       assert.deepEqual(conversations.map((row) => row.conversationId), ["ses_nativeonly"]);
+      const records = [];
+      await exportConversation("ses_nativeonly", async (record) => records.push(...record.text));
+      const sourcePath = path.join(f.root, "native-text-staging.jsonl");
+      await writeFile(sourcePath, records.map(JSON.stringify).join("\n") + "\n");
+      await publishArtifacts([{ relativePath: "native/ses_nativeonly.chat.jsonl", sourcePath }]);
+      assert.match(await f.runtime.store.readArtifact("session-1", "native/ses_nativeonly.chat.jsonl"), /Native-only question/);
       preserved = true;
       return { preserved: true, exclusive: true };
     } });

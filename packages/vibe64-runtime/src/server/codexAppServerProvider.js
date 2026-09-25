@@ -18,6 +18,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { exportCodexNativeHistory } from "./codexNativeHistoryExport.js";
 
 import {
   CODEX_AUTH_RECONNECTING_CODE,
@@ -2756,8 +2757,9 @@ async function listBoundedCodexAppServerThreadIds({
       () => client.request("thread/list", {
         archived,
         ...(cursor ? { cursor } : {}),
-        ...(ancestorThreadId ? { ancestorThreadId } : { cwd }),
+        ...(ancestorThreadId ? { ancestorThreadId } : cwd ? { cwd } : {}),
         limit: CODEX_APP_SERVER_THREAD_INVENTORY_PAGE_LIMIT,
+        modelProviders: [],
         sourceKinds,
         useStateDbOnly: false
       }, { signal }),
@@ -3988,6 +3990,33 @@ class CodexAppServerAgentProvider {
     );
   }
 
+  async exportThreadHistory(threadId, onRecord, { signal } = {}) {
+    const active = await this.activeClient();
+    // Oversized native items must fail preservation without disconnecting the
+    // shared conversation observer. Reuse JSKIT's transport on a separate socket.
+    const client = new CodexAppServerJsonRpcClient({
+      endpoint: active.endpoint,
+      maxMessageBytes: 64 * 1024 ** 2,
+      requestTimeoutMs: 30_000,
+      WebSocketImpl: this.options.WebSocketImpl
+    });
+    const deadline = AbortSignal.timeout(300_000);
+    const boundedSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    boundedSignal.throwIfAborted();
+    const abort = () => client.close();
+    boundedSignal.addEventListener("abort", abort, { once: true });
+    try {
+      await client.connect();
+      boundedSignal.throwIfAborted();
+      await client.initialize({ clientInfo: { name: "vibe64-history-export", title: "Vibe64", version: CODEX_APP_SERVER_CLIENT_VERSION } });
+      boundedSignal.throwIfAborted();
+      return await exportCodexNativeHistory(client, normalizeAgentText(threadId), onRecord, { signal: boundedSignal });
+    } finally {
+      boundedSignal.removeEventListener("abort", abort);
+      client.close();
+    }
+  }
+
   async listLoadedThreads(params = {}) {
     const client = await this.activeClient();
     return this.runRequest(
@@ -4061,6 +4090,23 @@ class CodexAppServerAgentProvider {
         requestLabel: "codex-app-server-native-storage-list", runRequest: this.runRequest.bind(this) });
     }
     return [...state.threadIds].sort();
+  }
+
+  async nativeThreadExists(threadId, { signal } = {}) {
+    const id = normalizeAgentText(threadId);
+    if (!id || id.length > CODEX_APP_SERVER_THREAD_INVENTORY_ID_MAX_LENGTH || codexAppServerTextHasControlCharacters(id)) {
+      throw new TypeError("Native existence checks require an exact thread id.");
+    }
+    const client = await this.activeClient();
+    const state = { entryCount: 0, threadIds: new Set(), totalBytes: 0 };
+    for (const archived of [false, true]) {
+      await listBoundedCodexAppServerThreadIds({ archived, client, state, signal,
+        sourceKinds: CODEX_NATIVE_STORAGE_SOURCE_KINDS,
+        errorCode: "vibe64_codex_retirement_inventory_invalid", label: "native storage",
+        requestLabel: "codex-app-server-native-existence", runRequest: this.runRequest.bind(this) });
+      if (state.threadIds.has(id)) return true;
+    }
+    return false;
   }
 
   async listEconomyThreads({

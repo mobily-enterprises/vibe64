@@ -423,6 +423,8 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   const privateRoot = path.join(root, "private");
   const requests = [];
   const stops = [];
+  const pageRequests = [];
+  let messageResponse = () => new Response("[]");
   let inventoryRows = [{ id: "ses_child", parentID: "ses_parent", directory: "/archived/source" }];
   const executionId = "11111111-1111-4111-8111-111111111111";
   t.after(() => rm(root, { force: true, recursive: true }));
@@ -459,6 +461,12 @@ test("OpenCode servers run and drain through one managed execution id", async (t
     },
     expectedVersion: OPENCODE_EXPECTED_VERSION,
     fetchImpl: async (url, options) => {
+      if (new URL(url).pathname.endsWith("/message")) {
+        assert.equal(options.headers.authorization, `Basic ${Buffer.from(`opencode:${requests[0].baseEnv.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`);
+        assert.equal(options.method, "GET");
+        pageRequests.push(new URL(url));
+        return messageResponse(options);
+      }
       if (new URL(url).pathname.startsWith("/session")) {
         assert.equal(options.headers.authorization, `Basic ${Buffer.from(`opencode:${requests[0].baseEnv.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`);
         assert.equal(options.method, "GET");
@@ -514,6 +522,37 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   await assert.rejects(server.listConversationChildren("ses_parent"), /invalid child inventory/);
   inventoryRows = Array.from({ length: 1001 }, (_, index) => ({ id: `ses_${index}`, directory: "/archived/source" }));
   await assert.rejects(server.listConversationsForDirectory("/archived/source"), /incomplete or invalid/);
+  assert.deepEqual(await server.readConversationStoragePage("ses_parent"), { data: [], nextCursor: null });
+  messageResponse = () => new Response("[]", { headers: { "x-next-cursor": "opaque+/=" } });
+  assert.equal((await server.readConversationStoragePage("ses_parent", { before: "opaque+/=" })).nextCursor, "opaque+/=");
+  assert.equal(pageRequests[0].pathname, "/session/ses_parent/message");
+  assert.deepEqual(Object.fromEntries(pageRequests[0].searchParams), { limit: "1" });
+  assert.deepEqual(Object.fromEntries(pageRequests[1].searchParams), { limit: "1", before: "opaque+/=" });
+  await assert.rejects(server.readConversationStoragePage("../credentials"), /Invalid/);
+  await assert.rejects(server.readConversationStoragePage("ses_parent", { signal: AbortSignal.abort() }), { name: "AbortError" });
+  assert.equal(pageRequests.length, 2);
+  const largeMessage = { info: { id: "msg_large", role: "user" }, parts: [{ type: "text", text: "x".repeat(3 * 1024 * 1024) }] };
+  messageResponse = () => new Response(JSON.stringify([largeMessage]));
+  assert.deepEqual(await server.readConversationStoragePage("ses_parent"), { data: [largeMessage], nextCursor: null });
+  messageResponse = () => new Response("[]", { headers: { link: '<http://localhost/session/ses_parent/message?before=opaque>; rel="next"' } });
+  await assert.rejects(server.readConversationStoragePage("ses_parent"), /continuation cursor/);
+  let bodyCancelled = false;
+  messageResponse = () => new Response(new ReadableStream({
+    pull(controller) { controller.enqueue(new Uint8Array(1024 * 1024)); },
+    cancel() { bodyCancelled = true; }
+  }));
+  await assert.rejects(server.readConversationStoragePage("ses_parent"), { code: "assistant_opencode_response_too_large" });
+  assert.equal(bodyCancelled, true);
+  const started = Promise.withResolvers();
+  const cancellation = new AbortController();
+  messageResponse = ({ signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    started.resolve();
+  });
+  const cancelledPage = server.readConversationStoragePage("ses_parent", { signal: cancellation.signal });
+  await started.promise;
+  cancellation.abort();
+  await assert.rejects(cancelledPage, { name: "AbortError" });
 
   const attached = await server.startAttachedTerminal({
     metadata: { sessionId: "session-1" },

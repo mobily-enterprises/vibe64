@@ -388,6 +388,7 @@ function publicRenewalResult(state = null, extra = {}, vibe64User = null) {
 
 function createSessionRenewalController({
   clearTimeoutFn = clearTimeout,
+  prepareArchive = null,
   project,
   publishSessionChanged = async () => null,
   resolveRenewalActor = null,
@@ -399,6 +400,9 @@ function createSessionRenewalController({
 } = {}) {
   if (!project || !terminals || !setupRunner) {
     throw new TypeError("Session renewal requires project, terminal, and setup services.");
+  }
+  if (prepareArchive !== null && typeof prepareArchive !== "function") {
+    throw new TypeError("Session archive preparation must be a function or null.");
   }
   if (
     resolveSuccessorAssistant !== null &&
@@ -1072,6 +1076,19 @@ function createSessionRenewalController({
     );
     try {
       if (sourceStatus === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) {
+        const prepared = await prepareArchive?.({
+          phase: predecessor.metadata?.source_recovery_saved === "yes" ? "source" : "stopping",
+          renewal: true,
+          runtime,
+          session: predecessor
+        });
+        if (prepared?.ok === false) {
+          throw renewalError(
+            prepared.error || "Session archive preparation failed.",
+            prepared.code || "vibe64_session_archive_preparation_failed",
+            { retryable: true }
+          );
+        }
         await runtime.prepareSessionSourceForRenewal(sourceSessionId, {
           renewalId: state.renewalId
         });
@@ -1233,12 +1250,14 @@ function createSessionRenewalController({
           updatedAt: timestamp()
         }));
       }
-      return updateRenewalMaintenance(runtime, current, (maintenance) => ({
+      const completed = await updateRenewalMaintenance(runtime, current, (maintenance) => ({
         ...maintenance,
         error: null,
         status: "completed",
         updatedAt: timestamp()
       }));
+      await publish(current.sessionId, "session-archived");
+      return completed;
     } catch (error) {
       return updateRenewalMaintenance(runtime, current, (maintenance) => ({
         ...maintenance,

@@ -278,6 +278,23 @@ within evidenced homes/directories, including CLI-created chats and forks. They
 retire finalized archived histories or accepted predecessors only after a host
 callback proves preservation and exclusive ownership. Provider owners check the
 entire native deletion family; matching a directory does not establish ownership.
+Codex retirement requires modern paginated history. Its owner streams native
+thread, goal, turn and item records plus normalized readable chat text through a
+bounded, separate JSKIT connection. Every inspected family member must finish
+exporting, and a second export must confirm the same exact content revision.
+Listed plain/compressed rollouts remain separate preservation artifacts;
+fileless paginated records still require the API export. These are content
+recovery evidence, not guaranteed native-resume or database backups. Legacy
+history fails with upgrade/migration guidance and is never silently discarded.
+Claude and OpenCode expose the same streamed export callback through their own
+native readers and existing text normalizers. Text carries branch/message
+provenance and available timestamps/models without attachments. OpenCode streams
+stable native pages newest first, one message at a time, preserving raw message
+parts and model identity; incomplete, repeated or oversized pages block deletion. Claude retains
+sidechain and rewind entries with transcript and parent-message provenance; Codex exposes
+current visible history. All native families require a complete export and exact
+revision recheck. An archived callback can publish that text and recovery files
+through the store's scoped artifact batch before authorizing native deletion.
 No public retention policy, compression worker or timer is added. Contracts and
 acceptance limits live in `docs/session-storage-lifecycle.md`; implementation is
 in `nativeConversationRetirement.js`, `assistantChangeover.js`, the terminal

@@ -13314,25 +13314,46 @@ function createCodexTerminalController({
           let thread;
           try { thread = codexAppServerThreadRawValue(await provider.readThreadStatus(conversationId)); }
           catch (error) {
-            if (codexAppServerThreadIsMissing(error, conversationId) && !normalizeText(error.message).toLowerCase().startsWith("thread not loaded:")) continue;
+            // Native thread/read also says "not loaded" after deletion. Only
+            // an exhaustive native inventory can distinguish absence from an
+            // existing unloaded thread, including one moved to another cwd.
+            if (codexAppServerThreadIsMissing(error, conversationId) &&
+                !await provider.nativeThreadExists(conversationId, { signal: options.signal })) continue;
             throw error;
           }
           if (thread.id !== conversationId || thread.cwd !== binding.workdir ||
               !["idle", "notLoaded"].includes(thread.status?.type)) {
             throw new Error("Codex retirement requires an idle native family in the exact saved directory.");
           }
+          if (thread.historyMode !== "paginated") {
+            throw Object.assign(new Error("Codex native retirement requires paginated history. This unsupported conversation needs operator cleanup."),
+              { code: "vibe64_codex_paginated_history_required" });
+          }
           const relative = path.isAbsolute(thread.path || "") && toolHomeSource
             ? path.relative(path.join(toolHomeSource, ".codex"), thread.path) : "";
-          if (!/^(?:sessions|archived_sessions)\//u.test(relative) || !thread.path.endsWith(".jsonl") ||
-              await realpath(thread.path) !== path.resolve(thread.path)) throw new Error("Codex returned an unsafe or unknown rollout path.");
-          const info = await lstat(thread.path);
-          if (!info.isFile() || info.isSymbolicLink()) throw new Error("Codex rollout is not a regular file.");
-          records.push({ conversationId, workdir: thread.cwd, path: thread.path,
-            inode: info.ino, size: info.size, modified: info.mtimeMs, updatedAt: thread.updatedAt, status: thread.status.type });
+          if (thread.path && (!/^(?:sessions|archived_sessions)\//u.test(relative) || !/\.jsonl(?:\.zst)?$/u.test(thread.path))) {
+            throw new Error("Codex returned an unsafe or unknown rollout path.");
+          }
+          const files = [];
+          const plainPath = thread.path?.replace(/\.zst$/u, "");
+          for (const file of plainPath ? [plainPath, `${plainPath}.zst`] : []) {
+            try {
+              const info = await lstat(file);
+              if (!info.isFile() || info.isSymbolicLink() || await realpath(file) !== path.resolve(file)) {
+                throw new Error("Codex rollout is not a regular file at its exact native path.");
+              }
+              files.push({ path: file, inode: info.ino, size: info.size, modified: info.mtimeMs });
+            } catch (error) { if (error.code !== "ENOENT") throw error; }
+          }
+          records.push({ conversationId, workdir: thread.cwd, historyMode: thread.historyMode, ...(files[0] || {}), files,
+            nativePath: thread.path ?? null, status: thread.status.type,
+            ...(Number.isFinite(thread.createdAt) ? { createdAt: new Date(thread.createdAt * 1000).toISOString() } : {}),
+            ...(Number.isFinite(thread.updatedAt) ? { updatedAt: new Date(thread.updatedAt * 1000).toISOString() } : {}) });
         }
         return records;
       };
       return retireNativeConversation({ binding, inspect, beforeDelete: options.beforeDelete,
+        exportConversation: (id, onRecord) => provider.exportThreadHistory(id, onRecord, { signal: options.signal }),
         remove: () => provider.deleteThread(binding.conversationId) });
     },
     closeGlobalTerminal(terminalSessionId) {

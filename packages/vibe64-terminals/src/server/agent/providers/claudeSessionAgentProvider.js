@@ -976,7 +976,7 @@ function createClaudeSessionAgentProvider({
       return { ok: true, deleted: true, conversationId: entry.id };
     },
     retireConversationHistory(context, binding) {
-      return retireClaudeConversationHistory({ configRoot, binding, beforeDelete: context.beforeDelete,
+      return retireClaudeConversationHistory({ configRoot, binding, beforeDelete: context.beforeDelete, signal: context.signal,
         requireIdle: async () => {
           const saved = JSON.parse(context.session.metadata[`claude_conversation_${binding.conversationId}`] || "null");
           const active = [...entries.values()].some((entry) => entry.id === binding.conversationId &&
