@@ -40,7 +40,12 @@ lease before archival can detach the session tree.
 People can create, select, inspect, and archive sessions. A new session receives
 its own Git source and stable identity. Creation starts in Plan with review off.
 The workflow picker previews the submitting user's Plan and Code destinations;
-owner configuration opens in the same overlay. Accounts initializes only missing
+it reads saved assignments and connection access without live model discovery.
+Uninitialized workflows use connected defaults to establish availability and say
+“Recommended on creation”; creation discovers and saves the exact recommendations.
+The picker shares the runtime's access and paired-backup rules, while creation
+and dispatch still validate the destination against its current model catalogue.
+Owner configuration opens in the same overlay. Accounts initializes only missing
 roles as part of explicit creation. The central resolver chooses the user's
 accessible Plan destination before creating the workspace, and its credential
 identity is checked again. Native selection and the intended workflow are stored

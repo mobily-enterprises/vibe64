@@ -100,28 +100,11 @@ const emit = defineEmits(["update:workflow", "update:ready"]);
 const selectedChoiceId = ref("");
 const routingOpen = ref(false);
 const routingSaving = ref(false);
-const { resource, engines, loadError, scopeKey } = useModelRouting({ enabled: computed(() => props.active) });
+const { resource, loadError, scopeKey } = useModelRouting({ enabled: computed(() => props.active), workflowsOnly: true });
 const loading = computed(() => Boolean(resource.isInitialLoading.value));
 const canConfigure = computed(() => resource.data.value?.canConfigure === true);
 
-function modelLabel(decision) {
-  const selection = decision?.effectiveSelection || decision?.configuredSelection;
-  if (!selection) return "Unavailable";
-  const engine = engines.value.find(({ engineId }) => engineId === selection.engineId);
-  const choice = engine?.choices.find((row) => row.modelProviderId === selection.modelProviderId && row.modelId === selection.modelId);
-  return `${engine?.label || selection.engineId} · ${choice?.label || selection.modelId}`;
-}
-
-const choices = computed(() => engines.value.filter((engine) =>
-  engine.roles.plan.assignment || engine.roles.code.assignment || engine.roles.plan.recommendation || engine.roles.code.recommendation
-).map((engine) => {
-  const preview = engine.setupPreview;
-  return { engineId: engine.engineId, label: engine.label,
-    planLabel: modelLabel(preview?.plan), codeLabel: modelLabel(preview?.code),
-    backupUsed: preview?.plan.backupUsed || preview?.code.backupUsed,
-    available: preview?.plan.available === true && preview?.code.available === true,
-    error: engine.error || (!preview?.plan.available ? preview?.plan.message : !preview?.code.available ? preview?.code.message : "") };
-}));
+const choices = computed(() => resource.data.value?.workflows || []);
 const selectedChoice = computed(() => choices.value.find((choice) => choice.engineId === selectedChoiceId.value) || null);
 
 function defaultChoiceId(available = choices.value) {

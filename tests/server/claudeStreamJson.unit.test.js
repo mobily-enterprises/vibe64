@@ -745,6 +745,16 @@ test("Claude reads account capabilities and allowance through an already owned p
   assert.equal(native.stopped, true);
 });
 
+test("Claude configured defaults do not start a model discovery process", async (t) => {
+  const f = await fixture(t);
+  const catalog = defineVibe64AssistantCapabilities(await f.provider.capabilities(f.context, { configuredOnly: "true" }));
+  assert.equal(catalog.modelProviders.find(({ id }) => id === "anthropic").connected, true);
+  assert.equal(catalog.defaults.modelId, "sonnet");
+  assert.equal(f.processes.length, 0);
+  assert.equal((await f.provider.capabilities(f.context)).modelProviders[0].models.length, 2);
+  assert.equal(f.processes.length, 1, "full configuration still reads the native model catalogue");
+});
+
 test("Claude retains failed catalog cleanup and retries it before another query or account change", async (t) => {
   const f = await fixture(t);
   const provider = createClaudeSessionAgentProvider({ ...f.providerOptions,

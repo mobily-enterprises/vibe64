@@ -1,5 +1,5 @@
 import {
-  ACTION_READ_MODEL_ROUTING, ACTION_SAVE_MODEL_ROUTING, ACTION_PREVIEW_MODEL_ROUTING,
+  ACTION_READ_MODEL_ROUTING, ACTION_READ_MODEL_ROUTING_WORKFLOWS, ACTION_SAVE_MODEL_ROUTING, ACTION_PREVIEW_MODEL_ROUTING,
   ACTION_READ_CODEX_PROVIDERS, ACTION_SAVE_CODEX_PROVIDER, ACTION_REMOVE_CODEX_PROVIDER,
   ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
   ACTION_LOGOUT_ACCOUNT,
@@ -104,6 +104,11 @@ function registerRoutes(
     summary: "Disconnect a curated Codex provider."
   });
 
+  routes.actionRoute("GET", "/model-routing/workflows", {
+    actionId: ACTION_READ_MODEL_ROUTING_WORKFLOWS,
+    buildInput: (request) => withVibe64User(request),
+    summary: "Read saved workflows and connection access without model discovery."
+  });
   routes.actionRoute("GET", "/model-routing", {
     actionId: ACTION_READ_MODEL_ROUTING,
     buildInput: (request) => withVibe64User(request),

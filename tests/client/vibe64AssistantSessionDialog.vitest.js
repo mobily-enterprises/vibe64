@@ -1,7 +1,7 @@
-import { computed, createRenderer, nextTick, ref, ssrContextKey } from "vue";
+import { createRenderer, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ resource: null, scopeKey: null, branches: null, branchOptions: null }));
+const mocks = vi.hoisted(() => ({ resource: null, scopeKey: null, branches: null, branchOptions: null, routingOptions: null }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: (options) => {
     mocks.branchOptions = options;
@@ -10,22 +10,15 @@ vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
 }));
 vi.mock("@local/vibe64-accounts/client", () => ({
   ModelRoutingForm: { render: () => null },
-  useModelRouting: () => ({ resource: mocks.resource, scopeKey: mocks.scopeKey,
-    engines: computed(() => mocks.resource.data.value?.engines || []), loadError: ref("") })
+  useModelRouting: (options) => {
+    mocks.routingOptions = options;
+    return { resource: mocks.resource, scopeKey: mocks.scopeKey, loadError: ref("") };
+  }
 }));
 vi.mock("@/lib/vibe64AccountConnectionsDialog.js", () => ({ requestVibe64AccountConnectionsDialog: vi.fn() }));
 import WorkflowSelector from "../../src/components/studio/vibe64-session/Vibe64WorkflowSelector.vue";
 import AssistantSessionDialog from "../../src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue";
 
-const astra = { engineId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra", label: "Astra" };
-const deepseek = { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-flash", label: "DeepSeek" };
-const pickle = { engineId: "opencode", modelProviderId: "opencode", modelId: "big-pickle", label: "Big Pickle" };
-const decision = (selection, backupUsed = false) => ({ available: true, effectiveSelection: selection, backupUsed });
-function engine(engineId, label, plan, code) {
-  return { engineId, label, choices: [plan, code], roles: {
-    plan: { assignment: null, recommendation: plan }, code: { assignment: null, recommendation: code }
-  }, setupPreview: { plan: decision(plan), code: decision(code) }, preview: { viewer: { plan: { available: false } } } };
-}
 let app;
 function mount(component = WorkflowSelector) {
   const createSession = vi.fn(async () => ({ ok: true, sessionId: "new-chat" }));
@@ -49,15 +42,19 @@ beforeEach(() => {
     isLoading: ref(false), loadError: ref(""), reload: vi.fn()
   };
   mocks.scopeKey = ref("owner:workspace");
-  mocks.resource = { data: ref({ canConfigure: true, engines: [engine("codex", "Codex", astra, deepseek), engine("opencode", "OpenCode", pickle, pickle)] }),
+  mocks.resource = { data: ref({ canConfigure: true, workflows: [
+    { engineId: "codex", label: "Codex", available: true, planLabel: "Codex · gpt-6-astra", codeLabel: "Codex · deepseek-flash" },
+    { engineId: "opencode", label: "OpenCode", available: true, planLabel: "OpenCode · big-pickle", codeLabel: "OpenCode · big-pickle" }
+  ] }),
     isInitialLoading: ref(false), reload: vi.fn() };
 });
 afterEach(() => app?.unmount());
 
 it("previews initial roles without writing and submits the workflow rather than a frozen model", async () => {
   const f = mount();
+  expect(mocks.routingOptions.workflowsOnly).toBe(true);
   expect(f.state.choices).toHaveLength(2);
-  expect(f.state.selectedChoice).toMatchObject({ engineId: "codex", available: true, planLabel: "Codex · Astra", codeLabel: "Codex · DeepSeek" });
+  expect(f.state.selectedChoice).toMatchObject({ engineId: "codex", available: true, planLabel: "Codex · gpt-6-astra", codeLabel: "Codex · deepseek-flash" });
   expect(f.createSession).not.toHaveBeenCalled();
   expect(f.workflow).toHaveBeenLastCalledWith("codex");
   expect(f.ready).toHaveBeenLastCalledWith(true);
@@ -65,19 +62,18 @@ it("previews initial roles without writing and submits the workflow rather than 
 
 it("shows a collaborator's backup pair and hides configuration", async () => {
   mocks.resource.data.value.canConfigure = false;
-  mocks.resource.data.value.engines[0].setupPreview = { plan: decision(pickle, true), code: decision(pickle, true) };
+  Object.assign(mocks.resource.data.value.workflows[0], { backupUsed: true,
+    planLabel: "OpenCode · big-pickle", codeLabel: "OpenCode · big-pickle" });
   const f = mount();
   expect(f.state.canConfigure).toBe(false);
   expect(f.state.selectedChoice).toMatchObject({ engineId: "codex", available: true, backupUsed: true,
-    planLabel: "OpenCode · Big Pickle", codeLabel: "OpenCode · Big Pickle" });
+    planLabel: "OpenCode · big-pickle", codeLabel: "OpenCode · big-pickle" });
   expect(f.workflow).toHaveBeenLastCalledWith("codex");
   expect(f.ready).toHaveBeenLastCalledWith(true);
 });
 
 it("retains an unavailable configured workflow with its reason and selects an available one", async () => {
-  const codex = mocks.resource.data.value.engines[0];
-  codex.roles.plan.assignment = astra;
-  codex.setupPreview.plan = { available: false, configuredSelection: astra, message: "Reconnect GPT" };
+  Object.assign(mocks.resource.data.value.workflows[0], { available: false, error: "Reconnect GPT" });
   const f = mount();
   expect(f.state.choices[0]).toMatchObject({ available: false, error: "Reconnect GPT" });
   expect(f.state.selectedChoiceId).toBe("opencode");

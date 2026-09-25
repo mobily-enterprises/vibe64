@@ -8,6 +8,7 @@ import {
   canUseVibe64Assistant,
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE,
+  VIBE64_AGENT_PROVIDERS,
   VIBE64_ASSISTANT_SELECTION_METADATA,
   Vibe64AgentExecutionProfileError,
   defineVibe64AssistantAccess,
@@ -740,7 +741,57 @@ function createSessionAgentManager({
     ])));
   }
 
+  async function inspectWorkflowChoices(configuration, options) {
+    const engineLabel = (id) => VIBE64_AGENT_PROVIDERS.find((provider) => provider.id === id)?.label || id;
+    const actor = await resolveAssistantUser(assistantUser(options));
+    options = { ...options, vibe64User: actor };
+    const access = new Map();
+    const readAccess = (selection) => {
+      const key = JSON.stringify([selection.engineId, selection.modelProviderId, selection.modelId]);
+      if (!access.has(key)) access.set(key, routingSelectionAccess(selection, options));
+      return access.get(key);
+    };
+    const needsSetup = (engineId) => !["plan", "code"].every((role) =>
+      Object.hasOwn(configuration.orchestrators[engineId] || {}, role));
+    const errors = new Map();
+    const catalogs = [...providerById.keys()].some(needsSetup) ? (await Promise.all([...providerById.values()].map(async (provider) => {
+      try { return await providerCapabilities(provider, { configuredOnly: "true" }, options); }
+      catch (cause) { errors.set(provider.id, cause.message); return null; }
+    }))).filter(Boolean) : [];
+    const defaultAccess = await Promise.all(catalogs.flatMap((catalog) => routingModelChoices(catalog)).map(readAccess));
+    const workflows = await Promise.all([...providerById.values()].map(async (provider) => {
+      const saved = configuration.orchestrators[provider.id] || {};
+      const assignments = { ...saved };
+      const error = needsSetup(provider.id) ? errors.get(provider.id) || "" : "";
+      // First use still offers connected assistants (including included OpenCode).
+      // Only configured defaults are read; creation discovers and saves full recommendations.
+      if (needsSetup(provider.id) && !error) {
+        const catalog = catalogs.find(({ engineId }) => engineId === provider.id);
+        const recommended = recommendedRoutingAssignments(catalog, { catalogs, assignments, connectionAccess: defaultAccess });
+        for (const role of ["plan", "code", "sharedBackup"]) {
+          if (!Object.hasOwn(saved, role) && recommended[role]) assignments[role] = recommended[role];
+        }
+      }
+      if (!Object.keys(saved).length && !assignments.plan && !assignments.code && !error) return null;
+      const connectionAccess = await Promise.all([assignments.plan, assignments.code, assignments.sharedBackup].filter(Boolean).map(readAccess));
+      const previewConfiguration = { ...configuration, orchestrators: { ...configuration.orchestrators, [provider.id]: assignments } };
+      const decision = resolveAssistantPurpose({ purpose: "plan", workflowEngineId: provider.id, actor,
+        configuration: previewConfiguration, connectionAccess, validateModels: false });
+      const modelLabel = (role) => {
+        const selection = decision.planCodePair?.[role]?.effectiveSelection || saved[role];
+        if (!Object.hasOwn(saved, role)) return "Recommended on creation";
+        return selection ? `${engineLabel(selection.engineId)} · ${selection.modelId}` : "Not configured";
+      };
+      return { engineId: provider.id, label: engineLabel(provider.id),
+        planLabel: modelLabel("plan"), codeLabel: modelLabel("code"),
+        backupUsed: Object.values(decision.planCodePair || {}).some((role) => role.backupUsed),
+        available: !error && decision.available, error: error || decision.message };
+    }));
+    return { workflows: workflows.filter(Boolean) };
+  }
+
   async function inspectRoutingConfiguration(configuration, options = {}) {
+    if (options.workflowsOnly === true) return inspectWorkflowChoices(configuration, options);
     const catalogs = [];
     const catalogErrors = new Map();
     for (const provider of providerById.values()) {

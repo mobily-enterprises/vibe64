@@ -16,6 +16,7 @@ import {
 
 const ACTION_READ_CODEX_PROVIDERS = "vibe64.accounts.codex-providers.read";
 const ACTION_READ_MODEL_ROUTING = "vibe64.accounts.model-routing.read";
+const ACTION_READ_MODEL_ROUTING_WORKFLOWS = "vibe64.accounts.model-routing.workflows.read";
 const ACTION_SAVE_MODEL_ROUTING = "vibe64.accounts.model-routing.save";
 const ACTION_PREVIEW_MODEL_ROUTING = "vibe64.accounts.model-routing.preview";
 const ACTION_SAVE_CODEX_PROVIDER = "vibe64.accounts.codex-providers.save";
@@ -34,6 +35,11 @@ function createActions({ accounts } = {}) {
   }
 
   return Object.freeze([
+    {
+      id: ACTION_READ_MODEL_ROUTING_WORKFLOWS, version: 1, kind: "query", input: accountsReadInputValidator,
+      output: null, idempotency: "none", audit: { actionName: ACTION_READ_MODEL_ROUTING_WORKFLOWS }, observability: {},
+      execute: (input) => accounts.readModelRoutingWorkflows(input)
+    },
     {
       id: ACTION_READ_MODEL_ROUTING, version: 1, kind: "query", input: accountsReadInputValidator,
       output: null, idempotency: "none", audit: { actionName: ACTION_READ_MODEL_ROUTING }, observability: {},
@@ -211,7 +217,7 @@ function createActions({ accounts } = {}) {
 
 export {
   ACTION_PREVIEW_MODEL_ROUTING,
-  ACTION_READ_MODEL_ROUTING, ACTION_SAVE_MODEL_ROUTING,
+  ACTION_READ_MODEL_ROUTING, ACTION_READ_MODEL_ROUTING_WORKFLOWS, ACTION_SAVE_MODEL_ROUTING,
   ACTION_READ_CODEX_PROVIDERS,
   ACTION_SAVE_CODEX_PROVIDER,
   ACTION_REMOVE_CODEX_PROVIDER,

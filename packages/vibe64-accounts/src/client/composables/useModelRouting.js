@@ -4,12 +4,13 @@ import { ACCOUNTS_ENDPOINT, VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CH
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { vibe64ProjectQueryScope } from "/src/lib/vibe64ProjectScope.js";
 
-function useModelRouting({ enabled = true } = {}) {
+function useModelRouting({ enabled = true, workflowsOnly = false } = {}) {
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   const queryKey = computed(() => ["vibe64", ...vibe64ProjectQueryScope(unref(viewer)?.projectSlug),
-    "model-routing", unref(viewer)?.actorKey || "signed-out"]);
+    "model-routing", unref(viewer)?.actorKey || "signed-out", workflowsOnly ? "workflows" : "configuration"]);
   const resource = useEndpointResource({
-    enabled: computed(() => Boolean(unref(enabled) && unref(viewer)?.actorKey)), path: `${ACCOUNTS_ENDPOINT}/model-routing`,
+    enabled: computed(() => Boolean(unref(enabled) && unref(viewer)?.actorKey)),
+    path: `${ACCOUNTS_ENDPOINT}/model-routing${workflowsOnly ? "/workflows" : ""}`,
     queryKey, realtime: { events: [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT] },
     queryOptions: { refetchOnMount: "always", retry: false },
     fallbackLoadError: "Model routing could not be loaded.", requestRecoveryLabel: "Model routing"

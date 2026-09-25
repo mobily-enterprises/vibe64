@@ -239,6 +239,8 @@ Repeating setup preserves saved choices, including roles the owner deliberately
 left empty. New ordinary chats
 start in Plan with review off. Creation and renewal share a workflow picker that
 previews the user's effective Plan and Code models, including Shared backup.
+It opens from saved routing and connection state without live model discovery;
+uninitialized choices say “Recommended on creation” until exact models are selected.
 Creating the first chat explicitly fills missing defaults, so included OpenCode
 works without a credential-setup step. Reading those defaults does not save them.
 Owners can open Model routing directly over the chat, with its saved workflow

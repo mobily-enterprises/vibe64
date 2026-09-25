@@ -123,6 +123,7 @@ async function mockEmptySessions(page) {
       limits: {
         openSessionCount: 0
       },
+      creation: { canCreate: true, showCreateAction: true, disabledReason: "" },
       ok: true,
       sessions: []
     });
@@ -145,6 +146,12 @@ async function mockShellStatusEndpoints(page) {
         setupPreview: { plan: decision, code: decision }
       }]
     });
+  });
+  await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", async (route) => {
+    await fulfillJson(route, { ok: true, canConfigure: true, workflows: [{
+      engineId: "codex", label: "Codex", available: true,
+      planLabel: "Codex · gpt-6-astra", codeLabel: "Codex · deepseek-flash", backupUsed: false, error: ""
+    }] });
   });
   await mockEmptySessions(page);
 }

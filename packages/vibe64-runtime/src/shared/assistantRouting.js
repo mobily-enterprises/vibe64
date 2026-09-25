@@ -123,7 +123,7 @@ function routingAssignmentSelection(engine, assignment, { purpose = "plan" } = {
 }
 
 function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configuration, catalogs = [], connectionAccess = [],
-  override, requirements = {}, reviewEnabled = false, allowSharedBackup = true } = {}) {
+  override, requirements = {}, reviewEnabled = false, allowSharedBackup = true, validateModels = true } = {}) {
   const role = ASSISTANT_PURPOSE_ROLES[purpose];
   const result = { available: false, reasonCode: "", message: "", role: role || purpose, workflowEngineId,
     settingsRevision: configuration?.revision, configuredSelection: null, effectiveSelection: null,
@@ -133,7 +133,7 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
     const assignments = configuration?.orchestrators?.[workflowEngineId];
     if (!assignments) throw routingError("Configure model routing for this workflow first.");
     if (purpose === "auto") {
-      const input = { workflowEngineId, actor, configuration, catalogs, connectionAccess, allowSharedBackup: false };
+      const input = { workflowEngineId, actor, configuration, catalogs, connectionAccess, allowSharedBackup: false, validateModels };
       const code = resolveAssistantPurpose({ ...input, purpose: "code", requirements, reviewEnabled });
       const router = resolveAssistantPurpose({ ...input, purpose: "request_routing" });
       const unavailable = [code, router].find((decision) => !decision.available);
@@ -176,6 +176,9 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
     };
     const validate = (destination, instructionPurpose, requiredCapabilities = []) => {
       if (destination.access.available === false) throw routingError("The selected AI connection is unavailable.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE);
+      // Read-only workflow choices need connection/access decisions, without
+      // launching model discovery. Dispatch always validates the model catalogue.
+      if (!validateModels) return destination;
       const engine = catalogs.find((entry) => entry.engineId === destination.selection.engineId);
       const selection = routingAssignmentSelection(engine, destination.selection, { purpose: instructionPurpose });
       const model = engine.modelProviders.find(({ id }) => id === selection.modelProviderId).models.find(({ id }) => id === selection.modelId);

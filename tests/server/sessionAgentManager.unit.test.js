@@ -139,6 +139,64 @@ test("routing configuration preview shares admission decisions and exposes no co
   assert.equal(f.manager.binding("main"), "");
 });
 
+test("workflow choices read saved pairs without model discovery and preserve collaborator backup decisions", async () => {
+  const f = routingManagerFixture();
+  f.configuration.orchestrators.opencode = { plan: f.backup, code: f.economy };
+  for (const [actor, model, backupUsed] of [
+    [{ role: "owner" }, "Codex · gpt-6-astra", false],
+    [f.options.vibe64User, "OpenCode · big-pickle", true]
+  ]) {
+    const result = await f.manager.inspectRoutingConfiguration(f.configuration, { vibe64User: actor, workflowsOnly: true });
+    const choice = result.workflows.find(({ engineId }) => engineId === "codex");
+    assert.equal(choice.available, true, choice.error);
+    assert.equal(choice.planLabel, model);
+    assert.equal(choice.backupUsed, backupUsed);
+    if (backupUsed) assert.equal(choice.codeLabel, model);
+    assert.doesNotMatch(JSON.stringify(result), /connectionIdentity|connection:/);
+  }
+  assert.equal(f.calls.some(({ type }) => type === "catalog"), false);
+  assert.equal(f.calls.some(({ assistantSelection }) => assistantSelection?.modelId === f.economy.modelId), true);
+  assert.equal(f.manager.binding("main"), "");
+  f.facts.get(f.backup.modelId).available = false;
+  const disconnected = await f.manager.inspectRoutingConfiguration(f.configuration, { ...f.options, workflowsOnly: true });
+  assert.equal(disconnected.workflows[0].available, false);
+  assert.match(disconnected.workflows[0].error, /unavailable/);
+  f.configuration.orchestrators.codex.plan = null;
+  const disabled = await f.manager.inspectRoutingConfiguration(f.configuration, { ...f.options, workflowsOnly: true });
+  assert.equal(disabled.workflows[0].available, false);
+  assert.equal(disabled.workflows[0].planLabel, "Not configured");
+  assert.equal(f.calls.some(({ type }) => type === "catalog"), false, "explicitly disabled roles do not initiate discovery");
+});
+
+test("workflow choices offer first-use connections without live discovery or saved changes", async () => {
+  const f = routingManagerFixture();
+  f.configuration.orchestrators = {};
+  const before = structuredClone(f.configuration);
+  const result = await f.manager.inspectRoutingConfiguration(f.configuration, { ...f.options, workflowsOnly: true });
+  assert.deepEqual(f.configuration, before);
+  assert.equal(result.workflows.length, 2);
+  for (const choice of result.workflows) {
+    assert.equal(choice.available, true, choice.error);
+    assert.equal(choice.planLabel, "Recommended on creation");
+    assert.equal(choice.codeLabel, "Recommended on creation");
+  }
+  assert.ok(f.calls.filter(({ type }) => type === "catalog").every(({ input }) => input.configuredOnly === "true"));
+  assert.equal(f.calls.filter(({ type }) => type === "catalog").length, 2);
+});
+
+test("the lightweight workflow preview cannot bypass model validation at dispatch", async () => {
+  const f = routingManagerFixture();
+  f.configuration.orchestrators.opencode = { plan: f.backup, code: f.economy };
+  f.configuration.orchestrators.codex.code = { ...f.code, modelId: "removed-model" };
+  f.facts.set("removed-model", { ...f.facts.get(f.code.modelId) });
+  const options = { vibe64User: { role: "owner" }, workflowsOnly: true };
+  const preview = await f.manager.inspectRoutingConfiguration(f.configuration, options);
+  assert.equal(preview.workflows[0].available, true, "the picker checks connections, not live model availability");
+  const admitted = await f.manager.resolveAssistantPurpose({ purpose: "code", workflowEngineId: "codex", validateModels: false }, options);
+  assert.equal(admitted.available, false, "request input and preview options cannot disable dispatch validation");
+  assert.match(admitted.message, /available/);
+});
+
 test("routing preview loads every connected OpenCode model page and refuses mixed catalogue revisions", async () => {
   const calls = [];
   let changed = false;

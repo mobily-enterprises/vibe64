@@ -797,6 +797,9 @@ function createClaudeSessionAgentProvider({
     async capabilities(context, input = {}) {
       const connected = await connectionStatus(context);
       const connections = await providerConnections.list();
+      if (input.configuredOnly === true || input.configuredOnly === "true") {
+        return claudeCapabilities({ models: [{ value: "sonnet", displayName: "Sonnet" }] }, connected, connections);
+      }
       if (input.modelProviderId && input.modelProviderId !== "anthropic") return claudeCapabilities({}, connected, connections);
       if (!connected) return claudeCapabilities({}, false, connections);
       if (closing) throw error("Claude is reconnecting.");

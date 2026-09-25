@@ -48,3 +48,32 @@ it("keeps owner, member and project routing responses in separate real query cac
   expect(routing.engines.value).toEqual([]);
   expect(request).toHaveBeenCalledTimes(3);
 });
+
+it("loads workflow choices independently of a slow configuration catalogue", async () => {
+  configureHttpWebClient({ request });
+  const catalogue = Promise.withResolvers();
+  request.mockImplementation((path) => path.endsWith("/workflows")
+    ? Promise.resolve({ ok: true, workflows: [{ engineId: "codex", available: true }] })
+    : catalogue.promise);
+  let configuration;
+  let picker;
+  const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  app = renderer.createApp({ setup() {
+    configuration = useModelRouting();
+    picker = useModelRouting({ workflowsOnly: true });
+    return () => null;
+  } });
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  app.use(VueQueryPlugin, { queryClient });
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, ref({ actorKey: "owner", projectSlug: "first" }));
+  app.mount({});
+  await flush();
+  expect(configuration.resource.isInitialLoading.value).toBe(true);
+  expect(picker.resource.isInitialLoading.value).toBe(false);
+  expect(picker.resource.data.value.workflows[0].engineId).toBe("codex");
+  expect(picker.scopeKey.value).not.toBe(configuration.scopeKey.value);
+  catalogue.resolve({ ok: true, engines: [{ engineId: "catalogue" }] });
+  await flush();
+  expect(configuration.engines.value[0].engineId).toBe("catalogue");
+  expect(picker.resource.data.value.workflows[0].engineId).toBe("codex");
+});

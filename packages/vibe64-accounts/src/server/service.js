@@ -2228,11 +2228,11 @@ function createService({
     });
   }
 
-  function routingView(configuration, input) {
+  function routingView(configuration, input, workflowsOnly = false) {
     if (typeof inspectRoutingConfiguration !== "function") throw new Error("Model routing is unavailable on this host.");
     const canConfigure = !codexManagementError(input);
     return inspectRoutingConfiguration(configuration, { vibe64User: input.vibe64User || null,
-      includeCollaboratorPreview: canConfigure }).then((result) => ({
+      includeCollaboratorPreview: canConfigure, workflowsOnly }).then((result) => ({
       ok: true, revision: configuration.revision, canConfigure, ...result
     }));
   }
@@ -2249,6 +2249,8 @@ function createService({
         throw new Error("Choose supported orchestrators to initialize model routing.");
       }
       const saved = await routingStore().read();
+      if (engineIds.every((id) => ASSISTANT_ROUTING_ASSIGNMENTS.every((role) =>
+        Object.hasOwn(saved.orchestrators[id] || {}, role)))) return { ok: true, initialized: [] };
       const view = await routingView(saved, input);
       const orchestrators = structuredClone(saved.orchestrators);
       const initialized = [];
@@ -2300,6 +2302,9 @@ function createService({
   return Object.freeze({
     initializeModelRouting,
     readModelRouting,
+    async readModelRoutingWorkflows(input = {}) {
+      return accountsResult(async () => routingView(await routingStore().read(), input, true));
+    },
     async previewModelRouting(input = {}) {
       return accountsResult(async () => {
         const failure = codexManagementError(input);

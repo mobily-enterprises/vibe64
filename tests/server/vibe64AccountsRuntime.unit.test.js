@@ -2191,6 +2191,37 @@ test("model routing setup initializes compatible missing roles once and preserve
   });
 });
 
+test("workflow reads use saved routing and scoped access without discovering model catalogues", async () => {
+  await withTempDir(async (root) => {
+    const f = await routingAccountsFixture(root);
+    await f.store.write({ codex: f.assignments, opencode: { plan: f.pickle, code: f.pickle } }, 0);
+    const revision = (await f.store.read()).revision;
+    const member = await f.service.readModelRoutingWorkflows({ vibe64User: f.member });
+    assert.equal(member.ok, true, member.error);
+    assert.equal(member.canConfigure, false);
+    assert.equal(member.workflows[0].planLabel, "OpenCode · big-pickle");
+    assert.equal(member.workflows[0].codeLabel, "OpenCode · big-pickle");
+    assert.equal(member.workflows[0].backupUsed, true);
+    const owner = await f.service.readModelRoutingWorkflows({ vibe64User: f.owner });
+    assert.equal(owner.canConfigure, true);
+    assert.equal(owner.workflows[0].planLabel, "Codex · gpt-6-astra");
+    assert.equal((await f.store.read()).revision, revision);
+    assert.deepEqual(f.events, []);
+    assert.doesNotMatch(JSON.stringify(member), /private-identity|connectionIdentity/);
+  });
+});
+
+test("initializing a complete saved workflow does not wait for live catalogues", async () => {
+  await withTempDir(async (root) => {
+    const f = await routingAccountsFixture(root);
+    await f.store.write({ codex: { ...f.assignments, sharedBackup: null } }, 0);
+    const service = createService({ accountRuntime: createAccountsRuntime({ systemRoot: root }),
+      inspectRoutingConfiguration: async () => { throw new Error("Model discovery must not run."); } });
+    assert.deepEqual(await service.initializeModelRouting({ engineIds: ["codex"], vibe64User: f.owner }), { ok: true, initialized: [] });
+    assert.equal((await f.store.read()).orchestrators.codex.sharedBackup, null);
+  });
+});
+
 test("model routing setup leaves an unusable workflow and incomplete catalogue untouched", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);

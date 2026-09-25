@@ -71,6 +71,39 @@ test.describe("studio startup navigation", () => {
     await expect(page.getByRole("tab", { name: "Preview", exact: true })).toHaveAttribute("aria-selected", "true");
   });
 
+  for (const width of [390, 1280]) {
+    test(`session picker uses saved workflow choices without model discovery at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await mockCurrentAppInspection(page);
+      let fullCatalogueRequests = 0;
+      let workflowRequests = 0;
+      await routeApiEndpoint(page, "/vibe64/accounts/model-routing", async (route) => {
+        fullCatalogueRequests += 1;
+        await route.abort();
+      });
+      await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", async (route) => {
+        workflowRequests += 1;
+        await fulfillJson(route, { ok: true, canConfigure: true, workflows: [{
+          engineId: "codex", label: "Codex", available: true,
+          planLabel: "Codex · gpt-6-astra", codeLabel: "Codex · deepseek-flash", backupUsed: false, error: ""
+        }] });
+      });
+      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+      await page.getByRole("button", { name: "New session", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog.getByText("Plan · Codex · gpt-6-astra", { exact: true })).toBeVisible();
+      await expect(dialog.getByText("Code · Codex · deepseek-flash", { exact: true })).toBeVisible();
+      await expect(dialog.getByRole("button", { name: "Create session", exact: true })).toBeEnabled();
+      await expect(dialog.getByRole("button", { name: "Configure model routing", exact: true })).toBeVisible();
+      expect(workflowRequests).toBe(1);
+      expect(fullCatalogueRequests).toBe(0);
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await page.getByRole("button", { name: "New session", exact: true }).click();
+      await expect(dialog.getByRole("button", { name: "Create session", exact: true })).toBeEnabled();
+      expect(fullCatalogueRequests).toBe(0);
+    });
+  }
+
   test("Health opens the read-only platform report", async ({ page }) => {
     await mockProjectGateReady(page);
     await routeApiEndpoint(page, "/studio/health", async (route) => {
