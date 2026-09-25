@@ -66,6 +66,15 @@ signal confirms it; an old stored phase cannot keep the indicator on.
 The optional phase belongs to new current-run writes; older records have no phase
 and need no historical state upgrade.
 
+Known compatibility gap: in live Codex 0.156.1 checks, an OpenAI encrypted
+compaction item passed unchanged to DeepSeek or GLM but did not preserve readable
+tool-derived facts for those models. Returning to Astra recovered the facts
+while that item remained active. If the foreign provider compacted again first,
+its text summary replaced the opaque item and Astra also lost those facts from
+active context. The original source history remained on disk. The current
+adapter does not reconstruct that history; ordinary provider-switch qualification
+does not establish compatibility after encrypted compaction.
+
 Undo last turn is a main-conversation command, available while idle. Its saved
 target identifies the latest user prompt and every following reply/activity row.
 The preceding user turn must use the same current assistant application and,
