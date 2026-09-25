@@ -2489,7 +2489,9 @@ function createService({
       };
       const session = await runtime.store.readSession(sessionId);
       if (session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
-        return runtime.store.withArchivedSession(sessionId, (archived, { publishArtifacts }) => retire(archived, true, publishArtifacts));
+        return runtime.store.withArchivedSession(sessionId, (archived, { publishArtifacts }) => retire(archived, true, publishArtifacts), {
+          beforeWork: options.beforeArchiveWork
+        });
       }
       return runMainAgentWrite(sessionId, { ...options, runtime }, ({ session }) => retire(session, false),
         { operation: "retire-native-history" });

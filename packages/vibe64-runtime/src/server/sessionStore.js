@@ -1631,7 +1631,7 @@ function createVibe64SessionStore({
     });
   }
 
-  async function withArchivedSession(sessionId, operation) {
+  async function withArchivedSession(sessionId, operation, { beforeWork } = {}) {
     if (typeof operation !== "function") {
       throw new TypeError("Archived session work requires an operation.");
     }
@@ -1655,6 +1655,7 @@ function createVibe64SessionStore({
         );
       }
       await validateSessionArchive(archiveRecord.archivePath);
+      await beforeWork?.({ stage: "extract", archivePath: archiveRecord.archivePath });
       return withExtractedSessionArchive(archiveRecord, async (sessionPaths, record) => {
         const session = await readSessionFromPaths(sessionPaths, record);
         if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED) {
@@ -1706,6 +1707,7 @@ function createVibe64SessionStore({
                 await rename(temporary, target);
               } finally { await source.close(); await rm(temporary, { force: true }); }
             }
+            await beforeWork?.({ stage: "publish", archivePath: archived.archivePath, sessionRoot: archived.sessionRoot });
             await publishExtractedSessionArchive(archived);
             return { ok: true, paths: [...published].sort() };
           } catch (error) {
@@ -1758,7 +1760,7 @@ function createVibe64SessionStore({
     } finally { await rm(candidatePath, { force: true }); }
   }
 
-  async function pruneArchivedSessionArtifacts(sessionId, { relativePaths, beforePrune } = {}) {
+  async function pruneArchivedSessionArtifacts(sessionId, { relativePaths, beforePrune, beforeWork } = {}) {
     if (typeof beforePrune !== "function") throw new TypeError("Artifact expiry requires a host callback.");
     if (!Array.isArray(relativePaths) || relativePaths.length > 1000) throw new TypeError("Artifact expiry requires a bounded exact path list.");
     const requested = [...new Set(relativePaths.map(assertSafeArtifactPath))].sort();
@@ -1769,15 +1771,18 @@ function createVibe64SessionStore({
         try { await rm(target); removed.push(relativePath); }
         catch (error) { if (!isMissingPathError(error)) throw error; }
       }
-      if (removed.length) await publishExtractedSessionArchive(session, async (candidatePath) => {
-        const proof = await beforePrune({ session, relativePaths: removed, candidatePath });
-        if (proof?.ok !== true) throw new Error("The host did not confirm artifact expiry.");
-      });
+      if (removed.length) {
+        await beforeWork?.({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
+        await publishExtractedSessionArchive(session, async (candidatePath) => {
+          const proof = await beforePrune({ session, relativePaths: removed, candidatePath });
+          if (proof?.ok !== true) throw new Error("The host did not confirm artifact expiry.");
+        });
+      }
       return { ok: true, paths: removed };
-    });
+    }, { beforeWork });
   }
 
-  async function pruneArchivedSessionAttachments(sessionId, { beforePrune } = {}) {
+  async function pruneArchivedSessionAttachments(sessionId, { beforePrune, beforeWork } = {}) {
     if (typeof beforePrune !== "function") throw new TypeError("Attachment expiry requires a host callback.");
     return withArchivedSession(sessionId, async (session) => {
       const attachmentRoot = path.join(session.artifactsRoot, "attachments");
@@ -1799,12 +1804,13 @@ function createVibe64SessionStore({
         removed.push(entry.name);
       }
       if (!removed.length) return { ok: true, attachmentIds: [] };
+      await beforeWork?.({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
       await publishExtractedSessionArchive(session, async (candidatePath) => {
         const proof = await beforePrune({ session, attachmentIds: [...removed].sort(), candidatePath });
         if (proof?.ok !== true) throw new Error("The host did not confirm attachment expiry.");
       });
       return { ok: true, attachmentIds: removed.sort() };
-    });
+    }, { beforeWork });
   }
 
   async function withPreparedRenewalSession(sessionId, operation) {

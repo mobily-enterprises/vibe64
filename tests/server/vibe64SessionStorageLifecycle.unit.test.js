@@ -147,6 +147,39 @@ async function storedFixture(root, { publish = true } = {}) {
   return store;
 }
 
+test("host capacity checks run before extraction and replacement without changing the published archive on refusal", async () => {
+  await withTemporaryRoot(async (root) => {
+    const store = await storedFixture(root);
+    const archived = await store.readSession("session-a");
+    const original = await readFile(archived.archivePath);
+    let opened = false;
+    await assert.rejects(store.withArchivedSession("session-a", () => { opened = true; }, {
+      beforeWork: async ({ stage, archivePath }) => {
+        assert.equal(stage, "extract");
+        assert.equal(archivePath, archived.archivePath);
+        throw new Error("No extraction capacity");
+      }
+    }), /No extraction capacity/u);
+    assert.equal(opened, false);
+    const stages = [];
+    await assert.rejects(store.pruneArchivedSessionArtifacts("session-a", {
+      relativePaths: ["recovery.txt"], beforePrune: async () => ({ ok: true }),
+      beforeWork: async ({ stage, sessionRoot }) => {
+        stages.push(stage);
+        if (stage === "publish") {
+          assert.ok(sessionRoot.startsWith(root));
+          throw new Error("No replacement capacity");
+        }
+      }
+    }), /No replacement capacity/u);
+    assert.deepEqual(stages, ["extract", "publish"]);
+    assert.deepEqual(await readFile(archived.archivePath), original);
+    await store.withArchivedSession("session-a", async (session) => {
+      assert.equal(await readFile(path.join(session.artifactsRoot, "recovery.txt"), "utf8"), "Keep this recovery");
+    });
+  });
+});
+
 test("preparation writes survive real archive publication without changing the session format", async () => {
   await withTemporaryRoot(async (root) => {
     const runtime = new Vibe64SessionRuntime({ projectContextRoot: root,

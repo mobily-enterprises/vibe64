@@ -75,6 +75,14 @@ have archived status before the operation runs. The published metadata must
 identify the exact requested session.
 
 The callback's return value is returned to the caller. An exception propagates.
+An optional third argument `{ beforeWork }` runs a trusted host callback inside
+the archive lock before extraction and before replacement compression. It
+receives `{ stage: "extract", archivePath }` or
+`{ stage: "publish", archivePath, sessionRoot }`. Throwing defers work without
+changing the published archive. Both prune operations accept `beforeWork` in
+their input; native retirement forwards `beforeArchiveWork` to this boundary.
+The host owns capacity estimates and any free-space reserve. Standalone access
+has no new storage policy.
 Both paths remove the temporary extraction and release the lock. Treat the
 extraction as read-only and use its scoped `publishArtifacts(files)` capability
 for explicit publication. Each of at most 1,000 files supplies a validated

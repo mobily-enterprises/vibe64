@@ -109,6 +109,8 @@ files into the extraction, validates and syncs a compressed replacement, and
 publishes it atomically under the already-held archive lock. Hosts can preserve
 native-only chat text in the canonical archive before provider retirement.
 The archive's metadata, messages, index and original archival time stay unchanged.
+An optional host callback checks capacity before extraction and replacement
+compression under the archive lock; refusal preserves the published archive.
 This is an archive access boundary,
 not proof of native-provider ownership, writer shutdown, transcript completeness,
 or permission to delete provider history. Consumers retain those responsibilities.
