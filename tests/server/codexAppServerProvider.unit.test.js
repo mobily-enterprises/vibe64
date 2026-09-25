@@ -27,6 +27,7 @@ import {
   codexAppServerEndpointForTarget,
   codexAppServerEconomyHomeDir,
   codexAppServerEconomyWorkspaceDir,
+  codexAppServerMetadataIsLive,
   codexAppServerRequestIsInvalid,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
@@ -224,7 +225,7 @@ function metadataForRuntime(runtimeDir, {
       userKey
     }),
     healthz: "",
-    historyAdapterBaseUrl: `http://127.0.0.1:23456/${processIdentity?.runtimeToken || "11111111-1111-4111-8111-111111111111"}`,
+    historyAdapterBaseUrl: `http://127.0.0.1:23456/${processIdentity?.runtimeToken || "11111111-1111-4111-8111-111111111111"}/v2`,
     logPath: path.join(runtimeDir, "app-server.log"),
     pid,
     processCwd: runtimeDir,
@@ -267,7 +268,7 @@ function codexAppServerCommandRunner(runtimeDir, commandCalls = []) {
       writeFileSync(socketPathForRuntime(runtimeDir), "");
       const runtimeToken = request.baseEnv.VIBE64_CODEX_APP_SERVER_RUNTIME_TOKEN;
       writeFileSync(path.join(runtimeDir, "history-adapter.json"), JSON.stringify({
-        baseUrl: `http://127.0.0.1:23456/${runtimeToken}`, runtimeToken
+        baseUrl: `http://127.0.0.1:23456/${runtimeToken}/v2`, runtimeToken
       }));
     }
     commandCalls.push(request);
@@ -874,6 +875,20 @@ test("codex provider reuses a live app-server runtime from Vibe64 metadata", asy
     assert.equal(runtime.endpoint, metadata.endpoint);
     assert.equal(runtime.provider, CODEX_APP_SERVER_PROVIDER_ID);
     assert.equal(runtime.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
+  });
+});
+
+test("an older live history adapter is incompatible without changing its process identity or metadata schema", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const metadata = metadataForRuntime(runtimeDir);
+    await writeFile(metadata.socketPath, "");
+    const options = { authStateSignature: metadata.authStateSignature, processGroupIsAlive: () => true,
+      WebSocketImpl: ResponsiveFakeWebSocket };
+    assert.equal(await codexAppServerMetadataIsLive(metadata, options), true);
+    const older = { ...metadata, historyAdapterBaseUrl: metadata.historyAdapterBaseUrl.replace(/\/v2$/u, "") };
+    assert.equal(await codexAppServerMetadataIsLive(older, options), false);
+    assert.deepEqual(older.processIdentity, metadata.processIdentity);
+    assert.equal(older.schemaVersion, metadata.schemaVersion);
   });
 });
 

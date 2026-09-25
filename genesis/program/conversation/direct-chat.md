@@ -66,14 +66,14 @@ signal confirms it; an old stored phase cannot keep the indicator on.
 The optional phase belongs to new current-run writes; older records have no phase
 and need no historical state upgrade.
 
-Known compatibility gap: in live Codex 0.156.1 checks, an OpenAI encrypted
-compaction item passed unchanged to DeepSeek or GLM but did not preserve readable
-tool-derived facts for those models. Returning to Astra recovered the facts
-while that item remained active. If the foreign provider compacted again first,
-its text summary replaced the opaque item and Astra also lost those facts from
-active context. The original source history remained on disk. The current
-adapter does not reconstruct that history; ordinary provider-switch qualification
-does not establish compatibility after encrypted compaction.
+Codex's encrypted OpenAI compaction cannot convey readable facts to DeepSeek or
+GLM. On a foreign request containing that item, the managed adapter supplies
+the saved readable conversation from before the exact native compaction boundary.
+This also supplies context to native foreign compaction, so returning to Astra
+can retain those facts after the foreign model summarizes. It adds no model call
+and never rewrites the native rollout. Single-provider requests and ordinary text
+summaries trigger no recovery reads; helper models elsewhere do not enable it.
+This preserves recorded text, not the originating model's opaque internal state.
 
 Undo last turn is a main-conversation command, available while idle. Its saved
 target identifies the latest user prompt and every following reply/activity row.
@@ -377,12 +377,33 @@ also covers those failed historical calls. Current tool definitions and streamed
 responses are unchanged, and the original rollout remains intact for Astra.
 DeepSeek credentials stay on its fixed upstream; they never use the OpenAI route.
 
+Curated DeepSeek and GLM resumes bind the native thread/read path into the local
+adapter URL. That private path never reaches an upstream. Recovery verifies it
+inside the managed process's Codex home, checks the rollout's conversation ID,
+and matches the exact encrypted boundary. Existing native metadata reads provide
+the path; no second history store or background process is introduced. The
+adapter rereads a bounded snapshot when recovery is needed, so reconnects and
+process restarts do not depend on a reconstruction cache. GLM's ordinary history
+passes through unchanged.
+
+Recovery labels original readable user/assistant messages, reasoning and tool
+records as historical context. It excludes old system/developer instructions and
+opaque reasoning. Missing or ambiguous boundaries, Undo/fork histories, unknown
+items, non-text attachments and oversized histories stop the foreign request
+with an explanation. It never discards readable records to fit. The initial
+limit is 32 MiB of saved rollout and a conservative complete-request byte budget
+of at most three quarters of the model's advertised token window, reserving any
+larger requested output allowance too. This deliberately rejects some histories
+that might fit with a provider-specific tokenizer. Continue with the previous
+model or use a new conversation when recovery is unsupported.
+
 The adapter bounds and decodes request bodies, forwards streamed HTTP responses,
 aborts upstream when native delivery disconnects, and adds no inference retry.
 It rejects WebSocket upgrades explicitly so the built-in provider falls back to
 HTTP. Models and native compaction use the same fixed upstream boundary.
 The runtime descriptor is private and tied to its existing process identity;
-older runtimes without the adapter retire once through normal owned cleanup.
+older runtimes without its thread-bound `v2` route retire once through normal
+owned cleanup. The metadata schema and saved conversations are unchanged.
 Focused transport tests cover cancellation, stream failure and process shutdown.
 The native fixture covers DeepSeek reasoning with opaque state and GLM reasoning
 with null opaque state, provider round trips, tools, another conversation and

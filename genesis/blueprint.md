@@ -406,6 +406,11 @@ main connections and actor positions work across session databases with the same
 schema. MySQL database names are resolved from the selected session; PostgreSQL
 schema distinctions remain explicit. Actual missing tables or connections still
 need review.
+In mixed-model Codex chats, switching after Astra compacts can recover the saved
+readable conversation for DeepSeek or GLM without an extra AI call. Ordinary single-model chats require
+no recovery. Unsupported histories, including Undo boundaries, non-text attachments
+or excessive size, explain why the handoff cannot proceed rather than silently
+dropping context. The saved conversation remains intact.
 The first project message carries the relevant Genesis task prompt; later
 messages and active-turn steering stay concise instead of rebuilding it. The
 project's shorter durable operating guide is loaded when a conversation is

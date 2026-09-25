@@ -1834,8 +1834,10 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
 }
 
 function codexHistoryAdapterUrlIsValid(baseUrl, token) {
-  const match = typeof baseUrl === "string" && /^http:\/\/127\.0\.0\.1:([1-9]\d{0,4})\/[0-9a-f-]{36}$/iu.exec(baseUrl);
-  return Boolean(match && Number(match[1]) <= 65535 && baseUrl.endsWith(`/${token}`));
+  // The previous adapter cannot serve thread-bound compaction recovery. Keep
+  // its process identity readable, but retire it through normal owned cleanup.
+  const match = typeof baseUrl === "string" && /^http:\/\/127\.0\.0\.1:([1-9]\d{0,4})\/[0-9a-f-]{36}\/v2$/iu.exec(baseUrl);
+  return Boolean(match && Number(match[1]) <= 65535 && baseUrl.endsWith(`/${token}/v2`));
 }
 
 async function readCodexAppServerMetadata(runtimeDir = "") {
@@ -3578,7 +3580,7 @@ class CodexAppServerAgentProvider {
       response = await this.withThreadEnvironment(threadId, params, (requestParams, resumed) =>
         resumed || client.request("thread/resume", { excludeTurns: true, ...requestParams, threadId }));
     } else {
-      params = await this.withHistoryAdapter(params, client);
+      params = await this.withHistoryAdapter(params, client, { threadId });
       const requestParams = codexAppServerThreadRequestParams(params, this.options.threadEnv);
       response = await this.runRequest(
         () => client.request("thread/resume", {
@@ -3602,14 +3604,21 @@ class CodexAppServerAgentProvider {
   async withHistoryAdapter(params, client, options = {}) {
     if (!this.runtime?.historyAdapterBaseUrl) return params;
     const modelProvider = params.modelProvider || this.options.modelProviderId || "openai";
-    if (modelProvider === "deepseek") {
-      const configKey = "model_providers.deepseek";
+    if (curatedCodexProvider(modelProvider)) {
+      const configKey = `model_providers.${modelProvider}`;
       const config = params.config?.[configKey];
       // Only the curated route owns these credentials. Do not redirect an
       // unrelated custom provider to our fixed upstream.
-      if (config?.base_url !== curatedCodexProvider(modelProvider).baseUrl) return params;
+      const baseUrl = `${this.runtime.historyAdapterBaseUrl}/${modelProvider}`;
+      if (config?.base_url !== curatedCodexProvider(modelProvider).baseUrl &&
+          config?.base_url !== baseUrl && !config?.base_url?.startsWith(`${baseUrl}/history/`)) return params;
+      let historyPath = options.historyPath;
+      if (!historyPath && options.threadId) {
+        const { thread } = await client.request("thread/read", { threadId: options.threadId, includeTurns: false }, { signal: options.signal });
+        historyPath = thread?.path;
+      }
       return { ...params, config: { ...params.config,
-        [configKey]: { ...config, base_url: `${this.runtime.historyAdapterBaseUrl}/deepseek` }
+        [configKey]: { ...config, base_url: historyPath ? `${baseUrl}/history/${Buffer.from(historyPath).toString("base64url")}` : baseUrl }
       } };
     }
     if (modelProvider !== "openai") return params;
@@ -3664,9 +3673,11 @@ class CodexAppServerAgentProvider {
         }
       };
       let nativeModelProvider = "";
+      let nativeHistoryPath = "";
       const readStatus = async () => {
         const { thread } = await request("thread/read", { threadId, includeTurns: false });
         nativeModelProvider = thread?.modelProvider || "";
+        nativeHistoryPath = thread?.path || "";
         return typeof thread?.status === "string" ? thread.status : thread?.status?.type;
       };
       const nativeStatus = await readStatus();
@@ -3676,7 +3687,7 @@ class CodexAppServerAgentProvider {
         requestParams = { ...requestParams, modelProvider: nativeModelProvider };
         requestParams = await this.options.prepareThreadParams?.(requestParams) || requestParams;
       }
-      requestParams = await this.withHistoryAdapter(requestParams, client, { signal });
+      requestParams = await this.withHistoryAdapter(requestParams, client, { signal, historyPath: nativeHistoryPath });
       const providerChanged = Boolean(requestParams.modelProvider && nativeModelProvider &&
         requestParams.modelProvider !== nativeModelProvider);
       if (providerChanged) {

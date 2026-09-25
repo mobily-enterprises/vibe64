@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { rename, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { startCodexHistoryAdapter } from "./codexHistoryAdapter.js";
 
@@ -8,7 +9,7 @@ import { startCodexHistoryAdapter } from "./codexHistoryAdapter.js";
 const [runtimeDir, command, ...args] = process.argv.slice(2);
 const token = process.env.VIBE64_CODEX_APP_SERVER_RUNTIME_TOKEN;
 const descriptor = path.join(runtimeDir, "history-adapter.json");
-const adapter = await startCodexHistoryAdapter({ token });
+const adapter = await startCodexHistoryAdapter({ token, codexHome: process.env.CODEX_HOME || path.join(os.homedir(), ".codex") });
 await writeFile(`${descriptor}.tmp`, JSON.stringify({ baseUrl: adapter.baseUrl, runtimeToken: token }), { mode: 0o600 });
 await rename(`${descriptor}.tmp`, descriptor);
 const child = spawn(command, args, { stdio: "inherit" });
