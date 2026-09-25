@@ -735,9 +735,12 @@ function createClaudeSessionAgentProvider({
   }
 
   async function restoreSessionEntries(ctx) {
-    for (const [key, value] of Object.entries(ctx.session?.metadata || {})) {
+    // Other conversations can close after this entry captured its context.
+    // Restoring from that snapshot would recreate their deleted process records.
+    const session = ctx.assistantScope ? null : await ctx.runtime.getSession(ctx.sessionId, { inspectSource: false });
+    for (const [key, value] of Object.entries(session?.metadata || {})) {
       if (key.startsWith("claude_conversation_") && key !== "claude_conversation_id" && value) {
-        await entryFor(ctx, key.slice("claude_conversation_".length));
+        await entryFor({ ...ctx, session }, key.slice("claude_conversation_".length));
       }
     }
     return [...entries.values()].filter((entry) => entry.context.key === ctx.key);

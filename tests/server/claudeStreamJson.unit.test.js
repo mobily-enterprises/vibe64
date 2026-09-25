@@ -436,6 +436,47 @@ test("Claude recovers exact admission and temporary history without resending af
   await assert.rejects(restored.readConversation(f.context, { conversationId: temporary.conversationId }), /unavailable/u);
 });
 
+test("Claude shutdown cannot restore a closed temporary chat from a cached main snapshot", async (t) => {
+  const f = await fixture(t);
+  const recovered = [];
+  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    stopExecution: async (id) => { recovered.push(id); return { scopeEmpty: false }; } });
+  await provider.sessionState(f.context);
+  const temporary = await provider.createConversation(f.context);
+  await provider.startConversationTurn(f.context, {
+    conversationId: temporary.conversationId, message: "Temporary", messageId: "temp"
+  });
+  // Main polling retains its own snapshot while the temporary process is active.
+  const stale = { ...f.context, session: structuredClone(f.context.session) };
+  await provider.sessionState(stale);
+  await provider.deleteConversation({ ...f.context, session: structuredClone(f.context.session) }, temporary);
+  const key = `claude_conversation_${temporary.conversationId}`;
+  assert.equal(Object.hasOwn(f.context.session.metadata, key), false);
+  assert.equal(f.processes[0].stopped, true);
+
+  assert.equal((await provider.closeProject()).ok, true);
+  assert.deepEqual(recovered, [], "Closed execution must not be recovered from an old snapshot");
+  assert.equal(Object.hasOwn(f.context.session.metadata, key), false);
+});
+
+test("Claude recovery discovers saved processes created after its supplied snapshot", async (t) => {
+  const f = await fixture(t);
+  await f.provider.sessionState(f.context);
+  const stale = { ...f.context, session: structuredClone(f.context.session) };
+  const temporary = await f.provider.createConversation(f.context);
+  await f.provider.startConversationTurn(f.context, {
+    conversationId: temporary.conversationId, message: "Temporary", messageId: "temp"
+  });
+  const recovered = [];
+  const restarted = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    stopExecution: async (id) => { recovered.push(id); return { scopeEmpty: true }; } });
+  assert.equal((await restarted.closeSession(stale)).ok, true);
+  assert.deepEqual(recovered, [f.processes[0].executionId]);
+  const saved = JSON.parse(f.context.session.metadata[`claude_conversation_${temporary.conversationId}`]);
+  assert.equal(saved.executionId, "");
+  assert.equal(saved.state, "interrupted");
+});
+
 test("Claude admission inspection uses the shared contract and native history prevents duplicate sends", async (t) => {
   const f = await fixture(t);
   const ready = await f.provider.ensureSession(f.context);

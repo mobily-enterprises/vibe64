@@ -122,6 +122,10 @@ invalidate access, suggestions and renewal queries. Session lists ignore events
 identified as belonging to another project. Deleting a temporary Claude chat
 removes its metadata record instead of accumulating empty files that every
 session read would reopen.
+Claude process restoration reads current saved session metadata, rather than a
+snapshot retained by another conversation. Closing a temporary chat cannot later
+recreate its deleted execution record during changeover or shutdown. Saved
+processes still require verified stop evidence.
 
 The conversation client overlays realtime upserts received during each pending
 history request before publishing that response to the query cache. Upserts
@@ -355,7 +359,8 @@ If a read sees completion before the idle event, the coordinator may review a
 Code request it admitted in the current process. After a server restart, the
 same recovered completion requires explicit Retry/Skip instead.
 Preparation failures retain Retry and Skip. Skipping an unstarted review clears
-its preparation error so the composer no longer asks the user to cancel it.
+its preparation error and finishes the completed coding request immediately,
+without waiting for another native completion event.
 A review stopped after admission is
 incomplete and needs a new explicit request; even a late native success cannot
 overwrite its cancellation. Completion must match the exact admitted turn,

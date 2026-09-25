@@ -240,7 +240,8 @@ in-scope defects. Its findings state what was checked; completion is not a
 guarantee of correctness. Hosted AI work rechecks the submitting user's current
 access before starting, including automatic review and Retry. Removing that
 user blocks further inference without losing completed coding work. Stop
-cancels pending review, and an interrupted review
+cancels pending review. Skipping an unstarted review finishes the request and
+clears its preparation warning immediately. An interrupted review
 remains incomplete. An unanswered structured question keeps the coding model
 selected and skips review so the user can answer first. Goals require a concrete
 mode and model, with Auto and automatic review unavailable. In Auto, the goal
@@ -1065,6 +1066,7 @@ The host owns that conversation's permissions, persistence and actions.
 Their messages stay out of main History. Close stops the conversation and any
 active goal, confirms cleanup, and deletes its conversation data and attachments
 while preserving project edits. Failed cleanup remains visible and retryable.
+Closed Claude chats stay closed through assistant changeover and server shutdown.
 Successful Close removes that chat from other connected browsers; reconnecting
 reconciles missed closures. Draft saves wait for brief assistant-operation
 contention and retry automatically when it remains busy.
