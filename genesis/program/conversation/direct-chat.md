@@ -125,7 +125,10 @@ session read would reopen.
 Claude process restoration reads current saved session metadata, rather than a
 snapshot retained by another conversation. Closing a temporary chat cannot later
 recreate its deleted execution record during changeover or shutdown. Saved
-processes still require verified stop evidence.
+processes still require verified stop evidence. A Claude entry retains its resolved
+assistant selection for later cleanup, including when it originally read that
+selection from session metadata. Moving Main to Codex or OpenCode cannot make
+shutdown reinterpret the retained Claude process as the new engine.
 
 The conversation client overlays realtime upserts received during each pending
 history request before publishing that response to the query cache. Upserts

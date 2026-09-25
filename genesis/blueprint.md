@@ -1075,6 +1075,8 @@ Their messages stay out of main History. Close stops the conversation and any
 active goal, confirms cleanup, and deletes its conversation data and attachments
 while preserving project edits. Failed cleanup remains visible and retryable.
 Closed Claude chats stay closed through assistant changeover and server shutdown.
+Shutdown can also stop retained Claude processes after Main moves to another AI,
+while preserving the new selection and conversation history.
 Successful Close removes that chat from other connected browsers; reconnecting
 reconciles missed closures. Draft saves wait for brief assistant-operation
 contention and retry automatically when it remains busy.
