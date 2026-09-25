@@ -20,6 +20,8 @@ old history is not backfilled.
 Composer spacing closes in narrow panes so the companion control does not push
 Send or Stop onto another row. Compact icon widths and horizontal padding keep
 all controls together while preserving existing touch-target heights.
+Send and Steer render their icons through the button's native icon property.
+The approval label uses its text property so an empty slot cannot hide either icon.
 OpenCode waits for its project event connection before sending, allowing cold
 initialization up to two minutes. A pre-send connection timeout is retryable.
 Each attempt retains its own failure notice, so resending the same message

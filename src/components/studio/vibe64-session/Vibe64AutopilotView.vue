@@ -587,10 +587,9 @@
                       :aria-busy="composerSending && !composerCanSubmit ? 'true' : undefined" color="primary" size="small" variant="flat"
                       :icon="composerSuggesting ? undefined : (composerSubmitMode === 'send' ? mdiSend : mdiArrowTopRight)"
                       :prepend-icon="composerSuggesting ? mdiAccountArrowRightOutline : undefined"
+                      :text="composerSuggesting ? 'Send for approval' : undefined"
                       class="studio-autopilot__composer-action" @click="sendComposerMessage"
-                    >
-                      <template v-if="composerSuggesting">Send for approval</template>
-                    </v-btn>
+                    />
                   </div>
                 </div>
               </template>
