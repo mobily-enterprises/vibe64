@@ -63,7 +63,10 @@ test("short follow-ups receive their latest exchange and bounded older context",
 test("the classifier cannot supply executable destinations or malformed decisions", () => {
   assert.deepEqual(parseRoutingDecision('{"mode":"code","reason":"explicit_implementation"}'), { mode: "code", reason: "explicit_implementation" });
   for (const output of ["code", "null", '{"mode":"economy","reason":"unclear"}',
-    '{"mode":"code","reason":"explicit_implementation","url":"https://example.invalid"}']) {
+    '{"mode":"code","reason":"explicit_implementation","url":"https://example.invalid"}',
+    ...["engineId", "modelId", "command"].map((key) => JSON.stringify({
+      mode: "code", reason: "explicit_implementation", [key]: "untrusted-router-value"
+    }))]) {
     assert.throws(() => parseRoutingDecision(output), /Routing returned/);
   }
 });
@@ -230,21 +233,31 @@ test("foreign Backup moves both effective roles even when Code is accessible and
 test("foreign Backup moves accessible Plan when only Code is personal", () => {
   const f = routingFixture();
   Object.assign(f.input.configuration.orchestrators.codex, { plan: f.roles.code, code: f.roles.plan });
-  const result = f.resolve("plan");
-  assert.equal(result.available, true, result.message);
-  assert.equal(result.effectiveSelection.engineId, "opencode");
-  assert.equal(result.planCodePair.plan.backupReason, "keep_workflow_together");
-  assert.equal(result.planCodePair.code.backupReason, "personal_connection");
+  for (const reviewEnabled of [false, true]) {
+    for (const purpose of ["plan", "code", "review"]) {
+      const result = f.resolve(purpose, { reviewEnabled });
+      assert.equal(result.available, true, result.message);
+      assert.equal(result.effectiveSelection.engineId, "opencode");
+      assert.equal(result.planCodePair.plan.backupReason, "keep_workflow_together");
+      assert.equal(result.planCodePair.code.backupReason, "personal_connection");
+      assert.deepEqual(result.planCodePair.plan.effectiveSelection, result.planCodePair.code.effectiveSelection);
+    }
+  }
 });
 
 test("both personal roles share the same foreign Backup without inventing another assignment", () => {
   const f = routingFixture();
   f.input.configuration.orchestrators.codex.code = { ...f.roles.plan, modelId: "gpt-6-sol" };
-  const result = f.resolve("code", { reviewEnabled: true });
-  assert.equal(result.available, true, result.message);
-  assert.equal(result.planCodePair.plan.backupReason, "personal_connection");
-  assert.equal(result.planCodePair.code.backupReason, "personal_connection");
-  assert.deepEqual(result.planCodePair.plan.effectiveSelection, result.planCodePair.code.effectiveSelection);
+  for (const reviewEnabled of [false, true]) {
+    for (const purpose of ["plan", "code", "review"]) {
+      const result = f.resolve(purpose, { reviewEnabled });
+      assert.equal(result.available, true, result.message);
+      assert.equal(result.effectiveSelection.engineId, "opencode");
+      assert.equal(result.planCodePair.plan.backupReason, "personal_connection");
+      assert.equal(result.planCodePair.code.backupReason, "personal_connection");
+      assert.deepEqual(result.planCodePair.plan.effectiveSelection, result.planCodePair.code.effectiveSelection);
+    }
+  }
 });
 
 test("same-engine Backup substitutes personal Plan without replacing an accessible different coder", () => {
@@ -254,11 +267,17 @@ test("same-engine Backup substitutes personal Plan without replacing an accessib
   roles.code = { ...f.roles.plan, modelId: "gpt-6-sol" };
   f.input.connectionAccess.push({ engineId: "codex", modelProviderId: "openai", modelId: "gpt-6-sol",
     ownerOnly: false, available: true, connectionIdentity: "shared-openai-api" });
-  const result = f.resolve("code", { reviewEnabled: true });
-  assert.equal(result.available, true, result.message);
-  assert.equal(result.effectiveSelection.modelId, "gpt-6-sol");
-  assert.equal(result.backupUsed, false);
-  assert.equal(result.planCodePair.plan.effectiveSelection.modelId, "deepseek-flash");
+  for (const reviewEnabled of [false, true]) {
+    for (const purpose of ["plan", "code", "review"]) {
+      const result = f.resolve(purpose, { reviewEnabled });
+      assert.equal(result.available, true, result.message);
+      assert.equal(result.effectiveSelection.engineId, "codex");
+      assert.equal(result.effectiveSelection.modelId, purpose === "code" ? "gpt-6-sol" : "deepseek-flash");
+      assert.equal(result.backupUsed, purpose !== "code");
+      assert.equal(result.planCodePair.plan.effectiveSelection.modelId, "deepseek-flash");
+      assert.equal(result.planCodePair.code.effectiveSelection.modelId, "gpt-6-sol");
+    }
+  }
 });
 
 test("Economy helpers stay independent of the Backup pair and Router has a distinct assignment", () => {
