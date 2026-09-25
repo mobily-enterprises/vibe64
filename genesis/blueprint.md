@@ -191,6 +191,8 @@ in order. A failed bubble shows its error and Retry, which reuses that message's
 identity and preserves the current draft.
 An interruption failure stays visible without covering the composer or its retry controls.
 Repair conversations keep their input and action buttons visible on small screens.
+Main and temporary chat restore uploaded files visibly alongside saved drafts.
+New uploads keep existing files, and removing one updates its numbered references.
 Long drafts scroll inside the input; repair details start collapsed, and a shared
 connection notice replaces repeated reconnection warnings. Failed automatic repair
 requests show a short description instead of internal agent instructions.

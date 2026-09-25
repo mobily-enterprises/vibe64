@@ -187,19 +187,12 @@
                 <v-btn v-if="routingRequest.status === 'review_pending'" variant="text" min-height="48" @click="stopTask(activeTask.id)">Skip review</v-btn>
               </div>
             </v-alert>
-          <div v-if="activeTask.restoredAttachments?.length" aria-label="Saved draft attachments">
-            <v-chip
-              v-for="attachment in activeTask.restoredAttachments" :key="attachment.attachmentId"
-              closable :disabled="taskInputDisabled(activeTask)"
-              @click:close="temporary.removeRestoredAttachment(activeTask.id, attachment.attachmentId)"
-            >
-              {{ attachment.reference }} {{ attachment.fileName }}
-            </v-chip>
-          </div>
           <Vibe64AutopilotPromptTextarea
             v-for="task in temporary.tasks.value"
             v-show="task.id === activeTask.id"
             :key="task.id"
+            :saved-attachments="task.attachments"
+            attachments-owned-by-conversation
             :ref="(element) => setTaskPrompt(task.id, element)"
             class="vibe64-temporary-ai__composer"
             :model-value="task.draft && (task.displayMessage || task.draft)"

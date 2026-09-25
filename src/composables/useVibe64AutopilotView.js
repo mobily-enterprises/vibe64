@@ -432,6 +432,7 @@ function useVibe64AutopilotView(props, emit, {
     Array.isArray(props.sessionToolbar?.sessions) && props.sessionToolbar.sessions.length
   ));
 
+  const composerKey = computed(() => JSON.stringify([actorKey.value, projectSlug.value, sessionId.value]));
   const composerDraft = ref("");
   const composerAttachments = ref([]);
   const composerRetrySubmission = ref(null);
@@ -449,7 +450,7 @@ function useVibe64AutopilotView(props, emit, {
   function restoreComposerState() {
     restoringComposer = true;
     composerStorageKey = actorKey.value && projectSlug.value && sessionId.value
-      ? `vibe64:chat-composer:v1:${JSON.stringify([actorKey.value, projectSlug.value, sessionId.value])}` : "";
+      ? `vibe64:chat-composer:v1:${composerKey.value}` : "";
     try {
       const saved = composerStorageKey && typeof window !== "undefined"
         ? JSON.parse(window.sessionStorage?.getItem(composerStorageKey) || "null") : null;
@@ -2236,6 +2237,7 @@ function useVibe64AutopilotView(props, emit, {
     chatReloadAvailable,
     chatReloading,
     chatTurns,
+    composerKey,
     composerAttachments,
     composerAttachmentsEnabled,
     composerAttachmentsSupported,

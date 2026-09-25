@@ -436,6 +436,8 @@
             </div>
             <Vibe64AutopilotPromptTextarea
               ref="composerInput"
+              :key="composerKey"
+              :saved-attachments="composerAttachments"
               v-model="composerDraft"
               :aria-label="assistantCanRequestMessage ? 'Message for owner approval' : 'Message AI assistant'"
               :attachments-enabled="composerAttachmentsEnabled"
@@ -1162,6 +1164,7 @@ const {
   chatReloadAvailable,
   chatReloading,
   chatTurns,
+  composerKey,
   composerAttachments,
   composerAttachmentsEnabled,
   composerAttachmentsSupported,

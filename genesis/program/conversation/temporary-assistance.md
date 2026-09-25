@@ -11,6 +11,12 @@ hides the host conversation without deleting its saved history.
 The workspace exposes its selected visibility to the parent so Main chat's
 optional companions cannot keep targeting Main while another chat is selected.
 
+Saved composer attachments use the same visible queue as new uploads. The composer
+combines saved receipts with its pending upload queue, retains completed uploads
+when a saved view closes, and still cancels unfinished uploads. Restored files count
+against the normal attachment limit; additions and removals keep numbered text
+references consistent. A confirmed send clears only its accepted receipts.
+
 ## Sources
 
 - `packages/vibe64-core/src/server/featureRoutes.js`

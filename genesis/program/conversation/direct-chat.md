@@ -153,6 +153,12 @@ exact previous execution owner's scope empty. A missing file by itself is never
 accepted as proof. Runtime sharing and shutdown follow the provider's runtime,
 so retaining a different provider does not skip the selected provider's cleanup.
 
+Saved composer attachments use the same visible queue as new uploads. The composer
+combines saved receipts with its pending upload queue, retains completed uploads
+when a saved view closes, and still cancels unfinished uploads. Restored files count
+against the normal attachment limit; additions and removals keep numbered text
+references consistent. A confirmed send clears only its accepted receipts.
+
 ## Sources
 
 - `packages/vibe64-terminals/src/server/assistantRouting.js`

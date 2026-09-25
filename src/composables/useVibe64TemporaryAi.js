@@ -275,7 +275,6 @@ function useVibe64TemporaryAi({
           apiPath,
           agentSettings: normalizeVibe64AgentSettings(record.agentSettings),
           attachments: record.attachments || [],
-          restoredAttachments: record.attachments || [],
           pendingMessageId: "",
           delivery: createAssistantMessageDelivery(),
           draft: record.draft || "",
@@ -354,7 +353,6 @@ function useVibe64TemporaryAi({
       agentSettings: normalizeVibe64AgentSettings(readRefOrGetterValue(agentSettings)),
       apiPath: currentSessionsApiPath(),
       attachments: [],
-      restoredAttachments: [],
       busy: false,
       completionMessage: temporaryAiText(completionMessage),
       conversationId: "",
@@ -577,7 +575,7 @@ function useVibe64TemporaryAi({
       return;
     }
     updateTask(taskId, {
-      attachments: [...(task.restoredAttachments || []), ...(Array.isArray(attachments) ? attachments : [])]
+      attachments: Array.isArray(attachments) ? attachments : []
     });
   }
 
@@ -790,7 +788,6 @@ function useVibe64TemporaryAi({
       updateTask(taskId, {
         attachments: current.attachments.filter((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId)),
         ...(response.assistantRoutingRequest ? { routingMetadata: { ...current.routingMetadata, assistant_routing_request: JSON.stringify(response.assistantRoutingRequest) } } : {}),
-        restoredAttachments: current.restoredAttachments.filter((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId)),
         busy: temporaryAiTurnIsActive(status),
         ...(Object.hasOwn(response, "goal") ? { goal: response.goal } : {}),
         conversationId,
@@ -1038,14 +1035,6 @@ function useVibe64TemporaryAi({
     reportRecoveryOutcome,
     restoreError,
     restoreTasks,
-    removeRestoredAttachment(taskId, attachmentId) {
-      const task = tasks.value.find((candidate) => candidate.id === taskId);
-      if (!task) return;
-      updateTask(taskId, {
-        restoredAttachments: task.restoredAttachments.filter((attachment) => attachment.attachmentId !== attachmentId),
-        attachments: task.attachments.filter((attachment) => attachment.attachmentId !== attachmentId)
-      });
-    },
     selectTask,
     send,
     showWorkspace,

@@ -36,13 +36,13 @@
   </AssistantPromptInput>
 </template>
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import {
   useVibe64AttachmentCommands
 } from "@/composables/useVibe64AttachmentCommands.js";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import {
-  useAgentAttachments
+  useAgentAttachments, codexAttachmentFilesFromDropEvent, codexAttachmentFilesFromPasteEvent
 } from "@/composables/useAgentAttachments.js";
 import { AssistantPromptInput } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64AttachmentQueue from "@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue";
@@ -68,6 +68,8 @@ const props = defineProps({
     default: "",
     type: String
   },
+  savedAttachments: { type: Array, default: null },
+  attachmentsOwnedByConversation: Boolean,
   attachmentsEnabled: {
     default: true,
     type: Boolean
@@ -149,17 +151,14 @@ const attachmentFeedback = useUiFeedback({
 });
 const attachments = useAgentAttachments({
   canUpload: () => props.attachmentsEnabled && !props.disabled,
-  deleteAttachment: attachmentCommands.deleteAttachment,
+  deleteAttachment: deleteUploadedFile,
   onError: attachmentFeedback.error,
   onUploaded: async (uploaded) => {
     const labeled = labelComposerAttachments(uploadedAttachments.value);
-    for (const attachment of uploadedAttachments.value) {
-      attachment.reference = labeled.find((item) => item.attachmentId === attachment.attachmentId).reference;
-    }
     const textarea = textareaRef.value;
     const text = textarea?.value ?? props.modelValue;
     const position = textarea?.selectionEnd ?? text.length;
-    const references = uploaded.map((attachment) => attachment.reference).join(" ");
+    const references = uploaded.map((attachment) => labeled.find((item) => item.attachmentId === attachment.attachmentId).reference).join(" ");
     const before = text.slice(0, position);
     const after = text.slice(position);
     const inserted = `${before && !/\s$/u.test(before) ? " " : ""}${references} `;
@@ -176,12 +175,18 @@ const attachments = useAgentAttachments({
   uploadAttachment
 });
 const dragActive = attachments.dragActive;
-const uploadedAttachments = attachments.attachments;
+const restoredAttachments = computed(() => (props.savedAttachments || [])
+  .filter((saved) => !attachments.attachments.value.some((file) => file.attachmentId === saved.attachmentId)));
+const uploadedAttachments = computed(() => labelComposerAttachments([...restoredAttachments.value, ...attachments.attachments.value]));
 const attachmentUploading = attachments.uploading;
-const queueItems = attachments.queueItems;
+const queueItems = computed(() => [
+  ...restoredAttachments.value.map((file) => ({ ...file, phase: "ready", receipt: file })),
+  ...attachments.queueItems.value
+].map((row) => ({ ...row, receipt: uploadedAttachments.value.find((file) => file.attachmentId === row.attachmentId) || row.receipt })));
+const availableSlots = computed(() => Math.max(0, attachments.maxItems - queueItems.value.filter((row) => row.phase !== "cancelled").length));
 const attachmentState = computed(() => Object.freeze({
-  atCapacity: attachments.atCapacity.value,
-  canAddFiles: attachments.canAddFiles.value,
+  atCapacity: availableSlots.value === 0,
+  canAddFiles: attachments.canAddFiles.value && availableSlots.value > 0,
   canSubmit: attachments.canSubmit.value,
   count: queueItems.value.length,
   hasUnresolved: attachments.hasUnresolved.value,
@@ -192,6 +197,8 @@ const presentationProps = computed(() => {
   const input = { ...props };
   delete input.sessionId;
   delete input.attachmentsEnabled;
+  delete input.savedAttachments;
+  delete input.attachmentsOwnedByConversation;
   return input;
 });
 const promptInput = ref(null);
@@ -204,50 +211,43 @@ function preserveHeightForNextModelValue() {
   return promptInput.value?.preserveHeightForNextModelValue();
 }
 const canUseFilePicker = computed(() => Boolean(
-  attachments.canAddFiles.value
+  attachmentState.value.canAddFiles
 ));
-function emitAttachmentsChanged() {
-  emit("attachments-change", [...uploadedAttachments.value]);
+function deleteUploadedFile(sessionId, attachmentId) {
+  // Saved temporary files are released by conversation Close, including prior messages.
+  if (props.attachmentsOwnedByConversation && props.savedAttachments?.some((file) => file.attachmentId === attachmentId)) {
+    return Promise.resolve({ ok: true });
+  }
+  return attachmentCommands.deleteAttachment(sessionId, attachmentId);
 }
-
 function removeUploadedAttachment(attachment = {}) {
-  const previous = uploadedAttachments.value.map((item) => ({ ...item }));
+  const previous = uploadedAttachments.value;
   const removed = attachments.removeAttachment(attachment);
-  if (!removed.length) {
-    return;
-  }
-  const next = labelComposerAttachments(uploadedAttachments.value);
-  for (const item of uploadedAttachments.value) {
-    item.reference = next.find((candidate) => candidate.attachmentId === item.attachmentId).reference;
-  }
-  const textarea = textareaRef.value;
-  const value = updateComposerAttachmentReferences(textarea?.value ?? props.modelValue, previous, next);
-  if (textarea) textarea.value = value;
+  const saved = restoredAttachments.value.find((file) => file.attachmentId === attachment.attachmentId);
+  if (!removed.length && !saved) return;
+  if (!removed.length) void deleteUploadedFile(props.sessionId, saved.attachmentId)
+    .catch((error) => attachmentFeedback.error(error));
+  const next = labelComposerAttachments(previous.filter((file) => file.attachmentId !== attachment.attachmentId));
+  const value = updateComposerAttachmentReferences(textareaRef.value?.value ?? props.modelValue, previous, next);
+  if (textareaRef.value) textareaRef.value.value = value;
   emit("update:modelValue", value);
-  emitAttachmentsChanged();
+  emit("attachments-change", next);
 }
 
 function clearAttachments({ attachmentIds = null } = {}) {
-  if (!queueItems.value.length) {
-    return false;
-  }
-  const previous = uploadedAttachments.value.map((item) => ({ ...item }));
+  if (!queueItems.value.length) return false;
+  const previous = uploadedAttachments.value;
+  const accepted = new Set(attachmentIds || previous.map((file) => file.attachmentId));
   attachments.clearAttachments({ accepted: true, attachmentIds });
-  const labeled = labelComposerAttachments(uploadedAttachments.value);
-  for (const attachment of uploadedAttachments.value) {
-    attachment.reference = labeled.find((item) => item.attachmentId === attachment.attachmentId).reference;
-  }
-  const remainingIds = new Set(labeled.map((attachment) => attachment.attachmentId));
+  const remaining = previous.filter((file) => !accepted.has(file.attachmentId));
+  const next = labelComposerAttachments(remaining);
   const text = textareaRef.value?.value ?? props.modelValue;
-  const value = updateComposerAttachmentReferences(
-    text,
-    previous.filter((attachment) => remainingIds.has(attachment.attachmentId)), labeled
-  );
+  const value = updateComposerAttachmentReferences(text, remaining, next);
   if (value !== text) {
     if (textareaRef.value) textareaRef.value.value = value;
     emit("update:modelValue", value);
   }
-  emitAttachmentsChanged();
+  emit("attachments-change", next);
   return true;
 }
 
@@ -256,10 +256,13 @@ function attachmentsCanSubmit() {
 }
 
 async function attachFiles(files = []) {
-  return attachments.uploadFiles(files);
+  const accepted = Array.from(files).slice(0, availableSlots.value);
+  if (accepted.length < files.length) attachmentFeedback.error(`A message can keep at most ${attachments.maxItems} attachments.`);
+  return attachments.uploadFiles(accepted);
 }
 
 async function attachFileProducer(options = {}) {
+  if (!attachmentState.value.canAddFiles) return [];
   const uploaded = await attachments.uploadFileProducer(options);
   return uploaded ? [uploaded] : [];
 }
@@ -269,11 +272,12 @@ async function handleFileInputChange(event = {}) {
   if (event?.target) {
     event.target.value = "";
   }
-  await attachments.uploadFiles(files);
+  await attachFiles(files);
 }
 
 function handleDrop(event) {
-  void attachments.handleDrop(event);
+  attachments.resetDragState();
+  void attachFiles(codexAttachmentFilesFromDropEvent(event));
 }
 
 function openFilePicker() {
@@ -291,7 +295,21 @@ function focusTextarea(options = { preventScroll: true }) {
 const handleDragEnter = attachments.handleDragEnter;
 const handleDragOver = attachments.handleDragOver;
 const handleDragLeave = attachments.handleDragLeave;
-const handlePaste = attachments.handlePaste;
+function handlePaste(event) {
+  const files = codexAttachmentFilesFromPasteEvent(event);
+  if (!files.length) return attachments.handlePaste(event);
+  if (!event.clipboardData?.getData("text/plain")) event.preventDefault?.();
+  return attachFiles(files);
+}
+watch(() => props.savedAttachments, (files) => {
+  if (!files) return;
+  const removed = attachments.attachments.value.filter((file) => !files.some((saved) => saved.attachmentId === file.attachmentId));
+  if (removed.length) attachments.clearAttachments({ attachmentIds: removed.map((file) => file.attachmentId) });
+});
+onBeforeUnmount(() => {
+  // Ready receipts belong to the saved draft; dispose still cancels unfinished uploads.
+  if (props.savedAttachments) attachments.clearAttachments({ attachmentIds: attachments.attachments.value.map((file) => file.attachmentId) });
+});
 
 watch(attachmentState, (state) => {
   emit("attachment-state-change", state);
