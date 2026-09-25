@@ -238,6 +238,26 @@ so retaining a different provider does not skip the selected provider's cleanup.
 
 ## Public contract
 
+Hosts may explicitly replace idle native context using an exact predecessor ID
+and a supplied briefing. A saved preparation journal prevents interrupted binding
+changes from admitting new assistant work; retries finish the same operation.
+The next ordinary Send delivers continuity into a fresh native ID, with existing
+receipt recovery, before its predecessor becomes eligible for explicit cleanup.
+Visible history, source and session identity remain unchanged. Unfinished goals,
+delivery, routing, Undo and active work block replacement. Native terminal/goal
+entry waits until the successor has accepted its briefing.
+
+Neutral storage operations enumerate saved bindings and native-only candidates
+within evidenced homes/directories, including CLI-created chats and forks. They
+retire finalized archived histories or accepted predecessors only after a host
+callback proves preservation and exclusive ownership. Provider owners check the
+entire native deletion family; matching a directory does not establish ownership.
+No public retention policy, compression worker or timer is added. Contracts and
+acceptance limits live in `docs/session-storage-lifecycle.md`; implementation is
+in `nativeConversationRetirement.js`, `assistantChangeover.js`, the terminal
+service and native adapters. Focused evidence is in the corresponding retirement,
+changeover and session-storage tests.
+
 The session manager exposes a purpose resolver for callers migrating to unified
 routing. It loads saved or server-supplied draft configuration, trusted actor
 and connection facts, and the exact required catalogue models before invoking

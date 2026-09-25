@@ -10,6 +10,7 @@ the canonical project and from other sessions.
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `tests/server/assistantRoutingStateInventory.unit.test.js`
+- `tests/server/vibe64SessionStorageLifecycle.unit.test.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
 - `src/components/studio/vibe64-session/Vibe64WorkflowSelector.vue`
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
@@ -84,6 +85,28 @@ stage and error for explicit retry; source recovery evidence keeps its protectio
 marker. Startup also finalizes interrupted archive publication from the immutable
 closing tree. Start, each durable stage transition, completion, and failure publish `vibe64.session.changed` to
 all clients with a list-refresh hint. Reconnecting clients read persisted state.
+
+The session service exposes optional `setArchivePreparation(callback)` for host
+preparation after terminal shutdown, under the existing agent-write lock and
+before the next resource/source archive step. Every attempt invokes it, including
+resumption at a later durable phase, so the callback must be idempotent and handle
+already-removed source. Throwing or returning `ok: false` preserves the existing
+archive failure/retry behavior. There is no default callback or maintenance policy.
+This callback belongs to ordinary archival; renewal retains its own transaction.
+
+The store's explicit `withArchivedSession(sessionId, operation)` serializes with
+archive publication, rejects remaining active/closing trees, validates the
+published archive and its archived status, and supplies full saved session
+metadata plus temporary recovery paths. Extraction is removed after success or
+failure; the original archive is unchanged. This is an archive access boundary,
+not proof of native-provider ownership, writer shutdown, transcript completeness,
+or permission to delete provider history. Consumers retain those responsibilities.
+The API contract and retry constraints are in `docs/session-storage-lifecycle.md`.
+Explicit attachment expiry uses that same finalized archive boundary. It builds
+and validates a compressed replacement, keeps text, descriptions and other
+artifacts, requires host confirmation, then publishes with one atomic rename.
+The archive index and original archival date remain unchanged. No automatic
+expiry policy or timer is installed.
 
 The chat header shares its available width among up to three session tabs,
 reserving extra room for the selected tab's Archive action. The new-session

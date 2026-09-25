@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { vibe64AssistantConversationKey, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
-import { readConversationRewindState, rememberAssistantBeforeChangeover, rewindLastConversationTurn, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
+import { readConversationRewindState, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedNativeConversationReplacement, rewindLastConversationTurn, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 
 function selection(engineId, providerId = "") {
   return { engineId, agentId: engineId === "codex" ? "codex" : "build",
@@ -29,6 +29,15 @@ async function harness(t) {
   const api = {
     get store() { return store; },
     calls, logs, receipts, failure: "", inspectUnknown: false,
+    nativeThread: "", closeFailure: false,
+    async replace(input) { return replaceNativeConversation(sessionId, input, await api.context(), agent); },
+    async bindNative() {
+      for (const [name, value] of Object.entries({ codex_conversation_id: "codex-original-thread",
+        codex_conversation_workdir: root, agent_identity_provider: "codex",
+        agent_identity_conversation_id: "codex-original-thread", agent_identity_workdir: root })) {
+        await store.writeMetadataValue(sessionId, name, value);
+      }
+    },
     async context() { return { runtime: { store }, session: await store.readSession(sessionId) }; },
     async select(engineId, providerId) {
       const context = await api.context();
@@ -48,6 +57,13 @@ async function harness(t) {
     async editAnswer(turnId, text) { await store.upsertConversationAssistantMessage(sessionId, { turnId, text }); }
   };
   const agent = {
+    async closeSession(_id, context) {
+      assert.equal(context.changeover, true);
+      assert.equal(context.forgetConversationBinding, true);
+      if (api.closeFailure) throw new Error("Native stop unconfirmed");
+      api.nativeThread = "fresh-successor";
+      return { ok: true };
+    },
     async rewindConversation(_id, input) {
       if (!input.checkpoint) return { ok: true, checkpoint: { messageId: input.messageId } };
       api.rewindCalls.push(input.checkpoint.messageId);
@@ -60,7 +76,7 @@ async function harness(t) {
     async sendMessage(_id, input, context) {
       const selected = JSON.parse(context.session.metadata.assistant_selection);
       const { engineId } = selected;
-      const threadId = `${vibe64AssistantConversationKey(selected)}-original-thread`;
+      const threadId = api.nativeThread || `${vibe64AssistantConversationKey(selected)}-original-thread`;
       if (api.failure === "preflight") return { ok: false, delivered: false };
       await input.onPromptSending?.({ threadId });
       calls.push({ engineId, threadId, messageId: input.messageId, message: input.message });
@@ -396,4 +412,104 @@ test("Undo stops at a Codex provider change and never targets another provider's
   await h.select("codex", "deepseek");
   assert.equal((await h.rewind(second)).text, "DeepSeek second");
   assert.equal(h.rewindCalls.length, 1);
+});
+
+const replacementRequest = { operationId: "rotation-1", expectedConversationId: "codex-original-thread", handover: "Keep the blue clock and its seconds display." };
+
+test("native replacement preserves History and delivers the briefing once with the next ordinary Send", async (t) => {
+  const h = await harness(t);
+  await h.send("Build the clock");
+  await h.bindNative();
+  const history = await h.history();
+  assert.equal((await h.replace(replacementRequest)).replacement.status, "ready");
+  assert.deepEqual(await h.history(), history);
+  assert.equal(h.calls.length, 1, "replacement performs no inference");
+  assert.equal(await h.store.readMetadataValue("changeover", "codex_conversation_id"), "");
+  await h.restart();
+  assert.equal((await h.replace(replacementRequest)).replacement.status, "ready");
+  await h.send("Continue", "successor-first");
+  assert.equal(h.calls.at(-1).threadId, "fresh-successor");
+  assert.match(h.calls.at(-1).message, /Keep the blue clock/u);
+  assert.equal((await h.history()).at(-1).user.text, "Continue");
+  const state = JSON.parse(await h.store.readMetadataValue("changeover", "assistant_changeover"));
+  assert.equal(state.replacement.status, "accepted");
+  assert.equal(state.replacement.handover, undefined);
+  assert.equal(state.retiredConversations[0].conversationId, "codex-original-thread");
+  assert.equal(state.retiredConversations[0].successorConversationId, "fresh-successor");
+  await h.send("Next");
+  assert.equal(h.calls.at(-1).message, "Next");
+});
+
+test("failed shutdown blocks Send across restart and retries the same replacement", async (t) => {
+  const h = await harness(t);
+  await h.bindNative();
+  h.closeFailure = true;
+  await assert.rejects(h.replace(replacementRequest), /stop unconfirmed/u);
+  await h.restart();
+  assert.doesNotThrow(() => requireCompletedNativeConversationReplacement({}));
+  const pending = await h.context();
+  assert.throws(() => requireCompletedNativeConversationReplacement(pending.session), { code: "vibe64_conversation_replacement_pending" });
+  await assert.rejects(h.send("Do not deliver"), { code: "vibe64_conversation_replacement_pending" });
+  assert.equal(await h.store.readMetadataValue("changeover", "codex_conversation_id"), "codex-original-thread");
+  h.closeFailure = false;
+  assert.equal((await h.replace(replacementRequest)).replacement.status, "ready");
+});
+
+test("partial binding writes resume without starting a successor or losing predecessor ownership", async (t) => {
+  const h = await harness(t);
+  await h.bindNative();
+  const remove = h.store.deleteMetadataValue;
+  let writes = 0;
+  h.store.deleteMetadataValue = async (...args) => {
+    if (++writes === 2) throw new Error("simulated process loss");
+    return remove(...args);
+  };
+  await assert.rejects(h.replace(replacementRequest), /simulated process loss/u);
+  await h.restart();
+  await assert.rejects(h.send("Blocked"), { code: "vibe64_conversation_replacement_pending" });
+  assert.equal((await h.replace(replacementRequest)).replacement.previous.conversationId, "codex-original-thread");
+  assert.equal(h.calls.length, 0);
+});
+
+test("uncertain successor delivery retains predecessor ownership and recovers its receipt without repeating inference", async (t) => {
+  const h = await harness(t);
+  await h.bindNative();
+  await h.replace(replacementRequest);
+  h.failure = "lost-response";
+  await assert.rejects(h.send("Continue", "first-new"), /connection lost/u);
+  await h.restart();
+  let state = JSON.parse(await h.store.readMetadataValue("changeover", "assistant_changeover"));
+  assert.equal(state.replacement.status, "ready");
+  assert.equal(state.retiredConversations, undefined);
+  h.failure = "";
+  await h.send("Continue", "first-new");
+  state = JSON.parse(await h.store.readMetadataValue("changeover", "assistant_changeover"));
+  assert.equal(state.replacement.status, "accepted");
+  assert.equal(state.retiredConversations.length, 1);
+  assert.equal(h.calls.length, 1);
+});
+
+test("replacement rejects changed identity, unbounded briefing and unconfirmed delivery", async (t) => {
+  const h = await harness(t);
+  await h.bindNative();
+  await assert.rejects(h.replace({ ...replacementRequest, expectedConversationId: "other" }), /identity changed/u);
+  await assert.rejects(h.replace({ ...replacementRequest, handover: "a".repeat(65537) }), /65536/u);
+  await h.select("opencode");
+  h.failure = "lost-response";
+  await assert.rejects(h.send("Pending", "pending"), /connection lost/u);
+  await h.select("codex");
+  await assert.rejects(h.replace(replacementRequest), /pending delivery/u);
+});
+
+test("replacement refuses to deliver its briefing to the predecessor and blocks native bypass before briefing", async (t) => {
+  const h = await harness(t);
+  await h.bindNative();
+  await h.replace(replacementRequest);
+  const { session } = await h.context();
+  assert.throws(() => requireCompletedNativeConversationReplacement(session, { requireBriefing: true }),
+    { code: "vibe64_conversation_replacement_briefing_pending" });
+  h.nativeThread = "codex-original-thread";
+  await assert.rejects(h.send("Continue"), /fresh successor before sending/u);
+  assert.equal(h.calls.length, 0);
+  assert.equal((await h.history()).length, 0);
 });

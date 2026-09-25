@@ -466,6 +466,19 @@ async function createOpenCodeServerProcess({
     return stopPromise;
   }
 
+  async function storageInventory(route) {
+    const response = await fetchImpl(`http://${OPENCODE_HOST}:${selectedPort}${route}`, {
+      method: "GET", signal: AbortSignal.timeout(10_000),
+      headers: { accept: "application/json", authorization: `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}` }
+    });
+    if (!response.ok) throw new Error(`OpenCode storage inventory returned HTTP ${response.status}.`);
+    const rows = JSON.parse(await readBoundedResponse(response, 4 * 1024 * 1024));
+    if (!Array.isArray(rows) || rows.length > 1000 || rows.some((row) => !/^ses_[a-zA-Z0-9]+$/u.test(row?.id))) {
+      throw new Error("OpenCode returned an incomplete or invalid storage inventory.");
+    }
+    return rows;
+  }
+
   try {
     processEnv = safeOpenCodeEnvironment(env, {
       cacheRoot: text(cacheRoot) ? path.resolve(text(cacheRoot)) : "",
@@ -586,6 +599,23 @@ async function createOpenCodeServerProcess({
       pid: processHandle.pid,
       port: selectedPort,
       privateRoot: normalizedPrivateRoot,
+      async listConversationChildren(conversationId) {
+        if (!/^ses_[a-zA-Z0-9]+$/u.test(conversationId)) throw new TypeError("Invalid OpenCode conversation id.");
+        const children = await storageInventory(`/session/${encodeURIComponent(conversationId)}/children`);
+        if (children.some((child) => child.parentID !== conversationId)) {
+          throw new Error("OpenCode returned an incomplete or invalid child inventory.");
+        }
+        return children;
+      },
+      async listConversationsForDirectory(directory) {
+        if (!path.isAbsolute(directory || "")) throw new TypeError("OpenCode inventory requires an absolute native directory.");
+        // path filters the saved native directory without opening that source
+        // as the control server's project. Request one beyond our limit so a
+        // truncated result cannot be mistaken for a complete inventory.
+        const rows = await storageInventory(`/session?${new URLSearchParams({ path: directory, limit: "1001" })}`);
+        if (rows.some((row) => typeof row.directory !== "string")) throw new Error("OpenCode inventory has no native directory.");
+        return rows.filter((row) => row.directory === directory);
+      },
       readLogs() {
         return readLogs();
       },

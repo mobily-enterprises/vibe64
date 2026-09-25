@@ -1630,6 +1630,89 @@ function createVibe64SessionStore({
     });
   }
 
+  async function withArchivedSession(sessionId, operation) {
+    if (typeof operation !== "function") {
+      throw new TypeError("Archived session work requires an operation.");
+    }
+    const normalizedSessionId = assertValidVibe64SessionId(sessionId);
+    return runSessionArchiveExclusive(normalizedSessionId, async () => {
+      // A published renewal can still retain its predecessor until the source
+      // transaction commits. It is not yet eligible for post-archive work.
+      for (const sessionPaths of [paths(normalizedSessionId), closingSessionPaths(normalizedSessionId)]) {
+        if (await pathExists(sessionPaths.sessionRoot)) {
+          throw vibe64Error(
+            `Session archive is not finalized: ${normalizedSessionId}`,
+            "vibe64_session_archive_not_finalized"
+          );
+        }
+      }
+      const archiveRecord = await requireSessionArchiveRecord(paths(), normalizedSessionId);
+      if (archiveRecord.sessionId !== normalizedSessionId) {
+        throw vibe64Error(
+          `Session archive identity does not match: ${normalizedSessionId}`,
+          "vibe64_invalid_session_archive_metadata"
+        );
+      }
+      await validateSessionArchive(archiveRecord.archivePath);
+      return withExtractedSessionArchive(archiveRecord, async (sessionPaths, record) => {
+        const session = await readSessionFromPaths(sessionPaths, record);
+        if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED) {
+          throw vibe64Error(
+            `Session archive contains an unarchived session: ${normalizedSessionId}`,
+            "vibe64_session_archive_not_finalized"
+          );
+        }
+        return operation({
+          ...session,
+          artifactsRoot: sessionPaths.artifactsRoot,
+          sessionRoot: sessionPaths.sessionRoot
+        });
+      });
+    });
+  }
+
+  async function pruneArchivedSessionAttachments(sessionId, { beforePrune } = {}) {
+    if (typeof beforePrune !== "function") throw new TypeError("Attachment expiry requires a host callback.");
+    return withArchivedSession(sessionId, async (session) => {
+      const attachmentRoot = path.join(session.artifactsRoot, "attachments");
+      const removed = [];
+      for (const directory of [session.artifactsRoot, attachmentRoot]) {
+        const info = await lstat(directory).catch((error) => { if (isMissingPathError(error)) return null; throw error; });
+        if (!info) return { ok: true, attachmentIds: [] };
+        if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Archived attachments must use regular directories.");
+      }
+      for (const entry of await readDirectoryEntries(attachmentRoot)) {
+        if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(entry.name) || !entry.isDirectory()) {
+          throw new Error("Archived attachments contain an unknown entry; inspect it before expiry.");
+        }
+        const payload = path.join(attachmentRoot, entry.name, "file");
+        const info = await lstat(payload).catch((error) => { if (isMissingPathError(error)) return null; throw error; });
+        if (!info) continue;
+        if (!info.isFile() || info.isSymbolicLink()) throw new Error("Archived attachment payload is not a regular file.");
+        await rm(payload);
+        removed.push(entry.name);
+      }
+      if (!removed.length) return { ok: true, attachmentIds: [] };
+      const candidatePath = `${session.archivePath}.${randomUUID()}.tmp`;
+      try {
+        const result = await runCommand("tar", ["-czf", candidatePath, "-C", path.dirname(session.sessionRoot), session.sessionId], {
+          allowedRoots: [path.dirname(session.sessionRoot), path.dirname(session.archivePath)], cwd: normalizedProjectContextRoot
+        });
+        if (!result.ok) throw vibe64Error("Cannot prepare attachment expiry archive.", "vibe64_session_archive_write_failed");
+        await validateSessionArchive(candidatePath);
+        const proof = await beforePrune({ session, attachmentIds: [...removed].sort(), candidatePath });
+        if (proof?.ok !== true) throw new Error("The host did not confirm attachment expiry.");
+        // A single rename publishes the complete compressed replacement. The
+        // archive index and original archival time remain unchanged. No partial
+        // file removals become visible if compression or confirmation fails.
+        await rename(candidatePath, session.archivePath);
+        return { ok: true, attachmentIds: removed.sort() };
+      } finally {
+        await rm(candidatePath, { force: true });
+      }
+    });
+  }
+
   async function withPreparedRenewalSession(sessionId, operation) {
     if (typeof operation !== "function") {
       throw new TypeError("Prepared renewal session work requires an operation.");
@@ -4994,6 +5077,8 @@ function createVibe64SessionStore({
     writeJsonArtifactForRenewal,
     writeSessionRenewalStateRecord,
     withPublishedRenewalSession,
+    withArchivedSession,
+    pruneArchivedSessionAttachments,
     writeSessionLabel,
     writeStatus
   };

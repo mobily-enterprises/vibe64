@@ -301,6 +301,21 @@ test("Claude reuses its main conversation when callers hold older session snapsh
   assert.equal(f.processes.length, 1);
 });
 
+test("Claude replacement forgets its cached main binding and blocks admission while preparing", async (t) => {
+  const f = await fixture(t);
+  const first = await f.provider.sessionState(f.context);
+  f.context.session.metadata.assistant_changeover = JSON.stringify({ replacement: { status: "preparing" } });
+  await assert.rejects(f.provider.sessionState(f.context), { code: "vibe64_conversation_replacement_pending" });
+  assert.equal((await f.provider.closeSession({ ...f.context, forgetConversationBinding: true })).ok, true);
+  delete f.context.session.metadata.claude_conversation_id;
+  delete f.context.session.metadata.agent_identity_conversation_id;
+  f.context.session.metadata.assistant_changeover = JSON.stringify({ replacement: { status: "ready" } });
+  const successor = await f.provider.sessionState(f.context);
+  assert.notEqual(successor.thread.id, first.thread.id);
+  assert.equal(f.context.session.metadata.claude_conversation_id, successor.thread.id);
+  assert.equal(f.processes.length, 0);
+});
+
 test("restoring Claude conversations preserves another engine's main identity", async (t) => {
   for (const operation of ["hasActiveTemporaryConversation", "closeSession", "reconcileSessions"]) {
     await t.test(operation, async (t) => {
