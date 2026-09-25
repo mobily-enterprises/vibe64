@@ -1572,6 +1572,38 @@ function createDeterministicHold() {
   };
 }
 
+test("routing refuses to relocate an existing Codex conversation into another provider home", async () => {
+  await withConversationController(async ({ controller }) => {
+    for (const saved of [
+      { codex_routing_home_provider: "deepseek", codex_conversation_id: "saved-thread" },
+      { codex_routing_home_provider: "zai-coding-plan", codex_conversation_id: "saved-thread" },
+      { agent_identity_provider: "opencode", codex_deepseek_conversation_id: "retained-thread" },
+      { agent_identity_provider: "codex", agent_identity_model_provider: "deepseek", agent_identity_conversation_id: "saved-thread" }
+    ]) {
+      const metadata = { ...saved };
+      const writes = [];
+      const runtime = { store: { writeMetadataValue: async (...args) => writes.push(args) } };
+      await assert.rejects(controller.prepareModelRouting("session-1", { modelProviderId: "deepseek" }, {
+        runtime, session: { metadata }
+      }), { code: "vibe64_codex_history_unsupported" });
+      assert.deepEqual(metadata, saved);
+      assert.deepEqual(writes, []);
+    }
+    const writes = [];
+    const runtime = { store: { writeMetadataValue: async (...args) => writes.push(args) } };
+    const metadata = {};
+    await controller.prepareModelRouting("session-1", { modelProviderId: "deepseek" }, { runtime, session: { metadata } });
+    assert.deepEqual(metadata, { codex_routing_home_provider: "openai" });
+    assert.deepEqual(writes, [["session-1", "codex_routing_home_provider", "openai"]]);
+    metadata.agent_identity_provider = "codex";
+    metadata.agent_identity_model_provider = "deepseek";
+    metadata.agent_identity_conversation_id = "shared-thread";
+    await controller.prepareModelRouting("session-1", { modelProviderId: "openai" }, { runtime, session: { metadata } });
+    assert.equal(writes.length, 1, "A shared Codex home remains pinned across provider changes.");
+    assert.equal(metadata.agent_identity_conversation_id, "shared-thread");
+  });
+});
+
 async function withConversationController(operation, {
   promptHints = null,
   codexEconomyThreadLedgerFactory = null

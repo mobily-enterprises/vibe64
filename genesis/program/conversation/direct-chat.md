@@ -1671,7 +1671,9 @@ favourite files, project access and operation admission.
 
 
 Legacy Codex conversations may retain separate provider homes and native thread
-ids. New routed conversations pin one home and resume the same native thread
+ids. Routing refuses those unsupported homes before changing their saved storage
+location and offers Renew; it never adopts them by rewriting their home to OpenAI.
+New routed conversations pin one home and resume the same native thread
 across qualified provider choices, as described above. Application changeover
 continues to use transcript selection snapshots and per-application receipts.
 Changing the selection alone sends nothing and is rejected while a turn is active.
