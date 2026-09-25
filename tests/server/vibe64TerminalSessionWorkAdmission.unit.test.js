@@ -1461,6 +1461,23 @@ for (const personalMember of [false, true]) {
 }
 
 
+test("shutdown requested by a dependent feature closes main and temporary routing admission", async (t) => {
+  const provider = await controllerHarness();
+  t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });
+  const { service, session } = await terminalServiceFixture(t, { store: {} }, { opencodeTerminalController: provider.controllerOptions });
+  session.metadata.assistant_selection = provider.session.metadata.assistant_selection;
+  session.metadata.assistant_routing = JSON.stringify({ mode: "code", workflowEngineId: "opencode", review: false });
+  await service.createTemporaryConversation(session.sessionId, { conversationId: "shutdown-chat" });
+  const shutdown = await service.invalidateAgentRuntimes({ reason: "server-shutdown" });
+  assert.notEqual(shutdown.ok, false);
+  const input = { messageId: "late-send", message: "Do not send this after shutdown.", submissionKind: "send" };
+  await assert.rejects(service.sendAgentMessage(session.sessionId, input), /shutting down/);
+  await assert.rejects(service.startTemporaryConversationTurn(session.sessionId, {
+    ...input, conversationId: "shutdown-chat"
+  }), /shutting down/);
+  assert.equal(provider.promptCalls.length, 0);
+});
+
 test("purpose access enables a member's configured chat after a personal turn while keeping steering on its native connection", async (t) => {
   const provider = await controllerHarness();
   t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });

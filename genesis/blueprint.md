@@ -254,6 +254,8 @@ mode and model, with Auto and automatic review unavailable. In Auto, the goal
 menu explains that a concrete
 mode must be selected before offering Start or Resume. Background helpers use
 the independent Economy role.
+When the service shuts down, pending routing is cancelled and its helper cleanup
+finishes before the assistant processes close. Restart does not send that request.
 AI controls includes a Close button that remains available while the assistant
 is working, so dismissing the panel does not require tapping outside it.
 The Settings cog opens AI model and access controls directly, with recovery

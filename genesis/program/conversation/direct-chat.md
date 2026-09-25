@@ -47,6 +47,12 @@ Existing assistant status and message-delivery diagnostics include the requestin
 user's authenticated username when supplied by the host. Request context takes
 precedence over operation options; background work without an actor records
 `username: null`. Logs do not include the user's credentials or message text.
+Service shutdown closes the main and temporary routing coordinators before
+invalidating native providers. They reject new Send requests, cancel pending
+classification through its existing Stop owner, and await helper cleanup and the
+saved cancellation. A cleanup failure remains an explicit shutdown failure.
+Already admitted native turns keep their existing interruption/reconnect handling;
+shutdown does not start a review.
 
 The shared transcript groups adjacent reasoning summaries across storage rows.
 User messages, commentary, answers and system messages separate progress groups.

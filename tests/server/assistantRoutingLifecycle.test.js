@@ -408,6 +408,65 @@ test("Stop still reports a helper cleanup failure and retains the helper for ret
   assert.equal(f.sends.length, 0);
 });
 
+test("shutdown cancels routing and waits for helper cleanup before native providers can close", async (t) => {
+  const f = await fixture(t);
+  assert.equal(typeof f.service.close, "function");
+  const started = Promise.withResolvers();
+  const finish = Promise.withResolvers();
+  const cleaning = Promise.withResolvers();
+  const releaseCleanup = Promise.withResolvers();
+  f.agent.waitForEphemeralConversationTurn = async () => {
+    started.resolve();
+    await finish.promise;
+    return { ok: true, text: '{"mode":"code","reason":"explicit_implementation"}' };
+  };
+  f.agent.stopEphemeralConversation = async () => { finish.resolve(); return { ok: true }; };
+  f.agent.deleteEphemeralConversation = async () => {
+    cleaning.resolve();
+    await releaseCleanup.promise;
+    return { ok: true };
+  };
+  const sending = f.service.send("session-1", request, f.context);
+  const rejected = assert.rejects(sending, /cancelled/);
+  await started.promise;
+  let closed = false;
+  const shutdown = f.service.close().then(() => { closed = true; });
+  await cleaning.promise;
+  assert.equal(closed, false);
+  assert.equal(f.state().status, "cancelled");
+  assert.ok(f.state().helper);
+  releaseCleanup.resolve();
+  await shutdown;
+  await rejected;
+  assert.equal(f.state().helper, null);
+  assert.equal(f.sends.length, 0);
+  await assert.rejects(f.service.send("session-1", { ...request, messageId: "late" }, f.context), /shutting down/);
+  await f.restart().reconcile("session-1", f.context);
+  assert.equal(f.state().status, "cancelled");
+  assert.equal(f.sends.length, 0);
+});
+
+test("shutdown reports unconfirmed Router cleanup instead of claiming completion", async (t) => {
+  const f = await fixture(t);
+  assert.equal(typeof f.service.close, "function");
+  const started = Promise.withResolvers();
+  const finish = Promise.withResolvers();
+  f.agent.waitForEphemeralConversationTurn = async () => {
+    started.resolve();
+    await finish.promise;
+    return { ok: false };
+  };
+  f.agent.stopEphemeralConversation = async () => { finish.resolve(); return { ok: true }; };
+  f.agent.deleteEphemeralConversation = async () => ({ ok: false });
+  const sending = f.service.send("session-1", request, f.context);
+  const rejected = assert.rejects(sending, /helper could not be closed/);
+  await started.promise;
+  await assert.rejects(f.service.close(), /routing shutdown/i);
+  await rejected;
+  assert.ok(f.state().helper);
+  assert.equal(f.sends.length, 0);
+});
+
 test("an interrupted Code turn never starts a review", async (t) => {
   const f = await fixture(t, { mode: "code", review: true });
   await f.service.send("session-1", request, f.context);

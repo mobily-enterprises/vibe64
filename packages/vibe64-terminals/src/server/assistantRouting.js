@@ -46,6 +46,7 @@ function withSelection(context, selection) {
 // the one request being prepared and its optional, single review continuation.
 function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publish, prepareSelection = async () => {} }) {
   const running = new Map();
+  let closing = false;
   const liveReviewRequests = new Map();
   const keyFor = (sessionId, context) => `${context.runtime.stateRoot}\0${sessionId}\0${context.routingConversationId || ""}`;
   async function save(context, state) {
@@ -308,6 +309,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
     const task = { cancelled: false, finished: Promise.withResolvers() };
     let key;
     await exclusive(sessionId, options, async (current) => {
+      if (closing) throw failure("The assistant is shutting down. Reconnect before sending.");
       context = current; key = keyFor(sessionId, context);
       const preferences = assistantRoutingFromMetadata(context.session.metadata) || (options.purpose ? {
         mode: options.purpose, review: false,
@@ -413,6 +415,14 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
         state.assignments = Object.fromEntries(Object.entries(destinations(state.decision)).map(([role, destination]) => [role, destination.effectiveSelection]));
         await save(context, state);
       }
+      if (closing) throw failure("The assistant is shutting down. Reconnect before sending.");
+      task.close = async () => {
+        await cancel(sessionId, options, { waitForCleanup: true });
+        const persisted = await read(context.runtime.store, sessionId);
+        if (persisted?.messageId === state.messageId && persisted.helper) {
+          throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
+        }
+      };
       running.set(key, task);
     });
     if (direct === true) return exclusive(sessionId, options, (current) => dispatch(sessionId, input, current));
@@ -598,7 +608,15 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
     return { pinned, context: { ...withSelection(context, selection), expectedConnectionIdentity: decision.connectionIdentity }, input: { ...input,
       ...(["set", "resume"].includes(input.action) && pinned.objective ? { objective: assistantModePrompt(mode, pinned.objective) } : {}) } };
   }
-  return { send, cancel, afterTurn, prepareGoal, reconcile };
+  async function close() {
+    closing = true;
+    const tasks = [...running.values()];
+    for (const task of tasks) task.cancelled = true;
+    const results = await Promise.allSettled(tasks.map((task) => task.close()));
+    const failures = results.filter((result) => result.status === "rejected").map((result) => result.reason);
+    if (failures.length) throw new AggregateError(failures, "Assistant routing shutdown did not complete successfully.");
+  }
+  return { send, cancel, afterTurn, prepareGoal, reconcile, close };
 }
 
 export { createAssistantRouting };
