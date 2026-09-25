@@ -467,7 +467,13 @@ test("OpenCode servers run and drain through one managed execution id", async (t
         pageRequests.push(new URL(url));
         return messageResponse(options);
       }
-      if (new URL(url).pathname.startsWith("/session")) {
+      if (new URL(url).pathname === "/experimental/session") {
+        assert.deepEqual(Object.fromEntries(new URL(url).searchParams), { directory: "/archived/source", limit: "1001" });
+      }
+      if (new URL(url).pathname === "/session/ses_parent") {
+        return new Response(JSON.stringify({ id: "ses_parent", directory: "/archived/source" }), { status: 200 });
+      }
+      if (new URL(url).pathname.startsWith("/session") || new URL(url).pathname === "/experimental/session") {
         assert.equal(options.headers.authorization, `Basic ${Buffer.from(`opencode:${requests[0].baseEnv.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`);
         assert.equal(options.method, "GET");
         return new Response(JSON.stringify(inventoryRows), { status: 200 });
@@ -515,6 +521,8 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   assert.equal(request.baseEnv.npm_config_cache, path.join(privateRoot, "cache", "npm"));
   assert.equal(request.credentialHome.home, path.join(privateRoot, "home"));
   assert.equal(server.executionId, executionId);
+  assert.deepEqual(await server.readConversationStorage("ses_parent"), { id: "ses_parent", directory: "/archived/source" });
+  await assert.rejects(server.readConversationStorage("../credentials"), /Invalid/);
   assert.deepEqual(await server.listConversationChildren("ses_parent"), inventoryRows);
   assert.deepEqual(await server.listConversationsForDirectory("/archived/source"), inventoryRows);
   await assert.rejects(server.listConversationChildren("../credentials"), /Invalid/);

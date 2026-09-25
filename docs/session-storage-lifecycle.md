@@ -333,3 +333,9 @@ compressed-copy completeness, native-only text retention, external writer
 exclusion, partial deletion recovery, account changes and continued archive
 reading against installed providers. These tests do not establish live provider
 retirement or production retention rollout.
+
+OpenCode storage inspection uses its global persisted session inventory and native
+record endpoint. Project-scoped listing and the workspace-resolving session endpoint
+can lose archived conversations after source removal and a server restart. Native
+status remains scoped to the saved directory; history paging and deletion use exact
+conversation IDs. Storage inspection never recreates archived source.

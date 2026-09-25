@@ -2917,13 +2917,13 @@ function createOpenCodeTerminalController({
           if (seen.has(conversationId) || queue.length > 1000) throw new Error("OpenCode native family is cyclic or exceeds its inventory limit.");
           seen.add(conversationId);
           let native;
-          try { native = await client.readSession(conversationId, { signal: options.signal }); }
+          try { native = await target.server.readConversationStorage(conversationId, { signal: options.signal }); }
           catch (error) { if (error.statusCode === 404 && index === 0) return []; throw error; }
-          if (native?.id !== conversationId || native?.location?.directory !== binding.workdir ||
+          if (native?.id !== conversationId || native?.directory !== binding.workdir ||
               (await client.sessionStatus(conversationId, { signal: options.signal })).type !== "idle") {
             throw new Error("OpenCode retirement requires an idle native family in the exact saved directory.");
           }
-          records.push({ conversationId, workdir: native.location.directory,
+          records.push({ conversationId, workdir: native.directory,
             ...(Number.isFinite(native.time?.created) ? { createdAt: new Date(native.time.created).toISOString() } : {}),
             ...(Number.isFinite(native.time?.updated) ? { updatedAt: new Date(native.time.updated).toISOString() } : {}) });
           const children = await target.server.listConversationChildren(conversationId, { signal: options.signal });
@@ -2935,12 +2935,12 @@ function createOpenCodeTerminalController({
         return records.sort((left, right) => left.conversationId.localeCompare(right.conversationId));
       };
       return retireNativeConversation({ binding, inspect, beforeDelete: options.beforeDelete,
-        readConversation: async (id) => ({ info: await client.readSession(id), messages: (await client.messages(id)).data }),
+        readConversation: async (id) => ({ info: await target.server.readConversationStorage(id), messages: (await client.messages(id)).data }),
         exportConversation: async (id, onRecord) => {
           const deadline = AbortSignal.timeout(300_000);
           const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
           const output = createNativeHistoryExport(onRecord, { signal });
-          const info = await client.readSession(id, { signal });
+          const info = await target.server.readConversationStorage(id, { signal });
           if (info?.id !== id || (await client.sessionStatus(id, { signal })).type !== "idle") {
             throw new Error("OpenCode native export requires the exact idle conversation.");
           }

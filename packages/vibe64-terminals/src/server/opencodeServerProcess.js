@@ -475,7 +475,7 @@ async function createOpenCodeServerProcess({
       headers: { accept: "application/json", authorization: `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}` }
     });
     try {
-      if (!response.ok) throw new Error(`OpenCode storage request returned HTTP ${response.status}.`);
+      if (!response.ok) throw Object.assign(new Error(`OpenCode storage request returned HTTP ${response.status}.`), { statusCode: response.status });
       const result = JSON.parse(await readBoundedResponse(response, maxBytes));
       boundedSignal.throwIfAborted();
       return { data: result, headers: response.headers };
@@ -620,12 +620,21 @@ async function createOpenCodeServerProcess({
       },
       async listConversationsForDirectory(directory, { signal } = {}) {
         if (!path.isAbsolute(directory || "")) throw new TypeError("OpenCode inventory requires an absolute native directory.");
-        // path filters the saved native directory without opening that source
-        // as the control server's project. Request one beyond our limit so a
-        // truncated result cannot be mistaken for a complete inventory.
-        const rows = await storageInventory(`/session?${new URLSearchParams({ path: directory, limit: "1001" })}`, { signal });
+        // Use the global persisted inventory: the project-scoped /session
+        // listing loses its Git project identity once archived source is gone.
+        // Request one beyond our limit to detect a truncated inventory.
+        const rows = await storageInventory(`/experimental/session?${new URLSearchParams({ directory, limit: "1001" })}`, { signal });
         if (rows.some((row) => typeof row.directory !== "string")) throw new Error("OpenCode inventory has no native directory.");
         return rows.filter((row) => row.directory === directory);
+      },
+      async readConversationStorage(conversationId, { signal } = {}) {
+        if (!/^ses_[a-zA-Z0-9]+$/u.test(conversationId)) throw new TypeError("Invalid OpenCode conversation id.");
+        // The native storage record does not resolve a live source workspace.
+        const { data } = await readStorageResponse(`/session/${encodeURIComponent(conversationId)}`, { signal, maxBytes: 4 * 1024 * 1024 });
+        if (data?.id !== conversationId || !path.isAbsolute(data.directory || "")) {
+          throw new Error("OpenCode returned an invalid native conversation record.");
+        }
+        return data;
       },
       async readConversationStoragePage(conversationId, { before = "", signal } = {}) {
         if (!/^ses_[a-zA-Z0-9]+$/u.test(conversationId)) throw new TypeError("Invalid OpenCode conversation id.");
