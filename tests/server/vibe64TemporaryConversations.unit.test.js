@@ -753,6 +753,38 @@ test("temporary Economy changeover and return retain both native histories and l
   });
 });
 
+test("temporary replies retain their routed identity across multiple native messages and restoration", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root, { role: "member", username: "member" }, true);
+    const main = (await f.store.readSession("one")).metadata;
+    await f.send("code", "member-code");
+    const record = await f.record();
+    const row = f.native.get(record.providerConversationId);
+    row.messages.push({ role: "assistant", id: "code-start", text: "I am implementing it.", complete: true });
+    await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    row.messages.push({ role: "thinking", id: "code-progress", text: "Checking the changed file.", complete: true });
+    await f.finish("Implemented the file.");
+    assert.equal(f.calls.starts.length, 2, "the routed reviewer starts once");
+    row.messages.push({ role: "assistant", id: "review-start", text: "I am reviewing it.", complete: true });
+    await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    row.messages.push({ role: "thinking", id: "review-progress", text: "Checking the result.", complete: true });
+    await f.finish("Reviewed the file.");
+    const snapshot = (await f.restart().listTemporaryConversations("one", f.options)).conversations[0];
+    const codeIds = ["member-code", "code-start", "code-progress", "reply-turn-1"];
+    const reviewIds = ["review-start", "review-progress", "reply-turn-2"];
+    for (const id of [...codeIds, ...reviewIds]) {
+      const message = snapshot.messages.find((message) => message.id === id);
+      assert.ok(message, id);
+      assert.equal(message.assistantSelection.engineId, "opencode", id);
+      assert.equal(message.assistantSelection.modelId, "big-pickle", id);
+      assert.equal(message.assistantRouting.resolvedMode, codeIds.includes(id) ? "code" : "review", id);
+    }
+    assert.equal(f.calls.starts.length, 2);
+    assert.deepEqual((await f.store.readSession("one")).metadata, main);
+    assert.deepEqual(await f.store.readConversationLog("one"), []);
+  });
+});
+
 test("a temporary read can observe live completion before its idle event without losing review", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root, { role: "member", username: "collaborator" }, true);

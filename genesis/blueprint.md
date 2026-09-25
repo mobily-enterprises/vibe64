@@ -202,6 +202,8 @@ and model named in a small shaded rectangle underneath, readable in light and
 dark themes. The label can extend beyond the circle without moving the icon or
 increasing the button height, and the button has no tooltip. New replies retain their
 answering AI when the selection changes: Codex, Claude Code or OpenCode with its model.
+Temporary replies keep that identity across tool progress and the final answer,
+independently of the AI selected in Main chat.
 Hovering a reply's name shows its saved model, provider and thinking choice.
 Older replies without a saved AI identity simply say "agent".
 Main and ordinary temporary chats offer Plan, Code, Economy and Auto from one

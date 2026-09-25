@@ -111,6 +111,10 @@ function createSessionConversations({
     const scope = { sessionId, conversationId: record.conversationId };
     let response = {};
     let turns = await ctx.runtime.store.readConversationLog(scope);
+    const requestTurn = turns.findLast((turn) => turn.user?.messageId === record.messageId);
+    const assistantSelection = requestTurn?.metadata?.assistantSelection || ctx.assistantSelection;
+    const messageScope = { ...scope, turnMetadata: { engineId: assistantSelection.engineId, assistantSelection,
+      ...(requestTurn?.metadata?.assistantRouting ? { assistantRouting: requestTurn.metadata.assistantRouting } : {}) } };
     const savedIds = new Set(turns.flatMap((turn) => turn.messages.map((message) => message.messageId)));
     let appended = false;
     if (record.providerConversationId && record.state !== "closing") {
@@ -120,7 +124,7 @@ function createSessionConversations({
           const operation = messageWriters[message.role];
           if (operation && message.text && message.complete !== false && !savedIds.has(message.id)) {
             const outcome = message.role === "assistant" ? normalizeVibe64AgentTaskResult(message.text) : null;
-            await ctx.runtime.store[operation](scope, { ...message, text: outcome?.message || message.text, messageId: message.id });
+            await ctx.runtime.store[operation](messageScope, { ...message, text: outcome?.message || message.text, messageId: message.id });
             appended = true;
           }
         }

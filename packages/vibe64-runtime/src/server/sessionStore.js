@@ -2613,7 +2613,7 @@ function createVibe64SessionStore({
     return ids;
   }
 
-  function conversationTransaction(sessionPaths) {
+  function conversationTransaction(sessionPaths, newTurnMetadata = null) {
     return {
       listTurnIds: () => conversationTurnIds(sessionPaths),
       nextTurnId: async () => nextConversationTurnId(await conversationTurnIds(sessionPaths, true)),
@@ -2635,6 +2635,9 @@ function createVibe64SessionStore({
         let metadata = turnMetadata
           ? normalizeConversationTurnMetadata(turnMetadata)
           : savedMetadata;
+        if (!savedMetadata && !metadata?.assistantSelection && newTurnMetadata) {
+          metadata = normalizeConversationTurnMetadata({ ...newTurnMetadata, ...metadata });
+        }
         if (!savedMetadata && !metadata?.assistantSelection) {
           const selection = vibe64AssistantSelectionFromMetadata(await readMetadataFromPaths(sessionPaths), { required: false });
           if (selection && (!metadata?.engineId || metadata.engineId === selection.engineId)) {
@@ -2728,7 +2731,7 @@ function createVibe64SessionStore({
     const operation = write ? mutateSession : withReadableSessionPaths;
     return operation(sessionId, (paths) => {
       const scopedPaths = typeof scope === "string" ? paths : conversationPaths(paths, scope.conversationId);
-      const run = () => callback(conversationTransaction(scopedPaths));
+      const run = () => callback(conversationTransaction(scopedPaths, typeof scope === "string" ? null : scope.turnMetadata));
       // Nested session mutations can have concurrent participants. Serialize
       // transcript writes within that lease as well as between root mutations.
       return write ? enqueueSessionMutation(scopedPaths.conversationLogRoot, run) : run();

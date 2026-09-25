@@ -62,6 +62,12 @@ Session text and metadata are replaced atomically, like the store's JSON records
 Concurrent readers see a complete previous or next value during assistant changes;
 a failed replacement preserves the saved value. This does not make multiple
 metadata files one transaction or change their saved format.
+
+A scoped conversation write may supply captured turn metadata for a new
+transcript block. Explicit message metadata and already saved block metadata
+take precedence. Temporary native-history reconciliation uses this seam to retain
+its request's answering AI and mode without changing the parent session or
+rewriting historical attribution. The persisted metadata shape is unchanged.
 Live OpenCode messages and turn activity, like Codex progress, do not reload the
 project's session list. Routing progress refreshes the affected chat only. Durable
 session changes and explicit list-refresh hints still update the session tabs and

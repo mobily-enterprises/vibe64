@@ -145,6 +145,11 @@ identity, settings, draft and repair state below its session's `conversations/`
 directory. Each chat uses the existing JSKIT transcript policy with a separate
 filesystem scope and a persisted native provider conversation. Codex user-facing
 chats are not native ephemeral threads. They never appear in main History.
+When reconciling native messages, the accepted request's recorded selection and
+mode supply metadata for new transcript blocks, including progress and later
+assistant replies after an initial message. If no request receipt is available,
+the retained temporary selection supplies the identity. Existing block metadata
+is preserved; this does not relabel historical messages or inherit Main's model.
 The collection GET restores open chats; POST creates an idempotently named draft;
 PATCH saves presentation and settings. Draft and attachment saves omit model
 settings; only explicit model/thinking edits submit them. This prevents a stale
