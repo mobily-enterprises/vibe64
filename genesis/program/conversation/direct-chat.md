@@ -1277,7 +1277,10 @@ exact Vibe64 server controller that started it; if that controller disappears,
 the provider's complete process tree stops rather than surviving as an orphan.
 An OpenCode cold start gets one full readiness window rather than churning
 through short-lived replacement processes. Prompt admission still happens only
-after that service is ready. An immediate first message joins the same in-flight
+after that service is ready. Native plugin dependency downloads use the workspace's
+existing OpenCode cache across process restarts; npm prefers cached packages and
+fetches missing ones. Credentials and configuration remain in each private runtime.
+An immediate first message joins the same in-flight
 provider and native-session preparation instead of starting either operation
 again. A startup failure remains attached to the unsent message as a readable
 retryable error rather than becoming a generic server response.

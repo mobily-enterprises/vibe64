@@ -217,6 +217,8 @@ test("OpenCode process environment is minimal and injects Vibe64's deny-all help
     ANTHROPIC_API_KEY: "must-not-leak",
     DEEPSEEK_API_KEY: "must-not-leak",
     LANG: "en_AU.UTF-8",
+    npm_config_cache: "/host/npm-cache",
+    npm_config_userconfig: "/host/private-npmrc",
     OPENCODE_CONFIG_CONTENT: '{"agent":{"vibe64-economy":{"permission":"allow"}}}',
     PATH: "/usr/bin",
     RANDOM_APPLICATION_SECRET: "must-not-leak"
@@ -241,6 +243,12 @@ test("OpenCode process environment is minimal and injects Vibe64's deny-all help
   assert.equal(env.DEEPSEEK_API_KEY, undefined);
   assert.equal(env.RANDOM_APPLICATION_SECRET, undefined);
   assert.equal(env.LANG, "en_AU.UTF-8");
+  assert.equal(env.npm_config_cache, "/private/cache/npm");
+  assert.equal(env.npm_config_prefer_offline, "true");
+  assert.equal(env.npm_config_userconfig, undefined);
+  assert.equal(env.HOME, "/private/session/home");
+  assert.equal(env.XDG_CONFIG_HOME, "/private/session/config");
+  assert.equal(env.XDG_DATA_HOME, "/private/session/data");
   assert.equal(env.PATH, "/managed/shims:/usr/bin");
   assert.equal(env.VIBE64_AGENT_ENV_SOCKET, "/run/vibe64/agent.sock");
   assert.equal(env.VIBE64_GIT_COMMAND_SOCKET, "/run/vibe64/git.sock");
@@ -490,6 +498,7 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   assert.equal(request.baseEnv.GENESIS_PARSER_ROOT, "/release/genesis-parsers");
   assert.equal(request.baseEnv.GENESIS_PARSER_AUTO_INSTALL, "0");
   assert.equal(request.baseEnv.OPENCODE_DB, path.join(root, "state", "opencode.db"));
+  assert.equal(request.baseEnv.npm_config_cache, path.join(privateRoot, "cache", "npm"));
   assert.equal(request.credentialHome.home, path.join(privateRoot, "home"));
   assert.equal(server.executionId, executionId);
 

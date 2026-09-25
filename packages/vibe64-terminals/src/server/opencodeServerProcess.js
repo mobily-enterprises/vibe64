@@ -246,18 +246,22 @@ function safeOpenCodeEnvironment(baseEnv = {}, {
   shimDirs = []
 } = {}) {
   const homeRoot = path.join(privateRoot, "home");
+  const effectiveCacheRoot = cacheRoot || path.join(privateRoot, "cache");
   const managed = Object.fromEntries(Object.entries(managedEnv || {})
     .filter(([name, value]) => (
       /^VIBE64_[A-Z0-9_]+$/u.test(name) && value !== undefined && value !== null
     ))
     .map(([name, value]) => [name, String(value)]));
   return isolatedProcessEnv(baseEnv, {
-    cacheRoot: cacheRoot || path.join(privateRoot, "cache"),
+    cacheRoot: effectiveCacheRoot,
     configRoot: path.join(privateRoot, "config"),
     dataRoot: path.join(privateRoot, "data"),
     extraEnv: {
       ...managed,
       ...genesisParserEnvironment({ environment: baseEnv }),
+      // OpenCode installs plugin dependencies through npm, which ignores XDG_CACHE_HOME.
+      npm_config_cache: path.join(effectiveCacheRoot, "npm"),
+      npm_config_prefer_offline: "true",
       NO_PROXY: [text(baseEnv.NO_PROXY), OPENCODE_HOST, "localhost", "::1"]
         .filter(Boolean)
         .join(","),
