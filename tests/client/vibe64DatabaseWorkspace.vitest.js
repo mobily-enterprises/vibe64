@@ -153,6 +153,30 @@ const firstState = {
 const secondState = { ...firstState, schema: { ...firstState.schema, tables: [secondTable] } };
 
 describe("Database Workspace automatic table admission", () => {
+  it.each([
+    ["useAssistantSql", "SELECT count(*) FROM public.items;"],
+    ["useAssistantSql", "DELETE FROM public.items WHERE id = 1;"],
+    ["loadSql", "SELECT id FROM public.items ORDER BY id;"]
+  ])("preserves %s SQL on the first Data visit without executing it: %s", async (action, sql) => {
+    const fixture = mountDatabaseWorkspace({ initialState: firstState, view: "overview" });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      fixture.workspace[action](sql);
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("data");
+      expect(fixture.editor().props.value).toBe(sql);
+      expect(fixture.runQuery).not.toHaveBeenCalled();
+      fixture.workspace.activeView = "overview";
+      await flushWorkspace(fixture.runQuery);
+      fixture.workspace.activeView = "data";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.editor().props.value).toBe(sql);
+      expect(fixture.runQuery).not.toHaveBeenCalled();
+      await fixture.workspace.requestRun();
+      expect(fixture.runQuery).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ sql, automatic: false }));
+    } finally { await fixture.close(); }
+  });
+
   it("retains the originating Overview while visiting Data and returning, with a fresh sidebar selection", async () => {
     const before = mocks.overviewMounts;
     const unmounts = mocks.overviewUnmounts;

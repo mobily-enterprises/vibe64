@@ -35,6 +35,9 @@ Automatic database reads follow the visible Database pane. A retained hidden
 workspace defers automatic table opening until it is active again, including
 when schema data arrives after leaving. Returning to the same selected table
 keeps its mounted SQL draft and results rather than running that table again.
+Putting Copilot SQL, a snippet or a history entry into the editor preserves that
+SQL on the first Data visit. It waits for Run; initial table selection cannot
+replace it with a default query or execute it automatically.
 When a command finishes after the workspace is hidden, its follow-up state
 reload also defers to normal activation. The command keeps its result without
 creating an unavailable-resource error behind the hidden pane.

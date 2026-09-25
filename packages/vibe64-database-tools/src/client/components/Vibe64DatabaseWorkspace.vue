@@ -829,6 +829,7 @@ watch([state, () => props.active, activeView], ([next, active]) => {
   }
   if (activeView.value !== "data") return;
   if (!selectedTableName.value) {
+    if (sqlText.value.trim()) return;
     const firstTable = next.schema?.tables?.[0];
     if (firstTable) void openTable(firstTable, { rememberCurrent: false });
   } else {
