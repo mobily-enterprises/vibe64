@@ -371,6 +371,10 @@ and tool restrictions remain provider-enforced. Lifecycle operations carry the
 same scope and provider settings, without the parent session's runtime or binding.
 Codex wait retains the original deadline and interrupts the exact turn on timeout;
 OpenCode wait retains bounded-output validation even with an explicit timeout.
+Claude applies the helper's output limit to answer text and structured results;
+reasoning keeps the normal block-size limit instead of consuming that allowance.
+Router refuses interrupted or failed helper results before parsing a decision,
+preserving the provider's error and cleaning up without dispatching the request.
 Claude reports its managed execution ID before inference so the parent request
 can retain it for restart cleanup. Cleanup uses the captured native reference and
 must verify stop; it does not authorize another inference. Cancellation before

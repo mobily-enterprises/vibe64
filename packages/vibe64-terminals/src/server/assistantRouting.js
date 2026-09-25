@@ -166,7 +166,9 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       const result = await agent.waitForEphemeralConversationTurn(scope, {
         conversationId: helper.conversationId, runId: helper.runId, executionProfile: helper.executionProfile
       }, helperContext);
-      if (result?.ok !== true) throw failure(result?.error || "Routing could not finish. Retry or choose a mode.");
+      if (result?.ok !== true || (result.status && result.status !== "completed")) {
+        throw failure(result?.error || "Routing could not finish. Retry or choose a mode.");
+      }
       decision = parseRoutingDecision(result.rawText || result.text);
     } catch (error) { generationError = error; }
     try {

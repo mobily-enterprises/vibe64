@@ -259,8 +259,9 @@ function createClaudeSessionAgentProvider({
       messages: [...entry.messages.values()], error: entry.turn?.error || "", status };
   }
 
-  function checkOutputLimit(entry, value) {
-    const limit = entry.profile?.limits.maxOutputCharacters || 4 * 1024 * 1024;
+  function checkOutputLimit(entry, value, role = "assistant") {
+    // Helper limits bound the answer; reasoning retains the normal block limit.
+    const limit = (role !== "thinking" && entry.profile?.limits.maxOutputCharacters) || 4 * 1024 * 1024;
     if (value.length > limit) throw error("Claude output exceeded its size limit.");
   }
 
@@ -320,7 +321,7 @@ function createClaudeSessionAgentProvider({
         const delta = event.delta?.text ?? event.delta?.thinking;
         if (block && typeof delta === "string") {
           block.text += delta;
-          checkOutputLimit(entry, block.text);
+          checkOutputLimit(entry, block.text, block.role);
           await publishMessage(entry, block);
           await entry.onEvent?.({ type: block.role === "thinking" ? "thinking" : "text", text: delta, threadId: entry.id });
         }
@@ -332,7 +333,7 @@ function createClaudeSessionAgentProvider({
       }
     } else if (frame.type === "assistant") {
       for (const block of claudeMessageBlocks(frame)) {
-        checkOutputLimit(entry, block.text);
+        checkOutputLimit(entry, block.text, block.role);
         await publishMessage(entry, block);
       }
     } else if (frame.type === "result") {

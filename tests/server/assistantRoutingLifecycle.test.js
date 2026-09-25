@@ -170,6 +170,18 @@ test("Auto uses a bounded helper then ordinary delivery and exactly one visible 
   assert.equal(f.state().reviewStatus, "completed");
 });
 
+test("interrupted Router results retain the provider error and never dispatch partial decisions", async (t) => {
+  const f = await fixture(t);
+  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, status: "interrupted",
+    text: '{"mode":"code","reason":"explicit_implementation"}', error: "Claude output exceeded its size limit." });
+  await assert.rejects(f.service.send("session-1", request, f.context), /Claude output exceeded its size limit/u);
+  assert.equal(f.state().status, "failed");
+  assert.equal(f.state().error, "Claude output exceeded its size limit.");
+  assert.equal(f.state().helper, null);
+  assert.equal(f.cleanupCalls(), 1);
+  assert.equal(f.sends.length, 0);
+});
+
 test("changing routing settings while classifying does not retarget this request", async (t) => {
   const f = await fixture(t);
   const classify = f.agent.waitForEphemeralConversationTurn;

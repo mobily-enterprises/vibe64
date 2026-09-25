@@ -829,6 +829,46 @@ test("scoped Claude helpers use the resolved model and can stop while main chat 
   assert.equal(main.lastInput.message, "Continue main");
 });
 
+test("Claude router reasoning does not consume the structured answer limit", async (t) => {
+  const f = await fixture(t);
+  const context = { assistantSelection: f.context.assistantSelection, sessionId: "router_output",
+    assistantScope: { id: "router_output", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "helper-runtime") } };
+  const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "economy", workloadId: "request_routing" });
+  const { conversationId } = await f.provider.createConversation(context, { ephemeral: true, executionProfile });
+  await f.provider.startConversationTurn(context, { conversationId, executionProfile, message: "Classify", messageId: "router-output" });
+  const event = f.processes.at(-1).options.onEvent;
+  const thinking = "Reasoning summary. ".repeat(120);
+  assert.ok(thinking.length > executionProfile.limits.maxOutputCharacters);
+  await event({ type: "stream_event", event: { type: "message_start", message: { id: "router-answer" } } });
+  await event({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } } });
+  await event({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { thinking } } });
+  await event({ type: "assistant", message: { id: "router-answer", content: [{ type: "thinking", thinking }] } });
+  const decision = { mode: "code", reason: "explicit_implementation" };
+  await event({ type: "result", subtype: "success", structured_output: decision });
+  const result = await f.provider.waitForConversationTurn(context, { conversationId });
+  assert.equal(result.status, "completed");
+  assert.deepEqual(JSON.parse(result.text), decision);
+  assert.equal(f.written.length, 0, "helper reasoning stays outside main chat");
+  await f.provider.deleteConversation(context, { conversationId });
+});
+
+test("Claude helpers still reject oversized answer text and structured results", async (t) => {
+  const f = await fixture(t);
+  const context = { assistantSelection: f.context.assistantSelection, sessionId: "helper_limit",
+    assistantScope: { id: "helper_limit", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "helper-runtime") } };
+  const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "economy", workloadId: "request_routing" });
+  const { conversationId } = await f.provider.createConversation(context, { ephemeral: true, executionProfile });
+  await f.provider.startConversationTurn(context, { conversationId, executionProfile, message: "Classify", messageId: "helper-limit" });
+  const event = f.processes.at(-1).options.onEvent;
+  const oversized = "x".repeat(executionProfile.limits.maxOutputCharacters + 1);
+  await event({ type: "stream_event", event: { type: "message_start", message: { id: "oversized-answer" } } });
+  await event({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } } });
+  await assert.rejects(event({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { text: oversized } } }), /output exceeded/u);
+  await assert.rejects(event({ type: "assistant", message: { id: "oversized-answer", content: [{ type: "text", text: oversized }] } }), /output exceeded/u);
+  await assert.rejects(event({ type: "result", subtype: "success", structured_output: { mode: oversized } }), /output exceeded/u);
+  await f.provider.deleteConversation(context, { conversationId });
+});
+
 test("Claude changes provider controls before model and keeps the native conversation", async (t) => {
   const f = await fixture(t);
   const home = path.join(f.providerOptions.systemRoot, "ai-connections", "codex", "deepseek");
