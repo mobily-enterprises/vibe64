@@ -92,7 +92,13 @@ before the next resource/source archive step. Every attempt invokes it, includin
 resumption at a later durable phase, so the callback must be idempotent and handle
 already-removed source. Throwing or returning `ok: false` preserves the existing
 archive failure/retry behavior. There is no default callback or maintenance policy.
-This callback belongs to ordinary archival; renewal retains its own transaction.
+Renewal invokes the same callback after predecessor shutdown and successor
+acknowledgement, before source/archive preparation. It supplies `renewal: true`
+and the existing renewal artifact reader/writer remains the persistence owner
+for its quiesced predecessor. Callback failure uses the renewal rollback/retry
+transaction. Successful committed maintenance publishes `session-archived` only
+after removing the retained predecessor tree, making finalized archive access
+available to embedding hosts.
 
 The store's explicit `withArchivedSession(sessionId, operation)` serializes with
 archive publication, rejects remaining active/closing trees, validates the

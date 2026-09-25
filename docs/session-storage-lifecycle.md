@@ -1,6 +1,6 @@
 # Session storage lifecycle extensions
 
-These server-only operations let an embedding host prepare for ordinary session
+These server-only operations let an embedding host prepare for session
 archival and inspect a fully finalized archive. Standalone Vibe64 registers no
 preparation callback and performs no automatic retention, provider deletion, or
 native context replacement through these operations. They add no routes, timer,
@@ -8,19 +8,20 @@ environment settings, or default retention period. Explicit replacement creates
 an optional journal in existing changeover metadata; ordinary sessions and
 existing archives require no conversion.
 
-## Preparation before ordinary archival
+## Preparation before archival
 
 Register through the existing `vibe64.sessions` service:
 
 ```js
-sessions.setArchivePreparation(async ({ phase, runtime, session }) => {
+sessions.setArchivePreparation(async ({ phase, runtime, session, renewal = false }) => {
   // Preserve any additional host-owned evidence before the next archive step.
   // Return normally on success; throw or return { ok: false, error } on failure.
 });
 ```
 
-Pass `null` to remove the callback. Other values are rejected. An admitted
-attempt retains the callback selected when that attempt began.
+Pass `null` to remove the callback. Other values are rejected. An ordinary archive
+attempt retains the callback selected when that attempt began; renewal reads the
+configured callback when it reaches predecessor archival.
 
 The callback runs under the session agent-write lock, after the ordinary
 terminal/output shutdown stage and before resource release or source archival
@@ -44,8 +45,17 @@ Use preparation to preserve or reconcile evidence. Do not delete native history
 here: Vibe64's archive has not yet been published. Do not recursively call
 `archiveSession` or acquire the same agent-write lock from this callback.
 
-Renewal uses its separate transaction and does not invoke this callback. An
-embedding host must not assume it captured every renewal or historical archive.
+Renewal invokes the same callback with `renewal: true` after predecessor shutdown
+and successor acknowledgement, before preparing the predecessor source/archive.
+Its existing workflow lock and quiesced state exclude ordinary session writes.
+Use `store.readArtifactForRenewal` and `store.writeJsonArtifactForRenewal` for
+host-owned evidence at this boundary; ordinary artifact access rejects quiesced
+sessions. `phase` is `stopping`, or `source` when source recovery was already
+prepared. Failure follows renewal's existing rollback/retry transaction. Do not
+start new session processes from the hook. After committed renewal maintenance
+removes the retained predecessor tree, the service publishes `session-archived`
+for that predecessor. Hosts can then schedule finalized-archive inspection.
+Neither archive path retroactively invokes preparation for historical archives.
 
 ## Access to a finalized archive
 
@@ -205,10 +215,23 @@ each inspected main, superseded, orphaned and subagent JSONL transcript, includi
 sidechains and retained rewind branches. It reuses the bounded native frame
 reader (16 MiB per frame); malformed/truncated input fails preservation.
 OpenCode emits `{ type: "thread", thread, text: [] }`, then
-`{ type: "message", message, text }` using its existing JSKIT client and message
-normalizer. Its native response cap is 2 MiB; large histories fail instead of
-being truncated. Both exports have a five-minute provider-work deadline and
-2 GiB record cap, with the same awaited callback ownership on cancellation.
+`{ type: "message", message, text }` using its authenticated server owner and
+existing message text normalizer. Native `/session/:id/message` exports one
+message per page, newest first, passing the opaque `X-Next-Cursor` header as
+`before` until no continuation remains. Raw `{ info, parts }` records preserve
+native IDs, timestamps and model attribution from `info.modelID`/`info.providerID`
+or the user's `info.model` fields. The export rejects invalid pages, unknown
+roles, foreign session IDs, duplicate IDs, repeated cursors, more than 20,000
+pages, or a response over 64 MiB. Cursors are limited to 8,192 characters and
+message ID suffixes to 256 characters so progress tracking also stays bounded.
+A single oversized message fails preservation; no truncated history can
+authorize deletion. The experimental V2 cursor endpoint is not used: on
+OpenCode 1.18.31 it can return an empty projection while the stable endpoint
+still holds messages written through the ordinary bridge. Ordinary conversation
+reads retain their existing limits.
+Both exports have a five-minute provider-work deadline and 2 GiB record cap,
+with the same awaited callback ownership on cancellation. OpenCode storage reads
+also enforce a ten-second request deadline and propagate caller cancellation.
 
 All three owners project readable user/assistant text without attachment blocks.
 Claude also projects goal conditions; Codex projects its native goal objective.

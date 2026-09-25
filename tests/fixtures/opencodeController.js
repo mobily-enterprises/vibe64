@@ -51,6 +51,7 @@ async function controllerHarness({
   beforeReadSession = null,
   beforeDeleteSession = null,
   listConversationChildren = async () => [],
+  readConversationStoragePage = async () => ({ data: [], nextCursor: null }),
   catalogProviders = providerResult,
   commandEnvironmentGate = null,
   gitActorFailure = null,
@@ -393,6 +394,7 @@ async function controllerHarness({
       }
       const started = {
         listConversationChildren,
+        readConversationStoragePage,
         client: serverClient || client(),
         options,
         workdir: options.workdir,

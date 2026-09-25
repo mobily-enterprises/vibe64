@@ -128,7 +128,8 @@ until that cleanup finishes; realtime notification delivery does not delay it.
 After a server restart, admitted archives resume from durable progress. Failed
 recovery preserves the evidence and requires an explicit retry.
 Hosts can register preparation before ordinary archival removes resources and
-source. Failed preparation stops that archive attempt. Fully published archives
+source, and before renewal archives its stopped predecessor. Failed preparation
+uses the existing archive or renewal recovery path. Fully published archives
 can be inspected through a guarded server operation. These extension points add
 no automatic history deletion or context rotation to the standalone editor.
 Explicit host operations can inventory and retire verified native histories,
@@ -141,9 +142,11 @@ and goals, alongside available rollout artifacts. The provider verifies the same
 content again before deletion. Hosts receive normalized chat text for durable
 retention; these exports do not promise a resumable native database backup.
 All three provider owners supply attachment-free readable text with available
-branch and message provenance. An archived host can atomically publish text and
-recovery artifacts in the existing session archive before native deletion, and
-later prune exact artifact paths through the same archive owner.
+branch and message provenance. OpenCode exports large histories in bounded
+pages; an incomplete or oversized export prevents deletion. An archived host can
+atomically publish text and recovery artifacts in the existing session archive
+before native deletion, and later prune exact artifact paths through the same
+archive owner.
 Selecting a session shows incoming saved work as soon as its version check
 confirms it, while the file-change details continue loading in the background.
 The chat header gives three session tabs room to show their labels, hides the

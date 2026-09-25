@@ -383,13 +383,19 @@ test("OpenCode retirement does not recreate archived source or make inference an
     forDirectory(directory) { inspectedDirectories.push(directory); return this; },
     readSession: async (id) => { if (!rows.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 }); return rows.get(id); },
     sessionStatus: async (id) => ({ type: busyChild && id === "ses_child" ? "busy" : "idle" }),
-    messages: async () => ({ data: [{ id: "question", type: "user", time: { created: 123 }, content: [
-      { type: "text", text: "Keep OpenCode question" }, { type: "file", url: "data:image/png;base64,payload" }
-    ] }, { id: "answer", parentID: "question", type: "assistant", time: { created: 124 }, modelID: "model", providerID: "provider",
-      content: [{ type: "text", text: "Keep OpenCode answer" }] }] }),
+    messages: async () => assert.fail("native preservation must use bounded pages"),
     deleteSession: async (id) => { deleted.push(id); rows.clear(); } };
+  const pageCalls = [];
   const h = await controllerHarness({ serverClient: client, listConversationChildren: async (id) => id === "ses_parent" && rows.size
-    ? [{ id: "ses_child", parentID: id, directory: rows.get(id).location.directory }] : [] });
+    ? [{ id: "ses_child", parentID: id, directory: rows.get(id).location.directory }] : [],
+    readConversationStoragePage: async (id, { before, signal }) => {
+      assert.equal(signal.aborted, false);
+      pageCalls.push([id, before]);
+      return before ? { data: [{ info: { id: "msg_question", sessionID: id, role: "user", time: { created: 123 } },
+        parts: [{ type: "text", text: "Keep OpenCode question" }, { type: "file", url: "data:image/png;base64,payload" }] }], nextCursor: null }
+        : { data: [{ info: { id: "msg_answer", sessionID: id, role: "assistant", time: { created: 124 }, modelID: "model", providerID: "provider" },
+          parts: [{ type: "text", text: "Keep OpenCode answer" }] }], nextCursor: "opaque+/=" };
+    } });
   t.after(async () => { await h.controller.closeAllForProject(); await rm(h.root, { recursive: true, force: true }); });
   const workdir = h.session.metadata.source_path;
   for (const id of ["ses_parent", "ses_child"]) rows.set(id, { id, location: { directory: workdir }, time: { updated: 1 } });
@@ -406,10 +412,11 @@ test("OpenCode retirement does not recreate archived source or make inference an
       for (const conversation of conversations) {
         const entries = [];
         await exportConversation(conversation.conversationId, async (record) => entries.push(...record.text));
-        assert.deepEqual(entries.map((entry) => entry.text), ["Keep OpenCode question", "Keep OpenCode answer"]);
+        assert.deepEqual(entries.map((entry) => entry.text), ["Keep OpenCode answer", "Keep OpenCode question"]);
         assert.equal(entries[0].branchId, conversation.conversationId);
-        assert.equal(entries[0].createdAt, new Date(123).toISOString());
-        assert.equal(entries[1].modelId, "model");
+        assert.equal(entries[1].createdAt, new Date(123).toISOString());
+        assert.equal(entries[0].modelId, "model");
+        assert.equal(entries[0].modelProviderId, "provider");
       }
       return proof();
     }
@@ -417,6 +424,72 @@ test("OpenCode retirement does not recreate archived source or make inference an
   assert.deepEqual(result.conversationIds, ["ses_child", "ses_parent"]);
   assert.deepEqual(deleted, ["ses_parent"]);
   assert.deepEqual(inspectedDirectories, [workdir, workdir]);
+  assert.deepEqual(pageCalls, ["ses_child", "ses_parent", "ses_child", "ses_parent"].flatMap((id) => [[id, ""], [id, "opaque+/="]]));
   assert.equal(h.promptCalls.length, 0);
   await assert.rejects(stat(workdir), { code: "ENOENT" });
+});
+
+test("OpenCode native export rejects incomplete pages, repeated history, caps and cancellation before deletion", async (t) => {
+  let deleted = false;
+  let nextPage;
+  let pageCalls = 0;
+  let native;
+  const h = await controllerHarness({
+    serverClient: { health: async () => ({ healthy: true }), readSession: async () => {
+      if (deleted) throw Object.assign(new Error("missing"), { statusCode: 404 });
+      return native;
+    },
+      sessionStatus: async () => ({ type: "idle" }), deleteSession: async () => { deleted = true; } },
+    readConversationStoragePage: async (_id, { before, signal }) => {
+      signal.throwIfAborted();
+      pageCalls++;
+      return nextPage(before);
+    }
+  });
+  t.after(async () => { await h.controller.closeAllForProject(); await rm(h.root, { recursive: true, force: true }); });
+  native = { id: "ses_parent", location: { directory: h.session.metadata.source_path } };
+  const binding = { engineId: "opencode", conversationId: native.id, workdir: native.location.directory };
+  const message = (id = "msg_one") => ({ info: { id, sessionID: native.id, role: "user", time: { created: 1 } }, parts: [{ type: "text", text: "Keep text" }] });
+  const preserve = async ({ exportConversation }) => { await exportConversation(native.id, async () => {}); return proof(); };
+  const retire = (options = {}) => h.controller.retireConversationHistory("session-1", binding, {
+    runtime: h.runtime, session: { ...h.session, status: "archived" }, beforeDelete: preserve, ...options
+  });
+  for (const response of [
+    { data: [] }, null, { data: [message(), message("msg_two")], nextCursor: null },
+    { data: [], nextCursor: "missing" }, { data: [message()], nextCursor: "x".repeat(8193) }
+  ]) {
+    nextPage = () => response;
+    await assert.rejects(retire(), /incomplete or invalid native message page/);
+  }
+  for (const row of [message(`msg_${"x".repeat(257)}`), { ...message(), parts: null },
+    { ...message(), info: { ...message().info, role: "future-role" } },
+    { ...message(), info: { ...message().info, sessionID: "ses_foreign" } }]) {
+    nextPage = () => ({ data: [row], nextCursor: null });
+    await assert.rejects(retire(), /invalid or duplicate native message/);
+  }
+  nextPage = () => ({ data: [message()], nextCursor: "repeat" });
+  await assert.rejects(retire(), /duplicate native message/);
+  nextPage = (before) => ({ data: [message(before ? "msg_two" : "msg_one")], nextCursor: "repeat" });
+  await assert.rejects(retire(), /repeated a native history cursor/);
+  pageCalls = 0;
+  nextPage = () => ({ data: [message(`msg_${pageCalls}`)], nextCursor: `page-${pageCalls}` });
+  await assert.rejects(retire(), /page limit/);
+  assert.equal(pageCalls, 20_000);
+  const controller = new AbortController();
+  pageCalls = 0;
+  nextPage = () => ({ data: [message()], nextCursor: "unread" });
+  await assert.rejects(retire({ signal: controller.signal, beforeDelete: async ({ exportConversation }) => {
+    await exportConversation(native.id, async (record) => { if (record.type === "message") controller.abort(); });
+    return proof();
+  } }), { name: "AbortError" });
+  assert.equal(pageCalls, 1);
+  assert.equal(deleted, false);
+  const emptyRecords = [];
+  nextPage = () => ({ data: [], nextCursor: null });
+  await retire({ beforeDelete: async ({ exportConversation }) => {
+    await exportConversation(native.id, async (record) => emptyRecords.push(record.type));
+    return proof();
+  } });
+  assert.deepEqual(emptyRecords, ["thread"]);
+  assert.equal(deleted, true);
 });
