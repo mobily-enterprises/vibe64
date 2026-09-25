@@ -10,7 +10,7 @@ const CHATGPT_SECURITY_SETTINGS_URL = "https://chatgpt.com/#settings/Security";
 const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "gu");
 const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
 
-function useProviderAccountsSetup(props) {
+function useProviderAccountsSetup(props, { onConnected } = {}) {
   const accountRows = computed(() => Array.isArray(props.accountRows) ? props.accountRows : []);
   const gitIdentityInputs = reactive({});
   const apiKeyInputs = reactive({});
@@ -43,7 +43,8 @@ function useProviderAccountsSetup(props) {
     startDeviceAuth,
     stopPolling
   } = useAccountAuthSessions(props.accounts, {
-    accountRows
+    accountRows,
+    onConnected
   });
   const errorMessage = computed(() => {
     if (authSessionErrorMessage.value) {

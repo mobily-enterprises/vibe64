@@ -363,6 +363,65 @@ describe("useAccountAuthSessions", () => {
     const { codexAuthSessionNeedsTerminalAttention } = await importAccountAuthSessions();
     expect(codexAuthSessionNeedsTerminalAttention(null)).toBe(false);
   });
+
+  it.each(["codex", "claude"])("reports immediate %s connection success with its routing result", async (id) => {
+    const account = { id, connected: true, routing: { ok: false, error: "Review routing setup." } };
+    const accounts = { loadError: "", startAuthCommand: {}, refresh: vi.fn(),
+      startAuth: vi.fn().mockResolvedValue({ id: "finished-login", account, status: "connected" }) };
+    const onConnected = vi.fn();
+    const setIntervalFn = vi.fn(() => 1);
+    const auth = await mountAccountAuthSessions(accounts, {
+      accountRows: [{ id, connected: false }], browserWindow: null,
+      onConnected, clearIntervalFn: vi.fn(), setIntervalFn
+    });
+    await auth.startBrowserAuth(id);
+    expect(onConnected).toHaveBeenCalledExactlyOnceWith(account);
+    expect(accounts.refresh).toHaveBeenCalledOnce();
+    expect(auth.activeSessionFor(id)).toBe(null);
+    expect(setIntervalFn).not.toHaveBeenCalled();
+  });
+
+  it("reports completed login once when realtime and polling overlap", async () => {
+    const pending = deferred();
+    const account = { id: "claude", connected: true, routing: { ok: true, initialized: [] } };
+    const session = { id: "claude-login", account: { id: "claude" }, status: "authenticating" };
+    const accounts = { loadError: "", startAuthCommand: {}, refresh: vi.fn(),
+      startAuth: vi.fn().mockResolvedValue(session),
+      readAuthSession: vi.fn().mockReturnValueOnce(pending.promise)
+        .mockResolvedValue({ ...session, account, status: "connected" }) };
+    const onConnected = vi.fn();
+    const auth = await mountAccountAuthSessions(accounts, {
+      accountRows: [{ id: "claude" }], browserWindow: null, onConnected,
+      clearIntervalFn: vi.fn(), setIntervalFn: vi.fn(() => 1)
+    });
+    await auth.startBrowserAuth("claude");
+    const poll = auth.pollAuthSessions();
+    await lastSocketHandler()({ sessionId: session.id });
+    pending.resolve({ ...session, account, status: "connected" });
+    await poll;
+    expect(onConnected).toHaveBeenCalledExactlyOnceWith(account);
+    expect(accounts.refresh).toHaveBeenCalledOnce();
+  });
+
+  it("does not reopen routing from a cancelled login's late status response", async () => {
+    const pending = deferred();
+    const session = { id: "cancelled-login", account: { id: "codex" }, status: "authenticating" };
+    const accounts = { loadError: "", startAuthCommand: {}, refresh: vi.fn(),
+      startAuth: vi.fn().mockResolvedValue(session), cancelAuthSession: vi.fn(),
+      readAuthSession: vi.fn().mockReturnValue(pending.promise) };
+    const onConnected = vi.fn();
+    const auth = await mountAccountAuthSessions(accounts, {
+      accountRows: [{ id: "codex" }], browserWindow: null, onConnected,
+      clearIntervalFn: vi.fn(), setIntervalFn: vi.fn(() => 1)
+    });
+    await auth.startDeviceAuth("codex");
+    const poll = auth.pollAuthSessions();
+    expect(await auth.cancelSession(session)).toBe(true);
+    pending.resolve({ ...session, status: "connected" });
+    await poll;
+    expect(onConnected).not.toHaveBeenCalled();
+    expect(auth.activeSessionFor("codex")).toBe(null);
+  });
 });
 
 function importAccountAuthSessions() {

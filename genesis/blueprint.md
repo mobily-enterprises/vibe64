@@ -215,8 +215,12 @@ Recommendations rank compatible models for each job, favouring Astra for plannin
 and DeepSeek for economical implementation. They preserve saved choices rather
 than silently changing models when the catalogue or recommendation policy changes.
 Connecting a newly usable assistant fills missing routing roles with compatible
-recommendations and opens them for review. Repeating setup preserves saved
-choices, including roles the owner deliberately left empty. New ordinary chats
+recommendations and opens them for review. Native Codex and Claude sign-in open
+this review from their confirmed login result, including immediate completion.
+A routing setup failure
+keeps the AI connected and appears in the review so the owner can finish setup.
+Repeating setup preserves saved choices, including roles the owner deliberately
+left empty. New ordinary chats
 start in Plan with review off. Creation and renewal share a workflow picker that
 previews the user's effective Plan and Code models, including Shared backup.
 Creating the first chat explicitly fills missing defaults, so included OpenCode

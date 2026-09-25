@@ -93,6 +93,13 @@ preserves every saved choice, including an explicit empty role. A workflow needs
 usable Plan and Code before initialization; a disconnected engine does not get
 a profile merely because independent helpers are available elsewhere. Routing
 setup failures are reported separately from a successfully connected key.
+Native Codex and Claude authentication retain that routing result in the current
+auth session, so the protected completion read includes it after the terminal
+closes. The login component emits the confirmed account to its existing parent,
+which opens the routing proposal and carries any setup warning. Immediate login
+completion uses the same path as realtime or polling completion. Overlapping or
+cancelled login reads cannot reopen the proposal, and refreshing ordinary account
+status does not imply a new successful login. This adds no saved account format.
 
 The form separates planning/coding, independent assistance and collaborator
 backup. Unsaved edits refresh a cancellable preview with a stable loading area;

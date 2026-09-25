@@ -1897,6 +1897,7 @@ test("Codex creates a new local identity once per successful sign-in and preserv
       accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
       projectService: { currentTargetRoot: () => root },
       invalidateAgentRuntimes: async () => { invalidations += 1; return { ok: true }; },
+      inspectRoutingConfiguration: async () => { throw new Error("Routing catalogue is temporarily unavailable."); },
       runHostToolCommand: async () => ({ ok: true, output: "Logged in using ChatGPT" }),
       publishAuthSessionChanged: async (session) => { published.push(session); },
       runAuthTerminalCommand: (input) => startGatewayAuthTestTerminal(input, {
@@ -1915,7 +1916,11 @@ test("Codex creates a new local identity once per successful sign-in and preserv
     const loginId = await readCodexLoginId(systemRoot);
     assert.notEqual(loginId, initialId);
     assert.equal(invalidations, 1);
-    await service.readAuthSession({ sessionId: successful.id });
+    const completed = await service.readAuthSession({ sessionId: successful.id });
+    assert.equal(completed.status, "connected", "Routing setup failure does not undo successful authentication");
+    assert.equal(completed.account.routing.ok, false);
+    assert.equal(completed.account.routing.error, "Routing catalogue is temporarily unavailable.");
+    assert.deepEqual(completed.account.routing, published.findLast((session) => session.id === successful.id).account.routing);
     await service.getCodexStatus();
     assert.equal(await readCodexLoginId(systemRoot), loginId);
     assert.equal(invalidations, 1, "Polling a completed sign-in must not rotate its ID again");
@@ -1926,7 +1931,8 @@ test("Codex creates a new local identity once per successful sign-in and preserv
       () => published.some((session) => session.id === failed.id && session.terminalStatus === "exited"),
       "Failed Codex sign-in did not finalize."
     );
-    await service.readAuthSession({ sessionId: failed.id });
+    const failedSession = await service.readAuthSession({ sessionId: failed.id });
+    assert.equal(failedSession.account.routing, undefined, "A failed attempt does not reuse an earlier setup result");
     assert.equal(await readCodexLoginId(systemRoot), loginId);
     assert.equal(invalidations, 1);
   });

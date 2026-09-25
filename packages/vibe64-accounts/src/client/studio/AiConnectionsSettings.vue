@@ -73,6 +73,7 @@ const routingSaving = ref(false);
 const editorRoutingPending = ref(false);
 const editorRoutingSetupError = ref("");
 const nativeRoutingReady = ref(false);
+const nativeRoutingSetupError = ref("");
 const editorOrigin = ref("direct");
 const editorStarter = ref(null);
 const editorStarterSurface = ref("");
@@ -606,10 +607,17 @@ function finishConnectionRouting() {
   emit("connected");
 }
 
-watch(nativeSetupConnected, (connected, previous) => {
-  if (connected && previous === false && nativeSetupOpen.value) nativeRoutingReady.value = true;
+function nativeConnected(account) {
+  if (!props.isOwner || !nativeSetupOpen.value || account?.id !== nativeSetupProviderId.value) return;
+  nativeRoutingSetupError.value = account.routing?.ok === false ? account.routing.error : "";
+  nativeRoutingReady.value = true;
+}
+watch(nativeSetupOpen, (open) => {
+  if (!open) {
+    nativeRoutingReady.value = false;
+    nativeRoutingSetupError.value = "";
+  }
 });
-watch(nativeSetupOpen, (open) => { if (!open) nativeRoutingReady.value = false; });
 
 function requestRemove(connection = {}) {
   if (connection.removable === false) return;
@@ -1251,7 +1259,7 @@ defineExpose({ openProvider });
     >
       <v-card :rounded="smAndDown ? 0 : 'xl'">
         <v-card-text class="vibe64-codex-setup__body">
-          <ModelRoutingForm v-if="nativeRoutingReady" :engine-id="nativeSetupProviderId" :connection-id="nativeSetupProviderId === 'codex' ? 'openai' : 'anthropic'" :connection-engines="[nativeSetupProviderId]" :connection-label="nativeSetupProviderId === 'codex' ? 'GPT' : 'Claude'" :setup-error="nativeSetupAccount?.routing?.ok === false ? nativeSetupAccount.routing.error : ''" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
+          <ModelRoutingForm v-if="nativeRoutingReady" :engine-id="nativeSetupProviderId" :connection-id="nativeSetupProviderId === 'codex' ? 'openai' : 'anthropic'" :connection-engines="[nativeSetupProviderId]" :connection-label="nativeSetupProviderId === 'codex' ? 'GPT' : 'Claude'" :setup-error="nativeRoutingSetupError" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
           <CodexProviderConnections
             v-else-if="nativeSetupProviderId === 'codex'"
             v-model="codexModelProviderId"
@@ -1274,6 +1282,7 @@ defineExpose({ openProvider });
             :status-loaded="aiStatusLoaded"
             :title="nativeSetupDetails.label"
             @back="backFromNativeSetup"
+            @connected="nativeConnected"
           >
             <template #close>
               <v-btn

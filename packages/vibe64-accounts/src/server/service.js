@@ -1922,6 +1922,7 @@ function createService({
       sessionId,
       terminalStatus: terminal.status
     });
+    if (account.connected && metadata.routing) account.routing = metadata.routing;
 
     return publicAuthSession({
       account,
@@ -2050,6 +2051,8 @@ function createService({
       });
       if (["codex", "claude"].includes(accountId) && account?.connected === true && exitCode === 0) {
         account.routing = await initializeModelRouting({ engineIds: [accountId], vibe64User });
+        const metadata = authMetadata(id);
+        if (metadata) metadata.routing = account.routing;
       }
       authDebug("server.auth.account_changed.publish.start", {
         account: accountDebugSummary(account),

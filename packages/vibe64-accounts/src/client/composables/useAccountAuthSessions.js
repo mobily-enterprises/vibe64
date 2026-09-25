@@ -41,6 +41,7 @@ function useAccountAuthSessions(
     clearIntervalFn,
     clipboard = defaultClipboard(browserWindow),
     nowFn = Date.now,
+    onConnected = () => {},
     pollIntervalMs = DEFAULT_RECOVERY_POLL_INTERVAL_MS,
     setIntervalFn
   } = {}
@@ -160,7 +161,8 @@ function useAccountAuthSessions(
         throw new Error("Login did not return an auth session.");
       }
       rememberAuthSession(session);
-      startRecoveryPolling();
+      await handleAuthSessionUpdate(session);
+      if (authBusy.value) startRecoveryPolling();
     } catch (error) {
       authDebug("client.auth.start.error", {
         accountId,
@@ -336,12 +338,14 @@ function useAccountAuthSessions(
     event = "client.auth.session.updated",
     previousSession = null
   } = {}) {
+    const accountId = authSessionAccountId(nextSession) || authSessionAccountId(previousSession);
+    if (activeSessions[accountId]?.id !== nextSession.id) return;
     rememberAuthSession(nextSession);
     if (nextSession.status === "connected") {
-      const accountId = authSessionAccountId(nextSession) || authSessionAccountId(previousSession);
       forgetSession(nextSession);
-      await refreshStatus();
       localError.value = "";
+      onConnected(nextSession.account);
+      await refreshStatus();
       authDebug("client.auth.session.connected", {
         accountId,
         authSessionId: String(nextSession.id || previousSession?.id || ""),

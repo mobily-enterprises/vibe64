@@ -527,7 +527,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["back", "continue"]);
+const emit = defineEmits(["back", "continue", "connected"]);
 
 const {
   CHATGPT_SECURITY_SETTINGS_URL,
@@ -575,7 +575,7 @@ const {
   statusReady,
   toggleApiKeyForm,
   updateAuthTerminalExpanded
-} = useProviderAccountsSetup(props);
+} = useProviderAccountsSetup(props, { onConnected: (account) => emit("connected", account) });
 
 const setupRows = computed(() => accountRows.value.map((account) => {
   const session = accountActiveSession(account);
