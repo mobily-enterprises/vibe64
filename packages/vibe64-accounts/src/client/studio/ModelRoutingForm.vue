@@ -260,7 +260,7 @@ async function reload() {
     </div>
     <div class="d-flex justify-end flex-wrap ga-2 pt-4">
       <v-btn variant="text" :disabled="saving" @click="emit('close')">{{ proposalMode ? suggestedChanges.length ? 'Keep current routing' : 'Done' : 'Cancel' }}</v-btn>
-      <v-btn v-if="canEdit && (!proposalMode || suggestedChanges.length)" variant="flat" color="primary" :disabled="saving || stale || previewPending || Boolean(loadError) || baseRevision === null || !engines.length || Boolean(proposalMode && !proposals.length)" @click="save">{{ saving ? 'Saving…' : proposalMode ? `Apply ${proposals.length} changes` : 'Save routing' }}</v-btn>
+      <v-btn v-if="canEdit && (!proposalMode || suggestedChanges.length)" variant="flat" color="primary" :disabled="saving || stale || previewPending || Boolean(loadError) || baseRevision === null || !engines.length || Boolean(proposalMode && !proposals.length)" @click="save">{{ saving ? 'Saving…' : proposalMode ? `Apply ${proposals.length} ${proposals.length === 1 ? 'change' : 'changes'}` : 'Save routing' }}</v-btn>
     </div>
   </section>
 </template>
