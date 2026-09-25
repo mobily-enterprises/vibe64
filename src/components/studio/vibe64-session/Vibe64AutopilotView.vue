@@ -56,13 +56,20 @@
               :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'primary' : undefined)"
               :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable) || temporaryAiWorkspace?.updateRepairTask?.busy"
               height="48"
-              :icon="saveWorkRequiresUpdate ? mdiSourcePull : mdiSourceCommit"
+              icon
               :title="saveWorkCheckAvailable ? `${saveWorkTitle}. Click to check for updates.` : saveWorkTitle"
               type="button"
               variant="tonal"
               width="48"
               @click="requestSessionSaveWork"
-            />
+            >
+              <v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourcePull" />
+              <span v-else-if="props.workState?.destination?.mode === 'github'" class="studio-autopilot__save-symbol" aria-hidden="true">
+                <v-icon :icon="mdiContentSaveOutline" size="26" class="studio-autopilot__save-symbol-disk" />
+                <v-icon :icon="mdiSourceCommit" size="24" class="studio-autopilot__save-symbol-commit" />
+              </span>
+              <v-icon v-else :icon="mdiContentSaveOutline" />
+            </v-btn>
           </template>
           <span role="status">Checking…</span>
         </v-tooltip>
@@ -859,28 +866,33 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="saveWorkConfirmOpen" max-width="42rem" scrollable>
-      <v-card>
-        <v-card-title>Review session changes</v-card-title>
+    <v-dialog v-model="saveWorkConfirmOpen" max-width="30rem" aria-label="Save changes" scrollable>
+      <v-card rounded="xl">
+        <v-card-title>Save changes</v-card-title>
         <v-card-text>
-          <p>{{ vibe64SessionDisplayTitle(props.session) }} · {{ props.workState?.changedPaths?.length || 0 }} changed {{ props.workState?.changedPaths?.length === 1 ? 'file' : 'files' }}</p>
-          <p class="mt-3">Your working files are already kept in this session. This action captures all changed files on disk as one commit, including eligible untracked files. Save open file edits first.</p>
-          <v-btn class="my-3" height="48" variant="text" @click="cancelSaveWork(); selectSessionTool('changes')">View diff</v-btn>
-          <v-sheet v-if="saveWorkReview" color="surface-light" rounded="lg" class="pa-4" style="overflow-wrap: anywhere">
+          <div class="d-flex align-center justify-space-between ga-2 mb-2">
+            <span>{{ props.workState?.changedPaths?.length || 0 }} changed {{ props.workState?.changedPaths?.length === 1 ? 'file' : 'files' }}</span>
+            <v-btn height="48" variant="text" @click="cancelSaveWork(); selectSessionTool('changes')">View diff</v-btn>
+          </div>
+          <v-sheet v-if="saveWorkReview" color="surface-light" rounded="lg" class="pa-3" style="overflow-wrap: anywhere">
+            <div class="text-label-small text-medium-emphasis">{{ saveWorkReview.mode === 'github' ? 'GitHub' : saveWorkReview.mode === 'local_source' ? 'Local project' : 'Project version' }}</div>
             <strong>{{ saveWorkReview.repository }}:{{ saveWorkReview.branch }}</strong>
-            <p class="mt-2">{{ publicationExplanation }}</p>
+            <p v-if="sessionPullRequest" class="text-body-small mt-1 mb-0">PR #{{ sessionPullRequest.number }} · {{ sessionPullRequest.headBranch }} → {{ sessionPullRequest.baseBranch }}</p>
           </v-sheet>
           <p v-else role="status">Refresh repository status to review the destination.</p>
-          <p class="mt-3">Database rows and conversation history are separate. Publishing the app is a separate action.</p>
-          <p v-if="saveWorkReview?.mode === 'github'" class="mt-2">A push or pull request may run this repository's GitHub automation.</p>
-          <p v-if="githubProject && !sessionPullRequest?.number" class="mt-3">Recommended: create a draft pull request to review these changes on a separate branch.</p>
-          <p v-if="props.workState?.publicationRequiresPullRequest && !sessionPullRequest?.number" class="mt-3">This project requires a pull request before Vibe64 can publish these changes.</p>
+          <p class="text-body-small mt-3 mb-0">Save open file edits first.</p>
+          <details class="studio-autopilot__save-details text-body-small">
+            <summary class="py-3">What's included</summary>
+            <p>All changed files on disk, including new files. Database data and chat history are separate. This does not deploy the app.</p>
+            <p v-if="saveWorkReview?.mode === 'github'" class="mt-2">GitHub automation may run.</p>
+          </details>
+          <p v-if="props.workState?.publicationRequiresPullRequest && !sessionPullRequest?.number" role="status" class="text-body-small mt-2">A pull request is required.</p>
           <p v-if="saveWorkDisabled" role="status" class="mt-3">{{ saveWorkTitle }}</p>
         </v-card-text>
-        <v-card-actions class="flex-column align-stretch ga-2">
+        <v-card-actions class="flex-wrap ga-2 px-6 pb-5">
           <v-spacer />
           <v-btn :disabled="saveWorkSending" height="48" type="button" variant="text" @click="cancelSaveWork">
-            Keep working
+            Cancel
           </v-btn>
           <v-btn
             v-if="githubProject && !sessionPullRequest?.number"
@@ -899,7 +911,6 @@
             :disabled="saveWorkDisabled || !saveWorkReview || (props.workState?.publicationRequiresPullRequest && !sessionPullRequest?.number)"
             type="button"
             :variant="githubProject && !sessionPullRequest?.number ? 'outlined' : 'flat'"
-            class="h-auto py-3"
             @click="confirmSaveWork"
           >
             <span class="text-wrap" style="overflow-wrap: anywhere">{{ saveWorkSending ? "Committing…" : publicationLabel }}</span>
@@ -932,6 +943,7 @@ import {
   mdiBroom,
   mdiCogOutline,
   mdiConsoleNetworkOutline,
+  mdiContentSaveOutline,
   mdiSourceCommit,
   mdiDotsVertical,
   mdiEyePlusOutline,
@@ -944,7 +956,7 @@ import {
   mdiStop,
   mdiUndo,
 } from "@mdi/js";
-import { vibe64SessionDisplayTitle, vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
+import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
 import Vibe64AssistantAccessPanel from "@/components/studio/vibe64-session/Vibe64AssistantAccessPanel.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
@@ -1476,15 +1488,8 @@ const githubProject = computed(() => githubProjectAvailable(props.projectContext
 const assistantCodeRestrictionMessage = computed(() => assistantPurposes.value.code?.message || "Code is unavailable. Review model routing.");
 const publicationLabel = computed(() => {
   const destination = saveWorkReview.value;
-  if (destination?.mode === "managed_git") return "Save project version";
-  if (destination?.mode === "github") return `Commit & push to ${destination.repository}:${destination.branch}`;
-  return `Commit to ${destination?.branch || "branch"}`;
-});
-const publicationExplanation = computed(() => {
-  if (saveWorkReview.value?.mode === "managed_git") return "Keep these changes as the current version of this branch in Vibe64.";
-  if (saveWorkReview.value?.mode === "local_source") return "Updates the opened local project folder and branch. Push to a remote is separate.";
-  if (sessionPullRequest.value) return `Updates this pull request's branch. Does not merge it into ${sessionPullRequest.value.baseBranch}.`;
-  return "Advances this GitHub branch now. Other sessions must Update to receive this version.";
+  if (destination?.mode === "github") return "Commit & push";
+  return "Save";
 });
 const dashboardContext = computed(() => ({
   ...(dashboardSessionContext.value || {}),
@@ -2059,6 +2064,26 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__save-work--check {
   opacity: var(--v-disabled-opacity);
+}
+
+.studio-autopilot__save-symbol {
+  position: relative;
+  width: 34px;
+  height: 32px;
+}
+
+.studio-autopilot__save-symbol-disk,
+.studio-autopilot__save-symbol-commit {
+  position: absolute;
+  opacity: 0.72;
+}
+
+.studio-autopilot__save-symbol-disk { left: 0; bottom: 0; }
+.studio-autopilot__save-symbol-commit { right: 0; top: 0; }
+
+.studio-autopilot__save-details summary {
+  min-height: 48px;
+  cursor: pointer;
 }
 
 .studio-autopilot__project-panel,

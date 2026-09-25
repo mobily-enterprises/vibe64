@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page, type Request, type Route } from "@playwright/test";
+import { mdiContentSaveOutline, mdiSourceCommit } from "@mdi/js";
 
 import { assistantStatusServer } from "./support/assistant-status-server";
 
@@ -793,16 +794,20 @@ test.describe("direct chat", () => {
     await saveButton.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("Review session changes", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Save changes", { exact: true })).toBeVisible();
     await expect(dialog.getByText("example-target-app:main", { exact: true })).toBeVisible();
-    await expect(dialog.getByText(/Database rows and conversation history are separate/iu)).toBeVisible();
+    await expect(dialog.getByText(/Database data and chat history are separate/iu)).not.toBeVisible();
+    await dialog.getByText("What's included", { exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(dialog.getByText(/Database data and chat history are separate/iu)).toBeVisible();
 
-    await dialog.getByRole("button", { name: "Keep working", exact: true }).click();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     expect(messages).toHaveLength(0);
 
     await saveButton.click();
-    const confirmButton = dialog.getByRole("button", { name: "Save project version", exact: true });
+    await expect(dialog.getByText(/Database data and chat history are separate/iu)).not.toBeVisible();
+    const confirmButton = dialog.getByRole("button", { name: "Save", exact: true });
     await confirmButton.click();
 
     await expect.poll(() => saves).toHaveLength(1);
@@ -812,12 +817,15 @@ test.describe("direct chat", () => {
   });
 
   for (const scenario of [
-    { mode: "local_source", repository: "/workspace/example-target-app", branch: "feature/editor", requirePullRequest: false },
-    { mode: "github", repository: "example/project", branch: "main", requirePullRequest: false },
-    { mode: "github", repository: "example/project", branch: "feature/review", requirePullRequest: true }
+    { mode: "local_source", repository: "/workspace/example-target-app", branch: "main", requirePullRequest: false, width: 390 },
+    { mode: "local_source", repository: "/workspace/example-target-app", branch: "feature/editor", requirePullRequest: false, width: 1280 },
+    { mode: "managed_git", repository: "example-target-app", branch: "main", requirePullRequest: false, width: 768 },
+    { mode: "github", repository: "example/project", branch: "main", requirePullRequest: false, width: 390 },
+    { mode: "github", repository: "example/project", branch: "feature/a-long-branch-name-for-reviewing-session-changes", requirePullRequest: false, width: 1280 },
+    { mode: "github", repository: "example/project", branch: "feature/review", requirePullRequest: true, width: 390 }
   ]) {
-    test(`reviews the exact ${scenario.mode} destination with PR requirement ${scenario.requirePullRequest}`, async ({ page }) => {
-      await page.setViewportSize({ width: 390, height: 844 });
+    test(`reviews the exact ${scenario.mode} destination with PR requirement ${scenario.requirePullRequest} at ${scenario.width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width: scenario.width, height: 844 });
       const destinationReview = { sessionId: SESSION_ID, mode: scenario.mode, repository: scenario.repository, branch: scenario.branch };
       const saves: Record<string, unknown>[] = [];
       const messageRequestReads: string[] = [];
@@ -829,19 +837,27 @@ test.describe("direct chat", () => {
         ...readyProjectSelectionPayload, currentProject: project, projects: [project]
       }));
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-      await page.getByRole("button", { name: "Review selected session changes", exact: true }).click();
+      const save = page.getByRole("button", { name: "Review selected session changes", exact: true });
+      await expect(save.locator(`path[d="${mdiContentSaveOutline}"]`)).toBeVisible();
+      await expect(save.locator(`path[d="${mdiSourceCommit}"]`)).toHaveCount(scenario.mode === "github" ? 1 : 0);
+      await page.screenshot({ path: testInfo.outputPath(`save-icon-${scenario.mode}-${scenario.width}.png`), animations: "disabled" });
+      await save.click();
       const review = page.getByRole("dialog");
       await expect(review.getByText(`${scenario.repository}:${scenario.branch}`, { exact: true })).toBeVisible();
       await expect(review.getByText(/Save open file edits first/)).toBeVisible();
       for (const button of await review.getByRole("button").all()) {
         await expect.poll(async () => (await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
       }
+      const bounds = await review.locator(".v-card").boundingBox();
+      expect(bounds!.width).toBeLessThanOrEqual(scenario.width);
+      expect(bounds!.height).toBeLessThan(600);
+      await page.screenshot({ path: testInfo.outputPath(`save-dialog-${scenario.mode}-${scenario.width}.png`), animations: "disabled" });
       if (scenario.mode === "local_source") {
         expect(messageRequestReads).toHaveLength(0);
         await expect(page.getByRole("region", { name: "Message requests", exact: true })).toHaveCount(0);
       }
       const publish = review.getByRole("button", { name: scenario.mode === "github"
-        ? `Commit & push to ${scenario.repository}:${scenario.branch}` : `Commit to ${scenario.branch}`, exact: true });
+        ? "Commit & push" : "Save", exact: true });
       if (scenario.requirePullRequest) {
         await expect(publish).toBeDisabled();
         await review.getByRole("button", { name: "Create draft PR", exact: true }).click();
@@ -850,6 +866,7 @@ test.describe("direct chat", () => {
         await expect(pullRequest.getByText(`${scenario.branch} → main`, { exact: true })).toBeVisible();
         await expect(pullRequest.getByText(/The base branch stays unchanged/)).toBeVisible();
         await expect(pullRequest.getByRole("checkbox", { name: "Create as draft" })).toBeChecked();
+        await page.screenshot({ path: testInfo.outputPath(`pull-request-${scenario.width}.png`), animations: "disabled" });
         expect(saves).toHaveLength(0);
       } else {
         await publish.click();

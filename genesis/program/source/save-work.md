@@ -31,16 +31,20 @@ Git commands.
 
 ## Public contract
 
-File Save writes only that file in the session. Review changes opens a publication
-review with the session, changed-file count, View diff and a captured destination.
-The review describes the complete on-disk tree, including eligible untracked
-files, and tells people to save open buffers first. It distinguishes database
-rows, conversation history and application publishing from the code commit.
+File Save writes only that file in the session. The compact Save changes review
+shows the changed-file count, View diff and captured destination, with a short
+reminder to save open editor changes first. A collapsed What's included section
+explains the on-disk scope, new files, separate database/chat data and deployment.
 
-The confirmation is Commit to the local branch, Save project version for
-Vibe64 Git, or Commit & push to the exact GitHub repository and branch. GitHub
-also offers Create draft PR as the recommended path and explains possible
-repository automation. A PR session names its head destination and base.
+The confirmation is Save for local and Vibe64 Git projects, or Commit & push for
+GitHub, with the exact repository and branch shown once above the actions.
+GitHub also offers Create draft PR; a required-PR policy remains visible and
+disables direct publication. A PR session names its head destination and base.
+The PR form keeps its destination, title, description and draft choice, with
+publication details collapsed. Repository automation is explained in those details.
+The header Save icon is a floppy disk for local and Vibe64 Git destinations;
+GitHub combines a floppy disk and Git commit symbol with partial transparency
+so both remain visible. Update retains its distinct existing icon and behavior.
 The browser retains the reviewed destination across refreshes; the server
 rechecks session, mode, repository and branch before preparation and under the
 publication lock. A stale review requires a new review. These commands do not

@@ -724,11 +724,12 @@ Retries keep the saved handover without asking the AI to write it again. If the
 source or conversation changed, the existing text returns for review with
 current source details before the person confirms continuation.
 
-File Save writes the session file. The chat and Changes actions instead open
-Review changes, naming the session, whole-tree file scope and exact destination.
-A local project offers Commit to its branch; a Vibe64-only project offers Save
-project version; GitHub offers Create draft PR and an explicit Commit & push
-to the named repository and branch. The server rejects an outdated destination
+File Save writes the session file. The chat and Changes actions instead open a
+compact Save changes review with the changed-file count, View diff and exact
+destination. Local and Vibe64-only projects offer Save; GitHub offers Create
+draft PR and Commit & push. Scope details stay collapsed until requested.
+The Save control uses a floppy disk, combined with a translucent Git commit
+symbol for GitHub destinations. The server rejects an outdated destination
 review. Working files, recovery checkpoints, project versions, database rows,
 conversation history and application publishing have separate effects.
 

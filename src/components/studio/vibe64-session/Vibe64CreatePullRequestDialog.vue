@@ -60,22 +60,24 @@ async function submit() {
         <div class="d-flex align-center ga-3"><v-icon :icon="mdiSourcePull" color="primary" /><h2 class="text-title-large">Create pull request</h2></div>
         <v-btn :icon="mdiClose" size="48" variant="text" aria-label="Close pull request dialog" :disabled="pending" @click="emit('update:modelValue', false)" />
       </div>
-      <v-card-text class="d-flex flex-column ga-4">
-        <div class="text-body-medium">Publish work from <strong>{{ vibe64SessionDisplayTitle(session) }}</strong>.</div>
-        <v-sheet color="surface-light" rounded="lg" class="pa-4 pr-destination">
+      <v-card-text class="d-flex flex-column ga-3">
+        <v-sheet color="surface-light" rounded="lg" class="pa-3 pr-destination">
           <div class="text-label-large">{{ repository }}</div>
           <div class="text-body-medium mt-1">{{ branch }} → {{ base }}</div>
-          <p class="text-body-small text-medium-emphasis mt-2 mb-0">Commit and push all session files on disk to this branch, then open a pull request. Future commits update that branch. The base branch stays unchanged.</p>
+          <p class="text-body-small text-medium-emphasis mt-2 mb-0">The base branch stays unchanged.</p>
         </v-sheet>
-        <p class="text-body-small ma-0">Save open file edits first. Database rows and conversation history are separate. GitHub automation may run; Vibe64 app publishing is separate.</p>
+        <p class="text-body-small ma-0">Save open file edits first.</p>
         <p v-if="!destinationReview" role="status">Refresh repository status before creating a pull request.</p>
         <v-text-field v-model="title" label="Title" variant="outlined" maxlength="256" :disabled="pending" hide-details />
         <v-textarea
           v-model="body" label="Description" placeholder="What changed, and how did you check it?" variant="outlined"
-          rows="5" auto-grow maxlength="65536" :disabled="pending" hide-details
+          rows="3" auto-grow maxlength="65536" :disabled="pending" hide-details
         />
         <v-switch v-model="draft" color="primary" label="Create as draft" :disabled="pending" hide-details />
-        <p v-if="pending" role="status" class="text-body-medium ma-0">Publishing session work and creating your pull request…</p>
+        <details class="pr-details text-body-small">
+          <summary class="py-3">What gets published</summary>
+          <p>All saved file changes are committed and pushed to the PR branch. Database data and chat history are separate. GitHub automation may run; this does not deploy the app.</p>
+        </details>
       </v-card-text>
       <v-card-actions class="pa-5 pt-2">
         <v-spacer />
@@ -92,4 +94,5 @@ async function submit() {
 </template>
 <style scoped>
 .pr-destination { overflow-wrap: anywhere; }
+.pr-details summary { min-height: 48px; cursor: pointer; }
 </style>
