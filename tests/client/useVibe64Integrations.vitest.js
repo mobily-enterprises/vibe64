@@ -205,6 +205,51 @@ it("a confirmed session switch clears the previous draft before accepting the ne
   expect(model.changedElsewhere.value).toBe(false);
 });
 
+it("a busy save keeps the draft editable and allows retry without reloading", async () => {
+  const { model } = fixture();
+  model.configuration.value.extensions.name = "draft";
+  mocks.save = vi.fn().mockRejectedValueOnce(Object.assign(new Error("Another assistant operation is starting. Try again in a moment."), {
+    statusCode: 409, code: "vibe64_agent_write_mode_busy"
+  })).mockResolvedValueOnce(payload("edited draft"));
+
+  await model.save();
+
+  expect(model.error.value).toBe("Another assistant operation is starting. Try again in a moment.");
+  expect(model.configuration.value.extensions.name).toBe("draft");
+  expect(model.dirty.value).toBe(true);
+  expect(model.changedElsewhere.value).toBe(false);
+  model.configuration.value.extensions.name = "edited draft";
+  await model.save();
+  expect(mocks.save).toHaveBeenCalledTimes(2);
+  expect(mocks.save.mock.calls[1][0].body).toMatchObject({
+    baseHash: "first", configuration: { extensions: { name: "edited draft" } }
+  });
+  expect(model.configuration.value.extensions.name).toBe("edited draft");
+  expect(model.dirty.value).toBe(false);
+  expect(model.error.value).toBe("");
+  expect(mocks.resource.reload).not.toHaveBeenCalled();
+});
+
+it.each(["vibe64_source_editor_conflict", "vibe64_source_editor_file_exists"])("a save conflict retains the draft and requires reload (%s)", async (code) => {
+  const { model } = fixture();
+  model.configuration.value.extensions.name = "draft";
+  mocks.save = vi.fn().mockRejectedValue(Object.assign(new Error("Configuration changed. Reload before saving."), {
+    statusCode: 409, code
+  }));
+
+  await model.save();
+  expect(model.configuration.value.extensions.name).toBe("draft");
+  expect(model.changedElsewhere.value).toBe(true);
+  await model.save();
+  expect(mocks.save).toHaveBeenCalledTimes(1);
+
+  mocks.resource.reload.mockResolvedValue({ data: payload("outside edit") });
+  await model.discard();
+  expect(model.configuration.value.extensions.name).toBe("outside edit");
+  expect(model.changedElsewhere.value).toBe(false);
+  expect(model.dirty.value).toBe(false);
+});
+
 it.each([false, true])("late save result from the previous session is ignored (failure=%s)", async (failure) => {
   const { context, model } = fixture();
   let settle;

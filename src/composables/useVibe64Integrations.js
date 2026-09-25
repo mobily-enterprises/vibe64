@@ -343,7 +343,9 @@ export function useVibe64Integrations(context, selectedId) {
       if (disposed || path.value !== requestPath) return;
       fieldErrors.value = failure.fieldErrors || failure.details?.fieldErrors || {};
       error.value = failure.message || "Configuration could not be saved. Reload to check for other changes.";
-      if (failure.status === 409 || failure.statusCode === 409) changedElsewhere.value = true;
+      if (failure.code === "vibe64_source_editor_conflict" || failure.code === "vibe64_source_editor_file_exists") {
+        changedElsewhere.value = true;
+      }
     }
   }
 

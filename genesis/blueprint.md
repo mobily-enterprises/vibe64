@@ -895,6 +895,8 @@ project session and checks the application's connection state again.
 Unsaved integration configuration stays available when people switch sessions or
 visit another project page in the same tab. Returning checks for outside edits;
 closing or reloading warns before losing an unsaved draft.
+If saving is temporarily blocked by assistant work, people can retry with their
+draft intact. Actual outside edits still require reloading before saving.
 
 
 Stripe and Paddle configuration includes recurring payment plans, feature names,

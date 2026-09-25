@@ -1049,6 +1049,9 @@ application again, never restored as a saved Connected claim. Configuration and
 credentials are not stored with this navigation preference. Session navigation retains unsaved configuration drafts in tab memory, keyed
 by the session API path. Returning restores the draft and compares its baseline
 with the current file; late save/reload results remain scoped to their request.
+An assistant-operation busy response preserves the editable draft and allows
+Save to be retried. Only a changed file or a concurrently created configuration
+requires reloading before saving.
 Drafts are not written to browser storage. Page unload prompts when a draft is
 unsaved because a full reload would discard that memory.
 
