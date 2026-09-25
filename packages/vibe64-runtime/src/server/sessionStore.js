@@ -1704,8 +1704,7 @@ function createVibe64SessionStore({
                 await rename(temporary, target);
               } finally { await source.close(); await rm(temporary, { force: true }); }
             }
-            await beforeWork?.({ stage: "publish", archivePath: archived.archivePath, sessionRoot: archived.sessionRoot });
-            await publishExtractedSessionArchive(archived);
+            await publishExtractedSessionArchive(archived, { beforeWork });
             return { ok: true, paths: [...published].sort() };
           } catch (error) {
             // Do not let a retry publish a partly modified extraction.
@@ -1739,7 +1738,8 @@ function createVibe64SessionStore({
     return target;
   }
 
-  async function publishExtractedSessionArchive(session, beforePublish = async () => {}) {
+  async function publishExtractedSessionArchive(session, { beforePublish, beforeWork } = {}) {
+    await beforeWork?.({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
     const candidatePath = `${session.archivePath}.${randomUUID()}.tmp`;
     try {
       const result = await runCommand("tar", ["-czf", candidatePath, "-C", path.dirname(session.sessionRoot), session.sessionId], {
@@ -1747,7 +1747,7 @@ function createVibe64SessionStore({
       });
       if (!result.ok) throw vibe64Error("Cannot prepare updated session archive.", "vibe64_session_archive_write_failed");
       await validateSessionArchive(candidatePath);
-      await beforePublish(candidatePath);
+      await beforePublish?.(candidatePath);
       const candidate = await open(candidatePath, "r");
       try { await candidate.sync(); } finally { await candidate.close(); }
       // Keep the archive index, metadata, messages and archival time unchanged.
@@ -1769,10 +1769,12 @@ function createVibe64SessionStore({
         catch (error) { if (!isMissingPathError(error)) throw error; }
       }
       if (removed.length) {
-        await beforeWork?.({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
-        await publishExtractedSessionArchive(session, async (candidatePath) => {
-          const proof = await beforePrune({ session, relativePaths: removed, candidatePath });
-          if (proof?.ok !== true) throw new Error("The host did not confirm artifact expiry.");
+        await publishExtractedSessionArchive(session, {
+          beforeWork,
+          beforePublish: async (candidatePath) => {
+            const proof = await beforePrune({ session, relativePaths: removed, candidatePath });
+            if (proof?.ok !== true) throw new Error("The host did not confirm artifact expiry.");
+          }
         });
       }
       return { ok: true, paths: removed };
@@ -1801,10 +1803,12 @@ function createVibe64SessionStore({
         removed.push(entry.name);
       }
       if (!removed.length) return { ok: true, attachmentIds: [] };
-      await beforeWork?.({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
-      await publishExtractedSessionArchive(session, async (candidatePath) => {
-        const proof = await beforePrune({ session, attachmentIds: [...removed].sort(), candidatePath });
-        if (proof?.ok !== true) throw new Error("The host did not confirm attachment expiry.");
+      await publishExtractedSessionArchive(session, {
+        beforeWork,
+        beforePublish: async (candidatePath) => {
+          const proof = await beforePrune({ session, attachmentIds: [...removed].sort(), candidatePath });
+          if (proof?.ok !== true) throw new Error("The host did not confirm attachment expiry.");
+        }
       });
       return { ok: true, attachmentIds: removed.sort() };
     }, { beforeWork });

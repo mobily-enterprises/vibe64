@@ -492,6 +492,11 @@ async function createOpenCodeServerProcess({
     return rows;
   }
 
+  function storageConversationPath(conversationId) {
+    if (!/^ses_[a-zA-Z0-9]+$/u.test(conversationId)) throw new TypeError("Invalid OpenCode conversation id.");
+    return `/session/${encodeURIComponent(conversationId)}`;
+  }
+
   try {
     processEnv = safeOpenCodeEnvironment(env, {
       cacheRoot: text(cacheRoot) ? path.resolve(text(cacheRoot)) : "",
@@ -613,8 +618,7 @@ async function createOpenCodeServerProcess({
       port: selectedPort,
       privateRoot: normalizedPrivateRoot,
       async listConversationChildren(conversationId, { signal } = {}) {
-        if (!/^ses_[a-zA-Z0-9]+$/u.test(conversationId)) throw new TypeError("Invalid OpenCode conversation id.");
-        const children = await storageInventory(`/session/${encodeURIComponent(conversationId)}/children`, { signal });
+        const children = await storageInventory(`${storageConversationPath(conversationId)}/children`, { signal });
         if (children.some((child) => child.parentID !== conversationId)) {
           throw new Error("OpenCode returned an incomplete or invalid child inventory.");
         }
@@ -630,19 +634,18 @@ async function createOpenCodeServerProcess({
         return rows.filter((row) => row.directory === directory);
       },
       async readConversationStorage(conversationId, { signal } = {}) {
-        if (!/^ses_[a-zA-Z0-9]+$/u.test(conversationId)) throw new TypeError("Invalid OpenCode conversation id.");
         // The native storage record does not resolve a live source workspace.
-        const { data } = await readStorageResponse(`/session/${encodeURIComponent(conversationId)}`, { signal, maxBytes: 4 * 1024 * 1024 });
+        const { data } = await readStorageResponse(storageConversationPath(conversationId), { signal });
         if (data?.id !== conversationId || !path.isAbsolute(data.directory || "")) {
           throw new Error("OpenCode returned an invalid native conversation record.");
         }
         return data;
       },
       async readConversationStoragePage(conversationId, { before = "", signal } = {}) {
-        if (!/^ses_[a-zA-Z0-9]+$/u.test(conversationId)) throw new TypeError("Invalid OpenCode conversation id.");
+        const route = `${storageConversationPath(conversationId)}/message`;
         if (typeof before !== "string" || before.length > 8192) throw new TypeError("Invalid OpenCode storage cursor.");
         const query = new URLSearchParams({ limit: "1", ...(before ? { before } : {}) });
-        const { data, headers } = await readStorageResponse(`/session/${encodeURIComponent(conversationId)}/message?${query}`, {
+        const { data, headers } = await readStorageResponse(`${route}?${query}`, {
           signal, maxBytes: 64 * 1024 * 1024
         });
         const nextCursor = headers.get("x-next-cursor");

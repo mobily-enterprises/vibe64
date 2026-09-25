@@ -50,6 +50,9 @@ export async function retireClaudeConversationHistory({ configRoot, binding, bef
   const id = requireClaudeSessionId(binding.conversationId);
   if (!path.isAbsolute(configRoot)) throw new TypeError("Claude retirement requires an absolute configuration root.");
   const root = path.resolve(configRoot);
+  const projects = path.join(root, "projects");
+  const isTranscript = (file) => !file.directory &&
+    file.path.startsWith(`${projects}${path.sep}`) && TRANSCRIPT_PATH_PATTERN.test(file.path);
   const missing = (error) => { if (error.code === "ENOENT") return null; throw error; };
   const inspect = async () => {
     await requireIdle();
@@ -67,7 +70,6 @@ export async function retireClaudeConversationHistory({ configRoot, binding, bef
       if (names.length > 10000) throw new Error("Claude storage directory exceeds its inspection limit.");
       return names;
     };
-    const projects = path.join(root, "projects");
     const projectNames = await directories(projects);
     const candidates = matchingClaudeProjectDirectories(projectNames, directory);
     const targets = [];
@@ -95,7 +97,7 @@ export async function retireClaudeConversationHistory({ configRoot, binding, bef
       if (info.isDirectory()) for (const name of (await directories(file)).sort()) await visit(path.join(file, name));
     };
     for (const target of targets.sort()) await visit(target);
-    const transcripts = files.filter((file) => !file.directory && file.path.startsWith(`${projects}${path.sep}`) && TRANSCRIPT_PATH_PATTERN.test(file.path));
+    const transcripts = files.filter(isTranscript);
     return targets.length ? [{ conversationId: id, workdir: binding.workdir, paths: targets, files,
       ...(transcripts.length ? { updatedAt: new Date(Math.max(...transcripts.map((file) => file.modified))).toISOString() } : {}) }] : [];
   };
@@ -106,10 +108,8 @@ export async function retireClaudeConversationHistory({ configRoot, binding, bef
       const output = createNativeHistoryExport(onRecord, { signal: boundedSignal });
       const [conversation] = await inspect();
       if (!conversation) throw new Error("Claude conversation disappeared before export.");
-      const projectRoot = path.join(root, "projects");
-      for (const file of conversation.files) {
-        if (file.directory || !file.path.startsWith(`${projectRoot}${path.sep}`) || !TRANSCRIPT_PATH_PATTERN.test(file.path)) continue;
-        const branchId = path.relative(projectRoot, file.path).split(path.sep).join("/");
+      for (const file of conversation.files.filter(isTranscript)) {
+        const branchId = path.relative(projects, file.path).split(path.sep).join("/");
         if (!file.size) continue;
         const stream = createReadStream(file.path, { end: file.size - 1, signal: boundedSignal });
         for await (const frame of readClaudeJsonFrames(stream)) {
@@ -134,10 +134,12 @@ export async function retireClaudeConversationHistory({ configRoot, binding, bef
         }
       }
       return output.complete();
-    }, remove: async (records) => {
-    await requireIdle();
-    for (const target of records[0].paths) await rm(target, { recursive: true, force: true });
-  } });
+    },
+    remove: async (records) => {
+      await requireIdle();
+      for (const target of records[0].paths) await rm(target, { recursive: true, force: true });
+    }
+  });
 }
 
 // Claude's SDK documents this layout. Only the requested native conversation is
