@@ -362,6 +362,36 @@ test("Stop cancels routing while helper cleanup finishes and prevents delivery",
   assert.equal(f.cleanupCalls(), 1);
 });
 
+test("Stop after classification finishes still prevents delivery while its helper closes", async (t) => {
+  const f = await fixture(t);
+  const closing = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const remove = f.agent.deleteEphemeralConversation;
+  f.agent.deleteEphemeralConversation = async (...args) => {
+    closing.resolve();
+    await release.promise;
+    return remove(...args);
+  };
+  const sending = f.service.send("session-1", request, f.context);
+  const rejected = assert.rejects(sending, { code: "vibe64_assistant_routing_cancelled" });
+  await closing.promise;
+  try {
+    assert.equal(f.helperCalls(), 1);
+    assert.equal(await f.service.cancel("session-1", f.context), true);
+    assert.equal(f.state().status, "cancelled");
+    assert.equal(f.sends.length, 0);
+  } finally {
+    release.resolve();
+  }
+  await rejected;
+  await f.restart().reconcile("session-1", f.context);
+  assert.equal(f.state().status, "cancelled");
+  assert.equal(f.state().helper, null);
+  assert.equal(f.state().input.message, request.message);
+  assert.equal(f.cleanupCalls(), 1);
+  assert.equal(f.sends.length, 0);
+});
+
 test("Stop reports a clean routing cancellation instead of the provider's AbortError", async (t) => {
   const f = await fixture(t, undefined, { beforeExclusive() {
     if (f.state()?.status === "cancelled" && !f.state().helper) {
@@ -525,6 +555,25 @@ test("restart recovery offers the unsent review for explicit retry and reviews e
   await f.restart().reconcile("session-1", f.context);
   assert.equal(f.sends.length, 2);
   assert.equal(f.state().reviewStatus, "completed");
+});
+
+test("Stop at a recovered Code-to-review boundary prevents Retry and late completion from starting review", async (t) => {
+  const f = await fixture(t, { mode: "code", review: true });
+  await f.service.send("session-1", request, f.context);
+  f.context.session.agentRuns = [completion().payload.agentRun];
+  const restarted = f.restart();
+  await restarted.reconcile("session-1", f.context);
+  assert.equal(f.state().status, "review_pending");
+  const stopping = restarted.cancel("session-1", f.context);
+  const lateCompletion = restarted.afterTurn("session-1", completion(), f.context);
+  assert.equal(await stopping, true);
+  await lateCompletion;
+  await assert.rejects(restarted.send("session-1", { ...request, reviewAction: "retry" }, f.context), /no pending review/i);
+  await f.restart().reconcile("session-1", f.context);
+  assert.equal(f.state().status, "done");
+  assert.equal(f.state().reviewStatus, "cancelled");
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.helperCalls(), 0);
 });
 
 test("restart during request preparation exposes recovery without automatically resending", async (t) => {
