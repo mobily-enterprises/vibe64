@@ -3562,7 +3562,9 @@ class CodexAppServerAgentProvider {
       () => client.request("thread/start", requestParams),
       "codex-app-server-thread-start"
     );
-    if (response?.thread?.historyMode === "legacy") {
+    // Native ephemeral helpers have no stored history and report "legacy".
+    // Paginated history is required only for persistent conversations.
+    if (params.ephemeral !== true && response?.thread?.historyMode === "legacy") {
       throw Object.assign(new Error("Codex did not create the required paginated conversation history. Update Codex before starting a conversation."), {
         code: "vibe64_codex_history_unsupported"
       });

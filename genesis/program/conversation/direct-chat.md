@@ -722,6 +722,9 @@ derived from its native thread and turn. It cannot reuse a preceding chat's
 checkpoint identity. Genuine goal continuations retain their existing outer owner.
 New durable threads explicitly request paginated history. Persistent history reads
 use paginated APIs only, and obsolete history cannot enter managed recovery.
+Native ephemeral Router and suggestion helpers have no saved history; Codex's
+`legacy` history label on those new threads does not trigger the durable-history
+guard. Main chat and user-facing temporary chats still require paginated history.
 Process restoration uses saved execution identities without the older timestamp
 inference. Unsupported runtime metadata requires a stopped-service upgrade; normal
 startup neither replaces it using an old PID-only format nor rewrites it.

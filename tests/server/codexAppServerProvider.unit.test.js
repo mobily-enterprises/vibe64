@@ -3107,19 +3107,36 @@ for (const failedMethod of ["thread/name/set", "thread/read"]) {
 
 test("codex provider does not persist ephemeral thread history at startup", async () => {
   for (const thread of [
+    { id: "thread-ephemeral", ephemeral: true, historyMode: "legacy" },
     { id: "thread-ephemeral", ephemeral: true, historyMode: "paginated" }
   ]) {
     const requests = [];
     const provider = new CodexAppServerAgentProvider({});
     provider.activeClient = async () => ({
-      async request(method) {
+      async request(method, params) {
         requests.push(method);
+        assert.equal(params.ephemeral, true);
+        assert.equal(Object.hasOwn(params, "historyMode"), false);
         return { thread };
       }
     });
-    assert.equal((await provider.startThread()).id, thread.id);
+    assert.equal((await provider.startThread({ ephemeral: true })).id, thread.id);
     assert.deepEqual(requests, ["thread/start"]);
   }
+});
+
+test("codex provider still rejects non-paginated persistent history", async () => {
+  const requests = [];
+  const provider = new CodexAppServerAgentProvider({});
+  provider.activeClient = async () => ({
+    async request(method, params) {
+      requests.push(method);
+      assert.equal(params.historyMode, "paginated");
+      return { thread: { id: "thread-persistent", ephemeral: false, historyMode: "legacy" } };
+    }
+  });
+  await assert.rejects(provider.startThread(), { code: "vibe64_codex_history_unsupported" });
+  assert.deepEqual(requests, ["thread/start"]);
 });
 
 test("codex provider reads full thread turns for response recovery", async () => {
