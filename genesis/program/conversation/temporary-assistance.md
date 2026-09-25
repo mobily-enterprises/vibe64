@@ -98,8 +98,9 @@ Each ordinary temporary chat reads availability from the same central resolver a
 Send, using its own workflow, mode and custom override. Its menu labels the user's
 effective destination and Shared backup, rather than using the main chat's last
 model or an account-wide preview. Mode changes return refreshed decisions without
-inference. Explicit model/thinking edits update that mode's saved override; their
-availability is validated against the current catalogue. Auto requires choosing
+inference. Toggling review keeps that override through the shared mode control;
+selecting another mode clears it. Explicit model/thinking edits update that mode's
+saved override; their availability is validated against the current catalogue. Auto requires choosing
 an explicit mode before customizing its model. A foreign backup cannot turn a
 Plan/Code override into a split-orchestrator pair. Configuration and connection changes refresh existing chats' decisions
 without replacing unsent drafts or switching away from Main chat or the selected

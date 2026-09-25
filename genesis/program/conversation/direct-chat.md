@@ -288,8 +288,10 @@ selection using its saved workflow, independently of the last native engine.
 Plan and Code resolve as a pair even when review is off. A member's foreign
 shared Backup replaces both roles; same-engine Backup replaces restricted roles.
 Auto requires direct access to Router, Plan and Code and never uses Backup.
-Exact model overrides apply only to explicit modes. Mode changes preserve the
-workflow; a deliberate assistant-selection change adopts its selected workflow.
+Exact model overrides apply only to explicit modes. Toggling review or selecting
+the current mode keeps its custom model/thinking choice; selecting another mode
+clears that override. Mode changes preserve the workflow; a deliberate
+assistant-selection change adopts its selected workflow.
 One icon beside Settings opens the mode choices, assigned models and review
 switch; these controls occupy no separate row above the composer. Its icon and
 accessible label reflect the selected mode. Owners open the shared Model routing

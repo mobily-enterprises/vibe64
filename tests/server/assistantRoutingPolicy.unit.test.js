@@ -188,12 +188,21 @@ test("scores do not admit unsupported Codex history routes; isolated Router has 
 test("independent recommendations compare engines, retain saved ties and filter Backup by connection scope", () => {
   const f = routingFixture();
   const options = { catalogs: f.input.catalogs, connectionAccess: f.input.connectionAccess };
+  const before = structuredClone(f.input);
   const recommended = recommendedRoutingAssignments(f.input.catalogs[1], options);
   assert.equal(recommended.plan.engineId, "opencode");
   assert.equal(recommended.code.engineId, "opencode");
   assert.equal(recommended.economy.engineId, "codex");
   assert.equal(recommended.router.modelId, "deepseek-flash");
   assert.equal(recommended.sharedBackup.modelProviderId, "deepseek");
+  assert.deepEqual(f.input, before, "recommendations do not rewrite saved assignments");
+  const withoutDeepSeek = { ...options, catalogs: [catalog(["openai"]), f.input.catalogs[1]] };
+  for (const catalogs of [withoutDeepSeek.catalogs, [...withoutDeepSeek.catalogs].reverse()]) {
+    const choices = recommendedRoutingAssignments(f.input.catalogs[1], { ...withoutDeepSeek, catalogs });
+    assert.equal(choices.economy.modelId, "gpt-6-luna");
+    assert.equal(choices.router.modelId, "gpt-6-luna");
+    assert.equal(choices.sharedBackup.modelId, "big-pickle");
+  }
   f.input.connectionAccess.find(({ modelProviderId }) => modelProviderId === "deepseek").ownerOnly = true;
   assert.equal(recommendedRoutingAssignments(f.input.catalogs[0], options).sharedBackup.modelId, "big-pickle");
   const engine = f.input.catalogs[1];
@@ -362,10 +371,26 @@ test("capability requirements are checked on effective models without changing d
 
 test("overrides cannot split a required Backup pair and direct Plan/Code cannot cross engines", () => {
   const f = routingFixture();
-  const result = f.resolve("code", { override: { role: "code", selection: f.roles.code } });
-  assert.equal(result.available, true, result.message);
-  assert.equal(result.effectiveSelection.engineId, "opencode");
+  const before = structuredClone(f.input);
+  const override = { role: "code", selection: { ...f.roles.code, variantId: "low" } };
+  const originalOverride = structuredClone(override);
+  for (const reviewEnabled of [false, true]) {
+    const result = f.resolve("code", { override, reviewEnabled });
+    assert.equal(result.available, true, result.message);
+    assert.equal(result.configuredSelection.variantId, "low");
+    assert.equal(result.effectiveSelection.engineId, "opencode");
+    assert.equal(result.planCodePair.plan.effectiveSelection.engineId, "opencode");
+    assert.equal(result.planCodePair.code.backupReason, "keep_workflow_together");
+    const sharedPlan = f.resolve("plan", { override: { role: "plan", selection: f.roles.code }, reviewEnabled });
+    assert.equal(sharedPlan.available, true, sharedPlan.message);
+    assert.equal(sharedPlan.effectiveSelection.engineId, "codex");
+    assert.equal(sharedPlan.planCodePair.code.effectiveSelection.engineId, "codex");
+    assert.equal(sharedPlan.backupUsed, false, "an accessible Plan override removes the need for Backup before resolving the pair");
+  }
+  assert.deepEqual(f.input, before);
+  assert.deepEqual(override, originalOverride);
   assert.equal(f.resolve("code", { override: { role: "code", selection: f.backup } }).available, false);
+  assert.equal(f.resolve("plan", { override: { role: "plan", selection: f.backup } }).available, false);
   assert.equal(f.resolve("economy", { override: { role: "economy", selection: f.backup } }).available, true);
 });
 

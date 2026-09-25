@@ -31,6 +31,8 @@ const goal = computed(() => props.session?.agentSession?.goal || props.session?.
 const hasGoal = computed(() => Boolean(goal.value && !["completed", "complete"].includes(goal.value.status)) ||
   Boolean(props.session?.agentSession?.turn?.goalStatus && !["completed", "complete"].includes(props.session.agentSession.turn.goalStatus)));
 const reviewAvailable = computed(() => !hasGoal.value && ["auto", "code"].includes(mode.value));
+const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
+  ...(mode.value === preferences.value?.mode && preferences.value.override ? { override: preferences.value.override } : {}) }));
 watch(preferences, (value) => { mode.value = value?.mode || ""; review.value = value?.review === true; }, { immediate: true });
 function selectionLabel(selection) {
   return `${engines.value.find(({ engineId }) => engineId === selection.engineId)?.label || selection.engineId} · ${selection.modelId}`;
@@ -67,7 +69,7 @@ const reviewDescription = computed(() => {
 const command = useCommand({
   access: "never", apiSuffix: VIBE64_SESSIONS_API_SUFFIX, placementSource: "vibe64.sessions.assistant-selection.update",
   buildCommandOptions: () => ({ method: "PATCH", path: vibe64SessionPath(readRefOrGetterValue(props.sessionsApiPath), props.session.sessionId, "/assistant-selection") }),
-  buildRawPayload: () => vibe64RealtimeOriginPayload({ assistantRouting: { mode: mode.value, review: review.value } }),
+  buildRawPayload: () => vibe64RealtimeOriginPayload({ assistantRouting: updatedPreferences.value }),
   onRunSuccess: (result) => { if (result?.ok === false) throw new Error(result.error || "Chat mode could not be saved."); },
   fallbackRunError: "Chat mode could not be saved.", suppressSuccessMessage: true,
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
@@ -78,7 +80,7 @@ async function save(nextMode = mode.value, nextReview = review.value) {
   mode.value = nextMode; review.value = nextReview; saving.value = true;
   saveError.value = "";
   try {
-    const result = props.savePreferences ? await props.savePreferences({ mode: mode.value, review: review.value }) : await command.run();
+    const result = props.savePreferences ? await props.savePreferences(updatedPreferences.value) : await command.run();
     if (result?.ok === false) throw new Error(result.error || "Chat mode could not be saved.");
     emit("saved");
   }

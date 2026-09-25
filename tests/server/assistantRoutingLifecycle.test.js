@@ -567,6 +567,72 @@ for (const review of [false, true]) {
     assert.equal(f.sends.at(-1).selection.engineId, "opencode");
     assert.equal(f.state().workflowEngineId, "codex", "a backup execution never chooses its own workflow profile");
   });
+
+  test(`a saved Code override survives member Backup, restart and owner return with review ${review}`, async (t) => {
+    const f = await fixture(t, { mode: "code", review });
+    const backup = sharedOpenCode(f);
+    await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
+    const override = { ...f.assignments.code, variantId: "low", selectionSource: "explicit" };
+    const preferences = JSON.stringify({ mode: "code", review, workflowEngineId: "codex", override });
+    f.metadata.assistant_routing = preferences;
+    f.context.vibe64User = { role: "member", username: "collaborator" };
+    await f.service.send("session-1", request, f.context);
+    assert.equal(f.sends[0].selection.engineId, "opencode");
+    assert.equal(f.state().decision.planCodePair.code.configuredSelection.variantId, "low");
+    assert.equal(f.state().decision.planCodePair.code.backupReason, "keep_workflow_together");
+    const restarted = f.restart();
+    await restarted.afterTurn("session-1", completion(), f.context);
+    if (review) {
+      assert.equal(f.sends[1].selection.engineId, "opencode");
+      assert.equal(f.sends[1].selection.modelId, "big-pickle");
+      await restarted.afterTurn("session-1", completion("turn-2"), f.context);
+    }
+    assert.equal(f.sends.length, review ? 2 : 1);
+    assert.equal(f.metadata.assistant_routing, preferences);
+    f.context.vibe64User = { role: "owner", username: "owner" };
+    await restarted.send("session-1", { ...request, messageId: "owner-return" }, f.context);
+    assert.equal(f.sends.at(-1).selection.engineId, "codex");
+    assert.equal(f.sends.at(-1).selection.modelId, "deepseek-flash");
+    assert.equal(f.sends.at(-1).selection.variantId, "low");
+    assert.equal(f.state().decision.backupUsed, false);
+    assert.equal(f.metadata.assistant_routing, preferences);
+  });
+}
+
+test("an incapable Backup refuses Plan and Code before delivery without splitting the pair or dropping review", async (t) => {
+  const f = await fixture(t);
+  const backup = sharedOpenCode(f);
+  f.catalogs[1].modelProviders[0].models[0].capabilities = { toolcall: false };
+  await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
+  f.context.vibe64User = { role: "member", username: "collaborator" };
+  const originalSelection = f.metadata.assistant_selection;
+  for (const mode of ["plan", "code"]) {
+    for (const review of [false, true]) {
+      f.metadata.assistant_routing = JSON.stringify({ mode, review, workflowEngineId: "codex" });
+      await assert.rejects(f.service.send("session-1", request, f.context), {
+        code: "vibe64_assistant_capability_unavailable"
+      });
+      assert.equal(f.metadata.assistant_selection, originalSelection);
+      assert.equal(f.sends.length, 0);
+      assert.equal(f.helperCalls(), 0);
+    }
+  }
+});
+
+for (const key of ["engineId", "modelId", "command"]) {
+  test(`Router-supplied ${key} is rejected before delivery and its helper is removed`, async (t) => {
+    const f = await fixture(t);
+    const originalSelection = f.metadata.assistant_selection;
+    f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: JSON.stringify({
+      mode: "code", reason: "explicit_implementation", [key]: "untrusted-router-value"
+    }) });
+    await assert.rejects(f.service.send("session-1", request, f.context), /Routing returned an invalid decision/);
+    assert.equal(f.state().status, "failed");
+    assert.equal(f.state().helper, null);
+    assert.equal(f.cleanupCalls(), 1);
+    assert.equal(f.sends.length, 0);
+    assert.equal(f.metadata.assistant_selection, originalSelection);
+  });
 }
 
 test("a member cannot unlock Auto through Backup", async (t) => {
