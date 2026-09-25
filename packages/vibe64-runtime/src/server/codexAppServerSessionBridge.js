@@ -1,4 +1,3 @@
-import { vibe64AssistantSelectionFromMetadata } from "../shared/assistantSelection.js";
 import path from "node:path";
 
 import { MINIMUM_CODEX_VERSION } from "./minimumCodexVersion.js";
@@ -25,9 +24,6 @@ import {
   Vibe64AgentExecutionProfileError,
   defineVibe64AgentExecutionProfileResolution
 } from "../shared/agentExecutionProfiles.js";
-import {
-  normalizeVibe64ConversationAttachments
-} from "../shared/conversationAttachments.js";
 
 const CODEX_SESSION_AGENT_PROVIDER = "codex";
 const CODEX_SESSION_MODEL = VIBE64_CODEX_DEFAULT_MODEL;
@@ -36,7 +32,6 @@ const CODEX_SESSION_REASONING_SUMMARY = "concise";
 const CODEX_SESSION_APPROVAL_POLICY = "never";
 const CODEX_SESSION_SANDBOX = "danger-full-access";
 const CODEX_SESSION_READ_ONLY_SANDBOX = "read-only";
-const CODEX_APP_SERVER_CONTEXT_TURN_TIMEOUT_MS = 60000;
 const CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE =
   "vibe64_session_renewal_thread_unreadable";
 const CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE =
@@ -109,37 +104,6 @@ const CODEX_APP_SERVER_ECONOMY_TOOL_FEATURES = Object.freeze([
   "view_image"
 ]);
 const codexAppServerEconomyIsolationConfigs = new WeakSet();
-const CODEX_CONTEXT_RECOVERY_TEMPLATE = `VIBE64_CONTEXT_RECOVERY: Codex provider thread recovery for Vibe64.
-
-Vibe64 tried to resume the previous Codex provider thread, but Codex app-server reported that it is not available anymore.
-
-Previous provider thread:
-{{previousThreadId}}
-
-Fresh provider thread:
-{{newThreadId}}
-
-Resume error:
-{{resumeError}}
-
-Session:
-{{sessionId}}
-
-Workdir:
-{{workdir}}
-
-The provider-side transcript for the previous thread is missing. The persisted Vibe64 UI conversation below is the authoritative user-visible history for this session.
-
-Use this conversation as context for future routed Vibe64 turns. If details are missing, work them out from the repository files, git state, and code changes in the session source. Do not assume the provider transcript is complete.
-
-Do not inspect files, run commands, or modify files for this recovery briefing.
-
-Reply exactly:
-Vibe64 Codex context restored.
-
-Persisted Vibe64 UI conversation:
-{{conversationLog}}`;
-
 function normalizeWorkdir(value = "") {
   return normalizeAgentText(value);
 }
@@ -1141,96 +1105,6 @@ async function sendCodexAppServerEconomyTurn({
   });
 }
 
-function renderCodexContextRecoveryTemplate(template = "", values = {}) {
-  return String(template || "").replace(/\{\{([A-Za-z0-9_.-]+)\}\}/gu, (_match, key) => {
-    return Object.hasOwn(values, key) ? String(values[key] ?? "") : "";
-  });
-}
-
-function conversationMessageLines(label = "", message = null) {
-  const text = normalizeAgentText(message?.text);
-  if (!text) {
-    return [];
-  }
-  const at = normalizeAgentText(message?.at);
-  const attachments = normalizeVibe64ConversationAttachments(message?.attachments);
-  return [
-    `### ${label}${at ? ` (${at})` : ""}`,
-    text,
-    ...(attachments.length
-      ? [[
-          "Attached files:",
-          ...attachments.map(({ fileName }) => `- ${fileName}`)
-        ].join("\n")]
-      : [])
-  ];
-}
-
-function conversationActivityMessages(turn = {}) {
-  const persistedOrder = Array.isArray(turn.messages)
-    ? turn.messages.filter((message) => (
-        ["commentary", "thinking"].includes(normalizeAgentText(message?.role))
-      ))
-    : [];
-  if (persistedOrder.length) {
-    return persistedOrder;
-  }
-  return [
-    ...(Array.isArray(turn.thinking) ? turn.thinking : []),
-    ...(Array.isArray(turn.commentary) ? turn.commentary : [])
-  ].sort((left, right) => (
-    normalizeAgentText(left?.at).localeCompare(normalizeAgentText(right?.at))
-  ));
-}
-
-function formatCodexRecoveryConversationTurn(turn = {}, index = 0) {
-  const lines = [`## Turn ${index + 1}`];
-  lines.push(...conversationMessageLines("System", turn.system));
-  lines.push(...conversationMessageLines("User", turn.user));
-  const activityCounts = {
-    commentary: 0,
-    thinking: 0
-  };
-  for (const message of conversationActivityMessages(turn)) {
-    const role = normalizeAgentText(message?.role) === "commentary" ? "commentary" : "thinking";
-    activityCounts[role] += 1;
-    const label = role === "commentary" ? "Assistant Commentary" : "Assistant Thinking";
-    lines.push(...conversationMessageLines(`${label} ${activityCounts[role]}`, message));
-  }
-  lines.push(...conversationMessageLines("Assistant", turn.assistant));
-  return lines.length > 1 ? lines.join("\n\n") : "";
-}
-
-function formatCodexRecoveryConversationLog(turns = []) {
-  const formattedTurns = (Array.isArray(turns) ? turns : [])
-    .map((turn, index) => formatCodexRecoveryConversationTurn(turn, index))
-    .filter(Boolean);
-  return formattedTurns.length
-    ? formattedTurns.join("\n\n---\n\n")
-    : "(No persisted Vibe64 UI conversation messages were available.)";
-}
-
-async function codexContextRecoveryPrompt({
-  error,
-  newThreadId = "",
-  previousThreadId = "",
-  runtime,
-  sessionId = "",
-  workdir = ""
-} = {}) {
-  const conversationLog = typeof runtime?.store?.readConversationLog === "function"
-    ? await runtime.store.readConversationLog(sessionId)
-    : [];
-  return renderCodexContextRecoveryTemplate(CODEX_CONTEXT_RECOVERY_TEMPLATE, {
-    conversationLog: formatCodexRecoveryConversationLog(conversationLog),
-    newThreadId: normalizeAgentText(newThreadId),
-    previousThreadId: normalizeAgentText(previousThreadId),
-    resumeError: normalizeAgentText(error?.message || String(error || "")),
-    sessionId: normalizeAgentText(sessionId),
-    workdir: normalizeWorkdir(workdir)
-  }).trim();
-}
-
 function codexAppServerRuntimeMetadata(runtime = {}) {
   return {
     endpoint: normalizeAgentText(runtime.endpoint),
@@ -1972,13 +1846,9 @@ async function startFreshCodexAppServerThreadForSession({
 
 function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   const metadata = session.metadata || {};
-  const selection = vibe64AssistantSelectionFromMetadata(metadata, { required: false });
-  const providerId = metadata.codex_routing_home_provider || (selection?.engineId === "codex" ? selection.modelProviderId : "openai");
-  const prefix = providerId === "openai" ? "codex" : `codex_${providerId}`;
-  const identityProvider = metadata.agent_identity_model_provider || "openai";
-  if (metadata.agent_identity_provider !== "codex" || !metadata.codex_routing_home_provider && identityProvider !== providerId) {
-    return normalizeWorkdir(workdir) && normalizeWorkdir(metadata[`${prefix}_conversation_workdir`]) === normalizeWorkdir(workdir)
-      ? normalizeAgentText(metadata[`${prefix}_conversation_id`]) : "";
+  if (metadata.agent_identity_provider !== "codex") {
+    return normalizeWorkdir(workdir) && normalizeWorkdir(metadata.codex_conversation_workdir) === normalizeWorkdir(workdir)
+      ? normalizeAgentText(metadata.codex_conversation_id) : "";
   }
   if (metadata.agent_transport_id !== CODEX_APP_SERVER_PROVIDER_ID) {
     return "";
@@ -2011,189 +1881,6 @@ async function codexAppServerThreadHasReadableHistory(provider = null, threadId 
     }
     throw error;
   }
-}
-
-function codexAppServerNotificationParams(notification = {}) {
-  const params = notification?.params;
-  return params && typeof params === "object" && !Array.isArray(params) ? params : {};
-}
-
-function codexAppServerNotificationThreadId(notification = {}) {
-  const params = codexAppServerNotificationParams(notification);
-  return normalizeAgentText(params.threadId || params.thread?.id);
-}
-
-function codexAppServerNotificationTurnId(notification = {}) {
-  const params = codexAppServerNotificationParams(notification);
-  return normalizeAgentText(params.turnId || params.turn?.id);
-}
-
-function codexAppServerNotificationTurnStatus(notification = {}) {
-  const params = codexAppServerNotificationParams(notification);
-  const status = params.status && typeof params.status === "object" && !Array.isArray(params.status)
-    ? params.status.type
-    : params.status;
-  return normalizeAgentText(params.turn?.status || status);
-}
-
-function codexAppServerTurnStatusIsComplete(status = "") {
-  return ["completed", "interrupted", "failed", "idle"].includes(normalizeAgentText(status));
-}
-
-function codexAppServerNotificationCompletesTurn(notification = {}) {
-  const method = normalizeAgentText(notification.method);
-  if (method === "turn/completed") {
-    return true;
-  }
-  return method === "thread/status/changed" &&
-    codexAppServerTurnStatusIsComplete(codexAppServerNotificationTurnStatus(notification));
-}
-
-function createCodexAppServerTurnCompletionWatcher(provider, threadId = "", {
-  timeoutMs = CODEX_APP_SERVER_CONTEXT_TURN_TIMEOUT_MS
-} = {}) {
-  const normalizedThreadId = normalizeAgentText(threadId);
-  const completedTurnIds = new Set();
-  const waiters = new Map();
-  const resolveWaiter = (waiter) => {
-    clearTimeout(waiter.timeout);
-    waiter.resolve();
-  };
-  const completeTurn = (turnId = "") => {
-    const normalizedTurnId = normalizeAgentText(turnId);
-    completedTurnIds.add(normalizedTurnId || "*");
-    for (const [waiterTurnId, waiter] of waiters.entries()) {
-      if (!normalizedTurnId || !waiterTurnId || normalizedTurnId === waiterTurnId) {
-        waiters.delete(waiterTurnId);
-        resolveWaiter(waiter);
-      }
-    }
-  };
-  const unsubscribe = typeof provider?.subscribe === "function"
-    ? provider.subscribe((notification = {}) => {
-        const notificationThreadId = codexAppServerNotificationThreadId(notification);
-        if (notificationThreadId && notificationThreadId !== normalizedThreadId) {
-          return;
-        }
-        if (codexAppServerNotificationCompletesTurn(notification)) {
-          completeTurn(codexAppServerNotificationTurnId(notification));
-        }
-      })
-    : null;
-
-  return {
-    dispose() {
-      unsubscribe?.();
-      for (const waiter of waiters.values()) {
-        clearTimeout(waiter.timeout);
-      }
-      waiters.clear();
-    },
-    wait(turnId = "") {
-      if (!unsubscribe) {
-        return Promise.resolve();
-      }
-      const normalizedTurnId = normalizeAgentText(turnId);
-      if (completedTurnIds.has("*") || (normalizedTurnId && completedTurnIds.has(normalizedTurnId))) {
-        return Promise.resolve();
-      }
-      return new Promise((resolve, reject) => {
-        const waiterKey = normalizedTurnId || `waiter:${waiters.size + 1}`;
-        const timeout = setTimeout(() => {
-          waiters.delete(waiterKey);
-          reject(new Error("Timed out waiting for the Codex context turn to complete."));
-        }, timeoutMs);
-        waiters.set(waiterKey, {
-          resolve,
-          timeout
-        });
-      });
-    }
-  };
-}
-
-async function sendCodexAppServerContextTurn({
-  agentSettings = {},
-  input = "",
-  provider,
-  threadId = "",
-  workdir = ""
-} = {}) {
-  const normalizedThreadId = normalizeAgentText(threadId);
-  if (!normalizedThreadId) {
-    throw new Error("Codex app-server context delivery requires a thread id.");
-  }
-  if (!normalizeAgentText(input)) {
-    throw new Error("Codex app-server context delivery requires input.");
-  }
-  const watcher = createCodexAppServerTurnCompletionWatcher(provider, normalizedThreadId);
-  try {
-    const turn = await provider.sendTurn(
-      normalizedThreadId,
-      input,
-      codexAppServerTurnSettings({
-        agentSettings,
-        cwd: workdir
-      })
-    );
-    if (!codexAppServerTurnStatusIsComplete(turn.status)) {
-      await watcher.wait(turn.id);
-    }
-    return {
-      input,
-      turn
-    };
-  } finally {
-    watcher.dispose();
-  }
-}
-
-async function sendCodexAppServerContextRecoveryTurn({
-  agentSettings = {},
-  error,
-  previousThreadId = "",
-  provider,
-  runtime,
-  sessionId = "",
-  threadId = "",
-  workdir = ""
-} = {}) {
-  return sendCodexAppServerContextTurn({
-    agentSettings,
-    input: await codexContextRecoveryPrompt({
-      error,
-      newThreadId: threadId,
-      previousThreadId,
-      runtime,
-      sessionId,
-      workdir
-    }),
-    provider,
-    threadId,
-    workdir
-  });
-}
-
-async function writeCodexAppServerReplacementMetadata({
-  error,
-  runtime,
-  sessionId = "",
-  threadId = ""
-} = {}) {
-  const previousThreadId = normalizeAgentText(threadId);
-  if (!previousThreadId) {
-    return;
-  }
-  const metadata = {
-    codex_app_server_replaced_thread_at: new Date().toISOString(),
-    codex_app_server_replaced_thread_error: normalizeAgentText(error?.message || String(error || "")),
-    codex_app_server_replaced_thread_id: previousThreadId
-  };
-  await runtime.store.mutateSession(sessionId, async () => {
-    await Promise.all(Object.entries(metadata).map(([name, value]) => (
-      runtime.store.writeMetadataValue(sessionId, name, String(value || ""))
-    )));
-  });
 }
 
 async function ensureCodexAppServerThreadForSession({
@@ -2239,7 +1926,6 @@ async function ensureCodexAppServerThreadForSession({
     cwd: normalizedWorkdir,
     developerInstructions
   });
-  let replacedThreadError = null;
   let thread = null;
   stageStartedAt = Date.now();
   if (existingThreadId) {
@@ -2249,23 +1935,9 @@ async function ensureCodexAppServerThreadForSession({
     }
     // Resuming can immediately start an active goal before the RPC returns.
     await observeThread(existingThreadId);
-    try {
-      thread = await provider.resumeThread(existingThreadId, threadSettings);
-      if (session.metadata?.codex_changeover_pause_goal === "yes") {
-        await runtime.store.writeMetadataValue(session.sessionId, "codex_changeover_pause_goal", "");
-      }
-    } catch (error) {
-      // A changeover must never run the legacy standalone recovery prompt.
-      // Keep the saved conversation and let the ordinary Send fail visibly.
-      if (session.metadata?.codex_routing_home_provider || session.metadata?.codex_changeover_pause_goal === "yes") throw error;
-      if (
-        !codexAppServerRequestIsInvalid(error, "thread/resume") ||
-        await codexAppServerThreadHasReadableHistory(provider, existingThreadId)
-      ) {
-        throw error;
-      }
-      replacedThreadError = error;
-      thread = await provider.startThread(threadStartSettings);
+    thread = await provider.resumeThread(existingThreadId, threadSettings);
+    if (session.metadata?.codex_changeover_pause_goal === "yes") {
+      await runtime.store.writeMetadataValue(session.sessionId, "codex_changeover_pause_goal", "");
     }
   } else {
     thread = await provider.startThread(threadStartSettings);
@@ -2275,22 +1947,10 @@ async function ensureCodexAppServerThreadForSession({
     sessionId: session.sessionId,
     stage: existingThreadId ? "resume" : "start"
   });
-  const threadId = normalizeAgentText(thread.id || (replacedThreadError ? "" : existingThreadId));
+  const threadId = normalizeAgentText(thread.id || existingThreadId);
   if (!threadId) {
     throw new Error("Codex app-server did not return a thread id.");
   }
-  const recovery = replacedThreadError
-    ? await sendCodexAppServerContextRecoveryTurn({
-        agentSettings,
-        error: replacedThreadError,
-        previousThreadId: existingThreadId,
-        provider,
-        runtime,
-        sessionId: session.sessionId,
-        threadId,
-        workdir: normalizedWorkdir
-    })
-    : null;
   stageStartedAt = Date.now();
   await writeCodexAppServerIdentityMetadata({
     appServerRuntime,
@@ -2304,19 +1964,8 @@ async function ensureCodexAppServerThreadForSession({
     sessionId: session.sessionId,
     stage: "identity-metadata"
   });
-  if (replacedThreadError) {
-    await writeCodexAppServerReplacementMetadata({
-      error: replacedThreadError,
-      runtime,
-      sessionId: session.sessionId,
-      threadId: existingThreadId
-    });
-  }
   return {
     appServerRuntime,
-    recovery,
-    replacedThreadError,
-    replacedThreadId: replacedThreadError ? existingThreadId : "",
     thread,
     threadId
   };

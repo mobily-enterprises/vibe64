@@ -354,6 +354,7 @@ function createService({
     );
   }
   const renewal = createSessionRenewalController({
+    prepareArchive: (context) => archivePreparation?.(context),
     project,
     publishSessionChanged,
     resolveRenewalActor,
@@ -1180,7 +1181,7 @@ function createService({
         const runtime = await project.createRuntime({ inspectSource: false });
         const session = await runtime.getSession(sessionId, { inspectSource: false });
         const [agentSession, conversation] = await Promise.all([
-          typeof terminals.agentSessionState === "function"
+          session.status !== "archived" && typeof terminals.agentSessionState === "function"
             ? terminals.agentSessionState(sessionId, {
               runtime,
               session
@@ -2122,8 +2123,7 @@ function createService({
               routingRequest?.status === "sent" && routingRequest.review && routingRequest.resolvedMode === "code") {
             throw new Error("Finish or cancel the pending request and review before changing assistants.");
           }
-          if (current.engineId !== next.engineId ||
-              current.engineId === "codex" && !session.metadata.codex_routing_home_provider && current.modelProviderId !== next.modelProviderId) {
+          if (current.engineId !== next.engineId) {
             const changeover = await terminals.prepareAssistantChangeover(sessionId, {
               runtime, session, vibe64User
             });

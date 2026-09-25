@@ -162,6 +162,10 @@ exact previous execution owner's scope empty. A missing file by itself is never
 accepted as proof. Runtime sharing and shutdown follow the provider's runtime,
 so retaining a different provider does not skip the selected provider's cleanup.
 
+An archived attachment whose payload has been removed returns a Gone response.
+Its preview keeps the filename and explains that chat text and the attachment
+description remain, with no broken Download action. The host owns expiry policy.
+
 Saved composer attachments use the same visible queue as new uploads. The composer
 combines saved receipts with its pending upload queue, retains completed uploads
 when a saved view closes, and still cancels unfinished uploads. Restored files count
@@ -274,6 +278,26 @@ within evidenced homes/directories, including CLI-created chats and forks. They
 retire finalized archived histories or accepted predecessors only after a host
 callback proves preservation and exclusive ownership. Provider owners check the
 entire native deletion family; matching a directory does not establish ownership.
+Codex retirement requires modern paginated history. Its owner streams native
+thread, goal, turn and item records plus normalized readable chat text through a
+bounded, separate JSKIT connection. Every inspected family member must finish
+exporting, and a second export must confirm the same exact content revision.
+Listed plain/compressed rollouts remain separate preservation artifacts;
+fileless paginated records still require the API export. These are content
+recovery evidence, not guaranteed native-resume or database backups. Legacy
+history fails with upgrade/migration guidance and is never silently discarded.
+Claude and OpenCode expose the same streamed export callback through their own
+native readers and existing text normalizers. Text carries branch/message
+provenance and available timestamps/models without attachments. OpenCode streams
+stable native pages newest first, one message at a time, preserving raw message
+parts and model identity, including Vibe64's own `msg_vibe64_` user-message IDs;
+incomplete, repeated or oversized pages block deletion. Cold storage requests
+use the normal server startup deadline because directory initialization can
+continue after global health becomes ready. Claude retains
+sidechain and rewind entries with transcript and parent-message provenance; Codex exposes
+current visible history. All native families require a complete export and exact
+revision recheck. An archived callback can publish that text and recovery files
+through the store's scoped artifact batch before authorizing native deletion.
 No public retention policy, compression worker or timer is added. Contracts and
 acceptance limits live in `docs/session-storage-lifecycle.md`; implementation is
 in `nativeConversationRetirement.js`, `assistantChangeover.js`, the terminal
@@ -349,10 +373,12 @@ Vibe64 then rechecks the captured decision and sends the original request throug
 ordinary native delivery with a Plan or Code instruction. Main chat uses both
 existing changeover preparation and Send when Economy or a member Backup selects
 another orchestrator. The workflow stays fixed across that excursion. Returning
-to routed Codex looks up its retained native history by the workflow's storage
-provider, even when the next turn selects a different model provider. Legacy
-Codex chats without a routing home retain their separate provider histories. Temporary
-chat scopes the same owner to its own transcript and retained native bindings.
+to Codex looks up its retained native history in the shared workflow storage,
+even when the next turn selects a different model provider. Temporary chat scopes
+the same owner to its own transcript and retained native bindings. Old provider-specific
+bindings are not converted during routing. Failed native resumes retain their
+saved identity and expose recovery actions; they never start a replacement thread
+or send an automatic recovery prompt.
 
 One durable request record owns preparation, admission uncertainty and an optional
 review continuation. Stop cancels preparation and suppresses its late result.
@@ -682,12 +708,23 @@ Codex can retain an old shell environment across an already-loaded resume. To
 change it, Vibe64 pauses an active goal, confirms that its turn stopped, detaches
 and resumes the same thread, then proves the effective managed environment with a
 bounded native shell digest check and authenticates its live control health routes.
-The check uses no model, prints no environment values and is excluded from live
-chat turn reconciliation; its shell record remains in native history. Another
+The check uses no model, prints no environment values and verifies its exact live
+item and turn completion instead of polling saved history. It is excluded from
+live chat reconciliation and from the current provider's latest-turn status
+snapshot; its shell record remains in native history. Another
 native subscriber can retain the old environment, so unsubscribe alone is never
 readiness proof. Failed verification leaves work stopped with an actionable error.
 Only the same goal paused by this recovery may continue, and a concurrent explicit
 Pause or goal change wins. Recovery does not replay a human prompt or tool command.
+
+Each newly observed terminal-origin turn receives its own stable outer identity,
+derived from its native thread and turn. It cannot reuse a preceding chat's
+checkpoint identity. Genuine goal continuations retain their existing outer owner.
+New durable threads explicitly request paginated history. Persistent history reads
+use paginated APIs only, and obsolete history cannot enter managed recovery.
+Process restoration uses saved execution identities without the older timestamp
+inference. Unsupported runtime metadata requires a stopped-service upgrade; normal
+startup neither replaces it using an old PID-only format nor rewrites it.
 
 Session command-environment preparation and closure share a project-scoped admission
 boundary. Closure drains admitted preparation and rejects overlapping acquisitions,
@@ -1017,8 +1054,11 @@ message or requiring an explicit Resume.
 The browser coalesces checks for the same
 connection and retries failures after one second, backing off to thirty seconds.
 It retains the reported failure in the connection notice until a successful
-check. A control-socket path configuration error stops timed retries and shows
-the repair instruction beside explicit Retry, preserving the draft.
+check. A control-socket path configuration error, failed control recovery, or
+unsupported native history stops timed retries and shows the repair instruction
+beside explicit Retry. Renew is also available in that failure notice, preserving
+the draft and access to the existing manual handover workflow. These actions appear
+before lengthy checkpoint diagnostics and wrap within narrow chat panes.
 Git, session shell, Env, database, preview and browser command sockets use compact,
 process-user-scoped names in the server temporary directory. Their identities
 include the full wrapper path and control kind, keeping projects and sessions
@@ -1639,7 +1679,9 @@ favourite files, project access and operation admission.
 
 
 Legacy Codex conversations may retain separate provider homes and native thread
-ids. New routed conversations pin one home and resume the same native thread
+ids. Routing refuses those unsupported homes before changing their saved storage
+location and offers Renew; it never adopts them by rewriting their home to OpenAI.
+New routed conversations pin one home and resume the same native thread
 across qualified provider choices, as described above. Application changeover
 continues to use transcript selection snapshots and per-application receipts.
 Changing the selection alone sends nothing and is rejected while a turn is active.

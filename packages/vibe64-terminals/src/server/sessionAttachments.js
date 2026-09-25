@@ -167,14 +167,32 @@ function createSessionAttachments({ projectService, env = process.env }) {
       });
     },
     async readAttachment(context, id) {
-      const { runtime, executionRoot, sessionId } = await attachmentContext(context);
+      const { sessionId } = context;
+      const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
+      const session = context.session || await runtime.getSession(sessionId, { inspectSource: false });
       const openAttachment = async (attachment) => ({
         attachment: { ...attachment, contentType: conversationAttachmentContentType(attachment.fileName) },
         fileHandle: await open(attachment.path, constants.O_RDONLY | constants.O_NOFOLLOW)
       });
       return runtime.store.withReadableSessionPaths(sessionId, async (paths) => {
         const saved = await readSavedAttachment(paths, id);
-        return saved ? openAttachment(saved) : withUploadedAgentAttachment(executionRoot, sessionId, id, openAttachment, { env });
+        if (!saved) {
+          const executionRoot = terminalSessionSourceRoot(session);
+          if (!executionRoot || !vibe64SessionStatusIsOpen(session.status)) {
+            throw Object.assign(new Error("This session has no such attachment."), { statusCode: 404 });
+          }
+          return withUploadedAgentAttachment(executionRoot, sessionId, id, openAttachment, { env });
+        }
+        try {
+          return await openAttachment(saved);
+        } catch (error) {
+          if (error.code === "ENOENT" && !vibe64SessionStatusIsOpen(session.status)) {
+            throw Object.assign(new Error("This attachment is no longer retained. Its description remains in the chat."), {
+              code: "vibe64_agent_attachment_expired", statusCode: 410
+            });
+          }
+          throw error;
+        }
       });
     }
   };

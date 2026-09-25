@@ -2,9 +2,11 @@ import { createReadStream } from "node:fs";
 import { lstat, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { readClaudeJsonFrames } from "@local/vibe64-runtime/server/claudeStreamJson";
+import { createNativeHistoryExport } from "@local/vibe64-runtime/server/nativeHistoryExport";
 import { retireNativeConversation } from "./nativeConversationRetirement.js";
 
 const UUID_PATTERN = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iu;
+const TRANSCRIPT_PATH_PATTERN = /\.jsonl(?:\.(?:superseded|orphaned)-.*)?$/u;
 
 function requireClaudeSessionId(id) {
   if (!UUID_PATTERN.test(id)) throw new TypeError("Invalid Claude conversation id.");
@@ -44,10 +46,13 @@ export async function listClaudeConversationStorage({ configRoot, binding }) {
   return [...ids].sort().map((conversationId) => ({ ...binding, conversationId }));
 }
 
-export async function retireClaudeConversationHistory({ configRoot, binding, beforeDelete, requireIdle }) {
+export async function retireClaudeConversationHistory({ configRoot, binding, beforeDelete, requireIdle, signal }) {
   const id = requireClaudeSessionId(binding.conversationId);
   if (!path.isAbsolute(configRoot)) throw new TypeError("Claude retirement requires an absolute configuration root.");
   const root = path.resolve(configRoot);
+  const projects = path.join(root, "projects");
+  const isTranscript = (file) => !file.directory &&
+    file.path.startsWith(`${projects}${path.sep}`) && TRANSCRIPT_PATH_PATTERN.test(file.path);
   const missing = (error) => { if (error.code === "ENOENT") return null; throw error; };
   const inspect = async () => {
     await requireIdle();
@@ -65,7 +70,6 @@ export async function retireClaudeConversationHistory({ configRoot, binding, bef
       if (names.length > 10000) throw new Error("Claude storage directory exceeds its inspection limit.");
       return names;
     };
-    const projects = path.join(root, "projects");
     const projectNames = await directories(projects);
     const candidates = matchingClaudeProjectDirectories(projectNames, directory);
     const targets = [];
@@ -93,12 +97,49 @@ export async function retireClaudeConversationHistory({ configRoot, binding, bef
       if (info.isDirectory()) for (const name of (await directories(file)).sort()) await visit(path.join(file, name));
     };
     for (const target of targets.sort()) await visit(target);
-    return targets.length ? [{ conversationId: id, workdir: binding.workdir, paths: targets, files }] : [];
+    const transcripts = files.filter(isTranscript);
+    return targets.length ? [{ conversationId: id, workdir: binding.workdir, paths: targets, files,
+      ...(transcripts.length ? { updatedAt: new Date(Math.max(...transcripts.map((file) => file.modified))).toISOString() } : {}) }] : [];
   };
-  return retireNativeConversation({ binding, inspect, beforeDelete, remove: async (records) => {
-    await requireIdle();
-    for (const target of records[0].paths) await rm(target, { recursive: true, force: true });
-  } });
+  return retireNativeConversation({ binding, inspect, beforeDelete,
+    exportConversation: async (_id, onRecord) => {
+      const deadline = AbortSignal.timeout(300_000);
+      const boundedSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+      const output = createNativeHistoryExport(onRecord, { signal: boundedSignal });
+      const [conversation] = await inspect();
+      if (!conversation) throw new Error("Claude conversation disappeared before export.");
+      for (const file of conversation.files.filter(isTranscript)) {
+        const branchId = path.relative(projects, file.path).split(path.sep).join("/");
+        if (!file.size) continue;
+        const stream = createReadStream(file.path, { end: file.size - 1, signal: boundedSignal });
+        for await (const frame of readClaudeJsonFrames(stream)) {
+          const provenance = { branchId,
+            ...(frame.uuid || frame.message?.id ? { messageId: frame.uuid || frame.message.id } : {}),
+            ...(frame.parentUuid ? { parentMessageId: frame.parentUuid } : {}),
+            ...(frame.timestamp ? { createdAt: frame.timestamp } : {}),
+            ...(frame.message?.model ? { modelId: frame.message.model } : {}) };
+          const text = claudeMessageBlocks(frame, { includeNested: true })
+            .filter((message) => message.role !== "thinking")
+            .map((message) => ({ ...provenance, role: "assistant", text: message.text }));
+          if (frame.type === "user") {
+            const content = frame.message?.content;
+            const user = typeof content === "string" ? content : (Array.isArray(content) ? content : [])
+              .filter((block) => block.type === "text" && typeof block.text === "string").map((block) => block.text).join("\n\n");
+            if (user) text.push({ ...provenance, role: "user", text: user });
+          }
+          if (frame.attachment?.type === "goal_status" && typeof frame.attachment.condition === "string") {
+            text.push({ ...provenance, role: "goal", text: frame.attachment.condition });
+          }
+          await output.emit({ type: "frame", branchId, frame, text });
+        }
+      }
+      return output.complete();
+    },
+    remove: async (records) => {
+      await requireIdle();
+      for (const target of records[0].paths) await rm(target, { recursive: true, force: true });
+    }
+  });
 }
 
 // Claude's SDK documents this layout. Only the requested native conversation is
@@ -125,8 +166,8 @@ async function claudeHistoryPath({ configRoot, workdir, conversationId }) {
   return null;
 }
 
-function claudeMessageBlocks(frame) {
-  if (frame.type !== "assistant" || frame.parent_tool_use_id) return [];
+function claudeMessageBlocks(frame, { includeNested = false } = {}) {
+  if (frame.type !== "assistant" || frame.parent_tool_use_id && !includeNested) return [];
   const content = frame.message?.content;
   if (!Array.isArray(content)) return [];
   // Native frames split one API message into blocks with distinct UUIDs.

@@ -125,9 +125,11 @@ export async function assistantStatusServer() {
       else if (route === `${sessionRoute}/message-suggestions`) result = { ok: true, suggestions: [], canManage: true };
       else if (route === `${sessionRoute}/work`) result = { ok: true, unsaved: false, operation: null, updateOperation: null };
       else if (route === `${sessionRoute}/renewal`) result = { ok: true, renewal: null, viewerScope: "status-test-owner" };
+      else if (route === `${sessionRoute}/agent-goal`) result = { ok: true, status: "unsupported" };
       else if (route === `${sessionRoute}/source-editor/stars`) result = { ok: true, files: [] };
       else if (route === "/vibe64/settings") result = { ok: true, promptHints: { enabled: false } };
       else if (route === "/vibe64/accounts") result = { ok: true, ready: true, accounts: [] };
+      else if (route === "/vibe64/accounts/model-routing") result = { ok: true, routing: null };
       if (request.method !== "GET" || result === undefined) {
         state.unexpectedRequests.push(requestKey);
         json(response, { ok: false, error: `Unexpected status fixture request: ${requestKey}` }, 404);

@@ -51,6 +51,8 @@ async function controllerHarness({
   beforeReadSession = null,
   beforeDeleteSession = null,
   listConversationChildren = async () => [],
+  readConversationStorage = null,
+  readConversationStoragePage = async () => ({ data: [], nextCursor: null }),
   catalogProviders = providerResult,
   commandEnvironmentGate = null,
   gitActorFailure = null,
@@ -393,6 +395,11 @@ async function controllerHarness({
       }
       const started = {
         listConversationChildren,
+        readConversationStoragePage,
+        readConversationStorage: readConversationStorage || (async (id, options) => {
+          const native = await (serverClient || client()).readSession(id, options);
+          return { ...native, directory: native.location?.directory };
+        }),
         client: serverClient || client(),
         options,
         workdir: options.workdir,

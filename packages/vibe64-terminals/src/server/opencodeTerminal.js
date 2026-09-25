@@ -3,6 +3,7 @@ import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
 import { retireNativeConversation } from "./nativeConversationRetirement.js";
 import { openCodeAssistantMessageText as assistantMessageText } from "@jskit-ai/assistant-core/server/opencode-client";
+import { createNativeHistoryExport } from "@local/vibe64-runtime/server/nativeHistoryExport";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -2899,7 +2900,7 @@ function createOpenCodeTerminalController({
     createConversation,
     async listNativeConversationStorage(sessionId, binding, options = {}) {
       const target = await ensureSharedProcess({ sessionId, runtime: options.runtime, session: options.session }, options);
-      return (await target.server.listConversationsForDirectory(binding.workdir)).map((row) => ({ ...binding, conversationId: row.id }));
+      return (await target.server.listConversationsForDirectory(binding.workdir, { signal: options.signal })).map((row) => ({ ...binding, conversationId: row.id }));
     },
     async retireConversationHistory(sessionId, binding, options = {}) {
       const target = await ensureSharedProcess({ sessionId, runtime: options.runtime, session: options.session }, options);
@@ -2911,18 +2912,21 @@ function createOpenCodeTerminalController({
         const seen = new Set();
         const records = [];
         for (let index = 0; index < queue.length; index += 1) {
+          options.signal?.throwIfAborted();
           const conversationId = queue[index];
           if (seen.has(conversationId) || queue.length > 1000) throw new Error("OpenCode native family is cyclic or exceeds its inventory limit.");
           seen.add(conversationId);
           let native;
-          try { native = await client.readSession(conversationId); }
+          try { native = await target.server.readConversationStorage(conversationId, { signal: options.signal }); }
           catch (error) { if (error.statusCode === 404 && index === 0) return []; throw error; }
-          if (native?.id !== conversationId || native?.location?.directory !== binding.workdir ||
-              (await client.sessionStatus(conversationId)).type !== "idle") {
+          if (native?.id !== conversationId || native?.directory !== binding.workdir ||
+              (await client.sessionStatus(conversationId, { signal: options.signal })).type !== "idle") {
             throw new Error("OpenCode retirement requires an idle native family in the exact saved directory.");
           }
-          records.push({ conversationId, workdir: native.location.directory, updatedAt: native.time?.updated });
-          const children = await target.server.listConversationChildren(conversationId);
+          records.push({ conversationId, workdir: native.directory,
+            ...(Number.isFinite(native.time?.created) ? { createdAt: new Date(native.time.created).toISOString() } : {}),
+            ...(Number.isFinite(native.time?.updated) ? { updatedAt: new Date(native.time.updated).toISOString() } : {}) });
+          const children = await target.server.listConversationChildren(conversationId, { signal: options.signal });
           for (const child of children) {
             if (child.directory !== binding.workdir) throw new Error("OpenCode child directory differs from its saved owner.");
             queue.push(child.id);
@@ -2931,7 +2935,53 @@ function createOpenCodeTerminalController({
         return records.sort((left, right) => left.conversationId.localeCompare(right.conversationId));
       };
       return retireNativeConversation({ binding, inspect, beforeDelete: options.beforeDelete,
-        readConversation: async (id) => ({ info: await client.readSession(id), messages: (await client.messages(id)).data }),
+        readConversation: async (id) => ({ info: await target.server.readConversationStorage(id), messages: (await client.messages(id)).data }),
+        exportConversation: async (id, onRecord) => {
+          const deadline = AbortSignal.timeout(300_000);
+          const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+          const output = createNativeHistoryExport(onRecord, { signal });
+          const info = await target.server.readConversationStorage(id, { signal });
+          if (info?.id !== id || (await client.sessionStatus(id, { signal })).type !== "idle") {
+            throw new Error("OpenCode native export requires the exact idle conversation.");
+          }
+          await output.emit({ type: "thread", thread: info, text: [] });
+          const messageIds = new Set();
+          const cursors = new Set();
+          let before = "";
+          let pages = 0;
+          while (true) {
+            signal.throwIfAborted();
+            if (++pages > 20_000) throw new Error("OpenCode native export exceeded its page limit; history was not retired.");
+            const response = await target.server.readConversationStoragePage(id, { before, signal });
+            if (!Array.isArray(response?.data) || response.data.length > 1 ||
+                (response.nextCursor !== null && (typeof response.nextCursor !== "string" || !response.nextCursor || response.nextCursor.length > 8192)) ||
+                (response.data.length === 0 && response.nextCursor !== null)) {
+              throw new Error("OpenCode returned an incomplete or invalid native message page.");
+            }
+            for (const message of response.data) {
+              const info = message?.info;
+              if (!/^msg_[a-zA-Z0-9_]{1,256}$/u.test(info?.id) || info.sessionID !== id ||
+                  !["user", "assistant"].includes(info.role) || !Array.isArray(message.parts) || messageIds.has(info.id)) {
+                throw new Error("OpenCode returned an invalid or duplicate native message.");
+              }
+              messageIds.add(info.id);
+              const content = assistantMessageText({ content: message.parts });
+              await output.emit({ type: "message", message, text: content ? [{ role: info.role, text: content,
+                branchId: id, messageId: info.id,
+                ...(info.parentID ? { parentMessageId: info.parentID } : {}),
+                ...(Number.isFinite(info.time?.created) ? { createdAt: new Date(info.time.created).toISOString() } : {}),
+                ...(Number.isFinite(info.time?.completed) ? { completedAt: new Date(info.time.completed).toISOString() } : {}),
+                ...(info.modelID || info.model?.modelID ? { modelId: info.modelID || info.model.modelID } : {}),
+                ...(info.providerID || info.model?.providerID ? { modelProviderId: info.providerID || info.model.providerID } : {}),
+                ...(info.agent ? { agent: info.agent } : {}) }] : [] });
+            }
+            if (response.nextCursor === null) break;
+            if (cursors.has(response.nextCursor)) throw new Error("OpenCode repeated a native history cursor.");
+            cursors.add(response.nextCursor);
+            before = response.nextCursor;
+          }
+          return output.complete();
+        },
         remove: () => client.deleteSession(binding.conversationId) });
     },
     async deleteConversation(sessionId, input = {}, options = {}) {

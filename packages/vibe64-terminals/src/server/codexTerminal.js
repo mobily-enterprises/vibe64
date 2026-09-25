@@ -1,5 +1,5 @@
 import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
-import { retireNativeConversation } from "./nativeConversationRetirement.js";
+import { nativeConversationBindings, retireNativeConversation } from "./nativeConversationRetirement.js";
 import { requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { codexProviderPaths, createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
@@ -215,7 +215,6 @@ import {
 const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
-const CODEX_CONTEXT_TASK_ID = "codex_context";
 const CODEX_SESSION_BRIEFING_FINGERPRINT_METADATA = "agent_briefing_fingerprint";
 const CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER = "\u001f";
 const CODEX_APP_SERVER_RESULT_PROCESSED_EVENT = "codex-app-server-result-processed";
@@ -1044,8 +1043,6 @@ function codexThreadIdForWorkdir(session = {}, workdir = "") {
 }
 
 function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
-  const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
-  if (!session.metadata?.codex_routing_home_provider && selection?.engineId === "codex" && selection.modelProviderId !== (session.metadata?.agent_identity_model_provider || "openai")) return "";
   if (!codexThreadIdForWorkdir(session, workdir)) {
     return "";
   }
@@ -1055,8 +1052,6 @@ function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
 }
 
 function codexReadyIdentityForWorkdir(session = {}, workdir = "") {
-  const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
-  if (!session.metadata?.codex_routing_home_provider && selection?.engineId === "codex" && selection.modelProviderId !== (session.metadata?.agent_identity_model_provider || "openai")) return null;
   const normalizedWorkdir = workdir ? path.resolve(workdir) : terminalWorktreePath(session);
   const identity = agentTerminalIdentityForWorkdir(session, {
     provider: CODEX_AGENT_PROVIDER,
@@ -2094,12 +2089,8 @@ function createCodexTerminalController({
           const runtime = await createRuntimeForSession();
           const session = await runtime.getSession(sessionId, { inspectSource: false });
           const previousExecutionId = normalizeText(session.metadata?.agent_transport_execution_id);
-          // Older sessions recorded the time of their native attachment, but
-          // not its execution id. A process started after that attachment is
-          // necessarily a replacement; reconnecting to the same process is not.
-          const savedProcessChanged = previousExecutionId
-            ? previousExecutionId !== normalizeText(providerRuntime?.executionId)
-            : Date.parse(providerRuntime?.startedAt) > Date.parse(session.metadata?.agent_identity_captured_at);
+          const savedProcessChanged = Boolean(previousExecutionId &&
+            previousExecutionId !== normalizeText(providerRuntime?.executionId));
           const processReplaced = processChanged || providerRuntime?.reused === false || savedProcessChanged;
           if (!processReplaced) return params;
           if (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
@@ -5703,6 +5694,7 @@ function createCodexTerminalController({
         sortDirection: "desc"
       });
       const observedTurn = Array.isArray(response?.data) ? response.data[0] : null;
+      if (provider.isControlProbeTurn?.(normalizedThreadId, observedTurn?.id)) return thread;
       return isRecord(observedTurn)
         ? {
             ...thread,
@@ -5933,8 +5925,12 @@ function createCodexTerminalController({
     if (normalizedInputSource) {
       patch.inputSource = normalizedInputSource;
     }
+    // A native terminal turn starts its own chat owner. Reusing the previous
+    // owner's id would checkpoint two different turns with one identity.
     const normalizedOuterTurnId = normalizeText(outerTurnId) ||
-      normalizeText(codexAppServerAgentRun(session)?.outerTurnId);
+      (normalizedInputSource === "terminal" && normalizedRunState === VIBE64_AGENT_RUN_STATE.ACTIVE && !sameActiveTurn
+        ? `codex:${normalizeText(threadId)}:${normalizeText(turnId)}`
+        : normalizeText(currentRun?.outerTurnId));
     if (normalizedOuterTurnId) {
       patch.outerTurnId = normalizedOuterTurnId;
     }
@@ -8100,9 +8096,6 @@ function createCodexTerminalController({
       status: "ready",
       terminalSessionId
     });
-    await writeCodexContextReplacementReady(runtime, sessionId, {
-      terminalSessionId
-    });
     return task;
   }
 
@@ -8120,107 +8113,6 @@ function createCodexTerminalController({
       terminalSessionId
     });
     return result;
-  }
-
-  async function writeCodexContextReplacementWarning(runtime, sessionId, thread = {}) {
-    const replacedThreadId = normalizeText(thread.replacedThreadId);
-    if (!replacedThreadId || !thread.replacedThreadError) {
-      return null;
-    }
-    const message = "Previous Codex context could not be resumed. Vibe64 started a fresh Codex thread for this session.";
-    const userMessage = "Codex could not resume its previous internal thread, so Vibe64 started a fresh Codex thread and gave it this session's saved chat history.";
-    const task = await runtime.store.writeBackgroundTaskEvent(sessionId, CODEX_CONTEXT_TASK_ID, {
-      event: {
-        error: errorMessage(thread.replacedThreadError),
-        kind: "thread_replaced",
-        message,
-        replacedThreadId,
-        status: "failed",
-        threadId: normalizeText(thread.threadId)
-      },
-      patch: {
-        error: errorMessage(thread.replacedThreadError),
-        kind: "codex_context",
-        label: "Codex context",
-        message,
-        retry: null,
-        status: "failed",
-        terminalSessionId: ""
-      }
-    });
-    const currentSession = typeof runtime.getSession === "function"
-      ? await runtime.getSession(sessionId).catch(() => null)
-      : null;
-    if (
-      currentSession?.metadata?.codex_context_replacement_notice_thread_id !== replacedThreadId &&
-      typeof runtime.store?.writeConversationSystemMessage === "function"
-    ) {
-      await runtime.store.writeConversationSystemMessage(sessionId, {
-        text: userMessage
-      });
-      if (typeof runtime.store?.writeMetadataValue === "function") {
-        await runtime.store.writeMetadataValue(
-          sessionId,
-          "codex_context_replacement_notice_thread_id",
-          replacedThreadId
-        );
-      }
-    }
-    await publishSessionChanged(sessionId, {
-      reason: "codex-context-replaced"
-    });
-    return task;
-  }
-
-  async function writeCodexContextReplacementReady(runtime, sessionId, {
-    terminalSessionId = ""
-  } = {}) {
-    if (
-      typeof runtime.getSession !== "function" ||
-      typeof runtime.store?.writeBackgroundTaskEvent !== "function"
-    ) {
-      return null;
-    }
-    const currentSession = await runtime.getSession(sessionId).catch(() => null);
-    const replacedThreadId = normalizeText(currentSession?.metadata?.codex_context_replacement_notice_thread_id);
-    const currentThreadId = normalizeText(
-      currentSession?.metadata?.agent_identity_conversation_id
-    );
-    const currentTask = (Array.isArray(currentSession?.backgroundTasks)
-      ? currentSession.backgroundTasks
-      : [])
-      .find((task) => String(task?.id || "").trim() === CODEX_CONTEXT_TASK_ID) || null;
-    if (
-      !replacedThreadId ||
-      !currentThreadId ||
-      currentThreadId === replacedThreadId ||
-      currentTask?.status !== "failed"
-    ) {
-      return null;
-    }
-    const message = "Codex context recovered with a fresh Codex thread.";
-    const task = await runtime.store.writeBackgroundTaskEvent(sessionId, CODEX_CONTEXT_TASK_ID, {
-      event: {
-        kind: "thread_replacement_ready",
-        message,
-        replacedThreadId,
-        status: "ready",
-        threadId: currentThreadId
-      },
-      patch: {
-        error: "",
-        kind: "codex_context",
-        label: "Codex context",
-        message,
-        retry: null,
-        status: "ready",
-        terminalSessionId: normalizeText(terminalSessionId)
-      }
-    });
-    await publishSessionChanged(sessionId, {
-      reason: "codex-context-ready"
-    });
-    return task;
   }
 
   async function writeCodexAppServerBlocked(runtime, sessionId, result, {
@@ -8703,7 +8595,6 @@ function createCodexTerminalController({
         session,
         sessionId
       });
-      await writeCodexContextReplacementWarning(runtime, sessionId, thread);
       subscribeCodexAppServerEvents(sessionId, provider, thread.threadId, providerOptions);
       rememberCodexAppServerManagedSession(codexAppServerProviderKey(sessionId, providerOptions), {
         providerOptions,
@@ -8932,7 +8823,6 @@ function createCodexTerminalController({
         sessionId,
         stage: "startup-ready"
       });
-      await writeCodexContextReplacementWarning(runtime, sessionId, thread);
       activeThreadId = thread.threadId;
       subscribeCodexAppServerEvents(sessionId, provider, thread.threadId, providerOptions);
       rememberCodexAppServerManagedSession(codexAppServerProviderKey(sessionId, providerOptions), {
@@ -11424,21 +11314,21 @@ function createCodexTerminalController({
     const conversationId = normalizeText(input.conversationId);
     const previous = codexAppServerConversation(sessionId, conversationId);
     const state = observeCodexConversation(sessionId, conversationId, context.provider);
-    let thread = await context.provider.readThreadStatus(conversationId);
-    const turns = [];
-    if (codexAppServerThreadRawValue(thread).historyMode === "paginated") {
-      let cursor;
-      do {
-        const page = await context.provider.listThreadTurns(conversationId, {
-          limit: 100, itemsView: "full", sortDirection: "asc", ...(cursor ? { cursor } : {})
-        });
-        turns.push(...page.data);
-        cursor = page.nextCursor;
-      } while (cursor);
-    } else {
-      thread = await context.provider.readThread(conversationId);
-      turns.push(...codexAppServerRenewalThreadTurns(thread));
+    const thread = await context.provider.readThreadStatus(conversationId);
+    if (codexAppServerThreadRawValue(thread).historyMode !== "paginated") {
+      throw Object.assign(new Error("This conversation uses an unsupported Codex history format. Start a fresh conversation."), {
+        code: "vibe64_codex_history_unsupported"
+      });
     }
+    const turns = [];
+    let cursor;
+    do {
+      const page = await context.provider.listThreadTurns(conversationId, {
+        limit: 100, itemsView: "full", sortDirection: "asc", ...(cursor ? { cursor } : {})
+      });
+      turns.push(...page.data);
+      cursor = page.nextCursor;
+    } while (cursor);
     const latest = turns.at(-1);
     const runId = codexAppServerRenewalTurnId(latest || {});
     let status = codexAppServerThreadStatus(thread);
@@ -12108,7 +11998,6 @@ function createCodexTerminalController({
         : await codexAppServerConversationThreadSettings(context);
       const requestedThreadId = normalizeText(input.threadId || input.codexSessionId);
       let thread = null;
-      let replacedThreadId = "";
       let economyThreadRecord = null;
       if (requestedThreadId) {
         if (economyTurn) {
@@ -12170,17 +12059,7 @@ function createCodexTerminalController({
             throw error;
           }
         } else {
-          try {
-            thread = await provider.resumeThread(requestedThreadId, threadSettings);
-          } catch (error) {
-            if (
-              !codexAppServerRequestIsInvalid(error, "thread/resume") ||
-              await codexAppServerThreadHasReadableHistory(provider, requestedThreadId)
-            ) {
-              throw error;
-            }
-            replacedThreadId = requestedThreadId;
-          }
+          thread = await provider.resumeThread(requestedThreadId, threadSettings);
         }
       }
       if (!thread) {
@@ -12214,7 +12093,6 @@ function createCodexTerminalController({
         await retireCodexAppServerEconomyThread(economyThreadRecord);
       };
       emitDetachedEvent({
-        replacedThreadId,
         threadId,
         type: "thread"
       });
@@ -12393,7 +12271,6 @@ function createCodexTerminalController({
       });
       return {
         ok: true,
-        replacedThreadId,
         text: result.text,
         threadId,
         turnId: result.turnId || turnId,
@@ -13420,24 +13297,19 @@ function createCodexTerminalController({
   }
 
   return Object.freeze({
-    async prepareModelRouting(sessionId, selection, { runtime, session }) {
-      const existingProvider = session.metadata?.codex_routing_home_provider || (session.metadata?.agent_identity_provider === "codex" && session.metadata?.agent_identity_conversation_id
-        ? session.metadata?.agent_identity_model_provider || "openai" : "openai");
-      if (existingProvider !== "openai" && existingProvider !== selection.modelProviderId) {
-        throw Object.assign(new Error("This older Codex chat uses separate provider storage. Keep its current provider, or start a new chat to route across providers without losing native history."),
-          { code: "vibe64_codex_legacy_route_unavailable" });
+    async prepareModelRouting(sessionId, _selection, { runtime, session }) {
+      if (session.metadata?.codex_routing_home_provider === "openai") return;
+      const boundProvider = session.metadata?.codex_routing_home_provider ||
+        (session.metadata?.agent_identity_provider === "codex" && session.metadata?.agent_identity_conversation_id
+          ? session.metadata.agent_identity_model_provider : "");
+      if (boundProvider && boundProvider !== "openai" || nativeConversationBindings(session).some((binding) =>
+        binding.engineId === "codex" && !binding.retired && binding.modelProviderId !== "openai")) {
+        throw Object.assign(new Error("This Codex conversation is stored in a separate provider home. Renew the session to use model routing; its existing history and storage location have not been changed."), {
+          code: "vibe64_codex_history_unsupported"
+        });
       }
-      if (session.metadata?.codex_routing_home_provider) return;
-      const changeover = JSON.parse(session.metadata?.assistant_changeover || "null");
-      const oldKey = existingProvider === "openai" ? "codex" : `codex/${existingProvider}`;
-      if (changeover && oldKey !== "codex" && changeover.engines?.[oldKey]) {
-        changeover.engines.codex = changeover.engines[oldKey];
-        delete changeover.engines[oldKey];
-        if (changeover.lastEngine === oldKey) changeover.lastEngine = "codex";
-        await runtime.store.writeMetadataValue(sessionId, "assistant_changeover", JSON.stringify(changeover));
-      }
-      await runtime.store.writeMetadataValue(sessionId, "codex_routing_home_provider", existingProvider);
-      session.metadata.codex_routing_home_provider = existingProvider;
+      await runtime.store.writeMetadataValue(sessionId, "codex_routing_home_provider", "openai");
+      session.metadata.codex_routing_home_provider = "openai";
     },
     async listNativeConversationStorage(sessionId, binding, options) {
       const { provider } = await nativeStorageProvider(sessionId, binding, options);
@@ -13452,25 +13324,46 @@ function createCodexTerminalController({
           let thread;
           try { thread = codexAppServerThreadRawValue(await provider.readThreadStatus(conversationId)); }
           catch (error) {
-            if (codexAppServerThreadIsMissing(error, conversationId) && !normalizeText(error.message).toLowerCase().startsWith("thread not loaded:")) continue;
+            // Native thread/read also says "not loaded" after deletion. Only
+            // an exhaustive native inventory can distinguish absence from an
+            // existing unloaded thread, including one moved to another cwd.
+            if (codexAppServerThreadIsMissing(error, conversationId) &&
+                !await provider.nativeThreadExists(conversationId, { signal: options.signal })) continue;
             throw error;
           }
           if (thread.id !== conversationId || thread.cwd !== binding.workdir ||
               !["idle", "notLoaded"].includes(thread.status?.type)) {
             throw new Error("Codex retirement requires an idle native family in the exact saved directory.");
           }
+          if (thread.historyMode !== "paginated") {
+            throw Object.assign(new Error("Codex native retirement requires paginated history. This unsupported conversation needs operator cleanup."),
+              { code: "vibe64_codex_paginated_history_required" });
+          }
           const relative = path.isAbsolute(thread.path || "") && toolHomeSource
             ? path.relative(path.join(toolHomeSource, ".codex"), thread.path) : "";
-          if (!/^(?:sessions|archived_sessions)\//u.test(relative) || !thread.path.endsWith(".jsonl") ||
-              await realpath(thread.path) !== path.resolve(thread.path)) throw new Error("Codex returned an unsafe or unknown rollout path.");
-          const info = await lstat(thread.path);
-          if (!info.isFile() || info.isSymbolicLink()) throw new Error("Codex rollout is not a regular file.");
-          records.push({ conversationId, workdir: thread.cwd, path: thread.path,
-            inode: info.ino, size: info.size, modified: info.mtimeMs, updatedAt: thread.updatedAt, status: thread.status.type });
+          if (thread.path && (!/^(?:sessions|archived_sessions)\//u.test(relative) || !/\.jsonl(?:\.zst)?$/u.test(thread.path))) {
+            throw new Error("Codex returned an unsafe or unknown rollout path.");
+          }
+          const files = [];
+          const plainPath = thread.path?.replace(/\.zst$/u, "");
+          for (const file of plainPath ? [plainPath, `${plainPath}.zst`] : []) {
+            try {
+              const info = await lstat(file);
+              if (!info.isFile() || info.isSymbolicLink() || await realpath(file) !== path.resolve(file)) {
+                throw new Error("Codex rollout is not a regular file at its exact native path.");
+              }
+              files.push({ path: file, inode: info.ino, size: info.size, modified: info.mtimeMs });
+            } catch (error) { if (error.code !== "ENOENT") throw error; }
+          }
+          records.push({ conversationId, workdir: thread.cwd, historyMode: thread.historyMode, ...(files[0] || {}), files,
+            nativePath: thread.path ?? null, status: thread.status.type,
+            ...(Number.isFinite(thread.createdAt) ? { createdAt: new Date(thread.createdAt * 1000).toISOString() } : {}),
+            ...(Number.isFinite(thread.updatedAt) ? { updatedAt: new Date(thread.updatedAt * 1000).toISOString() } : {}) });
         }
         return records;
       };
       return retireNativeConversation({ binding, inspect, beforeDelete: options.beforeDelete,
+        exportConversation: (id, onRecord) => provider.exportThreadHistory(id, onRecord, { signal: options.signal }),
         remove: () => provider.deleteThread(binding.conversationId) });
     },
     closeGlobalTerminal(terminalSessionId) {

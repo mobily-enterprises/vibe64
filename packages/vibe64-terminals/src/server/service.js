@@ -2449,7 +2449,7 @@ function createService({
     async retireAgentConversationHistory(sessionId, input = {}, options = {}) {
       if (typeof options.beforeDelete !== "function") throw new TypeError("Native retirement requires a host preservation callback.");
       const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
-      const retire = async (session, archived) => {
+      const retire = async (session, archived, publishArtifacts) => {
         if (!archived && (session.status !== VIBE64_SESSION_STATUS.ACTIVE || sessionIsClosing(session) ||
             sessionHasActiveAgentRun(session) || workspaceSetup.isRunning(sessionId))) {
           throw new Error("Native history retirement requires an idle open session or a finalized archive.");
@@ -2476,7 +2476,7 @@ function createService({
             if (inventory.conversations.some((entry) => currentIds.has(entry.conversationId))) {
               throw new Error("Native deletion would include a current Vibe64 conversation.");
             }
-            return options.beforeDelete({ ...inventory, session, archived });
+            return options.beforeDelete({ ...inventory, session, archived, ...(publishArtifacts ? { publishArtifacts } : {}) });
           }
         });
         if (!archived && result?.ok === true) {
@@ -2489,7 +2489,9 @@ function createService({
       };
       const session = await runtime.store.readSession(sessionId);
       if (session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
-        return runtime.store.withArchivedSession(sessionId, (archived) => retire(archived, true));
+        return runtime.store.withArchivedSession(sessionId, (archived, { publishArtifacts }) => retire(archived, true, publishArtifacts), {
+          beforeWork: options.beforeArchiveWork
+        });
       }
       return runMainAgentWrite(sessionId, { ...options, runtime }, ({ session }) => retire(session, false),
         { operation: "retire-native-history" });

@@ -4452,6 +4452,55 @@ test("collaborator continuation after boot recovery cannot race a newly active p
   assert.deepEqual(context.calls.createActor, { id: "collaborator-3", name: "Kai" });
 });
 
+test("renewal prepares a stopped predecessor before source archival and retries a refused preparation", async () => {
+  const context = fixture();
+  let refuse = true;
+  let preparations = 0;
+  context.controller = context.newController({
+    prepareArchive: async ({ session, runtime, phase, renewal }) => {
+      preparations += 1;
+      assert.equal(runtime, context.runtime);
+      assert.equal(session.sessionId, OLD_SESSION_ID);
+      assert.equal(session.status, "renewal_quiesced");
+      assert.equal(renewal, true);
+      assert.equal(phase, "stopping");
+      assert.notEqual(session.metadata.source_recovery_saved, "yes");
+      assert.ok(context.calls.close > 0);
+      assert.ok(context.terminalAdmissions.has(OLD_SESSION_ID));
+      assert.equal(context.calls.compact, 0);
+      if (refuse) return { ok: false, code: "host_preparation_failed", error: "Retry preservation." };
+      await runtime.store.writeJsonArtifactForRenewal(session.sessionId, "host/inventory.json", { captured: true });
+      return { ok: true };
+    }
+  });
+  const reviewed = await reviewedRenewal(context);
+  await context.controller.confirmSessionRenewal(OLD_SESSION_ID, {
+    expectedHash: reviewed.draft.hash,
+    expectedRevision: reviewed.draft.revision,
+    operationKey: reviewed.operationKey
+  });
+  const failed = await eventually(
+    () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
+    (state) => state?.status === SESSION_RENEWAL_STATUS.FAILED
+  );
+  assert.equal(failed.error.code, "host_preparation_failed");
+  assert.equal(context.sessions.get(OLD_SESSION_ID).status, "active");
+  assert.equal(context.calls.compact, 0);
+  assert.equal(context.events.some((event) => event.reason === "session-archived"), false);
+  refuse = false;
+  await context.controller.retrySessionRenewal(OLD_SESSION_ID, { operationKey: reviewed.operationKey });
+  await eventually(
+    () => context.events.find((event) => event.reason === "session-archived"),
+    (event) => Boolean(event)
+  );
+  const completed = await readSessionRenewalState(context.runtime, OLD_SESSION_ID);
+  assert.equal(completed.maintenance.status, "completed");
+  assert.equal(context.sessions.get(OLD_SESSION_ID).archiveRetained, false);
+  assert.equal(preparations, 2);
+  assert.equal(await context.runtime.store.readArtifactForRenewal(OLD_SESSION_ID, "host/inventory.json"),
+    `${JSON.stringify({ captured: true }, null, 2)}\n`);
+});
+
 test("archive failure restores the acknowledged predecessor before exposing a retry", async () => {
   const context = fixture({ archiveFailure: "compact" });
   const reviewed = await reviewedRenewal(context);

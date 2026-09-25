@@ -131,7 +131,8 @@ conversations remain available when those commands stop successfully.
 After a server restart, admitted archives resume from durable progress. Failed
 recovery preserves the evidence and requires an explicit retry.
 Hosts can register preparation before ordinary archival removes resources and
-source. Failed preparation stops that archive attempt. Fully published archives
+source, and before renewal archives its stopped predecessor. Failed preparation
+uses the existing archive or renewal recovery path. Fully published archives
 can be inspected through a guarded server operation. These extension points add
 no automatic history deletion or context rotation to the standalone editor.
 Explicit host operations can inventory and retire verified native histories,
@@ -139,6 +140,16 @@ replace idle native context using a supplied continuity briefing, and expire
 archived attachment payloads while keeping text. Native-only forks and new chats
 are discovered as candidates; hosts own preservation, exclusive ownership proof,
 retention dates and user-facing policy.
+Modern Codex retirement also requires a bounded export of native readable history
+and goals, alongside available rollout artifacts. The provider verifies the same
+content again before deletion. Hosts receive normalized chat text for durable
+retention; these exports do not promise a resumable native database backup.
+All three provider owners supply attachment-free readable text with available
+branch and message provenance. OpenCode exports large histories in bounded
+pages; an incomplete or oversized export prevents deletion. An archived host can
+atomically publish text and recovery artifacts in the existing session archive
+before native deletion, and later prune exact artifact paths through the same
+archive owner.
 Selecting a session shows incoming saved work as soon as its version check
 confirms it, while the file-change details continue loading in the background.
 The chat header gives three session tabs room to show their labels, hides the
@@ -320,9 +331,15 @@ short reasoning summaries for continuing goals as well as new messages.
 Assistant status recovers automatically after a failed connection check, without
 requiring a page reload or interrupting the assistant's work.
 Failed checks retain their reported reason beside Retry. A server configuration
-error that requires repair stops automatic retries, keeps the draft editable,
-and clears only after a successful check. Long workspace paths do not prevent
+error or failed assistant-control recovery stops automatic retries, keeps the
+draft editable, and clears only after a successful check. Retry and Renew remain
+visible above checkpoint warnings so a failed connection does not trap the person
+in repeated status checks. Long workspace paths do not prevent
 the assistant's local command controls from starting.
+New saved Codex conversations use its current paginated history format. Obsolete
+native histories are rejected with an explanation and a fresh-conversation action;
+the runtime does not retain old-format readers or silently upgrade their state.
+Native terminal turns own separate recovery checkpoints from earlier chat turns.
 An idle assistant whose process has stopped reconnects through the ordinary
 connection check, retaining completed replies without asking the person to
 resume finished work. Startup and disconnect cleanup cannot block each other.

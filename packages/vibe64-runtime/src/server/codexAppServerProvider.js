@@ -18,6 +18,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { exportCodexNativeHistory } from "./codexNativeHistoryExport.js";
 
 import {
   CODEX_AUTH_RECONNECTING_CODE,
@@ -581,18 +582,6 @@ function codexAppServerProcessMetadataIsIdentifiable(metadata = {}, runtimeDir =
       CODEX_APP_SERVER_PROCESS_STATE.RUNNING,
       CODEX_APP_SERVER_PROCESS_STATE.STOPPED
     ].includes(metadata.processState)
-  );
-}
-
-function codexAppServerLegacyProcessExitIsVerified(metadata = {}, runtimeDir = "") {
-  const normalizedRuntimeDir = normalizeAgentText(runtimeDir);
-  const pid = Number(metadata?.pid);
-  return Boolean(
-    Number(metadata?.schemaVersion) === CODEX_APP_SERVER_METADATA_SCHEMA_VERSION - 1 &&
-    metadata?.provider === CODEX_APP_SERVER_PROVIDER_ID &&
-    Number.isSafeInteger(pid) && pid > 0 &&
-    metadata?.runtimeDir === normalizedRuntimeDir &&
-    !processGroupIsAlive(pid)
   );
 }
 
@@ -1366,17 +1355,6 @@ async function stopCodexAppServerProcess(runtimeDir = "", options = {}) {
   }
   const metadata = await readCodexAppServerMetadata(normalizedRuntimeDir);
   if (!codexAppServerProcessMetadataIsIdentifiable(metadata, normalizedRuntimeDir)) {
-    if (
-      options.allowDeadLegacyRuntimeReplacement === true &&
-      codexAppServerLegacyProcessExitIsVerified(metadata, normalizedRuntimeDir)
-    ) {
-      return {
-        identityStatus: CODEX_APP_SERVER_PROCESS_IDENTITY_STATUS.ABSENT,
-        legacyRuntime: true,
-        processExitVerified: true,
-        stopped: false
-      };
-    }
     return {
       identityStatus: CODEX_APP_SERVER_PROCESS_IDENTITY_STATUS.INVALID,
       processExitVerified: false,
@@ -2625,10 +2603,7 @@ async function prepareCodexAppServerRuntime(options) {
     }
 
     if (afterLock && (!afterLockStatus || afterLockStatus.replace !== false)) {
-      const stopped = await stopCodexAppServerProcess(runtimeDir, {
-        ...runtimeOptions,
-        allowDeadLegacyRuntimeReplacement: true
-      });
+      const stopped = await stopCodexAppServerProcess(runtimeDir, runtimeOptions);
       if (stopped.processExitVerified !== true) {
         const error = new Error(
           "Vibe64 found an earlier Codex app-server but could not prove that its owned execution was stopped. It refused to start a replacement because two assistant processes could damage the session or worsen resource pressure."
@@ -2782,8 +2757,9 @@ async function listBoundedCodexAppServerThreadIds({
       () => client.request("thread/list", {
         archived,
         ...(cursor ? { cursor } : {}),
-        ...(ancestorThreadId ? { ancestorThreadId } : { cwd }),
+        ...(ancestorThreadId ? { ancestorThreadId } : cwd ? { cwd } : {}),
         limit: CODEX_APP_SERVER_THREAD_INVENTORY_PAGE_LIMIT,
+        modelProviders: [],
         sourceKinds,
         useStateDbOnly: false
       }, { signal }),
@@ -3341,6 +3317,12 @@ class CodexAppServerAgentProvider {
       if (method === "turn/started" && probe.turnId && probe.turnId !== turnId) {
         this.threadControlProbes.delete(threadId);
       } else if (probe.verified) {
+        if (turnId === probe.turnId) {
+          if (method === "item/completed" && notification.params.item?.id === probe.itemId) {
+            probe.result = notification.params.item;
+          }
+          if (method === "turn/completed") probe.completed = true;
+        }
         return;
       } else {
         if (method === "turn/started") probe.turnId = turnId;
@@ -3349,6 +3331,7 @@ class CodexAppServerAgentProvider {
           const item = notification.params?.item;
           if (item?.type === "commandExecution" && item.command?.includes(probe.marker)) {
             probe.verified = true;
+            probe.itemId = item.id;
             probe.pending = [];
           } else {
             // A concurrent native user turn must retain every event. Only a
@@ -3371,6 +3354,11 @@ class CodexAppServerAgentProvider {
 
   currentServerInfo() {
     return this.initializeResult;
+  }
+
+  isControlProbeTurn(threadId, turnId) {
+    const probe = this.threadControlProbes.get(threadId);
+    return Boolean(turnId && probe?.verified && probe.turnId === turnId);
   }
 
   async currentRuntimeInfo() {
@@ -3569,10 +3557,16 @@ class CodexAppServerAgentProvider {
       ? await this.options.prepareThreadEnvironment(this.options.threadEnv || {})
       : this.options.threadEnv;
     const requestParams = codexAppServerThreadRequestParams(params, environment);
+    if (params.ephemeral !== true) requestParams.historyMode = "paginated";
     const response = await this.runRequest(
       () => client.request("thread/start", requestParams),
       "codex-app-server-thread-start"
     );
+    if (response?.thread?.historyMode === "legacy") {
+      throw Object.assign(new Error("Codex did not create the required paginated conversation history. Update Codex before starting a conversation."), {
+        code: "vibe64_codex_history_unsupported"
+      });
+    }
     if (response?.thread?.historyMode === "paginated" && response.thread.ephemeral !== true) {
       const threadId = normalizeAgentText(response.thread.id);
       // A new paginated thread needs its metadata and empty rollout persisted
@@ -3706,6 +3700,11 @@ class CodexAppServerAgentProvider {
       let nativeHistoryPath = "";
       const readStatus = async () => {
         const { thread } = await request("thread/read", { threadId, includeTurns: false });
+        if (thread?.historyMode !== "paginated") {
+          throw Object.assign(new Error("This conversation uses an unsupported Codex history format. Renew the session to keep your files and saved chat and start a fresh conversation. You can write the handover yourself."), {
+            code: "vibe64_codex_history_unsupported"
+          });
+        }
         nativeModelProvider = thread?.modelProvider || "";
         nativeHistoryPath = thread?.path || "";
         return typeof thread?.status === "string" ? thread.status : thread?.status?.type;
@@ -3816,7 +3815,7 @@ class CodexAppServerAgentProvider {
         log("recovery_failed", { code: cause?.code || "", reason: cause.message });
         throw Object.assign(new Error(["vibe64_agent_control_binding_retained", "vibe64_codex_provider_binding_retained"].includes(cause?.code)
           ? `${cause.message} Your conversation and work are preserved.`
-          : "Assistant tool recovery could not be verified. Work is preserved; retry Resume after checking the assistant connection.", { cause }), {
+          : "The assistant connection could not be verified. Your conversation and files are preserved. Retry the connection, or renew the session to continue in a fresh conversation.", { cause }), {
           code: "vibe64_agent_control_recovery_failed", retryable: true
         });
       }
@@ -3844,7 +3843,8 @@ class CodexAppServerAgentProvider {
     if (!keys.length) return;
 
     const marker = `VIBE64_CONTROL_CHECK_${randomUUID()}:`;
-    this.threadControlProbes.set(threadId, { marker, pending: [], verified: false, turnId: "" });
+    const probe = { marker, pending: [], verified: false, turnId: "" };
+    this.threadControlProbes.set(threadId, probe);
     const expected = createHash("sha256").update(JSON.stringify(keys.map((key) => [key, environment[key]]))).digest("hex");
     const source = [
       "const {createHash}=require('node:crypto');",
@@ -3858,11 +3858,11 @@ class CodexAppServerAgentProvider {
     });
     while (true) {
       signal.throwIfAborted();
-      const page = await request("thread/turns/list", { threadId, limit: 1, sortDirection: "desc", itemsView: "full" });
-      const turn = page.data?.[0];
-      const probe = turn?.items?.find((item) => item.type === "commandExecution" && item.aggregatedOutput?.startsWith(marker));
-      if (probe && turn.status !== "inProgress") {
-        if (probe.exitCode !== 0 || probe.aggregatedOutput.trim() !== `${marker}${expected}`) {
+      // The native completion event owns this result; saved history is not a
+      // second acknowledgement of this live control operation.
+      if (probe.completed && probe.result) {
+        if (probe.result.type !== "commandExecution" || probe.result.exitCode !== 0 ||
+            probe.result.aggregatedOutput?.trim() !== `${marker}${expected}`) {
           throw Object.assign(new Error("Another native subscriber retained the previous tool environment. Close the native assistant terminal and retry Resume."), {
             code: "vibe64_agent_control_binding_retained"
           });
@@ -4013,6 +4013,33 @@ class CodexAppServerAgentProvider {
     );
   }
 
+  async exportThreadHistory(threadId, onRecord, { signal } = {}) {
+    const active = await this.activeClient();
+    // Oversized native items must fail preservation without disconnecting the
+    // shared conversation observer. Reuse JSKIT's transport on a separate socket.
+    const client = new CodexAppServerJsonRpcClient({
+      endpoint: active.endpoint,
+      maxMessageBytes: 64 * 1024 ** 2,
+      requestTimeoutMs: 30_000,
+      WebSocketImpl: this.options.WebSocketImpl
+    });
+    const deadline = AbortSignal.timeout(300_000);
+    const boundedSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    boundedSignal.throwIfAborted();
+    const abort = () => client.close();
+    boundedSignal.addEventListener("abort", abort, { once: true });
+    try {
+      await client.connect();
+      boundedSignal.throwIfAborted();
+      await client.initialize({ clientInfo: { name: "vibe64-history-export", title: "Vibe64", version: CODEX_APP_SERVER_CLIENT_VERSION } });
+      boundedSignal.throwIfAborted();
+      return await exportCodexNativeHistory(client, normalizeAgentText(threadId), onRecord, { signal: boundedSignal });
+    } finally {
+      boundedSignal.removeEventListener("abort", abort);
+      client.close();
+    }
+  }
+
   async listLoadedThreads(params = {}) {
     const client = await this.activeClient();
     return this.runRequest(
@@ -4086,6 +4113,23 @@ class CodexAppServerAgentProvider {
         requestLabel: "codex-app-server-native-storage-list", runRequest: this.runRequest.bind(this) });
     }
     return [...state.threadIds].sort();
+  }
+
+  async nativeThreadExists(threadId, { signal } = {}) {
+    const id = normalizeAgentText(threadId);
+    if (!id || id.length > CODEX_APP_SERVER_THREAD_INVENTORY_ID_MAX_LENGTH || codexAppServerTextHasControlCharacters(id)) {
+      throw new TypeError("Native existence checks require an exact thread id.");
+    }
+    const client = await this.activeClient();
+    const state = { entryCount: 0, threadIds: new Set(), totalBytes: 0 };
+    for (const archived of [false, true]) {
+      await listBoundedCodexAppServerThreadIds({ archived, client, state, signal,
+        sourceKinds: CODEX_NATIVE_STORAGE_SOURCE_KINDS,
+        errorCode: "vibe64_codex_retirement_inventory_invalid", label: "native storage",
+        requestLabel: "codex-app-server-native-existence", runRequest: this.runRequest.bind(this) });
+      if (state.threadIds.has(id)) return true;
+    }
+    return false;
   }
 
   async listEconomyThreads({

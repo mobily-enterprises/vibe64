@@ -54,6 +54,10 @@ across UI refreshes. Archiving stops active work, removes its active workspace,
 and preserves the read-only history needed to recover its conversation and
 understand what happened. Session History reads lightweight archive indexes and
 shows the most recently archived session first.
+Archived session detail reads the retained record and chat without asking a
+native provider for live state; its source and native conversation can be gone.
+Saved attachment reads likewise use the archive, without requiring a source
+workspace. Expired payloads return 410 while their descriptions remain readable.
 
 Routine session-detail refreshes read session and agent state without launching
 Git source inspections. Source operations retain their explicit health checks;
@@ -102,13 +106,26 @@ before the next resource/source archive step. Every attempt invokes it, includin
 resumption at a later durable phase, so the callback must be idempotent and handle
 already-removed source. Throwing or returning `ok: false` preserves the existing
 archive failure/retry behavior. There is no default callback or maintenance policy.
-This callback belongs to ordinary archival; renewal retains its own transaction.
+Renewal invokes the same callback after predecessor shutdown and successor
+acknowledgement, before source/archive preparation. It supplies `renewal: true`
+and the existing renewal artifact reader/writer remains the persistence owner
+for its quiesced predecessor. Callback failure uses the renewal rollback/retry
+transaction. Successful committed maintenance publishes `session-archived` only
+after removing the retained predecessor tree, making finalized archive access
+available to embedding hosts.
 
 The store's explicit `withArchivedSession(sessionId, operation)` serializes with
 archive publication, rejects remaining active/closing trees, validates the
 published archive and its archived status, and supplies full saved session
 metadata plus temporary recovery paths. Extraction is removed after success or
-failure; the original archive is unchanged. This is an archive access boundary,
+failure. A scoped batch artifact publication capability copies verified regular
+files into the extraction, validates and syncs a compressed replacement, and
+publishes it atomically under the already-held archive lock. Hosts can preserve
+native-only chat text in the canonical archive before provider retirement.
+The archive's metadata, messages, index and original archival time stay unchanged.
+An optional host callback checks capacity before extraction and replacement
+compression under the archive lock; refusal preserves the published archive.
+This is an archive access boundary,
 not proof of native-provider ownership, writer shutdown, transcript completeness,
 or permission to delete provider history. Consumers retain those responsibilities.
 The API contract and retry constraints are in `docs/session-storage-lifecycle.md`.
@@ -117,6 +134,8 @@ and validates a compressed replacement, keeps text, descriptions and other
 artifacts, requires host confirmation, then publishes with one atomic rename.
 The archive index and original archival date remain unchanged. No automatic
 expiry policy or timer is installed.
+Exact-path artifact expiry reuses the same publication owner and confirmation
+boundary; hosts choose recovery files while retaining permanent text artifacts.
 
 The chat header shares its available width among up to three session tabs,
 reserving extra room for the selected tab's Archive action. The new-session

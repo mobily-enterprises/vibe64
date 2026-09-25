@@ -76,6 +76,30 @@ test("healthy assistant can receive steering in the built client", async ({ page
   await expect(page.getByLabel("Message AI assistant")).toHaveValue("");
 });
 
+test("failed control recovery keeps Retry and Renew accessible above a checkpoint warning", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  server.state.session.agentSession.turn.active = false;
+  Object.assign(server.state.session, { backgroundTasks: [{
+    id: "codex_turn_checkpoint", status: "failed", error: "Checkpoint identity differs."
+  }] });
+  server.state.checks.push((response) => json(response, { ok: false,
+    code: "vibe64_agent_control_recovery_failed", error: "The assistant connection could not be verified." }, 409));
+  await openChat(page);
+  const banner = page.locator("[data-vibe64-connection-recovery]");
+  const renew = banner.getByRole("button", { name: "Renew session", exact: true });
+  await expect(banner.getByRole("button", { name: "Retry connection", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(renew).toBeInViewport({ ratio: 1 });
+  await expect(page.getByText("Recovery checkpoint failed", { exact: true })).toBeVisible();
+  await composer(page).fill("Keep my draft while I choose recovery.");
+  await renew.click();
+  await expect(page.getByRole("dialog", { name: "Renew this session", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close session renewal", exact: true }).click();
+  await expect(composer(page)).toHaveValue("Keep my draft while I choose recovery.");
+  await page.clock.fastForward(90_000);
+  expect(server.state.checkCount).toBe(1);
+  expect(server.state.messages).toEqual([]);
+});
+
 test("long goal keeps Pause and full-goal Close visible on small screens", async ({ page }, info) => {
   Object.assign(server.state.session, { assistantSelection: { engineId: "codex" } });
   const objective = "Complete the approved customer configuration plan, preserving existing work and checking each stage. ".repeat(45);
@@ -708,3 +732,31 @@ test(`${provider} continuation groups saved reasoning rows and follows execution
   expect(server.state.messages).toHaveLength(0);
 });
 }
+
+test("expired archived attachments keep their description and offer no broken download", async ({ page }, info) => {
+  server.state.session.agentSession.turn.active = false;
+  server.state.conversationLog = [{ turnId: "saved-attachment", user: {
+    role: "user", at: new Date().toISOString(), text: "Keep the explanation for [Image #1].",
+    attachments: [{ attachmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", fileName: "archived-screen.png",
+      contentType: "image/png", size: 20, reference: "[Image #1]" }]
+  } }];
+  const methods: string[] = [];
+  await page.route("**/agent-attachments/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa*", async (route) => {
+    methods.push(route.request().method());
+    await route.fulfill({ status: 410, body: "" });
+  });
+  await openChat(page);
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 950 });
+    await page.getByRole("button", { name: /archived-screen.png/u }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText("This attachment is no longer retained.", { exact: false })).toBeVisible();
+    await expect(dialog.getByText("archived-screen.png", { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Download", exact: true })).toHaveCount(0);
+    await expect(dialog.locator("img")).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath(`attachment-expired-${width}.png`) });
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByText("Keep the explanation for", { exact: false })).toBeVisible();
+  }
+  expect(methods).toEqual(["HEAD", "HEAD"]);
+});
