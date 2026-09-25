@@ -2094,12 +2094,8 @@ function createCodexTerminalController({
           const runtime = await createRuntimeForSession();
           const session = await runtime.getSession(sessionId, { inspectSource: false });
           const previousExecutionId = normalizeText(session.metadata?.agent_transport_execution_id);
-          // Older sessions recorded the time of their native attachment, but
-          // not its execution id. A process started after that attachment is
-          // necessarily a replacement; reconnecting to the same process is not.
-          const savedProcessChanged = previousExecutionId
-            ? previousExecutionId !== normalizeText(providerRuntime?.executionId)
-            : Date.parse(providerRuntime?.startedAt) > Date.parse(session.metadata?.agent_identity_captured_at);
+          const savedProcessChanged = Boolean(previousExecutionId &&
+            previousExecutionId !== normalizeText(providerRuntime?.executionId));
           const processReplaced = processChanged || providerRuntime?.reused === false || savedProcessChanged;
           if (!processReplaced) return params;
           if (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
@@ -5703,6 +5699,7 @@ function createCodexTerminalController({
         sortDirection: "desc"
       });
       const observedTurn = Array.isArray(response?.data) ? response.data[0] : null;
+      if (provider.isControlProbeTurn?.(normalizedThreadId, observedTurn?.id)) return thread;
       return isRecord(observedTurn)
         ? {
             ...thread,
@@ -5933,8 +5930,12 @@ function createCodexTerminalController({
     if (normalizedInputSource) {
       patch.inputSource = normalizedInputSource;
     }
+    // A native terminal turn starts its own chat owner. Reusing the previous
+    // owner's id would checkpoint two different turns with one identity.
     const normalizedOuterTurnId = normalizeText(outerTurnId) ||
-      normalizeText(codexAppServerAgentRun(session)?.outerTurnId);
+      (normalizedInputSource === "terminal" && normalizedRunState === VIBE64_AGENT_RUN_STATE.ACTIVE && !sameActiveTurn
+        ? `codex:${normalizeText(threadId)}:${normalizeText(turnId)}`
+        : normalizeText(currentRun?.outerTurnId));
     if (normalizedOuterTurnId) {
       patch.outerTurnId = normalizedOuterTurnId;
     }
@@ -11424,21 +11425,21 @@ function createCodexTerminalController({
     const conversationId = normalizeText(input.conversationId);
     const previous = codexAppServerConversation(sessionId, conversationId);
     const state = observeCodexConversation(sessionId, conversationId, context.provider);
-    let thread = await context.provider.readThreadStatus(conversationId);
-    const turns = [];
-    if (codexAppServerThreadRawValue(thread).historyMode === "paginated") {
-      let cursor;
-      do {
-        const page = await context.provider.listThreadTurns(conversationId, {
-          limit: 100, itemsView: "full", sortDirection: "asc", ...(cursor ? { cursor } : {})
-        });
-        turns.push(...page.data);
-        cursor = page.nextCursor;
-      } while (cursor);
-    } else {
-      thread = await context.provider.readThread(conversationId);
-      turns.push(...codexAppServerRenewalThreadTurns(thread));
+    const thread = await context.provider.readThreadStatus(conversationId);
+    if (codexAppServerThreadRawValue(thread).historyMode !== "paginated") {
+      throw Object.assign(new Error("This conversation uses an unsupported Codex history format. Start a fresh conversation."), {
+        code: "vibe64_codex_history_unsupported"
+      });
     }
+    const turns = [];
+    let cursor;
+    do {
+      const page = await context.provider.listThreadTurns(conversationId, {
+        limit: 100, itemsView: "full", sortDirection: "asc", ...(cursor ? { cursor } : {})
+      });
+      turns.push(...page.data);
+      cursor = page.nextCursor;
+    } while (cursor);
     const latest = turns.at(-1);
     const runId = codexAppServerRenewalTurnId(latest || {});
     let status = codexAppServerThreadStatus(thread);

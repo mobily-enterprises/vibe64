@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/server/codex-client";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -8,7 +9,7 @@ import path from "node:path";
 import test from "node:test";
 import { CodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerProvider";
 
-function harness({ status = "idle", goal = null, stayLoaded = false, beforeUnsubscribe = async () => {} } = {}) {
+function harness({ status = "idle", historyMode = "paginated", goal = null, stayLoaded = false, beforeUnsubscribe = async () => {} } = {}) {
   const calls = [];
   const logs = [];
   let environment = { MARKER: "A", PRIVATE_VALUE: "must-not-be-logged" };
@@ -16,7 +17,7 @@ function harness({ status = "idle", goal = null, stayLoaded = false, beforeUnsub
   const client = { async request(method, params) {
     calls.push({ method, params });
     if (method === "account/read") return { account: { type: "chatgpt" } };
-    if (method === "thread/read") return { thread: { id: "thread-1", status } };
+    if (method === "thread/read") return { thread: { id: "thread-1", status, historyMode } };
     if (method === "thread/goal/get") return { goal: goal && { ...goal } };
     if (method === "thread/goal/set") {
       goal = { ...goal, status: params.status, updatedAt: goal.updatedAt + 1 };
@@ -186,7 +187,56 @@ test("control probe filtering preserves a concurrent native user's turn", () => 
   assert.equal(h.provider.threadControlProbes.size, 0);
 });
 
-test("native Codex reload really applies changed controls and preserves history, goal and files", {
+for (const valid of [true, false]) {
+  test(`control verification uses its exact live completion and rejects an incorrect digest (valid: ${valid})`, async () => {
+    const h = harness();
+    const forwarded = [];
+    h.provider.subscribe((event) => forwarded.push(event));
+    const environment = { VIBE64_TEST_CONTROL: "B" };
+    h.provider.options.prepareThreadEnvironment = async () => environment;
+    const request = h.client.request;
+    h.client.request = async (method, params) => {
+      assert.notEqual(method, "thread/turns/list", "a control check must not depend on saved history items");
+      if (method !== "thread/shellCommand") return request(method, params);
+      const marker = params.command.match(/VIBE64_CONTROL_CHECK_[0-9a-f-]+:/u)?.[0];
+      assert.ok(marker);
+      const digest = createHash("sha256").update(JSON.stringify(Object.entries(environment))).digest("hex");
+      const item = { id: "probe-item", type: "commandExecution", command: params.command };
+      const emit = (method, fields) => h.provider.publishNotification({ method, params: { threadId: params.threadId, ...fields } });
+      emit("turn/started", { turn: { id: "probe-turn", status: "inProgress" } });
+      emit("item/started", { turnId: "probe-turn", item });
+      // A different item or turn cannot satisfy this check.
+      emit("item/completed", { turnId: "probe-turn", item: { ...item, id: "other-item", exitCode: 0, aggregatedOutput: `${marker}${digest}` } });
+      emit("turn/completed", { turn: { id: "other-turn", status: "completed" } });
+      const probe = h.provider.threadControlProbes.get(params.threadId);
+      assert.equal(probe.result, undefined);
+      assert.equal(probe.completed, undefined);
+      emit("item/completed", { turnId: "probe-turn", item: { ...item, exitCode: 0, aggregatedOutput: `${marker}${valid ? digest : "incorrect"}` } });
+      emit("turn/completed", { turn: { id: "probe-turn", status: "completed" } });
+      return {};
+    };
+    if (valid) {
+      await h.provider.ensureThreadControls("thread-1");
+      assert.equal(h.provider.threadEnvironments.size, 1);
+    } else {
+      await assert.rejects(h.provider.ensureThreadControls("thread-1"), { code: "vibe64_agent_control_recovery_failed" });
+      assert.equal(h.provider.threadEnvironments.size, 0);
+    }
+    assert.deepEqual(forwarded, []);
+    assert.equal(h.provider.isControlProbeTurn("thread-1", "probe-turn"), true);
+    assert.equal(h.provider.isControlProbeTurn("thread-1", "other-turn"), false);
+    assert.equal(h.provider.isControlProbeTurn("thread-2", "probe-turn"), false);
+  });
+}
+
+test("unsupported Codex history requires renewal without attempting native recovery", async () => {
+  const h = harness({ historyMode: "legacy" });
+  await assert.rejects(h.provider.resumeThread("thread-1"), { code: "vibe64_codex_history_unsupported" });
+  assert.equal(h.provider.threadEnvironments.size, 0);
+  assert.deepEqual(h.calls.map(({ method }) => method), ["thread/read"]);
+});
+
+test("native Codex paginated reload applies changed controls and preserves history, goal and files", {
   skip: spawnSync("codex", ["--version"], { timeout: 5000 }).status !== 0 ? "Codex CLI is not installed" : false, timeout: 30_000 }, async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-native-controls-"));
   let modelRequests = 0;
@@ -244,22 +294,26 @@ test("native Codex reload really applies changed controls and preserves history,
   const forwarded = [];
   provider.subscribe((event) => forwarded.push(event));
   client.subscribe((event) => provider.publishNotification(event));
-  const started = await provider.startThread({ cwd: root, approvalPolicy: "never", sandbox: "danger-full-access" });
+  const started = await provider.startThread({ cwd: root, historyMode: "paginated", approvalPolicy: "never", sandbox: "danger-full-access" });
   const threadId = started.id;
   await client.request("thread/name/set", { threadId, name: "Managed control regression" });
   await client.request("thread/read", { threadId, includeTurns: true });
   await writeFile(path.join(root, "preserved.txt"), "partial implementation");
   const shellMarker = async () => {
     let stop;
+    let output;
     const completed = new Promise((resolve) => {
-      stop = (message) => { if (message.method === "turn/completed" && message.params.threadId === threadId) resolve(); };
+      stop = (message) => {
+        if (message.params?.threadId !== threadId) return;
+        if (message.method === "item/completed" && message.params.item?.type === "commandExecution") output = message.params.item.aggregatedOutput;
+        if (message.method === "turn/completed") resolve();
+      };
       events.add(stop);
     });
     try {
       await client.request("thread/shellCommand", { threadId, command: 'printf "GENERATION=%s\\n" "$VIBE64_TEST_CONTROL_GENERATION"', timeoutMs: 2000 });
       await completed;
-      const page = await client.request("thread/turns/list", { threadId, limit: 1, sortDirection: "desc", itemsView: "full" });
-      return JSON.stringify(page.data[0]);
+      return output;
     } finally { events.delete(stop); }
   };
   assert.match(await shellMarker(), /GENERATION=A/);

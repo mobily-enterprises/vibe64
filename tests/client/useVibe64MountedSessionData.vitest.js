@@ -458,11 +458,20 @@ describe("useVibe64MountedSessionData", () => {
       expect(httpMocks.request).toHaveBeenCalledTimes(2);
     });
 
-    it.each([false, true])("keeps a permanent startup error until an explicit retry succeeds (HTTP error: %s)", async (httpError) => {
+    it.each([
+      ["vibe64_agent_control_path_too_long", false],
+      ["vibe64_agent_control_path_too_long", true],
+      ["vibe64_agent_control_recovery_failed", false],
+      ["vibe64_agent_control_recovery_failed", true],
+      ["vibe64_codex_history_unsupported", false],
+      ["vibe64_codex_history_unsupported", true]
+    ])("keeps %s actionable until an explicit retry succeeds (HTTP error: %s)", async (code, httpError) => {
       const failure = {
         ok: false,
-        code: "vibe64_agent_control_path_too_long",
-        error: "The assistant cannot start. Ask the workspace administrator to shorten TMPDIR, then retry."
+        code,
+        error: code === "vibe64_agent_control_recovery_failed"
+          ? "Assistant tool recovery could not be verified. Your conversation and work are preserved."
+          : "The assistant cannot start. Ask the workspace administrator to shorten TMPDIR, then retry."
       };
       if (httpError) httpMocks.request.mockRejectedValueOnce(Object.assign(new Error(failure.error), { code: failure.code }));
       else httpMocks.request.mockResolvedValueOnce(failure);

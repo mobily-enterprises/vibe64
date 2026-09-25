@@ -661,12 +661,23 @@ Codex can retain an old shell environment across an already-loaded resume. To
 change it, Vibe64 pauses an active goal, confirms that its turn stopped, detaches
 and resumes the same thread, then proves the effective managed environment with a
 bounded native shell digest check and authenticates its live control health routes.
-The check uses no model, prints no environment values and is excluded from live
-chat turn reconciliation; its shell record remains in native history. Another
+The check uses no model, prints no environment values and verifies its exact live
+item and turn completion instead of polling saved history. It is excluded from
+live chat reconciliation and from the current provider's latest-turn status
+snapshot; its shell record remains in native history. Another
 native subscriber can retain the old environment, so unsubscribe alone is never
 readiness proof. Failed verification leaves work stopped with an actionable error.
 Only the same goal paused by this recovery may continue, and a concurrent explicit
 Pause or goal change wins. Recovery does not replay a human prompt or tool command.
+
+Each newly observed terminal-origin turn receives its own stable outer identity,
+derived from its native thread and turn. It cannot reuse a preceding chat's
+checkpoint identity. Genuine goal continuations retain their existing outer owner.
+New durable threads explicitly request paginated history. Persistent history reads
+use paginated APIs only, and obsolete history cannot enter managed recovery.
+Process restoration uses saved execution identities without the older timestamp
+inference. Unsupported runtime metadata requires a stopped-service upgrade; normal
+startup neither replaces it using an old PID-only format nor rewrites it.
 
 Session command-environment preparation and closure share a project-scoped admission
 boundary. Closure drains admitted preparation and rejects overlapping acquisitions,
@@ -996,8 +1007,11 @@ message or requiring an explicit Resume.
 The browser coalesces checks for the same
 connection and retries failures after one second, backing off to thirty seconds.
 It retains the reported failure in the connection notice until a successful
-check. A control-socket path configuration error stops timed retries and shows
-the repair instruction beside explicit Retry, preserving the draft.
+check. A control-socket path configuration error, failed control recovery, or
+unsupported native history stops timed retries and shows the repair instruction
+beside explicit Retry. Renew is also available in that failure notice, preserving
+the draft and access to the existing manual handover workflow. These actions appear
+before lengthy checkpoint diagnostics and wrap within narrow chat panes.
 Git, session shell, Env, database, preview and browser command sockets use compact,
 process-user-scoped names in the server temporary directory. Their identities
 include the full wrapper path and control kind, keeping projects and sessions

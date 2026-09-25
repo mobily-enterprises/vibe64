@@ -284,7 +284,7 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
     async readThread(threadId) {
       calls.push(["read", threadId]);
       captures.onReadThread?.(threadId);
-      if (captures.persistentHistory) return { raw: { id: threadId, status: captures.persistentStatus || "idle", turns: captures.persistentHistory } };
+      if (captures.persistentHistory) return { raw: { id: threadId, historyMode: "paginated", status: captures.persistentStatus || "idle", turns: captures.persistentHistory } };
       throw new Error("ephemeral threads do not support includeTurns");
     },
     async readThreadStatus(threadId) {
@@ -4482,6 +4482,26 @@ test("terminal-origin messages inherit the latest UI actor without changing goal
     );
 
     const terminalTurnId = "terminal-origin-turn";
+    const beforeProbe = await store.readAgentRun(sessionId, "codex_app_server");
+    const readStatus = provider.readThreadStatus;
+    provider.connectionGeneration = "after-control-check";
+    provider.readThreadStatus = async () => ({ status: "idle" });
+    provider.turnId = "internal-control-check";
+    let probeChecks = 0;
+    provider.isControlProbeTurn = (id, turnId) => {
+      probeChecks += 1;
+      return id === threadId && turnId === "internal-control-check";
+    };
+    captures.threadSnapshotTurns = [{ id: "internal-control-check", status: "completed", items: [] }];
+    const reconnected = await controller.reconcileThreads([{ sessionId }]);
+    assert.equal(reconnected.ok, true, JSON.stringify(reconnected));
+    assert.ok(probeChecks > 0);
+    const afterProbe = await store.readAgentRun(sessionId, "codex_app_server");
+    assert.equal(afterProbe.providerTurnId, beforeProbe.providerTurnId);
+    assert.equal(afterProbe.outerTurnId, beforeProbe.outerTurnId);
+    assert.equal(afterProbe.state, VIBE64_AGENT_RUN_STATE.COMPLETED);
+    provider.readThreadStatus = readStatus;
+    captures.threadSnapshotTurns = null;
     provider.status = "inProgress";
     provider.turnId = terminalTurnId;
     emitCodexNotification(captures.subscribers, turnStarted({
@@ -4495,6 +4515,7 @@ test("terminal-origin messages inherit the latest UI actor without changing goal
       "the terminal-origin turn to activate"
     );
     assert.equal(terminalRun.inputSource, "terminal");
+    assert.equal(terminalRun.outerTurnId, `codex:${threadId}:${terminalTurnId}`);
 
     emitCodexNotification(captures.subscribers, {
       method: "item/completed",

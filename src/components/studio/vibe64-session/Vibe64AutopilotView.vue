@@ -176,9 +176,6 @@
       </header>
 
       <div class="studio-autopilot__activity" aria-label="Session activity">
-        <v-alert v-if="checkpointFailure" type="warning" variant="tonal" title="Recovery checkpoint failed">
-          Your files remain in this session, but the last assistant turn has no confirmed recovery checkpoint. {{ checkpointFailure }}
-        </v-alert>
         <v-sheet v-if="githubProject && sessionPullRequest" color="surface-light" rounded="lg" class="pa-2 text-body-small" style="overflow-wrap: anywhere">
           <strong>{{ sessionPullRequest.number ? `PR #${sessionPullRequest.number}` : 'Pull request branch' }}</strong>
           · Commit &amp; push to {{ sessionPullRequest.headRepository }}:{{ sessionPullRequest.headBranch }}
@@ -195,15 +192,6 @@
           role="status"
           data-vibe64-connection-recovery
         >
-          <span v-if="assistantAccountUnavailable" class="text-body-small">
-            {{ assistantAccountMessage }} Your draft is kept.
-          </span>
-          <span v-else class="text-body-small">
-            {{ props.agentConnectionStatus === 'disconnected'
-              ? 'Connection lost. Reconnecting automatically.'
-              : props.agentConnectionError || 'Checking the assistant connection.' }}
-            Your draft is kept.
-          </span>
           <v-btn
             v-if="assistantAccountUnavailable"
             color="primary"
@@ -222,7 +210,27 @@
           >
             {{ props.agentConnectionStatus === 'disconnected' ? 'Reconnect' : 'Retry connection' }}
           </v-btn>
+          <v-btn
+            v-if="props.agentConnectionStatus === 'failed' && props.sessionRenewal?.visible"
+            variant="tonal"
+            min-height="48"
+            @click="requestSessionRenewal($event.currentTarget)"
+          >
+            Renew session
+          </v-btn>
+          <span v-if="assistantAccountUnavailable" class="text-body-small">
+            {{ assistantAccountMessage }} Your draft is kept.
+          </span>
+          <span v-else class="text-body-small">
+            {{ props.agentConnectionStatus === 'disconnected'
+              ? 'Connection lost. Reconnecting automatically.'
+              : props.agentConnectionError || 'Checking the assistant connection.' }}
+            Your draft is kept.
+          </span>
         </v-sheet>
+        <v-alert v-if="checkpointFailure" type="warning" variant="tonal" title="Recovery checkpoint failed">
+          Your files remain in this session, but the last assistant turn has no confirmed recovery checkpoint. {{ checkpointFailure }}
+        </v-alert>
         <v-sheet v-if="testApproval && resourceRecoveryControl" class="d-flex flex-wrap align-center justify-space-between ga-2 pa-2" color="surface-variant" rounded="lg">
           <span class="text-body-small">{{ testApproval.state === 'waiting' ? 'Tests need memory approval' : 'Resuming the original test…' }}</span>
           <component
@@ -1917,12 +1925,13 @@ onBeforeUnmount(() => {
 .studio-autopilot__connection-recovery {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.25rem 0.5rem;
 }
 
 .studio-autopilot__connection-recovery > span {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 0;
 }
 

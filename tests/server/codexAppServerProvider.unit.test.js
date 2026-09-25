@@ -2268,7 +2268,7 @@ test("codex provider starts distinct app-server processes for distinct runtime i
   });
 });
 
-test("codex provider replaces old runtime metadata with host app-server metadata", async () => {
+test("codex provider preserves unsupported runtime metadata for a stopped-service upgrade", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const staleMetadata = {
       ...metadataForRuntime(runtimeDir),
@@ -2278,22 +2278,18 @@ test("codex provider replaces old runtime metadata with host app-server metadata
     };
     await writeMetadata(runtimeDir, staleMetadata);
     const commandCalls = [];
-    const runtime = await ensureCodexAppServerRuntime({
+    await assert.rejects(ensureCodexAppServerRuntime({
       authStateSignature: "test-auth-state-signature",
       readyTimeoutMs: 2000,
       runtimeDir,
       commandRunner: codexAppServerCommandRunner(runtimeDir, commandCalls),
       WebSocketImpl: ResponsiveFakeWebSocket
-    });
+    }), { code: "vibe64_codex_app_server_process_identity_unverified" });
 
-    assert.equal(runtime.reused, false);
-    assert.equal(commandCalls.length, 1);
-    managedCodexAppServerArgs(commandCalls[0]);
+    assert.equal(commandCalls.length, 0);
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
-    assert.equal(stored.schemaVersion, CODEX_APP_SERVER_METADATA_SCHEMA_VERSION);
-    assert.equal(stored.attachmentHostRoot, CODEX_ATTACHMENT_HOST_ROOT);
-    assert.equal(stored.authStateSignature, "test-auth-state-signature");
+    assert.deepEqual(stored, staleMetadata);
   });
 });
 
@@ -3014,10 +3010,9 @@ for (const failedMethod of ["thread/name/set", "thread/read"]) {
   });
 }
 
-test("codex provider does not persist ephemeral or legacy thread history at startup", async () => {
+test("codex provider does not persist ephemeral thread history at startup", async () => {
   for (const thread of [
-    { id: "thread-ephemeral", ephemeral: true, historyMode: "paginated" },
-    { id: "thread-legacy", historyMode: "legacy" }
+    { id: "thread-ephemeral", ephemeral: true, historyMode: "paginated" }
   ]) {
     const requests = [];
     const provider = new CodexAppServerAgentProvider({});
@@ -3191,7 +3186,8 @@ test("codex provider scopes each thread to its session environment", async () =>
       config: {
         shell_environment_policy: sessionPolicy
       },
-      cwd: "/repo/session-two"
+      cwd: "/repo/session-two",
+      historyMode: "paginated"
     }
   }, {
     method: "thread/resume",
@@ -3212,7 +3208,8 @@ test("codex provider scopes each thread to its session environment", async () =>
           set: {}
         }
       },
-      cwd: "/tmp/isolated-helper"
+      cwd: "/tmp/isolated-helper",
+      historyMode: "paginated"
     }
   }]);
 });

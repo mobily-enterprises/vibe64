@@ -314,9 +314,15 @@ short reasoning summaries for continuing goals as well as new messages.
 Assistant status recovers automatically after a failed connection check, without
 requiring a page reload or interrupting the assistant's work.
 Failed checks retain their reported reason beside Retry. A server configuration
-error that requires repair stops automatic retries, keeps the draft editable,
-and clears only after a successful check. Long workspace paths do not prevent
+error or failed assistant-control recovery stops automatic retries, keeps the
+draft editable, and clears only after a successful check. Retry and Renew remain
+visible above checkpoint warnings so a failed connection does not trap the person
+in repeated status checks. Long workspace paths do not prevent
 the assistant's local command controls from starting.
+New saved Codex conversations use its current paginated history format. Obsolete
+native histories are rejected with an explanation and a fresh-conversation action;
+the runtime does not retain old-format readers or silently upgrade their state.
+Native terminal turns own separate recovery checkpoints from earlier chat turns.
 An idle assistant whose process has stopped reconnects through the ordinary
 connection check, retaining completed replies without asking the person to
 resume finished work. Startup and disconnect cleanup cannot block each other.
