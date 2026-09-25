@@ -287,8 +287,12 @@ configuration snapshot, sharing connection and catalogue reads within that
 response only. The response omits private connection identities. Dispatch still
 rechecks access. An optional host user resolver refreshes the supplied actor
 before purpose resolution and native AI admission, and providers receive that
-current user. Hosted continuations with an explicitly missing actor cannot
-inherit the current viewer. Access responses omit the user record. Reads,
+current user. Hosted continuations with a missing actor cannot inherit the
+current viewer, including unsent requests from before the routing upgrade.
+Those requests retain their evidence and require cancellation followed by a
+new Send. Recorded submitters still receive fresh admission; inspecting a prior
+delivery receipt requires no new inference. Standalone admission without hosted
+users remains supported. Access responses omit the user record. Reads,
 Stop and cleanup remain separate from admission of new inference. Source
 explanations and Database Copilot use their own resolved Economy destination too.
 

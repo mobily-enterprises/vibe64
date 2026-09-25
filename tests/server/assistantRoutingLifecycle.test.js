@@ -828,6 +828,48 @@ test("a migrated unsent request goes through fresh admission while retaining its
   assert.equal(f.state().decision.backupUsed, true);
 });
 
+for (const actorFields of [{}, { submittedBy: null }]) {
+  test(`a migrated request with ${Object.hasOwn(actorFields, "submittedBy") ? "null" : "missing"} actor cannot borrow the hosted retry user's identity`, async (t) => {
+    const actors = [];
+    const f = await fixture(t, { mode: "code", review: false }, {
+      resolveAssistantUser: async (actor) => {
+        actors.push(actor);
+        if (!actor?.username) throw Object.assign(new Error("The submitting user is unavailable. Cancel and send a new request."), {
+          code: "vibe64_assistant_actor_unavailable"
+        });
+        return actor;
+      }
+    });
+    const original = JSON.stringify({ schemaVersion: 2, admissionRequired: true, workflowEngineId: "codex",
+      messageId: request.messageId, input: { message: request.message }, mode: "code", resolvedMode: "code", status: "failed", review: false,
+      assignments: { code: f.assignments.code }, settingsRevision: 1, ...actorFields });
+    f.metadata.assistant_routing_request = original;
+    await assert.rejects(f.restart().send("session-1", request, f.context), { code: "vibe64_assistant_actor_unavailable" });
+    assert.equal(actors.length, 1);
+    assert.equal(actors[0]?.username, undefined);
+    assert.equal(f.metadata.assistant_routing_request, original, "Refusal preserves the old request evidence");
+    assert.equal(f.sends.length, 0);
+    assert.equal(f.helperCalls(), 0);
+
+    await f.service.cancel("session-1", f.context);
+    await f.service.send("session-1", { ...request, messageId: "new-owner-request" }, f.context);
+    assert.equal(f.sends.length, 1, "An explicit new request can use its authenticated sender");
+    assert.equal(f.state().submittedBy.username, "owner");
+  });
+}
+
+test("standalone admission can retry a migrated request without a hosted actor", async (t) => {
+  const f = await fixture(t, { mode: "code", review: false });
+  f.context.vibe64User = null;
+  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 2, admissionRequired: true, workflowEngineId: "codex",
+    messageId: request.messageId, input: { message: request.message }, mode: "code", resolvedMode: "code", status: "failed", review: false,
+    assignments: { code: f.assignments.code }, settingsRevision: 1, submittedBy: null });
+  await f.service.send("session-1", request, f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.state().submittedBy, null);
+  assert.equal(f.state().admissionRequired, undefined);
+});
+
 test("a migrated uncertain request can inspect admission without authorizing fresh inference", async (t) => {
   const f = await fixture(t, { mode: "code", review: false });
   f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 2, admissionRequired: true, workflowEngineId: "codex",

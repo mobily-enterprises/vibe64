@@ -558,7 +558,8 @@ the composer while the owner reviews them, even when the assistant is busy.
 Owners see the author, full text and previewable attachments with Approve & send
 and Decline actions directly in chat. Members can withdraw pending requests and
 see recent decisions. Approval retains the author's attribution and safely
-retries a failed delivery.
+retries a failed delivery. A migrated AI request with no recorded submitter cannot
+borrow the current viewer's identity on Retry; cancel it and send a new request.
 When the owner switches to a connection available to the workspace, members'
 open browsers immediately return to direct AI use without reloading or losing
 drafts and attachments. Switching back restores Send for approval in real time.

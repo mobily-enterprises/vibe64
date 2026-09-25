@@ -213,7 +213,6 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
     state.configuration = { revision: saved.revision, orchestrators: { [state.workflowEngineId]: {
       ...saved.orchestrators[state.workflowEngineId], ...state.assignments
     } } };
-    state.submittedBy ||= context.vibe64User || null;
     state.observedSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     state.decision = await resolve(context, state);
     state.assignments = Object.fromEntries(Object.entries(destinations(state.decision)).map(([role, destination]) => [role, destination.effectiveSelection]));

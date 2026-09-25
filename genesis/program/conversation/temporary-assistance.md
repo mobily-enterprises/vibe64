@@ -402,10 +402,10 @@ native thread creation also releases any catalogue runtime owned by that scope.
 The manager also composes these scoped operations into one bounded helper turn,
 awaiting the parent's native-identity event before starting. Abort during startup
 stops the late native turn; abort while waiting stops that same scoped turn.
-Save naming now resolves effective Economy through this seam, with durable
-cleanup references in the existing Save task. Suggestions, source explanations
-and database callers still need migration from their older per-account settings
-and detached operations.
+Save naming, suggestions, source explanations and database help resolve effective
+Economy through this seam. Each feature retains its own durable helper-cleanup
+references, exact destination and connection identity; the last main-chat model
+does not determine helper access.
 
 Prompt suggestions, commit subjects, database help, and source explanations
 use the bounded low-cost execution profile in a private non-project workspace.
