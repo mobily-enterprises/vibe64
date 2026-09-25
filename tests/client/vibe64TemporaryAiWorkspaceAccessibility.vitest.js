@@ -260,7 +260,7 @@ function mountWorkspace(container, props) {
       return () => h("button", attrs, slots.default?.());
     }
   }));
-  for (const name of ["VIcon", "VSelect", "VSkeletonLoader", "VCard", "VCardTitle", "VCardText", "VCardActions", "VDialog"]) {
+  for (const name of ["VIcon", "VSelect", "VSkeletonLoader", "VCard", "VCardTitle", "VCardText", "VCardActions", "VDialog", "VChip"]) {
     app.component(name, defineComponent({ setup: (_props, { attrs, slots }) => () => h("div", attrs, slots.default?.()) }));
   }
   app.provide(ssrContextKey, { modules: new Set() });
@@ -304,6 +304,38 @@ describe("Temporary AI recovery workspace accessibility", () => {
   afterEach(() => {
     temporaryProvider.value = null;
     vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ["skipped_incomplete", "Coding stopped. Automatic review was skipped."],
+    ["incomplete", "Review stopped before finishing."],
+    ["skipped_unconfirmed", "Automatic review skipped: coding completion could not be confirmed."],
+    ["cancelled", "Automatic review cancelled."],
+    ["skipped_question", "Waiting for your answer. Automatic review was skipped."]
+  ])("explains restored %s review status without restarting work", async (reviewStatus, message) => {
+    const temporary = temporaryAiTestState(deferred());
+    const request = { status: "done", reviewStatus, messageId: "request-1", resolvedMode: "code" };
+    temporary.tasks.value = [{
+      id: "chat", conversationId: "chat", agentSettings: {}, delivery: createAssistantMessageDelivery(),
+      busy: false, draft: "My next question", error: "", messages: [], title: "Temporary 1",
+      routingMetadata: { assistant_routing_request: JSON.stringify(request) }
+    }];
+    temporary.activeTaskId.value = "chat";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const container = { children: [], type: "root" };
+    const { app } = mountWorkspace(container, { active: true, sessionId: "session-1" });
+    try {
+      await flushWorkspaceReveal();
+      const notice = findNode(container, (node) => node.props?.role === "status" && nodeText(node).includes(message));
+      expect(notice).toBeTruthy();
+      expect(temporary.send).not.toHaveBeenCalled();
+      expect(temporary.tasks.value[0].draft).toBe("My next question");
+      temporary.tasks.value[0].routingMetadata.assistant_routing_request = JSON.stringify({ ...request, reviewStatus: "completed" });
+      await nextTick();
+      expect(nodeText(container)).not.toContain(message);
+      expect(nodeText(container)).not.toContain("Review finished");
+    } finally { app.unmount(); }
   });
 
   it("uses the shared status for typing only in the visible temporary conversation", async () => {

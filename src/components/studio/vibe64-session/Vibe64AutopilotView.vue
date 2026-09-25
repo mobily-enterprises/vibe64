@@ -403,7 +403,11 @@
             class="studio-autopilot__composer"
             @focusout="handleComposerRegionFocusOut"
           >
-            <v-alert v-if="routingStatusLabel && (routingBusy || routingRequest?.error)" variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status">
+            <v-alert
+              v-if="routingStatusLabel && (routingBusy || routingRequest?.error ||
+                (routingRequest?.status === 'done' && ['incomplete', 'skipped_incomplete', 'skipped_unconfirmed', 'cancelled', 'skipped_question'].includes(routingRequest.reviewStatus)))"
+              variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status"
+            >
               {{ routingStatusLabel }}
               <p v-if="routingRequest?.error" class="text-body-small mt-1">{{ routingRequest.error }}</p>
               <div v-if="['review_pending', 'review_uncertain'].includes(routingRequest?.status)" class="d-flex flex-wrap ga-1">

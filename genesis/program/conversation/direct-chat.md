@@ -327,6 +327,9 @@ skips review visibly. Backend recovery offers an unsent review for Retry/Skip
 instead of launching it. Review retries use the original submitting actor even
 when an owner triggers Retry. The host revalidates that original user's current
 access before review; removal blocks review and preserves completed coding work.
+Main and temporary chat retain a compact status notice when review was skipped,
+cancelled or stopped before finishing, including after reload. The next request
+replaces that notice; displaying it does not restart coding or review.
 Replaced connections cannot receive a captured request; changed configuration
 does not retarget it. Goal mode, workflow and
 selection are resolved centrally and pinned only after native goal acceptance.

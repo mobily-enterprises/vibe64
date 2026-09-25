@@ -85,6 +85,9 @@ Code completion. Polling can schedule it when the current coordinator admitted
 that Code request, even if its native idle event arrives later. After a backend
 restart, a completed Code request instead offers explicit review Retry/Skip.
 Closing or stopping a chat cancels pending routing and review.
+Skipped, cancelled and incomplete reviews remain explained above the composer
+after reload, until the next request replaces their status. The notice does not
+restart work.
 When routing stops before delivery, the local prompt returns to the composer;
 its next explicit Send uses a new message ID. Newer draft text and attachments
 are retained, and a clean cancellation does not appear as a failed message.

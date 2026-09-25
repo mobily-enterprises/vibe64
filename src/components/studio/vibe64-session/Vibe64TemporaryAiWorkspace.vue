@@ -175,14 +175,18 @@
           </div>
         </template>
         <template #composer>
-          <v-alert v-if="routingLabel && (routingPending || routingRequest?.error)" variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status">
-            {{ routingLabel }}
-            <p v-if="routingRequest?.error" class="text-body-small">{{ routingRequest.error }}</p>
-            <div v-if="['review_pending', 'review_uncertain'].includes(routingRequest?.status)" class="d-flex flex-wrap ga-1">
-              <v-btn variant="text" min-height="48" @click="temporary.retryReview(activeTask.id)">{{ routingRequest.status === 'review_uncertain' ? 'Check delivery' : 'Retry review' }}</v-btn>
-              <v-btn v-if="routingRequest.status === 'review_pending'" variant="text" min-height="48" @click="stopTask(activeTask.id)">Skip review</v-btn>
-            </div>
-          </v-alert>
+            <v-alert
+              v-if="routingLabel && (routingPending || routingRequest?.error ||
+                (routingRequest?.status === 'done' && ['incomplete', 'skipped_incomplete', 'skipped_unconfirmed', 'cancelled', 'skipped_question'].includes(routingRequest.reviewStatus)))"
+              variant="tonal" density="compact" :type="routingRequest?.error ? 'warning' : 'info'" class="mb-2" role="status"
+            >
+              {{ routingLabel }}
+              <p v-if="routingRequest?.error" class="text-body-small">{{ routingRequest.error }}</p>
+              <div v-if="['review_pending', 'review_uncertain'].includes(routingRequest?.status)" class="d-flex flex-wrap ga-1">
+                <v-btn variant="text" min-height="48" @click="temporary.retryReview(activeTask.id)">{{ routingRequest.status === 'review_uncertain' ? 'Check delivery' : 'Retry review' }}</v-btn>
+                <v-btn v-if="routingRequest.status === 'review_pending'" variant="text" min-height="48" @click="stopTask(activeTask.id)">Skip review</v-btn>
+              </div>
+            </v-alert>
           <div v-if="activeTask.restoredAttachments?.length" aria-label="Saved draft attachments">
             <v-chip
               v-for="attachment in activeTask.restoredAttachments" :key="attachment.attachmentId"
