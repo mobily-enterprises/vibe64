@@ -327,11 +327,12 @@ test("native storage discovers and retires an archived native-only chat through 
   const f = await terminalServiceFixture(t, lock, { assistantSelection: selection, opencodeTerminalController: {
     createServerProcess: async () => ({
       client: { health: async () => ({ healthy: true }), sessionStatus: async () => ({ type: "idle" }),
-        readSession: async (id) => {
-          if (!ids.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 });
-          return { id, location: { directory: workdir }, time: { updated: 1 } };
-        }, deleteSession: async (id) => { assert.equal(preserved, true); ids.delete(id); } },
-      listConversationsForDirectory: async (directory) => { assert.equal(directory, workdir); return [...ids].map((id) => ({ id })); },
+        deleteSession: async (id) => { assert.equal(preserved, true); ids.delete(id); } },
+      readConversationStorage: async (id) => {
+        if (!ids.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 });
+        return { id, directory: workdir, time: { updated: 1 } };
+      },
+      listConversationsForDirectory: async (directory) => { assert.equal(directory, workdir); return [...ids].map((id) => ({ id, directory: workdir })); },
       listConversationChildren: async () => [], stop: async () => ({ exited: true }),
       readConversationStoragePage: async (id) => ({ nextCursor: null, data: [{
         info: { id: "msg_nativeuser", sessionID: id, role: "user" },

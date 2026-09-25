@@ -3543,6 +3543,7 @@ test("codex economy provider authoritatively inventories active and archived thr
       archived: false,
       cwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
       limit: 100,
+      modelProviders: [],
       sourceKinds: ["appServer"],
       useStateDbOnly: false
     }
@@ -3553,6 +3554,7 @@ test("codex economy provider authoritatively inventories active and archived thr
       cursor: "next-active",
       cwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
       limit: 100,
+      modelProviders: [],
       sourceKinds: ["appServer"],
       useStateDbOnly: false
     }
@@ -3562,6 +3564,7 @@ test("codex economy provider authoritatively inventories active and archived thr
       archived: true,
       cwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
       limit: 100,
+      modelProviders: [],
       sourceKinds: ["appServer"],
       useStateDbOnly: false
     }
@@ -3601,6 +3604,7 @@ test("codex provider inventories only active app-server threads for one exact se
       archived: false,
       cwd: "/repo/session-source",
       limit: 100,
+      modelProviders: [],
       sourceKinds: ["appServer"],
       useStateDbOnly: false
     }
@@ -3611,6 +3615,7 @@ test("codex provider inventories only active app-server threads for one exact se
       cursor: "next-page",
       cwd: "/repo/session-source",
       limit: 100,
+      modelProviders: [],
       sourceKinds: ["appServer"],
       useStateDbOnly: false
     }
