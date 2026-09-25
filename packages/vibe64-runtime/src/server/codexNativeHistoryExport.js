@@ -4,6 +4,17 @@ import {
 } from "@jskit-ai/assistant-core/server/codex-events";
 import { canonicalNativeHistoryJson as canonicalJson, createNativeHistoryExport } from "./nativeHistoryExport.js";
 
+function threadHistoryMetadata(thread) {
+  const stored = { ...thread };
+  // These describe a currently loaded process, not persisted conversation
+  // content. Native deletion can unload a thread before refusing an external
+  // fork, so they must not invalidate an otherwise identical preservation.
+  delete stored.status;
+  delete stored.canAcceptDirectInput;
+  delete stored.environments;
+  return stored;
+}
+
 // The caller owns a bounded, read-only connection. This exports API-visible
 // content, not an importable database or a native-resume snapshot.
 export async function exportCodexNativeHistory(client, threadId, onRecord, {
@@ -24,14 +35,15 @@ export async function exportCodexNativeHistory(client, threadId, onRecord, {
     throw new Error("Codex native export requires the exact idle thread.");
   }
   if (thread.historyMode !== "paginated") {
-    throw Object.assign(new Error("Codex native retirement requires paginated history. Upgrade Codex and use its supported rollout migration before retrying this older conversation."),
+    throw Object.assign(new Error("Codex native retirement requires paginated history. This unsupported conversation needs operator cleanup."),
       { code: "vibe64_codex_paginated_history_required" });
   }
   const goalResult = await request("thread/goal/get");
   if (!Object.hasOwn(goalResult || {}, "goal")) throw new Error("Codex did not return its native goal state.");
   const { goal } = goalResult;
   if (goal?.status === "active") throw new Error("Pause the Codex goal before native history retirement.");
-  await emit({ type: "thread", thread, text: [] });
+  const metadata = threadHistoryMetadata(thread);
+  await emit({ type: "thread", thread: metadata, text: [] });
   await emit({ type: "goal", goal: goal ?? null,
     text: typeof goal?.objective === "string" ? [{ role: "goal", text: goal.objective, branchId: threadId,
       ...(Number.isFinite(goal.createdAt) ? { createdAt: new Date(goal.createdAt * 1000).toISOString() } : {}),
@@ -73,7 +85,9 @@ export async function exportCodexNativeHistory(client, threadId, onRecord, {
   });
   const after = await request("thread/read", { includeTurns: false });
   const afterGoal = await request("thread/goal/get");
-  if (canonicalJson(after.thread) !== canonicalJson(thread) || canonicalJson(afterGoal.goal ?? null) !== canonicalJson(goal ?? null)) {
+  if (!["idle", "notLoaded"].includes(after.thread?.status?.type) ||
+      canonicalJson(threadHistoryMetadata(after.thread)) !== canonicalJson(metadata) ||
+      canonicalJson(afterGoal.goal ?? null) !== canonicalJson(goal ?? null)) {
     throw new Error("Codex native history changed during export; preserve it again before retirement.");
   }
   signal?.throwIfAborted();

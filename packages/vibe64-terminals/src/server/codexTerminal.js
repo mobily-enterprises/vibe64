@@ -13451,7 +13451,11 @@ function createCodexTerminalController({
           let thread;
           try { thread = codexAppServerThreadRawValue(await provider.readThreadStatus(conversationId)); }
           catch (error) {
-            if (codexAppServerThreadIsMissing(error, conversationId) && !normalizeText(error.message).toLowerCase().startsWith("thread not loaded:")) continue;
+            // Native thread/read also says "not loaded" after deletion. Only
+            // an exhaustive native inventory can distinguish absence from an
+            // existing unloaded thread, including one moved to another cwd.
+            if (codexAppServerThreadIsMissing(error, conversationId) &&
+                !await provider.nativeThreadExists(conversationId, { signal: options.signal })) continue;
             throw error;
           }
           if (thread.id !== conversationId || thread.cwd !== binding.workdir ||
@@ -13459,7 +13463,7 @@ function createCodexTerminalController({
             throw new Error("Codex retirement requires an idle native family in the exact saved directory.");
           }
           if (thread.historyMode !== "paginated") {
-            throw Object.assign(new Error("Codex native retirement requires paginated history. Upgrade Codex and use its supported rollout migration before retrying this older conversation."),
+            throw Object.assign(new Error("Codex native retirement requires paginated history. This unsupported conversation needs operator cleanup."),
               { code: "vibe64_codex_paginated_history_required" });
           }
           const relative = path.isAbsolute(thread.path || "") && toolHomeSource

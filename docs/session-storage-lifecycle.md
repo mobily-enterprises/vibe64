@@ -196,6 +196,11 @@ failure prevents retirement. It never
 raises the shared observer's message limit. Every family export must finish;
 the owner then reads it again and requires the same exact content revision,
 rechecks native metadata and rollout identities, and calls `thread/delete`.
+Native "not loaded" read errors count as absence only after a bounded inventory
+of every source kind, provider, directory and archive state confirms the exact
+ID is gone. Export revisions omit process-only thread status, direct-input
+availability and loaded environments; unloading after a refused deletion does
+not invalidate preserved conversation content. Active threads still reject export.
 
 Modern Codex still writes rollout JSONL and projects readable history into
 SQLite; paginated mode does not mean database-only storage. Preserve the native

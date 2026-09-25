@@ -102,6 +102,19 @@ test("Codex export awaits preservation and rejects changed metadata or a failed 
   }), /changed during export/);
 });
 
+test("Codex native export revisions survive unloading while retaining exact conversation content", async () => {
+  const client = codexExportClient();
+  Object.assign(client.thread, { status: { type: "idle" }, canAcceptDirectInput: true,
+    environments: [{ environmentId: "local", cwd: "/saved/source" }] });
+  const first = await exportCodexNativeHistory(client, "parent", async () => {});
+  Object.assign(client.thread, { status: { type: "notLoaded" }, canAcceptDirectInput: null, environments: null });
+  const unloaded = await exportCodexNativeHistory(client, "parent", async () => {});
+  assert.equal(unloaded.revision, first.revision);
+  await assert.rejects(exportCodexNativeHistory(client, "parent", async (record) => {
+    if (record.type === "item") client.thread.status = { type: "active" };
+  }), /changed during export/u);
+});
+
 test("Codex native export uses a separate bounded JSKIT connection and closes it on sink failure", async () => {
   const { provider, sockets } = codexExportProvider();
   assert.equal((await provider.exportThreadHistory("parent", async () => {})).itemCount, 2);
@@ -247,6 +260,28 @@ test("Codex native storage inventory discovers independent CLI roots as well as 
   await assert.rejects(provider.listNativeThreadsForCwd("/saved/source"), /invalid entry/);
 });
 
+test("Codex native absence requires complete inventory across directories, providers and archived threads", async () => {
+  const provider = new CodexAppServerAgentProvider();
+  let present = true;
+  const calls = [];
+  provider.activeClient = async () => ({ request: async (_method, params) => {
+    calls.push(params);
+    assert.equal(Object.hasOwn(params, "cwd"), false);
+    assert.equal(Object.hasOwn(params, "ancestorThreadId"), false);
+    assert.deepEqual(params.modelProviders, []);
+    assert.ok(params.sourceKinds.includes("cli") && params.sourceKinds.includes("unknown"));
+    if (!params.archived) return { data: [] };
+    return params.cursor ? { data: present ? [{ id: "moved", cwd: "/elsewhere" }] : [] }
+      : { data: [{ id: "unrelated" }], nextCursor: "last" };
+  } });
+  assert.equal(await provider.nativeThreadExists("moved"), true);
+  present = false;
+  assert.equal(await provider.nativeThreadExists("moved"), false);
+  assert.equal(calls.length, 6);
+  provider.activeClient = async () => ({ request: async () => ({ data: [], nextCursor: "repeat" }) });
+  await assert.rejects(provider.nativeThreadExists("moved"), /cursor/u);
+});
+
 test("Codex retirement uses native deletion only after preserving idle descendants and verifying their rollout files", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-retirement-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -268,8 +303,9 @@ test("Codex retirement uses native deletion only after preserving idle descendan
     codexAppServerProviderFactory: () => ({
       ensureAvailable: async () => ({ ok: true }),
       listThreadDescendants: async () => rows.has("child") ? ["child"] : [],
+      nativeThreadExists: async (id) => rows.has(id),
       readThreadStatus: async (id) => {
-        if (!rows.has(id)) throw Object.assign(new Error(`thread ${id} not found`), { code: -32600, method: "thread/read" });
+        if (!rows.has(id)) throw Object.assign(new Error(`thread not loaded: ${id}`), { code: -32600, method: "thread/read" });
         return { raw: rows.get(id) };
       },
       exportThreadHistory: async (id, emit) => { await emit({ type: "thread", thread: rows.get(id) }); return { revision: "a".repeat(64) }; },
