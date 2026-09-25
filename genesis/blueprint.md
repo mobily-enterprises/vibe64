@@ -264,6 +264,8 @@ use the full-width chat.
 Host-provided conversations enter chat only when explicitly opened through the
 host's own navigation. Their tab disappears when returning to another chat;
 ordinary chat controls do not retain a permanent shortcut.
+Main chat's optional companion controls detach while a temporary or host-provided
+conversation is selected. Pending voice input cannot send into hidden Main chat.
 On narrow screens, swiping left shows the selected Preview or Dashboard and
 swiping right returns to chat. The header supports either gesture, including
 above an embedded preview; ordinary chat and dashboard areas support them too.

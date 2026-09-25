@@ -1709,6 +1709,7 @@ const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
 const composerToolsTarget = ref(null);
 const conversationElement = ref(null);
 let assistantLayerMounted = true;
+const assistantLayerSelected = computed(() => props.active && !props.sessionSelectionArchived && !temporaryAiWorkspace.value?.visible);
 const assistantLayer = reactive({
   get sessionId() { return sessionId.value; },
   get turns() { return chatTurns.value; },
@@ -1721,7 +1722,7 @@ const assistantLayer = reactive({
     getState: () => ({
       id: sessionId.value,
       draft: composerDraft.value,
-      active: assistantLayerMounted && props.active && !props.sessionSelectionArchived,
+      active: assistantLayerMounted && assistantLayerSelected.value,
       canSend: composerCanSubmit.value,
       turnActive: agentActive.value
     }),
@@ -1737,12 +1738,12 @@ watchEffect(() => {
   if (!assistantHost) {
     return;
   }
-  if (props.active && !props.sessionSelectionArchived) {
+  if (assistantLayerSelected.value) {
     assistantHost.value = assistantLayer;
   } else if (assistantHost.value === assistantLayer) {
     assistantHost.value = null;
   }
-});
+}, { flush: "sync" });
 onBeforeUnmount(() => {
   assistantLayerMounted = false;
   if (assistantHost?.value === assistantLayer) {

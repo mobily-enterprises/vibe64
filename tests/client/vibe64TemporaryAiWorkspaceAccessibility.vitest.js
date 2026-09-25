@@ -99,6 +99,7 @@ import Vibe64TemporaryAiWorkspace from "../../src/components/studio/vibe64-sessi
 import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
 
 import * as SharedConversation from "@jskit-ai/assistant-core/client/conversation";
+import { VIBE64_HOST_CONVERSATION_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { AssistantProgress as Vibe64ConversationProgress } from "@jskit-ai/assistant-core/client/conversation";
 import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
@@ -237,8 +238,9 @@ function testRenderer() {
   });
 }
 
-function mountWorkspace(container, props) {
+function mountWorkspace(container, props, hostConversation = null) {
   const app = testRenderer().createApp(Vibe64TemporaryAiWorkspace, props);
+  if (hostConversation) app.provide(VIBE64_HOST_CONVERSATION_KEY, hostConversation);
   app.component("VAlert", defineComponent({
     inheritAttrs: false,
     props: {
@@ -304,6 +306,26 @@ describe("Temporary AI recovery workspace accessibility", () => {
   afterEach(() => {
     temporaryProvider.value = null;
     vi.unstubAllGlobals();
+  });
+
+  it("reports selection of temporary and host conversations to Main's companion owner", async () => {
+    const temporary = temporaryAiTestState(deferred());
+    temporary.open.value = false;
+    temporaryProvider.value = temporary;
+    const host = ref({ selected: false, label: "Host conversation", component: defineComponent({ render: () => null }) });
+    const { app, workspace } = mountWorkspace({ children: [], type: "root" }, { sessionId: "session-1" }, host);
+    try {
+      expect(workspace.visible).toBe(false);
+      temporary.open.value = true;
+      expect(workspace.visible).toBe(true);
+      temporary.open.value = false;
+      host.value.selected = true;
+      expect(workspace.visible).toBe(true);
+      host.value.selected = false;
+      expect(workspace.visible).toBe(false);
+    } finally {
+      app.unmount();
+    }
   });
 
   it.each([

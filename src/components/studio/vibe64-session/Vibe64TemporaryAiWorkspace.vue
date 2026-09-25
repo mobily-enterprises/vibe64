@@ -742,6 +742,7 @@ watch([recoveryMessageId, canReturnToMainChat, () => props.active], async () => 
 }, { flush: "post" });
 
 defineExpose({
+  get visible() { return temporary.open.value || Boolean(hostConversation?.value?.selected); },
   get composer() {
     if (hostConversation?.value?.selected) return hostComposer.value;
     return temporary.open.value ? taskPrompt(temporary.activeTaskId.value) : null;

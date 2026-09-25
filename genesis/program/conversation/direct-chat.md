@@ -518,7 +518,12 @@ model/access selector directly, with an always-available Close action in its
 footer, including during active work. It includes recovery guidance and pending message
 requests even while its catalogue is unavailable. The host tools target sits
 immediately after Settings in the composer row, followed by the icon-only
-starred-files menu, and remains mounted independently of Settings. Composer icon
+starred-files menu, and remains mounted independently of Settings. The public
+companion layer is offered only while Main chat is selected in the active session.
+Opening a temporary or host-provided conversation withdraws that layer immediately;
+its retained submission action also rejects writing or sending to hidden Main.
+Returning to Main exposes the same layer and preserves any unsent draft.
+Composer icon
 spacing grows with the chat pane's width, within a compact upper limit. The
 desktop minimum keeps Send and Stop on the same row as the other controls,
 including the host avatar, goal and allowance; the goal timer hides when space
