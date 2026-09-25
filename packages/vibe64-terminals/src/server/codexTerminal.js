@@ -4172,6 +4172,23 @@ function createCodexTerminalController({
     if (!managed || !provider || !sessionId) {
       throw new Error("Codex app-server managed connection is incomplete.");
     }
+    const sessionKey = codexTerminalNamespace(sessionId);
+    function assertCurrentConnection(session = null) {
+      assertCodexAppServerControllerOpen();
+      if (
+        codexAppServerSessionClosures.has(sessionKey) ||
+        codexAppServerManagedSessions.get(normalizedProviderKey) !== managed ||
+        codexAppServerProviders.get(normalizedProviderKey) !== provider ||
+        (session && (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED ||
+          codexThreadIdForWorkdir(session, managed.workdir) !== threadId))
+      ) {
+        throw Object.assign(new Error("The assistant session changed while its connection was being checked."), {
+          code: "vibe64_agent_session_changed",
+          retryable: true
+        });
+      }
+    }
+    assertCurrentConnection();
 
     if (reconnect) {
       await acquireCodexAppServerRuntime({
@@ -4205,26 +4222,18 @@ function createCodexTerminalController({
     }
     const runtime = await createRuntimeForSession();
     const session = await runtime.getSession(sessionId, { inspectSource: false });
-    if (
-      sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED ||
-      codexAppServerManagedSessions.get(normalizedProviderKey) !== managed ||
-      codexAppServerProviders.get(normalizedProviderKey) !== provider ||
-      codexThreadIdForWorkdir(session, managed.workdir) !== threadId
-    ) {
-      throw Object.assign(new Error("The assistant session changed while its connection was being checked."), {
-        code: "vibe64_agent_session_changed",
-        retryable: true
-      });
-    }
+    assertCurrentConnection(session);
     try {
       const controls = await provider.ensureThreadControls?.(threadId);
       if (controls?.recovered) providerThread = await codexAppServerReadThreadStatus(provider, threadId);
     } catch (error) {
+      assertCurrentConnection(session);
       // Retain the existing stop owner and its visible recovery state. Do not
       // spend automatic goal turns or repeatedly probe a known failed binding.
       void Promise.resolve(provider.failObservation?.(error)).catch(() => null);
       throw error;
     }
+    assertCurrentConnection(session);
     const nativeStatus = codexAppServerThreadRawValue(providerThread).status;
     const subscriptionKey = codexAppServerEventSubscriptionKey(
       normalizedProviderKey,

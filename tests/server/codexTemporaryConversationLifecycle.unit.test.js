@@ -10045,6 +10045,79 @@ test("startup recovers a stopped Codex busy record without resuming its conversa
   });
 });
 
+for (const phase of ["status", "controls", "failed controls"]) {
+  test(`Codex connection checks respect changeover during ${phase}`, { timeout: 15_000 }, async () => {
+    await withAgentMessageController(async ({ captures, controller, sessionId }) => {
+      assert.equal((await controller.ensureThread(sessionId)).ok, true);
+      const provider = captures.provider;
+      const checkingReached = Promise.withResolvers();
+      const releaseCheck = Promise.withResolvers();
+      const closingReached = Promise.withResolvers();
+      const releaseClose = Promise.withResolvers();
+      const readStatus = provider.readThreadStatus;
+      const pauseCheck = async () => {
+        checkingReached.resolve();
+        await releaseCheck.promise;
+      };
+      if (phase === "status") {
+        provider.readThreadStatus = async () => {
+          await pauseCheck();
+          return readStatus();
+        };
+      } else {
+        provider.ensureThreadControls = async () => {
+          await pauseCheck();
+          if (phase === "failed controls") {
+            await captures.providerOptions.at(-1).prepareThreadEnvironment({});
+          }
+          return { recovered: false };
+        };
+      }
+      let stops = 0;
+      provider.stopThreadForObservationLoss = async () => {
+        stops += 1;
+        closingReached.resolve();
+        await releaseClose.promise;
+      };
+      const checking = controller.ensureThread(sessionId);
+      await checkingReached.promise;
+      const closing = controller.closeAllForSession(sessionId, { changeover: true });
+      try {
+        await closingReached.promise;
+        releaseCheck.resolve();
+        const result = await checking;
+        assert.equal(provider.observationFailure, undefined, "deliberate closure is not observation loss");
+        assert.equal(result.ok, false, "a late check cannot announce that the closing connection is ready");
+        assert.equal(result.code, "vibe64_agent_session_changed");
+      } finally {
+        releaseCheck.resolve();
+        releaseClose.resolve();
+        await closing;
+        await checking;
+      }
+      assert.equal(stops, 1, "only the deliberate changeover owns Stop");
+      assert.equal(captures.turns.length, 0, "connection maintenance must not start a turn");
+    });
+  });
+}
+
+test("Codex control-check failure still stops observation on the current connection", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    assert.equal((await controller.sendMessage(sessionId, { message: "Work", messageId: "control-failure" })).ok, true);
+    const provider = captures.provider;
+    const failure = new Error("Current controls could not be verified");
+    provider.ensureThreadControls = async () => { throw failure; };
+    let stops = 0;
+    provider.stopThreadForObservationLoss = async () => { stops += 1; };
+    assert.equal((await controller.ensureThread(sessionId)).ok, false);
+    assert.equal(provider.observationFailure, failure);
+    await waitForSessionValue(() => store.readAgentRun(sessionId, "codex_app_server"),
+      (run) => run?.providerStatus === "observation_lost" && !run.active, "current connection observation stop");
+    assert.equal(stops, 1);
+    assert.equal(captures.turns.length, 1, "recovery must not replay the message");
+  });
+});
+
 for (const fallback of [false, true]) {
   test(`Codex observation loss verifies ${fallback ? "runtime exit" : "thread stop"} and requires explicit Send`, async () => {
     await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {

@@ -570,9 +570,15 @@ notifications revive completed turns or overwrite a successor. An active goal
 alone does not override a confirmed inactive, interrupted turn.
 
 
-Managed tool readiness includes the live Git, shell, Preview and Env control
-identities, not only native thread observation. The provider records the environment
-bound to each thread. Listener replacement or a valid stale-generation request
+Managed tool readiness checks native observation and the live Git, shell, Preview
+and Env control identities. A connection check that overlaps deliberate closure or
+changeover cannot announce readiness or turn that closure into observation loss.
+Late replies recheck the same connection before recovery and before publication;
+the existing close operation retains ownership of Stop. A failed control check
+on a current connection still follows ordinary observation-loss recovery.
+
+The provider records the environment bound to each thread. Listener replacement
+or a valid stale-generation request
 triggers one serialized check through that owner; account credentials and Env values
 never enter lifecycle logs. Logs correlate session, socket, control generation,
 native thread, connection generation, replacement/rejection and recovery outcome.
