@@ -467,7 +467,9 @@ async function createOpenCodeServerProcess({
   }
 
   async function readStorageResponse(route, { signal, maxBytes = 4 * 1024 * 1024 } = {}) {
-    const deadline = AbortSignal.timeout(10_000);
+    // The first storage request can initialize the saved directory after the
+    // global health endpoint is ready. Allow the normal startup deadline.
+    const deadline = AbortSignal.timeout(OPENCODE_READY_TIMEOUT_MS);
     const boundedSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
     boundedSignal.throwIfAborted();
     const response = await fetchImpl(`http://${OPENCODE_HOST}:${selectedPort}${route}`, {

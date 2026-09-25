@@ -1181,7 +1181,7 @@ function createService({
         const runtime = await project.createRuntime({ inspectSource: false });
         const session = await runtime.getSession(sessionId, { inspectSource: false });
         const [agentSession, conversation] = await Promise.all([
-          typeof terminals.agentSessionState === "function"
+          session.status !== "archived" && typeof terminals.agentSessionState === "function"
             ? terminals.agentSessionState(sessionId, {
               runtime,
               session

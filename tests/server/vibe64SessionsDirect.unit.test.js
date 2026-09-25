@@ -529,6 +529,23 @@ test("session detail exposes renewal advice from the current thread and durable 
   assert.equal(Object.hasOwn(result, "uiSync"), false);
 });
 
+test("archived session detail reads retained history without starting a native provider", async () => {
+  const session = { sessionId: "archived-session", status: "archived", metadata: {},
+    manifest: { createdAt: "2026-09-25T00:00:00.000Z" } };
+  const service = createService({
+    project: { async createRuntime() { return {
+      async getSession() { return session; },
+      async readConversationLogPage() { return { pagination: { totalTurnCount: 1 }, turns: [] }; }
+    }; } },
+    terminals: { async agentSessionState() { assert.fail("Archived source and native history may be gone."); } }
+  });
+  const result = await service.inspectSession(session.sessionId);
+  assert.equal(result.ok, true);
+  assert.equal(result.sessionId, session.sessionId);
+  assert.equal(result.status, "archived");
+  assert.equal(result.agentSession, null);
+});
+
 test("session status refreshes do not inspect Git and explicit source health checks remain enforced", async () => {
   const session = {
     manifest: { runtimeKind: "genesis" },
@@ -2814,9 +2831,10 @@ test("assistant selection can recover from an unavailable current choice before 
   assert.deepEqual(metadataWrites, []);
 });
 
-test("assistant selection changes engines or Codex providers only after destination access and successful shutdown", async () => {
+test("assistant selection checks destination access and requires shutdown only when changing engines", async () => {
   for (const target of ["opencode", "deepseek", "zai-coding-plan"]) {
-    for (const failure of ["active", "shutdown", ""]) {
+    const changesEngine = target === "opencode";
+    for (const failure of changesEngine ? ["active", "shutdown", ""] : ["active", ""]) {
       const lock = agentWriteLockHarness();
       const operations = [];
       const events = [];
@@ -2855,7 +2873,7 @@ test("assistant selection changes engines or Codex providers only after destinat
       } else {
         assert.notEqual(result.ok, false, JSON.stringify(result));
         assert.equal(JSON.parse(session.metadata.assistant_selection).modelProviderId, next.modelProviderId);
-        assert.deepEqual(operations, ["access", "state", "shutdown", "write"]);
+        assert.deepEqual(operations, ["access", "state", ...(changesEngine ? ["shutdown"] : []), "write"]);
         assert.equal(events.length, 1);
         assert.equal(events[0].realtime.audience, "all_clients");
         assert.equal(events[0].realtime.event, "vibe64.session.changed");

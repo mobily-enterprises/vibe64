@@ -2960,7 +2960,7 @@ function createOpenCodeTerminalController({
             }
             for (const message of response.data) {
               const info = message?.info;
-              if (!/^msg_[a-zA-Z0-9]{1,256}$/u.test(info?.id) || info.sessionID !== id ||
+              if (!/^msg_[a-zA-Z0-9_]{1,256}$/u.test(info?.id) || info.sessionID !== id ||
                   !["user", "assistant"].includes(info.role) || !Array.isArray(message.parts) || messageIds.has(info.id)) {
                 throw new Error("OpenCode returned an invalid or duplicate native message.");
               }

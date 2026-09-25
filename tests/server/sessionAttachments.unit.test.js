@@ -74,11 +74,13 @@ for (const engine of ["codex", "opencode"]) {
       const retried = await restarted.prepareMessage({ sessionId: "one" }, { message: "Retry", attachmentIds: [uploaded.attachmentId] });
       assert.equal(retried.attachments[0].path, delivered.attachments[0].path);
       assert.equal((await restarted.deleteAttachment({ sessionId: "one" }, { attachmentId: uploaded.attachmentId })).ok, false);
+      await store.writeMetadataValue("one", "source_path", "");
       await store.writeStatus("one", VIBE64_SESSION_STATUS.ARCHIVED);
       await store.publishSessionArchive("one");
       const archived = await restarted.readAttachment({ sessionId: "one" }, uploaded.attachmentId);
       assert.equal(await archived.fileHandle.readFile("utf8"), "attachment bytes");
       await archived.fileHandle.close();
+      await assert.rejects(restarted.readAttachment({ sessionId: "one" }, "00000000-0000-4000-8000-000000000000"), { statusCode: 404 });
       await store.pruneArchivedSessionAttachments("one", { beforePrune: async () => ({ ok: true }) });
       await assert.rejects(restarted.readAttachment({ sessionId: "one" }, uploaded.attachmentId), {
         code: "vibe64_agent_attachment_expired", statusCode: 410

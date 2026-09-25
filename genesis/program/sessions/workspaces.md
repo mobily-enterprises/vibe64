@@ -54,6 +54,10 @@ across UI refreshes. Archiving stops active work, removes its active workspace,
 and preserves the read-only history needed to recover its conversation and
 understand what happened. Session History reads lightweight archive indexes and
 shows the most recently archived session first.
+Archived session detail reads the retained record and chat without asking a
+native provider for live state; its source and native conversation can be gone.
+Saved attachment reads likewise use the archive, without requiring a source
+workspace. Expired payloads return 410 while their descriptions remain readable.
 
 Routine session-detail refreshes read session and agent state without launching
 Git source inspections. Source operations retain their explicit health checks;

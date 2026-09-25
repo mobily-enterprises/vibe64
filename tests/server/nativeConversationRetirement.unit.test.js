@@ -427,7 +427,7 @@ test("OpenCode retirement does not recreate archived source or make inference an
     readConversationStoragePage: async (id, { before, signal }) => {
       assert.equal(signal.aborted, false);
       pageCalls.push([id, before]);
-      return before ? { data: [{ info: { id: "msg_question", sessionID: id, role: "user", time: { created: 123 } },
+      return before ? { data: [{ info: { id: `msg_vibe64_${"a".repeat(40)}`, sessionID: id, role: "user", time: { created: 123 } },
         parts: [{ type: "text", text: "Keep OpenCode question" }, { type: "file", url: "data:image/png;base64,payload" }] }], nextCursor: null }
         : { data: [{ info: { id: "msg_answer", sessionID: id, role: "assistant", time: { created: 124 }, modelID: "model", providerID: "provider" },
           parts: [{ type: "text", text: "Keep OpenCode answer" }] }], nextCursor: "opaque+/=" };

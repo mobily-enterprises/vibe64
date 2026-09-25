@@ -290,7 +290,10 @@ Claude and OpenCode expose the same streamed export callback through their own
 native readers and existing text normalizers. Text carries branch/message
 provenance and available timestamps/models without attachments. OpenCode streams
 stable native pages newest first, one message at a time, preserving raw message
-parts and model identity; incomplete, repeated or oversized pages block deletion. Claude retains
+parts and model identity, including Vibe64's own `msg_vibe64_` user-message IDs;
+incomplete, repeated or oversized pages block deletion. Cold storage requests
+use the normal server startup deadline because directory initialization can
+continue after global health becomes ready. Claude retains
 sidechain and rewind entries with transcript and parent-message provenance; Codex exposes
 current visible history. All native families require a complete export and exact
 revision recheck. An archived callback can publish that text and recovery files
