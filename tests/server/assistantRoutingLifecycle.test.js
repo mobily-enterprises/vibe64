@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
+import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
+import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
 import { recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRouting";
@@ -169,6 +171,44 @@ test("Auto uses a bounded helper then ordinary delivery and exactly one visible 
   assert.equal(f.sends.length, 2);
   assert.equal(f.state().reviewStatus, "completed");
 });
+
+for (const mode of ["plan", "code"]) {
+  test(`a member's API-key Codex account permits Auto to ${mode} without Backup`, async (t) => {
+    const f = await fixture(t);
+    const root = f.context.runtime.stateRoot;
+    const authPath = path.join(root, ".codex", "auth.json");
+    const markerPath = codexAuthMarkerPath(root);
+    await mkdir(path.dirname(authPath), { recursive: true });
+    await mkdir(path.dirname(markerPath), { recursive: true });
+    await writeFile(authPath, JSON.stringify({ auth_mode: "apikey", OPENAI_API_KEY: "fixture-key-not-sent" }));
+    await writeFile(markerPath, JSON.stringify({ connected: true, version: 1,
+      loginId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", updatedAt: "2026-09-25T00:00:00.000Z" }));
+    const access = await readCodexSelectedAccountAccess({ toolHomeSource: root, systemRoot: root });
+    assert.equal(access.ownerOnly, false);
+    assert.equal(access.endpointCode, "openai_api");
+    assert.ok(access.connectionIdentity);
+    f.connections.set("codex:openai", access);
+    f.context.vibe64User = { role: "member", username: "collaborator" };
+    f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true,
+      text: JSON.stringify({ mode, reason: mode === "plan" ? "planning" : "explicit_implementation" }) });
+
+    await f.service.send("session-1", request, f.context);
+    assert.equal(f.helperCalls(), 1);
+    assert.equal(f.cleanupCalls(), 1);
+    assert.equal(f.sends[0].selection.modelId, mode === "plan" ? "gpt-6-astra" : "deepseek-flash");
+    assert.equal(f.state().decision.backupUsed, false);
+    assert.equal(f.state().submittedBy.username, "collaborator");
+    assert.equal(f.state().decision.planCodePair.plan.connectionIdentity, access.connectionIdentity);
+    await f.service.afterTurn("session-1", completion(), f.context);
+    if (mode === "code") {
+      assert.equal(f.sends[1].selection.modelId, "gpt-6-astra");
+      await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+      assert.equal(f.state().reviewStatus, "completed");
+    }
+    assert.equal(f.sends.length, mode === "code" ? 2 : 1);
+    assert.equal(f.state().status, "done");
+  });
+}
 
 test("interrupted Router results retain the provider error and never dispatch partial decisions", async (t) => {
   const f = await fixture(t);
@@ -544,6 +584,40 @@ test("Auto uses a foreign Router and does not require Economy", async (t) => {
 });
 
 for (const review of [false, true]) {
+  test(`same-engine Backup keeps a different accessible coder through completion and restart with review ${review}`, async (t) => {
+    const f = await fixture(t, { mode: "code", review, workflowEngineId: "opencode" });
+    const backup = sharedOpenCode(f);
+    f.catalogs.at(-1).modelProviders.push(...structuredClone(f.catalog.modelProviders));
+    const plan = { ...f.assignments.plan, engineId: "opencode", agentId: "build" };
+    const code = { ...f.assignments.code, engineId: "opencode", agentId: "build" };
+    await f.configuration.write({ codex: f.assignments, opencode: {
+      plan, code, economy: code, router: code, sharedBackup: backup
+    } }, 1);
+    const configuration = await f.configuration.read();
+    f.context.vibe64User = { role: "member", username: "collaborator" };
+    await f.service.send("session-1", request, f.context);
+    assert.equal(f.sends[0].selection.modelId, "deepseek-flash");
+    assert.equal(f.sends[0].selection.engineId, "opencode");
+    assert.equal(f.state().assignments.plan.modelId, "big-pickle");
+    assert.equal(f.state().assignments.code.modelId, "deepseek-flash");
+    assert.equal(f.state().decision.planCodePair.code.backupUsed, false);
+    await f.service.afterTurn("session-1", completion(), f.context);
+    if (review) {
+      assert.equal(f.sends[1].selection.modelId, "big-pickle");
+      assert.equal(f.sends[1].selection.engineId, "opencode");
+      await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+      assert.equal(f.state().reviewStatus, "completed");
+    }
+    assert.equal(f.sends.length, review ? 2 : 1);
+    f.metadata.assistant_routing = JSON.stringify({ mode: "plan", review: false, workflowEngineId: "opencode" });
+    await f.restart().send("session-1", { ...request, messageId: "next-plan" }, f.context);
+    assert.equal(f.sends.at(-1).selection.modelId, "big-pickle");
+    assert.equal(f.state().assignments.code.modelId, "deepseek-flash");
+    assert.equal(f.state().workflowEngineId, "opencode");
+    assert.equal(f.helperCalls(), 0);
+    assert.deepEqual(await f.configuration.read(), configuration);
+  });
+
   test(`a member's foreign Backup keeps Plan and Code together with review ${review}`, async (t) => {
     const f = await fixture(t, { mode: "code", review });
     const backup = sharedOpenCode(f);
