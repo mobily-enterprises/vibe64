@@ -1151,7 +1151,9 @@ check. A control-socket path configuration error, failed control recovery, or
 unsupported native history stops timed retries and shows the repair instruction
 beside explicit Retry. Renew is also available in that failure notice, preserving
 the draft and access to the existing manual handover workflow. These actions appear
-before lengthy checkpoint diagnostics and wrap within narrow chat panes.
+before the compact checkpoint notice and wrap within narrow chat panes.
+Checkpoint diagnostics stay collapsed until requested and scroll within a
+bounded area, keeping the conversation and composer visible.
 Git, session shell, Env, database, preview and browser command sockets use compact,
 process-user-scoped names in the server temporary directory. Their identities
 include the full wrapper path and control kind, keeping projects and sessions

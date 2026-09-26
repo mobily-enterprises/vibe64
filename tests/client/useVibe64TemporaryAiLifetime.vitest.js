@@ -336,10 +336,43 @@ describe("temporary AI mounted lifetime", () => {
     }));
   });
 
-  it.each(["instructions", "label", "new reply"])("restored repair Retry clears submitted %s but preserves a newer reply", async (draftKind) => {
+  it("keeps generated repair instructions in the request through failure and Retry, never in the composer", async () => {
+    const message = "Full internal repair instructions and diagnostics.";
+    const displayMessage = "Fix this Update problem without losing work.";
+    const starting = Promise.withResolvers();
+    http.request.mockResolvedValue({ ok: true, status: "completed" });
+    const { temporary } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    http.request.mockClear();
+    http.request.mockResolvedValueOnce({ ok: true, conversationId: "conversation-1" })
+      .mockReturnValueOnce(starting.promise);
+    const sending = temporary.startTask({ message, displayMessage, recoveryOperation: "update" });
+    expect(temporary.activeTask.value.draft).toBe("");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(http.request.mock.calls[0][1].body.presentation.draft).toBe("");
+    expect(temporary.activeTask.value.delivery.state.messages[0]).toMatchObject({
+      text: displayMessage, payload: { message, displayMessage }
+    });
+    starting.reject(new Error("Provider unavailable."));
+    await expect(sending).resolves.toMatchObject({ started: false });
+    expect(temporary.activeTask.value.draft).toBe("");
+    const failed = temporary.activeTask.value.delivery.state.messages[0];
+    await vi.advanceTimersByTimeAsync(250);
+    expect(http.request).toHaveBeenLastCalledWith(CONVERSATION_PATH, expect.objectContaining({
+      body: expect.objectContaining({ presentation: expect.objectContaining({ draft: "" }) })
+    }));
+    temporary.updateDraft(temporary.activeTask.value.id, displayMessage);
+    await expect(temporary.send(temporary.activeTask.value.id, { retryMessageId: failed.id })).resolves.toBe(true);
+    expect(temporary.activeTask.value.draft).toBe(displayMessage);
+    const sends = http.request.mock.calls.filter(([url]) => url.endsWith("/turns"));
+    expect(sends).toHaveLength(2);
+    for (const [, options] of sends) expect(options.body).toMatchObject({ messageId: failed.id, message, displayMessage });
+  });
+
+  it.each(["empty", "instructions", "label", "new reply"])("restored repair Retry leaves the independent %s draft untouched", async (draftKind) => {
     const message = "Help resolve this Vibe64 Update problem. Inspect repository state and preserve all work.\n\nInternal repair diagnostics.";
     const displayMessage = "Fix this Update problem without losing work.";
-    const draft = draftKind === "instructions" ? message : draftKind === "label" ? displayMessage : "Please also check the tests.";
+    const draft = draftKind === "empty" ? "" : draftKind === "instructions" ? message : draftKind === "label" ? displayMessage : "Please also check the tests.";
     const input = { message, displayMessage, presentation: { draft: "" } };
     const request = { messageId: "repair-request", status: "failed", input };
     http.request.mockImplementation(async (url, options) => {
@@ -353,7 +386,7 @@ describe("temporary AI mounted lifetime", () => {
     const { temporary } = mountTemporaryAi({ openTask: false });
     await vi.advanceTimersByTimeAsync(0);
     await expect(temporary.send("conversation-1", { retryMessageId: "repair-request" })).resolves.toBe(true);
-    const expectedDraft = draftKind === "new reply" ? draft : "";
+    const expectedDraft = draft;
     expect(temporary.activeTask.value.draft).toBe(expectedDraft);
     expect(temporary.activeTask.value.busy).toBe(true);
     const sends = http.request.mock.calls.filter(([, options]) => options?.method === "POST");
@@ -383,7 +416,9 @@ describe("temporary AI mounted lifetime", () => {
     http.request.mockResolvedValueOnce({ ok: true, status: "completed", runId: "turn-1" });
     await expect(temporary.send(task.id, { retryMessageId: failed.id })).resolves.toBe(true);
     const bodies = http.request.mock.calls.filter(([path]) => path.endsWith("/turns")).map(([, options]) => options.body);
-    expect(bodies).toEqual([originalBody, originalBody]);
+    expect(bodies).toEqual([originalBody, {
+      ...originalBody, presentation: { ...originalBody.presentation, draft: "A newer question." }
+    }]);
     expect(temporary.activeTask.value.draft).toBe("A newer question.");
     expect(temporary.activeTask.value.delivery.state.messages).toEqual([]);
     expect(temporary.activeTask.value.attachments.map((file) => file.attachmentId)).toEqual(["new-file"]);
@@ -393,6 +428,23 @@ describe("temporary AI mounted lifetime", () => {
         attachmentIds: ["new-file"], presentation: expect.objectContaining({ draft: "A newer question." })
       })
     }));
+  });
+
+  it("a fresh Send owns a new request even when an earlier failed request has identical text", async () => {
+    const { temporary, task } = mountTemporaryAi();
+    http.request.mockResolvedValueOnce({ ok: true, conversationId: "conversation-1" })
+      .mockRejectedValueOnce(new Error("Provider unavailable."));
+    await expect(temporary.send(task.id)).resolves.toBe(false);
+    const failed = temporary.activeTask.value.delivery.state.messages[0];
+    expect(temporary.activeTask.value.draft).toBe("");
+    temporary.updateDraft(task.id, failed.text);
+    http.request.mockResolvedValueOnce({ ok: true, status: "completed", runId: "new-turn" });
+    await expect(temporary.send(task.id)).resolves.toBe(true);
+    const sends = http.request.mock.calls.filter(([url]) => url.endsWith("/turns"));
+    expect(sends[1][1].body.messageId).not.toBe(failed.id);
+    expect(sends[1][1].body.message).toBe(failed.payload.message);
+    expect(temporary.activeTask.value.draft).toBe("");
+    expect(temporary.activeTask.value.delivery.find(failed.id).status).toBe("failed");
   });
 
   it.each(["editMessage", "cancelMessage"])("%s removes the failed entry without losing a newer draft", async (action) => {

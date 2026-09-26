@@ -69,17 +69,9 @@ async function createGitTurnCheckpointUnlocked({
     });
   }
 
-  const latestCommit = await optionalGitOutput(runCommand, identity.worktreePath, [
-    "rev-parse",
-    "--verify",
-    refs.latestRef
-  ], { project });
   const headCommit = await requiredGitOutput(runCommand, identity.worktreePath, [
-    "rev-parse",
-    "--verify",
-    "HEAD"
+    "rev-parse", "--verify", "HEAD"
   ], { project });
-  const parentCommit = latestCommit || headCommit;
   const tree = await writeGitWorktreeTreeUnlocked({
     baseCommit: headCommit,
     project,
@@ -88,42 +80,54 @@ async function createGitTurnCheckpointUnlocked({
     temporaryDiskReserveBytes,
     worktreePath: identity.worktreePath
   });
-  const message = checkpointMessage(identity);
-  const commit = await requiredGitOutput(runCommand, identity.worktreePath, [
-    "commit-tree",
-    tree,
-    "-p",
-    parentCommit
-  ], {
-    env: checkpointDateEnv(identity.timestamp),
-    input: message,
-    project
-  });
   const absentObject = await zeroObjectId(runCommand, identity.worktreePath, { project });
-  await requiredGitOutput(runCommand, identity.worktreePath, [
-    "update-ref",
-    refs.turnRef,
-    commit,
-    absentObject
-  ], { project });
-  await requiredGitOutput(runCommand, identity.worktreePath, [
-    "update-ref",
-    refs.latestRef,
-    commit,
-    latestCommit || absentObject
-  ], { project });
-  return {
-    baseCommit: parentCommit,
-    commit,
-    created: true,
-    latestRef: refs.latestRef,
-    ok: true,
-    outerTurnId: identity.outerTurnId,
-    outcome: identity.outcome,
-    sessionId: identity.sessionId,
-    tree,
-    turnRef: refs.turnRef
-  };
+  for (let attempt = 0; ; attempt += 1) {
+    const latestCommit = await optionalGitOutput(runCommand, identity.worktreePath, [
+      "rev-parse", "--verify", refs.latestRef
+    ], { project });
+    const parentCommit = latestCommit || headCommit;
+    const commit = await requiredGitOutput(runCommand, identity.worktreePath, [
+      "commit-tree", tree, "-p", parentCommit
+    ], {
+      env: checkpointDateEnv(identity.timestamp),
+      input: checkpointMessage(identity),
+      project
+    });
+    try {
+      // Publish the turn and latest pointer together. Another process may share
+      // these refs even though this process serializes worktree snapshots.
+      await requiredGitOutput(runCommand, identity.worktreePath, ["update-ref", "--stdin"], {
+        input: `start\ncreate ${refs.turnRef} ${commit}\nupdate ${refs.latestRef} ${commit} ${latestCommit || absentObject}\nprepare\ncommit\n`,
+        project
+      });
+    } catch (error) {
+      const publishedTurn = await optionalGitOutput(runCommand, identity.worktreePath, [
+        "rev-parse", "--verify", refs.turnRef
+      ], { project });
+      if (publishedTurn) {
+        return validateExistingCheckpoint({ commit: publishedTurn, identity, project, refs, runCommand });
+      }
+      const currentLatest = await optionalGitOutput(runCommand, identity.worktreePath, [
+        "rev-parse", "--verify", refs.latestRef
+      ], { project });
+      if (attempt >= 2 || currentLatest === latestCommit) throw error;
+      // Re-parent the same captured tree onto the winning checkpoint. Real Git
+      // failures are not retried, and neither checkpoint's history is discarded.
+      continue;
+    }
+    return {
+      baseCommit: parentCommit,
+      commit,
+      created: true,
+      latestRef: refs.latestRef,
+      ok: true,
+      outerTurnId: identity.outerTurnId,
+      outcome: identity.outcome,
+      sessionId: identity.sessionId,
+      tree,
+      turnRef: refs.turnRef
+    };
+  }
 }
 
 async function writeGitWorktreeTree({

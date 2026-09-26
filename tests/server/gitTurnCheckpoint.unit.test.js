@@ -75,6 +75,63 @@ test("turn checkpoint retries are object-identical and a later turn advances lat
   }
 });
 
+test("checkpoint publication retries a competing latest ref without losing either turn or changing source", async () => {
+  const root = await createRepository();
+  try {
+    const input = { outerTurnId: "repair", outcome: "completed", sessionId: "session-1",
+      timestamp: "2026-08-18T09:00:00.000Z", worktreePath: root };
+    const previous = await createGitTurnCheckpoint({ ...input, outerTurnId: "previous" });
+    await writeFile(path.join(root, "tracked.txt"), "repaired work\n", "utf8");
+    const head = await git(root, ["rev-parse", "HEAD"]);
+    const status = await git(root, ["status", "--porcelain=v1"]);
+    let competingCommit;
+    let publications = 0;
+    const checkpoint = await createGitTurnCheckpoint({ ...input, runCommand: async (request) => {
+      if (request.args[0] === "update-ref" && request.args[1] === "--stdin") {
+        publications += 1;
+        if (publications === 1) {
+          competingCommit = await git(root, ["commit-tree", `${head}^{tree}`, "-p", previous.commit, "-m", "Another completed turn"]);
+          const competingRefs = checkpointRefs({ ...input, outerTurnId: "competing" });
+          await git(root, ["update-ref", competingRefs.turnRef, competingCommit]);
+          await git(root, ["update-ref", competingRefs.latestRef, competingCommit, previous.commit]);
+        }
+      }
+      return runVibe64Command(request);
+    } });
+    assert.equal(publications, 2);
+    assert.equal(checkpoint.baseCommit, competingCommit);
+    assert.equal(await git(root, ["rev-parse", checkpoint.latestRef]), checkpoint.commit);
+    assert.equal(await git(root, ["rev-parse", checkpoint.turnRef]), checkpoint.commit);
+    assert.equal(await git(root, ["show", `${checkpoint.commit}:tracked.txt`]), "repaired work");
+    assert.equal(await git(root, ["rev-parse", `${checkpoint.commit}^^`]), previous.commit);
+    assert.equal(await git(root, ["rev-parse", "HEAD"]), head);
+    assert.equal(await git(root, ["status", "--porcelain=v1"]), status);
+    assert.equal((await createGitTurnCheckpoint(input)).commit, checkpoint.commit);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("checkpoint publication leaves no partial turn ref and does not retry an unrelated Git failure", async () => {
+  const root = await createRepository();
+  try {
+    const input = { outerTurnId: "repair", sessionId: "session-1",
+      timestamp: "2026-08-18T09:00:00.000Z", worktreePath: root };
+    let publications = 0;
+    await assert.rejects(createGitTurnCheckpoint({ ...input, runCommand: async (request) => {
+      if (request.args[0] === "update-ref") {
+        publications += 1;
+        return { ok: false, stderr: "Permission denied" };
+      }
+      return runVibe64Command(request);
+    } }), /Permission denied/);
+    assert.equal(publications, 1);
+    assert.equal(await git(root, ["for-each-ref", "--format=%(refname)", "refs/vibe64/checkpoints"]), "");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("later checkpoints drop files that became ignored without removing them from the worktree", async () => {
   const root = await createRepository();
   try {

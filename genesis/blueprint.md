@@ -210,6 +210,9 @@ New uploads keep existing files, and removing one updates its numbered reference
 Long drafts scroll inside the input; repair details start collapsed, and a shared
 connection notice replaces repeated reconnection warnings. Failed automatic repair
 requests show a short description instead of internal agent instructions.
+Generated repair instructions stay with the request, separate from the editable
+draft. Recovery checkpoint warnings stay compact, with technical details
+collapsed and scrollable when opened.
 The main chat composer keeps Add, Settings, Goal, plan allowance, and icon-only
 Send together, with Stop beside Send while needed. Goal and available allowance
 stay visible when menus are closed. Add holds left-aligned attachment actions.

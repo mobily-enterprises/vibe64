@@ -231,8 +231,12 @@
             Your draft is kept.
           </span>
         </v-sheet>
-        <v-alert v-if="checkpointFailure" type="warning" variant="tonal" title="Recovery checkpoint failed">
-          Your files remain in this session, but the last assistant turn has no confirmed recovery checkpoint. {{ checkpointFailure }}
+        <v-alert v-if="checkpointFailure" class="studio-autopilot__checkpoint-notice" type="warning" variant="tonal" density="compact">
+          <details :key="checkpointFailure">
+            <summary class="text-body-medium">Recovery checkpoint unavailable · Details</summary>
+            <p class="text-body-small mt-2 mb-2">Your files remain in this session. The last assistant turn has no confirmed recovery checkpoint.</p>
+            <pre class="studio-autopilot__checkpoint-details text-body-small">{{ checkpointFailure }}</pre>
+          </details>
         </v-alert>
         <v-sheet v-if="testApproval && resourceRecoveryControl" class="d-flex flex-wrap align-center justify-space-between ga-2 pa-2" color="surface-variant" rounded="lg">
           <span class="text-body-small">{{ testApproval.state === 'waiting' ? 'Tests need memory approval' : 'Resuming the original test…' }}</span>
@@ -1780,6 +1784,15 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.studio-autopilot__checkpoint-notice summary {
+  cursor: pointer;
+}
+.studio-autopilot__checkpoint-details {
+  max-height: 8rem;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
 .studio-autopilot__request-intro {
   display: grid;
   gap: 0.25rem;

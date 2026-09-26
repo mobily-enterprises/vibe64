@@ -115,8 +115,12 @@ recovery actions remain above the composer. Notices never restart work.
 When routing stops before delivery, the local prompt returns to the composer;
 its next explicit Send uses a new message ID. Newer draft text and attachments
 are retained, and a clean cancellation does not appear as a failed message.
-Retry clears a draft matching either the submitted instructions or their visible
-message, including after reload, while retaining a different unsent reply.
+The composer owns only unsent user text. Generated repair requests go directly
+to the existing delivery record, which retains the full prompt separately from
+its displayed bubble. Failure leaves that request available through Retry/Edit;
+it does not copy the prompt back into the composer. Retry resends the saved
+payload and identity without reading or clearing the draft, including after
+reload. Edit explicitly places the visible request text into the composer.
 Dedicated repair requests keep their own instructions and do not expose modes.
 
 Each ordinary temporary chat reads availability from the same central resolver as

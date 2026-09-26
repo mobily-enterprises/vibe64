@@ -277,8 +277,12 @@ Codex, Claude and OpenCode observed writable session turns create private Git
 recovery checkpoints on completion, interruption or failure. Ordinary temporary
 conversations participate; scoped read-only helpers and naming profiles do not.
 Checkpoints preserve the saveable files without advancing the project branch or
-changing the index. A durable background-task failure appears in chat; the files
-remain but a successful recovery point is not claimed. This is not continuous
+changing the index. A turn's ref and the latest pointer are published in one Git
+transaction. If another writer advances latest, publication retries up to twice
+with the same captured tree parented onto that checkpoint. Both turns remain
+recoverable; unrelated Git failures stop immediately. A durable background-task
+failure appears as a compact chat notice with collapsed, scrollable technical
+details; the files remain but a successful recovery point is not claimed. This is not continuous
 backup of arbitrary terminal edits, unsaved editor buffers or database contents.
 
 GitHub project owners can require PR publication through

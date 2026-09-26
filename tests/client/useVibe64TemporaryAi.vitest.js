@@ -748,7 +748,7 @@ describe("useVibe64TemporaryAi", () => {
     expect(mocks.requests.filter(([path]) => path.endsWith("/turns"))).toHaveLength(2);
   });
 
-  it("keeps a failed recovery task visible with its draft and error so it can be retried", async () => {
+  it("keeps a failed recovery request in its delivery record for explicit Retry", async () => {
     mocks.responses.push({
       error: "Temporary AI could not be started.",
       ok: false
@@ -772,7 +772,7 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.tasks.value).toHaveLength(1);
     expect(failedTask).toMatchObject({
       busy: false,
-      draft: "Resolve the Save conflict safely.",
+      draft: "",
       error: "Temporary AI could not be started.",
       status: "failed"
     });
@@ -790,7 +790,8 @@ describe("useVibe64TemporaryAi", () => {
       }
     );
 
-    await expect(temporary.send(failedTask.id)).resolves.toBe(true);
+    expect(failedTask.delivery.find(failedTask.pendingMessageId).payload.message).toBe("Resolve the Save conflict safely.");
+    await expect(temporary.send(failedTask.id, { retryMessageId: failedTask.pendingMessageId })).resolves.toBe(true);
     await flushPromises();
 
     expect(temporary.open.value).toBe(true);
@@ -854,7 +855,7 @@ describe("useVibe64TemporaryAi", () => {
     const originalMessageId = failedTask.pendingMessageId;
     expect(failedTask).toMatchObject({
       conversationId: "conversation-1",
-      draft: "Resolve the Update conflict safely.",
+      draft: "",
       status: "failed"
     });
 
@@ -1087,7 +1088,7 @@ describe("useVibe64TemporaryAi", () => {
     { ok: false, status: "inProgress", error: "The stop is not yet confirmed." },
     { ok: true, status: "inProgress", error: "The stop is not yet confirmed." },
     () => { throw Object.assign(new Error("The stop is not yet confirmed."), { status: 503 }); }
-  ])("keeps Stop and the reply draft available after an unconfirmed progress read (%#)", async (response) => {
+  ])("keeps Stop and an explicitly retriable failed reply after an unconfirmed progress read (%#)", async (response) => {
     const { task, temporary } = await runningTemporaryAi();
     temporary.updateDraft(task.id, "Keep this reply.");
     mocks.responses.push(response);
@@ -1100,18 +1101,22 @@ describe("useVibe64TemporaryAi", () => {
       runId: "turn-1",
       status: "inProgress"
     });
+    mocks.responses.push({ ok: false, error: "Reply delivery is unconfirmed." });
     await expect(temporary.send(task.id)).resolves.toBe(false);
     mocks.responses.push({ ok: true });
     await expect(temporary.stopTask(task.id)).resolves.toBe(true);
     expect(temporary.activeTask.value).toMatchObject({
       busy: false,
-      draft: "Keep this reply.",
+      draft: "",
       error: "",
       status: "interrupted"
     });
-    const requests = mocks.requests.length;
+    expect(temporary.activeTask.value.delivery.state.messages.at(-1)).toMatchObject({
+      status: "failed", payload: { message: "Keep this reply." }
+    });
+    const requests = mocks.requests.filter(([, options]) => options.method !== "PATCH").length;
     await vi.advanceTimersByTimeAsync(650);
-    expect(mocks.requests).toHaveLength(requests);
+    expect(mocks.requests.filter(([, options]) => options.method !== "PATCH")).toHaveLength(requests);
   });
 
   it("settles a confirmed failed turn without retrying progress or sending again", async () => {
@@ -1174,7 +1179,8 @@ describe("useVibe64TemporaryAi", () => {
     const { task, temporary } = await temporaryAiWithDraft();
 
     await expect(temporary.send(task.id)).resolves.toBe(false);
-    await expect(temporary.send(task.id)).resolves.toBe(true);
+    const retryMessageId = temporary.activeTask.value.pendingMessageId;
+    await expect(temporary.send(task.id, { retryMessageId })).resolves.toBe(true);
     await flushPromises();
 
     const turnRequests = mocks.requests.filter(([path]) => path.endsWith("/turns"));
