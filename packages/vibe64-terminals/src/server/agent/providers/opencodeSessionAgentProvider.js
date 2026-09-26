@@ -46,7 +46,7 @@ function resolveOpenCodeEconomyExecutionProfile(context = {}, request = {}) {
   ) {
     throw openCodeExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE,
-      "Choose an Economy model in Model routing."
+      "Choose an Intern model in Model routing."
     );
   }
   const thinking = "";

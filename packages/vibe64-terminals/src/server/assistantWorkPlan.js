@@ -67,7 +67,7 @@ async function prepareWorkPlan(context, planning) {
   return file;
 }
 
-function workPlanInstructions(file, mode, { automatic = false } = {}) {
+function workPlanInstructions(file, role) {
   const common = [
     `The conversation's working plan is ${JSON.stringify(file)}, outside the project repository.`,
     "Never commit or copy it into project source.",
@@ -77,7 +77,7 @@ function workPlanInstructions(file, mode, { automatic = false } = {}) {
     "Human instructions take precedence over the document.",
     "In chat, refer to the View plan action; do not expose or link this internal filesystem path."
   ].join(" ");
-  if (mode === "plan") {
+  if (role === "senior") {
     const planning = [
       "You may create or update ONLY this plan file; do not edit application files or run state-changing project operations.",
       "For every proposed implementation, inspect the actual project and write a VERY DETAILED plan: enumerate relevant occurrences and affected files/code locations, explain exact proposed changes and boundaries, record decisions and unresolved questions, ordered implementation steps, concrete acceptance criteria and verification, and completed work/blockers.",
@@ -86,17 +86,14 @@ function workPlanInstructions(file, mode, { automatic = false } = {}) {
       "Mark ready only when the plan is complete and decisions are resolved, then summarize it for the human and ask whether to implement it.",
       "Do not start or delegate coding.",
       "Pure conversation does not require manufacturing a plan.",
-      automatic
-        ? "The user selected Auto; this request is currently in its Planning stage. Do not claim they selected persistent Plan mode."
-        : "This turn is planning; do not infer that the user changed their selected chat mode."
+      "The user selected Auto; this request is currently in its planning stage. Do not claim they selected direct Senior chat."
     ].join(" ");
     return `${common}\n${planning}`;
   }
-  let start = "Read the plan if it is relevant to this explicit Code request.";
-  if (mode === "review") start = "Read the working plan before reviewing the implementation.";
-  else if (automatic) start = "Read and implement the approved plan before changing application files.";
   const implementation = [
-    start,
+    role === "review"
+      ? "Read the working plan before reviewing the implementation."
+      : "Read and implement the approved plan before changing application files.",
     "Keep its Progress and blockers section current, including files changed and actual checks.",
     "Do not silently revise its agreed scope or approach.",
     "Ordinary implementation problems and failing tests are yours to resolve.",
@@ -104,7 +101,7 @@ function workPlanInstructions(file, mode, { automatic = false } = {}) {
     "Vibe64 will return the work to the planner.",
     "Do not discard existing edits.",
     "On successful implementation set Status: implemented.",
-    mode === "review"
+    role === "review"
       ? "Review against the detailed plan and accepted steering. You may fix in-scope defects; an unresolved scope or design decision returns to planning."
       : ""
   ].join(" ");

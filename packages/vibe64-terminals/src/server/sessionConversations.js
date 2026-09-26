@@ -371,8 +371,8 @@ function createSessionConversations({
         const existing = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
         if (existing) return snapshot(ctx, existing, true);
         const parentPreferences = assistantRoutingFromMetadata(ctx.session.metadata);
-        const requestedPreferences = input.presentation?.recoveryOperation ? { mode: "code", review: false }
-          : input.assistantRouting || { mode: "plan", review: false };
+        const requestedPreferences = input.presentation?.recoveryOperation ? { mode: "junior", review: false }
+          : input.assistantRouting || { mode: "senior", review: false };
         const preferences = assistantRoutingPreferences({ ...requestedPreferences,
           workflowEngineId: parentPreferences?.workflowEngineId || vibe64AssistantSelectionFromMetadata(ctx.session.metadata).engineId
         });
@@ -432,10 +432,10 @@ function createSessionConversations({
         }
         if (settingsChanged && !input.assistantRouting) {
           const preferences = assistantRoutingFromMetadata(record.routingMetadata);
-          if (preferences.mode === "auto") throw new Error("Choose Plan, Code or Economy before customizing its model.");
+          if (preferences.mode === "auto") throw new Error("Choose Senior, Junior or Intern before customizing its model.");
           const selection = record.assistantSelection;
-          if (["plan", "code"].includes(preferences.mode) && selection.engineId !== preferences.workflowEngineId) {
-            throw new Error("Plan and Code model overrides must use the workflow orchestrator. Configure its shared backup in Model routing.");
+          if (["senior", "junior"].includes(preferences.mode) && selection.engineId !== preferences.workflowEngineId) {
+            throw new Error("Senior and Junior model overrides must use the workflow orchestrator. Configure its shared backup in Model routing.");
           }
           const override = await sessionAgent.resolveSelection({ engineId: selection.engineId, modelProviderId: selection.modelProviderId,
             agentId: selection.agentId, modelId: input.agentSettings.model || selection.modelId,

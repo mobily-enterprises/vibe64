@@ -43,8 +43,8 @@ beforeEach(() => {
   };
   mocks.scopeKey = ref("owner:workspace");
   mocks.resource = { data: ref({ canConfigure: true, workflows: [
-    { engineId: "codex", label: "Codex", available: true, planLabel: "Codex · gpt-6-astra", codeLabel: "Codex · deepseek-flash" },
-    { engineId: "opencode", label: "OpenCode", available: true, planLabel: "OpenCode · big-pickle", codeLabel: "OpenCode · big-pickle" }
+    { engineId: "codex", label: "Codex", available: true, seniorLabel: "Codex · gpt-6-astra", juniorLabel: "Codex · deepseek-flash" },
+    { engineId: "opencode", label: "OpenCode", available: true, seniorLabel: "OpenCode · big-pickle", juniorLabel: "OpenCode · big-pickle" }
   ] }),
     isInitialLoading: ref(false), reload: vi.fn() };
 });
@@ -54,7 +54,7 @@ it("previews initial roles without writing and submits the workflow rather than 
   const f = mount();
   expect(mocks.routingOptions.workflowsOnly).toBe(true);
   expect(f.state.choices).toHaveLength(2);
-  expect(f.state.selectedChoice).toMatchObject({ engineId: "codex", available: true, planLabel: "Codex · gpt-6-astra", codeLabel: "Codex · deepseek-flash" });
+  expect(f.state.selectedChoice).toMatchObject({ engineId: "codex", available: true, seniorLabel: "Codex · gpt-6-astra", juniorLabel: "Codex · deepseek-flash" });
   expect(f.createSession).not.toHaveBeenCalled();
   expect(f.workflow).toHaveBeenLastCalledWith("codex");
   expect(f.ready).toHaveBeenLastCalledWith(true);
@@ -63,11 +63,11 @@ it("previews initial roles without writing and submits the workflow rather than 
 it("shows a collaborator's backup pair and hides configuration", async () => {
   mocks.resource.data.value.canConfigure = false;
   Object.assign(mocks.resource.data.value.workflows[0], { backupUsed: true,
-    planLabel: "OpenCode · big-pickle", codeLabel: "OpenCode · big-pickle" });
+    seniorLabel: "OpenCode · big-pickle", juniorLabel: "OpenCode · big-pickle" });
   const f = mount();
   expect(f.state.canConfigure).toBe(false);
   expect(f.state.selectedChoice).toMatchObject({ engineId: "codex", available: true, backupUsed: true,
-    planLabel: "OpenCode · big-pickle", codeLabel: "OpenCode · big-pickle" });
+    seniorLabel: "OpenCode · big-pickle", juniorLabel: "OpenCode · big-pickle" });
   expect(f.workflow).toHaveBeenLastCalledWith("codex");
   expect(f.ready).toHaveBeenLastCalledWith(true);
 });

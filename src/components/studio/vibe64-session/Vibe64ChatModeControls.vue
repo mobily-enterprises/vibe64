@@ -1,10 +1,10 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiAutoFix, mdiCheck, mdiCodeBraces, mdiCompassOutline, mdiLeaf, mdiTuneVariant } from "@mdi/js";
+import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiSchoolOutline, mdiTuneVariant } from "@mdi/js";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { ModelRoutingForm, useModelRouting } from "@local/vibe64-accounts/client";
-import { ASSISTANT_MODES, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_MODES, assistantModeLabel, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
@@ -20,8 +20,8 @@ const detailsOpen = ref(false);
 const modeMenu = ref(null);
 const routingOpen = ref(false);
 const routingSaving = ref(false);
-const modeIcons = { plan: mdiCompassOutline, code: mdiCodeBraces, economy: mdiLeaf, auto: mdiAutoFix };
-const modeLabel = computed(() => ASSISTANT_MODES.find(({ id }) => id === mode.value)?.label || "");
+const modeIcons = { senior: mdiAccountStarOutline, junior: mdiAccountOutline, intern: mdiSchoolOutline, auto: mdiAutoFix };
+const modeLabel = computed(() => assistantModeLabel(mode.value));
 const { engines, loadError, resource } = useModelRouting({ enabled: computed(() => Boolean(props.session?.sessionId)) });
 const workflowEngineId = computed(() => preferences.value?.workflowEngineId || props.session?.assistantSelection?.engineId);
 const engine = computed(() => engines.value.find(({ engineId }) => engineId === workflowEngineId.value));
@@ -30,7 +30,7 @@ const goal = computed(() => props.session?.agentSession?.goal || props.session?.
   JSON.parse(props.session?.metadata?.assistant_routing_goal || "null"));
 const hasGoal = computed(() => Boolean(goal.value && !["completed", "complete"].includes(goal.value.status)) ||
   Boolean(props.session?.agentSession?.turn?.goalStatus && !["completed", "complete"].includes(props.session.agentSession.turn.goalStatus)));
-const reviewAvailable = computed(() => !hasGoal.value && ["auto", "code"].includes(mode.value));
+const reviewAvailable = computed(() => !hasGoal.value && mode.value === "auto");
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
   ...(mode.value === preferences.value?.mode && preferences.value.override ? { override: preferences.value.override } : {}) }));
 watch(preferences, (value) => { mode.value = value?.mode || ""; review.value = value?.review === true; }, { immediate: true });
@@ -40,7 +40,7 @@ function selectionLabel(selection) {
 function roleLabel(role) {
   const decision = decisions.value[role === "router" ? "request_routing" : role];
   if (decision && !decision.available) return decision.message || "Unavailable";
-  const selection = decision?.effectiveSelection || engine.value?.roles[role]?.assignment;
+  const selection = decision?.effectiveSelection || engine.value?.roles[role === "review" ? "senior" : role]?.assignment;
   if (!selection) return canConfigureMessage();
   return `${selectionLabel(selection)}${decision?.backupUsed ? ' · Shared backup' : ''}`;
 }
@@ -51,20 +51,20 @@ function canConfigureMessage() {
 const description = computed(() => {
   if (!mode.value) return `Current model · ${props.session?.assistantSelection?.modelId || "Choose an assistant"}`;
   if (mode.value === "auto") return decisions.value.auto?.available === false
-    ? decisions.value.auto.message : `Router chooses Plan or Code · ${roleLabel("router")}`;
+    ? decisions.value.auto.message : `Senior plans; Junior implements · Router: ${roleLabel("router")}`;
   const selectedOverride = preferences.value?.mode === mode.value && preferences.value.override;
   return selectedOverride && !decisions.value[mode.value] ? `${selectionLabel(selectedOverride)} · custom` : roleLabel(mode.value);
 });
-const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Review after coding on' : ''}`);
+const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Senior review and Deslop on' : ''}`);
 const reviewDescription = computed(() => {
   if (hasGoal.value) return "The mode is fixed during a goal. Auto and automatic review are unavailable.";
-  if (!reviewAvailable.value) return "Available in Code and Auto.";
+  if (!reviewAvailable.value) return "Automatic review is available in Auto only.";
   if (decisions.value.review?.available === false) return decisions.value.review.message;
   const reviewer = decisions.value.review?.effectiveSelection;
-  const coder = decisions.value.code?.effectiveSelection;
+  const coder = decisions.value.junior?.effectiveSelection;
   const sameModel = reviewer && coder && ["engineId", "modelProviderId", "modelId"]
     .every((key) => reviewer[key] === coder[key]);
-  return `${roleLabel("review")} reviews, fixes issues and Deslops the changes. ${sameModel ? "Same model as Code. " : ""}Uses one additional turn.`;
+  return `Senior · ${roleLabel("review")} reviews, fixes issues and Deslops the changes. ${sameModel ? "Same model as Junior. " : ""}Uses one additional turn.`;
 });
 const command = useCommand({
   access: "never", apiSuffix: VIBE64_SESSIONS_API_SUFFIX, placementSource: "vibe64.sessions.assistant-selection.update",
@@ -133,11 +133,13 @@ function configure() {
           </v-list>
           <div class="px-4 pb-3">
             <p v-if="mode" class="text-body-small mt-2">{{ ASSISTANT_MODES.find(({ id }) => id === mode)?.description }}</p>
-            <p v-if="engine && ['plan', 'code', 'economy', 'router'].some((role) => !engine.roles[role]?.assignment)" class="text-body-small mt-2">{{ canConfigure ? 'Assign missing models in Configure model routing below.' : 'Ask the owner to configure the missing models.' }}</p>
-            <p v-if="decisions[mode]?.backupReason === 'keep_workflow_together'" class="text-body-small mt-2">Plan and Code use the shared backup together to keep this workflow in one orchestrator.</p>
-            <v-switch :model-value="review" :disabled="disabled || saving || !reviewAvailable || !review && decisions.review?.available === false" label="Review after coding" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
-            <p class="text-body-small">{{ reviewDescription }}</p>
-            <p v-if="mode === 'auto'" class="text-body-small mt-2">Router reads your request and recent chat first. Mixed or uncertain requests go to Plan.</p>
+            <p v-if="engine && ['senior', 'junior', 'intern', 'router'].some((role) => !engine.roles[role]?.assignment)" class="text-body-small mt-2">{{ canConfigure ? 'Assign missing models in Configure model routing below.' : 'Ask the owner to configure the missing models.' }}</p>
+            <p v-if="decisions[mode]?.backupReason === 'keep_workflow_together'" class="text-body-small mt-2">Senior and Junior use the shared backup together to keep this workflow in one orchestrator.</p>
+            <template v-if="mode === 'auto'">
+              <v-switch :model-value="review" :disabled="disabled || saving || !reviewAvailable || !review && decisions.review?.available === false" label="Senior review and Deslop" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
+              <p class="text-body-small">{{ reviewDescription }}</p>
+              <p class="text-body-small mt-2">Router reads your request and recent chat. New work goes to Senior for planning; Junior starts after your approval. Standalone Deslop goes directly to Senior.</p>
+            </template>
             <v-btn v-if="canConfigure" variant="text" min-height="48" size="small" class="mt-2" @click="configure">Configure model routing</v-btn>
           </div>
         </template>

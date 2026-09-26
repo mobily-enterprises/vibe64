@@ -548,11 +548,11 @@ test("assistant access exposes separate purpose decisions without private connec
     harness.terminals.inspectAssistantAccess = async (_sessionId, context) => {
       assert.equal(context.vibe64User.username, "member");
       return {
-        available: true, canUse: true, nativeCanUse: false, canUseAny: true, canRequestMessage: false, currentMode: "code",
+        available: true, canUse: true, nativeCanUse: false, canUseAny: true, canRequestMessage: false, currentMode: "junior",
         purposes: {
-          code: { available: true, effectiveSelection: { ...selection, modelId: "deepseek-flash" },
-            connectionIdentity: "private-connection", planCodePair: {
-              plan: { connectionIdentity: "private-plan" }, code: { connectionIdentity: "private-code" }
+          junior: { available: true, effectiveSelection: { ...selection, modelId: "deepseek-flash" },
+            connectionIdentity: "private-connection", seniorJuniorPair: {
+              senior: { connectionIdentity: "private-plan" }, junior: { connectionIdentity: "private-code" }
             } },
           prompt_hint: { available: false, reasonCode: "helper_review_required", message: "Review helper routing." },
           auto: { available: false, routerConnectionIdentity: "private-router", reasonCode: "personal_roles" }
@@ -561,11 +561,11 @@ test("assistant access exposes separate purpose decisions without private connec
     };
     const result = await harness.service.inspectAssistantAccess("session-1", { vibe64User: { username: "member", role: "member" } });
     assert.equal(result.ok, true);
-    assert.equal(result.currentMode, "code");
+    assert.equal(result.currentMode, "junior");
     assert.equal(result.canUse, true);
     assert.equal(result.nativeCanUse, false);
     assert.equal(result.purposes.prompt_hint.available, false);
-    assert.equal(result.purposes.code.effectiveSelection.modelId, "deepseek-flash");
+    assert.equal(result.purposes.junior.effectiveSelection.modelId, "deepseek-flash");
     assert.doesNotMatch(JSON.stringify(result), /private-|connectionIdentity|routerConnectionIdentity/u);
     assert.equal(harness.deliveries.length, 0);
   });

@@ -27,7 +27,7 @@ const retiredHelperModelResponse = Object.freeze({
   ok: false,
   statusCode: 410,
   code: "vibe64_helper_model_retired",
-  error: "Helper settings have moved to Model routing. Reload the app and choose Economy there."
+  error: "Helper settings have moved to Model routing. Reload the app and choose Intern there."
 });
 
 function registerRoutes(

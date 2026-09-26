@@ -19,7 +19,7 @@ import { computed } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
-import { assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantModeLabel, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 const props = defineProps({
   delivery: { type: Object, default: null },
   routingRequest: { type: Object, default: null },
@@ -35,7 +35,7 @@ const emit = defineEmits(["resend", "cancel", "edit"]);
 const turns = computed(() => {
   const result = conversationTurnsFromMessages(props.messages.map((message) => {
     const selection = message.assistantSelection;
-    return selection ? { ...message, assistantLabel: `${selection.engineId} · ${selection.modelId}${message.assistantRouting?.resolvedMode ? ` · ${message.assistantRouting.resolvedMode}` : ""}` } : message;
+    return selection ? { ...message, assistantLabel: `${selection.engineId} · ${selection.modelId}${message.assistantRouting?.resolvedMode ? ` · ${assistantModeLabel(message.assistantRouting.resolvedMode)}` : ""}` } : message;
   }));
   const request = props.routingRequest;
   if (request && ["routing", "sending", "uncertain", "failed"].includes(request.status) && !result.some((turn) => turn.user?.messageId === request.messageId)) {

@@ -30,10 +30,10 @@ one statement at a time.
 Read-only execution uses the reader endpoint and a read-only transaction;
 manual write execution requires the existing unlock and confirmation checks.
 Copilot SQL remains read-only and uses the same execution owner as manual SQL.
-Copilot resolves the workflow's Economy assignment for the submitting user before
+Copilot resolves the workflow's Intern assignment for the submitting user before
 inference. It may use a shared model in another orchestrator while the main chat
 remains on the owner's personal model. Its availability and model label describe
-that resolved destination, including Shared backup. Disabling Economy does not
+that resolved destination, including Shared backup. Disabling Intern does not
 prevent browsing or manual SQL. A person can still prepare a question in main
 chat when its separate approval workflow is available.
 
@@ -51,7 +51,7 @@ or starts inference. Helper Stop cannot stop the main conversation.
 The client caches database workspace state per actor, project and session, and
 refreshes it when AI connections or routing change. Switching actors remounts
 the transient Copilot view. AI generation of the project's Data overview is a
-separate Code task; it does not use Copilot's Economy availability.
+separate Junior task; it does not use Copilot's Intern availability.
 
 SQLite uses an explicitly declared persistent filename. Hosted resources provide
 an absolute filename; standalone projects may resolve a relative filename from

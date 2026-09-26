@@ -177,6 +177,7 @@
         <template #composer>
           <Vibe64RoutingNotice
             :request="routingRequest"
+            :mode="assistantRoutingFromMetadata(activeTask.routingMetadata)?.mode || ''"
             :active="props.active && temporary.open.value"
             :busy="activeTask.busy"
             @implement="temporary.implementPlan(activeTask.id, $event)"
@@ -310,7 +311,7 @@
 
 <script setup>
 import { AssistantComposerActions } from "@jskit-ai/assistant-core/client/conversation";
-import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import { computed, inject, nextTick, ref, useId, watch } from "vue";

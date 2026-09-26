@@ -1,4 +1,3 @@
-import { assistantRoutingPreferences } from "../shared/assistantRouting.js";
 import {
   defineVibe64AssistantSelection,
   vibe64AssistantConversationKey,
@@ -12,6 +11,19 @@ const requestStatuses = new Set([
   "review_pending", "review_sending", "review_uncertain", "reviewing"
 ]);
 const record = (value) => value && typeof value === "object" && !Array.isArray(value);
+
+// Frozen preference validation for the published V2 migration.
+function assistantRoutingPreferences(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !modes.has(value.mode)) {
+    throw Object.assign(new Error("Choose Plan, Code, Economy, or Auto."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
+  }
+  if (value.workflowEngineId !== undefined && !Object.values(VIBE64_ASSISTANT_ENGINE_IDS).includes(value.workflowEngineId)) {
+    throw Object.assign(new Error("Choose a supported workflow orchestrator."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
+  }
+  return { mode: value.mode, review: value.review === true,
+    ...(value.workflowEngineId ? { workflowEngineId: value.workflowEngineId } : {}),
+    ...(value.override && value.mode !== "auto" ? { override: defineVibe64AssistantSelection(value.override) } : {}) };
+}
 
 function readRecord(raw, label) {
   if (!raw) return null;

@@ -8,7 +8,7 @@ import RoutingNotice from "../../src/components/studio/vibe64-session/Vibe64Rout
 let app;
 afterEach(() => { app?.unmount(); feedback.report.mockReset(); });
 function mount(request) {
-  const props = ref({ request, active: true });
+  const props = ref({ request, active: true, mode: "auto" });
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   const notice = ref();
   const component = { ...RoutingNotice, render: () => null };
@@ -19,7 +19,7 @@ function mount(request) {
 }
 
 it("keeps normal routing in the message bubble and reports review interruption once through the transient snackbar", async () => {
-  const request = { messageId: "one", status: "routing", resolvedMode: "code", review: true };
+  const request = { messageId: "one", status: "routing", resolvedMode: "junior", review: true };
   const f = mount(request);
   expect(f.state().actionable).toBe(false);
   f.props.value.request = { ...request, status: "sent" };
@@ -36,8 +36,8 @@ it("keeps normal routing in the message bubble and reports review interruption o
   expect(feedback.report).toHaveBeenCalledTimes(1);
 });
 
-it("does not replay finished notices on restore, background completion or Plan completion", async () => {
-  const request = { messageId: "old", status: "done", resolvedMode: "code", reviewStatus: "cancelled" };
+it("does not replay finished notices on restore, background completion or Senior completion", async () => {
+  const request = { messageId: "old", status: "done", resolvedMode: "junior", reviewStatus: "cancelled" };
   const f = mount(request);
   await nextTick();
   expect(feedback.report).not.toHaveBeenCalled();
@@ -45,7 +45,7 @@ it("does not replay finished notices on restore, background completion or Plan c
   await nextTick();
   f.props.value.request.status = "done";
   await nextTick();
-  f.props.value = { active: true, request: { ...request, messageId: "plan", status: "sent", resolvedMode: "plan" } };
+  f.props.value = { active: true, request: { ...request, messageId: "senior", status: "sent", resolvedMode: "senior" } };
   await nextTick();
   f.props.value.request.status = "done";
   await nextTick();
@@ -66,14 +66,14 @@ it("keeps failures and review recovery controls visible", async () => {
 });
 
 it("only offers implementation for a ready plan after completion; paused and revised plans stay read-only", async () => {
-  const request = { messageId: "planned", status: "done", resolvedMode: "plan", workPlan: { status: "ready", revision: "one", text: "Detailed plan" } };
+  const request = { mode: "auto", messageId: "planned", status: "done", resolvedMode: "senior", workPlan: { status: "ready", revision: "one", text: "Detailed plan" } };
   const f = mount(request);
   expect(f.state().planReady).toBe(true);
   f.props.value.request = { ...request, status: "sent" };
   await nextTick();
   expect(f.state().planReady).toBe(false);
   expect(f.state().planStage).toBe("Planning");
-  f.props.value.request.resolvedMode = "code";
+  f.props.value.request.resolvedMode = "junior";
   await nextTick();
   expect(f.state().planStage).toBe("Coding");
   for (const status of ["drafting", "paused", "blocked", "implemented"]) {
@@ -87,7 +87,7 @@ it("only offers implementation for a ready plan after completion; paused and rev
 });
 
 it("shows recovery controls for a stopped planning handoff", () => {
-  const f = mount({ status: "planning_pending", continuation: "plan", resolvedMode: "code", assignments: { plan: { engineId: "codex", modelId: "gpt-6-astra" } } });
+  const f = mount({ status: "planning_pending", continuation: "planning", resolvedMode: "junior", assignments: { senior: { engineId: "codex", modelId: "gpt-6-astra" } } });
   expect(f.state().actionable).toBe(true);
   expect(f.state().label).toBe("Back to planning · codex · gpt-6-astra");
 });
@@ -97,3 +97,14 @@ it("leaves a mixed-request explanation on the unsent bubble instead of adding an
   expect(f.state().actionable).toBe(false);
   expect(feedback.report).not.toHaveBeenCalled();
 });
+
+for (const mode of ["senior", "junior", "intern"]) {
+  it(`hides Auto's plan when the user switches to direct ${mode}`, async () => {
+    const f = mount({ mode: "auto", status: "done", workPlan: { status: "ready", text: "Detailed plan" } });
+    expect(f.state().planReady).toBe(true);
+    f.props.value.mode = mode;
+    await nextTick();
+    expect(f.state().planVisible).toBe(false);
+    expect(f.state().planReady).toBe(false);
+  });
+}

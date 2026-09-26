@@ -2629,7 +2629,7 @@ function createVibe64SessionStore({
       actorId: normalizeText(value.actorId),
       ...(["claude", "codex", "opencode"].includes(value.engineId) ? { engineId: value.engineId } : {}),
       ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
-      ...(isPlainObject(value.assistantRouting) && ["plan", "code", "economy", "review"].includes(value.assistantRouting.resolvedMode) ? {
+      ...(isPlainObject(value.assistantRouting) && ["senior", "junior", "intern", "review", "deslop"].includes(value.assistantRouting.resolvedMode) ? {
         assistantRouting: Object.fromEntries(["requestedMode", "resolvedMode", "reason", "parentMessageId", "settingsRevision"]
           .filter((key) => value.assistantRouting[key] !== undefined).map((key) => [key, value.assistantRouting[key]]))
       } : {}),
@@ -4970,7 +4970,7 @@ function createVibe64SessionStore({
 
   // The stopped-service upgrade owns backups and publication. This operation
   // only stages routing changes, using this store's native/archive layout.
-  async function prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform }) {
+  async function prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform, transformTurnMetadata }) {
     const relativeScratch = path.relative(normalizedStateRoot, temporaryRoot || normalizedStateRoot);
     if (!path.isAbsolute(temporaryRoot || "") || typeof transform !== "function" ||
         !(relativeScratch === ".." || relativeScratch.startsWith(`..${path.sep}`))) {
@@ -5035,6 +5035,25 @@ function createVibe64SessionStore({
         if (!previous) throw new Error("Routing upgrade cannot create or replace an unknown temporary conversation.");
         if (JSON.stringify(previous.record) === JSON.stringify(record)) continue;
         changes.push({ filePath: previous.filePath, original: previous.original, contents: `${JSON.stringify(record)}\n` });
+      }
+      if (transformTurnMetadata) {
+        const scopes = [sessionPaths, ...conversations.map(({ record }) => conversationPaths(sessionPaths, record.conversationId))];
+        for (const scope of scopes) {
+          for (const entry of await inventory(scope.conversationLogRoot)) {
+            if (!entry.isDirectory() || !CONVERSATION_TURN_ID_PATTERN.test(entry.name)) continue;
+            const filePath = path.join(scope.conversationLogRoot, entry.name, CONVERSATION_TURN_METADATA_FILE);
+            const original = await readRegularText(filePath);
+            if (!original) continue;
+            let record;
+            try { record = JSON.parse(original); }
+            catch { throw new Error(`Invalid conversation metadata: ${filePath}. Inspect it before upgrading routing.`); }
+            if (!isPlainObject(record)) throw new Error(`Invalid conversation metadata: ${filePath}.`);
+            const updated = transformTurnMetadata(record);
+            if (JSON.stringify(updated) !== JSON.stringify(record)) {
+              changes.push({ filePath, original, contents: `${JSON.stringify(updated)}\n` });
+            }
+          }
+        }
       }
       return changes;
     };

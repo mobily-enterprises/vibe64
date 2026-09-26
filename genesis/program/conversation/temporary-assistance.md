@@ -64,15 +64,15 @@ references consistent. A confirmed send clears only its accepted receipts.
 
 ## Public contract
 
-Ordinary persistent temporary chats offer the same Plan, Code, Economy, Auto
-and optional review controls as main chat, through one icon in the bottom
+Ordinary persistent temporary chats offer the same Senior, Junior, Intern, Auto
+and Auto-only optional review controls as main chat, through one icon in the bottom
 composer toolbar. Owners can open the shared Model routing overlay directly
 from its menu. Each keeps its own selection, routing
 preferences, pending request and retained native conversations. Creating an ordinary
-draft starts in Plan with review off, inherits only its parent's workflow, and
+draft starts in Senior with review off, inherits only its parent's workflow, and
 does not require inference access to the parent's last model. The first routed Send resolves the submitting
 actor's destination. App-generated implementation and repair drafts explicitly
-select Code with review off, preserving the parent's workflow. Dedicated repairs
+select Junior with review off, preserving the parent's workflow. Direct roles use the conversation and user request; they neither consult Auto's working plan nor trigger an automatic reviewer. Dedicated repairs
 retain their instructions and cannot change mode.
 The authenticated actor supplied by the HTTP turn action is captured with the
 routing request, so later automatic review retains the submitting user's access
@@ -91,9 +91,9 @@ Realtime routing updates share an already pending conversation read instead of
 starting overlapping polls. A replaced turn resumes polling after the older
 read settles; closed views and changed actors still discard that response.
 Native idle events and read-time reconciliation recover one eligible review after normal
-Code completion. Polling can schedule it when the current coordinator admitted
-that Code request, even if its native idle event arrives later. After a backend
-restart, a completed Code request instead offers explicit review Retry/Skip.
+Junior completion. Polling can schedule it when the current coordinator admitted
+that Junior request, even if its native idle event arrives later. After a backend
+restart, a completed Junior request instead offers explicit review Retry/Skip.
 Closing or stopping a chat cancels pending routing and review.
 Service shutdown also drains pending routing through the same cancellation owner
 before closing native providers, so a stopped Router cannot leave a stale process
@@ -115,7 +115,7 @@ inference. Toggling review keeps that override through the shared mode control;
 selecting another mode clears it. Explicit model/thinking edits update that mode's
 saved override; their availability is validated against the current catalogue. Auto requires choosing
 an explicit mode before customizing its model. A foreign backup cannot turn a
-Plan/Code override into a split-orchestrator pair. Configuration and connection changes refresh existing chats' decisions
+Senior/Junior override into a split-orchestrator pair. Configuration and connection changes refresh existing chats' decisions
 without replacing unsent drafts or switching away from Main chat or the selected
 temporary chat. Initial restoration still opens saved temporary chats.
 Only account and connection events reload the
@@ -128,7 +128,7 @@ main chat's last model. An active turn reports its separate native steering
 permission; a collaborator may be unable to steer that turn while still having a
 shared route for the next request.
 
-Foreign Economy and Backup turns use the same changeover preparation and Send
+Foreign Intern and Backup turns use the same changeover preparation and Send
 owner as Main chat, scoped to this chat's metadata and visible transcript. The
 previous native conversation is stopped and retained before selection changes;
 a failed stop leaves that selection unchanged. Returning resumes the recorded
@@ -280,7 +280,7 @@ Every product-owned repair entry, including project setup warnings, uses the
 shared Fix it with AI control and temporary-task sender. It opens, selects, and
 focuses a separate Temporary AI task immediately, even while the main assistant
 is working. These entries and subsystem generation check the viewer's effective
-Code access, independently of the main chat's mode or personal connection.
+Junior access, independently of the main chat's mode or personal connection.
 Onboarding's create, inspect and adoption actions use that same
 temporary-chat path. Each onboarding request opens a fresh chat. The task
 shows a concise user-facing repair request and a compact status heading while
@@ -410,7 +410,7 @@ The manager also composes these scoped operations into one bounded helper turn,
 awaiting the parent's native-identity event before starting. Abort during startup
 stops the late native turn; abort while waiting stops that same scoped turn.
 Save naming, suggestions, source explanations and database help resolve effective
-Economy through this seam. Each feature retains its own durable helper-cleanup
+Intern through this seam. Each feature retains its own durable helper-cleanup
 references, exact destination and connection identity; the last main-chat model
 does not determine helper access.
 

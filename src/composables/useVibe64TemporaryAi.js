@@ -446,7 +446,7 @@ function useVibe64TemporaryAi({
     }
     const task = openTask({
       ...input,
-      initialRouting: { mode: "code", review: false },
+      initialRouting: { mode: "junior", review: false },
       dedupeKey,
       draft: message
     });

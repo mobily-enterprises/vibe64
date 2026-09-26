@@ -23,24 +23,24 @@ function catalog(providerIds = ["openai", "deepseek", "zai-coding-plan"]) {
     })) })) };
 }
 
-test("JSON recommendations keep Astra for Plan and prefer DeepSeek, then Sol, over GLM for Code", () => {
+test("JSON recommendations keep Astra for Senior and prefer DeepSeek, then Sol, over GLM for Junior", () => {
   for (const [providers, expected] of [
     [["openai"], "gpt-6-sol"], [["openai", "zai-coding-plan"], "gpt-6-sol"],
     [["openai", "deepseek"], "deepseek-flash"], [["openai", "zai-coding-plan", "deepseek"], "deepseek-flash"]
   ]) {
     const roles = recommendedRoutingAssignments(catalog(providers));
-    assert.equal(roles.plan.modelId, "gpt-6-astra");
-    assert.equal(roles.code.modelId, expected);
-    assert.equal(roles.economy.modelId, providers.includes("deepseek") ? "deepseek-flash" : "gpt-6-luna");
-    assert.equal(roles.router.modelId, roles.economy.modelId);
-    assert.equal(roles.economy.variantId, "low");
+    assert.equal(roles.senior.modelId, "gpt-6-astra");
+    assert.equal(roles.junior.modelId, expected);
+    assert.equal(roles.intern.modelId, providers.includes("deepseek") ? "deepseek-flash" : "gpt-6-luna");
+    assert.equal(roles.router.modelId, roles.intern.modelId);
+    assert.equal(roles.intern.variantId, "low");
   }
 });
 
 test("a saved assignment is revalidated without replacing it with a recommendation", () => {
   const engine = catalog();
-  const saved = { ...recommendedRoutingAssignments(engine).code, modelProviderId: "zai-coding-plan", modelId: "glm-5.3", selectionSource: "explicit" };
-  assert.equal(recommendedRoutingAssignments(engine).code.modelId, "deepseek-flash");
+  const saved = { ...recommendedRoutingAssignments(engine).junior, modelProviderId: "zai-coding-plan", modelId: "glm-5.3", selectionSource: "explicit" };
+  assert.equal(recommendedRoutingAssignments(engine).junior.modelId, "deepseek-flash");
   assert.equal(routingAssignmentSelection(engine, saved).modelId, "glm-5.3");
   assert.throws(() => routingAssignmentSelection(engine, { ...saved, modelProviderId: "deepseek", modelId: "deepseek-v4-pro" }), /has not been verified/);
   assert.throws(() => routingAssignmentSelection(engine, { ...saved, modelId: "glm-unverified" }), /available/);
@@ -61,24 +61,25 @@ test("short follow-ups receive their latest exchange and bounded older context",
 });
 
 test("the classifier cannot supply executable destinations or malformed decisions", () => {
-  assert.deepEqual(parseRoutingDecision('{"mode":"code","reason":"explicit_implementation"}'), { mode: "code", reason: "explicit_implementation" });
+  assert.deepEqual(parseRoutingDecision('{"mode":"junior","reason":"explicit_implementation"}'), { mode: "junior", reason: "explicit_implementation" });
   assert.deepEqual(parseRoutingDecision('{"mode":"deslop","reason":"deslop"}'), { mode: "deslop", reason: "deslop" });
-  assert.deepEqual(parseRoutingDecision('{"mode":"plan","reason":"mixed_deslop_request"}'), { mode: "plan", reason: "mixed_deslop_request" });
-  for (const output of ["code", "null", '{"mode":"economy","reason":"unclear"}',
-    '{"mode":"deslop","reason":"planning"}', '{"mode":"code","reason":"deslop"}',
-    '{"mode":"code","reason":"mixed_deslop_request"}',
-    '{"mode":"code","reason":"explicit_implementation","url":"https://example.invalid"}',
+  assert.deepEqual(parseRoutingDecision('{"mode":"senior","reason":"mixed_deslop_request"}'), { mode: "senior", reason: "mixed_deslop_request" });
+  for (const output of ["junior", "null", '{"mode":"intern","reason":"unclear"}',
+    '{"mode":"deslop","reason":"planning"}', '{"mode":"junior","reason":"deslop"}',
+    '{"mode":"junior","reason":"mixed_deslop_request"}',
+    '{"mode":"junior","reason":"explicit_implementation","url":"https://example.invalid"}',
     ...["engineId", "modelId", "command"].map((key) => JSON.stringify({
-      mode: "code", reason: "explicit_implementation", [key]: "untrusted-router-value"
+      mode: "junior", reason: "explicit_implementation", [key]: "untrusted-router-value"
     }))]) {
     assert.throws(() => parseRoutingDecision(output), /Routing returned/);
   }
 });
 
-test("Plan permits only its working document while the scoped review instruction allows fixes", () => {
+test("Senior permits only its working document while the scoped review instruction allows fixes", () => {
   const text = "The original human text.";
-  assert.match(assistantModePrompt("plan", text), /Do not change application files/);
-  assert.match(assistantModePrompt("code", text), /Stop for an unresolved architectural/);
+  assert.match(assistantModePrompt("senior", text, { planInstructions: "Auto planning instructions" }), /Do not change application files/);
+  assert.match(assistantModePrompt("senior", text), /You may edit application files when requested/);
+  assert.match(assistantModePrompt("junior", text, { planInstructions: "Approved Auto plan" }), /Stop for an unresolved architectural/);
   assert.match(assistantModePrompt("review", text), /may directly fix in-scope defects/);
   assert.ok(assistantModePrompt("review", text).endsWith(text));
   assert.match(assistantModePrompt("deslop", text), /You may edit code for behavior-preserving cleanup/);
@@ -95,7 +96,7 @@ test("routing receipts and reviewer identity survive transcript storage and relo
   const assistantRouting = { requestedMode: "auto", resolvedMode: "review", reason: "explicit_implementation", parentMessageId: "code-request", settingsRevision: 2 };
   await store.writeConversationUserMessage("routing", { messageId: "review-request", text: "Automatic review", turnMetadata: {
     actorId: "app", actorDisplayName: "Automatic review", engineId: "codex",
-    assistantSelection: recommendedRoutingAssignments(catalog()).plan, assistantRouting
+    assistantSelection: recommendedRoutingAssignments(catalog()).senior, assistantRouting
   } });
   await store.writeConversationAssistantMessage("routing", { text: "Checked the code." });
   const [turn] = await create().readConversationTail("routing");
@@ -130,7 +131,7 @@ test("Accounts exposes safe choices and validates owner-managed assignments", as
     canManageCodex: ({ vibe64User } = {}) => vibe64User?.role === "owner" ? null : { ok: false, error: "Owner required" } });
   const data = await service.readModelRouting();
   assert.equal(data.ok, true, JSON.stringify(data));
-  assert.equal(data.engines[0].roles.plan.assignment, null);
+  assert.equal(data.engines[0].roles.senior.assignment, null);
   const recommendations = recommendedRoutingAssignments(catalog());
   const input = { revision: data.revision, orchestrators: { codex: Object.fromEntries(
     ASSISTANT_ROUTING_ROLES.map((role) => [role, recommendations[role]])
@@ -138,8 +139,8 @@ test("Accounts exposes safe choices and validates owner-managed assignments", as
   assert.equal((await service.saveModelRouting(input)).ok, false);
   const saved = await service.saveModelRouting({ ...input, vibe64User: { role: "owner" } });
   assert.equal(saved.ok, true, JSON.stringify(saved));
-  assert.equal(saved.engines[0].roles.code.assignment.modelId, "deepseek-flash");
-  assert.equal(saved.engines[0].roles.code.assignment.selectionSource, "recommended");
+  assert.equal(saved.engines[0].roles.junior.assignment.modelId, "deepseek-flash");
+  assert.equal(saved.engines[0].roles.junior.assignment.selectionSource, "recommended");
   assert.equal((await service.saveModelRouting({ ...input, vibe64User: { role: "owner" } })).ok, false);
 });
 
@@ -158,7 +159,7 @@ function routingFixture() {
     { engineId: "opencode", modelProviderId: "opencode", ownerOnly: false, available: true, connectionIdentity: "included-zen" }
   ];
   const roles = recommendedRoutingAssignments(codex);
-  const backup = recommendedRoutingAssignments(opencode).code;
+  const backup = recommendedRoutingAssignments(opencode).junior;
   const configuration = { revision: 4, orchestrators: { codex: { ...roles, sharedBackup: backup } } };
   const input = { workflowEngineId: "codex", actor: { id: "member", role: "member" }, configuration,
     catalogs: [codex, opencode], connectionAccess };
@@ -189,7 +190,7 @@ test("scores do not admit unsupported Codex history routes; isolated Router has 
   assert.equal(isolated.compatibilityError, "");
   engine.modelProviders.push({ id: "unqualified", connected: true, models: [{ id: "gpt-6-astra", status: "available", variants: [] }] });
   assert.ok(routingModelChoices(engine, { purpose: "request_routing" }).find(({ modelProviderId }) => modelProviderId === "unqualified").compatibilityError);
-  assert.equal(routingModelScore({ ...ordinary, modelId: "fake-deepseek-flash" }, "code"), 2);
+  assert.equal(routingModelScore({ ...ordinary, modelId: "fake-deepseek-flash" }, "junior"), 2);
 });
 
 test("independent recommendations compare engines, retain saved ties and filter Backup by connection scope", () => {
@@ -197,16 +198,16 @@ test("independent recommendations compare engines, retain saved ties and filter 
   const options = { catalogs: f.input.catalogs, connectionAccess: f.input.connectionAccess };
   const before = structuredClone(f.input);
   const recommended = recommendedRoutingAssignments(f.input.catalogs[1], options);
-  assert.equal(recommended.plan.engineId, "opencode");
-  assert.equal(recommended.code.engineId, "opencode");
-  assert.equal(recommended.economy.engineId, "codex");
+  assert.equal(recommended.senior.engineId, "opencode");
+  assert.equal(recommended.junior.engineId, "opencode");
+  assert.equal(recommended.intern.engineId, "codex");
   assert.equal(recommended.router.modelId, "deepseek-flash");
   assert.equal(recommended.sharedBackup.modelProviderId, "deepseek");
   assert.deepEqual(f.input, before, "recommendations do not rewrite saved assignments");
   const withoutDeepSeek = { ...options, catalogs: [catalog(["openai"]), f.input.catalogs[1]] };
   for (const catalogs of [withoutDeepSeek.catalogs, [...withoutDeepSeek.catalogs].reverse()]) {
     const choices = recommendedRoutingAssignments(f.input.catalogs[1], { ...withoutDeepSeek, catalogs });
-    assert.equal(choices.economy.modelId, "gpt-6-luna");
+    assert.equal(choices.intern.modelId, "gpt-6-luna");
     assert.equal(choices.router.modelId, "gpt-6-luna");
     assert.equal(choices.sharedBackup.modelId, "big-pickle");
   }
@@ -214,89 +215,89 @@ test("independent recommendations compare engines, retain saved ties and filter 
   assert.equal(recommendedRoutingAssignments(f.input.catalogs[0], options).sharedBackup.modelId, "big-pickle");
   const engine = f.input.catalogs[1];
   engine.modelProviders[0].models.push(...["model-b", "model-a"].map((id) => ({ id, status: "available", variants: [] })));
-  assert.equal(recommendedRoutingAssignments(engine).code.modelId, "model-a");
-  const saved = { ...recommendedRoutingAssignments(engine).code, modelId: "model-b" };
+  assert.equal(recommendedRoutingAssignments(engine).junior.modelId, "model-a");
+  const saved = { ...recommendedRoutingAssignments(engine).junior, modelId: "model-b" };
   engine.modelProviders[0].models.reverse();
-  assert.equal(recommendedRoutingAssignments(engine, { assignments: { code: saved } }).code.modelId, "model-b");
+  assert.equal(recommendedRoutingAssignments(engine, { assignments: { junior: saved } }).junior.modelId, "model-b");
 });
 
-test("owner retains the configured pair and captured review uses Plan", () => {
+test("owner retains the configured pair and captured review uses Senior", () => {
   const f = routingFixture();
-  const result = f.resolve("code", { actor: { role: "owner" }, reviewEnabled: true });
+  const result = f.resolve("junior", { actor: { role: "owner" }, reviewEnabled: true });
   assert.equal(result.available, true, result.message);
   assert.equal(result.effectiveSelection.modelId, "deepseek-flash");
-  assert.equal(result.planCodePair.plan.effectiveSelection.modelId, "gpt-6-astra");
+  assert.equal(result.seniorJuniorPair.senior.effectiveSelection.modelId, "gpt-6-astra");
   assert.equal(result.backupUsed, false);
 });
 
-test("foreign Backup moves both effective roles even when Code is accessible and review is off", () => {
+test("foreign Backup moves both effective roles even when Junior is accessible and review is off", () => {
   const f = routingFixture();
   const before = structuredClone(f.input);
   for (const reviewEnabled of [false, true]) {
-    for (const purpose of ["plan", "code", "review"]) {
+    for (const purpose of ["senior", "junior", "review"]) {
       const result = f.resolve(purpose, { reviewEnabled });
       assert.equal(result.available, true, result.message);
       assert.equal(result.effectiveSelection.engineId, "opencode");
-      assert.equal(result.planCodePair.plan.effectiveSelection.modelId, "big-pickle");
-      assert.equal(result.planCodePair.code.effectiveSelection.modelId, "big-pickle");
-      assert.equal(result.planCodePair.plan.backupReason, "personal_connection");
-      assert.equal(result.planCodePair.code.backupReason, "keep_workflow_together");
+      assert.equal(result.seniorJuniorPair.senior.effectiveSelection.modelId, "big-pickle");
+      assert.equal(result.seniorJuniorPair.junior.effectiveSelection.modelId, "big-pickle");
+      assert.equal(result.seniorJuniorPair.senior.backupReason, "personal_connection");
+      assert.equal(result.seniorJuniorPair.junior.backupReason, "keep_workflow_together");
     }
   }
   assert.deepEqual(f.input, before, "resolution must not rewrite saved settings or catalogues");
 });
 
-test("foreign Backup moves accessible Plan when only Code is personal", () => {
+test("foreign Backup moves accessible Senior when only Junior is personal", () => {
   const f = routingFixture();
-  Object.assign(f.input.configuration.orchestrators.codex, { plan: f.roles.code, code: f.roles.plan });
+  Object.assign(f.input.configuration.orchestrators.codex, { senior: f.roles.junior, junior: f.roles.senior });
   for (const reviewEnabled of [false, true]) {
-    for (const purpose of ["plan", "code", "review"]) {
+    for (const purpose of ["senior", "junior", "review"]) {
       const result = f.resolve(purpose, { reviewEnabled });
       assert.equal(result.available, true, result.message);
       assert.equal(result.effectiveSelection.engineId, "opencode");
-      assert.equal(result.planCodePair.plan.backupReason, "keep_workflow_together");
-      assert.equal(result.planCodePair.code.backupReason, "personal_connection");
-      assert.deepEqual(result.planCodePair.plan.effectiveSelection, result.planCodePair.code.effectiveSelection);
+      assert.equal(result.seniorJuniorPair.senior.backupReason, "keep_workflow_together");
+      assert.equal(result.seniorJuniorPair.junior.backupReason, "personal_connection");
+      assert.deepEqual(result.seniorJuniorPair.senior.effectiveSelection, result.seniorJuniorPair.junior.effectiveSelection);
     }
   }
 });
 
 test("both personal roles share the same foreign Backup without inventing another assignment", () => {
   const f = routingFixture();
-  f.input.configuration.orchestrators.codex.code = { ...f.roles.plan, modelId: "gpt-6-sol" };
+  f.input.configuration.orchestrators.codex.junior = { ...f.roles.senior, modelId: "gpt-6-sol" };
   for (const reviewEnabled of [false, true]) {
-    for (const purpose of ["plan", "code", "review"]) {
+    for (const purpose of ["senior", "junior", "review"]) {
       const result = f.resolve(purpose, { reviewEnabled });
       assert.equal(result.available, true, result.message);
       assert.equal(result.effectiveSelection.engineId, "opencode");
-      assert.equal(result.planCodePair.plan.backupReason, "personal_connection");
-      assert.equal(result.planCodePair.code.backupReason, "personal_connection");
-      assert.deepEqual(result.planCodePair.plan.effectiveSelection, result.planCodePair.code.effectiveSelection);
+      assert.equal(result.seniorJuniorPair.senior.backupReason, "personal_connection");
+      assert.equal(result.seniorJuniorPair.junior.backupReason, "personal_connection");
+      assert.deepEqual(result.seniorJuniorPair.senior.effectiveSelection, result.seniorJuniorPair.junior.effectiveSelection);
     }
   }
 });
 
-test("same-engine Backup substitutes personal Plan without replacing an accessible different coder", () => {
+test("same-engine Backup substitutes personal Senior without replacing an accessible different coder", () => {
   const f = routingFixture();
   const roles = f.input.configuration.orchestrators.codex;
-  roles.sharedBackup = f.roles.code;
-  roles.code = { ...f.roles.plan, modelId: "gpt-6-sol" };
+  roles.sharedBackup = f.roles.junior;
+  roles.junior = { ...f.roles.senior, modelId: "gpt-6-sol" };
   f.input.connectionAccess.push({ engineId: "codex", modelProviderId: "openai", modelId: "gpt-6-sol",
     ownerOnly: false, available: true, connectionIdentity: "shared-openai-api" });
   for (const reviewEnabled of [false, true]) {
-    for (const purpose of ["plan", "code", "review"]) {
+    for (const purpose of ["senior", "junior", "review"]) {
       const result = f.resolve(purpose, { reviewEnabled });
       assert.equal(result.available, true, result.message);
       assert.equal(result.effectiveSelection.engineId, "codex");
-      assert.equal(result.effectiveSelection.modelId, purpose === "code" ? "gpt-6-sol" : "deepseek-flash");
-      assert.equal(result.backupUsed, purpose !== "code");
-      assert.equal(result.planCodePair.plan.effectiveSelection.modelId, "deepseek-flash");
-      assert.equal(result.planCodePair.code.effectiveSelection.modelId, "gpt-6-sol");
+      assert.equal(result.effectiveSelection.modelId, purpose === "junior" ? "gpt-6-sol" : "deepseek-flash");
+      assert.equal(result.backupUsed, purpose !== "junior");
+      assert.equal(result.seniorJuniorPair.senior.effectiveSelection.modelId, "deepseek-flash");
+      assert.equal(result.seniorJuniorPair.junior.effectiveSelection.modelId, "gpt-6-sol");
     }
   }
 });
 
-test("Economy helpers stay independent of the Backup pair and Router has a distinct assignment", () => {
+test("Intern helpers stay independent of the Backup pair and Router has a distinct assignment", () => {
   const f = routingFixture();
   const external = { ...f.backup, modelId: "external-helper" };
   f.input.catalogs[1].modelProviders[0].models.push({ id: external.modelId, status: "available", variants: [] });
@@ -304,32 +305,32 @@ test("Economy helpers stay independent of the Backup pair and Router has a disti
   const result = f.resolve("prompt_hint");
   assert.equal(result.available, true, result.message);
   assert.equal(result.effectiveSelection.modelId, "deepseek-flash");
-  assert.equal(result.planCodePair, undefined);
+  assert.equal(result.seniorJuniorPair, undefined);
   assert.deepEqual(result.executionProfileRequest, { profileId: "economy", workloadId: "prompt_hint" });
   const router = f.resolve("request_routing");
   assert.equal(router.effectiveSelection.modelId, "external-helper");
   assert.equal(router.executionProfileRequest.workloadId, "request_routing");
-  f.input.configuration.orchestrators.codex.economy = f.roles.plan;
+  f.input.configuration.orchestrators.codex.intern = f.roles.senior;
   f.input.configuration.orchestrators.codex.sharedBackup = external;
   assert.equal(f.resolve("prompt_hint").effectiveSelection.engineId, "opencode");
 });
 
-test("unresolved migration helper choices block only Economy helpers", () => {
+test("unresolved migration helper choices block only Intern helpers", () => {
   const f = routingFixture();
-  f.input.configuration.orchestrators.codex.helperRoutingReview = { reason: "legacy_helpers_differ", previous: [] };
+  f.input.configuration.orchestrators.codex.helperRoutingReview = { reason: "helper_choices_differ", previous: [] };
   assert.equal(f.resolve("prompt_hint").reasonCode, "vibe64_assistant_helper_review_required");
-  assert.equal(f.resolve("economy").available, true);
-  assert.equal(f.resolve("code").available, true);
+  assert.equal(f.resolve("intern").available, true);
+  assert.equal(f.resolve("junior").available, true);
   assert.equal(f.resolve("request_routing").available, true);
 });
 
-test("Auto requires direct Router/Plan/Code and never depends on Economy or uses Backup", () => {
+test("Auto requires direct Router/Senior/Junior and never depends on Intern or uses Backup", () => {
   const f = routingFixture();
   assert.equal(f.resolve("auto").reasonCode, "vibe64_assistant_auto_requires_direct_roles");
   f.input.connectionAccess[0].ownerOnly = false;
-  delete f.input.configuration.orchestrators.codex.economy;
+  delete f.input.configuration.orchestrators.codex.intern;
   assert.equal(f.resolve("auto").available, true);
-  f.input.configuration.orchestrators.codex.router = { ...f.roles.plan, modelProviderId: "zai-coding-plan", modelId: "glm-5.3" };
+  f.input.configuration.orchestrators.codex.router = { ...f.roles.senior, modelProviderId: "zai-coding-plan", modelId: "glm-5.3" };
   assert.equal(f.resolve("request_routing").reasonCode, "vibe64_assistant_owner_required");
   assert.equal(f.resolve("auto").reasonCode, "vibe64_assistant_auto_requires_direct_roles");
 });
@@ -338,10 +339,10 @@ test("known personal connection health does not prevent shared access, but delet
   const f = routingFixture();
   f.input.connectionAccess[0].available = false;
   f.input.catalogs[0].modelProviders[0].connected = false;
-  assert.equal(f.resolve("code").available, true);
+  assert.equal(f.resolve("junior").available, true);
   f.input.connectionAccess.shift();
-  assert.equal(f.resolve("code").available, false);
-  assert.match(f.resolve("code").message, /no longer recognised/);
+  assert.equal(f.resolve("junior").available, false);
+  assert.match(f.resolve("junior").message, /no longer recognised/);
 });
 
 test("missing, personal, unhealthy or incompatible Backup fails before any request can be dispatched", () => {
@@ -353,14 +354,14 @@ test("missing, personal, unhealthy or incompatible Backup fails before any reque
   ]) {
     const f = routingFixture();
     change(f);
-    for (const reviewEnabled of [false, true]) assert.equal(f.resolve("code", { reviewEnabled }).available, false);
+    for (const reviewEnabled of [false, true]) assert.equal(f.resolve("junior", { reviewEnabled }).available, false);
   }
 });
 
 test("an unavailable accessible model is an error, not a reason to use Backup", () => {
   const f = routingFixture();
   f.input.connectionAccess.find(({ modelProviderId }) => modelProviderId === "deepseek").available = false;
-  const result = f.resolve("code", { actor: { role: "owner" } });
+  const result = f.resolve("junior", { actor: { role: "owner" } });
   assert.equal(result.available, false);
   assert.equal(result.reasonCode, "vibe64_assistant_connection_unavailable");
   assert.equal(result.backupUsed, false);
@@ -369,42 +370,42 @@ test("an unavailable accessible model is an error, not a reason to use Backup", 
 
 test("capability requirements are checked on effective models without changing destinations", () => {
   const f = routingFixture();
-  assert.equal(f.resolve("plan", { requirements: { capabilities: ["images"] } }).available, false);
-  assert.equal(f.resolve("code", { reviewEnabled: true, requirements: { review: ["images"] } }).available, false);
-  const result = f.resolve("plan", { requirements: { capabilities: ["toolcall"] } });
+  assert.equal(f.resolve("senior", { requirements: { capabilities: ["images"] } }).available, false);
+  assert.equal(f.resolve("junior", { reviewEnabled: true, requirements: { review: ["images"] } }).available, false);
+  const result = f.resolve("senior", { requirements: { capabilities: ["toolcall"] } });
   assert.equal(result.available, true, result.message);
   assert.equal(result.effectiveSelection.modelId, "big-pickle");
 });
 
-test("overrides cannot split a required Backup pair and direct Plan/Code cannot cross engines", () => {
+test("overrides cannot split a required Backup pair and direct Senior/Junior cannot cross engines", () => {
   const f = routingFixture();
   const before = structuredClone(f.input);
-  const override = { role: "code", selection: { ...f.roles.code, variantId: "low" } };
+  const override = { role: "junior", selection: { ...f.roles.junior, variantId: "low" } };
   const originalOverride = structuredClone(override);
   for (const reviewEnabled of [false, true]) {
-    const result = f.resolve("code", { override, reviewEnabled });
+    const result = f.resolve("junior", { override, reviewEnabled });
     assert.equal(result.available, true, result.message);
     assert.equal(result.configuredSelection.variantId, "low");
     assert.equal(result.effectiveSelection.engineId, "opencode");
-    assert.equal(result.planCodePair.plan.effectiveSelection.engineId, "opencode");
-    assert.equal(result.planCodePair.code.backupReason, "keep_workflow_together");
-    const sharedPlan = f.resolve("plan", { override: { role: "plan", selection: f.roles.code }, reviewEnabled });
+    assert.equal(result.seniorJuniorPair.senior.effectiveSelection.engineId, "opencode");
+    assert.equal(result.seniorJuniorPair.junior.backupReason, "keep_workflow_together");
+    const sharedPlan = f.resolve("senior", { override: { role: "senior", selection: f.roles.junior }, reviewEnabled });
     assert.equal(sharedPlan.available, true, sharedPlan.message);
     assert.equal(sharedPlan.effectiveSelection.engineId, "codex");
-    assert.equal(sharedPlan.planCodePair.code.effectiveSelection.engineId, "codex");
+    assert.equal(sharedPlan.seniorJuniorPair.junior.effectiveSelection.engineId, "codex");
     assert.equal(sharedPlan.backupUsed, false, "an accessible Plan override removes the need for Backup before resolving the pair");
   }
   assert.deepEqual(f.input, before);
   assert.deepEqual(override, originalOverride);
-  assert.equal(f.resolve("code", { override: { role: "code", selection: f.backup } }).available, false);
-  assert.equal(f.resolve("plan", { override: { role: "plan", selection: f.backup } }).available, false);
-  assert.equal(f.resolve("economy", { override: { role: "economy", selection: f.backup } }).available, true);
+  assert.equal(f.resolve("junior", { override: { role: "junior", selection: f.backup } }).available, false);
+  assert.equal(f.resolve("senior", { override: { role: "senior", selection: f.backup } }).available, false);
+  assert.equal(f.resolve("intern", { override: { role: "intern", selection: f.backup } }).available, true);
 });
 
 test("the pure resolver requires a trusted actor input; standalone null remains explicit", () => {
   const f = routingFixture();
-  assert.equal(f.resolve("plan", { actor: undefined }).available, false);
-  assert.equal(f.resolve("plan", { actor: null }).effectiveSelection.modelId, "gpt-6-astra");
+  assert.equal(f.resolve("senior", { actor: undefined }).available, false);
+  assert.equal(f.resolve("senior", { actor: null }).effectiveSelection.modelId, "gpt-6-astra");
   assert.equal(f.resolve("unknown").available, false);
 });
 
@@ -413,13 +414,13 @@ test("included Pickle remains usable for chat and Backup but cannot route or run
   const f = routingFixture();
   const engine = f.input.catalogs[1];
   const recommended = recommendedRoutingAssignments(engine, { connectionAccess: f.input.connectionAccess });
-  assert.equal(recommended.plan.modelId, "big-pickle");
-  assert.equal(recommended.code.modelId, "big-pickle");
+  assert.equal(recommended.senior.modelId, "big-pickle");
+  assert.equal(recommended.junior.modelId, "big-pickle");
   assert.equal(recommended.sharedBackup.modelId, "big-pickle");
   assert.equal(recommended.router, null);
-  assert.equal(recommended.economy, null);
-  Object.assign(f.input.configuration.orchestrators.codex, { router: f.backup, economy: f.backup });
-  assert.equal(f.resolve("economy").available, true);
+  assert.equal(recommended.intern, null);
+  Object.assign(f.input.configuration.orchestrators.codex, { router: f.backup, intern: f.backup });
+  assert.equal(f.resolve("intern").available, true);
   for (const purpose of ["request_routing", "prompt_hint", "auto"]) {
     const result = f.resolve(purpose, { actor: { role: "owner" } });
     assert.equal(result.available, false);

@@ -270,9 +270,9 @@
         >
           <template v-if="saveWorkError && saveWorkCanResolveWithTemporaryAi" #error-actions>
             <Vibe64TemporaryAiFixAction
-              :disabled="repositoryRecoverySending || !assistantCodeAllowed"
+              :disabled="repositoryRecoverySending || !assistantJuniorAllowed"
               :pending="repositoryRecoverySending"
-              :title="assistantCodeAllowed ? 'Open temporary AI to resolve this repository problem' : assistantCodeRestrictionMessage"
+              :title="assistantJuniorAllowed ? 'Open temporary AI to resolve this repository problem' : assistantJuniorRestrictionMessage"
               @click="fixRepositoryActionError"
             />
           </template>
@@ -358,7 +358,7 @@
               v-else
               :disabled="workspaceSetupAskDisabled"
               :pending="workspaceSetupFixSending"
-              :title="assistantCodeAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantCodeRestrictionMessage"
+              :title="assistantJuniorAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantJuniorRestrictionMessage"
               @click="askCodexToFixWorkspaceSetup"
             />
           </template>
@@ -420,6 +420,7 @@
           >
             <Vibe64RoutingNotice
               :request="routingRequest"
+              :mode="assistantRoutingFromMetadata(props.session?.metadata)?.mode || ''"
               :active="props.active && conversationLogVisible"
               :retrying="routingReviewRetrying"
               :busy="agentActive"
@@ -758,14 +759,14 @@
           :open-request="databaseOpenRequest"
           v-if="rightPaneTabMounted('database')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
-          :assistant-available="assistantCanUsePurpose('code')"
+          :assistant-available="assistantCanUsePurpose('junior')"
           :assistant-request-available="assistantCanRequestMessage"
           :assistant-unavailable-message="assistantRestrictionMessage"
           class="studio-autopilot__session-tool-content"
           :project-slug="projectSlug"
           :session-id="sessionId"
           :sessions-api-path="props.sessionsApiPath"
-          @request-overview-assistant="assistantCanUsePurpose('code') ? startTemporaryAiTask($event) : prefillComposer($event.message, { append: true })"
+          @request-overview-assistant="assistantCanUsePurpose('junior') ? startTemporaryAiTask($event) : prefillComposer($event.message, { append: true })"
           @request-message="prefillComposer($event, { append: true })"
         />
       </section>
@@ -787,7 +788,7 @@
           </v-btn>
         </header>
         <Vibe64SubsystemsView
-          :assistant-available="assistantCodeAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
+          :assistant-available="assistantJuniorAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
           v-if="rightPaneTabMounted('system')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
           class="studio-autopilot__session-tool-content"
@@ -820,12 +821,12 @@
           :active="props.active && props.projectPane === 'preview'"
           :archived="props.sessionSelectionArchived"
           :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
-          :can-ask="assistantCodeAllowed"
+          :can-ask="assistantJuniorAllowed"
           :request-temporary-ai="startTemporaryAiTask"
           :session-id="selectedAssistantSessionId"
         >
           <Vibe64OutputControls
-            :ask-codex-to-fix-preview-identity="assistantCodeAllowed ? askCodexToFixPreviewIdentity : null"
+            :ask-codex-to-fix-preview-identity="assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null"
             :attach-preview-file="attachPreviewFile"
             :prepare-preview-file="attachPreviewFileProducer"
             :auto-start-managed-preview="!props.sessionSelectionArchived"
@@ -919,6 +920,7 @@
 </template>
 
 <script setup>
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
@@ -1162,7 +1164,7 @@ async function sendMainChatMessage(input = {}) {
 const {
   Vibe64OutputControls,
   assistantDirectAllowed,
-  assistantCodeAllowed,
+  assistantJuniorAllowed,
   agentActive,
   agentObservationLost,
   agentStopEnabled,
@@ -1303,7 +1305,7 @@ const {
   assistantCanRequestMessage,
   assistantCanUseAi: assistantCanUseAiState,
   assistantCanRouteChat,
-  assistantCanUseCode: computed(() => assistantCanUsePurpose("code")),
+  assistantCanUseJunior: computed(() => assistantCanUsePurpose("junior")),
   assistantCanUseNative,
   assistantProgressLabel: openCodeProgressLabel,
   onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds }),
@@ -1489,7 +1491,7 @@ const checkpointFailure = computed(() => (props.session?.backgroundTasks || [])
   .find((task) => task.id === "codex_turn_checkpoint" && task.status === "failed")?.error || "");
 const sessionPullRequest = computed(() => vibe64SessionPullRequest(props.session));
 const githubProject = computed(() => githubProjectAvailable(props.projectContext));
-const assistantCodeRestrictionMessage = computed(() => assistantPurposes.value.code?.message || "Code is unavailable. Review model routing.");
+const assistantJuniorRestrictionMessage = computed(() => assistantPurposes.value.junior?.message || "Junior is unavailable. Review model routing.");
 const publicationLabel = computed(() => {
   const destination = saveWorkReview.value;
   if (destination?.mode === "github") return "Commit & push";
@@ -1499,8 +1501,8 @@ const dashboardContext = computed(() => ({
   ...(dashboardSessionContext.value || {}),
   assistantDirectAllowed: assistantDirectAllowed.value,
   assistantDraftAvailable: sourceEditorAskCodexAvailable.value,
-  assistantCodeAllowed: assistantCodeAllowed.value,
-  assistantCodeRestrictionMessage: assistantCodeRestrictionMessage.value,
+  assistantJuniorAllowed: assistantJuniorAllowed.value,
+  assistantJuniorRestrictionMessage: assistantJuniorRestrictionMessage.value,
   assistantRestrictionMessage: assistantRestrictionMessage.value,
   requestAssistantDraft: (text) => prefillComposer(text, { append: true }),
   requestUpdateWork: props.updateSessionWork,
@@ -1612,7 +1614,7 @@ function openTemporaryAi() {
 }
 
 async function startTemporaryAiTask(options = {}) {
-  if (!assistantCanUsePurpose("code") || props.sessionSelectionArchived) {
+  if (!assistantCanUsePurpose("junior") || props.sessionSelectionArchived) {
     return false;
   }
   emit("chat-attention");

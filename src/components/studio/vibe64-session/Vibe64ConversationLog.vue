@@ -80,6 +80,7 @@
   </AssistantConversationElement>
 </template>
 <script setup>
+import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, watch } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
@@ -218,8 +219,8 @@ const adapter = computed(() => ({
       const engineName = selection?.engineId === "claude" ? "Claude Code" : selection?.engineId === "opencode" ? "OpenCode" : "Codex";
       return {
         ...turn,
-        assistantLabel: !selection ? "agent" : `${engineName} · ${selection.modelId}${turn.metadata?.assistantRouting?.resolvedMode ? ` · ${turn.metadata.assistantRouting.resolvedMode}` : ""}`,
-        ...(!turn.system && turn.metadata?.assistantRouting && selection ? { system: { role: "system", text: `${turn.metadata.assistantRouting.requestedMode === "auto" ? "Auto → " : ""}${turn.metadata.assistantRouting.resolvedMode} · ${engineName} · ${selection.modelId}` } } : {}),
+        assistantLabel: !selection ? "agent" : `${engineName} · ${selection.modelId}${turn.metadata?.assistantRouting?.resolvedMode ? ` · ${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)}` : ""}`,
+        ...(!turn.system && turn.metadata?.assistantRouting && selection ? { system: { role: "system", text: `${turn.metadata.assistantRouting.requestedMode === "auto" ? "Auto → " : ""}${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ${engineName} · ${selection.modelId}` } } : {}),
         assistantDetails: selection
           ? `${engineName}\nModel: ${selection.modelId}\nProvider: ${selection.modelProviderId}\nThinking: ${selection.variantId || "Automatic"}`
           : undefined,

@@ -2,6 +2,7 @@
 import { parseArgs } from "node:util";
 import { runStateUpgrades } from "@local/vibe64-core/server/stateUpgrades";
 import { upgradeAssistantRouting } from "@local/vibe64-accounts/server/assistantRoutingUpgrade";
+import { upgradeAssistantRoles } from "@local/vibe64-accounts/server/assistantRoleUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -16,6 +17,7 @@ try {
     systemRoot: values["system-root"],
     apply: Boolean(values.apply),
     upgradeAssistantRouting,
+    upgradeAssistantRoles,
     report: (level, message) => {
       const line = `[vibe64-upgrade] ${level.toUpperCase()}: ${message}`;
       if (level === "warning") console.error(line);

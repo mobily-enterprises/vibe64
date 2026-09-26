@@ -19,7 +19,7 @@ function mount(savePreferences) {
   app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
     .createApp({ ...Vibe64ChatModeControls, render: () => null }, {
       session: { sessionId: "session-1", metadata: { assistant_routing: JSON.stringify({
-        mode: "code", review: false, workflowEngineId: "codex", override
+        mode: "junior", review: false, workflowEngineId: "codex", override
       }) } }, savePreferences
     });
   app.provide(ssrContextKey, { modules: new Set() });
@@ -30,24 +30,34 @@ beforeEach(() => { mocks.save.mockReset(); mocks.save.mockResolvedValue({ ok: tr
 afterEach(() => { app?.unmount(); });
 
 for (const temporary of [false, true]) {
-  it(`${temporary ? "temporary" : "main"} review toggles preserve the custom coder; changing mode clears it`, async () => {
+  it(`${temporary ? "temporary" : "main"} direct roles retain their custom model; only Auto offers review`, async () => {
     const state = mount(temporary ? mocks.save : undefined);
-    await state.save("code", true);
-    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "code", review: true, override });
-    await state.save("code", false);
-    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "code", review: false, override });
-    await state.save("plan", false);
-    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "plan", review: false });
+    expect(state.modeLabel).toBe("Junior");
+    expect(state.reviewAvailable).toBe(false);
+    await state.save("junior", true);
+    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "junior", review: true, override });
+    await state.save("junior", false);
+    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "junior", review: false, override });
+    await state.save("senior", false);
+    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false });
+    expect(state.modeLabel).toBe("Senior");
+    expect(state.reviewAvailable).toBe(false);
+    await state.save("intern", false);
+    expect(state.modeLabel).toBe("Intern");
+    expect(state.reviewAvailable).toBe(false);
+    await state.save("auto", true);
+    expect(state.reviewAvailable).toBe(true);
+    expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true });
   });
 }
 
-it("a failed review toggle keeps the prior preference and retries the same custom coder", async () => {
+it("a failed switch to Auto keeps the direct role and custom model", async () => {
   const state = mount();
   mocks.save.mockRejectedValueOnce(new Error("Connection interrupted."));
-  await state.save("code", true);
+  await state.save("auto", true);
   expect(state.review).toBe(false);
-  expect(state.mode).toBe("code");
+  expect(state.mode).toBe("junior");
   expect(state.saveError).toBe("Connection interrupted.");
-  await state.save("code", true);
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "code", review: true, override });
+  await state.save("auto", true);
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true });
 });

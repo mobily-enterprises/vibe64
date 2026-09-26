@@ -358,7 +358,7 @@ function useVibe64AutopilotView(props, emit, {
   assistantCanRequestMessage = null,
   assistantCanUseAi = null,
   assistantCanRouteChat = null,
-  assistantCanUseCode = null,
+  assistantCanUseJunior = null,
   assistantCanUseNative = null,
   assistantProgressLabel = null,
   onAttachmentsAccepted = null,
@@ -397,8 +397,8 @@ function useVibe64AutopilotView(props, emit, {
   const assistantDirectAllowed = computed(() => (
     !assistantAccessConfigured || unref(assistantCanUseAi) === true
   ));
-  const assistantCodeAllowed = computed(() => assistantCanUseCode === null
-    ? assistantDirectAllowed.value : unref(assistantCanUseCode) === true);
+  const assistantJuniorAllowed = computed(() => assistantCanUseJunior === null
+    ? assistantDirectAllowed.value : unref(assistantCanUseJunior) === true);
   const assistantRequestOnly = computed(() => unref(assistantCanRequestMessage) === true);
   const assistantMainChatAllowed = computed(() => (
     !assistantAccessConfigured ||
@@ -829,7 +829,7 @@ function useVibe64AutopilotView(props, emit, {
     !sessionId.value ||
     props.sessionSelectionArchived ||
     repositoryOperationActive.value ||
-    !assistantCodeAllowed.value
+    !assistantJuniorAllowed.value
   ));
 
   async function retryWorkspaceSetup() {
@@ -959,7 +959,7 @@ function useVibe64AutopilotView(props, emit, {
   async function askCodexToFixPreviewIdentity(input = {}) {
     if (
       typeof requestTemporaryAi !== "function" ||
-      !assistantCodeAllowed.value ||
+      !assistantJuniorAllowed.value ||
       !props.active ||
       !sessionId.value ||
       props.sessionSelectionArchived ||
@@ -993,7 +993,7 @@ function useVibe64AutopilotView(props, emit, {
     return Boolean(
       repositoryRecoverySending.value ||
       typeof requestTemporaryAi !== "function" ||
-      !assistantCodeAllowed.value ||
+      !assistantJuniorAllowed.value ||
       !props.active ||
       !sessionId.value ||
       props.sessionSelectionArchived ||
@@ -2047,7 +2047,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   async function describeSubsystems() {
-    if (typeof requestTemporaryAi !== "function" || !assistantCodeAllowed.value ||
+    if (typeof requestTemporaryAi !== "function" || !assistantJuniorAllowed.value ||
         !props.active || !sessionId.value || props.sessionSelectionArchived || repositoryOperationActive.value) {
       return false;
     }
@@ -2217,7 +2217,7 @@ function useVibe64AutopilotView(props, emit, {
   return {
     Vibe64OutputControls,
     assistantDirectAllowed,
-    assistantCodeAllowed,
+    assistantJuniorAllowed,
     agentActive,
     agentObservationLost,
     agentStopEnabled,

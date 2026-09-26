@@ -2792,7 +2792,7 @@ function createService({
         const result = await assistantRouting.send(sessionId, {
           messageId: saved.continuationMessageId, submissionKind: "send",
           message: `Integration setup completed for slot ${JSON.stringify(saved.integrationId)}. Continue the implementation from your integration setup request. Read the project's saved integration configuration; do not request or expose credentials in chat.`
-        }, { ...options, runtime, purpose: "code",
+        }, { ...options, runtime, purpose: "junior",
           onPromptSending: async ({ threadId, assistantSelection }) => {
             const changed = await inspectConfiguration(saved);
             if (changed) throw Object.assign(new Error(changed.error), { code: changed.code });
@@ -2903,7 +2903,7 @@ function createService({
         return runMainAgentWrite(sessionId, input, async (context) => {
           requireCompletedConversationRewind(context.session);
           if (assistantRoutingFromMetadata(context.session.metadata)?.mode === "auto") {
-            return { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Plan, Code, or Economy before starting or resuming a goal." };
+            return { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Senior, Junior, or Intern before starting or resuming a goal." };
           }
           const pendingRoute = JSON.parse(context.session.metadata.assistant_routing_request || "null");
           if (assistantRoutingStatusIsPending(pendingRoute?.status) || pendingRoute?.helper) {

@@ -336,7 +336,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     ["skipped_question", "Waiting for your answer. Automatic review was skipped."]
   ])("does not restore a permanent banner for %s review status", async (reviewStatus, message) => {
     const temporary = temporaryAiTestState(deferred());
-    const request = { status: "done", reviewStatus, messageId: "request-1", resolvedMode: "code" };
+    const request = { status: "done", reviewStatus, messageId: "request-1", resolvedMode: "junior" };
     temporary.tasks.value = [{
       id: "chat", conversationId: "chat", agentSettings: {}, delivery: createAssistantMessageDelivery(),
       busy: false, draft: "My next question", error: "", messages: [], title: "Temporary 1",

@@ -214,12 +214,34 @@ Focused evidence: `assistantRoutingConfigurationUpgrade.unit.test.js`,
 and `stateUpgrades.unit.test.js`, including the packaged CLI and interrupted
 publication before ledger commit.
 
+## Senior, Junior and Intern role names
+
+`20260926-assistant-role-names` changes routing configuration and request snapshots
+to schema 3. It renames the `plan`, `code` and `economy` model roles to `senior`,
+`junior` and `intern`, and `planCodePair` to `seniorJuniorPair`. The actual Auto
+working document remains `workPlan`; its return-to-planning continuation is
+`planning`. Runtime parsing and APIs use only the new role names.
+
+The upgrade preserves exact assignments and configuration revision. It visits
+main/temporary preferences, request and goal snapshots, renewal successor settings
+and transcript attribution in active, closing, archived and prepared sessions.
+Message text, native histories, actor identity, pending delivery receipts and plan
+documents stay intact. Existing V2 upgrades use their frozen validation and score
+format, so an older installation first completes those published operations.
+
+The script reuses the routing upgrade's verified before/after publication engine
+with its own `upgrades/backups/20260926-assistant-role-names/manifest.json`.
+Preflight is read-only; malformed or ambiguous role records and symlinks block
+publication. Interrupted writes resume from the same verified replacements.
+Focused evidence: `assistantRoleUpgrade.unit.test.js` and the packaged CLI in
+`stateUpgrades.unit.test.js`.
+
 ## Conversation working plans
 
 Working plans are new conversation-owned artifacts, created only by explicit
 planning work. They do not transform existing history or metadata and require no
 historical backfill. The existing request record may carry a `workPlan` display
-snapshot and approved content revision plus a `continuation: "plan"` for a blocked
+snapshot and approved content revision plus a `continuation: "planning"` for a blocked
 coding handoff. Absence means there is no approvable plan, never inferred approval
 from old conversation text. Existing admitted requests retain their receipts;
 new Auto coding requires a current approved document. Main plans are stored under
@@ -228,7 +250,7 @@ existing conversation directory. Existing archive and explicit-close operations
 own these files together with their surrounding conversation state.
 
 A newly admitted cleanup request can carry `task: "deslop"` in that same request
-record, while its resolved model role stays Plan. Mixed Auto requests use the
+record, while its resolved model role stays Senior. Mixed Auto requests use the
 existing failed/unsent state with a `mixed_deslop_request` reason and fixed
 explanation. These are new request outcomes, not historical transformations;
 no old requests are reclassified or backfilled.

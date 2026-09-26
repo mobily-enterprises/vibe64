@@ -12,18 +12,18 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 
 const STATE_KEY = "assistant_routing_request";
-const PROFILE = Object.freeze({ profileId: "economy", workloadId: "request_routing" });
+const PROFILE = Object.freeze({ profileId: "intern", workloadId: "request_routing" });
 const OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["mode", "reason"],
   properties: {
-    mode: { type: "string", enum: ["plan", "code", "deslop"] },
+    mode: { type: "string", enum: ["senior", "junior", "deslop"] },
     reason: { type: "string", enum: [...ROUTING_REASONS] }
   }
 };
-const continuationStatus = (state, phase) => `${state.continuation === "plan" ? "planning" : "review"}_${phase}`;
-const continuationRole = (state) => state.continuation === "plan" ? "plan" : "review";
+const continuationStatus = (state, phase) => `${state.continuation === "planning" ? "planning" : "review"}_${phase}`;
+const continuationRole = (state) => state.continuation === "planning" ? "senior" : "review";
 const activeGoal = (goal) => goal && !["complete", "completed"].includes(goal.status);
 function failure(message, code = "vibe64_assistant_routing_unavailable") {
   return Object.assign(new Error(message), { code, statusCode: 409 });
@@ -153,7 +153,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       if (task.cancelled) throw failure("Routing cancelled.");
       const started = await agent.startEphemeralConversationTurn(scope, {
         conversationId: helper.conversationId, executionProfile, outputSchema: OUTPUT_SCHEMA,
-        messageId: state.messageId, promptLabel: "Choose Plan, Code or Deslop",
+        messageId: state.messageId, promptLabel: "Choose Senior, Junior or Deslop",
         message: assistantRoutingPrompt({
           message: state.input.message,
           exchanges,
@@ -203,10 +203,10 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
   const sameSelection = (left, right) => ["engineId", "modelProviderId", "modelId", "agentId", "variantId"]
     .every((name) => left?.[name] === right?.[name]);
   function destinations(decision) {
-    return decision.planCodePair
-      ? { ...decision.planCodePair, ...(decision.router ? { router: {
+    return decision.seniorJuniorPair
+      ? { ...decision.seniorJuniorPair, ...(decision.router ? { router: {
         effectiveSelection: decision.router, connectionIdentity: decision.routerConnectionIdentity } } : {}) }
-      : { economy: decision };
+      : { intern: decision };
   }
   async function validateDecision(context, state, followup = false) {
     if (!state.decision || state.admissionRequired) throw failure("This request needs fresh admission. Retry it before continuing.");
@@ -238,9 +238,9 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
     const store = context.runtime.store;
     context = { ...context, vibe64User: state.submittedBy };
     const role = followup ? continuationRole(state) : state.resolvedMode;
-    const modelRole = followup ? "plan" : state.resolvedMode;
-    const followupLabel = state.continuation === "plan" ? "Back to planning" : "Automatic review";
-    const deliveredStatus = followup ? (role === "plan" ? "planning" : "reviewing") : "sent";
+    const modelRole = followup ? "senior" : state.resolvedMode;
+    const followupLabel = state.continuation === "planning" ? "Back to planning" : "Automatic review";
+    const deliveredStatus = followup ? (role === "senior" ? "planning" : "reviewing") : "sent";
     const selection = state.assignments[modelRole];
     const messageId = followup ? state.reviewMessageId : state.messageId;
     const selectedContext = withSelection(context, selection);
@@ -260,7 +260,8 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       await save(context, state);
       return { ok: true, delivered: true, messageId, threadId: state.threadId };
     }
-    if (followup && state.continuation !== "plan" && await skipReviewForQuestion(sessionId, context, state)) return { ok: true, skipped: true };
+    if (followup && state.mode !== "auto") throw failure("Automatic follow-ups require Auto. Cancel this follow-up and send a new request in your chosen role.");
+    if (followup && state.continuation !== "planning" && await skipReviewForQuestion(sessionId, context, state)) return { ok: true, skipped: true };
     await validateDecision(context, state, followup);
     const currentSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const expected = followup ? state.assignments[state.resolvedMode] : state.observedSelection;
@@ -279,16 +280,17 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
     if (followup && (native?.pendingRequests?.length || native?.turn?.waitingForInput)) {
       throw failure("Answer the pending question or approval before retrying review.");
     }
-    if (!followup && (state.mode === "auto" || state.input.planRevision) && role === "code") {
+    if (!followup && state.mode === "auto" && role === "junior") {
       const plan = await readWorkPlan(context);
       if (!plan || plan.status !== "ready" || plan.revision !== state.workPlan?.approvedRevision) {
         throw failure("The plan changed before coding started. Return to planning and approve the updated plan.");
       }
     }
-    const file = role !== "economy" ? await prepareWorkPlan(context, role === "plan") : null;
-    if (role === "plan" && state.workPlan) state.workPlan = await readWorkPlan(context);
+    const usesPlan = state.mode === "auto";
+    const file = usesPlan ? await prepareWorkPlan(context, role === "senior") : null;
+    if (usesPlan && role === "senior" && state.workPlan) state.workPlan = await readWorkPlan(context);
     const message = assistantModePrompt(state.task || role, followup ? state.reviewMessage : state.input.message,
-      { planInstructions: file && state.task !== "deslop" ? workPlanInstructions(file, role, { automatic: state.mode === "auto" }) : "" });
+      { planInstructions: file && state.task !== "deslop" ? workPlanInstructions(file, role) : "" });
     await prepareSelection(sessionId, selection, context);
     state.deliverySelection = selection;
     await save(context, state);
@@ -317,13 +319,13 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
     state.status = deliveredStatus;
     state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";
     if (followup) state.reviewStatus = "running";
-    if (state.resolvedMode === "code") liveFollowupRequests.set(keyFor(sessionId, context), state.messageId);
+    if (state.resolvedMode === "junior") liveFollowupRequests.set(keyFor(sessionId, context), state.messageId);
     delete state.error;
     await save(context, state);
     return { ...result, assistantRoutingRequest: state };
   }
   function attribution(state, followup) {
-    const modelRole = followup ? "plan" : state.resolvedMode;
+    const modelRole = followup ? "senior" : state.resolvedMode;
     const destination = destinations(state.decision || {})[modelRole];
     return { requestedMode: state.mode, resolvedMode: followup ? continuationRole(state) : state.task || state.resolvedMode,
       workflowEngineId: state.workflowEngineId, destination: state.assignments[modelRole],
@@ -333,7 +335,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
   }
 
   async function send(sessionId, input, options) {
-    if (options.purpose && options.purpose !== "code") throw new TypeError("Generated main-chat work must declare Code.");
+    if (options.purpose && options.purpose !== "junior") throw new TypeError("Generated main-chat work must declare Junior.");
     const explicitDeslop = !options.purpose && (input.genesisTask === "deslop" || /^\s*deslop[.!]?\s*$/iu.test(input.message));
     let context;
     let state;
@@ -344,7 +346,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.");
       context = current; key = keyFor(sessionId, context);
       const preferences = assistantRoutingFromMetadata(context.session.metadata) || (options.purpose || explicitDeslop ? {
-        mode: options.purpose || "plan", review: false,
+        mode: options.purpose || "senior", review: false,
         workflowEngineId: vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId
       } : null);
       if (input.reviewAction === "retry") {
@@ -380,7 +382,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       // Steering keeps the running model and its instructions. It never goes
       // through the classifier, including while a review turn is running.
       if (native?.turn?.active) {
-        if (explicitDeslop) throw failure("Deslop uses the Plan model in its own turn. Finish or stop the current turn, then send Deslop again.");
+        if (explicitDeslop) throw failure("Deslop uses the Senior model in its own turn. Finish or stop the current turn, then send Deslop again.");
         if (input.submissionKind === "send") throw failure("The assistant started another turn. Review it before sending.");
         direct = true; return;
       }
@@ -388,7 +390,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       if (running.has(key)) throw failure("This conversation is preparing a request. Cancel it or wait before sending another.");
       if (assistantRoutingStatusIsPending(state?.status) && state.messageId !== input.messageId) throw failure("Resolve or cancel the pending request before sending another.");
       if (state?.helper && state.messageId !== input.messageId) throw failure("Retry cleanup of the previous routing helper before sending another request.");
-      if (state?.messageId !== input.messageId && state?.status === "sent" && state.review && state.resolvedMode === "code") {
+      if (state?.messageId !== input.messageId && state?.status === "sent" && state.review && state.resolvedMode === "junior") {
         throw failure("The coding turn is preparing its review. Wait for it, or skip the review before sending another request.");
       }
       if (state?.messageId === input.messageId) {
@@ -404,26 +406,27 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         const { goal, pinned: savedGoal } = await currentGoal(sessionId, context);
         if (explicitDeslop && activeGoal(goal)) throw failure("Finish or cancel the current goal before starting Deslop.");
-        if (!options.purpose && preferences.mode === "auto" && activeGoal(goal)) throw failure("Choose Plan, Code, or Economy before working on a goal.");
+        if (!options.purpose && preferences.mode === "auto" && activeGoal(goal)) throw failure("Choose Senior, Junior, or Intern before working on a goal.");
         const saved = await createAssistantRoutingStore({ systemRoot }).read();
         const pinnedGoal = activeGoal(goal) && savedGoal;
         if (options.purpose && activeGoal(goal) && pinnedGoal?.mode !== options.purpose) {
-          throw failure("Finish or cancel the current goal before starting this Code task.");
+          throw failure("Finish or cancel the current goal before starting this Junior task.");
         }
         const mode = pinnedGoal?.mode || options.purpose || preferences.mode;
-        const plan = await readWorkPlan(context);
+        const approving = Boolean(input.planRevision);
+        const plan = mode === "auto" ? await readWorkPlan(context) : null;
         const previousPlan = state?.workPlan;
         const readyPlan = plan?.status === "ready" && previousPlan?.status === "ready" && plan.revision === previousPlan.revision;
-        const approving = Boolean(input.planRevision);
-        if (approving && (activeGoal(goal) || !["auto", "plan", "code"].includes(mode) ||
+        if (approving && mode !== "auto") throw failure("Choose Auto to implement its working plan. Direct roles work from your message and conversation.");
+        if (approving && (activeGoal(goal) ||
             !readyPlan || plan.revision !== input.planRevision)) {
           throw failure("This plan is no longer ready to implement. Ask the planner to update it and review the new version.");
         }
         let resolvedMode = mode;
-        if (explicitDeslop) resolvedMode = "plan";
-        else if (approving) resolvedMode = "code";
+        if (explicitDeslop) resolvedMode = "senior";
+        else if (approving) resolvedMode = "junior";
         else if (mode === "auto") resolvedMode = "";
-        const review = !explicitDeslop && !options.purpose && preferences.review && !activeGoal(goal) && (["auto", "code"].includes(mode) || approving);
+        const review = mode === "auto" && !explicitDeslop && !options.purpose && preferences.review && !activeGoal(goal);
         const workflowEngineId = pinnedGoal?.workflowEngineId || preferences.workflowEngineId || selection.engineId;
         state = {
           messageId: input.messageId,
@@ -440,7 +443,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
             status: readyPlan ? "ready" : "drafting",
             ...(approving ? { approvedRevision: plan.revision } : {})
           } : null,
-          schemaVersion: 2,
+          schemaVersion: 3,
           workflowEngineId,
           observedSelection: selection,
           configuration: pinnedGoal?.configuration || { revision: saved.revision,
@@ -487,10 +490,10 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
           state.reason = decision.reason;
           throw failure(AUTO_MIXED_DESLOP_MESSAGE, "vibe64_assistant_split_request");
         }
-        // A classifier cannot invent approval or turn an unplanned request into Code.
-        const approved = decision.mode === "code" && decision.reason === "plan_approval" && state.workPlan?.status === "ready";
-        state.resolvedMode = approved ? "code" : "plan";
-        state.reason = approved ? "plan_approval" : decision.mode === "code" ? "planning" : decision.reason;
+        // A classifier cannot invent approval or turn an unplanned request into Junior.
+        const approved = decision.mode === "junior" && decision.reason === "plan_approval" && state.workPlan?.status === "ready";
+        state.resolvedMode = approved ? "junior" : "senior";
+        state.reason = approved ? "plan_approval" : decision.mode === "junior" ? "planning" : decision.reason;
         if (decision.mode === "deslop") { state.task = "deslop"; state.review = false; }
         if (approved) state.workPlan.approvedRevision = state.workPlan.revision;
       }
@@ -583,8 +586,9 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       }
       if (state.turnId !== (run.providerTurnId || run.turnId)) return;
       const role = ["reviewing", "planning"].includes(state.status) ? continuationRole(state) : state.resolvedMode;
+      const usesPlan = state.mode === "auto";
       let plan;
-      try { plan = role === "economy" ? null : await readWorkPlan(context); }
+      try { plan = usesPlan ? await readWorkPlan(context) : null; }
       catch (error) {
         state.status = "done";
         state.error = error.message;
@@ -595,13 +599,13 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       if (plan) {
         let status = plan.status;
         if (run.state !== "completed" || state.stopped) status = "paused";
-        else if (role !== "plan" && status !== "blocked") status = "implemented";
+        else if (role !== "senior" && status !== "blocked") status = "implemented";
         state.workPlan = { ...plan, status };
       }
-      if (run.state === "completed" && !state.stopped && ["code", "review"].includes(role) && plan?.status === "blocked") {
+      if (run.state === "completed" && !state.stopped && ["junior", "review"].includes(role) && plan?.status === "blocked") {
         const needsRetry = recovered && liveFollowupRequests.get(keyFor(sessionId, context)) !== state.messageId;
         liveFollowupRequests.delete(keyFor(sessionId, context));
-        state.continuation = "plan";
+        state.continuation = "planning";
         state.reviewMessageId = randomUUID();
         state.reviewMessage = "Back to planning: coding encountered a decision or changed assumption. Read the working plan and its progress/blockers, inspect existing edits, and revise the detailed plan. Explain the decision to me and wait for approval before coding resumes.";
         state.status = "planning_pending";
@@ -620,7 +624,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       if (state.status === "planning") {
         liveFollowupRequests.delete(keyFor(sessionId, context));
         state.status = "done";
-        state.resolvedMode = "plan";
+        state.resolvedMode = "senior";
         delete state.reviewStatus;
         await save(context, state); return;
       }
@@ -630,10 +634,10 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
         state.reviewStatus = state.reviewStatus !== "cancelled" && run.state === "completed" ? "completed" : "incomplete";
         await save(context, state); return;
       }
-      if (!state.review || state.resolvedMode !== "code" || run.state !== "completed") {
+      if (state.mode !== "auto" || !state.review || state.resolvedMode !== "junior" || run.state !== "completed") {
         liveFollowupRequests.delete(keyFor(sessionId, context));
         state.status = "done";
-        if (state.review && state.resolvedMode === "code") state.reviewStatus = "skipped_incomplete";
+        if (state.mode === "auto" && state.review && state.resolvedMode === "junior") state.reviewStatus = "skipped_incomplete";
         await save(context, state); return;
       }
       const native = await agent.sessionState(sessionId, context);
@@ -674,7 +678,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
           state.error = "Delivery was interrupted. Check its receipt before continuing.";
         } else if (followup) {
           state.status = continuationStatus(state, "pending");
-          state.error = state.continuation === "plan"
+          state.error = state.continuation === "planning"
             ? "Planning preparation was interrupted. Continue planning when ready."
             : "Review preparation was interrupted. Retry or skip this review.";
         } else {
@@ -694,7 +698,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
   async function prepareGoal(sessionId, input, context) {
     const preferences = assistantRoutingFromMetadata(context.session.metadata);
     if (!preferences) return { input, context };
-    if (preferences.mode === "auto") throw failure("Choose Plan, Code, or Economy before starting or resuming a goal.");
+    if (preferences.mode === "auto") throw failure("Choose Senior, Junior, or Intern before starting or resuming a goal.");
     const previous = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
     const saved = await createAssistantRoutingStore({ systemRoot }).read();
     const current = vibe64AssistantSelectionFromMetadata(context.session.metadata);

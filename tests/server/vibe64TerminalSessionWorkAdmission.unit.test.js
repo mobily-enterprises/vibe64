@@ -495,8 +495,8 @@ test("integration continuation recovers provider acceptance after local write fa
     opencodeTerminalController: provider.controllerOptions
   });
   session.metadata.assistant_selection = provider.session.metadata.assistant_selection;
-  const code = { ...JSON.parse(session.metadata.assistant_selection), selectionSource: "explicit" };
-  await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({ opencode: { plan: code, code } }, 0);
+  const junior = { ...JSON.parse(session.metadata.assistant_selection), selectionSource: "explicit" };
+  await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({ opencode: { senior: junior, junior } }, 0);
   service.configureAssistantRuntime({
     readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "shared-deepseek" }),
     resolveConnection: provider.controllerOptions.resolveConnection,
@@ -550,7 +550,7 @@ test("integration continuation recovers provider acceptance after local write fa
   assert.equal(provider.promptCalls.length, 1);
 });
 
-test("integration continuation uses a member's shared Code destination without changing Plan preferences or adding review", async (t) => {
+test("integration continuation uses a member's shared Junior destination without changing Senior preferences or adding review", async (t) => {
   const provider = await controllerHarness();
   t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });
   const completed = Promise.withResolvers();
@@ -563,10 +563,10 @@ test("integration continuation uses a member's shared Code destination without c
   const shared = { ...JSON.parse(provider.session.metadata.assistant_selection), selectionSource: "explicit" };
   const personal = { ...shared, modelProviderId: "personal", modelId: "personal-model" };
   session.metadata.assistant_selection = JSON.stringify(shared);
-  const preferences = JSON.stringify({ mode: "plan", workflowEngineId: "opencode", review: true, override: personal });
+  const preferences = JSON.stringify({ mode: "senior", workflowEngineId: "opencode", review: true, override: personal });
   await runtime.store.writeMetadataValue(session.sessionId, "assistant_routing", preferences);
   await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({ opencode: {
-    plan: personal, code: personal, sharedBackup: shared
+    senior: personal, junior: personal, sharedBackup: shared
   } }, 0);
   service.configureAssistantRuntime({
     listConnections: provider.controllerOptions.listConnections,
@@ -591,9 +591,9 @@ test("integration continuation uses a member's shared Code destination without c
   await completed.promise;
   assert.equal(provider.promptCalls.length, 1);
   assert.deepEqual(provider.promptCalls[0].input.model, { providerID: "deepseek", id: "deepseek-chat", variant: "high" });
-  assert.match(provider.promptCalls[0].input.prompt.text, /Vibe64 mode: code/);
+  assert.match(provider.promptCalls[0].input.prompt.text, /Vibe64 role: Junior/);
   const route = JSON.parse(session.metadata.assistant_routing_request);
-  assert.equal(route.resolvedMode, "code");
+  assert.equal(route.resolvedMode, "junior");
   assert.equal(route.review, false);
   assert.equal(route.decision.backupUsed, true);
   assert.equal(route.submittedBy.username, "member");
@@ -1477,7 +1477,7 @@ test("shutdown requested by a dependent feature closes main and temporary routin
   t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });
   const { service, session } = await terminalServiceFixture(t, { store: {} }, { opencodeTerminalController: provider.controllerOptions });
   session.metadata.assistant_selection = provider.session.metadata.assistant_selection;
-  session.metadata.assistant_routing = JSON.stringify({ mode: "code", workflowEngineId: "opencode", review: false });
+  session.metadata.assistant_routing = JSON.stringify({ mode: "junior", workflowEngineId: "opencode", review: false });
   await service.createTemporaryConversation(session.sessionId, { conversationId: "shutdown-chat" });
   const shutdown = await service.invalidateAgentRuntimes({ reason: "server-shutdown" });
   assert.notEqual(shutdown.ok, false);
@@ -1496,9 +1496,9 @@ test("purpose access enables a member's configured chat after a personal turn wh
   const shared = { ...JSON.parse(provider.session.metadata.assistant_selection), selectionSource: "explicit" };
   const personal = { ...shared, modelProviderId: "personal", modelId: "personal-model" };
   session.metadata.assistant_selection = JSON.stringify(personal);
-  session.metadata.assistant_routing = JSON.stringify({ mode: "code", workflowEngineId: "opencode", review: true });
+  session.metadata.assistant_routing = JSON.stringify({ mode: "junior", workflowEngineId: "opencode", review: true });
   await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({ opencode: {
-    plan: personal, code: shared, router: shared, economy: shared, sharedBackup: shared
+    senior: personal, junior: shared, router: shared, intern: shared, sharedBackup: shared
   } }, 0);
   service.configureAssistantRuntime({
     listConnections: provider.controllerOptions.listConnections,
@@ -1511,13 +1511,13 @@ test("purpose access enables a member's configured chat after a personal turn wh
   assert.equal(active.steering, true);
   assert.equal(active.canUse, false, "steering cannot substitute another model while a personal native turn is active");
   assert.equal(active.canRequestMessage, true);
-  assert.equal(active.purposes.code.available, true, active.purposes.code.message);
+  assert.equal(active.purposes.junior.available, true, active.purposes.junior.message);
   assert.equal(active.purposes.prompt_hint.available, true);
   assert.equal(active.purposes.auto.available, false);
   session.agentRuns = [];
   const idle = await service.inspectAssistantAccess(session.sessionId, options);
   assert.equal(idle.steering, false);
-  assert.equal(idle.canUse, true, idle.purposes.code.message);
+  assert.equal(idle.canUse, true, idle.purposes.junior.message);
   assert.equal(idle.canRequestMessage, false);
   assert.equal(idle.purposes.review.effectiveSelection.modelId, shared.modelId);
   assert.equal(provider.promptCalls.length, 0, "availability never sends work to a provider");

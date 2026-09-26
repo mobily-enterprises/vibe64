@@ -2122,10 +2122,10 @@ test("curated Codex connection management uses the existing workspace owner auth
 async function routingAccountsFixture(root) {
   const selection = (engineId, modelProviderId, modelId) => ({ schema: "vibe64.assistant-selection.v1",
     engineId, modelProviderId, modelId, agentId: engineId, variantId: "", catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource: "recommended" });
-  const plan = selection("codex", "openai", "gpt-6-astra");
-  const code = selection("codex", "deepseek", "deepseek-flash");
+  const senior = selection("codex", "openai", "gpt-6-astra");
+  const junior = selection("codex", "deepseek", "deepseek-flash");
   const pickle = selection("opencode", "opencode", "big-pickle");
-  const routes = [plan, code, pickle];
+  const routes = [senior, junior, pickle];
   const unavailable = new Set();
   const store = createAssistantRoutingStore({ systemRoot: root });
   const manager = createSessionAgentManager({ readRoutingConfiguration: () => store.read(),
@@ -2134,7 +2134,7 @@ async function routingAccountsFixture(root) {
     providers: ["codex", "opencode"].map((engineId) => ({ id: engineId, transportId: `${engineId}_server`,
       async capabilities(_context, input) {
         const selected = routes.filter((row) => row.engineId === engineId && (!input.modelProviderId || row.modelProviderId === input.modelProviderId));
-        return { engineId, label: engineId, transportId: `${engineId}_server`, revision: plan.catalogRevision,
+        return { engineId, label: engineId, transportId: `${engineId}_server`, revision: senior.catalogRevision,
           agents: [{ id: engineId, mode: "primary" }], modelProviders: [...new Set(selected.map(({ modelProviderId }) => modelProviderId))].map((id) => ({
             id, label: id, connected: true, models: selected.filter(({ modelProviderId }) => modelProviderId === id)
               .map(({ modelId }) => ({ id: modelId, label: modelId, status: unavailable.has(modelId) ? "unavailable" : "available", variants: [], capabilities: { toolcall: true } }))
@@ -2149,8 +2149,8 @@ async function routingAccountsFixture(root) {
     publishAccountChanged: async (...args) => { events.push(args); } });
   const owner = { role: "owner", username: "owner" };
   const member = { role: "member", username: "member" };
-  const assignments = { plan, code, router: code, economy: code, sharedBackup: pickle };
-  return { service, store, manager, owner, member, denied, events, assignments, plan, code, pickle, unavailable };
+  const assignments = { senior, junior, router: junior, intern: junior, sharedBackup: pickle };
+  return { service, store, manager, owner, member, denied, events, assignments, senior, junior, pickle, unavailable };
 }
 
 test("model routing setup initializes compatible missing roles once and preserves deliberate choices", async () => {
@@ -2158,9 +2158,9 @@ test("model routing setup initializes compatible missing roles once and preserve
     const f = await routingAccountsFixture(root);
     const preview = await f.service.readModelRouting({ vibe64User: f.member });
     const setup = preview.engines.find(({ engineId }) => engineId === "codex");
-    assert.equal(setup.preview.viewer.plan.available, false, "reading does not initialize missing defaults");
-    assert.equal(setup.setupPreview.plan.effectiveSelection.modelId, "deepseek-flash");
-    assert.equal(setup.setupPreview.plan.backupUsed, true);
+    assert.equal(setup.preview.viewer.senior.available, false, "reading does not initialize missing defaults");
+    assert.equal(setup.setupPreview.senior.effectiveSelection.modelId, "deepseek-flash");
+    assert.equal(setup.setupPreview.senior.backupUsed, true);
     assert.equal((await f.store.read()).revision, 0);
     // Internal session setup can be triggered by the first collaborator; it
     // accepts only workflow IDs and cannot replace the owner's assignments.
@@ -2168,24 +2168,24 @@ test("model routing setup initializes compatible missing roles once and preserve
     assert.equal(first.ok, true, first.error);
     assert.equal(first.initialized.length, 5);
     const saved = await f.store.read();
-    assert.equal(saved.orchestrators.codex.plan.modelId, "gpt-6-astra");
-    assert.equal(saved.orchestrators.codex.code.modelId, "deepseek-flash");
-    assert.equal(saved.orchestrators.codex.economy.modelId, "deepseek-flash");
+    assert.equal(saved.orchestrators.codex.senior.modelId, "gpt-6-astra");
+    assert.equal(saved.orchestrators.codex.junior.modelId, "deepseek-flash");
+    assert.equal(saved.orchestrators.codex.intern.modelId, "deepseek-flash");
     assert.equal(saved.orchestrators.codex.router.modelId, "deepseek-flash");
     assert.equal(saved.orchestrators.codex.sharedBackup.modelId, "deepseek-flash");
     assert.equal(saved.orchestrators.opencode, undefined, "only the newly usable orchestrator is initialized");
     assert.deepEqual(await f.service.initializeModelRouting({ engineIds: ["codex"], vibe64User: f.owner }), { ok: true, initialized: [] });
     assert.deepEqual(await f.store.read(), saved);
-    const chosen = { ...saved.orchestrators.codex, code: { ...f.plan, selectionSource: "explicit" }, economy: null };
+    const chosen = { ...saved.orchestrators.codex, junior: { ...f.senior, selectionSource: "explicit" }, intern: null };
     delete chosen.router;
     await f.store.write({ codex: chosen }, saved.revision);
     const result = await f.service.initializeModelRouting({ engineIds: ["codex", "claude"], vibe64User: f.owner });
     assert.deepEqual(result.initialized, [{ engineId: "codex", role: "router" }]);
     const current = await f.store.read();
-    assert.equal(current.orchestrators.codex.economy, null, "explicitly unset is not a missing assignment");
+    assert.equal(current.orchestrators.codex.intern, null, "explicitly unset is not a missing assignment");
     const nextPreview = await f.service.readModelRouting({ vibe64User: f.owner });
-    assert.equal(nextPreview.engines.find(({ engineId }) => engineId === "codex").setupPreview.economy.available, false);
-    assert.deepEqual(current.orchestrators.codex.code, chosen.code);
+    assert.equal(nextPreview.engines.find(({ engineId }) => engineId === "codex").setupPreview.intern.available, false);
+    assert.deepEqual(current.orchestrators.codex.junior, chosen.junior);
     assert.equal(current.orchestrators.claude, undefined, "an unavailable orchestrator gets no helper-only profile");
     assert.equal(f.events.length, 2);
   });
@@ -2194,17 +2194,17 @@ test("model routing setup initializes compatible missing roles once and preserve
 test("workflow reads use saved routing and scoped access without discovering model catalogues", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
-    await f.store.write({ codex: f.assignments, opencode: { plan: f.pickle, code: f.pickle } }, 0);
+    await f.store.write({ codex: f.assignments, opencode: { senior: f.pickle, junior: f.pickle } }, 0);
     const revision = (await f.store.read()).revision;
     const member = await f.service.readModelRoutingWorkflows({ vibe64User: f.member });
     assert.equal(member.ok, true, member.error);
     assert.equal(member.canConfigure, false);
-    assert.equal(member.workflows[0].planLabel, "OpenCode · big-pickle");
-    assert.equal(member.workflows[0].codeLabel, "OpenCode · big-pickle");
+    assert.equal(member.workflows[0].seniorLabel, "OpenCode · big-pickle");
+    assert.equal(member.workflows[0].juniorLabel, "OpenCode · big-pickle");
     assert.equal(member.workflows[0].backupUsed, true);
     const owner = await f.service.readModelRoutingWorkflows({ vibe64User: f.owner });
     assert.equal(owner.canConfigure, true);
-    assert.equal(owner.workflows[0].planLabel, "Codex · gpt-6-astra");
+    assert.equal(owner.workflows[0].seniorLabel, "Codex · gpt-6-astra");
     assert.equal((await f.store.read()).revision, revision);
     assert.deepEqual(f.events, []);
     assert.doesNotMatch(JSON.stringify(member), /private-identity|connectionIdentity/);
@@ -2245,9 +2245,9 @@ test("model routing read and draft preview resolve the whole collaborator pair w
     const preview = await f.service.previewModelRouting(draft);
     assert.equal(preview.ok, true, preview.error);
     const codex = preview.engines.find(({ engineId }) => engineId === "codex");
-    assert.equal(codex.preview.owner.plan.effectiveSelection.modelId, "gpt-6-astra");
-    assert.equal(codex.preview.collaborator.plan.effectiveSelection.engineId, "opencode");
-    assert.equal(codex.preview.collaborator.code.backupReason, "keep_workflow_together");
+    assert.equal(codex.preview.owner.senior.effectiveSelection.modelId, "gpt-6-astra");
+    assert.equal(codex.preview.collaborator.senior.effectiveSelection.engineId, "opencode");
+    assert.equal(codex.preview.collaborator.junior.backupReason, "keep_workflow_together");
     assert.equal(codex.preview.collaborator.review.effectiveSelection.modelId, "big-pickle");
     assert.equal(codex.preview.collaborator.auto.available, false);
     assert.equal((await f.store.read()).revision, 0);
@@ -2262,7 +2262,7 @@ test("model routing read and draft preview resolve the whole collaborator pair w
     assert.equal(member.canConfigure, false);
     assert.equal(viewer.owner, undefined);
     assert.equal(viewer.collaborator, undefined);
-    assert.equal(viewer.viewer.code.effectiveSelection.engineId, "opencode");
+    assert.equal(viewer.viewer.junior.effectiveSelection.engineId, "opencode");
   });
 });
 
@@ -2270,37 +2270,37 @@ test("model routing preserves unavailable assignments and their provenance while
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
     await f.store.write({ codex: f.assignments, opencode: { ...Object.fromEntries(Object.keys(f.assignments).map((role) => [role, f.pickle])) } }, 0);
-    f.unavailable.add(f.plan.modelId);
+    f.unavailable.add(f.senior.modelId);
     const result = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 1, orchestrators: { codex: {
-      ...f.assignments, plan: { ...f.plan, selectionSource: "explicit" }, economy: { ...f.pickle, selectionSource: "explicit" }
+      ...f.assignments, senior: { ...f.senior, selectionSource: "explicit" }, intern: { ...f.pickle, selectionSource: "explicit" }
     } } });
     assert.equal(result.ok, true, result.error);
     const saved = await f.store.read();
-    assert.deepEqual(saved.orchestrators.codex.plan, f.plan);
-    assert.equal(saved.orchestrators.codex.economy.engineId, "opencode");
-    assert.equal(saved.orchestrators.codex.economy.selectionSource, "explicit");
-    assert.equal(saved.orchestrators.opencode.code.modelId, "big-pickle");
-    assert.match(result.engines.find(({ engineId }) => engineId === "codex").roles.plan.error, /unavailable/);
+    assert.deepEqual(saved.orchestrators.codex.senior, f.senior);
+    assert.equal(saved.orchestrators.codex.intern.engineId, "opencode");
+    assert.equal(saved.orchestrators.codex.intern.selectionSource, "explicit");
+    assert.equal(saved.orchestrators.opencode.junior.modelId, "big-pickle");
+    assert.match(result.engines.find(({ engineId }) => engineId === "codex").roles.senior.error, /unavailable/);
     const stale = await f.service.previewModelRouting({ vibe64User: f.owner, revision: 1, orchestrators: {} });
     assert.equal(stale.code, "vibe64_assistant_routing_stale");
-    const invalid = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 2, orchestrators: { codex: { sharedBackup: f.plan } } });
+    const invalid = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 2, orchestrators: { codex: { sharedBackup: f.senior } } });
     assert.equal(invalid.ok, false);
     assert.ok(invalid.fieldErrors["codex.sharedBackup"]);
     assert.equal((await f.store.read()).revision, 2);
   });
 });
 
-test("model routing only clears migrated helper evidence after explicit review of a valid Economy choice", async () => {
+test("model routing only clears migrated helper evidence after explicit review of a valid Intern choice", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
-    const helperRoutingReview = { reason: "legacy_helpers_differ", previous: [{ engineId: "codex", modelProviderId: "openai",
-      modelId: "gpt-6-luna", selectionSource: "explicit" }], proposed: f.code };
+    const helperRoutingReview = { reason: "helper_choices_differ", previous: [{ engineId: "codex", modelProviderId: "openai",
+      modelId: "gpt-6-luna", selectionSource: "explicit" }], proposed: f.junior };
     await f.store.write({ codex: { ...f.assignments, helperRoutingReview } }, 0);
-    const unrelated = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 1, orchestrators: { codex: { router: f.plan } } });
+    const unrelated = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 1, orchestrators: { codex: { router: f.senior } } });
     assert.equal(unrelated.ok, true, unrelated.error);
     assert.deepEqual((await f.store.read()).orchestrators.codex.helperRoutingReview, helperRoutingReview);
     const preview = unrelated.engines.find(({ engineId }) => engineId === "codex").preview.owner;
-    assert.equal(preview.economy.available, true);
+    assert.equal(preview.intern.available, true);
     assert.equal(preview.prompt_hint.reasonCode, "vibe64_assistant_helper_review_required");
     const resolved = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 2,
       orchestrators: {}, reviewedHelperWorkflows: ["codex"] });
@@ -2318,18 +2318,18 @@ test("first-session setup offers included OpenCode chat without promising restri
     const before = await f.service.readModelRouting({ vibe64User: f.member });
     const preview = before.engines.find(({ engineId }) => engineId === "opencode");
     assert.equal(preview.setupPreview.auto.available, false);
-    assert.equal(preview.setupPreview.plan.available, true);
+    assert.equal(preview.setupPreview.senior.available, true);
     assert.equal((await f.store.read()).revision, 0);
     const initialized = await f.service.initializeModelRouting({ engineIds: ["opencode"], vibe64User: f.member });
     assert.equal(initialized.ok, true, initialized.error);
     const saved = await f.store.read();
     assert.deepEqual(Object.keys(saved.orchestrators), ["opencode"]);
-    for (const role of ["plan", "code", "sharedBackup"]) {
+    for (const role of ["senior", "code", "sharedBackup"]) {
       assert.equal(saved.orchestrators.opencode[role].modelId, "big-pickle");
     }
     const after = await f.service.readModelRouting({ vibe64User: f.member });
     assert.equal(saved.orchestrators.opencode.router, undefined);
-    assert.equal(saved.orchestrators.opencode.economy, undefined);
+    assert.equal(saved.orchestrators.opencode.intern, undefined);
     assert.equal(after.engines.find(({ engineId }) => engineId === "opencode").preview.viewer.auto.available, false);
   });
 });

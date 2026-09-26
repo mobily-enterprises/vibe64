@@ -1269,20 +1269,20 @@ function createOpenCodeTerminalController({
     }
     const projectContextRoot = path.resolve(context.runtime.projectContextRoot);
     const start = Promise.resolve().then(async () => {
-      let economyModelId = "";
+      let internModelId = "";
       if (!context.assistantScope && getAssistantManager()) {
         const workflowEngineId = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId || context.selection.engineId;
-        const economy = await getAssistantManager().resolveAssistantPurpose({ purpose: "economy", workflowEngineId }, {
+        const intern = await getAssistantManager().resolveAssistantPurpose({ purpose: "intern", workflowEngineId }, {
           ...context, vibe64User: options.vibe64User || null
         }).catch(() => null);
-        if (economy?.available && economy.effectiveSelection.engineId === VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE &&
-            economy.effectiveSelection.modelProviderId === context.selection.modelProviderId) {
-          economyModelId = economy.effectiveSelection.modelId;
+        if (intern?.available && intern.effectiveSelection.engineId === VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE &&
+            intern.effectiveSelection.modelProviderId === context.selection.modelProviderId) {
+          internModelId = intern.effectiveSelection.modelId;
         }
       }
       const commands = await managedCommandEnvironment(context);
       sessionEnvironments.set(context.key, {
-        economyModelId,
+        internModelId,
         modelProviderId: context.selection.modelProviderId,
         env: commands.env,
         pathEntries: commands.shimDirs,
@@ -1316,7 +1316,7 @@ function createOpenCodeTerminalController({
         text(current.selection?.catalogRevision) === text(context.selection.catalogRevision) &&
         sameOpenCodeSelection(current.selection, context.selection)
       ) {
-        current.economyModelId = economyModelId;
+        current.internModelId = internModelId;
         current.server = openCodeServerForDirectory(shared.server, context.workdir);
         return current;
       }
@@ -1328,7 +1328,7 @@ function createOpenCodeTerminalController({
         upstreamSessionId: nativeId
       };
       Object.assign(created, {
-        economyModelId,
+        internModelId,
         canonicalUrl: connection.canonicalUrl,
         connectionFingerprint: connection.fingerprint,
         endpointCode: connection.endpointCode,

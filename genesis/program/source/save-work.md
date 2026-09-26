@@ -52,7 +52,7 @@ require an AI connection; server write admission still rejects active work.
 
 The internal Save operation described below is this explicit publication action.
 Save captures tracked, staged, unstaged, and relevant untracked session work,
-asks the workflow's effective Economy model to give that exact checkpoint a concise
+asks the workflow's effective Intern model to give that exact checkpoint a concise
 commit subject, and publishes one ordinary commit to the exact configured
 GitHub, managed-Git, or local-source authority. It refuses ambiguous authority,
 changed session history, dirty local authority, or a moving canonical branch.
@@ -64,7 +64,7 @@ their source-operation and GitHub permissions still apply.
 The chat-header Save control also remains usable after AI access is denied or
 startup fails. It still waits while assistant activity is unknown or being
 reconciled, and while a turn or repository operation is running.
-Naming resolves Economy, including an eligible shared Backup, before requesting
+Naming resolves Intern, including an eligible shared Backup, before requesting
 its bounded tool-free profile. Its scoped conversation never changes the main
 chat's binding or history. Repository authorization and write admission still apply.
 The existing Save task retains the helper scope, exact selection, connection

@@ -132,12 +132,12 @@ describe("temporary AI mounted lifetime", () => {
     const viewer = ref({ actorKey: "owner" });
     const started = Promise.withResolvers();
     const record = { conversationId: "conversation-1", status: "ready", messages: [],
-      routingMetadata: { assistant_routing: '{"mode":"code","workflowEngineId":"codex"}' },
-      purposes: { code: { available: true, effectiveSelection: { engineId: "codex", modelId: "deepseek-flash" } } } };
+      routingMetadata: { assistant_routing: '{"mode":"junior","workflowEngineId":"codex"}' },
+      purposes: { junior: { available: true, effectiveSelection: { engineId: "codex", modelId: "deepseek-flash" } } } };
     http.request.mockImplementation(async (_path, options) => {
       if (options?.method === "POST") return started.promise;
       return { conversations: [{ ...record, purposes: viewer.value.actorKey === "owner" ? record.purposes : {
-        code: { available: true, effectiveSelection: { engineId: "opencode", modelId: "big-pickle" } }
+        junior: { available: true, effectiveSelection: { engineId: "opencode", modelId: "big-pickle" } }
       } }] };
     });
     const { temporary } = mountTemporaryAi({ viewer, openTask: false });
@@ -147,7 +147,7 @@ describe("temporary AI mounted lifetime", () => {
     await vi.waitFor(() => expect(http.request.mock.calls.some(([, options]) => options?.method === "POST")).toBe(true));
     viewer.value = { actorKey: "member" };
     expect(temporary.tasks.value).toEqual([]);
-    await vi.waitFor(() => expect(temporary.tasks.value[0]?.purposes.code.effectiveSelection.modelId).toBe("big-pickle"));
+    await vi.waitFor(() => expect(temporary.tasks.value[0]?.purposes.junior.effectiveSelection.modelId).toBe("big-pickle"));
     started.resolve({ ok: true, status: "inProgress", runId: "owner-run" });
     expect(await sending).toBe(false);
     expect(temporary.tasks.value[0].runId).toBeUndefined();
@@ -192,7 +192,7 @@ describe("temporary AI mounted lifetime", () => {
     async (event) => {
       const records = ["conversation-1", "conversation-2"].map((conversationId) => ({
         conversationId, status: "ready", draft: "Saved draft", messages: [],
-        purposes: { plan: { available: true } }
+        purposes: { senior: { available: true } }
       }));
       http.request.mockResolvedValueOnce({ conversations: records });
       const { temporary, socket } = mountTemporaryAi({ openTask: false });
@@ -210,14 +210,14 @@ describe("temporary AI mounted lifetime", () => {
       // Returning to Main chat during the refresh must also be respected.
       temporary.closeWorkspace();
       refreshing.resolve({ conversations: records.map((record) => ({
-        ...record, purposes: { plan: { available: false, reason: "Connection removed" } }
+        ...record, purposes: { senior: { available: false, reason: "Connection removed" } }
       })) });
       await vi.advanceTimersByTimeAsync(0);
 
       expect(temporary.open.value).toBe(false);
       expect(temporary.activeTask.value).toMatchObject({
         id: "conversation-2", draft: "Keep my unsent changes",
-        purposes: { plan: { available: false, reason: "Connection removed" } }
+        purposes: { senior: { available: false, reason: "Connection removed" } }
       });
       expect(http.request.mock.calls.every(([, options]) => options.method === "GET")).toBe(true);
 
@@ -228,7 +228,7 @@ describe("temporary AI mounted lifetime", () => {
       expect(temporary.open.value).toBe(true);
       expect(temporary.activeTask.value.id).toBe("conversation-2");
       expect(temporary.activeTask.value.draft).toBe("Keep my unsent changes");
-      expect(temporary.activeTask.value.purposes.plan.available).toBe(true);
+      expect(temporary.activeTask.value.purposes.senior.available).toBe(true);
     }
   );
 

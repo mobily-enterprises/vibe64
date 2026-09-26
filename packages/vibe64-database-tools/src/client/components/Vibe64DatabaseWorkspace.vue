@@ -730,7 +730,7 @@ const assistantUnavailableTitle = computed(() => {
   return "Copilot is unavailable";
 });
 const assistantUnavailableCopy = computed(() => {
-  return state.value?.assistant?.message || "Ask the owner to configure Economy in Model routing. Database browsing and editing work without AI.";
+  return state.value?.assistant?.message || "Ask the owner to configure Intern in Model routing. Database browsing and editing work without AI.";
 });
 const selectedTable = computed(() => schema.value.tables.find((table) => table.qualifiedName === selectedTableName.value) || null);
 const assistantTableName = computed(() => {

@@ -103,9 +103,9 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain('class="studio-autopilot__activity"');
     expect(component).toContain(".studio-autopilot__activity:empty");
     expect(composable).toContain("Vibe64—not Temporary AI—owns every repository operation");
-    expect(component).toContain(':disabled="repositoryRecoverySending || !assistantCodeAllowed"');
-    expect(component).toContain(":title=\"assistantCodeAllowed ? 'Open temporary AI to resolve this repository problem' : assistantCodeRestrictionMessage\"");
-    expect(component).toContain(":title=\"assistantCodeAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantCodeRestrictionMessage\"");
+    expect(component).toContain(':disabled="repositoryRecoverySending || !assistantJuniorAllowed"');
+    expect(component).toContain(":title=\"assistantJuniorAllowed ? 'Open temporary AI to resolve this repository problem' : assistantJuniorRestrictionMessage\"");
+    expect(component).toContain(":title=\"assistantJuniorAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantJuniorRestrictionMessage\"");
     expect(component).toContain("assistantDirectAllowed: assistantDirectAllowed.value");
     expect(component).toContain("assistantRestrictionMessage: assistantRestrictionMessage.value");
     expect(composable).toContain("Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase");
@@ -349,7 +349,7 @@ describe("Vibe64 direct session view", () => {
       "utf8"
     );
 
-    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"assistantCodeAllowed ? askCodexToFixPreviewIdentity : null\"");
+    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null\"");
     expect(launchControls).toContain("previewIdentityFixAvailable");
     expect(launchControls).toContain("<Vibe64TemporaryAiFixAction");
     expect(launchControls).toContain("previewIdentityFixSending");

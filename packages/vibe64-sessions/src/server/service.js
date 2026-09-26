@@ -387,16 +387,16 @@ function createService({
       ? await resolveAssistantSelection(input.assistantSelection, vibe64User, { configuredOnly: true })
       : null;
     const previous = session ? assistantRoutingFromMetadata(session.metadata) : null;
-    const preferences = assistantRoutingPreferences({ mode: "plan", review: false,
+    const preferences = assistantRoutingPreferences({ mode: "senior", review: false,
       workflowEngineId: input.workflowEngineId || explicitSelection?.engineId || previous?.workflowEngineId || "opencode",
       ...(explicitSelection ? { override: explicitSelection } : {}) });
     if (explicitSelection && explicitSelection.engineId !== preferences.workflowEngineId) {
-      throw new Error("The starting Plan model must use the chosen workflow orchestrator.");
+      throw new Error("The starting Senior model must use the chosen workflow orchestrator.");
     }
     const routingSetup = await initializeModelRouting({ engineIds: [preferences.workflowEngineId], vibe64User });
     if (routingSetup?.ok === false) throw Object.assign(new Error(routingSetup.error), { code: routingSetup.code, statusCode: routingSetup.statusCode });
-    const decision = await terminals.resolveAssistantPurpose({ purpose: "plan", workflowEngineId: preferences.workflowEngineId,
-      ...(explicitSelection ? { override: { role: "plan", selection: explicitSelection } } : {}) }, { vibe64User });
+    const decision = await terminals.resolveAssistantPurpose({ purpose: "senior", workflowEngineId: preferences.workflowEngineId,
+      ...(explicitSelection ? { override: { role: "senior", selection: explicitSelection } } : {}) }, { vibe64User });
     if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
     await terminals.requireAssistantSelectionAccess(decision.effectiveSelection, {
       vibe64User, expectedConnectionIdentity: decision.connectionIdentity
@@ -2088,8 +2088,8 @@ function createService({
             const previous = assistantRoutingFromMetadata(session.metadata);
             const preferences = assistantRoutingPreferences({ ...input.assistantRouting,
               workflowEngineId: previous?.workflowEngineId || current.engineId });
-            if (["plan", "code"].includes(preferences.mode) && preferences.override?.engineId &&
-                preferences.override.engineId !== preferences.workflowEngineId) throw new Error("Plan and Code overrides must use the workflow orchestrator.");
+            if (["senior", "junior"].includes(preferences.mode) && preferences.override?.engineId &&
+                preferences.override.engineId !== preferences.workflowEngineId) throw new Error("Senior and Junior overrides must use the workflow orchestrator.");
             if (preferences.mode === "auto") {
               const observed = await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User });
               const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
@@ -2119,10 +2119,10 @@ function createService({
           });
           const routing = assistantRoutingFromMetadata(session.metadata);
           const changingWorkflow = routing && (routing.workflowEngineId || current.engineId) !== next.engineId;
-          if (routing && !changingWorkflow && routing.mode === "auto") throw new Error("Choose Plan, Code, or Economy before selecting a custom model.");
+          if (routing && !changingWorkflow && routing.mode === "auto") throw new Error("Choose Senior, Junior, or Intern before selecting a custom model.");
           const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
           if (assistantRoutingStatusIsPending(routingRequest?.status) ||
-              routingRequest?.status === "sent" && routingRequest.review && routingRequest.resolvedMode === "code") {
+              routingRequest?.status === "sent" && routingRequest.review && routingRequest.resolvedMode === "junior") {
             throw new Error("Finish or cancel the pending request and review before changing assistants.");
           }
           if (current.engineId !== next.engineId) {

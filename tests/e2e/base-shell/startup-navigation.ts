@@ -85,7 +85,7 @@ test.describe("studio startup navigation", () => {
         workflowRequests += 1;
         await fulfillJson(route, { ok: true, canConfigure: true, workflows: [{
           engineId: "codex", label: "Codex", available: true,
-          planLabel: "Codex · gpt-6-astra", codeLabel: "Codex · deepseek-flash", backupUsed: false, error: ""
+          seniorLabel: "Codex · gpt-6-astra", juniorLabel: "Codex · deepseek-flash", backupUsed: false, error: ""
         }] });
       });
       await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);

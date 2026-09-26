@@ -14,7 +14,8 @@
     "./bin/claude-auth-browser": "./bin/claude-auth-browser",
     "./server/aiConnectionService": "./src/server/aiConnectionService.js",
     "./server/aiConnectionRuntime": "./src/server/aiConnectionRuntime.js",
-    "./server/assistantRoutingUpgrade": "./src/server/assistantRoutingUpgrade.js"
+    "./server/assistantRoutingUpgrade": "./src/server/assistantRoutingUpgrade.js",
+    "./server/assistantRoleUpgrade": "./src/server/assistantRoleUpgrade.js"
   },
   "jskit": {
     "kind": "runtime",

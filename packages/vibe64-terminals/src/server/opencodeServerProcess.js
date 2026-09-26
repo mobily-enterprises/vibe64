@@ -26,7 +26,7 @@ import { genesisParserEnvironment } from "@local/vibe64-genesis/server";
 
 const OPENCODE_EXPECTED_VERSION = "1.18.31";
 const OPENCODE_ECONOMY_AGENT_ID = "vibe64-economy";
-const OPENCODE_ECONOMY_SUBAGENT_PREFIX = "vibe64-economy-";
+const OPENCODE_INTERN_SUBAGENT_PREFIX = "vibe64-intern-";
 const OPENCODE_EPHEMERAL_AGENT_ID = "vibe64-ephemeral";
 const OPENCODE_HOST = "127.0.0.1";
 const OPENCODE_LOG_LIMIT_BYTES = 64 * 1024;
@@ -161,16 +161,16 @@ function canonicalProviderUrl(value = "") {
   return source;
 }
 
-function openCodeEconomySubagents(providerConnections = []) {
+function openCodeInternSubagents(providerConnections = []) {
   const agents = {};
   for (const connection of Array.isArray(providerConnections) ? providerConnections : []) {
     const providerId = text(connection?.modelProviderId);
-    const economyModelId = text(connection?.economyModelId);
-    if (providerId && economyModelId) {
-      agents[`${OPENCODE_ECONOMY_SUBAGENT_PREFIX}${providerId}`] = {
+    const internModelId = text(connection?.economyModelId);
+    if (providerId && internModelId) {
+      agents[`${OPENCODE_INTERN_SUBAGENT_PREFIX}${providerId}`] = {
         description: `Vibe64 low-cost helper on the ${providerId} connection for delegating simple, inexpensive work.`,
         mode: "subagent",
-        model: `${providerId}/${economyModelId}`
+        model: `${providerId}/${internModelId}`
       };
     }
   }
@@ -195,12 +195,12 @@ function openCodeInlineConfig({
   if ([...routes].some(([providerId]) => !providerId)) {
     throw new TypeError("OpenCode provider URL overrides require a provider id.");
   }
-  const economySubagents = openCodeEconomySubagents(providerConnections);
+  const internSubagents = openCodeInternSubagents(providerConnections);
   return JSON.stringify({
     ...OPENCODE_INLINE_CONFIG_BASE,
     agent: {
       ...OPENCODE_INLINE_CONFIG_BASE.agent,
-      ...economySubagents,
+      ...internSubagents,
       ...(text(sessionEnvironmentRegistry) ? {
         // Preserve OpenCode's native tool definitions. The session plugin rejects
         // every ephemeral tool call before execution; "deny" removes the tools
@@ -908,7 +908,7 @@ async function verifyOpenCodeApiKey({
 
 export {
   OPENCODE_ECONOMY_AGENT_ID,
-  OPENCODE_ECONOMY_SUBAGENT_PREFIX,
+  OPENCODE_INTERN_SUBAGENT_PREFIX,
   OPENCODE_EPHEMERAL_AGENT_ID,
   OPENCODE_EXPECTED_VERSION,
   OPENCODE_HOST,

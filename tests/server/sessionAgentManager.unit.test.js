@@ -32,15 +32,15 @@ test("native replacement blocks terminal and goal bypass while permitting ordina
 function routingManagerFixture({ resolveAssistantUser } = {}) {
   const selection = (engineId, modelProviderId, modelId) => ({ schema: "vibe64.assistant-selection.v1",
     engineId, agentId: engineId, modelProviderId, modelId, variantId: "", catalogRevision });
-  const plan = selection("codex", "openai", "gpt-6-astra");
-  const code = selection("codex", "deepseek", "deepseek-flash");
+  const senior = selection("codex", "openai", "gpt-6-astra");
+  const junior = selection("codex", "deepseek", "deepseek-flash");
   const backup = selection("opencode", "opencode", "big-pickle");
-  const economy = selection("opencode", "deepseek", "deepseek-v4-flash");
-  const configuration = { schemaVersion: 2, revision: 7, orchestrators: { codex: {
-    plan, code, sharedBackup: backup, economy, router: code
+  const intern = selection("opencode", "deepseek", "deepseek-v4-flash");
+  const configuration = { schemaVersion: 3, revision: 7, orchestrators: { codex: {
+    senior, junior, sharedBackup: backup, intern, router: junior
   } } };
-  const facts = new Map([plan, code, backup, economy].map((value) => [value.modelId, {
-    available: true, ownerOnly: value === plan, connectionIdentity: `connection:${value.modelId}`
+  const facts = new Map([senior, junior, backup, intern].map((value) => [value.modelId, {
+    available: true, ownerOnly: value === senior, connectionIdentity: `connection:${value.modelId}`
   }]));
   const calls = [];
   const manager = createSessionAgentManager({
@@ -53,7 +53,7 @@ function routingManagerFixture({ resolveAssistantUser } = {}) {
     providers: ["codex", "opencode"].map((id) => ({ id, transportId: `${id}_server`,
       async capabilities(context, input) {
         calls.push({ type: "catalog", context, input });
-        const choices = [plan, code, backup, economy].filter((value) => value.engineId === id &&
+        const choices = [senior, junior, backup, intern].filter((value) => value.engineId === id &&
           (!input.modelProviderId || input.modelProviderId === value.modelProviderId) &&
           (!input.modelId || input.modelId === value.modelId));
         return { engineId: id, transportId: `${id}_server`, revision: catalogRevision,
@@ -65,9 +65,9 @@ function routingManagerFixture({ resolveAssistantUser } = {}) {
       }
     }))
   });
-  const session = { sessionId: "main", metadata: { assistant_selection: JSON.stringify(plan) } };
+  const session = { sessionId: "main", metadata: { assistant_selection: JSON.stringify(senior) } };
   const options = { session, vibe64User: { role: "user", username: "member" } };
-  return { manager, configuration, facts, calls, options, plan, code, backup, economy };
+  return { manager, configuration, facts, calls, options, senior, junior, backup, intern };
 }
 
 test("purpose resolution uses the current user role instead of its saved role", async () => {
@@ -76,12 +76,12 @@ test("purpose resolution uses the current user role instead of its saved role", 
     assert.equal(actor.username, current.username);
     return current;
   } });
-  const decision = await f.manager.resolveAssistantPurpose({ purpose: "code", workflowEngineId: "codex" }, {
+  const decision = await f.manager.resolveAssistantPurpose({ purpose: "junior", workflowEngineId: "codex" }, {
     ...f.options, vibe64User: { username: current.username, role: "owner" }
   });
   assert.equal(decision.available, true);
-  assert.equal(decision.planCodePair.plan.effectiveSelection.modelId, "big-pickle");
-  assert.equal(decision.planCodePair.code.effectiveSelection.modelId, "big-pickle");
+  assert.equal(decision.seniorJuniorPair.senior.effectiveSelection.modelId, "big-pickle");
+  assert.equal(decision.seniorJuniorPair.junior.effectiveSelection.modelId, "big-pickle");
   assert.equal(f.calls.filter(({ type }) => type === "access").every(({ vibe64User }) => vibe64User.role === "member"), true);
 });
 
@@ -121,13 +121,13 @@ test("routing configuration preview shares admission decisions and exposes no co
     vibe64User: { role: "owner" }, includeCollaboratorPreview: true
   });
   const workflow = view.engines.find(({ engineId }) => engineId === "codex");
-  assert.equal(workflow.preview.owner.plan.effectiveSelection.modelId, "gpt-6-astra");
-  assert.equal(workflow.preview.collaborator.plan.effectiveSelection.modelId, "big-pickle");
-  assert.equal(workflow.preview.collaborator.code.effectiveSelection.modelId, "big-pickle");
-  assert.equal(workflow.preview.collaborator.code.backupReason, "keep_workflow_together");
+  assert.equal(workflow.preview.owner.senior.effectiveSelection.modelId, "gpt-6-astra");
+  assert.equal(workflow.preview.collaborator.senior.effectiveSelection.modelId, "big-pickle");
+  assert.equal(workflow.preview.collaborator.junior.effectiveSelection.modelId, "big-pickle");
+  assert.equal(workflow.preview.collaborator.junior.backupReason, "keep_workflow_together");
   assert.equal(workflow.preview.collaborator.review.effectiveSelection.modelId, "big-pickle");
   assert.equal(workflow.preview.collaborator.auto.available, false);
-  assert.equal(workflow.roles.plan.choices.every(({ engineId }) => engineId === "codex"), true);
+  assert.equal(workflow.roles.senior.choices.every(({ engineId }) => engineId === "codex"), true);
   assert.equal(workflow.roles.router.choices.some(({ engineId }) => engineId === "opencode"), true);
   assert.equal(workflow.roles.sharedBackup.choices.some(({ ownerOnly }) => ownerOnly), false);
   assert.doesNotMatch(JSON.stringify(view), /connectionIdentity|connection:big-pickle/);
@@ -135,13 +135,13 @@ test("routing configuration preview shares admission decisions and exposes no co
   const memberView = member.engines.find(({ engineId }) => engineId === "codex").preview;
   assert.equal(memberView.owner, undefined);
   assert.equal(memberView.collaborator, undefined);
-  assert.equal(memberView.viewer.plan.effectiveSelection.modelId, "big-pickle");
+  assert.equal(memberView.viewer.senior.effectiveSelection.modelId, "big-pickle");
   assert.equal(f.manager.binding("main"), "");
 });
 
 test("workflow choices read saved pairs without model discovery and preserve collaborator backup decisions", async () => {
   const f = routingManagerFixture();
-  f.configuration.orchestrators.opencode = { plan: f.backup, code: f.economy };
+  f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.intern };
   for (const [actor, model, backupUsed] of [
     [{ role: "owner" }, "Codex · gpt-6-astra", false],
     [f.options.vibe64User, "OpenCode · big-pickle", true]
@@ -149,22 +149,22 @@ test("workflow choices read saved pairs without model discovery and preserve col
     const result = await f.manager.inspectRoutingConfiguration(f.configuration, { vibe64User: actor, workflowsOnly: true });
     const choice = result.workflows.find(({ engineId }) => engineId === "codex");
     assert.equal(choice.available, true, choice.error);
-    assert.equal(choice.planLabel, model);
+    assert.equal(choice.seniorLabel, model);
     assert.equal(choice.backupUsed, backupUsed);
-    if (backupUsed) assert.equal(choice.codeLabel, model);
+    if (backupUsed) assert.equal(choice.juniorLabel, model);
     assert.doesNotMatch(JSON.stringify(result), /connectionIdentity|connection:/);
   }
   assert.equal(f.calls.some(({ type }) => type === "catalog"), false);
-  assert.equal(f.calls.some(({ assistantSelection }) => assistantSelection?.modelId === f.economy.modelId), true);
+  assert.equal(f.calls.some(({ assistantSelection }) => assistantSelection?.modelId === f.intern.modelId), true);
   assert.equal(f.manager.binding("main"), "");
   f.facts.get(f.backup.modelId).available = false;
   const disconnected = await f.manager.inspectRoutingConfiguration(f.configuration, { ...f.options, workflowsOnly: true });
   assert.equal(disconnected.workflows[0].available, false);
   assert.match(disconnected.workflows[0].error, /unavailable/);
-  f.configuration.orchestrators.codex.plan = null;
+  f.configuration.orchestrators.codex.senior = null;
   const disabled = await f.manager.inspectRoutingConfiguration(f.configuration, { ...f.options, workflowsOnly: true });
   assert.equal(disabled.workflows[0].available, false);
-  assert.equal(disabled.workflows[0].planLabel, "Not configured");
+  assert.equal(disabled.workflows[0].seniorLabel, "Not configured");
   assert.equal(f.calls.some(({ type }) => type === "catalog"), false, "explicitly disabled roles do not initiate discovery");
 });
 
@@ -177,8 +177,8 @@ test("workflow choices offer first-use connections without live discovery or sav
   assert.equal(result.workflows.length, 2);
   for (const choice of result.workflows) {
     assert.equal(choice.available, true, choice.error);
-    assert.equal(choice.planLabel, "Recommended on creation");
-    assert.equal(choice.codeLabel, "Recommended on creation");
+    assert.equal(choice.seniorLabel, "Recommended on creation");
+    assert.equal(choice.juniorLabel, "Recommended on creation");
   }
   assert.ok(f.calls.filter(({ type }) => type === "catalog").every(({ input }) => input.configuredOnly === "true"));
   assert.equal(f.calls.filter(({ type }) => type === "catalog").length, 2);
@@ -186,13 +186,13 @@ test("workflow choices offer first-use connections without live discovery or sav
 
 test("the lightweight workflow preview cannot bypass model validation at dispatch", async () => {
   const f = routingManagerFixture();
-  f.configuration.orchestrators.opencode = { plan: f.backup, code: f.economy };
-  f.configuration.orchestrators.codex.code = { ...f.code, modelId: "removed-model" };
-  f.facts.set("removed-model", { ...f.facts.get(f.code.modelId) });
+  f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.intern };
+  f.configuration.orchestrators.codex.junior = { ...f.junior, modelId: "removed-model" };
+  f.facts.set("removed-model", { ...f.facts.get(f.junior.modelId) });
   const options = { vibe64User: { role: "owner" }, workflowsOnly: true };
   const preview = await f.manager.inspectRoutingConfiguration(f.configuration, options);
   assert.equal(preview.workflows[0].available, true, "the picker checks connections, not live model availability");
-  const admitted = await f.manager.resolveAssistantPurpose({ purpose: "code", workflowEngineId: "codex", validateModels: false }, options);
+  const admitted = await f.manager.resolveAssistantPurpose({ purpose: "junior", workflowEngineId: "codex", validateModels: false }, options);
   assert.equal(admitted.available, false, "request input and preview options cannot disable dispatch validation");
   assert.match(admitted.message, /available/);
 });
@@ -211,9 +211,9 @@ test("routing preview loads every connected OpenCode model page and refuses mixe
           : ["opencode", "deepseek"].map((id) => ({ id, connected: true, models: [] })),
         page: { hasMore: Boolean(input.modelProviderId && !input.cursor), nextCursor: input.modelProviderId && !input.cursor ? "second" : "" } };
     } }] });
-  const configuration = { schemaVersion: 2, revision: 1, orchestrators: {} };
+  const configuration = { schemaVersion: 3, revision: 1, orchestrators: {} };
   const view = await manager.inspectRoutingConfiguration(configuration);
-  const choices = view.engines[0].roles.code.choices;
+  const choices = view.engines[0].roles.junior.choices;
   assert.equal(choices.length, 4);
   assert.deepEqual(choices.filter(({ modelId }) => modelId === "later-model").map(({ modelProviderId }) => modelProviderId), ["opencode", "deepseek"]);
   assert.equal(calls.length, 5);
@@ -221,42 +221,42 @@ test("routing preview loads every connected OpenCode model page and refuses mixe
   const invalid = await manager.inspectRoutingConfiguration(configuration);
   assert.equal(invalid.engines[0].engineId, "opencode", "a new connection's catalogue failure remains visible before it has routing settings");
   assert.match(invalid.engines[0].error, /catalogue changed/);
-  assert.deepEqual(invalid.engines[0].roles.code.choices, []);
+  assert.deepEqual(invalid.engines[0].roles.junior.choices, []);
 });
 
 test("purpose resolution uses the effective pair before authorizing the last personal selection", async () => {
   const f = routingManagerFixture();
   for (const reviewEnabled of [false, true]) {
-    const result = await f.manager.resolveAssistantPurpose({ purpose: "code", workflowEngineId: "codex", reviewEnabled }, f.options);
+    const result = await f.manager.resolveAssistantPurpose({ purpose: "junior", workflowEngineId: "codex", reviewEnabled }, f.options);
     assert.equal(result.available, true, result.message);
     assert.equal(result.settingsRevision, 7);
-    assert.equal(result.planCodePair.plan.effectiveSelection.engineId, "opencode");
-    assert.equal(result.planCodePair.code.effectiveSelection.engineId, "opencode");
-    assert.equal(result.planCodePair.code.backupReason, "keep_workflow_together");
+    assert.equal(result.seniorJuniorPair.senior.effectiveSelection.engineId, "opencode");
+    assert.equal(result.seniorJuniorPair.junior.effectiveSelection.engineId, "opencode");
+    assert.equal(result.seniorJuniorPair.junior.backupReason, "keep_workflow_together");
     assert.equal(result.connectionIdentity, "connection:big-pickle");
   }
   assert.equal(f.manager.binding("main"), "", "preview never binds the main conversation");
   const access = await f.manager.requireAssistantAccessForSelection(f.backup, f.options);
   assert.equal(access.engineId, "opencode");
   assert.equal(access.connectionIdentity, "connection:big-pickle");
-  await assert.rejects(f.manager.requireAssistantAccessForSelection(f.plan, f.options), { code: "vibe64_assistant_owner_required" });
+  await assert.rejects(f.manager.requireAssistantAccessForSelection(f.senior, f.options), { code: "vibe64_assistant_owner_required" });
 });
 
 test("captured member and preview actors do not inherit an ambient owner's access", async () => {
   const f = routingManagerFixture();
   await runWithProjectRequestContext({ vibe64User: { role: "owner" } }, async () => {
-    const result = await f.manager.resolveAssistantPurpose({ purpose: "code", workflowEngineId: "codex", actor: { role: "owner" } }, f.options);
+    const result = await f.manager.resolveAssistantPurpose({ purpose: "junior", workflowEngineId: "codex", actor: { role: "owner" } }, f.options);
     assert.equal(result.backupUsed, true);
     assert.ok(f.calls.filter(({ type }) => type === "access").every(({ vibe64User }) => vibe64User.username === "member"));
     assert.ok(f.calls.filter(({ type }) => type === "catalog").every(({ context }) => context.vibe64User.username === "member"));
-    await assert.rejects(f.manager.requireAssistantAccessForSelection(f.plan, f.options), { code: "vibe64_assistant_owner_required" });
+    await assert.rejects(f.manager.requireAssistantAccessForSelection(f.senior, f.options), { code: "vibe64_assistant_owner_required" });
   });
-  const owner = await f.manager.resolveAssistantPurpose({ purpose: "plan", workflowEngineId: "codex" }, {
+  const owner = await f.manager.resolveAssistantPurpose({ purpose: "senior", workflowEngineId: "codex" }, {
     ...f.options, vibe64User: { role: "owner" }
   });
   assert.equal(owner.effectiveSelection.modelId, "gpt-6-astra");
   await runWithProjectRequestContext({ vibe64User: f.options.vibe64User }, async () => {
-    const member = await f.manager.resolveAssistantPurpose({ purpose: "plan", workflowEngineId: "codex", actor: { role: "owner" } }, {
+    const member = await f.manager.resolveAssistantPurpose({ purpose: "senior", workflowEngineId: "codex", actor: { role: "owner" } }, {
       session: f.options.session, vibe64User: null
     });
     assert.equal(member.effectiveSelection.modelId, "big-pickle", "empty optional user does not erase authenticated context");
@@ -265,28 +265,28 @@ test("captured member and preview actors do not inherit an ambient owner's acces
 
 test("purpose resolution merges exact OpenCode models without consulting its first catalogue page", async () => {
   const f = routingManagerFixture();
-  f.configuration.orchestrators.opencode = { plan: f.backup, code: f.economy };
-  const result = await f.manager.resolveAssistantPurpose({ purpose: "code", workflowEngineId: "opencode" }, f.options);
+  f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.intern };
+  const result = await f.manager.resolveAssistantPurpose({ purpose: "junior", workflowEngineId: "opencode" }, f.options);
   assert.equal(result.available, true, result.message);
-  assert.equal(result.planCodePair.plan.effectiveSelection.modelId, "big-pickle");
-  assert.equal(result.planCodePair.code.effectiveSelection.modelId, "deepseek-v4-flash");
+  assert.equal(result.seniorJuniorPair.senior.effectiveSelection.modelId, "big-pickle");
+  assert.equal(result.seniorJuniorPair.junior.effectiveSelection.modelId, "deepseek-v4-flash");
   assert.deepEqual(f.calls.filter(({ type }) => type === "catalog").map(({ input }) => input.modelId), ["big-pickle", "deepseek-v4-flash"]);
 });
 
-test("independent Router and Economy resolve exact destinations without reading unrelated roles", async () => {
+test("independent Router and Intern resolve exact destinations without reading unrelated roles", async () => {
   const f = routingManagerFixture();
   const helper = await f.manager.resolveAssistantPurpose({ purpose: "prompt_hint", workflowEngineId: "codex" }, f.options);
   assert.equal(helper.available, true, helper.message);
-  assert.equal(helper.effectiveSelection.modelId, f.economy.modelId);
+  assert.equal(helper.effectiveSelection.modelId, f.intern.modelId);
   assert.deepEqual(helper.executionProfileRequest, { profileId: "economy", workloadId: "prompt_hint" });
   assert.deepEqual(f.calls.filter(({ type }) => type === "catalog").map(({ input }) => input), [{
     modelProviderId: "deepseek", modelId: "deepseek-v4-flash", limit: "1"
   }]);
-  assert.deepEqual(f.calls.filter(({ type }) => type === "access").map(({ assistantSelection }) => assistantSelection.modelId), [f.economy.modelId]);
+  assert.deepEqual(f.calls.filter(({ type }) => type === "access").map(({ assistantSelection }) => assistantSelection.modelId), [f.intern.modelId]);
   f.calls.length = 0;
   const router = await f.manager.resolveAssistantPurpose({ purpose: "request_routing", workflowEngineId: "codex" }, f.options);
-  assert.equal(router.effectiveSelection.modelId, f.code.modelId);
-  assert.deepEqual(f.calls.filter(({ type }) => type === "access").map(({ assistantSelection }) => assistantSelection.modelId), [f.code.modelId]);
+  assert.equal(router.effectiveSelection.modelId, f.junior.modelId);
+  assert.deepEqual(f.calls.filter(({ type }) => type === "access").map(({ assistantSelection }) => assistantSelection.modelId), [f.junior.modelId]);
   assert.equal(f.manager.binding("main"), "");
 });
 
@@ -296,12 +296,12 @@ test("runtime resolution preserves Auto restrictions, unsaved preview and non-fa
   const automatic = await f.manager.resolveAssistantPurpose(input, f.options);
   assert.equal(automatic.reasonCode, "vibe64_assistant_auto_requires_direct_roles");
   const draft = structuredClone(f.configuration);
-  draft.orchestrators.codex.plan = f.code;
+  draft.orchestrators.codex.senior = f.junior;
   const preview = await f.manager.resolveAssistantPurpose(input, { ...f.options, configuration: draft });
   assert.equal(preview.available, true, preview.message);
-  assert.equal(f.configuration.orchestrators.codex.plan.modelId, "gpt-6-astra");
-  f.facts.get(f.code.modelId).available = false;
-  const unavailable = await f.manager.resolveAssistantPurpose({ purpose: "code", workflowEngineId: "codex" }, {
+  assert.equal(f.configuration.orchestrators.codex.senior.modelId, "gpt-6-astra");
+  f.facts.get(f.junior.modelId).available = false;
+  const unavailable = await f.manager.resolveAssistantPurpose({ purpose: "junior", workflowEngineId: "codex" }, {
     ...f.options, vibe64User: { role: "owner" }
   });
   assert.equal(unavailable.available, false);
@@ -1766,8 +1766,8 @@ test("goal status and Stop target the retained goal selection without rebinding 
 
 test("purpose availability shares one response's facts and preserves member-specific destinations", async () => {
   const f = routingManagerFixture();
-  const purposes = await f.manager.inspectAssistantPurposes({ workflowEngineId: "codex", mode: "code", review: true }, f.options);
-  for (const purpose of ["plan", "code", "review"]) {
+  const purposes = await f.manager.inspectAssistantPurposes({ workflowEngineId: "codex", mode: "junior", review: true }, f.options);
+  for (const purpose of ["senior", "junior", "review"]) {
     assert.equal(purposes[purpose].available, true);
     assert.equal(purposes[purpose].effectiveSelection.engineId, "opencode");
     assert.equal(purposes[purpose].effectiveSelection.modelId, f.backup.modelId);
@@ -1775,26 +1775,26 @@ test("purpose availability shares one response's facts and preserves member-spec
   }
   assert.equal(purposes.auto.available, false);
   assert.equal(purposes.auto.reasonCode, "vibe64_assistant_auto_requires_direct_roles");
-  assert.equal(purposes.prompt_hint.effectiveSelection.modelId, f.economy.modelId);
-  assert.equal(purposes.source_explanation.effectiveSelection.modelId, f.economy.modelId);
-  assert.equal(purposes.request_routing.effectiveSelection.modelId, f.code.modelId);
+  assert.equal(purposes.prompt_hint.effectiveSelection.modelId, f.intern.modelId);
+  assert.equal(purposes.source_explanation.effectiveSelection.modelId, f.intern.modelId);
+  assert.equal(purposes.request_routing.effectiveSelection.modelId, f.junior.modelId);
   assert.equal(f.calls.filter(({ type }) => type === "access").length, 4, "each connection/model is inspected once per response");
   assert.equal(f.manager.binding("main"), "", "availability never binds the main chat");
-  f.facts.get(f.economy.modelId).available = false;
+  f.facts.get(f.intern.modelId).available = false;
   const refreshed = await f.manager.inspectAssistantPurposes({ workflowEngineId: "codex" }, f.options);
   assert.equal(refreshed.prompt_hint.available, false, "a later response reads fresh connection facts");
-  assert.equal(refreshed.code.available, true, "independent role failure does not disable chat");
+  assert.equal(refreshed.junior.available, true, "independent role failure does not disable chat");
 });
 
 test("purpose availability applies an explicit mode override without modifying other modes", async () => {
   const f = routingManagerFixture();
-  const purposes = await f.manager.inspectAssistantPurposes({ workflowEngineId: "codex", mode: "code", override: f.plan }, {
+  const purposes = await f.manager.inspectAssistantPurposes({ workflowEngineId: "codex", mode: "junior", override: f.senior }, {
     ...f.options, vibe64User: { role: "owner" }
   });
-  assert.equal(purposes.code.effectiveSelection.modelId, f.plan.modelId);
-  assert.equal(purposes.review.planCodePair.code.effectiveSelection.modelId, f.plan.modelId);
-  assert.equal(purposes.plan.planCodePair.code.effectiveSelection.modelId, f.code.modelId);
-  assert.equal(purposes.auto.planCodePair.code.effectiveSelection.modelId, f.code.modelId);
-  assert.equal(purposes.prompt_hint.effectiveSelection.modelId, f.economy.modelId);
-  assert.equal(f.configuration.orchestrators.codex.code.modelId, f.code.modelId);
+  assert.equal(purposes.junior.effectiveSelection.modelId, f.senior.modelId);
+  assert.equal(purposes.review.seniorJuniorPair.junior.effectiveSelection.modelId, f.junior.modelId);
+  assert.equal(purposes.senior.seniorJuniorPair.junior.effectiveSelection.modelId, f.junior.modelId);
+  assert.equal(purposes.auto.seniorJuniorPair.junior.effectiveSelection.modelId, f.junior.modelId);
+  assert.equal(purposes.prompt_hint.effectiveSelection.modelId, f.intern.modelId);
+  assert.equal(f.configuration.orchestrators.codex.junior.modelId, f.junior.modelId);
 });

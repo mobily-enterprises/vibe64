@@ -669,7 +669,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
     });
     await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
     await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ codex: {
-      economy: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
+      intern: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
     } }, 0);
     let firstResolvedProfile = null;
     let resolvedProfile = null;
@@ -839,7 +839,7 @@ for (const startFails of [false, true]) {
       });
       await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
       await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ codex: {
-        economy: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
+        intern: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
       } }, 0);
       const sourceEditor = createSourceEditorService({
         projectService: terminalProjectService,
@@ -2870,10 +2870,10 @@ test("Codex integration continuation recovers native acceptance with a fresh ser
   await withAgentMessageController(async ({ captures, controllerOptions, projectService, terminalService, sessionId, store }) => {
     const systemRoot = controllerOptions.env.VIBE64_SYSTEM_ROOT;
     await writeCodexAuthMarker(systemRoot, { connected: true, loginId: randomUUID() });
-    const code = { ...JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection), selectionSource: "explicit" };
-    await createAssistantRoutingStore({ systemRoot }).write({ codex: { plan: code, code } }, 0);
+    const junior = { ...JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection), selectionSource: "explicit" };
+    await createAssistantRoutingStore({ systemRoot }).write({ codex: { senior: junior, junior } }, 0);
     const routingAccess = await terminalService.inspectAssistantAccess(sessionId);
-    assert.equal(routingAccess.purposes.code.available, true, JSON.stringify(routingAccess));
+    assert.equal(routingAccess.purposes.junior.available, true, JSON.stringify(routingAccess));
     const prepared = await terminalService.ensureAgentSession(sessionId);
     assert.equal(prepared.ok, true, JSON.stringify(prepared));
     const mainProvider = captures.provider;
@@ -5472,10 +5472,10 @@ test("scoped Codex helpers enforce the selected bounded profile without touching
     assert.equal(captures.turns[0].settings.effort, "low");
     assert.deepEqual(captures.turns[0].settings.sandboxPolicy, { networkAccess: false, type: "readOnly" });
     const waiting = controller.waitForConversationTurn(scope.id, { ...input, runId: started.runId }, options);
-    completeDetachedTurn(subscribers, { text: '{"answer":"plan"}', threadId: created.conversationId, turnId: started.runId });
+    completeDetachedTurn(subscribers, { text: '{"answer":"senior"}', threadId: created.conversationId, turnId: started.runId });
     const completed = await waiting;
     assert.equal(completed.ok, true, JSON.stringify(completed));
-    assert.equal(completed.rawText, '{"answer":"plan"}');
+    assert.equal(completed.rawText, '{"answer":"senior"}');
     const tooLong = await controller.startConversationTurn(scope.id, { ...input, message: "x".repeat(25) }, options);
     assert.equal(tooLong.ok, false);
     assert.match(tooLong.error, /input limit/);

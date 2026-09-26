@@ -253,13 +253,13 @@ test("native child helpers inherit only their registered parent's account, comma
     await rm(root, { recursive: true, force: true });
   });
   const sessions = [{
-    upstreamSessionId: "shared-parent", modelProviderId: "deepseek", economyModelId: "chosen-helper",
+    upstreamSessionId: "shared-parent", modelProviderId: "deepseek", internModelId: "chosen-helper",
     promptContext: { scope: "session", conversationKind: "main", session: {
       managedGit: true, managedPreview: false, managedEnvironment: false, managedDatabaseRefresh: false
     } },
     env: { VIBE64_WRAPPER: "/managed/shared-session-wrapper" }
   }, {
-    upstreamSessionId: "owner-parent", modelProviderId: "zai-coding-plan", economyModelId: "glm-5-flash",
+    upstreamSessionId: "owner-parent", modelProviderId: "zai-coding-plan", internModelId: "glm-5-flash",
     env: { VIBE64_WRAPPER: "/managed/owner-session-wrapper" }
   }];
   await writeFile(registryPath, JSON.stringify({ sessions }));
@@ -282,38 +282,38 @@ test("native child helpers inherit only their registered parent's account, comma
     const history = { messages: [{ info: { sessionID }, parts: [{ type: "tool", tool: "bash", state: { input: command.args } }] }] };
     await plugin["experimental.chat.messages.transform"]({}, history);
     assert.equal(history.messages[0].parts[0].state.input.command, "git status --short");
-    await plugin["tool.execute.before"]({ sessionID, tool: "task" }, { args: { subagent_type: "vibe64-economy-deepseek" } });
+    await plugin["tool.execute.before"]({ sessionID, tool: "task" }, { args: { subagent_type: "vibe64-intern-deepseek" } });
     const output = { message: { model: { providerID: "deepseek", modelID: "old-default" } } };
-    await plugin["chat.message"]({ sessionID, agent: "vibe64-economy-deepseek" }, output);
+    await plugin["chat.message"]({ sessionID, agent: "vibe64-intern-deepseek" }, output);
     assert.deepEqual(output.message.model, { providerID: "deepseek", modelID: "chosen-helper" });
-    await plugin["chat.params"]({ sessionID, agent: "vibe64-economy-deepseek", model: { providerID: "deepseek", id: "chosen-helper" } }, {});
+    await plugin["chat.params"]({ sessionID, agent: "vibe64-intern-deepseek", model: { providerID: "deepseek", id: "chosen-helper" } }, {});
     // Task filtering alone is insufficient: native @mentions can bypass it.
-    await assert.rejects(plugin["tool.execute.before"]({ sessionID, tool: "task" }, { args: { subagent_type: "vibe64-economy-zai-coding-plan" } }), /selected AI account/u);
-    await assert.rejects(plugin["chat.message"]({ sessionID, agent: "vibe64-economy-zai-coding-plan" }, { message: {} }), /selected AI account/u);
-    await assert.rejects(plugin["chat.params"]({ sessionID, agent: "vibe64-economy-zai-coding-plan", model: { providerID: "zai-coding-plan", id: "glm-5-flash" } }, {}), /selected AI account/u);
-    await assert.rejects(plugin["chat.params"]({ sessionID, agent: "vibe64-economy-deepseek", model: { providerID: "zai-coding-plan", id: "glm-5-flash" } }, {}), /selected AI account/u);
+    await assert.rejects(plugin["tool.execute.before"]({ sessionID, tool: "task" }, { args: { subagent_type: "vibe64-intern-zai-coding-plan" } }), /selected AI account/u);
+    await assert.rejects(plugin["chat.message"]({ sessionID, agent: "vibe64-intern-zai-coding-plan" }, { message: {} }), /selected AI account/u);
+    await assert.rejects(plugin["chat.params"]({ sessionID, agent: "vibe64-intern-zai-coding-plan", model: { providerID: "zai-coding-plan", id: "glm-5-flash" } }, {}), /selected AI account/u);
+    await assert.rejects(plugin["chat.params"]({ sessionID, agent: "vibe64-intern-deepseek", model: { providerID: "zai-coding-plan", id: "glm-5-flash" } }, {}), /selected AI account/u);
   }
-  await plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "vibe64-economy-deepseek", task_id: "grandchild" } });
+  await plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "vibe64-intern-deepseek", task_id: "grandchild" } });
   const inherited = { system: ["Project guidance"] };
   await plugin["experimental.chat.system.transform"]({ sessionID: "grandchild" }, inherited);
   await plugin["experimental.chat.system.transform"]({ sessionID: "grandchild" }, inherited);
   assert.equal(inherited.system.length, 2);
   assert.match(inherited.system[1], /managed `git` and `gh` commands/u);
-  await assert.rejects(plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "vibe64-economy-deepseek", task_id: "owner-child" } }), /does not belong/u);
+  await assert.rejects(plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "vibe64-intern-deepseek", task_id: "owner-child" } }), /does not belong/u);
   await assert.rejects(plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "general", task_id: "owner-child" } }), /does not belong/u);
   await assert.rejects(plugin["chat.params"]({ sessionID: "grandchild", agent: "general", model: { providerID: "zai-coding-plan", id: "glm-5-flash" } }, {}), /selected AI account/u);
   const owner = { message: {} };
-  await plugin["chat.message"]({ sessionID: "owner-child", agent: "vibe64-economy-zai-coding-plan" }, owner);
+  await plugin["chat.message"]({ sessionID: "owner-child", agent: "vibe64-intern-zai-coding-plan" }, owner);
   assert.equal(owner.message.model.providerID, "zai-coding-plan");
   for (const sessionID of ["unknown", "loop"]) {
     const output = { args: { command: "pwd" } };
     await assert.rejects(plugin["tool.execute.before"]({ sessionID, tool: "bash" }, output), /could not verify this conversation's tool access/u);
     await assert.rejects(plugin["tool.execute.before"]({ sessionID, tool: "read" }, {}), /could not verify this conversation's tool access/u);
-    await assert.rejects(plugin["chat.message"]({ sessionID, agent: "vibe64-economy-deepseek" }, { message: {} }), /selected AI account/u);
+    await assert.rejects(plugin["chat.message"]({ sessionID, agent: "vibe64-intern-deepseek" }, { message: {} }), /selected AI account/u);
   }
   await assert.rejects(plugin["tool.execute.before"]({ sessionID: "broken", tool: "bash" }, { args: { command: "pwd" } }), /could not verify/u);
   assert.ok(reads < 100, "Parent cycles must terminate");
-  sessions[0].economyModelId = "";
+  sessions[0].internModelId = "";
   await writeFile(registryPath, JSON.stringify({ sessions }));
-  await assert.rejects(plugin["chat.message"]({ sessionID: "child", agent: "vibe64-economy-deepseek" }, { message: {} }), /selected AI account/u);
+  await assert.rejects(plugin["chat.message"]({ sessionID: "child", agent: "vibe64-intern-deepseek" }, { message: {} }), /selected AI account/u);
 });

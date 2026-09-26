@@ -62,8 +62,8 @@
           <span class="vibe64-assistant-dialog__choice-heading">
             <strong>{{ choice.label }}</strong>
           </span>
-          <small>Plan · {{ choice.planLabel }}</small>
-          <small>Code · {{ choice.codeLabel }}</small>
+          <small>Senior · {{ choice.seniorLabel }}</small>
+          <small>Junior · {{ choice.juniorLabel }}</small>
           <small v-if="choice.backupUsed">Shared backup for your access</small>
           <small v-if="choice.error" class="text-error">{{ choice.error }}</small>
         </span>
@@ -76,7 +76,7 @@
         />
       </label>
     </v-radio-group>
-    <p v-if="choices.length" class="text-body-small mt-3 mb-0">Review after coding starts off. You can enable it from chat.</p>
+    <p v-if="choices.length" class="text-body-small mt-3 mb-0">Auto review starts off. Enable it after choosing Auto in chat.</p>
     <v-btn v-if="canConfigure && choices.length" class="mt-2" variant="text" @click="routingOpen = true">
       Configure model routing
     </v-btn>

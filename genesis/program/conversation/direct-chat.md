@@ -8,7 +8,7 @@ warning and queue requests in a local editor with no hosted identity.
 Owner settings in main and temporary chat use the Model routing permission
 response independently of that queue, so they remain available in the local editor.
 The compact mode menu names the effective reviewer and states when it uses the
-same model as Code, including a collaborator's shared backup pair.
+same model as Junior, including a collaborator's shared backup pair.
 Unavailable modes retain their explanation and expose their disabled state to
 assistive technology, including when Auto requires a personal connection.
 Model labels and restriction reasons wrap fully within the scrollable mode menu.
@@ -310,9 +310,9 @@ The session manager exposes a purpose resolver for callers migrating to unified
 routing. It loads saved or server-supplied draft configuration, trusted actor
 and connection facts, and the exact required catalogue models before invoking
 the shared deterministic policy. It does not authorize against the last chat
-selection or change a conversation binding. Plan/Code decisions capture the
-whole effective pair; independent Router/Economy decisions read only their own
-dependencies. OpenCode model pages must share one catalogue revision. Unknown
+selection or change a conversation binding. Senior/Junior decisions capture the
+whole effective pair; independent Router/Intern decisions read only their own
+dependencies. OpenJunior model pages must share one catalogue revision. Unknown
 credentials and unavailable catalogues produce unavailable decisions rather
 than provider-failure substitution. Execution retains the direct provider
 access check, including the captured connection identity at inference admission.
@@ -329,23 +329,30 @@ new Send. Recorded submitters still receive fresh admission; inspecting a prior
 delivery receipt requires no new inference. Standalone admission without hosted
 users remains supported. Access responses omit the user record. Reads,
 Stop and cleanup remain separate from admission of new inference. Source
-explanations and Database Copilot use their own resolved Economy destination too.
+explanations and Database Copilot use their own resolved Intern destination too.
 
-Main chat can save Plan, Code, Economy or Auto plus an optional review preference
+Main chat can save Senior, Junior, Intern or Auto plus an optional Auto review preference
 in the existing conversation metadata. A role resolves to a live, available
 selection using its saved workflow, independently of the last native engine.
-Plan and Code resolve as a pair even when review is off. A member's foreign
+Senior and Junior resolve as a pair even when review is off. A member's foreign
 shared Backup replaces both roles; same-engine Backup replaces restricted roles.
-Auto requires direct access to Router, Plan and Code and never uses Backup.
+Auto requires direct access to Router, Senior and Junior and never uses Backup.
 Goals cannot start or resume in Auto, and an unfinished goal blocks switching
 to Auto. When native goal observation is unavailable, that switch still respects
 the saved goal; a confirmed completion or removal releases the restriction.
-Exact model overrides apply only to explicit modes. Toggling review or selecting
-the current mode keeps its custom model/thinking choice; selecting another mode
+The runtime, API and saved role keys are `senior`, `junior` and `intern`.
+Configuration and request snapshots use schema 3. The numbered stopped-service
+role upgrade renames owned routing fields in settings, sessions, temporary chats,
+renewal records and transcript attribution, including archived histories. It
+preserves model choices, native histories and message text; the live runtime has
+no old-role aliases. Actual Auto plan artifacts retain their `workPlan` and
+`planRevision` names. These model roles do not restrict work by task type. Exact model overrides
+apply only to direct roles. Selecting the current role keeps its custom
+model/thinking choice; selecting another role
 clears that override. Mode changes preserve the workflow; a deliberate
 assistant-selection change adopts its selected workflow.
 One icon beside Settings opens the mode choices, assigned models and review
-switch; these controls occupy no separate row above the composer. Its icon and
+switch in Auto; these controls occupy no separate row above the composer. Its icon and
 accessible label reflect the selected mode. Owners open the shared Model routing
 form directly in an overlay, initially selecting this chat's orchestrator.
 Other users have no configuration action. The mode icon remains reachable when
@@ -355,13 +362,13 @@ Routing progress stays on the message bubble, without a duplicate composer banne
 Main and temporary chats share the routing notice component: errors and review
 recovery actions remain visible, while a newly interrupted or skipped coding review
 uses the shell's brief notification. Restoring a chat does not replay old notices.
-Auto choosing Plan completes without reporting a skipped coding review.
+Auto choosing Senior planning completes without reporting a skipped coding review.
 Saving a mode refreshes main-chat access immediately so Send reflects the new
 destination without waiting for a later session event. Main-chat availability
 uses the selected mode; steering checks the bound native
 connection. Members regain direct chat after an owner's personal turn finishes
 when their configured explicit mode is accessible. Suggestions independently use
-`prompt_hint` availability, allowing private drafts through accessible Economy.
+`prompt_hint` availability, allowing private drafts through accessible Intern.
 An idle routed Send does not require the previous native connection to start.
 Unresolved activity or a running turn still prevents changing its destination.
 Access and approval query caches separate actor/role, project and session; user
@@ -370,7 +377,7 @@ changes and native turn boundaries refresh access without refreshing on every
 streamed message. Missing assignments explain where
 to configure them or direct the user to the owner.
 
-Auto starts new implementation work with Plan, even when the user phrases it as
+Auto starts new implementation work with Senior, even when the user phrases it as
 an imperative. The Router classifies ordinary new requests by intent, including
 cleanup requests expressed without the word Deslop. The planner investigates and writes a very detailed working
 Markdown document outside project Git. Main chat owns
@@ -384,25 +391,31 @@ verification, and progress/blockers. Ready requires every section to have conten
 The prompt requires concrete inspected files/occurrences, exact intended changes,
 resolved decisions and acceptance checks; structural validation cannot certify
 semantic completeness. Pure conversation need not create a document.
-Plan may write only this designated document, not application files. Beginning
+During Auto planning, Senior may write only this designated document, not application files. Beginning
 another planning turn invalidates readiness before inference. The conversation
 keeps a display snapshot and its content revision in the existing routing request;
 the file is the working authority. View plan opens a compact Markdown dialog.
 Implement submits the displayed revision through ordinary Send, retaining the
 draft and existing access checks. Natural-language approval uses the Router;
-only unambiguous approval of a currently ready plan can select Code. The runtime
+only unambiguous approval of a currently ready plan can select Junior. The runtime
 checks the ready file and approved revision again before changing model or sending.
 No file, an incomplete document, a new request, or a stale approval cannot start
-Auto coding. Explicit Code remains a direct implementation choice. Plan completion
-never starts coding automatically.
-Coding updates progress and verification without silently rewriting the agreed
-scope. A material blocker is recorded with Status: blocked, then the coder ends
+Auto coding. Planning completion never starts coding automatically.
+Direct Senior, Junior and Intern answer questions or implement changes from the
+message and conversation, without reading, preparing, updating or requiring the
+temporary working plan. Senior has no planning-only restriction outside Auto.
+A saved review preference applies only to Auto; direct roles never schedule an
+automatic follow-up. An old plan cannot block them, appear as their plan snapshot
+or trigger a return to planning. The View plan and Implement controls are hidden
+outside Auto, and the server rejects plan approval submitted in a direct role.
+Approved-plan coding updates progress and verification without silently rewriting
+the agreed scope. A material blocker is recorded with Status: blocked, then the coder ends
 its turn. After confirmed normal completion, the coordinator returns to the
-captured Plan model with a visible Back to planning message, even with review off.
+captured Senior model with a visible Back to planning message, even with review off.
 The planner preserves partial edits, revises the same file and waits for approval.
 Ordinary implementation failures remain the coder's responsibility. Review uses
-the document and accepted steering and may also return a scope decision to Plan.
-The same Plan-model review turn fixes in-scope defects, then applies the project's
+the document and accepted steering and may also return a scope decision to Senior.
+The same Senior review turn fixes in-scope defects, then applies the project's
 Deslop guidance to the coding changes and review fixes, preserving intended
 behavior and staging. Verification follows cleanup. The visible review request
 and mode-menu description name both jobs; no separate cleanup turn is scheduled.
@@ -412,14 +425,14 @@ restart require Continue planning rather than running automatically. Delivery
 uncertainty checks the retained receipt before any retry. Both follow-up purposes
 reuse the existing routing owner and native delivery, not another agent runtime.
 
-Deslop is a task using the configured Plan model with permission to clean up code,
+Deslop is a task using the configured Senior model with permission to clean up code,
 not a separate selectable chat mode. A standalone `deslop` command or the saved
 commit Deslop action bypasses classification, including from explicit modes.
 Other cleanup-only wording in Auto uses the Router's Deslop decision. Deslop
 applies the project's cleanup guidance directly, preserves behavior and staging,
 does not create an implementation proposal, and never schedules another review.
 The conversation's mode preference remains unchanged. Dispatch validates the
-captured Plan connection and tool capability; a Code override cannot redirect
+captured Senior connection and tool capability; a Junior override cannot redirect
 cleanup. Existing actor access and shared-backup policy still apply.
 Cleanup invalidates a previous ready implementation proposal before editing.
 The reply and status name Deslop and the answering model. A direct Deslop command
@@ -434,9 +447,9 @@ about Deslop or ambiguous cleanup/redesign remains planning. Classifier output
 is a validated mode/reason pair, never a model, executable command or generated
 rejection message. Cancellation and receipt recovery use the ordinary coordinator.
 
-Auto captures Router and the effective Plan–Code pair, the actor, connection
+Auto captures Router and the effective Senior–Junior pair, the actor, connection
 identities and configuration revision before invoking the existing tool-free
-classification workload in a separate non-project scope. Economy is not an Auto
+classification workload in a separate non-project scope. Intern is not an Auto
 dependency. The classifier sees the submitted text, attachment labels and bounded
 recent visible exchanges plus the ready plan revision and bounded outline; it returns only a mode and reason. Its native reference
 and any managed execution ID stay in the parent request until verified cleanup.
@@ -444,8 +457,8 @@ Helper callbacks merge that reference under the ordinary lock without overwritin
 cancellation. A late native start is stopped before delivery; failed cleanup
 blocks new work and is retried during reconciliation or explicit cancellation.
 Vibe64 then rechecks the captured decision and sends the original request through
-ordinary native delivery with a Plan or Code instruction. Main chat uses both
-existing changeover preparation and Send when Economy or a member Backup selects
+ordinary native delivery with a Senior or Junior instruction. Main chat uses both
+existing changeover preparation and Send when Intern or a member Backup selects
 another orchestrator. The workflow stays fixed across that excursion. Returning
 to Codex looks up its retained native history in the shared workflow storage,
 even when the next turn selects a different model provider. Temporary chat scopes
@@ -465,8 +478,8 @@ accepted native turn is active. It cannot become an accidental steering request.
 after a server restart becomes visibly retryable. A new request cannot overtake
 an unresolved pending request. Active-turn steering bypasses classification.
 
-After the matching Code turn completes normally, review uses one preallocated
-message identity and the snapshotted Plan selection. The visible automatic
+After the matching Junior turn completes normally, review uses one preallocated
+message identity and the snapshotted Senior selection. The visible automatic
 request permits scoped fixes. Structured waiting, failure, interruption, active
 goals and Stop suppress continuation; a reviewer never schedules another review.
 Before review changes models or sends, it also checks the saved last assistant
@@ -475,7 +488,7 @@ An unanswered structured question visibly skips review, preserves the question
 and coding model, and allows the user's answer as the next ordinary request.
 Review Retry applies the same check after restart.
 If a read sees completion before the idle event, the coordinator may review a
-Code request it admitted in the current process. After a server restart, the
+Junior request it admitted in the current process. After a server restart, the
 same recovered completion requires explicit Retry/Skip instead.
 Preparation failures retain Retry and Skip. Skipping an unstarted review clears
 its preparation error and finishes the completed coding request immediately,
@@ -731,7 +744,7 @@ The interactive Codex app-server starts with explicit `approval_policy="never"`
 and `sandbox_mode="danger-full-access"` configuration overrides. Codex does not
 apply its top-level sandbox bypass flag to app-server defaults. Setting those
 defaults prevents native work restored without per-turn overrides from falling
-back to a network-disabled sandbox that denies managed command sockets. Economy
+back to a network-disabled sandbox that denies managed command sockets. Intern
 startup retains its separate isolation. The native paginated-history test runs
 the production launcher and verifies the effective defaults and automatic goal
 continuation permissions after a cold restart.
@@ -949,9 +962,9 @@ records the original engine and native thread before delivery. An uncertain
 delivery requires admission inspection before any other action. An
 accepted record cannot be claimed again or rebound to another thread. These
 store operations do not themselves contact the assistant. The terminal service
-uses the ordinary routing coordinator for generated Code, with automatic review
+uses the ordinary routing coordinator for generated Junior work, with automatic review
 off and unchanged chat preferences. It resolves the submitting actor's effective
-Code destination, including shared Backup and ordinary history changeover.
+Junior destination, including shared Backup and ordinary history changeover.
 Its internal pre-send callback claims the domain receipt before native inference;
 both transitions use the existing main assistant write lock. Before the first
 claim, the sessions feature supplies the source editor's configuration reader;
@@ -1505,17 +1518,17 @@ ordinary provider command boundaries, and closing that session drains those
 descendants.
 The shared OpenCode configuration defines economy subagents for connected
 providers, while task admission and native chat/model hooks restrict use to the
-registered parent's selected provider and effective Economy model. A foreign
-Economy choice is not exposed as a native subagent. Resuming a
+registered parent's selected provider and effective Intern model. A foreign
+Intern choice is not exposed as a native subagent. Resuming a
 helper from another parent is rejected. The plugin resolves native child
 `parentID` ancestry for command control, history unwrapping and host capabilities;
 unknown or unverifiable ancestry fails closed. Helpers gain no extra account or
 command permissions.
 OpenCode progress broadcasts coalesce to at most one per second per session,
 with the first state published immediately. A meaningful reasoning sentence or
-completed part can queue one bounded, tool-free summary through effective Economy
+completed part can queue one bounded, tool-free summary through effective Intern
 using the common scoped manager and the submitting actor. This helper may run
-under another orchestrator without changing the working OpenCode model. Streaming and final projection share turn-owned entries, so
+under another orchestrator without changing the working OpenJunior model. Streaming and final projection share turn-owned entries, so
 replayed parts never submit duplicate requests and initial partial words do not
 consume a part. The existing completion reader waits for the helper's finished
 answer. Main completion persists any missing mechanical headlines before its
@@ -1552,7 +1565,7 @@ origin, without resending the private draft. The HTTP route preserves omitted
 optional fields so action validation can admit that cancellation. Draft context
 is bounded to its latest 4,000 characters;
 it is sent only to the tool-free suggestion helper, not saved as a chat message.
-The server resolves the saved workflow's effective Economy destination for the
+The server resolves the saved workflow's effective Intern destination for the
 requesting actor before creating a provider profile; a personal main-chat
 selection does not block an accessible shared helper. Cache identity includes
 the actor, exact destination and connection generation, routing revision, draft,
@@ -1566,7 +1579,7 @@ by the next request or session close, including after restart. Cancelling a
 session also waits for requests still preparing their context.
 Successful generation without a draft also stores a shared suggestion snapshot
 in the session's private assistant artifact and publishes a session refresh hint.
-When effective Economy is unavailable, the server may return that snapshot
+When effective Intern is unavailable, the server may return that snapshot
 only while its complete conversation/Blueprint basis still matches; this path
 does not invoke inference. Draft suggestions remain actor-specific and are never persisted in
 this shared artifact. The browser sends the person's draft only when effective
@@ -1763,8 +1776,8 @@ continues to use transcript selection snapshots and per-application receipts.
 Changing the selection alone sends nothing and is rejected while a turn is active.
 
 Curated provider homes project only their fixed endpoint, key and model
-metadata. Main chat, ephemeral tasks and isolated Economy helpers use that
-selected connection. Economy copies only this server-owned projection into
+metadata. Main chat, ephemeral tasks and isolated Intern helpers use that
+selected connection. Intern copies only this server-owned projection into
 its existing temporary private home, checks canonical identity before and after
 requests, and never activates OpenAI authentication. Its existing no-tool,
 no-project-access contract and verified process cleanup still apply.

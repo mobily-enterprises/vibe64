@@ -9,6 +9,8 @@ and see whether the Studio host is ready to support them.
 
 - `packages/vibe64-core/src/server/assistantRoutingStore.js`
 - `packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js`
+- `packages/vibe64-accounts/src/server/assistantRoleUpgrade.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20260926-assistant-role-names.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
 - `packages/vibe64-runtime/src/shared/assistantRoutingScores.json`
 - `packages/vibe64-accounts/src/client/composables/useModelRouting.js`
@@ -56,13 +58,13 @@ and see whether the Studio host is ready to support them.
 
 ## Public contract
 
-Model routing is a shared Accounts surface. Each workflow keeps Plan and Code
-in one orchestrator, with independent Economy and Router choices and a shared
+Model routing is a shared Accounts surface. Each workflow keeps Senior and Junior
+in one orchestrator, with independent Intern and Router choices and a shared
 Backup across connected orchestrators. Thinking choices and Personal/Workspace
 scope appear with each exact route. Saves are atomic and revision-checked in private installation state at
 `ai-connections/routing.json`; unreadable settings are preserved for recovery.
-The store's version-2 format keeps independent Router and shared Backup fields
-and helper-conflict evidence alongside those choices. Plan/Code assignments
+The store's version-3 format keeps independent Router and shared Backup fields
+and helper-conflict evidence alongside those choices. Senior/Junior assignments
 must belong to their workflow engine. Old-format files require the explicit
 stopped-service upgrade; ordinary reads do not change them.
 The server validates changed assignments against their destination catalogue;
@@ -75,9 +77,9 @@ the assignments remain shared across conversations.
 Accounts delegates saved and unsaved previews to the central terminal runtime,
 using the same connection facts and purpose resolver as Send. Owners see Owner
 and Collaborator results; member reads expose their own result and cannot save
-or evaluate drafts. A foreign Backup moves both effective Plan and Code even
-without review. Review uses effective Plan; Auto requires direct access to all
-three of Router, Plan and Code. Connection identities never enter this response.
+or evaluate drafts. A foreign Backup moves both effective Senior and Junior even
+without review. Review uses effective Senior; Auto requires direct access to all
+three of Router, Senior and Junior. Connection identities never enter this response.
 OpenCode catalogue refreshes always use the clean catalogue process, including
 when a managed chat process is running; runtime output limits and defaults must
 not invalidate a verified provider connection. Pages are combined only at one revision, including models
@@ -90,7 +92,7 @@ creation can be initiated by a collaborator using included OpenCode; this intern
 initialization accepts workflow IDs, never user assignments. Editing or disabling
 roles remains owner-only. Repeating setup
 preserves every saved choice, including an explicit empty role. A workflow needs
-usable Plan and Code before initialization; a disconnected engine does not get
+usable Senior and Junior before initialization; a disconnected engine does not get
 a profile merely because independent helpers are available elsewhere. Routing
 setup failures are reported separately from a successfully connected key.
 Native Codex and Claude authentication retain that routing result in the current
@@ -104,8 +106,8 @@ status does not imply a new successful login. This adds no saved account format.
 The form separates planning/coding, independent assistance and collaborator
 backup. Unsaved edits refresh a cancellable preview with a stable loading area;
 stale replies are ignored. Conflicting saves preserve the draft. Migrated helper
-conflicts require the owner's explicit acknowledgement of a valid Economy choice;
-an unrelated edit keeps the migration evidence. Economy and Router assignments
+conflicts require the owner's explicit acknowledgement of a valid Intern choice;
+an unrelated edit keeps the migration evidence. Intern and Router assignments
 replace the former per-account Helper model controls and endpoints. Native
 helpers receive the central resolver's exact model; they do not read the retired
 preferences or select an implicit model. Only the stopped-service upgrade reads
@@ -120,8 +122,8 @@ identity through the same optional public host injection.
 Recommendation values live in the checked-in `assistantRoutingScores.json`,
 keyed by exact orchestrator/provider/model route and role. The shared routing
 policy filters eligible choices before applying those scores. It prefers Astra
-for Codex planning and DeepSeek Flash for Code, Economy and Router. Sol ranks
-above GLM for Code; Luna ranks above GLM for economical assistance. Claude's
+for Codex Senior and DeepSeek Flash for Junior, Intern and Router. Sol ranks
+above GLM for Junior; Luna ranks above GLM for economical assistance. Claude's
 listed native aliases use corresponding tiers. Other eligible models receive
 the JSON default scores, with included Pickle ranked last. Saved eligible
 choices win score ties; exact route ordering makes other ties stable. Scores
@@ -138,7 +140,7 @@ round-trip history compatibility.
 New-credential success refreshes the catalogue and opens one proposal with
 independent checkboxes for each affected workflow/role. Native login and API-key
 setup identify the actual connected engines; credentials are never copied.
-Proposals include only workflows with eligible Plan and Code models.
+Proposals include only workflows with eligible Senior and Junior models.
 Changes to custom assignments start unchecked. Saves submit only actual edits,
 so untouched absent roles do not become deliberately disabled. Customize carries only selected
 proposals into the normal form; Keep current routing closes without saving.
@@ -181,8 +183,8 @@ its own runtime state.
 The connection store supplies included OpenCode Big Pickle, with no Codex login
 required. Live native OpenCode checks show that its free provider rejects the
 restricted, tool-free profile used by Router and background helpers. Pickle remains
-eligible for Plan, Code, explicit Economy chat and shared Backup, but is not
-recommended for Economy or Router; previews reject those helper purposes before
+eligible for Senior, Junior, explicit Intern chat and shared Backup, but is not
+recommended for Intern or Router; previews reject those helper purposes before
 sending. Another connected model is needed for Auto and background assistance.
 New OpenCode keys are checked against the complete trusted provider
 catalogue and verified before replacing a working connection. The browser cannot
@@ -390,7 +392,7 @@ outcome. No provider URL override is required: the pinned OpenCode runtime owns
 its native provider destinations.
 
 Older clients reaching the retired native or OpenCode helper-setting endpoints
-receive HTTP 410 with a reload instruction pointing to Economy in Model routing.
+receive HTTP 410 with a reload instruction pointing to Intern in Model routing.
 Those endpoints cannot recreate the retired preferences. Provider profiles
 continue validating the resolved model's availability and supported thinking
 controls; configuration changes do not rewrite already captured tasks.

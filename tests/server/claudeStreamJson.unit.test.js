@@ -977,7 +977,7 @@ test("Claude router reasoning does not consume the structured answer limit", asy
   await event({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } } });
   await event({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { thinking } } });
   await event({ type: "assistant", message: { id: "router-answer", content: [{ type: "thinking", thinking }] } });
-  const decision = { mode: "code", reason: "explicit_implementation" };
+  const decision = { mode: "junior", reason: "explicit_implementation" };
   await event({ type: "result", subtype: "success", structured_output: decision });
   const result = await f.provider.waitForConversationTurn(context, { conversationId });
   assert.equal(result.status, "completed");

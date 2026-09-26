@@ -1465,7 +1465,7 @@ test.describe("direct chat", () => {
       await expect(questions.locator(".assistant-transcript__question-text strong")).toHaveText([
         "remain yellow", "“Invoiced” switch", "10% VIP discount"
       ]);
-      await expect(questions.locator("code")).toHaveText(["yellow", "vip_discount"]);
+      await expect(questions.locator("junior")).toHaveText(["yellow", "vip_discount"]);
       await expect(questions.locator(".assistant-transcript__question-choices strong")).toHaveText("Yes");
       await expect(questions).toContainText("Recommended");
       await expect(questions).not.toContainText("**");
@@ -2090,8 +2090,8 @@ for (const width of [390, 820, 1280]) {
     await mockDirectChat(page, { onMessage: body => { sent.push(body); } });
     const revision = "a".repeat(64);
     const selection = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra" };
-    const routing = { mode: "auto", resolvedMode: "plan", status: "done", messageId: "planned",
-      assignments: { plan: selection, code: { ...selection, modelId: "deepseek-flash" } },
+    const routing = { mode: "auto", resolvedMode: "senior", status: "done", messageId: "planned",
+      assignments: { senior: selection, junior: { ...selection, modelId: "deepseek-flash" } },
       workPlan: { status: "ready", revision, text: "# Rename wash terminology\n\n## Findings\nThe job-card status after Waiting still says Washing.\n\n## Proposed changes\nReplace visible wording with Bathing; preserve stored identifiers.\n\n## Verification\nCheck the job card and search every display label.\n" } };
     const session = { ...directSession(), assistantSelection: selection, metadata: {
       assistant_routing: JSON.stringify({ mode: "auto", workflowEngineId: "codex", review: true }),
@@ -2118,7 +2118,7 @@ for (const width of [390, 820, 1280]) {
     await expect(view).toBeFocused();
     await expect(composer).toHaveValue("Keep my next question as a draft");
     await view.click();
-    await dialog.getByRole("button", { name: "Implement with deepseek-flash" }).click();
+    await dialog.getByRole("button", { name: "Implement with Junior · deepseek-flash" }).click();
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0].planRevision).toBe(revision);
     expect(sent[0].message).toBe("Implement the plan I have approved.");
@@ -2160,3 +2160,75 @@ hintTest("@deslop-routing a mixed request remains editable with one polite expla
   }
   expect(submissions).toBe(1);
 });
+
+for (const width of [390, 1280]) {
+  hintTest(`@assistant-roles direct roles and Auto show distinct controls at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const selection = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra" };
+    const junior = { ...selection, modelProviderId: "deepseek", modelId: "deepseek-flash" };
+    const assignments = { senior: selection, junior, intern: junior, router: junior, sharedBackup: junior };
+    await mockDirectChat(page, { conversationLog: Object.entries(assignments).slice(0, 3).map(([role, model], index) => ({
+      turnId: String(index + 1), user: { role: "user", text: `Question ${index + 1}` },
+      assistant: { role: "assistant", text: `Answer ${index + 1}` },
+      metadata: { assistantSelection: model, assistantRouting: { requestedMode: role, resolvedMode: role } }
+    })) });
+    const session = { ...directSession(), assistantSelection: junior, metadata: {
+      assistant_routing: JSON.stringify({ mode: "junior", workflowEngineId: "codex", review: true }),
+      assistant_routing_request: JSON.stringify({ mode: "auto", resolvedMode: "senior", status: "done", assignments,
+        workPlan: { status: "ready", revision: "a".repeat(64), text: "# An earlier Auto plan" } })
+    } };
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/assistant-selection`, async route => {
+      session.metadata.assistant_routing = JSON.stringify({ workflowEngineId: "codex", ...route.request().postDataJSON().assistantRouting });
+      await fulfillJson(route, { ok: true, ...session });
+    });
+    const choices = [selection, junior].map(model => ({ ...model, label: model.modelId,
+      engineLabel: "Codex", providerLabel: model.modelProviderId, available: true, variants: [] }));
+    const decision = (effectiveSelection) => ({ available: true, effectiveSelection });
+    const preview = { ...Object.fromEntries(Object.entries(assignments).map(([role, model]) => [role, decision(model)])),
+      review: decision(selection), auto: { available: true }, request_routing: decision(junior), prompt_hint: decision(junior) };
+    let canConfigure = true;
+    await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => fulfillJson(route, {
+      ok: true, revision: 1, canConfigure, engines: [{ engineId: "codex", label: "Codex",
+        roles: Object.fromEntries(Object.entries(assignments).map(([role, assignment]) => [role, { assignment, recommendation: assignment, choices }])),
+        preview: { viewer: preview, owner: preview, collaborator: preview }
+      }]
+    }));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+    for (const label of ["Senior", "Junior", "Intern"]) {
+      await expect(page.getByText(new RegExp(`Codex · .* · ${label}$`)).first()).toBeVisible();
+    }
+    const trigger = page.getByRole("button", { name: /^Chat mode:/ });
+    await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Junior\./);
+    await expect(page.getByRole("button", { name: "View plan", exact: true })).toHaveCount(0);
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const modes = page.getByRole("list", { name: "Choose chat mode" });
+    for (const label of ["Senior", "Junior", "Intern", "Auto"]) await expect(modes.getByRole("button", { name: new RegExp(`^${label}`) })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "Senior review and Deslop" })).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath(`roles-${width}.png`), animations: "disabled" });
+    await modes.getByRole("button", { name: /^Auto/ }).click();
+    await expect(page.getByRole("checkbox", { name: "Senior review and Deslop" })).toBeVisible();
+    await modes.getByRole("button", { name: /^Senior/ }).click();
+    await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
+    await expect(page.getByRole("checkbox", { name: "Senior review and Deslop" })).toHaveCount(0);
+    await modes.getByRole("button", { name: /^Intern/ }).click();
+    await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Intern\./);
+    await page.getByRole("button", { name: "Configure model routing", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Model routing", exact: true });
+    await expect(dialog).toBeVisible();
+    for (const label of ["Senior", "Junior", "Intern", "Router"]) await expect(dialog.getByRole("combobox", { name: label, exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`routing-roles-${width}.png`), animations: "disabled" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(trigger).toBeFocused();
+    canConfigure = false;
+    await page.reload();
+    await expect(trigger).toBeVisible();
+    await trigger.click();
+    await expect(modes.getByRole("button", { name: /^Intern/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Configure model routing", exact: true })).toHaveCount(0);
+  });
+}

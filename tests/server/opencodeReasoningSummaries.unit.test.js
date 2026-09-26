@@ -20,8 +20,8 @@ async function until(check) {
 }
 async function fixture(t, { providers = [], readAccess = null, ...options } = {}) {
   const harness = await controllerHarness(options);
-  const economy = { ...harness.selection, variantId: "low", selectionSource: "explicit" };
-  harness.routing = { schemaVersion: 2, revision: 1, orchestrators: { opencode: { economy } } };
+  const intern = { ...harness.selection, variantId: "low", selectionSource: "explicit" };
+  harness.routing = { schemaVersion: 3, revision: 1, orchestrators: { opencode: { intern } } };
   harness.accessCalls = [];
   harness.controllerOptions.getAssistantManager = () => harness.manager;
   harness.controller = harness.createController();
@@ -73,7 +73,7 @@ test("reasoning reads a completed helper answer once per block and deletes nativ
   assert.equal([...harness.upstreamSessions.values()].filter(({ agent }) => agent === "vibe64-economy").length, 0);
 });
 
-test("foreign Economy summaries use an isolated scope and leave the working OpenCode model alone", async (t) => {
+test("foreign Intern summaries use an isolated scope and leave the working OpenCode model alone", async (t) => {
   const calls = [];
   const provider = { id: "claude", transportId: "claude_stream_json",
     async capabilities() {
@@ -97,7 +97,7 @@ test("foreign Economy summaries use an isolated scope and leave the working Open
   };
   const response = { pending: true, text: "", content: [part()] };
   const harness = await fixture(t, { providers: [provider], assistantResponses: [response] });
-  harness.routing.orchestrators.opencode.economy = { engineId: "claude", agentId: "claude", modelProviderId: "anthropic",
+  harness.routing.orchestrators.opencode.intern = { engineId: "claude", agentId: "claude", modelProviderId: "anthropic",
     modelId: "haiku", variantId: "", catalogRevision: `sha256:${"b".repeat(64)}`, selectionSource: "explicit" };
   const decision = await harness.manager.resolveAssistantPurpose({ purpose: "conversation_summary", workflowEngineId: "opencode" }, {
     session: harness.session, vibe64User: { username: "member", role: "member" }
@@ -124,13 +124,13 @@ test("foreign Economy summaries use an isolated scope and leave the working Open
   assert.equal(harness.session.metadata.assistant_selection, selection);
   assert.equal(harness.promptCalls.length, 1);
   const registry = JSON.parse(await readFile(harness.processStarts[0].options.sessionEnvironmentRegistry, "utf8"));
-  assert.equal(registry.sessions.find(({ sessionId }) => sessionId === "session-1").economyModelId, "");
+  assert.equal(registry.sessions.find(({ sessionId }) => sessionId === "session-1").internModelId, "");
   response.pending = false;
   response.text = "Done.";
   await harness.controller.waitForTurn("session-1");
 });
 
-test("a replaced Economy connection prevents summary inference and preserves ordinary progress", async (t) => {
+test("a replaced Intern connection prevents summary inference and preserves ordinary progress", async (t) => {
   let scopedAccess = 0;
   const response = { pending: true, text: "", content: [part()] };
   const harness = await fixture(t, { assistantResponses: [response], readAccess(input) {
@@ -183,7 +183,7 @@ test("an initial partial word does not suppress later live reasoning", async (t)
   const current = { ...part(), text: "I" };
   const response = { pending: true, text: "", content: [current] };
   const harness = await fixture(t, { assistantResponses: [response] });
-  harness.routing.orchestrators.opencode.economy = null;
+  harness.routing.orchestrators.opencode.intern = null;
   await harness.controller.sendMessage("session-1", { message: "Review", messageId: "partial" });
   await delay(300);
   assert.equal(harness.thinkingMessages.length, 0);
@@ -277,7 +277,7 @@ test("failed native helper deletion retains ownership and is retried on project 
   assert.equal((await harness.runtime.store.readAgentRun("session-1", "opencode_server")).reasoningSummaryHelper, null);
 });
 
-test("summaries and representable native subagents use central Economy and retain the submitting actor", async (t) => {
+test("summaries and representable native subagents use central Intern and retain the submitting actor", async (t) => {
   const response = { pending: true, text: "", content: [part()] };
   const harness = await fixture(t, { assistantResponses: [response], helperResponse: summary });
   await harness.controller.sendMessage("session-1", { message: "Review", messageId: "helper-preference" }, {
@@ -289,7 +289,7 @@ test("summaries and representable native subagents use central Economy and retai
   assert.equal(harness.accessCalls[0].modelProviderId, "deepseek");
   assert.equal(harness.accessCalls.every(({ vibe64User }) => vibe64User?.username === "collaborator"), true);
   const registry = JSON.parse(await readFile(harness.processStarts[0].options.sessionEnvironmentRegistry, "utf8"));
-  assert.equal(registry.sessions.find(({ sessionId }) => sessionId === "session-1").economyModelId, "deepseek-chat");
+  assert.equal(registry.sessions.find(({ sessionId }) => sessionId === "session-1").internModelId, "deepseek-chat");
   assert.equal(registry.sessions[0].modelProviderId, "deepseek");
   response.pending = false;
   response.text = "Done.";

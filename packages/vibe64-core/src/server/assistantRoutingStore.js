@@ -3,15 +3,15 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const writes = new Map();
-const routingRoles = ["plan", "code", "economy", "router", "sharedBackup"];
+const routingRoles = ["senior", "junior", "intern", "router", "sharedBackup"];
 // eslint-disable-next-line no-control-regex -- Routing identifiers must exclude ASCII control characters.
 const controlCharacters = /[\x00-\x1f\x7f]/u;
 const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 
-function validateAssistantRoutingConfiguration(value, { legacy = false } = {}) {
+function validateAssistantRoutingConfiguration(value) {
   const invalid = () => { throw new Error("Saved model routing has an unsupported shape. Restore or repair the settings before changing them."); };
   if (!object(value) || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
-      !object(value.orchestrators) || !(legacy ? [1, 2] : [2]).includes(value.schemaVersion)) invalid();
+      !object(value.orchestrators) || value.schemaVersion !== 3) invalid();
   const assignment = (entry) => {
     if (!object(entry) || entry.schema !== "vibe64.assistant-selection.v1" ||
         Object.keys(entry).some((key) => !["schema", "engineId", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision", "selectionSource"].includes(key)) ||
@@ -20,7 +20,7 @@ function validateAssistantRoutingConfiguration(value, { legacy = false } = {}) {
         !["engineId", "agentId", "modelProviderId", "modelId", "variantId"].every((name) =>
           typeof entry[name] === "string" && entry[name].length <= 512 &&
           (name === "variantId" || entry[name].trim().length) && !controlCharacters.test(entry[name])) ||
-        !(legacy && entry.selectionSource === undefined || ["recommended", "explicit"].includes(entry.selectionSource))) invalid();
+        !["recommended", "explicit"].includes(entry.selectionSource)) invalid();
   };
   for (const [engineId, roles] of Object.entries(value.orchestrators)) {
     if (!["codex", "claude", "opencode"].includes(engineId) || !object(roles) ||
@@ -28,12 +28,12 @@ function validateAssistantRoutingConfiguration(value, { legacy = false } = {}) {
     for (const role of routingRoles) {
       if (roles[role] == null) continue;
       assignment(roles[role]);
-      if (["plan", "code"].includes(role) && roles[role].engineId !== engineId) invalid();
+      if (["senior", "junior"].includes(role) && roles[role].engineId !== engineId) invalid();
     }
     if (roles.helperRoutingReview !== undefined) {
       const review = roles.helperRoutingReview;
       if (!object(review) || Object.keys(review).some((key) => !["reason", "previous", "proposed"].includes(key)) ||
-          review.reason !== "legacy_helpers_differ" || !Array.isArray(review.previous) ||
+          review.reason !== "helper_choices_differ" || !Array.isArray(review.previous) ||
           !review.previous.length || review.previous.some((entry) => !object(entry) ||
             Object.keys(entry).some((key) => !["engineId", "modelProviderId", "modelId", "selectionSource"].includes(key)) ||
             !["codex", "claude", "opencode"].includes(entry.engineId) ||
@@ -51,14 +51,14 @@ function createAssistantRoutingStore({ systemRoot } = {}) {
   async function read() {
     try {
       const value = JSON.parse(await readFile(filePath, "utf8"));
-      if (value.schemaVersion === 1) {
+      if (value.schemaVersion !== 3) {
         throw Object.assign(new Error("Model routing needs the stopped-service state upgrade. Run the candidate release's upgrade-state command before starting it."), {
           code: "vibe64_assistant_routing_upgrade_required"
         });
       }
       return validateAssistantRoutingConfiguration(value);
     } catch (error) {
-      if (error.code === "ENOENT") return { schemaVersion: 2, revision: 0, orchestrators: {} };
+      if (error.code === "ENOENT") return { schemaVersion: 3, revision: 0, orchestrators: {} };
       if (error instanceof SyntaxError) throw new Error("Saved model routing is unreadable. Restore or repair the settings before changing them.");
       throw error;
     }
@@ -70,7 +70,7 @@ function createAssistantRoutingStore({ systemRoot } = {}) {
       if (current.revision !== expectedRevision) throw Object.assign(new Error("Model routing changed in another tab. Reload and review the current choices."), {
         code: "vibe64_assistant_routing_stale", statusCode: 409
       });
-      const next = validateAssistantRoutingConfiguration({ schemaVersion: 2, revision: current.revision + 1, orchestrators });
+      const next = validateAssistantRoutingConfiguration({ schemaVersion: 3, revision: current.revision + 1, orchestrators });
       await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
       const temporary = `${filePath}.${randomUUID()}.tmp`;
       try {

@@ -9,7 +9,7 @@
       <v-card-title class="vibe64-assistant-dialog__title">
         <span class="vibe64-assistant-dialog__title-copy">
           <strong class="text-title-large">Start an AI session</strong>
-          <small class="text-body-small">Start in Plan. Choose Code or Auto from chat.</small>
+          <small class="text-body-small">Start with Senior. Choose Junior, Intern or Auto from chat.</small>
         </span>
         <v-btn
           aria-label="Close AI session dialog"

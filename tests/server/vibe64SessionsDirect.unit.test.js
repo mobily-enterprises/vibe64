@@ -121,7 +121,7 @@ const initialPlanSelection = {
 function assertInitialPlanMetadata(metadata = {}, createdBy = "") {
   assert.equal(metadata.created_by, createdBy);
   assert.deepEqual(vibe64AssistantSelectionFromMetadata(metadata), initialPlanSelection);
-  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode: "plan", review: false, workflowEngineId: "opencode" });
+  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode: "senior", review: false, workflowEngineId: "opencode" });
 }
 
 async function requireAgentWrite(runtime, sessionId, operation) {
@@ -2723,10 +2723,10 @@ for (const chooseBranch of [false, true]) {
       assert.equal(result.ok, true, result.error);
       assert.deepEqual(calls, [
         ["setup", { engineIds: ["codex"], vibe64User: actor }],
-        ["resolve", { purpose: "plan", workflowEngineId: "codex" }, { vibe64User: actor }],
+        ["resolve", { purpose: "senior", workflowEngineId: "codex" }, { vibe64User: actor }],
         ["access", initialPlanSelection, { vibe64User: actor, expectedConnectionIdentity: "shared-key" }]
       ]);
-      assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.assistant_routing), { mode: "plan", review: false, workflowEngineId: "codex" });
+      assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.assistant_routing), { mode: "senior", review: false, workflowEngineId: "codex" });
       assert.deepEqual(vibe64AssistantSelectionFromMetadata(harness.creationInputs[0].metadata), initialPlanSelection);
       assert.equal(harness.creationInputs[0].metadata.repository_branch, chooseBranch ? repositoryBranch.name : undefined);
       assert.deepEqual(harness.creationInputs[0].sourceContext, {
@@ -3495,29 +3495,29 @@ test("PR session creation binds only the server-resolved source and exact head c
   });
 });
 
-test("chat mode changes retain the workflow after a foreign Economy answer", async () => {
+test("chat mode changes retain the workflow after a foreign Intern answer", async () => {
   const lock = agentWriteLockHarness();
   const current = { agentId: "build", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "opencode",
     modelId: "big-pickle", modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: "" };
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
-    assistant_selection: JSON.stringify(current), assistant_routing: JSON.stringify({ mode: "economy", review: false, workflowEngineId: "codex" }) } };
+    assistant_selection: JSON.stringify(current), assistant_routing: JSON.stringify({ mode: "intern", review: false, workflowEngineId: "codex" }) } };
   const runtime = { async getSession() { return session; }, store: { ...lock.store,
     async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
   const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {} });
   const changed = await service.updateAssistantSelection(session.sessionId, {
-    assistantRouting: { mode: "plan", review: true }, vibe64User: { role: "member", username: "member" } });
+    assistantRouting: { mode: "senior", review: true }, vibe64User: { role: "member", username: "member" } });
   assert.notEqual(changed.ok, false, JSON.stringify(changed));
-  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "plan", review: true, workflowEngineId: "codex" });
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true, workflowEngineId: "codex" });
   assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
   const foreignOverride = await service.updateAssistantSelection(session.sessionId, {
-    assistantRouting: { mode: "code", override: current }, vibe64User: { role: "member", username: "member" } });
+    assistantRouting: { mode: "junior", override: current }, vibe64User: { role: "member", username: "member" } });
   assert.equal(foreignOverride.ok, false);
   assert.match(foreignOverride.error, /workflow orchestrator/);
 });
 
 test("Auto cannot bypass an unfinished goal when native goal observation is unavailable", async () => {
   const lock = agentWriteLockHarness();
-  const initialRouting = JSON.stringify({ mode: "code", review: false, workflowEngineId: "codex" });
+  const initialRouting = JSON.stringify({ mode: "junior", review: false, workflowEngineId: "codex" });
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
     assistant_routing: initialRouting,
     assistant_selection: JSON.stringify({ schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
@@ -3530,7 +3530,7 @@ test("Auto cannot bypass an unfinished goal when native goal observation is unav
     terminals: { async readAgentGoal() { return observed; } } });
   const input = { assistantRouting: { mode: "auto", review: false }, vibe64User: { role: "owner", username: "owner" } };
   for (const status of ["active", "paused", "blocked", "budgetLimited", "usageLimited"]) {
-    session.metadata.assistant_routing_goal = JSON.stringify({ status, mode: "code" });
+    session.metadata.assistant_routing_goal = JSON.stringify({ status, mode: "junior" });
     const denied = await service.updateAssistantSelection(session.sessionId, input);
     assert.equal(denied.ok, false, status);
     assert.match(denied.error, /unfinished goal/);

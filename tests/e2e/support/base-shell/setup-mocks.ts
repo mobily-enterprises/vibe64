@@ -142,15 +142,15 @@ async function mockShellStatusEndpoints(page) {
       canConfigure: true,
       engines: [{
         engineId: "codex", label: "Codex", choices: [selection],
-        roles: { plan: { recommendation: selection }, code: { recommendation: selection } },
-        setupPreview: { plan: decision, code: decision }
+        roles: { senior: { recommendation: selection }, junior: { recommendation: selection } },
+        setupPreview: { senior: decision, junior: decision }
       }]
     });
   });
   await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", async (route) => {
     await fulfillJson(route, { ok: true, canConfigure: true, workflows: [{
       engineId: "codex", label: "Codex", available: true,
-      planLabel: "Codex · gpt-6-astra", codeLabel: "Codex · deepseek-flash", backupUsed: false, error: ""
+      seniorLabel: "Codex · gpt-6-astra", juniorLabel: "Codex · deepseek-flash", backupUsed: false, error: ""
     }] });
   });
   await mockEmptySessions(page);

@@ -176,7 +176,7 @@ const goalState = computed(() => ({
 
 <template>
   <AssistantGoalControl v-if="goalEngineId === 'codex'" :state="goalState">
-    <p v-if="!goalExplicitMode" class="text-body-small mt-2">Choose Plan, Code, or Economy before starting or resuming a goal.</p>
+    <p v-if="!goalExplicitMode" class="text-body-small mt-2">Choose Senior, Junior, or Intern before starting or resuming a goal.</p>
     <v-btn
       v-if="goalAvailable && goal && goal.status !== 'complete'"
       class="mt-2" color="error" size="small" variant="text"
@@ -210,7 +210,7 @@ const goalState = computed(() => ({
       </v-btn>
       <v-btn v-if="goal && goal.status !== 'complete'" color="error" size="small" variant="text" :disabled="changingGoal" @click="changeGoal('cancel')">Cancel goal</v-btn>
       <p v-if="goal && goal.status !== 'complete'" class="text-body-small mt-2">Pause stops the current turn and keeps the goal for later. Cancel also clears the goal.</p>
-      <p v-if="!goalExplicitMode" class="text-body-small mt-2">Choose Plan, Code, or Economy before starting or resuming a goal.</p>
+      <p v-if="!goalExplicitMode" class="text-body-small mt-2">Choose Senior, Junior, or Intern before starting or resuming a goal.</p>
       <form v-if="goalExplicitMode && (!goal || goal.status === 'complete')" class="d-flex flex-column ga-3 mt-3" @submit.prevent="changeGoal('set', { objective: claudeObjective.trim() })">
         <v-textarea v-model="claudeObjective" label="Goal objective" placeholder="Describe the result Claude should work toward" rows="3" auto-grow maxlength="4000" :disabled="changingGoal" hide-details />
         <v-btn type="submit" class="align-self-start" size="small" :disabled="changingGoal || !claudeObjective.trim()">{{ changingGoal ? 'Starting…' : 'Start goal' }}</v-btn>

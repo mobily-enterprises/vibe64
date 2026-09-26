@@ -131,10 +131,10 @@
         <template #actions>
           <Vibe64TemporaryAiFixAction
             v-if="canResolveUpdateWithTemporaryAi && typeof dashboard.requestTemporaryAi === 'function'"
-            :disabled="resolvingUpdateProblem || dashboard.assistantCodeAllowed === false"
+            :disabled="resolvingUpdateProblem || dashboard.assistantJuniorAllowed === false"
             :pending="resolvingUpdateProblem"
-            :title="dashboard.assistantCodeAllowed === false
-              ? dashboard.assistantCodeRestrictionMessage
+            :title="dashboard.assistantJuniorAllowed === false
+              ? dashboard.assistantJuniorRestrictionMessage
               : 'Open temporary AI to resolve this repository update'"
             @click="resolveUpdateProblem"
           />
@@ -670,7 +670,7 @@ function versionButtonLabel(version = {}, index = -1) {
 async function resolveUpdateProblem() {
   if (
     resolvingUpdateProblem.value ||
-    dashboard.value.assistantCodeAllowed === false ||
+    dashboard.value.assistantJuniorAllowed === false ||
     typeof dashboard.value.requestTemporaryAi !== "function"
   ) {
     return false;

@@ -39,7 +39,7 @@ lease before archival can detach the session tree.
 
 People can create, select, inspect, and archive sessions. A new session receives
 its own Git source and stable identity. Creation starts in Plan with review off.
-The workflow picker previews the submitting user's Plan and Code destinations;
+The workflow picker previews the submitting user's Senior and Junior destinations;
 it reads saved assignments and connection access without live model discovery.
 Uninitialized workflows use connected defaults to establish availability and say
 “Recommended on creation”; creation discovers and saves the exact recommendations.

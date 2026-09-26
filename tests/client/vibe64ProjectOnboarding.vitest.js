@@ -324,7 +324,7 @@ describe("Preview project onboarding", () => {
   });
 
   it("opens separate repair conversations while the main assistant and a previous repair are working", async () => {
-    expect(onboardingTag).toContain(':can-ask="assistantCodeAllowed"');
+    expect(onboardingTag).toContain(':can-ask="assistantJuniorAllowed"');
     expect(onboardingTag).toContain(':request-temporary-ai="startTemporaryAiTask"');
     const fixture = mountOnboarding({ temporaryChats: true });
     try {

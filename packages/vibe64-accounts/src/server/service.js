@@ -2292,10 +2292,10 @@ function createService({
     const reviewed = input.reviewedHelperWorkflows || [];
     if (!Array.isArray(reviewed) || reviewed.some((id) => !Object.hasOwn(orchestrators, id))) throw new Error("Choose the workflow whose helper settings you reviewed.");
     for (const engineId of reviewed) {
-      if (!orchestrators[engineId].economy) throw new Error("Choose Economy before confirming the migrated helper settings.");
+      if (!orchestrators[engineId].intern) throw new Error("Choose Intern before confirming the migrated helper settings.");
       delete orchestrators[engineId].helperRoutingReview;
     }
-    const configuration = validateAssistantRoutingConfiguration({ schemaVersion: 2, revision: saved.revision, orchestrators });
+    const configuration = validateAssistantRoutingConfiguration({ schemaVersion: 3, revision: saved.revision, orchestrators });
     return { saved, configuration };
   }
 
@@ -2326,7 +2326,7 @@ function createService({
             if (!selection) continue;
             const previous = saved.orchestrators[engine.engineId]?.[role];
             const unchanged = sameRoutingSelection(previous, selection);
-            if (engine.roles[role].error && (!unchanged || role === "economy" && input.reviewedHelperWorkflows?.includes(engine.engineId))) {
+            if (engine.roles[role].error && (!unchanged || role === "intern" && input.reviewedHelperWorkflows?.includes(engine.engineId))) {
               fieldErrors[`${engine.engineId}.${role}`] = engine.roles[role].error;
             }
             selection.selectionSource = unchanged ? previous.selectionSource

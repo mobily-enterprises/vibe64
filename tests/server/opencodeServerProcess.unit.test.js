@@ -296,7 +296,7 @@ test("non-project OpenCode tools stay behind approval and require the execution 
   assert.equal(guarded.agent[OPENCODE_ECONOMY_AGENT_ID].permission["*"], "deny");
 });
 
-test("OpenCode forces Z.AI API and Coding Plan through distinct canonical billing routes", () => {
+test("OpenCode forces Z.AI API and Coding Senior through distinct canonical billing routes", () => {
   const standard = JSON.parse(openCodeInlineConfig({
     canonicalUrl: "https://api.z.ai/api/paas/v4",
     modelProviderId: "zai"
@@ -355,17 +355,17 @@ test("OpenCode injects one low-cost subagent per configured provider economy mod
     ]
   }));
 
-  assert.deepEqual(config.agent["vibe64-economy-zai-coding-plan"], {
+  assert.deepEqual(config.agent["vibe64-intern-zai-coding-plan"], {
     description: "Vibe64 low-cost helper on the zai-coding-plan connection for delegating simple, inexpensive work.",
     mode: "subagent",
     model: "zai-coding-plan/glm-5.3-flash"
   });
-  assert.deepEqual(config.agent["vibe64-economy-deepseek"], {
+  assert.deepEqual(config.agent["vibe64-intern-deepseek"], {
     description: "Vibe64 low-cost helper on the deepseek connection for delegating simple, inexpensive work.",
     mode: "subagent",
     model: "deepseek/deepseek-v4-flash"
   });
-  assert.equal(config.agent["vibe64-economy-anthropic"], undefined);
+  assert.equal(config.agent["vibe64-intern-anthropic"], undefined);
   assert.equal(config.agent[OPENCODE_ECONOMY_AGENT_ID].hidden, true);
   assert.equal(Object.keys(config.agent).length, 4);
 });

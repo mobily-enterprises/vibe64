@@ -1202,7 +1202,7 @@ function fixture({
       const requested = input.assistantSelection;
       calls.selectionRequests.push({ requested, workflowEngineId: input.workflowEngineId, ...options });
       const selected = requested && Object.keys(requested).length > 0 ? requested : successorAssistantSelection;
-      return { assistantSelection: selected, assistantRouting: { mode: "plan", review: false,
+      return { assistantSelection: selected, assistantRouting: { mode: "senior", review: false,
         workflowEngineId: input.workflowEngineId || selected.engineId } };
     },
     setupRunner,
@@ -2107,7 +2107,7 @@ test("a confirmation replay resumes a durably approved workflow that was never s
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
+          assistantRouting: { mode: "senior", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       replacementCeiling: 2
     }
@@ -3081,7 +3081,7 @@ test("restart resumes successor discard after predecessor restore and after stat
         status: SESSION_RENEWAL_STATUS.RUNNING,
         successor: {
           assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
+          assistantRouting: { mode: "senior", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
           attempt,
           replacementCeiling: 2
         }
@@ -3552,7 +3552,7 @@ test("restart completes durable failure restoration before exposing FAILED", asy
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
+          assistantRouting: { mode: "senior", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       sessionId: "renewal-restart-successor"
     }
@@ -3596,7 +3596,7 @@ test("restart never restores a predecessor quiesced by another renewal", async (
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
+          assistantRouting: { mode: "senior", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       sessionId: "renewal-foreign-successor"
     }
@@ -4171,7 +4171,7 @@ test("automatic recovery resolves the persisted confirmer through the trusted ho
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
+          assistantRouting: { mode: "senior", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4211,7 +4211,7 @@ test("automatic recovery prefers the last trusted collaborator who continued the
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
+          assistantRouting: { mode: "senior", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4261,7 +4261,7 @@ test("active OLD_QUIESCING recovery never closes predecessor work that is not id
         status: SESSION_RENEWAL_STATUS.RUNNING,
         successor: {
           assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
+          assistantRouting: { mode: "senior", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
           attempt: 1,
           replacementCeiling: 2
         }
@@ -4301,7 +4301,7 @@ test("unavailable automatic actor recovery pauses durably until an explicit retr
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
+          assistantRouting: { mode: "senior", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4418,7 +4418,7 @@ test("collaborator continuation after boot recovery cannot race a newly active p
     status: SESSION_RENEWAL_STATUS.RUNNING,
     successor: {
       assistantSelection: ASSISTANT_SELECTION,
-          assistantRouting: { mode: "plan", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
+          assistantRouting: { mode: "senior", review: false, workflowEngineId: ASSISTANT_SELECTION.engineId },
       attempt: 1,
       replacementCeiling: 2
     }
@@ -4987,7 +4987,7 @@ test("renewal retains the requested workflow through backup creation and replace
   const completed = await eventually(() => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
     (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED);
   assert.equal(completed.successor.assistantSelection.engineId, "opencode");
-  assert.deepEqual(completed.successor.assistantRouting, { mode: "plan", review: false, workflowEngineId: "codex" });
+  assert.deepEqual(completed.successor.assistantRouting, { mode: "senior", review: false, workflowEngineId: "codex" });
   assert.deepEqual(JSON.parse(context.calls.createMetadata.assistant_routing), completed.successor.assistantRouting);
   assert.equal(context.calls.selectionRequests[0].workflowEngineId, "codex");
   assert.equal(completed.successor.attempt, 2);

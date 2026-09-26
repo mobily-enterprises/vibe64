@@ -345,12 +345,12 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.systemReloadVersion.value).toBe(1);
   });
 
-  it("uses Code availability for generated work while the main personal chat is restricted", async () => {
+  it("uses Junior availability for generated work while the main personal chat is restricted", async () => {
     const canCode = ref(true);
     const requestTemporaryAi = vi.fn(async () => ({ ok: true, taskId: "shared-code-task" }));
     const { view, props } = await createViewWithProps({ session: { ...viewProps().session,
       workspaceSetup: { status: "failed", diagnostic: "Install failed." }
-    } }, { assistantCanUseAi: ref(false), assistantCanUseCode: canCode, requestTemporaryAi });
+    } }, { assistantCanUseAi: ref(false), assistantCanUseJunior: canCode, requestTemporaryAi });
     view.composerDraft.value = "Keep my draft.";
     expect(view.assistantDirectAllowed.value).toBe(false);
     expect(view.workspaceSetupAskDisabled.value).toBe(false);
@@ -2454,7 +2454,7 @@ describe("useVibe64AutopilotView direct chat", () => {
 
   it.each(["restricted", "unavailable", "failed"])("allows native Save when AI access is %s and no turn is running", async (connectionStatus) => {
     const { props, view } = await createViewWithProps({ agentConnectionStatus: connectionStatus,
-      workState: { unsaved: true } }, { assistantCanUseAi: ref(false), assistantCanUseCode: ref(false) });
+      workState: { unsaved: true } }, { assistantCanUseAi: ref(false), assistantCanUseJunior: ref(false) });
     expect(view.saveWorkDisabled.value).toBe(false);
     expect(view.requestSaveWork()).toBe(true);
     await view.confirmSaveWork();

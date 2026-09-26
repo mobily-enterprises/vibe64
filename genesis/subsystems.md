@@ -48,9 +48,9 @@ identities and adding missed or corrected history to the next ordinary Send.
 It owns workflow chat modes, actor-aware destination resolution, isolated request
 classification and delivery, per-turn attribution, cancellation, and optional
 automatic review, temporary detailed work plans, exact-version approval and
-returning blocked coding work to planning. Plan and Code retain one effective orchestrator per actor.
-Deslop uses that workflow's Plan model for direct behavior-preserving cleanup.
-Foreign Economy and Backup chat turns reuse ordinary changeover.
+returning blocked coding work to planning. Senior and Junior retain one effective orchestrator per actor.
+Deslop uses that workflow's Senior model for direct behavior-preserving cleanup.
+Foreign Intern and Backup chat turns reuse ordinary changeover.
 Temporary conversation discovery and explicit-close cleanup belong here too;
 these chats survive view removal and stay separate from main History.
 
@@ -158,7 +158,7 @@ filename and content indexes for each working session.
 ## `database` Database exploration
 
 Owns inspection, diagram exploration, agent-assisted layout changes and query execution for a selected project database.
-Its transient copilot consumes the shared JSKIT conversation UI and central Economy
+Its transient copilot consumes the shared JSKIT conversation UI and central Intern
 resolution. It owns its bounded database loop and durable helper-cleanup references;
 the shared runtime owns scoped native conversations and their execution.
 

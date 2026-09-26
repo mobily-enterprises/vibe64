@@ -674,8 +674,8 @@ function createSessionAgentManager({
     const { purpose, workflowEngineId, override, requirements, reviewEnabled } = input;
     const assignments = configuration?.orchestrators?.[workflowEngineId] || {};
     const role = ASSISTANT_PURPOSE_ROLES[purpose];
-    const roles = purpose === "auto" ? ["plan", "code", "router"]
-      : ["plan", "code"].includes(role) ? ["plan", "code"] : role ? [role] : [];
+    const roles = purpose === "auto" ? ["senior", "junior", "router"]
+      : ["senior", "junior"].includes(role) ? ["senior", "junior"] : role ? [role] : [];
     const selections = roles.map((key) => override?.role === key && purpose !== "auto"
       ? override.selection : assignments[key]).filter(Boolean);
     const connectionAccess = [];
@@ -734,8 +734,8 @@ function createSessionAgentManager({
     const purposes = [...Object.keys(ASSISTANT_PURPOSE_ROLES), "auto"];
     return Object.fromEntries(await Promise.all(purposes.map(async (purpose) => [purpose,
       await resolvePurpose({ purpose, workflowEngineId: input.workflowEngineId,
-        reviewEnabled: input.review === true && ["code", "auto"].includes(purpose),
-        ...(input.override && (purpose === input.mode || purpose === "review" && input.mode === "code")
+        reviewEnabled: input.review === true && purpose === "auto",
+        ...(input.override && purpose === input.mode
           ? { override: { role: input.mode, selection: input.override } } : {})
       }, { ...options, configuration }, facts)
     ])));
@@ -751,7 +751,7 @@ function createSessionAgentManager({
       if (!access.has(key)) access.set(key, routingSelectionAccess(selection, options));
       return access.get(key);
     };
-    const needsSetup = (engineId) => !["plan", "code"].every((role) =>
+    const needsSetup = (engineId) => !["senior", "junior"].every((role) =>
       Object.hasOwn(configuration.orchestrators[engineId] || {}, role));
     const errors = new Map();
     const catalogs = [...providerById.keys()].some(needsSetup) ? (await Promise.all([...providerById.values()].map(async (provider) => {
@@ -768,23 +768,23 @@ function createSessionAgentManager({
       if (needsSetup(provider.id) && !error) {
         const catalog = catalogs.find(({ engineId }) => engineId === provider.id);
         const recommended = recommendedRoutingAssignments(catalog, { catalogs, assignments, connectionAccess: defaultAccess });
-        for (const role of ["plan", "code", "sharedBackup"]) {
+        for (const role of ["senior", "junior", "sharedBackup"]) {
           if (!Object.hasOwn(saved, role) && recommended[role]) assignments[role] = recommended[role];
         }
       }
-      if (!Object.keys(saved).length && !assignments.plan && !assignments.code && !error) return null;
-      const connectionAccess = await Promise.all([assignments.plan, assignments.code, assignments.sharedBackup].filter(Boolean).map(readAccess));
+      if (!Object.keys(saved).length && !assignments.senior && !assignments.junior && !error) return null;
+      const connectionAccess = await Promise.all([assignments.senior, assignments.junior, assignments.sharedBackup].filter(Boolean).map(readAccess));
       const previewConfiguration = { ...configuration, orchestrators: { ...configuration.orchestrators, [provider.id]: assignments } };
-      const decision = resolveAssistantPurpose({ purpose: "plan", workflowEngineId: provider.id, actor,
+      const decision = resolveAssistantPurpose({ purpose: "senior", workflowEngineId: provider.id, actor,
         configuration: previewConfiguration, connectionAccess, validateModels: false });
       const modelLabel = (role) => {
-        const selection = decision.planCodePair?.[role]?.effectiveSelection || saved[role];
+        const selection = decision.seniorJuniorPair?.[role]?.effectiveSelection || saved[role];
         if (!Object.hasOwn(saved, role)) return "Recommended on creation";
         return selection ? `${engineLabel(selection.engineId)} · ${selection.modelId}` : "Not configured";
       };
       return { engineId: provider.id, label: engineLabel(provider.id),
-        planLabel: modelLabel("plan"), codeLabel: modelLabel("code"),
-        backupUsed: Object.values(decision.planCodePair || {}).some((role) => role.backupUsed),
+        seniorLabel: modelLabel("senior"), juniorLabel: modelLabel("junior"),
+        backupUsed: Object.values(decision.seniorJuniorPair || {}).some((role) => role.backupUsed),
         available: !error && decision.available, error: error || decision.message };
     }));
     return { workflows: workflows.filter(Boolean) };
@@ -830,7 +830,7 @@ function createSessionAgentManager({
     // Illustrative actors affect only these read-only decisions. They never enter
     // a provider execution context. Preview uses the same policy as admission.
     const preview = (workflowEngineId, actor, previewConfiguration = configuration) => Object.fromEntries(
-      ["plan", "code", "economy", "prompt_hint", "request_routing", "review", "auto"].map((purpose) => {
+      ["senior", "junior", "intern", "prompt_hint", "request_routing", "review", "auto"].map((purpose) => {
         const decision = resolveAssistantPurpose({ purpose, workflowEngineId, actor, configuration: previewConfiguration, catalogs, connectionAccess });
         return [purpose, JSON.parse(JSON.stringify(decision, (key, value) =>
           ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value))];
@@ -843,7 +843,7 @@ function createSessionAgentManager({
       const recommendations = recommendedRoutingAssignments(engine, { catalogs, assignments, connectionAccess });
       const setupAssignments = { ...assignments };
       // Explicit setup fills only absent roles. An explicit null stays disabled.
-      if (!catalogErrors.has(engineId) && recommendations.plan && recommendations.code) {
+      if (!catalogErrors.has(engineId) && recommendations.senior && recommendations.junior) {
         for (const role of ASSISTANT_ROUTING_ASSIGNMENTS) {
           if (!Object.hasOwn(setupAssignments, role) && recommendations[role]) {
             setupAssignments[role] = recommendations[role];
@@ -853,8 +853,8 @@ function createSessionAgentManager({
       const setupConfiguration = { ...configuration,
         orchestrators: { ...configuration.orchestrators, [engineId]: setupAssignments } };
       const roles = Object.fromEntries(ASSISTANT_ROUTING_ASSIGNMENTS.map((role) => {
-        const purpose = role === "router" ? "request_routing" : role === "sharedBackup" ? "code" : role;
-        const candidates = ["plan", "code"].includes(role) ? (engine ? [engine] : []) : catalogs;
+        const purpose = role === "router" ? "request_routing" : role === "sharedBackup" ? "junior" : role;
+        const candidates = ["senior", "junior"].includes(role) ? (engine ? [engine] : []) : catalogs;
         const choices = candidates.flatMap((catalog) => routingModelChoices(catalog, { purpose }).map((choice) => {
           const fact = access.get(routeKey(choice));
           return { ...choice, engineLabel: catalog.label, ownerOnly: fact?.ownerOnly !== false,
@@ -864,16 +864,16 @@ function createSessionAgentManager({
         let error = "";
         if (assignment) {
           try {
-            if (["plan", "code"].includes(role) && assignment.engineId !== engineId) throw new Error("Plan and Code must use the workflow orchestrator.");
+            if (["senior", "junior"].includes(role) && assignment.engineId !== engineId) throw new Error("Senior and Junior must use the workflow orchestrator.");
             routingAssignmentSelection(catalogs.find((row) => row.engineId === assignment.engineId), assignment, { purpose });
             const choice = choices.find((row) => routeKey(row) === routeKey(assignment));
             if (!choice?.available) throw new Error(role === "sharedBackup" ? "Choose an available workspace connection for Shared backup." : "The selected AI connection is unavailable.");
-            if (["code", "sharedBackup"].includes(role) && choice.capabilities?.toolcall === false) throw new Error("Choose a model that supports coding tools.");
+            if (["junior", "sharedBackup"].includes(role) && choice.capabilities?.toolcall === false) throw new Error("Choose a model that supports coding tools.");
           } catch (cause) { error = cause.message; }
         }
         return [role, { assignment, recommendation: recommendations[role], choices, error }];
       }));
-      return { engineId, label: engine?.label || engineId, roles, choices: roles.plan.choices,
+      return { engineId, label: engine?.label || engineId, roles, choices: roles.senior.choices,
         setupAssignments, setupPreview: preview(engineId, assistantUser(options), setupConfiguration),
         error: catalogErrors.get(engineId) || "", helperRoutingReview: assignments.helperRoutingReview || null,
         preview: { viewer: preview(engineId, assistantUser(options)), ...(options.includeCollaboratorPreview ? {
