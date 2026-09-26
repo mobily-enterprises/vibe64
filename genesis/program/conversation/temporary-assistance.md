@@ -74,7 +74,8 @@ draft starts in Senior with review off, inherits only its parent's workflow, and
 does not require inference access to the parent's last model. The first routed Send resolves the submitting
 actor's destination. App-generated implementation and repair drafts explicitly
 select Junior with review off, preserving the parent's workflow. Direct roles use the conversation and user request; they neither consult Auto's working plan nor trigger an automatic reviewer. Dedicated repairs
-retain their instructions and cannot change mode.
+retain their instructions and cannot change mode. Reply labels show the role
+first, followed by the orchestrator and model, as in main chat.
 The authenticated actor supplied by the HTTP turn action is captured with the
 routing request, so later automatic review retains the submitting user's access
 even when an owner reads the conversation or triggers reconciliation.

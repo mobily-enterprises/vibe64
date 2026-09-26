@@ -35,7 +35,7 @@ const emit = defineEmits(["resend", "cancel", "edit"]);
 const turns = computed(() => {
   const result = conversationTurnsFromMessages(props.messages.map((message) => {
     const selection = message.assistantSelection;
-    return selection ? { ...message, assistantLabel: `${selection.engineId} · ${selection.modelId}${message.assistantRouting?.resolvedMode ? ` · ${assistantModeLabel(message.assistantRouting.resolvedMode)}` : ""}` } : message;
+    return selection ? { ...message, assistantLabel: `${message.assistantRouting?.resolvedMode ? `${assistantModeLabel(message.assistantRouting.resolvedMode)} · ` : ""}${selection.engineId} · ${selection.modelId}` } : message;
   }));
   const request = props.routingRequest;
   if (request && ["routing", "sending", "uncertain", "failed"].includes(request.status) && !result.some((turn) => turn.user?.messageId === request.messageId)) {

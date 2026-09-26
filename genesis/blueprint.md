@@ -221,6 +221,7 @@ answering AI when the selection changes: Codex, Claude Code or OpenCode with its
 Temporary replies keep that identity across tool progress and the final answer,
 independently of the AI selected in Main chat.
 Hovering a reply's name shows its saved model, provider and thinking choice.
+Reply labels put the role first, followed by the orchestrator and model.
 Older replies without a saved AI identity simply say "agent".
 Main and ordinary temporary chats offer Senior, Junior, Intern and Auto from one
 compact icon in the composer's bottom toolbar. The icon reflects the selected

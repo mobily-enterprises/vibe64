@@ -219,7 +219,7 @@ const adapter = computed(() => ({
       const engineName = selection?.engineId === "claude" ? "Claude Code" : selection?.engineId === "opencode" ? "OpenCode" : "Codex";
       return {
         ...turn,
-        assistantLabel: !selection ? "agent" : `${engineName} · ${selection.modelId}${turn.metadata?.assistantRouting?.resolvedMode ? ` · ${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)}` : ""}`,
+        assistantLabel: !selection ? "agent" : `${turn.metadata?.assistantRouting?.resolvedMode ? `${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ` : ""}${engineName} · ${selection.modelId}`,
         ...(!turn.system && turn.metadata?.assistantRouting && selection ? { system: { role: "system", text: `${turn.metadata.assistantRouting.requestedMode === "auto" ? "Auto → " : ""}${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ${engineName} · ${selection.modelId}` } } : {}),
         assistantDetails: selection
           ? `${engineName}\nModel: ${selection.modelId}\nProvider: ${selection.modelProviderId}\nThinking: ${selection.variantId || "Automatic"}`

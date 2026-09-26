@@ -2197,7 +2197,7 @@ for (const width of [390, 1280]) {
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
     await expect(page.getByLabel("Message AI assistant")).toBeVisible();
     for (const label of ["Senior", "Junior", "Intern"]) {
-      await expect(page.getByText(new RegExp(`Codex · .* · ${label}$`)).first()).toBeVisible();
+      await expect(page.locator(".assistant-transcript__assistant-header").getByText(new RegExp(`^${label} · Codex · `)).first()).toBeVisible();
     }
     const trigger = page.getByRole("button", { name: /^Chat mode:/ });
     await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Junior\./);

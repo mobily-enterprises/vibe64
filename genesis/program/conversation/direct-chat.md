@@ -20,7 +20,9 @@ theme-aware contrast. The label extends beyond the button circle without
 shifting the icon, increasing the button height or adding a tooltip. The session store
 snapshots the assistant selection on a new turn. History preserves that snapshot
 through normalization, and the adapter supplies per-turn labels and hover details
-to the shared transcript. Replies without a saved selection display "agent";
+to the shared transcript. Reply labels show the role first, followed by the
+orchestrator and model. This display order applies to existing replies without
+rewriting saved history. Replies without a saved selection display "agent";
 old history is not backfilled.
 Composer spacing closes in narrow panes so the companion control does not push
 Send or Stop onto another row. Compact icon widths and horizontal padding keep
