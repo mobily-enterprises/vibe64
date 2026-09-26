@@ -1170,3 +1170,23 @@ terminal, repository and project-understanding features. Maintainers can build
 and test the exact distributable before publishing it; release preparation does
 not remove their installed development tools. The installed editor includes the
 database drivers required by its Database view.
+
+Auto sends new work to the planner first. For implementation work, the planner
+investigates and writes a very detailed, temporary plan outside the project's Git
+history, covering findings, exact changes, decisions, steps and acceptance checks.
+Chat carries its human-readable summary and compact View plan/Implement actions.
+Coding starts only after approval of that version, through the button or a clear
+reply. Explicit Code remains available for direct implementation. The coder keeps
+progress and blockers in the document. A material decision returns work to the
+planner, preserving edits, and a revised plan needs approval again. Optional
+review checks implementation against the plan. Stop never starts another agent;
+interrupted handoffs wait for an explicit continuation after restart. Main and
+temporary conversations each own their plan until their normal lifecycle cleanup.
+
+Deslop uses the configured Plan model to perform behavior-preserving cleanup
+directly, with permission to edit code. The command and saved-commit action go
+straight there; Auto also recognizes equivalent cleanup wording. Cleanup does
+not launch another review or change the selected chat mode. In Auto, requests
+combining feature work and Deslop remain unsent with a polite explanation asking
+for separate requests; neither part starts and no cleanup is queued. The user
+can edit the message and send one request at a time.

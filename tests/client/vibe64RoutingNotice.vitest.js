@@ -60,7 +60,40 @@ it("keeps failures and review recovery controls visible", async () => {
     f.props.value.request = { messageId: "one", status };
     await nextTick();
     expect(f.state().actionable).toBe(true);
-    expect(f.state().reviewNeedsAction).toBe(true);
+    expect(f.state().followupNeedsAction).toBe(true);
   }
+  expect(feedback.report).not.toHaveBeenCalled();
+});
+
+it("only offers implementation for a ready plan after completion; paused and revised plans stay read-only", async () => {
+  const request = { messageId: "planned", status: "done", resolvedMode: "plan", workPlan: { status: "ready", revision: "one", text: "Detailed plan" } };
+  const f = mount(request);
+  expect(f.state().planReady).toBe(true);
+  f.props.value.request = { ...request, status: "sent" };
+  await nextTick();
+  expect(f.state().planReady).toBe(false);
+  expect(f.state().planStage).toBe("Planning");
+  f.props.value.request.resolvedMode = "code";
+  await nextTick();
+  expect(f.state().planStage).toBe("Coding");
+  for (const status of ["drafting", "paused", "blocked", "implemented"]) {
+    f.props.value.request = { ...request, workPlan: { ...request.workPlan, status } };
+    await nextTick();
+    expect(f.state().planReady).toBe(false);
+  }
+  f.props.value.request = { ...request, error: "Plan changed" };
+  await nextTick();
+  expect(f.state().planReady).toBe(false);
+});
+
+it("shows recovery controls for a stopped planning handoff", () => {
+  const f = mount({ status: "planning_pending", continuation: "plan", resolvedMode: "code", assignments: { plan: { engineId: "codex", modelId: "gpt-6-astra" } } });
+  expect(f.state().actionable).toBe(true);
+  expect(f.state().label).toBe("Back to planning · codex · gpt-6-astra");
+});
+
+it("leaves a mixed-request explanation on the unsent bubble instead of adding another banner", () => {
+  const f = mount({ status: "failed", reason: "mixed_deslop_request", error: "Please request feature work and Deslop separately." });
+  expect(f.state().actionable).toBe(false);
   expect(feedback.report).not.toHaveBeenCalled();
 });

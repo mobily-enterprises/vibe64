@@ -422,6 +422,8 @@
               :request="routingRequest"
               :active="props.active && conversationLogVisible"
               :retrying="routingReviewRetrying"
+              :busy="agentActive"
+              @implement="implementWorkingPlan"
               @retry="retryAutomaticReview"
               @skip="props.interruptAgentTurn({ reason: 'skip-review' })"
             />
@@ -1356,6 +1358,14 @@ async function retryAutomaticReview() {
   routingReviewRetrying.value = true;
   try { await props.sendAgentMessage({ messageId: routingRequest.value.messageId, message: routingRequest.value.input.message, reviewAction: "retry" }); }
   finally { routingReviewRetrying.value = false; }
+}
+async function implementWorkingPlan(planRevision) {
+  if (routingReviewRetrying.value || agentActive.value) return;
+  routingReviewRetrying.value = true;
+  try {
+    await props.sendAgentMessage({ messageId: crypto.randomUUID(), submissionKind: "send", planRevision,
+      message: "Implement the plan I have approved." });
+  } finally { routingReviewRetrying.value = false; }
 }
 const conversationAssistantLabel = computed(() => (
   `${props.session?.assistantSelection?.engineId === "opencode" ? "OpenCode" :

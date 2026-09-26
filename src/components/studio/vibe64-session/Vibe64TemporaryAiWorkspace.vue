@@ -178,6 +178,8 @@
           <Vibe64RoutingNotice
             :request="routingRequest"
             :active="props.active && temporary.open.value"
+            :busy="activeTask.busy"
+            @implement="temporary.implementPlan(activeTask.id, $event)"
             @retry="temporary.retryReview(activeTask.id)"
             @skip="stopTask(activeTask.id)"
           />

@@ -158,7 +158,7 @@ function createSessionConversations({
     }
     const outcome = response.outcome || normalizeVibe64AgentTaskResult(response.text);
     const route = JSON.parse(record.routingMetadata?.assistant_routing_request || "null");
-    if (route && ["sent", "reviewing"].includes(route.status) && response.runId &&
+    if (route && ["sent", "reviewing", "planning"].includes(route.status) && response.runId &&
         !["starting", "inProgress", "ready"].includes(response.status)) {
       // Schedule after releasing the existing write lock. Native idle events
       // normally do this; a read also recovers a missed completion notification.

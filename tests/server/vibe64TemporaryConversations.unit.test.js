@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile, writeFile, access } from "node:fs/promises";
+import { mkdir, readFile, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
@@ -9,6 +9,7 @@ import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agent
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
 import { createSessionConversations } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
+import { readWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
@@ -196,7 +197,7 @@ async function conversationFixture(root, engineId = "codex") {
   return { attachments, events, native, restart, service: restart(), runtime, store, selection, sessionAgent, capabilities };
 }
 
-test("temporary Auto and one automatic review retain the native conversation without changing main chat", async () => {
+test("temporary Auto planning, approval, review and Deslop retain the native conversation without changing main chat", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
     const role = (modelId) => ({ ...resolveVibe64AssistantSelection(f.capabilities, { ...f.selection, modelId, catalogRevision: f.capabilities.revision }), selectionSource: "explicit" });
@@ -239,24 +240,51 @@ test("temporary Auto and one automatic review retain the native conversation wit
     await service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode: "auto", review: true } });
     const input = { conversationId: "chat", messageId: "request", message: "Implement the agreed change." };
     await service.startTemporaryConversationTurn("one", input);
-    assert.equal(starts[0].selection.modelId, "chosen");
-    assert.match(starts[0].input.message, /Vibe64 mode: code/);
+    assert.equal(starts[0].selection.modelId, "gpt-6-astra");
+    const planPath = path.join(f.store.paths("one").conversationsRoot, "chat", "work-plan", "plan.md");
+    await writeFile(planPath, "# Agreed change\nStatus: ready\n\n" + ["Outcome and scope", "Findings", "Proposed changes", "Decisions", "Implementation steps", "Verification", "Progress and blockers"]
+      .map((heading) => `## ${heading}\nConcrete implementation evidence for ${heading}.\n`).join("\n"));
+    f.native.status = "completed";
+    await service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-1" } });
+    const planned = JSON.parse((await f.store.readSessionConversation("one", "chat")).routingMetadata.assistant_routing_request);
+    assert.equal(planned.workPlan.status, "ready");
+    assert.equal(starts.length, 1, "no coding before approval");
+    await service.startTemporaryConversationTurn("one", { ...input, messageId: "approve", planRevision: planned.workPlan.revision });
+    assert.equal(starts[1].selection.modelId, "chosen");
+    assert.match(starts[1].input.message, /Vibe64 mode: code/);
     const record = await f.store.readSessionConversation("one", "chat");
     assert.equal(JSON.parse(record.routingMetadata.assistant_routing_request).status, "sent");
     assert.equal((await f.store.readConversationLog("one")).length, 0);
     assert.equal(JSON.parse((await f.store.readSession("one")).metadata.assistant_selection).modelId, "main-model");
     f.native.status = "completed";
-    await service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-1" } });
-    assert.equal(starts.length, 2, (await f.store.readSessionConversation("one", "chat")).routingMetadata.assistant_routing_request);
-    assert.equal(starts[1].selection.modelId, "gpt-6-astra");
-    assert.equal(starts[1].input.conversationId, starts[0].input.conversationId);
-    assert.equal(starts[1].input.messageId, JSON.parse(record.routingMetadata.assistant_routing_request).reviewMessageId);
-    f.native.status = "completed";
     await service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-2" } });
+    assert.equal(starts.length, 3, (await f.store.readSessionConversation("one", "chat")).routingMetadata.assistant_routing_request);
+    assert.equal(starts[2].selection.modelId, "gpt-6-astra");
+    assert.equal(starts[2].input.conversationId, starts[1].input.conversationId);
+    assert.equal(starts[2].input.messageId, JSON.parse(record.routingMetadata.assistant_routing_request).reviewMessageId);
+    f.native.status = "completed";
+    await service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-3" } });
     const restored = await f.restart({ systemRoot: root }).readTemporaryConversation("one", { conversationId: "chat" });
     assert.equal(JSON.parse(restored.routingMetadata.assistant_routing_request).reviewStatus, "completed");
-    assert.equal(starts.length, 2);
-    assert.equal(restored.messages.filter((message) => message.role === "user").length, 2);
+    assert.equal(starts.length, 3);
+    assert.equal(restored.messages.filter((message) => message.role === "user").length, 3);
+    await service.startTemporaryConversationTurn("one", { ...input, messageId: "cleanup", message: "Deslop" });
+    assert.equal(starts[3].selection.modelId, "gpt-6-astra");
+    assert.equal(starts[3].input.genesisTask, "deslop");
+    assert.equal(starts[3].input.conversationId, starts[0].input.conversationId);
+    assert.match(starts[3].input.message, /You may edit code for behavior-preserving cleanup/);
+    f.native.status = "completed";
+    await service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-4" } });
+    assert.equal(starts.length, 4, "Deslop never schedules another review");
+    f.sessionAgent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"plan","reason":"mixed_deslop_request"}' });
+    await assert.rejects(service.startTemporaryConversationTurn("one", {
+      ...input, messageId: "mixed", message: "Add a feature and deslop."
+    }), /please request feature work and Deslop separately/);
+    assert.equal(starts.length, 4, "neither part of the mixed request reaches the conversation");
+    assert.equal((await f.store.readConversationLog("one")).length, 0);
+    assert.equal(JSON.parse((await f.store.readSession("one")).metadata.assistant_selection).modelId, "main-model");
+    await service.deleteTemporaryConversation("one", { conversationId: "chat" });
+    await assert.rejects(access(planPath), { code: "ENOENT" });
   });
 });
 
@@ -293,6 +321,14 @@ test("Close waits for a starting Router and retains its parent when helper clean
     const service = f.restart({ systemRoot: root });
     await service.createTemporaryConversation("one", { conversationId: "chat" });
     await service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode: "auto" } });
+    const planRoot = path.join(f.store.paths("one").conversationsRoot, "chat", "work-plan");
+    await mkdir(planRoot, { recursive: true });
+    await writeFile(path.join(planRoot, "plan.md"), "Status: ready\n\n" + ["Outcome and scope", "Findings", "Proposed changes", "Decisions", "Implementation steps", "Verification", "Progress and blockers"]
+      .map((heading) => `## ${heading}\nConcrete implementation evidence for ${heading}.\n`).join("\n"));
+    const workPlan = await readWorkPlan({ session: { sessionId: "one" }, runtime: { store: f.store }, routingConversationId: "chat" });
+    const planned = await f.store.readSessionConversation("one", "chat");
+    await f.store.writeSessionConversation("one", "chat", { routingMetadata: { ...planned.routingMetadata,
+      assistant_routing_request: JSON.stringify({ status: "done", workPlan }) } });
     const sending = service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "request", message: "Implement it." });
     void sending.catch(() => {});
     await starting.promise;

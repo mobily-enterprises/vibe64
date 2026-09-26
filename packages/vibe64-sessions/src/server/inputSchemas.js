@@ -89,6 +89,7 @@ function requiredInputSchema(fields) {
 }
 
 const agentMessageFields = {
+  planRevision: { type: "string", maxLength: 64, required: false },
   reviewAction: { type: "string", enum: ["retry"], required: false },
   submissionKind: { type: "string", enum: ["send", "steer"], required: false },
   agentSettings: {

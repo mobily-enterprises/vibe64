@@ -508,6 +508,18 @@ function useVibe64TemporaryAi({
     } catch (error) { updateTask(taskId, { error: error.message }); }
   }
 
+  async function implementPlan(taskId, planRevision) {
+    const task = tasks.value.find((candidate) => candidate.id === taskId);
+    if (!task || task.busy) return;
+    updateTask(taskId, { busy: true, error: "" });
+    try {
+      await request(vibe64TemporaryConversationTurnsPath(task.apiPath, task.sessionId, task.conversationId), {
+        method: "POST", body: { messageId: crypto.randomUUID(), message: "Implement the plan I have approved.", planRevision, submissionKind: "send" }
+      });
+      void pollTask(taskId);
+    } catch (error) { updateTask(taskId, { busy: false, error: error.message }); }
+  }
+
   function updateAgentSetting(taskId = "", parameterId = "", value = "") {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     if (!task) {
@@ -1046,6 +1058,7 @@ function useVibe64TemporaryAi({
     updateDraft,
     updateRouting,
     retryReview,
+    implementPlan,
     updateRepairTask
   };
 }

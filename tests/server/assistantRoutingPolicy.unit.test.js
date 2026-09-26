@@ -62,7 +62,11 @@ test("short follow-ups receive their latest exchange and bounded older context",
 
 test("the classifier cannot supply executable destinations or malformed decisions", () => {
   assert.deepEqual(parseRoutingDecision('{"mode":"code","reason":"explicit_implementation"}'), { mode: "code", reason: "explicit_implementation" });
+  assert.deepEqual(parseRoutingDecision('{"mode":"deslop","reason":"deslop"}'), { mode: "deslop", reason: "deslop" });
+  assert.deepEqual(parseRoutingDecision('{"mode":"plan","reason":"mixed_deslop_request"}'), { mode: "plan", reason: "mixed_deslop_request" });
   for (const output of ["code", "null", '{"mode":"economy","reason":"unclear"}',
+    '{"mode":"deslop","reason":"planning"}', '{"mode":"code","reason":"deslop"}',
+    '{"mode":"code","reason":"mixed_deslop_request"}',
     '{"mode":"code","reason":"explicit_implementation","url":"https://example.invalid"}',
     ...["engineId", "modelId", "command"].map((key) => JSON.stringify({
       mode: "code", reason: "explicit_implementation", [key]: "untrusted-router-value"
@@ -71,12 +75,15 @@ test("the classifier cannot supply executable destinations or malformed decision
   }
 });
 
-test("Plan prohibits edits while the scoped review instruction allows fixes", () => {
+test("Plan permits only its working document while the scoped review instruction allows fixes", () => {
   const text = "The original human text.";
-  assert.match(assistantModePrompt("plan", text), /Do not create, modify, or delete files/);
+  assert.match(assistantModePrompt("plan", text), /Do not change application files/);
   assert.match(assistantModePrompt("code", text), /Stop for an unresolved architectural/);
   assert.match(assistantModePrompt("review", text), /may directly fix in-scope defects/);
   assert.ok(assistantModePrompt("review", text).endsWith(text));
+  assert.match(assistantModePrompt("deslop", text), /You may edit code for behavior-preserving cleanup/);
+  assert.match(assistantModePrompt("deslop", text), /Do not implement features/);
+  assert.ok(assistantModePrompt("deslop", text).endsWith(text));
 });
 
 test("routing receipts and reviewer identity survive transcript storage and reload", async (t) => {

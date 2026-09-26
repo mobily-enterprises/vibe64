@@ -2082,3 +2082,81 @@ async function fulfillJson(route: Route, payload: unknown) {
     contentType: "application/json"
   });
 }
+
+for (const width of [390, 820, 1280]) {
+  hintTest(`@working-plan detailed plan approval preserves drafts and fits at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const sent: Record<string, unknown>[] = [];
+    await mockDirectChat(page, { onMessage: body => { sent.push(body); } });
+    const revision = "a".repeat(64);
+    const selection = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra" };
+    const routing = { mode: "auto", resolvedMode: "plan", status: "done", messageId: "planned",
+      assignments: { plan: selection, code: { ...selection, modelId: "deepseek-flash" } },
+      workPlan: { status: "ready", revision, text: "# Rename wash terminology\n\n## Findings\nThe job-card status after Waiting still says Washing.\n\n## Proposed changes\nReplace visible wording with Bathing; preserve stored identifiers.\n\n## Verification\nCheck the job card and search every display label.\n" } };
+    const session = { ...directSession(), assistantSelection: selection, metadata: {
+      assistant_routing: JSON.stringify({ mode: "auto", workflowEngineId: "codex", review: true }),
+      assistant_routing_request: JSON.stringify(routing)
+    } };
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    const composer = page.getByLabel("Message AI assistant");
+    await expect(composer).toBeVisible();
+    await composer.fill("Keep my next question as a draft");
+    const view = page.getByRole("button", { name: "View plan", exact: true });
+    await expect(view).toBeVisible();
+    await view.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Working plan" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("The job-card status after Waiting still says Washing.")).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: testInfo.outputPath(`plan-${width}.png`), animations: "disabled" });
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(view).toBeFocused();
+    await expect(composer).toHaveValue("Keep my next question as a draft");
+    await view.click();
+    await dialog.getByRole("button", { name: "Implement with deepseek-flash" }).click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0].planRevision).toBe(revision);
+    expect(sent[0].message).toBe("Implement the plan I have approved.");
+    await expect(composer).toHaveValue("Keep my next question as a draft");
+  });
+}
+
+hintTest("@deslop-routing a mixed request remains editable with one polite explanation after reload", async ({ page }) => {
+  const explanation = "In Auto, please request feature work and Deslop separately. Send the feature request first, then ask for Deslop after implementation.";
+  let routing: Record<string, unknown> | null = null;
+  let submissions = 0;
+  await mockDirectChat(page);
+  await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
+    ok: true, ...directSession(), metadata: {
+      assistant_routing: JSON.stringify({ mode: "auto", workflowEngineId: "codex", review: true }),
+      ...(routing ? { assistant_routing_request: JSON.stringify(routing) } : {})
+    }
+  }));
+  await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-message`, async route => {
+    const input = requestBodyWithoutOrigin(route.request());
+    submissions++;
+    routing = { messageId: input.messageId, input, mode: "auto", status: "failed", reason: "mixed_deslop_request", error: explanation };
+    await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({
+      ok: false, code: "vibe64_assistant_split_request", error: explanation
+    }) });
+  });
+  await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+  const composer = page.getByLabel("Message AI assistant");
+  await composer.fill("Add this feature and deslop afterwards.");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(page.getByText(explanation, { exact: false })).toHaveCount(1);
+  await composer.fill("Keep this next draft.");
+  await page.reload();
+  for (const width of [390, 820, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByText(explanation, { exact: false })).toHaveCount(1);
+    await expect(composer).toHaveValue("Keep this next draft.");
+    await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
+  }
+  expect(submissions).toBe(1);
+});

@@ -213,3 +213,22 @@ Focused evidence: `assistantRoutingConfigurationUpgrade.unit.test.js`,
 `assistantRoutingStateInventory.unit.test.js`, `assistantRoutingStateUpgrade.unit.test.js`
 and `stateUpgrades.unit.test.js`, including the packaged CLI and interrupted
 publication before ledger commit.
+
+## Conversation working plans
+
+Working plans are new conversation-owned artifacts, created only by explicit
+planning work. They do not transform existing history or metadata and require no
+historical backfill. The existing request record may carry a `workPlan` display
+snapshot and approved content revision plus a `continuation: "plan"` for a blocked
+coding handoff. Absence means there is no approvable plan, never inferred approval
+from old conversation text. Existing admitted requests retain their receipts;
+new Auto coding requires a current approved document. Main plans are stored under
+`work-plan/plan.md` inside the session runtime, and temporary plans under the
+existing conversation directory. Existing archive and explicit-close operations
+own these files together with their surrounding conversation state.
+
+A newly admitted cleanup request can carry `task: "deslop"` in that same request
+record, while its resolved model role stays Plan. Mixed Auto requests use the
+existing failed/unsent state with a `mixed_deslop_request` reason and fixed
+explanation. These are new request outcomes, not historical transformations;
+no old requests are reclassified or backfilled.

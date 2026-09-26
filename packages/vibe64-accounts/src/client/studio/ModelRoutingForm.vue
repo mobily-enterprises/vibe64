@@ -250,7 +250,7 @@ async function reload() {
           <dl v-else class="model-routing__results">
             <div v-for="row in previewRows" :key="row.id" class="py-2">
               <dt class="text-label-large">{{ row.label }}</dt>
-              <dd class="text-body-medium">{{ decisions[row.id]?.available ? row.id === 'auto' ? 'Available · Router chooses Plan or Code' : selectionLabel(decisions[row.id].effectiveSelection) : 'Unavailable' }}<p v-if="decisionReason(row.id)" class="text-body-small">{{ decisionReason(row.id) }}</p></dd>
+              <dd class="text-body-medium">{{ decisions[row.id]?.available ? row.id === 'auto' ? 'Available · Plan first, then approve coding' : selectionLabel(decisions[row.id].effectiveSelection) : 'Unavailable' }}<p v-if="decisionReason(row.id)" class="text-body-small">{{ decisionReason(row.id) }}</p></dd>
             </div>
           </dl>
         </div>

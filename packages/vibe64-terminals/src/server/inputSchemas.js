@@ -94,6 +94,7 @@ const temporaryConversationInputValidator = validator({
   sessionId: sessionIdField
 });
 const temporaryConversationTurnActionInputValidator = validator({
+  planRevision: optionalText,
   reviewAction: { type: "string", enum: ["retry"], required: false },
   submissionKind: { type: "string", enum: ["send", "steer"], required: false },
   agentSettings: {

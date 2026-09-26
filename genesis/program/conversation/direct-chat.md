@@ -175,6 +175,7 @@ references consistent. A confirmed send clears only its accepted receipts.
 ## Sources
 
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
+- `packages/vibe64-terminals/src/server/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
@@ -366,11 +367,71 @@ changes and native turn boundaries refresh access without refreshing on every
 streamed message. Missing assignments explain where
 to configure them or direct the user to the owner.
 
+Auto starts new implementation work with Plan, even when the user phrases it as
+an imperative. The Router classifies ordinary new requests by intent, including
+cleanup requests expressed without the word Deslop. The planner investigates and writes a very detailed working
+Markdown document outside project Git. Main chat owns
+`<sessionRoot>/work-plan/plan.md`; each temporary conversation owns
+`<conversationsRoot>/<conversationId>/work-plan/plan.md`, removed by its existing
+Close cleanup. Session archival retains the main plan with other runtime files;
+normal session retention owns expiry. No application source document is created.
+The file has a Status line (drafting, ready, blocked or implemented) and sections
+for outcome/scope, findings, proposed changes, decisions, implementation steps,
+verification, and progress/blockers. Ready requires every section to have content.
+The prompt requires concrete inspected files/occurrences, exact intended changes,
+resolved decisions and acceptance checks; structural validation cannot certify
+semantic completeness. Pure conversation need not create a document.
+Plan may write only this designated document, not application files. Beginning
+another planning turn invalidates readiness before inference. The conversation
+keeps a display snapshot and its content revision in the existing routing request;
+the file is the working authority. View plan opens a compact Markdown dialog.
+Implement submits the displayed revision through ordinary Send, retaining the
+draft and existing access checks. Natural-language approval uses the Router;
+only unambiguous approval of a currently ready plan can select Code. The runtime
+checks the ready file and approved revision again before changing model or sending.
+No file, an incomplete document, a new request, or a stale approval cannot start
+Auto coding. Explicit Code remains a direct implementation choice. Plan completion
+never starts coding automatically.
+Coding updates progress and verification without silently rewriting the agreed
+scope. A material blocker is recorded with Status: blocked, then the coder ends
+its turn. After confirmed normal completion, the coordinator returns to the
+captured Plan model with a visible Back to planning message, even with review off.
+The planner preserves partial edits, revises the same file and waits for approval.
+Ordinary implementation failures remain the coder's responsibility. Review uses
+the document and accepted steering and may also return a scope decision to Plan.
+Stop suppresses this continuation even if a late native event reports success;
+interrupted planning cannot leave an approvable plan. Recovered blockers after
+restart require Continue planning rather than running automatically. Delivery
+uncertainty checks the retained receipt before any retry. Both follow-up purposes
+reuse the existing routing owner and native delivery, not another agent runtime.
+
+Deslop is a task using the configured Plan model with permission to clean up code,
+not a separate selectable chat mode. A standalone `deslop` command or the saved
+commit Deslop action bypasses classification, including from explicit modes.
+Other cleanup-only wording in Auto uses the Router's Deslop decision. Deslop
+applies the project's cleanup guidance directly, preserves behavior and staging,
+does not create an implementation proposal, and never schedules another review.
+The conversation's mode preference remains unchanged. Dispatch validates the
+captured Plan connection and tool capability; a Code override cannot redirect
+cleanup. Existing actor access and shared-backup policy still apply.
+Cleanup invalidates a previous ready implementation proposal before editing.
+The reply and status name Deslop and the answering model. A direct Deslop command
+cannot steer an active coder or change an unfinished goal; the user must first
+finish or stop the current turn, and finish or cancel a goal. Other steering
+retains its existing current-turn semantics and is not reclassified.
+Auto accepts feature work or Deslop in one request, never both. A mixed decision
+returns a fixed, polite explanation asking for separate requests. The original
+message stays unsent and editable using existing delivery recovery, without a
+duplicate banner, file changes, native dispatch or queued cleanup. A question
+about Deslop or ambiguous cleanup/redesign remains planning. Classifier output
+is a validated mode/reason pair, never a model, executable command or generated
+rejection message. Cancellation and receipt recovery use the ordinary coordinator.
+
 Auto captures Router and the effective Plan–Code pair, the actor, connection
 identities and configuration revision before invoking the existing tool-free
 classification workload in a separate non-project scope. Economy is not an Auto
 dependency. The classifier sees the submitted text, attachment labels and bounded
-recent visible exchanges; it returns only a mode and reason. Its native reference
+recent visible exchanges plus the ready plan revision and bounded outline; it returns only a mode and reason. Its native reference
 and any managed execution ID stay in the parent request until verified cleanup.
 Helper callbacks merge that reference under the ordinary lock without overwriting
 cancellation. A late native start is stopped before delivery; failed cleanup
@@ -387,7 +448,7 @@ saved identity and expose recovery actions; they never start a replacement threa
 or send an automatic recovery prompt.
 
 One durable request record owns preparation, admission uncertainty and an optional
-review continuation. Stop cancels preparation and suppresses its late result.
+review or return-to-planning continuation. Stop cancels preparation and suppresses its late result.
 Once cancellation and helper cleanup are saved, the Send response reports that
 cancellation without competing with another chat for write admission.
 After native admission it uses ordinary interruption. Native receipts prevent
@@ -420,8 +481,7 @@ skips review visibly. Backend recovery offers an unsent review for Retry/Skip
 instead of launching it. Review retries use the original submitting actor even
 when an owner triggers Retry. The host revalidates that original user's current
 access before review; removal blocks review and preserves completed coding work.
-Main and temporary chat retain a compact status notice when review was skipped,
-cancelled or stopped before finishing, including after reload. The next request
+Main and temporary chat retain outcomes in history; transient review notices do not replay after reload. The next request
 replaces that notice; displaying it does not restart coding or review.
 Replaced connections cannot receive a captured request; changed configuration
 does not retarget it. Goal mode, workflow and

@@ -47,8 +47,10 @@ It also owns switching the main conversation between engines, preserving native
 identities and adding missed or corrected history to the next ordinary Send.
 It owns workflow chat modes, actor-aware destination resolution, isolated request
 classification and delivery, per-turn attribution, cancellation, and optional
-automatic review. Plan and Code retain one effective orchestrator per actor;
-foreign Economy and Backup chat turns reuse ordinary changeover.
+automatic review, temporary detailed work plans, exact-version approval and
+returning blocked coding work to planning. Plan and Code retain one effective orchestrator per actor.
+Deslop uses that workflow's Plan model for direct behavior-preserving cleanup.
+Foreign Economy and Backup chat turns reuse ordinary changeover.
 Temporary conversation discovery and explicit-close cleanup belong here too;
 these chats survive view removal and stay separate from main History.
 
