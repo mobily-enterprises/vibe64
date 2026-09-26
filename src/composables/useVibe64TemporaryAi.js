@@ -732,7 +732,7 @@ function useVibe64TemporaryAi({
     updateTask(taskId, {
       sendVersion: (task.sendVersion || 0) + 1,
       busy: true,
-      draft: retry && task.draft !== payload.draftSnapshot ? task.draft : "",
+      draft: retry && ![payload.draftSnapshot, payload.message, payload.displayMessage].includes(task.draft) ? task.draft : "",
       error: "",
       errorCode: "",
       pendingMessageId: messageId,

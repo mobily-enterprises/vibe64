@@ -115,6 +115,8 @@ recovery actions remain above the composer. Notices never restart work.
 When routing stops before delivery, the local prompt returns to the composer;
 its next explicit Send uses a new message ID. Newer draft text and attachments
 are retained, and a clean cancellation does not appear as a failed message.
+Retry clears a draft matching either the submitted instructions or their visible
+message, including after reload, while retaining a different unsent reply.
 Dedicated repair requests keep their own instructions and do not expose modes.
 
 Each ordinary temporary chat reads availability from the same central resolver as

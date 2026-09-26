@@ -336,6 +336,35 @@ describe("temporary AI mounted lifetime", () => {
     }));
   });
 
+  it.each(["instructions", "label", "new reply"])("restored repair Retry clears submitted %s but preserves a newer reply", async (draftKind) => {
+    const message = "Help resolve this Vibe64 Update problem. Inspect repository state and preserve all work.\n\nInternal repair diagnostics.";
+    const displayMessage = "Fix this Update problem without losing work.";
+    const draft = draftKind === "instructions" ? message : draftKind === "label" ? displayMessage : "Please also check the tests.";
+    const input = { message, displayMessage, presentation: { draft: "" } };
+    const request = { messageId: "repair-request", status: "failed", input };
+    http.request.mockImplementation(async (url, options) => {
+      if (options?.method === "POST") return { ok: true, status: "inProgress", runId: "repair-turn" };
+      if (options?.method === "PATCH") return { ok: true };
+      if (url === CONVERSATION_PATH) return { ok: true, status: "inProgress", runId: "repair-turn" };
+      return { conversations: [{ conversationId: "conversation-1", recoveryOperation: "update", status: "failed",
+        draft, messages: [], routingMetadata: { assistant_routing_request: JSON.stringify(request) }
+      }] };
+    });
+    const { temporary } = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(temporary.send("conversation-1", { retryMessageId: "repair-request" })).resolves.toBe(true);
+    const expectedDraft = draftKind === "new reply" ? draft : "";
+    expect(temporary.activeTask.value.draft).toBe(expectedDraft);
+    expect(temporary.activeTask.value.busy).toBe(true);
+    const sends = http.request.mock.calls.filter(([, options]) => options?.method === "POST");
+    expect(sends).toHaveLength(1);
+    expect(sends[0][1].body).toMatchObject({ messageId: "repair-request", message, displayMessage });
+    await vi.advanceTimersByTimeAsync(250);
+    expect(http.request).toHaveBeenLastCalledWith(CONVERSATION_PATH, expect.objectContaining({
+      method: "PATCH", body: expect.objectContaining({ presentation: expect.objectContaining({ draft: expectedDraft }) })
+    }));
+  });
+
   it("retries a failed message with its original identity and payload while preserving a newer draft", async () => {
     const { temporary, task } = mountTemporaryAi();
     temporary.updateAttachments(task.id, [{ attachmentId: "original-file", fileName: "first.txt" }]);
