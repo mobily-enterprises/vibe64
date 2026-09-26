@@ -746,9 +746,11 @@ current source details before the person confirms continuation.
 File Save writes the session file. The chat and Changes actions instead open a
 compact Save changes review with the changed-file count, View diff and exact
 destination. Local and Vibe64-only projects offer Save; GitHub offers Create
-draft PR and Commit & push. Scope details stay collapsed until requested.
+draft PR and Commit & push.
 The Save control uses a floppy disk, combined with a translucent Git commit
-symbol for GitHub destinations. The server rejects an outdated destination
+symbol for GitHub destinations. Its hover hint includes the save operation and
+repository/branch; ordinary sessions no longer repeat that line above the chat.
+The server rejects an outdated destination
 review. Working files, recovery checkpoints, project versions, database rows,
 conversation history and application publishing have separate effects.
 
@@ -759,8 +761,10 @@ project, the folder the person opened is authoritative and Save records the
 session's work there as an ordinary local commit. A PR session has an explicit
 GitHub branch authority of its own; publishing its work does not change the
 project authority or notify sessions that track a different branch. Hosted
-session creation also offers an optional existing or new branch. The default
-remains the project branch, and database scope still determines session limits.
+session creation offers a visible Work on choice: the project branch, Create a
+new branch, or Use an existing branch. New branches have a name and a source
+branch; an existing name is rejected before submission. The default remains
+the project branch, and database scope still determines session limits.
 Explicit branch destinations survive renewal and archive indexing. Choosing a
 branch for a new session does not switch another session's files or database.
 GitHub project owners can require PR publication in the Vibe64 workflow. This

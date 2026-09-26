@@ -33,8 +33,7 @@ Git commands.
 
 File Save writes only that file in the session. The compact Save changes review
 shows the changed-file count, View diff and captured destination, with a short
-reminder to save open editor changes first. A collapsed What's included section
-explains the on-disk scope, new files, separate database/chat data and deployment.
+reminder to save open editor changes first.
 
 The confirmation is Save for local and Vibe64 Git projects, or Commit & push for
 GitHub, with the exact repository and branch shown once above the actions.
@@ -45,6 +44,11 @@ publication details collapsed. Repository automation is explained in those detai
 The header Save icon is a floppy disk for local and Vibe64 Git destinations;
 GitHub combines a floppy disk and Git commit symbol with partial transparency
 so both remain visible. Update retains its distinct existing icon and behavior.
+The Save icon's hover hint includes the operation and repository/branch alongside
+its current status. Update/rebase, status checks and unavailable actions use their
+own status with the repository/branch, without a save or push label.
+Ordinary sessions do not repeat this destination above chat;
+PR sessions retain their separate PR context banner.
 The browser retains the reviewed destination across refreshes; the server
 rechecks session, mode, repository and branch before preparation and under the
 publication lock. A stale review requires a new review. These commands do not
@@ -255,7 +259,12 @@ and use native non-forcing Git switch. Creation starts at the reviewed HEAD and
 does not set an upstream or push. Older sessions keep their original binding.
 
 Hosted session creation can list or create branches through the existing project
-owner. A selection carries its observed commit, which the server rechecks under
+owner. The dialog's Work on selector offers the project branch, a new branch,
+or an existing branch without an advanced switch. Creating asks for the name
+and source branch, rejects an already listed name, and states where changes
+will be saved. Listing and selection both use the project service's configured
+GitHub credential mode; neither silently substitutes the process environment.
+A selection carries its observed commit, which the server rechecks under
 the project source lock. Creating a branch is absent-only; opening an existing
 branch clones that branch's verified commit. No current worktree is retargeted.
 The optional `repository_branch` metadata explicitly overrides the project branch

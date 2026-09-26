@@ -1310,10 +1310,10 @@ function createService({
       return projectResult(async () => localRepositoryRemote(await currentProjectState(), input, { logger }));
     },
     async repositoryBranches(input = {}) {
-      return projectResult(async () => repositoryBranches(await currentProjectState(), input));
+      return projectResult(async () => repositoryBranches(await currentProjectState(), input, { env }));
     },
     async resolveSessionBranch(input = {}) {
-      return repositoryBranches(await currentProjectState(), input);
+      return repositoryBranches(await currentProjectState(), input, { env });
     },
     async readRepositoryWorkflow() {
       return readProjectRepositoryWorkflow(selectedProjectRuntimeRoot());

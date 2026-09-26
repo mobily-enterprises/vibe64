@@ -30,6 +30,9 @@ export function githubApi(input, { env = process.env, runCommand = runVibe64Comm
       cwd: identity.home, envPolicy: "auth", mode: "capture", purpose: "github-api",
       runtimes: ["gh"], userKey: identity.username, timeout: 30_000, maxBuffer: 4 * 1024 * 1024
     });
+    if (result.code === "vibe64_github_user_credentials_required") {
+      throw vibe64Error(result.error, result.code);
+    }
     let value;
     try { value = JSON.parse(result.stdout || ""); } catch { /* Handled as an unsuccessful response below. */ }
     if (allowNotFound && method === "GET" && String(value?.status) === "404") return null;

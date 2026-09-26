@@ -57,7 +57,7 @@
               :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable) || temporaryAiWorkspace?.updateRepairTask?.busy"
               height="48"
               icon
-              :title="saveWorkCheckAvailable ? `${saveWorkTitle}. Click to check for updates.` : saveWorkTitle"
+              :title="saveWorkHeaderHint"
               type="button"
               variant="tonal"
               width="48"
@@ -187,10 +187,6 @@
           <strong>{{ sessionPullRequest.number ? `PR #${sessionPullRequest.number}` : 'Pull request branch' }}</strong>
           · Commit &amp; push to {{ sessionPullRequest.headRepository }}:{{ sessionPullRequest.headBranch }}
         </v-sheet>
-        <p v-else-if="props.workState?.destination" class="ma-0 text-body-small text-medium-emphasis" style="overflow-wrap: anywhere">
-          {{ props.workState.destination.mode === 'local_source' ? 'Local commit' : props.workState.destination.mode === 'github' ? 'Commit & push' : 'Project version' }}
-          · {{ props.workState.destination.repository }}:{{ props.workState.destination.branch }}
-        </p>
         <v-sheet
           v-if="connectionRecoveryVisible"
           class="studio-autopilot__connection-recovery"
@@ -879,11 +875,6 @@
           </v-sheet>
           <p v-else role="status">Refresh repository status to review the destination.</p>
           <p class="text-body-small mt-3 mb-0">Save open file edits first.</p>
-          <details class="studio-autopilot__save-details text-body-small">
-            <summary class="py-3">What's included</summary>
-            <p>All changed files on disk, including new files. Database data and chat history are separate. This does not deploy the app.</p>
-            <p v-if="saveWorkReview?.mode === 'github'" class="mt-2">GitHub automation may run.</p>
-          </details>
           <p v-if="props.workState?.publicationRequiresPullRequest && !sessionPullRequest?.number" role="status" class="text-body-small mt-2">A pull request is required.</p>
           <p v-if="saveWorkDisabled" role="status" class="mt-3">{{ saveWorkTitle }}</p>
         </v-card-text>
@@ -1670,6 +1661,19 @@ const saveWorkCheckAvailable = computed(() => Boolean(
   !sourceOperationsSuspended.value && !props.sessionSelectionArchived &&
   typeof props.sessionToolbar?.refreshRepositoryState === "function"
 ));
+const saveWorkHeaderHint = computed(() => {
+  const status = saveWorkChecking.value ? "Checking for updates…"
+    : saveWorkCheckAvailable.value ? `${saveWorkTitle.value}. Click to check for updates.`
+      : saveWorkTitle.value;
+  const destination = props.workState?.destination;
+  if (!destination) return status;
+  if (saveWorkRequiresUpdate.value || saveWorkDisabled.value || saveWorkChecking.value) {
+    return `${status}\n${destination.repository}:${destination.branch}`;
+  }
+  const action = destination.mode === "local_source" ? "Local commit"
+    : destination.mode === "github" ? "Commit & push" : "Project version";
+  return `${action} · ${destination.repository}:${destination.branch}\n${status}`;
+});
 
 async function requestSessionSaveWork() {
   if (saveWorkChecking.value) return;
@@ -2086,11 +2090,6 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__save-symbol-disk { left: 0; bottom: 0; }
 .studio-autopilot__save-symbol-commit { right: 0; top: 0; }
-
-.studio-autopilot__save-details summary {
-  min-height: 48px;
-  cursor: pointer;
-}
 
 .studio-autopilot__project-panel,
 .studio-autopilot__dashboard-shell,

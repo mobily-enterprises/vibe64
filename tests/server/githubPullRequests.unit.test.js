@@ -7,6 +7,8 @@ import path from "node:path";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "../../packages/vibe64-project/src/server/githubPullRequests.js";
 import { assertSessionRepositoryReview, sessionRepositoryDestination, sessionRepositoryProject, readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import { repositoryBranches } from "../../packages/vibe64-project/src/server/repositoryBranches.js";
+import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
+import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 import { prepareSessionPullRequestBranch, saveSessionWorkDirect, checkSessionUpdatesDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
@@ -48,6 +50,57 @@ function fixture(replies) {
     calls.push(request); assert.ok(replies.length, "Unexpected GitHub request"); return replies.shift();
   } } };
 }
+
+test("branch listing and session selection honor the host's per-user credential policy", async (t) => {
+  const previousMode = process.env.VIBE64_GITHUB_ACCOUNT_MODE;
+  process.env.VIBE64_GITHUB_ACCOUNT_MODE = "local";
+  t.after(() => {
+    if (previousMode === undefined) delete process.env.VIBE64_GITHUB_ACCOUNT_MODE;
+    else process.env.VIBE64_GITHUB_ACCOUNT_MODE = previousMode;
+  });
+  const service = createProjectService({
+    env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" },
+    projectContext: { async listProjects() { return { currentProject: branchProject, projects: [branchProject] }; } }
+  });
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-branch-identity-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const branchProject = { ...project, projectRuntimeRoot: root };
+  // A missing web-user identity must fail before looking for the daemon's GitHub login.
+  const listed = await service.repositoryBranches();
+  assert.equal(listed.ok, false);
+  assert.equal(listed.errors[0].code, "vibe64_os_user_required");
+  await assert.rejects(service.resolveSessionBranch({ selection: {
+    name: "feature/new", fromBranch: "main", expectedCommit: "a".repeat(40)
+  } }), { code: "vibe64_os_user_required" });
+  const osUser = os.userInfo();
+  const vibe64User = { username: osUser.username, home: osUser.homedir, uid: osUser.uid, gid: osUser.gid };
+  const calls = [];
+  t.after(installVibe64ManagedExecutionProvider({
+    async stopExecution() { throw new Error("No process should start in this test."); },
+    async runCommand(request, context) {
+      calls.push(request);
+      assert.equal(request.actor, "named-user");
+      assert.equal(context.actor.user.username, osUser.username);
+      assert.equal(request.credentialHome.home, osUser.homedir);
+      return success(request.args.includes("POST")
+        ? { ref: "refs/heads/feature/new" }
+        : [{ name: "main", commit: { sha: "a".repeat(40) } }]);
+    }
+  }));
+  assert.equal((await service.repositoryBranches({ vibe64User })).ok, true);
+  assert.deepEqual(await service.resolveSessionBranch({ vibe64User, selection: {
+    name: "feature/new", fromBranch: "main", expectedCommit: "a".repeat(40)
+  } }), { name: "feature/new", commit: "a".repeat(40) });
+  assert.equal(calls.length, 3);
+});
+
+test("branch credential policy failures are reported without asking the user to reconnect", async () => {
+  const f = fixture([{ ok: false, code: "vibe64_github_user_credentials_required",
+    error: "GitHub work requires a signed-in user's credentials. The workspace service account cannot be used." }]);
+  await assert.rejects(repositoryBranches({ ...project, projectRuntimeRoot: "/test/project" }, { vibe64User: user },
+    { ...f.options, runExclusive: async (_root, operation) => operation() }),
+  { code: "vibe64_github_user_credentials_required", message: /workspace service account cannot be used/u });
+});
 
 test("GitHub branch choices validate the reviewed commit and never overwrite an existing branch", async () => {
   const rows = [{ name: "main", commit: { sha: "a".repeat(40) } }];
