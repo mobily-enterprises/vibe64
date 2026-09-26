@@ -12,6 +12,7 @@ the canonical project and from other sessions.
 - `tests/server/assistantRoutingStateInventory.unit.test.js`
 - `tests/server/vibe64SessionStorageLifecycle.unit.test.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
+- `packages/vibe64-terminals/src/server/projectStackInspection.js`
 - `src/components/studio/vibe64-session/Vibe64WorkflowSelector.vue`
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
@@ -26,6 +27,20 @@ the canonical project and from other sessions.
 - `src/composables/useVibe64SessionDialogs.js`
 
 ## Public contract
+
+`inspectCanonicalProjectStack` is a neutral saved-source inspection capability.
+Its caller holds the existing project source lock. It reuses ordinary Add session
+source selection, resolves the configured branch to an exact commit, and returns
+normalized Stack components plus repository/branch/commit/check-time evidence.
+GitHub is freshly checked through the existing credential and command boundary;
+mirror objects never replace that authority. No assistant session or full working
+checkout is created. Only ordinary current-format Genesis Stack inputs are
+materialized, bounded to 128 files and 1 MiB, and removed in `finally`. Git object
+transfers use the normal repository machinery and command timeouts; that input
+limit is not a quota on Git pack downloads. A caller owns interrupted scratch
+cleanup. This capability adds no automatic maintenance or retention policy to
+standalone Vibe64.
+
 
 Each session owns a `drop-zone` directory alongside its runtime records, outside
 its repository. New sessions and renewal successors start with an empty exchange.

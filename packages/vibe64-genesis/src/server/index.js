@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -254,6 +255,20 @@ function inspectGenesisStackSection(name, options = {}) {
   );
 }
 
+async function inspectGenesisStackComponents(options = {}) {
+  const format = await inspectGenesisProjectFormat(options);
+  if (format.status !== "current") {
+    throw Object.assign(new Error("The project needs a current Genesis format before its Stack can be inspected."), {
+      code: "vibe64_stack_format_required"
+    });
+  }
+  // The compiler treats an absent Stack as empty during bootstrap. An explicit
+  // inspection must distinguish that from a saved, valid empty selection.
+  await readFile(path.join(options.projectRoot, "genesis/stack.md"), "utf8");
+  const stack = await inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options);
+  return { components: stack.components, stackHash: stack.stackHash };
+}
+
 async function inspectVibe64Deployment(options = {}) {
   const [section, environment] = await Promise.all([
     inspectGenesisStackSection(VIBE64_APPLICATION_DEPLOYMENT_SECTION, options),
@@ -470,6 +485,7 @@ export {
   inspectGenesisSkills,
   listGenesisTemplates,
   inspectGenesisStackSection,
+  inspectGenesisStackComponents,
   inspectVibe64Deployment,
   inspectGenesisEnvironment,
   inspectVibe64Outputs,

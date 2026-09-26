@@ -22,6 +22,14 @@ Genesis without creating another interpretation of the application.
 
 ## Public contract
 
+`inspectGenesisStackComponents` validates the current project format and requires
+an explicitly saved Stack before returning normalized components and its hash.
+The pinned Genesis parser and installed catalog own interpretation; callers do
+not infer technologies from package files or treat a missing Stack as an empty
+successful selection. This read-only API does not migrate source or execute
+consumer operations.
+
+
 Code indexing uses Genesis's parser management interface. Standalone first use
 prepares only missing parsers needed by the source, outside project dependencies.
 The Genesis command exposes `parsers list`, `parsers install`, and `parsers verify`.

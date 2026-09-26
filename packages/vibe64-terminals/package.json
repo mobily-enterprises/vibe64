@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./server/projectStackInspection": "./src/server/projectStackInspection.js",
     "./server/actions": "./src/server/actions.js",
     "./server/codexGitCommand": "./src/server/codexGitCommand.js",
     "./server/vibe64OutputTargets": "./src/server/vibe64OutputTargets.js",

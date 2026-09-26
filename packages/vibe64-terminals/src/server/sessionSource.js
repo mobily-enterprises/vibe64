@@ -652,6 +652,8 @@ async function createSessionSource({
 }
 
 export {
+  canonicalProjectSource,
   createSessionSource,
-  githubSourceCommandOptions
+  githubSourceCommandOptions,
+  prepareGithubMirrorReference
 };
