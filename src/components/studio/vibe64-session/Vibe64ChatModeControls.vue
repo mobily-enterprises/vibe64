@@ -64,7 +64,7 @@ const reviewDescription = computed(() => {
   const coder = decisions.value.code?.effectiveSelection;
   const sameModel = reviewer && coder && ["engineId", "modelProviderId", "modelId"]
     .every((key) => reviewer[key] === coder[key]);
-  return `${roleLabel("review")} checks the work and may fix issues. ${sameModel ? "Same model as Code. " : ""}Uses an additional turn.`;
+  return `${roleLabel("review")} reviews, fixes issues and Deslops the changes. ${sameModel ? "Same model as Code. " : ""}Uses one additional turn.`;
 });
 const command = useCommand({
   access: "never", apiSuffix: VIBE64_SESSIONS_API_SUFFIX, placementSource: "vibe64.sessions.assistant-selection.update",

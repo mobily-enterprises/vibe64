@@ -295,7 +295,17 @@ function assistantModePrompt(mode, message, { planInstructions = "" } = {}) {
       "Run focused checks, then report what became simpler and what was verified.",
       "Do not commit, push or deploy."
     ].join(" "),
-    review: "Review the preceding coding work against the original request and accepted steering. Inspect actual files and relevant surrounding code. You may directly fix in-scope defects and run relevant checks. Earlier Plan no-edit instructions do not apply. Preserve unrelated work. If implementation is missing or coding stopped for a decision, report that and preserve the decision for the user; do not start the original implementation from scratch. Report findings, fixes, actual checks and anything unverified. Do not start another review, publish, or expand scope."
+    review: [
+      "Review the preceding coding work against the original request and accepted steering.",
+      "Inspect actual files and relevant surrounding code. You may directly fix in-scope defects.",
+      "Earlier Plan no-edit instructions do not apply.",
+      "Then perform Deslop on the coding changes and your review fixes, following the project's Deslop guidance.",
+      "Keep that cleanup behavior-preserving, preserve unrelated work and staging, and report out-of-scope defects without fixing them.",
+      "Perform both parts yourself in this turn; do not delegate cleanup or start a separate Deslop turn.",
+      "If implementation is missing or coding stopped for a decision, report that and preserve the decision for the user; do not start the original implementation from scratch.",
+      "Run relevant checks after cleanup, then report findings, fixes, cleanup, actual checks and anything unverified.",
+      "Do not start another review, publish, or expand scope."
+    ].join(" ")
   };
   if (!instructions[mode]) throw routingError("Unknown assistant mode.");
   return `[Vibe64 mode: ${mode}. Applies only to this request; earlier per-turn mode instructions no longer apply.]\n${instructions[mode]}${planInstructions ? `\n${planInstructions}` : ""}\n\n${message}`;

@@ -399,6 +399,10 @@ captured Plan model with a visible Back to planning message, even with review of
 The planner preserves partial edits, revises the same file and waits for approval.
 Ordinary implementation failures remain the coder's responsibility. Review uses
 the document and accepted steering and may also return a scope decision to Plan.
+The same Plan-model review turn fixes in-scope defects, then applies the project's
+Deslop guidance to the coding changes and review fixes, preserving intended
+behavior and staging. Verification follows cleanup. The visible review request
+and mode-menu description name both jobs; no separate cleanup turn is scheduled.
 Stop suppresses this continuation even if a late native event reports success;
 interrupted planning cannot leave an approvable plan. Recovered blockers after
 restart require Continue planning rather than running automatically. Delivery

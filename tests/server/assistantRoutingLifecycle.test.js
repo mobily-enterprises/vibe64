@@ -188,7 +188,7 @@ test("generated Code cannot change the mode of an unfinished Plan goal", async (
   assert.equal(f.helperCalls(), 0);
 });
 
-test("Auto uses a bounded helper then ordinary delivery and exactly one visible review", async (t) => {
+test("Auto uses a bounded helper then ordinary delivery and one Plan-model review with Deslop", async (t) => {
   const f = await fixture(t);
   assert.equal((await f.service.send("session-1", request, f.context)).delivered, true);
   assert.equal(f.helperCalls(), 1);
@@ -203,6 +203,11 @@ test("Auto uses a bounded helper then ordinary delivery and exactly one visible 
   assert.equal(f.sends[1].input.messageId, f.state().reviewMessageId);
   assert.equal(f.sends[1].input.turnMetadata.assistantRouting.parentMessageId, "request-1");
   assert.match(f.sends[1].input.message, /may directly fix/);
+  assert.match(f.sends[1].input.message, /Then perform Deslop on the coding changes and your review fixes/);
+  assert.match(f.sends[1].input.message, /Perform both parts yourself in this turn/);
+  assert.match(f.sends[1].input.message, /Run relevant checks after cleanup/);
+  assert.match(f.sends[1].input.displayMessage, /Automatic review and Deslop/);
+  assert.equal(f.sends[1].input.genesisTask, undefined);
   await f.service.afterTurn("session-1", completion(), f.context);
   await f.service.afterTurn("session-1", completion("turn-2"), f.context);
   assert.equal(f.sends.length, 2);

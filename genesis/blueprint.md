@@ -259,8 +259,10 @@ agreed work and stops for an unresolved architectural or product decision.
 Steering stays with the currently working assistant.
 
 People can enable Review after coding. After a normally completed Code turn,
-one visible follow-up asks the Plan model to inspect the implementation and fix
-in-scope defects. Its findings state what was checked; completion is not a
+one visible follow-up asks the Plan model to inspect the implementation, fix
+in-scope defects and then Deslop the coding changes and its fixes in the same
+turn. Cleanup preserves the intended behavior and follows the project's Deslop
+guidance; relevant checks follow cleanup. Its findings state what was checked; completion is not a
 guarantee of correctness. Hosted AI work rechecks the submitting user's current
 access before starting, including automatic review and Retry. Removing that
 user blocks further inference without losing completed coding work. Stop

@@ -455,7 +455,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
           submittedBy: context.vibe64User ? Object.fromEntries(["username", "id", "role", "email", "preferredName"]
             .filter((name) => context.vibe64User[name] !== undefined)
             .map((name) => [name, context.vibe64User[name]])) : null,
-          reviewMessage: "Automatic review: check the preceding coding work against my request and steering. Fix in-scope issues, run relevant checks, and explain the result."
+          reviewMessage: "Automatic review and Deslop: check the preceding coding work against my request and steering. Fix in-scope issues, then Deslop those changes while preserving the intended behavior. Run relevant checks and explain the result."
         };
         state.decision = await resolve(context, state);
         if (activeGoal(goal) && !pinnedGoal && !sameSelection(destinations(state.decision)[mode]?.effectiveSelection, selection)) {
