@@ -171,7 +171,11 @@ test("the live routing store reads only the current format and never upgrades du
   assert.deepEqual(await store.read(), saved);
   await writeFile(f.routingPath, JSON.stringify(old()));
   const original = await readFile(f.routingPath, "utf8");
-  await assert.rejects(store.read(), { code: "vibe64_assistant_routing_upgrade_required" });
+  await assert.rejects(store.read(), {
+    code: "vibe64_assistant_routing_upgrade_required",
+    statusCode: 409,
+    message: /workspace administrator must stop Vibe64, run this version's upgrade-state command, and restart it/u
+  });
   assert.equal(await readFile(f.routingPath, "utf8"), original);
 });
 

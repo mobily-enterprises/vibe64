@@ -9,6 +9,7 @@ import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agent
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
 import { createSessionConversations } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
+import { createCodexTerminalController } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
 import { readWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
@@ -196,6 +197,34 @@ async function conversationFixture(root, engineId = "codex") {
   });
   return { attachments, events, native, restart, service: restart(), runtime, store, selection, sessionAgent, capabilities };
 }
+
+test("a fresh Update repair routes independently of its parent's older Codex history", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    const parentHistory = {
+      codex_deepseek_conversation_id: "parent-deepseek-thread",
+      codex_conversation_id: "parent-openai-thread",
+      agent_identity_provider: "codex",
+      agent_identity_model_provider: "deepseek",
+      agent_identity_conversation_id: "parent-deepseek-thread"
+    };
+    for (const [key, value] of Object.entries(parentHistory)) await f.store.writeMetadataValue("one", key, value);
+    const parent = await f.store.readSession("one");
+    const codex = createCodexTerminalController({ env: {}, codexAppServerProviderOptions: { systemRoot: root } });
+    const service = f.restart({ prepareSelection: codex.prepareModelRouting });
+    await service.createTemporaryConversation("one", { conversationId: "repair", presentation: { recoveryOperation: "update" } });
+    await service.startTemporaryConversationTurn("one", {
+      conversationId: "repair", messageId: "fix-update", message: "Fix this Update problem without losing work."
+    });
+    assert.equal(f.native.starts, 1);
+    const repair = await f.store.readSessionConversation("one", "repair");
+    assert.equal(repair.providerConversationId, "native");
+    assert.equal(repair.routingMetadata.codex_routing_home_provider, "openai");
+    assert.deepEqual((await f.store.readSession("one")).metadata, parent.metadata);
+    assert.deepEqual(await f.store.readConversationLog("one"), []);
+    await service.close();
+  });
+});
 
 test("temporary direct Junior ignores an unusable working plan and persists no plan snapshot", async () => {
   await withTemporaryRoot(async (root) => {
@@ -991,6 +1020,7 @@ for (const pinned of [false, true]) {
       for (const mode of ["senior", "junior"]) {
         await assert.rejects(f.send(mode, `return-${mode}`), {
           code: "vibe64_codex_history_unsupported",
+          statusCode: 409,
           message: /Start a new temporary chat/
         });
         const after = await f.record();

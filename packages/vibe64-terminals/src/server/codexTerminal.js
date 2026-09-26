@@ -13305,7 +13305,7 @@ function createCodexTerminalController({
       if (boundProvider && boundProvider !== "openai" || nativeConversationBindings(session).some((binding) =>
         binding.engineId === "codex" && !binding.retired && binding.modelProviderId !== "openai")) {
         throw Object.assign(new Error("This Codex conversation is stored in a separate provider home. Renew the session to use model routing; its existing history and storage location have not been changed."), {
-          code: "vibe64_codex_history_unsupported"
+          code: "vibe64_codex_history_unsupported", statusCode: 409
         });
       }
       await runtime.store.writeMetadataValue(sessionId, "codex_routing_home_provider", "openai");

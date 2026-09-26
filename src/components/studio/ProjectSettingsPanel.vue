@@ -3,14 +3,14 @@
     <header class="project-settings__header">
       <div>
         <h1 class="text-headline-small font-weight-bold ma-0">Project settings</h1>
-        <p>Project-wide Vibe64 behavior and source-owned engineering choices.</p>
+        <p class="text-body-medium">Choose how you and your AI work on this project.</p>
       </div>
       <v-btn
         class="project-settings__refresh"
         :disabled="loading"
-        size="small"
+        height="48"
         type="button"
-        variant="tonal"
+        variant="text"
         @click="refresh"
       >
         {{ loading ? "Refreshing…" : "Refresh" }}
@@ -29,18 +29,18 @@
 
     <template v-else>
       <section class="project-settings__section" aria-labelledby="engineering-approach-title">
-        <div class="project-settings__section-copy">
-          <p v-if="engineeringAvailable" class="project-settings__scope">
+        <div class="project-settings__section-copy text-body-medium">
+          <p v-if="engineeringAvailable" class="project-settings__scope text-label-medium">
             {{ engineeringSourceLabel }}
           </p>
-          <h2 id="engineering-approach-title">Engineering approach</h2>
+          <h2 id="engineering-approach-title" class="text-title-medium font-weight-bold">Engineering approach</h2>
           <p>
-            Choose how cautiously the AI changes this software. Every profile still requires
-            simple, targeted code and a question before necessary complexity is added.
+            Choose how cautiously the AI changes your software. Every profile keeps changes
+            simple and asks before adding necessary complexity.
           </p>
         </div>
 
-        <template v-if="engineeringAvailable">
+        <div v-if="engineeringAvailable" class="project-settings__content text-body-medium">
           <div class="project-settings__engineering-field">
             <v-select
               v-model="engineeringProfileDraft"
@@ -57,12 +57,12 @@
             />
           </div>
 
-          <div class="project-settings__action">
+          <div class="project-settings__action text-body-small">
             <p>{{ engineeringStatusText }}</p>
             <v-btn
               :disabled="!engineeringChanged || engineeringSaving"
-              color="primary"
-              size="small"
+              :color="engineeringChanged ? 'primary' : undefined"
+              height="48"
               type="button"
               variant="flat"
               @click="saveEngineeringProfile"
@@ -70,19 +70,18 @@
               {{ engineeringSaving ? "Saving…" : "Save engineering approach" }}
             </v-btn>
           </div>
-        </template>
+        </div>
 
-        <div v-else class="project-settings__action">
+        <div v-else class="project-settings__action text-body-small">
           <p>{{ engineeringUnavailableReason }}</p>
         </div>
       </section>
 
       <section class="project-settings__section" aria-labelledby="development-database-title">
-        <div class="project-settings__section-copy">
-          <h2 id="development-database-title">Development database</h2>
+        <div class="project-settings__section-copy text-body-medium">
+          <h2 id="development-database-title" class="text-title-medium font-weight-bold">Development database</h2>
           <p v-if="managed">
-            Choose whether development sessions share data or receive isolated databases.
-            This choice is not supplied to the application as an environment value.
+            Share development data across sessions or keep a separate database for each.
           </p>
           <p v-else>
             This Vibe64 installation does not manage development databases. The application
@@ -90,7 +89,7 @@
           </p>
         </div>
 
-        <template v-if="managed">
+        <div v-if="managed" class="project-settings__content text-body-medium">
           <v-radio-group
             v-model="scopeDraft"
             aria-labelledby="development-database-title"
@@ -100,6 +99,7 @@
           >
             <div class="project-settings__option">
               <v-radio
+                class="py-1"
                 :aria-describedby="sessionScopeReason ? 'development-database-session-reason' : undefined"
                 :disabled="!sessionScopeAvailable"
                 label="A separate database for each session"
@@ -108,13 +108,14 @@
               <p
                 v-if="sessionScopeReason"
                 id="development-database-session-reason"
-                class="project-settings__option-support"
+                class="project-settings__option-support text-body-small"
               >
                 {{ sessionScopeReason }}
               </p>
             </div>
             <div class="project-settings__option">
               <v-radio
+                class="py-1"
                 :aria-describedby="projectScopeReason ? 'development-database-project-reason' : undefined"
                 :disabled="!projectScopeAvailable"
                 label="One database shared by this project"
@@ -123,14 +124,14 @@
               <p
                 v-if="projectScopeReason"
                 id="development-database-project-reason"
-                class="project-settings__option-support"
+                class="project-settings__option-support text-body-small"
               >
                 {{ projectScopeReason }}
               </p>
             </div>
           </v-radio-group>
 
-          <div class="project-settings__action">
+          <div class="project-settings__action text-body-small">
             <p v-if="disabledReason">{{ disabledReason }}</p>
             <p v-else-if="scopeDraft === 'project'">
               Data and schema changes will be visible to every project session and remain
@@ -138,8 +139,8 @@
             </p>
             <v-btn
               :disabled="!databaseChanged || !canChange || !scopeDraftAvailable || databaseSaving"
-              color="primary"
-              size="small"
+              :color="databaseChanged ? 'primary' : undefined"
+              height="48"
               type="button"
               variant="flat"
               @click="saveDatabase"
@@ -147,20 +148,20 @@
               {{ databaseSaving ? "Saving…" : "Save database choice" }}
             </v-btn>
           </div>
-        </template>
+        </div>
       </section>
 
       <section class="project-settings__section" aria-labelledby="ai-behaviour-title">
-        <div class="project-settings__section-copy">
-          <p class="project-settings__scope">{{ collaborationSourceLabel }}</p>
-          <h2 id="ai-behaviour-title">AI behaviour</h2>
+        <div class="project-settings__section-copy text-body-medium">
+          <p class="project-settings__scope text-label-medium">{{ collaborationSourceLabel }}</p>
+          <h2 id="ai-behaviour-title" class="text-title-medium font-weight-bold">AI behaviour</h2>
           <p>
-            Collaboration guidance is stored in genesis/collaboration.md and follows this
-            source. Prompt suggestions remain a separate Vibe64 setting.
+            Set the tone, level of detail and project requirements for your conversations.
+            These choices follow your project source.
           </p>
           <v-btn
             class="project-settings__account-link"
-            size="small"
+            height="48"
             type="button"
             variant="text"
             @click="openPersonalSettings"
@@ -169,85 +170,97 @@
           </v-btn>
         </div>
 
-        <div class="project-settings__ai-fields">
-          <v-select
-            v-model="collaborationDraft.tone"
-            :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
-            density="comfortable"
-            hide-details
-            item-title="label"
-            item-value="value"
-            :items="toneOptions"
-            label="Tone"
-            variant="outlined"
-          />
-          <v-select
-            v-model="collaborationDraft.responseLength"
-            :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
-            density="comfortable"
-            hide-details
-            item-title="label"
-            item-value="value"
-            :items="responseLengthOptions"
-            label="Response length"
-            variant="outlined"
-          />
-          <v-select
-            v-model="collaborationDraft.experience"
-            :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
-            density="comfortable"
-            hide-details
-            item-title="label"
-            item-value="value"
-            :items="experienceOptions"
-            label="Experience level"
-            variant="outlined"
-          />
-          <v-select
-            v-model="collaborationDraft.explanationStyle"
-            :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
-            density="comfortable"
-            hide-details
-            item-title="label"
-            item-value="value"
-            :items="explanationStyleOptions"
-            label="Explanation style"
-            variant="outlined"
-          />
-          <v-textarea
-            v-model="collaborationDraft.requirements"
-            class="project-settings__ai-note"
-            :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
-            density="compact"
-            hide-details
-            label="Project requirements (optional)"
-            placeholder="For example: use Australian English."
-            rows="2"
-            variant="outlined"
-          />
+        <div class="project-settings__content text-body-medium">
+          <div class="project-settings__ai-fields">
+            <v-select
+              v-model="collaborationDraft.tone"
+              :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
+              density="comfortable"
+              hide-details
+              item-title="label"
+              item-value="value"
+              :items="toneOptions"
+              label="Tone"
+              variant="outlined"
+            />
+            <v-select
+              v-model="collaborationDraft.responseLength"
+              :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
+              density="comfortable"
+              hide-details
+              item-title="label"
+              item-value="value"
+              :items="responseLengthOptions"
+              label="Response length"
+              variant="outlined"
+            />
+            <v-select
+              v-model="collaborationDraft.experience"
+              :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
+              density="comfortable"
+              hide-details
+              item-title="label"
+              item-value="value"
+              :items="experienceOptions"
+              label="Experience level"
+              variant="outlined"
+            />
+            <v-select
+              v-model="collaborationDraft.explanationStyle"
+              :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
+              density="comfortable"
+              hide-details
+              item-title="label"
+              item-value="value"
+              :items="explanationStyleOptions"
+              label="Explanation style"
+              variant="outlined"
+            />
+            <v-textarea
+              v-model="collaborationDraft.requirements"
+              class="project-settings__ai-note"
+              :disabled="!collaborationAvailable || !collaborationCanEdit || collaborationSaving"
+              auto-grow
+              density="comfortable"
+              hide-details
+              label="Project requirements (optional)"
+              placeholder="For example: use Australian English."
+              rows="6"
+              max-rows="18"
+              variant="outlined"
+            />
+          </div>
+
+          <div class="project-settings__action text-body-small">
+            <p v-if="!collaborationAvailable">{{ collaborationUnavailableReason }}</p>
+            <p v-else-if="!collaborationCanEdit">
+              Only the project owner can change these controls in Settings. Anyone who can
+              edit this source can change genesis/collaboration.md directly.
+            </p>
+            <p v-else>
+              Applies when a conversation next starts or refreshes its context. Existing history
+              and instructions in an active Codex conversation stay as they are.
+            </p>
+            <v-btn
+              :disabled="!collaborationChanged || !collaborationAvailable || !collaborationCanEdit || collaborationSaving"
+              :color="collaborationChanged ? 'primary' : undefined"
+              height="48"
+              type="button"
+              variant="flat"
+              @click="saveCollaboration"
+            >
+              {{ collaborationSaving ? "Saving…" : "Save collaboration" }}
+            </v-btn>
+          </div>
         </div>
+      </section>
 
-        <div class="project-settings__action">
-          <p v-if="!collaborationAvailable">{{ collaborationUnavailableReason }}</p>
-          <p v-else-if="!collaborationCanEdit">
-            Only the project owner can change these controls in Settings. Anyone who can
-            edit this source can change genesis/collaboration.md directly.
-          </p>
-          <p v-else>
-            Collaboration changes apply when an assistant conversation next establishes or
-            refreshes stable context; existing history and live Codex instructions do not change.
-          </p>
-          <v-btn
-            :disabled="!collaborationChanged || !collaborationAvailable || !collaborationCanEdit || collaborationSaving"
-            color="primary"
-            size="small"
-            type="button"
-            variant="flat"
-            @click="saveCollaboration"
-          >
-            {{ collaborationSaving ? "Saving…" : "Save collaboration" }}
-          </v-btn>
-
+      <section class="project-settings__section" aria-labelledby="prompt-suggestions-title">
+        <div class="project-settings__section-copy text-body-medium">
+          <h2 id="prompt-suggestions-title" class="text-title-medium font-weight-bold">Prompt suggestions</h2>
+          <p>Get ideas for what to ask next. This Vibe64 setting does not change your AI's instructions.</p>
+        </div>
+        <div class="project-settings__content text-body-medium">
           <v-switch
             v-model="promptHintsDraft"
             class="project-settings__ai-hints"
@@ -256,44 +269,47 @@
             hide-details
             label="Suggest useful next prompts"
           />
-          <p>
-            Prompt suggestions are a Vibe64 helper only; this choice never changes coding-agent
-            instructions.
-          </p>
-          <v-btn
-            :disabled="!promptHintsChanged || !promptHintsCanEdit || promptHintsSaving"
-            color="primary"
-            size="small"
-            type="button"
-            variant="flat"
-            @click="savePromptHints"
-          >
-            {{ promptHintsSaving ? "Saving…" : "Save prompt suggestions" }}
-          </v-btn>
+          <div class="project-settings__action text-body-small">
+            <v-btn
+              :disabled="!promptHintsChanged || !promptHintsCanEdit || promptHintsSaving"
+              :color="promptHintsChanged ? 'primary' : undefined"
+              height="48"
+              type="button"
+              variant="flat"
+              @click="savePromptHints"
+            >
+              {{ promptHintsSaving ? "Saving…" : "Save prompt suggestions" }}
+            </v-btn>
+          </div>
         </div>
       </section>
       <section v-if="repositoryWorkflow.available" class="project-settings__section" aria-labelledby="repository-workflow-title">
-        <div class="project-settings__section-copy">
-          <h2 id="repository-workflow-title">Git workflow</h2>
+        <div class="project-settings__section-copy text-body-medium">
+          <h2 id="repository-workflow-title" class="text-title-medium font-weight-bold">Git workflow</h2>
           <p>Choose how Vibe64 publishes changes to this repository.</p>
         </div>
-        <v-switch
-          v-model="requirePullRequest"
-          label="Require pull requests for Vibe64 publication"
-          color="primary"
-          hide-details
-          :disabled="!repositoryWorkflow.canEdit || repositoryWorkflowCommand.isRunning"
-        />
-        <p>Reviewing changes will require Create pull request before commits can be published. Existing sessions keep their destinations and can explicitly create a PR from their work.</p>
-        <p>This controls Vibe64's publication actions. Use GitHub branch rules to restrict pushes made through terminals and other tools.</p>
-        <v-btn
-          color="primary"
-          variant="flat"
-          :disabled="!repositoryWorkflow.canEdit || repositoryWorkflowCommand.isRunning || requirePullRequest === repositoryWorkflow.requirePullRequest"
-          @click="saveRepositoryWorkflow"
-        >
-          {{ repositoryWorkflowCommand.isRunning ? 'Saving…' : 'Save repository workflow' }}
-        </v-btn>
+        <div class="project-settings__content text-body-medium">
+          <v-switch
+            v-model="requirePullRequest"
+            label="Require pull requests for Vibe64 publication"
+            color="primary"
+            hide-details
+            :disabled="!repositoryWorkflow.canEdit || repositoryWorkflowCommand.isRunning"
+          />
+          <p>Reviewing changes will require Create pull request before commits can be published. Existing sessions keep their destinations and can explicitly create a PR from their work.</p>
+          <p>This controls Vibe64's publication actions. Use GitHub branch rules to restrict pushes made through terminals and other tools.</p>
+          <div class="project-settings__action text-body-small">
+            <v-btn
+              :color="requirePullRequest !== repositoryWorkflow.requirePullRequest ? 'primary' : undefined"
+              height="48"
+              variant="flat"
+              :disabled="!repositoryWorkflow.canEdit || repositoryWorkflowCommand.isRunning || requirePullRequest === repositoryWorkflow.requirePullRequest"
+              @click="saveRepositoryWorkflow"
+            >
+              {{ repositoryWorkflowCommand.isRunning ? 'Saving…' : 'Save repository workflow' }}
+            </v-btn>
+          </div>
+        </div>
       </section>
     </template>
   </section>
@@ -764,9 +780,10 @@ function reloadPage() {
 
 <style scoped>
 .project-settings {
-  display: grid;
-  gap: 1rem;
+  container: project-settings / inline-size;
   min-width: 0;
+  max-width: 76rem;
+  width: 100%;
 }
 
 .project-settings__header {
@@ -774,84 +791,51 @@ function reloadPage() {
   display: flex;
   gap: 1rem;
   justify-content: space-between;
+  padding-block-end: 1.5rem;
 }
 
-.project-settings__header h1,
-.project-settings__header p,
-.project-settings__section-copy h2,
-.project-settings__section-copy p,
-.project-settings__scope,
-.project-settings__action p {
+.project-settings p,
+.project-settings h2 {
   margin: 0;
 }
 
-.project-settings__header p,
-.project-settings__section-copy p,
-.project-settings__action p {
+.project-settings p {
   color: rgba(var(--v-theme-on-surface), 0.7);
+  overflow-wrap: anywhere;
 }
 
 .project-settings__header p {
-  margin-top: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.project-settings__refresh {
+  flex: 0 0 auto;
 }
 
 .project-settings__section {
   align-items: start;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
-  border-radius: 8px;
+  border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
   display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
-  padding: 1rem;
+  gap: 1.5rem 2rem;
+  grid-template-columns: minmax(12rem, 1fr) minmax(0, 2fr);
+  padding-block: 1.5rem;
 }
 
 .project-settings__section-copy,
-.project-settings__engineering-field,
+.project-settings__content,
 .project-settings__action {
   display: grid;
-  gap: 0.4rem;
+  gap: 1rem;
   min-width: 0;
 }
 
-.project-settings__section-copy h2 {
-  font-size: 1rem;
+.project-settings__section-copy {
+  align-content: start;
+  gap: 0.5rem;
 }
 
-.project-settings__section-copy p,
-.project-settings__engineering-field p,
-.project-settings__action p {
-  font-size: 0.875rem;
-}
-
-.project-settings__refresh {
-  min-width: 6.5rem;
-}
-
-.project-settings :deep(.v-btn),
-.project-settings__options :deep(.v-selection-control) {
-  min-height: 3rem;
-}
-
-.project-settings__options {
-  margin: -0.35rem 0;
-}
-
-.project-settings__option {
-  min-width: 0;
-}
-
-.project-settings__option-support {
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  font-size: 0.75rem;
-  line-height: 1.3;
-  margin: -0.2rem 0 0 2.5rem;
-}
-
-.project-settings__scope {
-  color: rgb(var(--v-theme-primary)) !important;
-  font-size: 0.75rem !important;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+.project-settings__action {
+  justify-items: start;
 }
 
 .project-settings__account-link {
@@ -859,52 +843,29 @@ function reloadPage() {
   margin-inline-start: -0.75rem;
 }
 
-.project-settings__engineering-field {
-  align-self: center;
+.project-settings__engineering-field,
+.project-settings__option {
+  min-width: 0;
+}
+
+.project-settings .project-settings__option-support {
+  margin-inline-start: 2.5rem;
 }
 
 .project-settings__ai-fields {
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
   min-width: 0;
 }
 
-.project-settings__ai-note,
-.project-settings__ai-hints {
+.project-settings__ai-note {
   grid-column: 1 / -1;
 }
 
-.project-settings__ai-hints {
-  margin: -0.35rem 0;
-}
-
-.project-settings__action {
-  justify-items: end;
-}
-
-.project-settings__action p {
-  text-align: right;
-}
-
-@media (max-width: 900px) {
+@container project-settings (max-width: 48rem) {
   .project-settings__section {
-    grid-template-columns: 1fr;
-  }
-
-  .project-settings__action {
-    justify-items: start;
-  }
-
-  .project-settings__action p {
-    text-align: left;
-  }
-}
-
-@media (max-width: 540px) {
-  .project-settings__ai-fields {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-
 </style>

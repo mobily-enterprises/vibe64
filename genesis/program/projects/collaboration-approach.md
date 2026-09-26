@@ -25,6 +25,11 @@ optional project requirements. Vibe64 does not duplicate those choices or
 their instruction text. Saving changes `genesis/collaboration.md` in the
 standalone source or selected hosted session source, so the result follows the
 same source authority and history as the project.
+The controls and their Save action stay together beside the section description,
+stacking below it in narrow panes. Project requirements spans the form width,
+starts at six rows and grows up to eighteen before scrolling. Prompt suggestions
+has a separate section and Save action. Material typography and theme colors
+provide the same hierarchy in light and dark themes.
 An unsaved choice survives refreshes of that same source. Switching project,
 source kind or source session loads the new source's choices; the previous
 source's draft is never submitted as the new source's settings. A temporary

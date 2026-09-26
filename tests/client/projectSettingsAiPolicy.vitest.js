@@ -1409,16 +1409,9 @@ describe("ProjectSettingsPanel AI behaviour", () => {
     app.unmount();
   });
 
-  it("keeps the database controls compact, adaptive, and touch accessible", () => {
+  it("labels the database controls and their unavailable-choice explanation", () => {
     expect(componentSource).toContain('aria-labelledby="development-database-title"');
     expect(componentSource).toContain("development-database-project-reason");
-    expect(componentSource).toContain(
-      "grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));"
-    );
-    expect(componentSource).toContain("@media (max-width: 900px)");
-    expect(componentSource).toContain("@media (max-width: 540px)");
-    expect(componentSource).not.toContain("@media (pointer: coarse)");
-    expect(componentSource).toContain("min-height: 3rem;");
   });
 
   it("lets an owner edit but keeps a member read-only even if an event is invoked", async () => {

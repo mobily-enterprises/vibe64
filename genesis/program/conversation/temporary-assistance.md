@@ -18,6 +18,10 @@ when a saved view closes, and still cancels unfinished uploads. Restored files c
 against the normal attachment limit; additions and removals keep numbered text
 references consistent. A confirmed send clears only its accepted receipts.
 
+When saved AI settings need a state upgrade, restoration reports the administrator's
+stop, upgrade and restart steps. It never converts old settings during a read.
+Restore failures retain a readable retry action in a tonal error notice.
+
 ## Sources
 
 - `packages/vibe64-core/src/server/featureRoutes.js`
@@ -81,6 +85,10 @@ routing request, so later automatic review retains the submitting user's access
 even when an owner reads the conversation or triggers reconciliation.
 The shared routing coordinator uses the temporary conversation's existing write
 lock and transcript; it does not write main-chat history or alter its selection.
+Native conversation IDs are scoped to that temporary chat. A fresh repair can
+start even when the main chat retains Codex history in an older provider home;
+neither chat's existing history is moved or converted. A chat with its own
+unsupported history reports the required action as a conflict, not a server error.
 Creation and polling release that lock before looking up mode availability.
 Slow provider catalogue reads therefore do not block sibling Router updates or
 draft saves; native admission and transcript reconciliation remain serialized.

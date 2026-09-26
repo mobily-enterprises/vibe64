@@ -76,6 +76,10 @@ function createSessionConversations({
     const selection = record.assistantSelection || vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
     const metadata = { ...ctx.session.metadata };
     for (const key of ["assistant_routing", "assistant_routing_request", "assistant_routing_goal", "codex_routing_home_provider", "assistant_changeover"]) delete metadata[key];
+    // Native history belongs to this chat, never to the parent session.
+    for (const key of Object.keys(metadata)) {
+      if (/^(?:codex(?:_[a-z0-9_-]+)?|claude|opencode)_conversation_id$/u.test(key)) delete metadata[key];
+    }
     Object.assign(metadata, record.routingMetadata || {}, {
       assistant_selection: serializeVibe64AssistantSelection(selection),
       agent_identity_provider: record.providerConversationId ? selection.engineId : "",
@@ -276,7 +280,7 @@ function createSessionConversations({
       if (selection.engineId === "codex" && Object.entries(record.nativeBindings || {}).some(([key, binding]) =>
         binding.assistantSelection.engineId === "codex" && key !== "codex")) {
         throw Object.assign(new Error("This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed."), {
-          code: "vibe64_codex_history_unsupported"
+          code: "vibe64_codex_history_unsupported", statusCode: 409
         });
       }
       if (record.assistantSelection.engineId !== selection.engineId) {

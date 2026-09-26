@@ -52,8 +52,8 @@ function createAssistantRoutingStore({ systemRoot } = {}) {
     try {
       const value = JSON.parse(await readFile(filePath, "utf8"));
       if (value.schemaVersion !== 3) {
-        throw Object.assign(new Error("Model routing needs the stopped-service state upgrade. Run the candidate release's upgrade-state command before starting it."), {
-          code: "vibe64_assistant_routing_upgrade_required"
+        throw Object.assign(new Error("Vibe64's saved AI settings need an upgrade. The workspace administrator must stop Vibe64, run this version's upgrade-state command, and restart it."), {
+          code: "vibe64_assistant_routing_upgrade_required", statusCode: 409
         });
       }
       return validateAssistantRoutingConfiguration(value);

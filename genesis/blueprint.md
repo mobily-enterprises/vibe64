@@ -583,6 +583,10 @@ source. Those choices apply when a conversation next establishes stable
 context; they do not rewrite past conversation or get repeated with every
 message. Personal names and prompt suggestions remain separate Vibe64 conveniences
 and are not added to agent prompts.
+Project settings keeps each form's controls, explanation and Save action together.
+The layout adapts to the available pane width, with readable choices and a wide
+project-requirements editor that starts at six lines and grows with its content.
+Prompt suggestions have their own section, separate from collaboration guidance.
 Members can choose an accessible explicit mode even when the latest answer used
 the owner's personal AI. Senior and Junior show the actor's effective model and any
 Shared backup. Auto remains unavailable when its required roles need personal
@@ -639,6 +643,8 @@ Existing installations receive historical metadata repairs through numbered
 deployment upgrades with read-only preflight, warnings, backups and a record of
 completion. Errors block activation. Ordinary account reads do not repair old
 formats, and the Codex identity upgrade does not rewrite project source.
+An overdue AI-settings upgrade reports the administrator's stop, upgrade and
+restart steps in the affected screen instead of a generic server error.
 Routing upgrades preserve saved destinations, conversation identities and
 delivery evidence, including archived and temporary conversations. Conflicting
 old helper choices remain visible for owner review. Interrupted publication

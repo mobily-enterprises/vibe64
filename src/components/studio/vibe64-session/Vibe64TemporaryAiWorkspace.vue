@@ -85,9 +85,9 @@
     />
     <template v-if="!hostConversation?.selected">
     <div class="vibe64-temporary-ai__recovery-row">
-      <v-alert v-if="temporary.restoreError.value" type="error" density="compact">
+      <v-alert v-if="temporary.restoreError.value" type="error" variant="tonal" density="compact">
         {{ temporary.restoreError.value }}
-        <v-btn size="small" @click="temporary.restoreTasks()">Try again</v-btn>
+        <v-btn color="error" variant="text" height="48" @click="temporary.restoreTasks()">Try again</v-btn>
       </v-alert>
       <div
         v-if="activeTask?.recoveryNotice && !activeTaskRecoveryVerified && !props.connectionUnavailable"
