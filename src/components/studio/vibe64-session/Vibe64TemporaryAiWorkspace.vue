@@ -223,13 +223,6 @@
                 @submit="sendTask(task.id)"
                 @stop="stopTask(task.id)"
               >
-                <Vibe64AgentSettingsMenu
-                  v-if="!task.routingMetadata?.assistant_routing"
-                  :agent-settings="task.agentSettings"
-                  :assistant-selection="task.assistantSelection || props.assistantSelection"
-                  :disabled="taskInputDisabled(task) || task.busy"
-                  @update-setting="updateActiveAgentSetting"
-                />
                 <Vibe64ChatModeControls
                   v-if="task.id === activeTask.id && !task.recoveryOperation" :session="modeSession"
                   :save-preferences="(preferences) => temporary.updateRouting(task.id, preferences)"
@@ -268,6 +261,13 @@
                   title="Attach console and network diagnostics"
                   variant="text"
                   @click="previewAttachmentState.attachDiagnostics?.()"
+                />
+                <Vibe64AgentSettingsMenu
+                  v-if="!task.routingMetadata?.assistant_routing"
+                  :agent-settings="task.agentSettings"
+                  :assistant-selection="task.assistantSelection || props.assistantSelection"
+                  :disabled="taskInputDisabled(task) || task.busy"
+                  @update-setting="updateActiveAgentSetting"
                 />
               </AssistantComposerActions>
             </template>

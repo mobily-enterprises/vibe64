@@ -224,7 +224,8 @@ Hovering a reply's name shows its saved model, provider and thinking choice.
 Older replies without a saved AI identity simply say "agent".
 Main and ordinary temporary chats offer Senior, Junior, Intern and Auto from one
 compact icon in the composer's bottom toolbar. The icon reflects the selected
-role; its menu shows model assignments and the selected role. Auto alone offers
+role and comes first; Settings comes last before Send and Stop. Its menu shows
+model assignments and the selected role. Auto alone offers
 automatic Senior review and Deslop. Direct Senior, Junior and Intern conversations
 answer questions or implement requested changes without a temporary plan,
 automatic handoff or review. These names describe the model roles, not limits

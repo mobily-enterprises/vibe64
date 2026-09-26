@@ -2201,8 +2201,15 @@ for (const width of [390, 1280]) {
     }
     const trigger = page.getByRole("button", { name: /^Chat mode:/ });
     await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Junior\./);
+    const toolbar = page.locator(".studio-autopilot__composer-actions");
+    await expect(toolbar.getByRole("button").first()).toHaveAttribute("aria-label", /^Chat mode:/);
+    await expect(toolbar.locator(":scope > button:visible").last()).toHaveAttribute("aria-label", /^Chat settings for /);
     await expect(page.getByRole("button", { name: "View plan", exact: true })).toHaveCount(0);
     await trigger.focus();
+    await page.keyboard.press("Tab");
+    await expect(toolbar.getByRole("button", { name: "Add to message", exact: true })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(trigger).toBeFocused();
     await page.keyboard.press("Enter");
     const modes = page.getByRole("list", { name: "Choose chat mode" });
     for (const label of ["Senior", "Junior", "Intern", "Auto"]) await expect(modes.getByRole("button", { name: new RegExp(`^${label}`) })).toBeVisible();

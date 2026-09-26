@@ -67,7 +67,8 @@ references consistent. A confirmed send clears only its accepted receipts.
 Ordinary persistent temporary chats offer the same Senior, Junior, Intern, Auto
 and Auto-only optional review controls as main chat, through one icon in the bottom
 composer toolbar. Owners can open the shared Model routing overlay directly
-from its menu. Each keeps its own selection, routing
+from its menu. The role selector comes first; any separate Settings control comes
+last before Send and Stop. Each keeps its own selection, routing
 preferences, pending request and retained native conversations. Creating an ordinary
 draft starts in Senior with review off, inherits only its parent's workflow, and
 does not require inference access to the parent's last model. The first routed Send resolves the submitting

@@ -481,6 +481,11 @@
               </template>
               <template #footer="{ attachmentState }">
                 <div class="studio-autopilot__composer-actions" :class="{ 'studio-autopilot__composer-actions--request': assistantCanRequestMessage }">
+                  <Vibe64ChatModeControls
+                    v-if="!props.sessionSelectionArchived" :session="props.session" :sessions-api-path="props.sessionsApiPath"
+                    :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantCanConfigureRouting"
+                    @saved="reloadAssistantAccess"
+                  />
                   <v-menu eager location="top start" :close-on-content-click="false">
                     <template #activator="{ props: menuProps }">
                       <v-btn
@@ -535,6 +540,13 @@
                       </v-btn>
                     </v-card>
                   </v-menu>
+                  <div ref="composerToolsTarget" class="studio-autopilot__composer-tools" />
+                  <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
+                  <Vibe64AgentPlanUsage
+                    :active="props.active && !props.sessionSelectionArchived"
+                    :session="props.session"
+                    :sessions-api-path="props.sessionsApiPath"
+                  />
                   <v-btn
                     ref="composerSettingsButton"
                     :aria-label="`Chat settings for ${conversationAssistantLabel}${composerAccessHint && !assistantCanRequestMessage ? ': attention required' : ''}`"
@@ -577,18 +589,6 @@
                       </div>
                     </template>
                   </Vibe64SessionAssistantMenu>
-                  <Vibe64ChatModeControls
-                    v-if="!props.sessionSelectionArchived" :session="props.session" :sessions-api-path="props.sessionsApiPath"
-                    :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantCanConfigureRouting"
-                    @saved="reloadAssistantAccess"
-                  />
-                  <div ref="composerToolsTarget" class="studio-autopilot__composer-tools" />
-                  <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
-                  <Vibe64AgentPlanUsage
-                    :active="props.active && !props.sessionSelectionArchived"
-                    :session="props.session"
-                    :sessions-api-path="props.sessionsApiPath"
-                  />
                   <div class="studio-autopilot__composer-delivery">
                     <v-btn
                       v-if="agentStopVisible" aria-label="Stop" title="Stop assistant"

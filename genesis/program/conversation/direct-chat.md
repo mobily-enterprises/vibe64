@@ -13,6 +13,8 @@ Unavailable modes retain their explanation and expose their disabled state to
 assistive technology, including when Auto requires a personal connection.
 Model labels and restriction reasons wrap fully within the scrollable mode menu.
 The Settings cog stays on the same horizontal centerline as the neighboring icons.
+The role selector comes first in the composer toolbar; Settings comes last before
+the Send and Stop controls. Visual and keyboard order match.
 It labels the next recipient underneath in a compact, bordered rectangle with
 theme-aware contrast. The label extends beyond the button circle without
 shifting the icon, increasing the button height or adding a tooltip. The session store
