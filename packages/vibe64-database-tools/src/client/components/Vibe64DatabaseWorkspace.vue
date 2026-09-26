@@ -147,7 +147,7 @@
             :key="sessionId"
             :schema="schema"
             :overview="state?.overview || { present: false, hash: '', definition: { version: 1, actors: [] } }"
-            :assistant-available="assistantAvailable || assistantRequestAvailable"
+            :assistant-available="assistantAvailable"
             :save-overview="saveOverview"
             @select-table="(table, label) => selectTableFromErd(table, 'overview', label)"
             @inspect-table="diagramSelections.overview = $event"
@@ -412,14 +412,8 @@
           </div>
           <div v-else class="database-workspace__copilot-unavailable">
             <v-icon :icon="mdiInformationOutline" size="26" />
-            <strong>{{ assistantUnavailableTitle }}</strong>
+            <strong>Copilot is unavailable</strong>
             <span>{{ assistantUnavailableCopy }}</span>
-            <v-btn
-              v-if="assistantRequestAvailable" color="primary" variant="tonal"
-              @click="emit('request-message', assistantRequestMessage)"
-            >
-              Ask through the owner
-            </v-btn>
           </div>
         </aside>
       </div>
@@ -594,7 +588,6 @@ const props = defineProps({
     default: true,
     type: Boolean
   },
-  assistantRequestAvailable: { default: false, type: Boolean },
   assistantUnavailableMessage: {
     default: "",
     type: String
@@ -612,7 +605,7 @@ const props = defineProps({
     type: [String, Object, Function]
   }
 });
-const emit = defineEmits(["request-overview-assistant", "request-message"]);
+const emit = defineEmits(["request-overview-assistant"]);
 
 function requestOverviewAssistant({ abstraction = "balanced", scope = "all" } = {}) {
   const level = DATA_OVERVIEW_ABSTRACTIONS.find((item) => item.value === abstraction) || DATA_OVERVIEW_ABSTRACTIONS[1];
@@ -725,10 +718,6 @@ const assistantStatusLabel = computed(() => {
   const engine = VIBE64_AGENT_PROVIDERS.find(({ id }) => id === assistant.engineId)?.label || assistant.engineId;
   return `${engine} · ${assistant.model}${assistant.backupUsed ? ' · Shared backup' : ''}`;
 });
-const assistantUnavailableTitle = computed(() => {
-  if (props.assistantRequestAvailable) return "Get help through the owner";
-  return "Copilot is unavailable";
-});
 const assistantUnavailableCopy = computed(() => {
   return state.value?.assistant?.message || "Ask the owner to configure Intern in Model routing. Database browsing and editing work without AI.";
 });
@@ -737,10 +726,6 @@ const assistantTableName = computed(() => {
   const name = activeView.value === "data" ? selectedTableName.value : diagramSelections[activeView.value];
   return schema.value.tables.some((table) => table.qualifiedName === name) ? name : "";
 });
-const assistantRequestMessage = computed(() => assistantTableName.value
-  ? `Help me understand the ${assistantTableName.value} table and its relationships.`
-  : "Help me understand this project’s database and its main tables."
-);
 const currentQueryIsDefault = computed(() => Boolean(
   selectedTable.value && sqlText.value.trim() === defaultTableSql(selectedTable.value)
 ));

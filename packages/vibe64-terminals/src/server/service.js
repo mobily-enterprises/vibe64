@@ -2608,7 +2608,7 @@ function createService({
       const available = currentMode && !steering ? purposes[currentMode]?.available === true : native.available;
       const canUse = currentMode && !steering ? purposes[currentMode]?.available === true : native.canUse;
       return { ...native, available, canUse, nativeCanUse: native.canUse, steering, canUseAny: Object.values(purposes).some(({ available }) => available),
-        canRequestMessage: !canUse && native.canRequestMessage, currentMode, purposes };
+        currentMode, purposes };
     },
 
     async requireAssistantAccess(sessionId, options = {}) {
@@ -3200,14 +3200,6 @@ function createService({
 
     readAgentAttachment(sessionId, attachmentId) {
       return sessionAttachments.readAttachment({ sessionId }, attachmentId);
-    },
-
-    pinAgentAttachments(sessionId, input = {}, options = {}) {
-      return sessionAgent.pinAttachments(sessionId, input, options);
-    },
-
-    unpinAgentAttachments(sessionId, input = {}, options = {}) {
-      return sessionAgent.unpinAttachments(sessionId, input, options);
     },
 
     deleteAgentAttachment(sessionId, input = {}, options = {}) {

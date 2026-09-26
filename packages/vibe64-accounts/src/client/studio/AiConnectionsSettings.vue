@@ -1259,7 +1259,7 @@ defineExpose({ openProvider });
     >
       <v-card :rounded="smAndDown ? 0 : 'xl'">
         <v-card-text class="vibe64-codex-setup__body">
-          <ModelRoutingForm v-if="nativeRoutingReady" :engine-id="nativeSetupProviderId" :connection-id="nativeSetupProviderId === 'codex' ? 'openai' : 'anthropic'" :connection-engines="[nativeSetupProviderId]" :connection-label="nativeSetupProviderId === 'codex' ? 'GPT' : 'Claude'" :setup-error="nativeRoutingSetupError" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
+          <ModelRoutingForm v-if="nativeRoutingReady" :engine-id="nativeSetupProviderId" :connection-id="nativeSetupProviderId === 'codex' ? 'openai' : 'anthropic'" :connection-engines="[nativeSetupProviderId]" :connection-label="nativeSetupProviderId === 'codex' ? 'Codex login' : 'Claude login'" :setup-error="nativeRoutingSetupError" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
           <CodexProviderConnections
             v-else-if="nativeSetupProviderId === 'codex'"
             v-model="codexModelProviderId"

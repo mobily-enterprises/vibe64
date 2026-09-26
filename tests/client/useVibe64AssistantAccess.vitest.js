@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import { effectScope, nextTick, ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -8,18 +6,8 @@ const endpointMocks = vi.hoisted(() => ({
   resources: [],
   useEndpointResource: vi.fn()
 }));
-const commandMocks = vi.hoisted(() => ({
-  command: null,
-  options: null,
-  useCommand: vi.fn()
-}));
-
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: endpointMocks.useEndpointResource
-}));
-
-vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
-  useCommand: commandMocks.useCommand
 }));
 
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
@@ -56,38 +44,12 @@ function resource(data = null) {
 describe("useVibe64AssistantAccess", () => {
   beforeEach(() => {
     endpointMocks.options.length = 0;
-    endpointMocks.resources = [resource(), resource()];
+    endpointMocks.resources = [resource()];
     endpointMocks.useEndpointResource.mockReset();
     endpointMocks.useEndpointResource.mockImplementation((options) => {
       endpointMocks.options.push(options);
       return endpointMocks.resources[endpointMocks.options.length - 1];
     });
-    commandMocks.command = {
-      run: vi.fn(async () => ({ ok: true }))
-    };
-    commandMocks.options = null;
-    commandMocks.useCommand.mockReset();
-    commandMocks.useCommand.mockImplementation((options) => {
-      commandMocks.options = options;
-      return commandMocks.command;
-    });
-  });
-
-  it("keeps local assistant access without reading the hosted message-request queue", async () => {
-    endpointMocks.resources = [resource({ ok: true, canUse: true }), resource({ ok: false, error: "Sign in required" })];
-    const scope = effectScope();
-    const access = scope.run(() => useVibe64AssistantAccess({
-      sessionId: "local-session", sessionsApiPath: "/api/vibe64/sessions", messageSuggestionsEnabled: false
-    }));
-    expect(endpointMocks.options[0].enabled.value).toBe(true);
-    expect(endpointMocks.options[1].enabled.value).toBe(false);
-    expect(access.canUseAi.value).toBe(true);
-    expect(access.suggestionsError.value).toBe("");
-    expect(access.pendingSuggestions.value).toEqual([]);
-    await access.reload();
-    expect(endpointMocks.resources[0].reload).toHaveBeenCalledOnce();
-    expect(endpointMocks.resources[1].reload).not.toHaveBeenCalled();
-    scope.stop();
   });
 
   it("loads configured session choices without provider or model catalogs", () => {
@@ -110,16 +72,14 @@ describe("useVibe64AssistantAccess", () => {
     scope.stop();
   });
 
-  it("hydrates access and queue resources for warm-cache and realtime navigation", async () => {
+  it("hydrates access for warm-cache and realtime navigation", async () => {
     endpointMocks.resources = [
       resource({
         accessLabel: "Workspace use",
         available: true,
-        canRequestMessage: false,
         canUse: true,
         ok: true
-      }),
-      resource({ canManage: false, ok: true, suggestions: [] })
+      })
     ];
     const scope = effectScope();
     const sessionId = ref("session-a");
@@ -128,19 +88,15 @@ describe("useVibe64AssistantAccess", () => {
       sessionsApiPath: ref("/api/vibe64/sessions")
     }));
 
-    expect(endpointMocks.options).toHaveLength(2);
+    expect(endpointMocks.options).toHaveLength(1);
     expect(endpointMocks.options[0].path.value).toBe(
       "/api/vibe64/sessions/session-a/assistant-access"
     );
-    expect(endpointMocks.options[1].path.value).toBe(
-      "/api/vibe64/sessions/session-a/message-suggestions"
-    );
     expect(endpointMocks.options[0].queryOptions.refetchOnMount).toBe("always");
-    expect(endpointMocks.options[1].queryOptions.refetchOnMount).toBe("always");
     expect(endpointMocks.options[0].queryOptions.refetchOnWindowFocus).toBe(true);
     expect(access.accessLabel.value).toBe("Workspace use");
     expect(access.canUseAi.value).toBe(true);
-    expect(access.canSubmitMainChat.value).toBe(true);
+    expect(access.canUseChat.value).toBe(true);
     expect(endpointMocks.options[0].realtime.events).toEqual([
       "vibe64.session.changed",
       "vibe64.connections.changed",
@@ -183,25 +139,24 @@ describe("useVibe64AssistantAccess", () => {
     scope.stop();
   });
 
-  it("keeps chat, helpers, Auto and approval availability independent", () => {
+  it("keeps chat, helpers and Auto availability independent", () => {
     endpointMocks.resources = [resource({
-      ok: true, available: true, canUse: true, nativeCanUse: false, canUseAny: true, currentMode: "code", canRequestMessage: false,
+      ok: true, available: true, canUse: true, nativeCanUse: false, canUseAny: true, currentMode: "junior",
       purposes: {
-        code: { available: true, backupUsed: true, effectiveSelection: { engineId: "opencode", modelId: "big-pickle" } },
-        auto: { available: false, message: "Auto requires direct access to Plan, Code and Router." },
+        junior: { available: true, backupUsed: true, effectiveSelection: { engineId: "opencode", modelId: "big-pickle" } },
+        auto: { available: false, message: "Choose a compatible Router model." },
         prompt_hint: { available: false, message: "Review the migrated helper settings." }
       }
-    }), resource({ ok: true, canManage: false, suggestions: [] })];
+    })];
     const scope = effectScope();
     const access = scope.run(() => useVibe64AssistantAccess({ sessionId: "session-a", sessionsApiPath: "/api/vibe64/sessions" }));
     expect(access.canUseChat.value).toBe(true);
     expect(access.canUseNative.value).toBe(false);
     expect(access.canRouteChat.value).toBe(true);
     expect(access.canUseAi.value).toBe(true);
-    expect(access.canUsePurpose("code")).toBe(true);
+    expect(access.canUsePurpose("junior")).toBe(true);
     expect(access.canUsePurpose("auto")).toBe(false);
     expect(access.canUsePurpose("prompt_hint")).toBe(false);
-    expect(access.canRequestMessage.value).toBe(false);
     expect(access.accessLabel.value).toBe("Shared backup");
     expect(access.restrictionMessage.value).toBe("");
     endpointMocks.resources[0].data.value = {
@@ -211,8 +166,7 @@ describe("useVibe64AssistantAccess", () => {
     expect(access.canUseNative.value).toBe(true);
     expect(access.canRouteChat.value).toBe(false);
     expect(access.canUseAi.value).toBe(true);
-    expect(access.canSubmitMainChat.value).toBe(false);
-    expect(access.restrictionMessage.value).toContain("Auto requires direct access");
+    expect(access.restrictionMessage.value).toContain("compatible Router model");
     scope.stop();
   });
 
@@ -220,11 +174,7 @@ describe("useVibe64AssistantAccess", () => {
     const accessResource = resource();
     accessResource.isInitialLoading.value = false;
     accessResource.isLoading.value = false;
-    endpointMocks.resources = [accessResource, resource({
-      canManage: false,
-      ok: true,
-      suggestions: []
-    })];
+    endpointMocks.resources = [accessResource];
     const scope = effectScope();
     const active = ref(true);
     const sessionId = ref("");
@@ -264,140 +214,27 @@ describe("useVibe64AssistantAccess", () => {
     scope.stop();
   });
 
-  it("turns a personal member's main-chat message into a suggestion only", async () => {
-    endpointMocks.resources = [
-      resource({
-        accessLabel: "Personal use",
-        available: true,
-        canRequestMessage: true,
-        canUse: false,
-        ownerOnly: true,
-        ok: true
-      }),
-      resource({
-        canManage: false,
-        ok: true,
-        suggestions: [{ id: "suggestion-a", status: "pending" }]
-      })
-    ];
+  it("blocks steering a personal turn while independent helpers remain available", async () => {
+    endpointMocks.resources = [resource({
+      ok: true, available: true, ownerOnly: true, steering: true, canUse: false, nativeCanUse: false,
+      currentMode: "junior", purposes: {
+        junior: { available: true }, prompt_hint: { available: true }, source_explanation: { available: true }
+      }
+    })];
     const scope = effectScope();
-    const access = scope.run(() => useVibe64AssistantAccess({
-      sessionId: ref("session-a"),
-      sessionsApiPath: ref("/api/vibe64/sessions")
-    }));
-
-    expect(access.canUseAi.value).toBe(false);
-    expect(access.canRequestMessage.value).toBe(true);
-    expect(access.canSubmitMainChat.value).toBe(true);
-    expect(access.restrictionMessage.value).toContain("owner reviews your request");
-    expect(access.pendingSuggestions.value.map(({ id }) => id)).toEqual(["suggestion-a"]);
-
-    const result = await access.suggestMessage({
-      attachmentIds: ["attachment-a"],
-      message: "Please review this"
-    });
-    expect(result.suggested).toBe(true);
-    expect(commandMocks.command.run).toHaveBeenCalledWith({
-      body: {
-        attachmentIds: ["attachment-a"],
-        message: "Please review this"
-      },
-      path: "/api/vibe64/sessions/session-a/message-suggestions"
-    });
-    expect(endpointMocks.resources[1].reload).toHaveBeenCalledTimes(1);
+    const access = scope.run(() => useVibe64AssistantAccess({ sessionId: "session-a", sessionsApiPath: "/api/vibe64/sessions" }));
+    expect(access.canUseChat.value).toBe(false);
+    expect(access.canRouteChat.value).toBe(false);
+    expect(access.canUsePurpose("prompt_hint")).toBe(true);
+    expect(access.canUsePurpose("source_explanation")).toBe(true);
+    expect(access.restrictionMessage.value).toContain("Only the owner can steer this turn");
+    endpointMocks.resources[0].data.value = { ...endpointMocks.resources[0].data.value, steering: false, canUse: true };
+    expect(access.canUseChat.value).toBe(true);
+    expect(access.canRouteChat.value).toBe(true);
+    expect(access.restrictionMessage.value).toBe("");
+    await access.reload();
+    expect(endpointMocks.resources[0].reload).toHaveBeenCalledOnce();
+    expect(endpointMocks.options).toHaveLength(1);
     scope.stop();
-  });
-
-  it("approves a request through the session's current AI without route confirmation", async () => {
-    endpointMocks.resources = [
-      resource({
-        accessLabel: "Personal use",
-        available: true,
-        canRequestMessage: false,
-        canUse: true,
-        ownerOnly: true,
-        ok: true
-      }),
-      resource({
-        canManage: true,
-        ok: true,
-        suggestions: [{ id: "suggestion-a", status: "pending" }]
-      })
-    ];
-    const scope = effectScope();
-    const access = scope.run(() => useVibe64AssistantAccess({
-      sessionId: ref("session-a"),
-      sessionsApiPath: ref("/api/vibe64/sessions")
-    }));
-
-    await access.approveSuggestion("suggestion-a");
-    expect(commandMocks.command.run).toHaveBeenCalledWith({
-      body: {},
-      path: "/api/vibe64/sessions/session-a/message-suggestions/suggestion-a/approve"
-    });
-    scope.stop();
-  });
-
-  it("puts message review above the composer with direct approval and attachment previews", () => {
-    const autopilot = fs.readFileSync(path.resolve(
-      "src/components/studio/vibe64-session/Vibe64AutopilotView.vue"
-    ), "utf8");
-    const panel = fs.readFileSync(path.resolve(
-      "src/components/studio/vibe64-session/Vibe64AssistantAccessPanel.vue"
-    ), "utf8");
-    const assistantMenuSource = fs.readFileSync(path.resolve(
-      "src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue"
-    ), "utf8");
-    const modelControlSource = fs.readFileSync(path.resolve("node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantModelControl.vue"), "utf8");
-    const assistantDialog = fs.readFileSync(path.resolve(
-      "src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue"
-    ), "utf8");
-    const footerStart = autopilot.indexOf('<template #footer="{ attachmentState }">');
-    const accessControl = autopilot.indexOf("<Vibe64AssistantAccessPanel");
-    const assistantMenu = autopilot.indexOf("<Vibe64SessionAssistantMenu", footerStart);
-
-    expect(footerStart).toBeGreaterThan(-1);
-    expect(accessControl).toBeLessThan(footerStart);
-    expect(accessControl).toBeLessThan(autopilot.indexOf("<Vibe64AutopilotPromptTextarea"));
-    expect(assistantMenu).toBeGreaterThan(accessControl);
-    expect(panel).not.toContain("<v-dialog");
-    expect(panel).toContain("Approve & send");
-    expect(panel).toContain("Vibe64ConversationAttachments");
-    expect(panel).toContain("Waiting for the owner");
-    expect(panel).toContain("Approved and sent");
-    expect(autopilot).toContain("Send for approval");
-    expect(autopilot).toContain(':access-label="assistantAccessLabel"');
-    expect(autopilot).toContain(':access-loading="assistantAccessLoading"');
-    expect(autopilot).toContain(':can-configure="assistantCanConfigureRouting"');
-    expect(autopilot).toContain(':changes-disabled="composerSending || agentActive"');
-    expect(modelControlSource).toContain('aria-label="AI session selector"');
-    expect(modelControlSource).toContain('AI choices are view-only while the assistant is working.');
-    expect(assistantMenuSource).not.toMatch(/aria-label="Choose AI"[\s\S]{0,180}:disabled=/u);
-    expect(assistantMenuSource).toContain('providerConnectedOnly: true');
-    expect(assistantMenuSource).toContain('active: catalogActive');
-    expect(assistantMenuSource).toContain('props.session?.sessionId && engineId.value');
-    expect(assistantMenuSource).toContain('provider.connected === true');
-    expect(assistantMenuSource).toContain('model.status === "available"');
-    expect(assistantMenuSource).toContain('watch([menuOpen, modelProvider, modelRows]');
-    expect(assistantMenuSource).toContain('model.id === provider.defaultModelId');
-    expect(assistantMenuSource).not.toContain('appendIcon: mdiLockOutline');
-    expect(assistantMenuSource).not.toContain('vibe64-session-assistant-menu__option--locked');
-    expect(assistantMenuSource).toContain(':icon="mdiLockOutline"');
-    expect(assistantMenuSource).toContain('modelAccess.label');
-    expect(assistantMenuSource).toContain('Unlock paid models');
-    expect(assistantMenuSource).toContain('restoreRecommendedModel');
-    expect(assistantMenuSource).toContain('vibe64AssistantModelAccessPath');
-    expect(modelControlSource).toContain('aria-label="Model"');
-    expect(modelControlSource).toContain('aria-label="Thinking"');
-    expect(assistantMenuSource).toContain('watch(assistantSelection, hydrateSelection, { immediate: true });');
-    expect(assistantMenuSource).toContain('void reloadCatalog().catch(() => null);');
-    expect(assistantMenuSource).not.toContain('<v-select');
-    expect(assistantMenuSource).not.toContain('label="Agent"');
-    expect(assistantMenuSource).toContain('v-if="canConfigure"');
-    expect(assistantMenuSource).toContain('Configure more AIs');
-    expect(assistantMenuSource).not.toContain("Vibe64AssistantSessionDialog");
-    expect(assistantMenuSource).not.toContain("disabledReason");
-    expect(assistantDialog).toContain('Vibe64WorkflowSelector');
-    expect(assistantDialog).toContain('Start in Plan. Choose Code or Auto from chat.');
   });
 });

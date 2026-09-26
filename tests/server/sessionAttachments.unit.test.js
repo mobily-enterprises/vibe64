@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, utimes, mkdir, rm, symlink } from "node:fs/promises";
+import { readFile, writeFile, utimes, mkdir, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
@@ -107,19 +107,19 @@ test("attachment reads and sends reject other sessions, invalid IDs and expired 
   });
 });
 
-test("draft uploads support preview, pin/unpin and explicit deletion without becoming session artifacts", async () => {
+test("draft uploads support preview and deletion while historical request attachments remain retained", async () => {
   await withTemporaryRoot(async (root) => {
     const { attachments, env } = await fixture(root);
     const uploaded = await upload(attachments, "unsafe.svg");
     const opened = await attachments.readAttachment({ sessionId: "one" }, uploaded.attachmentId);
     assert.equal(opened.attachment.contentType, "application/octet-stream");
     await opened.fileHandle.close();
-    const input = { attachmentIds: [uploaded.attachmentId], suggestionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" };
-    await attachments.pinAttachments({ sessionId: "one" }, input);
+    const pin = path.join(path.dirname(uploaded.path), ".suggestion-pin-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    await writeFile(pin, "2026-09-01T00:00:00.000Z\n");
     await prepareCodexAttachmentStorage({ env, now: Date.now() + 3600000 });
     assert.equal(await readFile(uploaded.path, "utf8"), "attachment bytes");
-    await assert.rejects(attachments.deleteAttachment({ sessionId: "one" }, { attachmentId: uploaded.attachmentId }), /pending owner suggestion/u);
-    await attachments.unpinAttachments({ sessionId: "one" }, input);
+    await assert.rejects(attachments.deleteAttachment({ sessionId: "one" }, { attachmentId: uploaded.attachmentId }), /historical message request/u);
+    await rm(pin);
     await attachments.deleteAttachment({ sessionId: "one" }, { attachmentId: uploaded.attachmentId });
     await assert.rejects(readFile(uploaded.path), { code: "ENOENT" });
   });

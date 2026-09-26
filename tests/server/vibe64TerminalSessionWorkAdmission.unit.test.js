@@ -1510,15 +1510,13 @@ test("purpose access enables a member's configured chat after a personal turn wh
   const active = await service.inspectAssistantAccess(session.sessionId, options);
   assert.equal(active.steering, true);
   assert.equal(active.canUse, false, "steering cannot substitute another model while a personal native turn is active");
-  assert.equal(active.canRequestMessage, true);
   assert.equal(active.purposes.junior.available, true, active.purposes.junior.message);
   assert.equal(active.purposes.prompt_hint.available, true);
-  assert.equal(active.purposes.auto.available, false);
+  assert.equal(active.purposes.auto.available, true, active.purposes.auto.message);
   session.agentRuns = [];
   const idle = await service.inspectAssistantAccess(session.sessionId, options);
   assert.equal(idle.steering, false);
   assert.equal(idle.canUse, true, idle.purposes.junior.message);
-  assert.equal(idle.canRequestMessage, false);
   assert.equal(idle.purposes.review.effectiveSelection.modelId, shared.modelId);
   assert.equal(provider.promptCalls.length, 0, "availability never sends work to a provider");
   service.configureAssistantRuntime({

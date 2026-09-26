@@ -397,7 +397,7 @@
         :scroll-key="conversationScrollKey"
         :source-root="sessionSourceRoot"
         :turns="chatTurns"
-        :visible="conversationLogVisible"
+        :visible="conversationLogVisible && !chatCollapsed && !temporaryAiWorkspace?.visible"
         :welcome-message="emptyConversationWelcome"
         @cancel-turn="cancelOptimisticMessage"
         @edit-turn="editOptimisticMessage"
@@ -439,31 +439,12 @@
               @retry="retryAutomaticReview"
               @skip="props.interruptAgentTurn({ reason: 'skip-review' })"
             />
-            <Vibe64AssistantAccessPanel
-              :access-error="assistantAccessError"
-              :assistant-busy="agentActive"
-              :action-is-pending="assistantActionIsPending"
-              :can-manage="assistantSuggestionsCanManage"
-              :pending-action="assistantPendingAction"
-              :recent-suggestions="assistantRecentSuggestions"
-              :session-id="sessionId"
-              :pending-suggestions="assistantPendingSuggestions"
-              :suggestions-error="assistantSuggestionsError"
-              @approve="approveAssistantSuggestion"
-              @discard="discardAssistantSuggestion"
-              @reload="reloadAssistantAccess"
-              @withdraw="withdrawAssistantSuggestion"
-            />
-            <div v-if="assistantCanRequestMessage" class="studio-autopilot__request-intro">
-              <strong>Send a request to the owner</strong>
-              <span>{{ assistantRestrictionMessage }}</span>
-            </div>
             <Vibe64AutopilotPromptTextarea
               ref="composerInput"
               :key="composerKey"
               :saved-attachments="composerAttachments"
               v-model="composerDraft"
-              :aria-label="assistantCanRequestMessage ? 'Message for owner approval' : 'Message AI assistant'"
+              aria-label="Message AI assistant"
               :attachments-enabled="composerAttachmentsEnabled"
               :described-by="composerSupportStatusVisible ? thinkingStatusId : ''"
               :disabled="composerDisabled"
@@ -491,7 +472,7 @@
                 />
               </template>
               <template #footer="{ attachmentState }">
-                <div class="studio-autopilot__composer-actions" :class="{ 'studio-autopilot__composer-actions--request': assistantCanRequestMessage }">
+                <div class="studio-autopilot__composer-actions">
                   <Vibe64ChatModeControls
                     v-if="!props.sessionSelectionArchived" :session="props.session" :sessions-api-path="props.sessionsApiPath"
                     :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantCanConfigureRouting"
@@ -560,14 +541,14 @@
                   />
                   <v-btn
                     ref="composerSettingsButton"
-                    :aria-label="`Chat settings for ${conversationAssistantLabel}${composerAccessHint && !assistantCanRequestMessage ? ': attention required' : ''}`"
+                    :aria-label="`Chat settings for ${conversationAssistantLabel}${composerAccessHint ? ': attention required' : ''}`"
                     aria-haspopup="menu" :aria-expanded="composerSettingsOpen"
                     icon size="small" variant="text"
                     class="studio-autopilot__composer-action overflow-visible"
                     @click="composerSettingsOpen = !composerSettingsOpen"
                   >
                     <span class="studio-autopilot__assistant-button">
-                      <v-badge :model-value="Boolean(composerAccessHint) && !assistantCanRequestMessage" color="warning" dot floating>
+                      <v-badge :model-value="Boolean(composerAccessHint)" color="warning" dot floating>
                         <v-icon :icon="mdiCogOutline" size="20" />
                       </v-badge>
                       <span class="studio-autopilot__assistant-button-label">{{ conversationAssistantLabel }}</span>
@@ -585,7 +566,7 @@
                   >
                     <template #access>
                       <div
-                        v-if="composerAccessHint && !assistantCanRequestMessage"
+                        v-if="composerAccessHint"
                         class="studio-autopilot__settings-access"
                       >
                         <div class="text-body-small" role="status">
@@ -608,12 +589,10 @@
                       @click="requestAgentInterrupt"
                     />
                     <v-btn
-                      ref="composerSendButton" :aria-label="composerSubmitActionAriaLabel"
-                      :title="composerSubmitActionTitle" :disabled="!composerCanSubmit || !attachmentState.canSubmit"
+                      ref="composerSendButton" :aria-label="composerSubmitAriaLabel"
+                      :title="composerSubmitTitle" :disabled="!composerCanSubmit || !attachmentState.canSubmit"
                       :aria-busy="composerSending && !composerCanSubmit ? 'true' : undefined" color="primary" size="small" variant="flat"
-                      :icon="composerSuggesting ? undefined : (composerSubmitMode === 'send' ? mdiSend : mdiArrowTopRight)"
-                      :prepend-icon="composerSuggesting ? mdiAccountArrowRightOutline : undefined"
-                      :text="composerSuggesting ? 'Send for approval' : undefined"
+                      :icon="composerSubmitMode === 'send' ? mdiSend : mdiArrowTopRight"
                       class="studio-autopilot__composer-action" @click="sendComposerMessage"
                     />
                   </div>
@@ -771,14 +750,12 @@
           v-if="rightPaneTabMounted('database')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
           :assistant-available="assistantCanUsePurpose('junior')"
-          :assistant-request-available="assistantCanRequestMessage"
-          :assistant-unavailable-message="assistantRestrictionMessage"
+          :assistant-unavailable-message="assistantJuniorRestrictionMessage"
           class="studio-autopilot__session-tool-content"
           :project-slug="projectSlug"
           :session-id="sessionId"
           :sessions-api-path="props.sessionsApiPath"
           @request-overview-assistant="assistantCanUsePurpose('junior') ? startTemporaryAiTask($event) : prefillComposer($event.message, { append: true })"
-          @request-message="prefillComposer($event, { append: true })"
         />
       </section>
 
@@ -941,7 +918,6 @@ import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnec
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
-  mdiAccountArrowRightOutline,
   mdiArrowLeft,
   mdiArrowTopRight,
   mdiAutorenew,
@@ -964,7 +940,6 @@ import {
 } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
-import Vibe64AssistantAccessPanel from "@/components/studio/vibe64-session/Vibe64AssistantAccessPanel.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
@@ -1130,39 +1105,22 @@ const { resource: modelRoutingResource } = useModelRouting({
 });
 const assistantCanConfigureRouting = computed(() => modelRoutingResource.data.value?.canConfigure === true);
 const {
-  accessError: assistantAccessError,
   accessLabel: assistantAccessLabel,
-  actionIsPending: assistantActionIsPending,
-  approveSuggestion: approveAssistantSuggestion,
-  canManage: assistantSuggestionsCanManage,
-  canRequestMessage: assistantCanRequestMessage,
   canUseChat: assistantCanUseAiState,
   canRouteChat: assistantCanRouteChat,
   canUseNative: assistantCanUseNative,
   canUsePurpose: assistantCanUsePurpose,
   purposes: assistantPurposes,
   scopeKey: assistantAccessScopeKey,
-  discardSuggestion: discardAssistantSuggestion,
   initialAccessLoading: assistantAccessLoading,
-  pendingAction: assistantPendingAction,
-  pendingSuggestions: assistantPendingSuggestions,
-  recentSuggestions: assistantRecentSuggestions,
-  reload: reloadAssistantAccess,
-  restrictionMessage: assistantRestrictionMessage,
-  suggestMessage: suggestAssistantMessage,
-  suggestionsError: assistantSuggestionsError,
-  withdrawSuggestion: withdrawAssistantSuggestion
+  restrictionMessage: assistantRestrictionMessage
 } = useVibe64AssistantAccess({
   active: computed(() => props.active && !props.sessionSelectionArchived),
-  messageSuggestionsEnabled: computed(() => props.projectContext?.repositoryMode !== "local_source"),
   sessionId: selectedAssistantSessionId,
   sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath))
 });
 
 async function sendMainChatMessage(input = {}) {
-  if (assistantCanRequestMessage.value) {
-    return suggestAssistantMessage(input);
-  }
   if (assistantCanUseAiState.value) {
     return props.sendAgentMessage(input);
   }
@@ -1311,7 +1269,6 @@ const {
   workspaceSetupTitle
 } = useVibe64AutopilotView(props, emit, {
   assistantAccessLoading,
-  assistantCanRequestMessage,
   assistantCanUseAi: assistantCanUseAiState,
   assistantCanRouteChat,
   assistantCanUseJunior: computed(() => assistantCanUsePurpose("junior")),
@@ -1326,23 +1283,6 @@ const fileBookmarks = useVibe64StarredFiles({
   sessionId,
   sessionsApiPath: () => props.sessionsApiPath
 });
-const composerSuggesting = computed(() => assistantCanRequestMessage.value && [
-  "retry",
-  "send",
-  "sending",
-  "steer",
-  "steering"
-].includes(composerSubmitMode.value));
-const composerSubmitActionAriaLabel = computed(() => (
-  composerSuggesting.value ? "Send for approval" : composerSubmitAriaLabel.value
-));
-const composerSubmitActionTitle = computed(() => (
-  composerSuggesting.value ? assistantRestrictionMessage.value : composerSubmitTitle.value
-));
-const composerAccessHint = computed(() => (
-  assistantCanRequestMessage.value ? assistantRestrictionMessage.value : composerHint.value
-));
-
 const {
   blur: stopTypingOnBlur,
   noteInputActivity: noteTypingActivity,
@@ -1354,10 +1294,12 @@ const {
   sessionId,
   sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath))
 });
-const composerAssistantLabel = computed(() => (
-  (testApproval.value?.state === "waiting" ? "Waiting for memory approval" : "") ||
-  (thinkingVisible.value ? thinkingLabel.value : typingLabel.value)
-));
+const composerAccessHint = computed(() => assistantRestrictionMessage.value || composerHint.value);
+const composerAssistantLabel = computed(() => {
+  if (testApproval.value?.state === "waiting") return "Waiting for memory approval";
+  if (!thinkingVisible.value) return typingLabel.value;
+  return assistantRestrictionMessage.value || thinkingLabel.value;
+});
 watch(agentActive, (active) => {
   if (!active) {
     openCodeProgressLabel.value = "";
@@ -1440,11 +1382,7 @@ const promptHintsCanRequest = computed(() => Boolean(
   !workspaceSetupRunning.value &&
   !workspaceSetupRetrying.value &&
   !sourceOperationsSuspended.value &&
-  (
-    promptHintsBlankConversation.value || (
-      (assistantCanUsePurpose("prompt_hint") || assistantCanRequestMessage.value)
-    )
-  ) &&
+  (promptHintsBlankConversation.value || assistantCanUsePurpose("prompt_hint")) &&
   !structuredQuestionActive.value &&
   composerAttachmentState.value.count < 1 &&
   !composerAttachmentState.value.uploading &&
@@ -1472,8 +1410,6 @@ const {
   canRequest: promptHintsCanRequest,
   conversationKey: promptHintsConversationKey,
   draft: composerDraft,
-  sharedOnly: computed(() => !assistantCanUsePurpose("prompt_hint")),
-  projectSlug,
   existingProject: promptHintsExistingProject,
   onSelect: applyPromptHint,
   policy: computed(() => props.promptHintPolicy),
@@ -1488,8 +1424,7 @@ const composerPromptHintPreview = computed(() => (
     : ""
 ));
 const composerPromptHintPlaceholder = computed(() => (
-  composerPromptHintPreview.value || (assistantCanRequestMessage.value
-    ? "What would you like the AI to help with?" : composerPlaceholder.value)
+  composerPromptHintPreview.value || composerPlaceholder.value
 ));
 const composerSupportStatusVisible = computed(() => Boolean(
   composerAssistantLabel.value || promptHintsVisible.value
@@ -1815,15 +1750,6 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
-.studio-autopilot__request-intro {
-  display: grid;
-  gap: 0.25rem;
-  padding: 0.2rem 0.2rem 0.65rem;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: rgba(var(--v-theme-on-surface), 0.75);
-}
-.studio-autopilot__request-intro strong { color: rgb(var(--v-theme-on-surface)); }
 .studio-autopilot {
   background: rgb(var(--v-theme-background));
   display: grid;
@@ -1922,21 +1848,6 @@ onBeforeUnmount(() => {
 }
 
 @container studio-chat-pane (max-width: 32rem) {
-  .studio-autopilot__composer-actions--request {
-    flex-wrap: wrap;
-    row-gap: 0.4rem;
-  }
-
-  .studio-autopilot__composer-actions--request .studio-autopilot__composer-delivery {
-    flex-basis: 100%;
-    justify-content: flex-end;
-  }
-
-  .studio-autopilot__composer-actions--request .studio-autopilot__composer-delivery .studio-autopilot__composer-action {
-    width: auto;
-    padding-inline: 0.75rem;
-  }
-
   .studio-autopilot__header-actions--compact {
     display: flex;
   }

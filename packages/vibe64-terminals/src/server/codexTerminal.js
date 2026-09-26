@@ -128,12 +128,10 @@ import {
 import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
   cleanupCodexAttachments,
-  pinCodexAttachments,
   prepareCodexAttachmentRoot,
   releaseCodexSessionAttachments,
   renewCodexAttachments,
   storeCodexAttachment,
-  unpinCodexAttachments
 } from "./codexAttachments.js";
 import {
   loadProjectExecutionEnv,
@@ -14346,52 +14344,6 @@ function createCodexTerminalController({
           ...await renewCodexAttachments(executionRoot, sessionId, attachmentIds, {
             env: codexAttachmentEnv()
           }),
-          ok: true
-        };
-      });
-    },
-
-    async pinAttachments(sessionId, attachmentIds = [], suggestionId = "") {
-      return vibe64Result(async () => {
-        const runtime = await createRuntimeForSession();
-        const session = await runtime.getSession(sessionId);
-        const executionRoot = terminalSessionSourceRoot(session);
-        if (!executionRoot) {
-          return {
-            code: "vibe64_agent_attachment_source_root_missing",
-            error: "Vibe64 Codex session source root is not available.",
-            ok: false
-          };
-        }
-        return {
-          ...await pinCodexAttachments(
-            executionRoot,
-            sessionId,
-            attachmentIds,
-            suggestionId,
-            { env: codexAttachmentEnv() }
-          ),
-          ok: true
-        };
-      });
-    },
-
-    async unpinAttachments(sessionId, attachmentIds = [], suggestionId = "") {
-      return vibe64Result(async () => {
-        const runtime = await createRuntimeForSession();
-        const session = await runtime.getSession(sessionId);
-        const executionRoot = terminalSessionSourceRoot(session);
-        if (!executionRoot) {
-          return { ok: true, released: [] };
-        }
-        return {
-          ...await unpinCodexAttachments(
-            executionRoot,
-            sessionId,
-            attachmentIds,
-            suggestionId,
-            { env: codexAttachmentEnv() }
-          ),
           ok: true
         };
       });

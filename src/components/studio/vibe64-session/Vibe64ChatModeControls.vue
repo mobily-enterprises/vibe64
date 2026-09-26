@@ -9,7 +9,7 @@ import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 
-const props = defineProps({ session: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, disabled: Boolean, active: Boolean, canConfigure: Boolean });
+const props = defineProps({ session: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, temporary: Boolean, disabled: Boolean, active: Boolean, canConfigure: Boolean });
 const emit = defineEmits(["saved"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
@@ -19,8 +19,10 @@ const saveError = ref("");
 const detailsOpen = ref(false);
 const modeMenu = ref(null);
 const routingOpen = ref(false);
+const routingFocusRole = ref("");
 const routingSaving = ref(false);
 const modeIcons = { senior: mdiAccountStarOutline, junior: mdiAccountOutline, intern: mdiSchoolOutline, auto: mdiAutoFix };
+const modes = computed(() => ASSISTANT_MODES.filter(({ id }) => !props.temporary || id !== "auto"));
 const modeLabel = computed(() => assistantModeLabel(mode.value));
 const { engines, loadError, resource } = useModelRouting({ enabled: computed(() => Boolean(props.session?.sessionId)) });
 const workflowEngineId = computed(() => preferences.value?.workflowEngineId || props.session?.assistantSelection?.engineId);
@@ -30,7 +32,7 @@ const goal = computed(() => props.session?.agentSession?.goal || props.session?.
   JSON.parse(props.session?.metadata?.assistant_routing_goal || "null"));
 const hasGoal = computed(() => Boolean(goal.value && !["completed", "complete"].includes(goal.value.status)) ||
   Boolean(props.session?.agentSession?.turn?.goalStatus && !["completed", "complete"].includes(props.session.agentSession.turn.goalStatus)));
-const reviewAvailable = computed(() => !hasGoal.value && mode.value === "auto");
+const reviewAvailable = computed(() => !props.temporary && !hasGoal.value && mode.value === "auto");
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
   ...(mode.value === preferences.value?.mode && preferences.value.override ? { override: preferences.value.override } : {}) }));
 watch(preferences, (value) => { mode.value = value?.mode || ""; review.value = value?.review === true; }, { immediate: true });
@@ -55,16 +57,12 @@ const description = computed(() => {
   const selectedOverride = preferences.value?.mode === mode.value && preferences.value.override;
   return selectedOverride && !decisions.value[mode.value] ? `${selectionLabel(selectedOverride)} · custom` : roleLabel(mode.value);
 });
-const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Senior review and Deslop on' : ''}`);
+const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Automatic deslop by Senior on' : ''}`);
 const reviewDescription = computed(() => {
   if (hasGoal.value) return "The mode is fixed during a goal. Auto and automatic review are unavailable.";
   if (!reviewAvailable.value) return "Automatic review is available in Auto only.";
   if (decisions.value.review?.available === false) return decisions.value.review.message;
-  const reviewer = decisions.value.review?.effectiveSelection;
-  const coder = decisions.value.junior?.effectiveSelection;
-  const sameModel = reviewer && coder && ["engineId", "modelProviderId", "modelId"]
-    .every((key) => reviewer[key] === coder[key]);
-  return `Senior · ${roleLabel("review")} reviews, fixes issues and Deslops the changes. ${sameModel ? "Same model as Junior. " : ""}Uses one additional turn.`;
+  return "";
 });
 const command = useCommand({
   access: "never", apiSuffix: VIBE64_SESSIONS_API_SUFFIX, placementSource: "vibe64.sessions.assistant-selection.update",
@@ -75,9 +73,9 @@ const command = useCommand({
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
 });
 async function save(nextMode = mode.value, nextReview = review.value) {
-  if (saving.value || props.disabled || !nextMode || nextMode === "auto" && hasGoal.value) return;
+  if (saving.value || props.disabled || !nextMode || nextMode === "auto" && (hasGoal.value || props.temporary)) return;
   const previous = { mode: mode.value, review: review.value };
-  mode.value = nextMode; review.value = nextReview; saving.value = true;
+  mode.value = nextMode; review.value = !props.temporary && nextReview; saving.value = true;
   saveError.value = "";
   try {
     const result = props.savePreferences ? await props.savePreferences(updatedPreferences.value) : await command.run();
@@ -89,6 +87,7 @@ async function save(nextMode = mode.value, nextReview = review.value) {
 }
 function configure() {
   if (!props.canConfigure) return;
+  routingFocusRole.value = "";
   detailsOpen.value = false;
   routingOpen.value = true;
 }
@@ -116,7 +115,7 @@ function configure() {
         <template v-else>
           <v-list aria-label="Choose chat mode" :lines="false" class="py-0">
             <v-list-item
-              v-for="choice in ASSISTANT_MODES" :key="choice.id"
+              v-for="choice in modes" :key="choice.id"
               :title="choice.label" :prepend-icon="modeIcons[choice.id]"
               :active="mode === choice.id" :aria-pressed="mode === choice.id" role="button"
               :disabled="disabled || saving || hasGoal || decisions[choice.id]?.available === false" color="primary" min-height="60"
@@ -132,13 +131,10 @@ function configure() {
             </v-list-item>
           </v-list>
           <div class="px-4 pb-3">
-            <p v-if="mode" class="text-body-small mt-2">{{ ASSISTANT_MODES.find(({ id }) => id === mode)?.description }}</p>
-            <p v-if="engine && ['senior', 'junior', 'intern', 'router'].some((role) => !engine.roles[role]?.assignment)" class="text-body-small mt-2">{{ canConfigure ? 'Assign missing models in Configure model routing below.' : 'Ask the owner to configure the missing models.' }}</p>
             <p v-if="decisions[mode]?.backupReason === 'keep_workflow_together'" class="text-body-small mt-2">Senior and Junior use the shared backup together to keep this workflow in one orchestrator.</p>
-            <template v-if="mode === 'auto'">
-              <v-switch :model-value="review" :disabled="disabled || saving || !reviewAvailable || !review && decisions.review?.available === false" label="Senior review and Deslop" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
-              <p class="text-body-small">{{ reviewDescription }}</p>
-              <p class="text-body-small mt-2">Router reads your request and recent chat. New work goes to Senior for planning; Junior starts after your approval. Standalone Deslop goes directly to Senior.</p>
+            <template v-if="!temporary && mode === 'auto'">
+              <v-switch :model-value="review" :disabled="disabled || saving || !reviewAvailable || !review && decisions.review?.available === false" label="Automatic deslop by Senior" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
+              <p v-if="reviewDescription" class="text-body-small">{{ reviewDescription }}</p>
             </template>
             <v-btn v-if="canConfigure" variant="text" min-height="48" size="small" class="mt-2" @click="configure">Configure model routing</v-btn>
           </div>
@@ -146,10 +142,10 @@ function configure() {
       </div>
     </v-card>
   </v-menu>
-  <v-dialog v-if="canConfigure" v-model="routingOpen" max-width="38rem" :persistent="routingSaving" scrollable aria-label="Model routing" @after-leave="modeMenu?.activatorEl?.focus()">
+  <v-dialog v-if="canConfigure" v-model="routingOpen" max-width="38rem" :persistent="routingSaving" scrollable aria-label="Model routing" @after-enter="routingFocusRole = decisions.auto?.missingRoles?.[0] || ''" @after-leave="modeMenu?.activatorEl?.focus()">
     <v-card>
       <v-card-text>
-        <ModelRoutingForm v-if="routingOpen" :engine-id="workflowEngineId" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingSaving = false; routingOpen = false" />
+        <ModelRoutingForm v-if="routingOpen" :engine-id="workflowEngineId" :focus-role="routingFocusRole" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingSaving = false; routingOpen = false" />
       </v-card-text>
     </v-card>
   </v-dialog>

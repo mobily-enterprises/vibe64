@@ -215,6 +215,8 @@ finishes. Each undelivered bubble is visibly Pending, and messages are delivered
 in order. A failed bubble shows its error and Retry, which reuses that message's
 identity and preserves the current draft.
 An interruption failure stays visible without covering the composer or its retry controls.
+Once an unsent request is fully cancelled, its old error notice disappears,
+including after reload. Unfinished cleanup or uncertain delivery stays visible.
 Repair conversations keep their input and action buttons visible on small screens.
 Main and temporary chat restore uploaded files visibly alongside saved drafts.
 New uploads keep existing files, and removing one updates its numbered references.
@@ -237,8 +239,8 @@ independently of the AI selected in Main chat.
 Hovering a reply's name shows its saved model, provider and thinking choice.
 Reply labels put the role first, followed by the orchestrator and model.
 Older replies without a saved AI identity simply say "agent".
-Main and ordinary temporary chats offer Senior, Junior, Intern and Auto from one
-compact icon in the composer's bottom toolbar. The icon reflects the selected
+Main chat offers Senior, Junior, Intern and Auto; ordinary temporary chats offer
+Senior, Junior and Intern only. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
 role and comes first; Settings comes last before Send and Stop. Its menu shows
 model assignments and the selected role. Auto alone offers
 automatic Senior review and Deslop. Direct Senior, Junior and Intern conversations
@@ -252,11 +254,32 @@ than silently changing models when the catalogue or recommendation policy change
 Connecting a newly usable assistant fills missing routing roles with compatible
 recommendations and opens them for review. Native Codex and Claude sign-in open
 this review from their confirmed login result, including immediate completion.
+The connection review shows optional current-to-suggested model changes and their
+access scope. Keeping current routing leaves the new connection available;
+Customize routing opens the workflow editor. Each assignment states what
+collaborators will get, including shared backups or access restrictions, without
+a separate preview section. The chat-mode switch is labelled Automatic deslop by Senior.
 A routing setup failure
 keeps the AI connected and appears in the review so the owner can finish setup.
 Repeating setup preserves saved choices, including roles the owner deliberately
-left empty. New ordinary chats
-start with Senior, with Auto review off. Creation and renewal share a workflow picker that
+left empty. New main chats start with Senior, with Auto review off.
+User-created temporary chats inherit Main chat's role, workflow and custom model
+choice when created. Main's Auto mode starts them as Senior. Each temporary chat
+then keeps its own selection and can change role independently; later changes in
+Main do not retarget existing temporary chats. Automatic tasks retain their
+explicit Junior or Intern assignments. There is no temporary-chat default setting.
+Temporary chats never run Auto, working plans or automatic review.
+Model routing puts the workflow orchestrator first and edits only that workflow's
+assignments. It shows connected orchestrators and retained saved configurations;
+unconnected orchestrators without saved assignments are omitted. Auto names any
+missing model assignments, and Configure model routing brings the first missing
+assignment into view.
+Router is the first model assignment, directly below the compact Review
+recommendations button. That button lists only changes from the current form's
+models and thinking choices, showing only the proposed values. It is disabled
+when there are no changes. Apply to form accepts the list; Save routing saves
+the assignments. Cancelling the review leaves the form unchanged.
+Main session creation and renewal share a workflow picker that
 previews the user's effective Senior and Junior models, including Shared backup.
 It opens from saved routing and connection state without live model discovery;
 uninitialized choices say “Recommended on creation” until exact models are selected.
@@ -601,27 +624,18 @@ Project settings keeps each form's controls, explanation and Save action togethe
 The layout adapts to the available pane width, with readable choices and a wide
 project-requirements editor that starts at six lines and grows with its content.
 Prompt suggestions have their own section, separate from collaboration guidance.
-Members can choose an accessible explicit mode even when the latest answer used
-the owner's personal AI. Senior and Junior show the actor's effective model and any
-Shared backup. Auto remains unavailable when its required roles need personal
-access substitution. While a personal turn is active, steering stays with that
-turn's connection. Members who cannot send directly can compose messages and
-attach files in normal chat using Send for approval. Requests remain visible above
-the composer while the owner reviews them, even when the assistant is busy.
-Owners see the author, full text and previewable attachments with Approve & send
-and Decline actions directly in chat. Members can withdraw pending requests and
-see recent decisions. Approval retains the author's attribution and safely
-retries a failed delivery. A migrated AI request with no recorded submitter cannot
-borrow the current viewer's identity on Retry; cancel it and send a new request.
-When the owner switches to a connection available to the workspace, members'
-open browsers immediately return to direct AI use without reloading or losing
-drafts and attachments. Switching back restores Send for approval in real time.
-The suggestion service can use the actor's effective Intern model independently
-of the personal connection answering in main chat. Conversation-based suggestions
-are also shared without another inference when no helper is available. They
-survive reloads, follow the current conversation and Blueprint, and never include
-another person's unsent draft. The browser sends a private draft to the helper
-only when that purpose is available, independently of the selected chat mode.
+Collaborators use the same model routing as owners. When an assigned connection
+is owner-only, its compatible shared fallback supplies chat, Auto, review and
+helpers, including database and source explanations and prompt hints. Each
+operation resolves access for its requesting person before using credentials.
+Model capability and connection failures remain specific to that operation.
+Non-owners cannot steer an active turn using an owner-only connection. The
+composer becomes available when that turn finishes, preserving its draft and
+attachments. There is no prompt-proposal queue or owner-approval interface.
+A migrated AI request with no recorded submitter cannot borrow the current
+viewer's identity on Retry; cancel it and send a new request.
+Prompt hints use the actor's effective Intern independently of the connection
+answering Main chat. Draft hints remain private to their author.
 
 Prompt suggestions follow the person's current draft first, then the latest
 conversation, grounded in the project's purpose. They help express the current
@@ -929,7 +943,8 @@ action runs the project's declared setup steps. The notice does not claim the
 Update is still running or require an AI repair for routine preparation.
 
 Short actions show one compact progress line that a person can dismiss or open
-for full history. The browser remembers a dismissal for that exact attempt
+for full history. Their output shows human-readable messages and omits internal
+bookkeeping entries that have no message. The browser remembers a dismissal for that exact attempt
 across reloads, while a new attempt appears normally. Long-running application
 output stays out of the way until opened and remains available after the run
 ends. Project agents are instructed to keep full test logs in local artifacts
@@ -1130,7 +1145,9 @@ An Intern or shared Backup turn can use another assistant application; returning
 to Senior or Junior retains the conversation already held by its effective assistant.
 The server keeps their conversations, settings, drafts and sent attachments
 until explicit Close. Reloading or navigating away does not stop their work;
-returning restores the same chats. A server restart retains their history and
+returning restores the same chats. Reload opens Main chat; saved temporary chats
+remain available through Temporary AI with their drafts and history intact.
+Returning from another chat shows Main's latest messages. A server restart retains their history and
 stops any work whose observation was lost until an explicit Send or Resume.
 People can keep typing and use Steer during active temporary work, with Stop
 still available. Guidance reaches the current native conversation; it does not
@@ -1223,8 +1240,8 @@ Direct Senior, Junior and Intern use the request and conversation, without
 reading, updating or requiring that document; automatic review is unavailable.
 The View plan and Implement controls belong to Auto and disappear when selecting
 a direct role. Stop never starts another agent; interrupted handoffs wait for an
-explicit continuation after restart. Main and temporary conversations each own
-their Auto plan until their normal lifecycle cleanup.
+explicit continuation after restart. Main conversations own their Auto plan
+until their normal lifecycle cleanup.
 
 Deslop uses the configured Senior model to perform behavior-preserving cleanup
 directly, with permission to edit code. The command and saved-commit action go

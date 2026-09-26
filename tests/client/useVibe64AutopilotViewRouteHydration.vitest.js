@@ -92,6 +92,25 @@ describe("useVibe64AutopilotView route hydration", () => {
   });
   afterEach(() => scope.stop());
 
+  it("shows Save messages without empty internal helper events", async () => {
+    const props = viewProps();
+    props.workState = { activeOperation: { kind: "save", operationId: "save-1" }, operation: { id: "save-work", operationId: "save-1", status: "ready", events: [
+      { at: "2026-09-26T13:28:47.406Z", message: "Writing a concise name for this work." },
+      { at: "2026-09-26T13:28:47.431Z", kind: "naming-helper", message: "" },
+      { at: "2026-09-26T13:28:49.452Z", kind: "naming-helper", message: "  " },
+      { at: "2026-09-26T13:28:53.890Z", kind: "naming-helper-closed" },
+      { at: "2026-09-26T13:29:03.800Z", message: "Session work was saved." }
+    ] } };
+    const { useVibe64AutopilotView } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    expect(view.saveWorkOutput.value).toBe([
+      "2026-09-26T13:28:47.406Z  Writing a concise name for this work.",
+      "2026-09-26T13:29:03.800Z  Session work was saved."
+    ].join("\n"));
+    props.workState.operation.events.push({ at: "2026-09-26T13:30:00.000Z", message: "Publishing failed; retry Save." });
+    expect(view.saveWorkOutput.value).toContain("Publishing failed; retry Save.");
+  });
+
   it.each([true, false])("opens Current changes without the dashboard menu (direct link: %s)", async (direct) => {
     route.path = `/app/project/chat-test/dashboard/${direct ? "changes" : "health"}`;
     const { useVibe64AutopilotView } = await import(

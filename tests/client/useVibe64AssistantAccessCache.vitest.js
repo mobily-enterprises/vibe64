@@ -18,17 +18,15 @@ let queryClient;
 afterEach(() => { app?.unmount(); queryClient?.clear(); request.mockReset(); configureHttpWebClient(originalClient); });
 const flush = async () => { await nextTick(); await new Promise((resolve) => setTimeout(resolve, 0)); await nextTick(); };
 
-it("isolates real access and approval caches when users or projects change", async () => {
+it("isolates real access caches when users or projects change", async () => {
   configureHttpWebClient({ request });
   project.slug = ref("first");
   const viewer = ref({ actorKey: "owner" });
   const member = Promise.withResolvers();
   request.mockImplementation((path) => {
     if (viewer.value.actorKey === "member" && path.endsWith("assistant-access")) return member.promise;
-    return Promise.resolve(path.endsWith("assistant-access")
-      ? { ok: true, canUse: true, canUseAny: true, currentMode: "auto", purposes: { auto: { available: true } } }
-      : { ok: true, canManage: viewer.value.actorKey === "owner", suggestions: viewer.value.actorKey === "owner"
-        ? [{ id: "owner-only-request", status: "pending" }] : [] });
+    expect(path).toMatch(/assistant-access$/);
+    return Promise.resolve({ ok: true, canUse: true, canUseAny: true, currentMode: "auto", purposes: { auto: { available: true } } });
   });
   let access;
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
@@ -42,8 +40,6 @@ it("isolates real access and approval caches when users or projects change", asy
   app.mount({});
   await flush();
   expect(access.canUsePurpose("auto")).toBe(true);
-  expect(access.canManage.value).toBe(true);
-  expect(access.pendingSuggestions.value).toHaveLength(1);
   const ownerScope = access.scopeKey.value;
 
   viewer.value = { actorKey: "member" };
@@ -51,10 +47,8 @@ it("isolates real access and approval caches when users or projects change", asy
   expect(access.scopeKey.value).not.toBe(ownerScope);
   expect(access.access.value).toBeNull();
   expect(access.canUseChat.value).toBe(false);
-  expect(access.canManage.value).toBe(false);
-  expect(access.pendingSuggestions.value).toEqual([]);
-  member.resolve({ ok: true, canUse: true, currentMode: "code", purposes: {
-    code: { available: true, backupUsed: true }, auto: { available: false }, prompt_hint: { available: true }
+  member.resolve({ ok: true, canUse: true, currentMode: "junior", purposes: {
+    junior: { available: true, backupUsed: true }, auto: { available: false }, prompt_hint: { available: true }
   } });
   await flush();
   expect(access.canUseChat.value).toBe(true);
@@ -65,13 +59,11 @@ it("isolates real access and approval caches when users or projects change", asy
   project.slug.value = "second";
   await flush();
   expect(access.scopeKey.value).not.toBe(memberScope);
-  expect(request).toHaveBeenCalledTimes(6);
+  expect(request).toHaveBeenCalledTimes(3);
   viewer.value = null;
   await flush();
   expect(access.access.value).toBeNull();
-  expect(access.canManage.value).toBe(false);
-  expect(access.pendingSuggestions.value).toEqual([]);
-  expect(request).toHaveBeenCalledTimes(6);
+  expect(request).toHaveBeenCalledTimes(3);
 });
 
 it("isolates database private workspaces and Economy availability for owner, member and sign-out", async () => {

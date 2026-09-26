@@ -81,8 +81,12 @@ watch(planVisible, (visible) => { if (!visible) planOpen.value = false; });
 const feedback = useShellWebErrorRuntime();
 const label = computed(() => assistantRoutingStatusLabel(props.request));
 const followupNeedsAction = computed(() => ["review_pending", "review_uncertain", "planning_pending", "planning_uncertain"].includes(props.request?.status));
-// The unsent bubble already explains why a mixed request needs separating.
-const actionable = computed(() => Boolean(label.value && props.request?.reason !== "mixed_deslop_request" && (props.request?.error || followupNeedsAction.value)));
+const actionable = computed(() => {
+  const request = props.request;
+  if (request?.status === "cancelled" && !request.helper && !request.attemptedMessageId) return false;
+  // The unsent bubble already explains why a mixed request needs separating.
+  return Boolean(label.value && request?.reason !== "mixed_deslop_request" && (request?.error || followupNeedsAction.value));
+});
 
 // Announce a newly finished review once. Restoring a conversation must not
 // replay an old notification; its outcome remains on the message in history.

@@ -102,7 +102,9 @@ maintenance runs after Save completes and cannot change the Save result.
 
 The shared terminal surface gives operation cards a subtle theme-aware background
 in both compact and expanded states, separating them from the conversation.
-While Save runs, the workspace shows one compact progress line. Opening its
+While Save runs, the workspace shows one compact progress line. The output includes
+only events with readable messages; helper lifecycle records stay in the stored
+operation without producing timestamp-only lines. Opening its
 details keeps the same card, heading, status and progress line, with controls
 beside the description, and reveals
 the bounded command progress; while work is active, Collapse

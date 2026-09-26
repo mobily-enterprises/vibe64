@@ -68,21 +68,27 @@ Restore failures retain a readable retry action in a tonal error notice.
 
 ## Public contract
 
-Ordinary persistent temporary chats offer the same Senior, Junior, Intern, Auto
-and Auto-only optional review controls as main chat, through one icon in the bottom
-composer toolbar. Owners can open the shared Model routing overlay directly
+Ordinary persistent temporary chats offer Senior, Junior and Intern through
+the same compact role icon as main chat. Auto, plan approval and automatic
+review are unavailable in temporary chats, including through direct API calls
+and pending handoff retries. Owners can open the shared Model routing overlay directly
 from its menu. The role selector comes first; any separate Settings control comes
 last before Send and Stop. Each keeps its own selection, routing
 preferences, pending request and retained native conversations. Creating an ordinary
-draft starts in Senior with review off, inherits only its parent's workflow, and
-does not require inference access to the parent's last model. The first routed Send resolves the submitting
-actor's destination. App-generated implementation and repair drafts explicitly
-select Junior with review off, preserving the parent's workflow. Direct roles use the conversation and user request; they neither consult Auto's working plan nor trigger an automatic reviewer. Dedicated repairs
+draft copies Main's current role, workflow and custom model override. Auto maps
+to Senior, with review off. A Main chat without routing preferences passes its
+exact AI as a Senior override. New chats resolve access for the submitting actor
+through the ordinary purpose resolver; inherited choices do not grant new access.
+Existing temporary chats keep their own role and model choices after Main changes
+or the view reloads. The compact role selector can change each chat independently.
+There is no workspace default or reset-to-default action. App-generated
+implementation and repair drafts explicitly select Junior with review off;
+background helpers keep their assigned roles. Direct roles use the conversation and user request; they neither consult Auto's working plan nor trigger an automatic reviewer. Dedicated repairs
 retain their instructions and cannot change mode. Reply labels show the role
 first, followed by the orchestrator and model, as in main chat.
 The authenticated actor supplied by the HTTP turn action is captured with the
-routing request, so later automatic review retains the submitting user's access
-even when an owner reads the conversation or triggers reconciliation.
+routing request, so retries and reconciliation retain the submitting user's
+access even when an owner reads the conversation.
 The shared routing coordinator uses the temporary conversation's existing write
 lock and transcript; it does not write main-chat history or alter its selection.
 Native conversation IDs are scoped to that temporary chat. A fresh repair can
@@ -100,18 +106,11 @@ still apply, and filesystem ownership continues to protect separate processes.
 Realtime routing updates share an already pending conversation read instead of
 starting overlapping polls. A replaced turn resumes polling after the older
 read settles; closed views and changed actors still discard that response.
-Native idle events and read-time reconciliation recover one eligible review after normal
-Junior completion. Polling can schedule it when the current coordinator admitted
-that Junior request, even if its native idle event arrives later. After a backend
-restart, a completed Junior request instead offers explicit review Retry/Skip.
-Closing or stopping a chat cancels pending routing and review.
-Service shutdown also drains pending routing through the same cancellation owner
-before closing native providers, so a stopped Router cannot leave a stale process
-reference after an orderly restart.
-Skipped, cancelled and incomplete coding reviews use the shared five-second
-notification when they finish. Restoring a chat does not replay old notices.
-Ordinary routing progress stays in the message bubble; only errors and review
-recovery actions remain above the composer. Notices never restart work.
+Native idle events and read-time reconciliation finish the admitted turn without
+starting another model. Closing or stopping a chat cancels pending delivery and
+cleans up retained helpers. Service shutdown drains pending delivery before
+closing native providers. Errors remain attached to the request; temporary chats
+have no plan approval or review controls.
 When routing stops before delivery, the local prompt returns to the composer;
 its next explicit Send uses a new message ID. Newer draft text and attachments
 are retained, and a clean cancellation does not appear as a failed message.
@@ -127,13 +126,12 @@ Each ordinary temporary chat reads availability from the same central resolver a
 Send, using its own workflow, mode and custom override. Its menu labels the user's
 effective destination and Shared backup, rather than using the main chat's last
 model or an account-wide preview. Mode changes return refreshed decisions without
-inference. Toggling review keeps that override through the shared mode control;
-selecting another mode clears it. Explicit model/thinking edits update that mode's
-saved override; their availability is validated against the current catalogue. Auto requires choosing
-an explicit mode before customizing its model. A foreign backup cannot turn a
+inference. Selecting another role clears a custom override. Explicit model/thinking edits update that mode's
+saved override; their availability is validated against the current catalogue. A foreign backup cannot turn a
 Senior/Junior override into a split-orchestrator pair. Configuration and connection changes refresh existing chats' decisions
 without replacing unsent drafts or switching away from Main chat or the selected
-temporary chat. Initial restoration still opens saved temporary chats.
+temporary chat. Initial restoration loads saved chats without selecting them;
+reload keeps Main chat visible until a person explicitly opens Temporary AI.
 Only account and connection events reload the
 collection; unrelated progress events do not. Refreshes during a pending read
 share that wait, then the latest refresh reads one fresh snapshot. Actor changes

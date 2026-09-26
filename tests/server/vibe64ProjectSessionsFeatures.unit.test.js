@@ -84,7 +84,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.project.settings.read",
     "vibe64.project.templates.apply"
   ]);
-  assert.equal(projectRoutes.length, projectActions[0].actions.length + 17);
+  assert.equal(projectRoutes.length, projectActions[0].actions.length + 20);
   assert.equal(
     projectRoutes.some(([method, path]) => method === "POST" && path.endsWith("/env/reveal")),
     true,
@@ -153,11 +153,6 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.integration-setup.resume",
     "vibe64.sessions.integration-setup.skip",
     "vibe64.sessions.list",
-    "vibe64.sessions.message-suggestions.approve",
-    "vibe64.sessions.message-suggestions.create",
-    "vibe64.sessions.message-suggestions.discard",
-    "vibe64.sessions.message-suggestions.list",
-    "vibe64.sessions.message-suggestions.withdraw",
     "vibe64.sessions.presence.update",
     "vibe64.sessions.preview-state.broadcast",
     "vibe64.sessions.pull-request.create",

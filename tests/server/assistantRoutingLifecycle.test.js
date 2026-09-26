@@ -120,6 +120,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   const routingOptions = { systemRoot: root, agent, exclusive,
     publish: async (_id, value) => { events.push(structuredClone(value)); },
     dispatch: async (_id, input, selected) => {
+      await manager.requireAssistantAccessForSelection(selected.assistantSelection || JSON.parse(selected.session.metadata.assistant_selection), selected);
       await input.onPromptSending?.({ threadId: "native-thread" });
       sends.push({ input, selection: selected.assistantSelection });
       if (failAdmission) throw new Error("Lost admission response.");
@@ -916,14 +917,26 @@ for (const key of ["engineId", "modelId", "command"]) {
   });
 }
 
-test("a member cannot unlock Auto through Backup", async (t) => {
-  const f = await fixture(t);
-  const backup = sharedOpenCode(f);
-  await f.configuration.write({ codex: { ...f.assignments, router: backup, sharedBackup: backup } }, 1);
+test("Auto uses a shared fallback for a member's Router, implementation and review", async (t) => {
+  const f = await fixture(t, { mode: "auto", review: true });
+  const backup = sharedOpenCode(f, "zai", "glm-4.7");
+  await f.configuration.write({ codex: { ...f.assignments, router: f.assignments.senior, sharedBackup: backup } }, 1);
   f.context.vibe64User = { role: "member", username: "collaborator" };
-  await assert.rejects(f.service.send("session-1", request, f.context), /Auto requires direct access/);
-  assert.equal(f.helperCalls(), 0);
-  assert.equal(f.sends.length, 0);
+  const startHelper = f.agent.startEphemeralConversationTurn;
+  f.agent.startEphemeralConversationTurn = async (scope, input, options) => {
+    assert.equal(options.assistantSelection.modelId, "glm-4.7");
+    assert.equal(options.vibe64User.username, "collaborator");
+    return startHelper(scope, input, options);
+  };
+  await f.service.send("session-1", request, f.context);
+  assert.equal(f.helperCalls(), 1);
+  assert.equal(f.sends[0].selection.modelId, "glm-4.7");
+  assert.equal(f.sends[0].input.turnMetadata.assistantRouting.backupUsed, true);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.sends.length, 2);
+  assert.equal(f.sends[1].selection.modelId, "glm-4.7");
+  assert.equal(f.state().submittedBy.username, "collaborator");
+  assert.equal(f.state().workflowEngineId, "codex");
 });
 
 test("review retries retain the original member when the owner triggers the retry", async (t) => {
@@ -1470,4 +1483,22 @@ test("Deslop with uncertain admission retains its task and checks the receipt wi
   assert.equal(f.sends.length, 1);
   assert.equal(f.state().task, "deslop");
   assert.equal(f.state().status, "sent");
+});
+
+test("a member cannot steer an active personal turn even when a shared fallback exists", async (t) => {
+  const f = await fixture(t, { mode: "auto", review: true });
+  const backup = sharedOpenCode(f, "zai", "glm-4.7");
+  await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
+  f.agent.sessionState = async () => ({ turn: { active: true } });
+  f.context.vibe64User = { role: "member", username: "collaborator" };
+  for (const submissionKind of ["steer", undefined]) {
+    await assert.rejects(f.service.send("session-1", { ...request, submissionKind }, f.context),
+      { code: "vibe64_assistant_owner_required" });
+  }
+  assert.equal(f.helperCalls(), 0);
+  assert.equal(f.sends.length, 0);
+  f.context.vibe64User = { role: "owner", username: "owner" };
+  await f.service.send("session-1", { ...request, submissionKind: "steer" }, f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.helperCalls(), 0);
 });

@@ -8,8 +8,6 @@ import {
   assistantModelAccessUpdateActionInputValidator,
   assistantSelectionUpdateActionInputValidator,
   currentSessionInputValidator,
-  messageSuggestionActionInputValidator,
-  messageSuggestionDecisionActionInputValidator,
   repositoryHistoryInputValidator,
   repositoryVersionFileDiffInputValidator,
   repositoryVersionFilesInputValidator,
@@ -62,11 +60,6 @@ const ACTION_ARCHIVE_SESSION = "vibe64.sessions.archive";
 const ACTION_SEND_AGENT_MESSAGE = "vibe64.sessions.agent-message.send";
 const ACTION_REWIND_CONVERSATION = "vibe64.sessions.conversation.rewind";
 const ACTION_INSPECT_ASSISTANT_ACCESS = "vibe64.sessions.assistant-access.inspect";
-const ACTION_LIST_MESSAGE_SUGGESTIONS = "vibe64.sessions.message-suggestions.list";
-const ACTION_SUGGEST_AGENT_MESSAGE = "vibe64.sessions.message-suggestions.create";
-const ACTION_WITHDRAW_MESSAGE_SUGGESTION = "vibe64.sessions.message-suggestions.withdraw";
-const ACTION_APPROVE_MESSAGE_SUGGESTION = "vibe64.sessions.message-suggestions.approve";
-const ACTION_DISCARD_MESSAGE_SUGGESTION = "vibe64.sessions.message-suggestions.discard";
 const ACTION_INTERRUPT_AGENT_TURN = "vibe64.sessions.agent-turn.interrupt";
 const ACTION_BROADCAST_SESSION_PREVIEW_STATE = "vibe64.sessions.preview-state.broadcast";
 const ACTION_UPDATE_SESSION_PRESENCE = "vibe64.sessions.presence.update";
@@ -380,36 +373,6 @@ function createSessionActions({ sessions } = {}) {
       execute: (input) => sessions.inspectAssistantAccess(input.sessionId, withoutSessionId(input))
     }),
     action({
-      id: ACTION_LIST_MESSAGE_SUGGESTIONS,
-      kind: "query",
-      input: assistantAccessActionInputValidator,
-      execute: (input) => sessions.listMessageSuggestions(input.sessionId, withoutSessionId(input))
-    }),
-    action({
-      id: ACTION_SUGGEST_AGENT_MESSAGE,
-      kind: "command",
-      input: messageSuggestionActionInputValidator,
-      execute: (input) => sessions.suggestAgentMessage(input.sessionId, withoutSessionId(input))
-    }),
-    action({
-      id: ACTION_WITHDRAW_MESSAGE_SUGGESTION,
-      kind: "command",
-      input: messageSuggestionDecisionActionInputValidator,
-      execute: (input) => sessions.withdrawMessageSuggestion(input.sessionId, withoutSessionId(input))
-    }),
-    action({
-      id: ACTION_APPROVE_MESSAGE_SUGGESTION,
-      kind: "command",
-      input: messageSuggestionDecisionActionInputValidator,
-      execute: (input) => sessions.approveMessageSuggestion(input.sessionId, withoutSessionId(input))
-    }),
-    action({
-      id: ACTION_DISCARD_MESSAGE_SUGGESTION,
-      kind: "command",
-      input: messageSuggestionDecisionActionInputValidator,
-      execute: (input) => sessions.discardMessageSuggestion(input.sessionId, withoutSessionId(input))
-    }),
-    action({
       id: ACTION_INTERRUPT_AGENT_TURN,
       kind: "command",
       input: agentTurnInterruptActionInputValidator,
@@ -441,7 +404,6 @@ export {
   ACTION_REWIND_CONVERSATION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
-  ACTION_APPROVE_MESSAGE_SUGGESTION,
   ACTION_LIST_ASSISTANT_CAPABILITIES,
   ACTION_CANCEL_SESSION_RENEWAL,
   ACTION_CHECK_SESSION_UPDATES,
@@ -452,7 +414,6 @@ export {
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
   ACTION_CREATE_SESSION,
   ACTION_CREATE_PULL_REQUEST,
-  ACTION_DISCARD_MESSAGE_SUGGESTION,
   ACTION_CONFIRM_SESSION_RENEWAL,
   ACTION_INSPECT_SESSION,
   ACTION_INSPECT_SESSION_RENEWAL,
@@ -463,20 +424,17 @@ export {
   ACTION_INTERRUPT_AGENT_TURN,
   ACTION_LIST_SESSIONS,
   ACTION_LIST_ARCHIVED_SESSIONS,
-  ACTION_LIST_MESSAGE_SUGGESTIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
   ACTION_REQUEST_SESSION_RENEWAL_DRAFT,
   ACTION_RETRY_SESSION_RENEWAL,
   ACTION_RETRY_WORKSPACE_SETUP,
   ACTION_SAVE_SESSION_WORK,
   ACTION_SEND_AGENT_MESSAGE,
-  ACTION_SUGGEST_AGENT_MESSAGE,
   ACTION_UPDATE_CURRENT_SESSION,
   ACTION_UPDATE_ASSISTANT_MODEL_ACCESS,
   ACTION_UPDATE_ASSISTANT_SELECTION,
   ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
   ACTION_UPDATE_SESSION_PRESENCE,
   ACTION_UPDATE_SESSION_WORK,
-  ACTION_WITHDRAW_MESSAGE_SUGGESTION,
   createSessionActions
 };

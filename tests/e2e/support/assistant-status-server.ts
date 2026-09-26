@@ -122,7 +122,6 @@ export async function assistantStatusServer() {
       else if (route === `${sessionRoute}/conversation-log`) result = { ok: true, sessionId: session.sessionId, conversationLog: state.conversationLog, pagination: { count: state.conversationLog.length, totalTurnCount: state.conversationLog.length, hasMoreBefore: false, limit: 20 } };
       else if (route === `${sessionRoute}/assistant-access`) result = state.assistantAccess;
       else if (route === `${sessionRoute}/temporary-conversations`) result = { ok: true, conversations: [] };
-      else if (route === `${sessionRoute}/message-suggestions`) result = { ok: true, suggestions: [], canManage: true };
       else if (route === `${sessionRoute}/work`) result = { ok: true, unsaved: false, operation: null, updateOperation: null };
       else if (route === `${sessionRoute}/renewal`) result = { ok: true, renewal: null, viewerScope: "status-test-owner" };
       else if (route === `${sessionRoute}/agent-goal`) result = { ok: true, status: "unsupported" };

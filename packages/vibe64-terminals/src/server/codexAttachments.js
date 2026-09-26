@@ -7,8 +7,7 @@ import {
   rm,
   rmdir,
   stat,
-  utimes,
-  writeFile
+  utimes
 } from "node:fs/promises";
 import path from "node:path";
 import { Transform } from "node:stream";
@@ -96,17 +95,6 @@ function assertAttachmentId(attachmentId = "") {
   return normalized;
 }
 
-function suggestionPinFileName(suggestionId = "") {
-  const id = String(suggestionId || "").trim();
-  if (!ATTACHMENT_ID_PATTERN.test(id)) {
-    throw attachmentUploadValidationError(
-      "vibe64_agent_attachment_pin_invalid",
-      "Attachment retention requires a valid suggestion id."
-    );
-  }
-  return `${ATTACHMENT_SUGGESTION_PIN_PREFIX}${id}`;
-}
-
 function isSuggestionPin(entry = {}) {
   return entry.isFile() && entry.name.startsWith(ATTACHMENT_SUGGESTION_PIN_PREFIX);
 }
@@ -171,7 +159,7 @@ async function cleanupCodexAttachments(executionRoot, sessionId, attachmentId = 
         if (entries.some(isSuggestionPin)) {
           throw attachmentUploadValidationError(
             "vibe64_agent_attachment_retained",
-            "This attachment belongs to a pending owner suggestion. Withdraw the suggestion before removing it.",
+            "This attachment is retained by a historical message request.",
             409
           );
         }
@@ -975,77 +963,6 @@ async function withUploadedAgentAttachment(executionRoot, sessionId, attachmentI
   return result.value;
 }
 
-async function pinCodexAttachments(
-  executionRoot,
-  sessionId,
-  attachmentIds = [],
-  suggestionId = "",
-  options = {}
-) {
-  const pinName = suggestionPinFileName(suggestionId);
-  const busy = [];
-  const missing = [];
-  const retained = [];
-  for (const candidate of new Set(Array.isArray(attachmentIds) ? attachmentIds : [])) {
-    const attachmentId = assertAttachmentId(candidate);
-    const directory = attachmentHostDirectory(executionRoot, sessionId, attachmentId, options);
-    const pinned = await withAttachmentDirectoryLock(directory, async () => {
-      const entries = (await readdir(directory, { withFileTypes: true }))
-        .filter((entry) => entry.name !== ATTACHMENT_LEASE_LOCK_FILE && !isSuggestionPin(entry));
-      const storedFiles = entries.filter((entry) => entry.isFile() && !entry.name.startsWith(".uploading-"));
-      if (storedFiles.length !== 1 || entries.length !== 1) {
-        return false;
-      }
-      await writeFile(path.join(directory, pinName), `${new Date().toISOString()}\n`, {
-        encoding: "utf8",
-        mode: 0o600
-      });
-      return true;
-    }, {
-      waitMs: attachmentLockWaitMs(options, ATTACHMENT_RENEW_LOCK_WAIT_MS)
-    });
-    if (pinned.busy) {
-      busy.push(attachmentId);
-    } else if (!pinned.exists || pinned.value !== true) {
-      missing.push(attachmentId);
-    } else {
-      retained.push(attachmentId);
-      scheduleAttachmentCleanup(directory);
-    }
-  }
-  return {
-    ...(busy.length > 0 ? { busy } : {}),
-    missing,
-    retained
-  };
-}
-
-async function unpinCodexAttachments(
-  executionRoot,
-  sessionId,
-  attachmentIds = [],
-  suggestionId = "",
-  options = {}
-) {
-  const pinName = suggestionPinFileName(suggestionId);
-  const released = [];
-  for (const candidate of new Set(Array.isArray(attachmentIds) ? attachmentIds : [])) {
-    const attachmentId = assertAttachmentId(candidate);
-    const directory = attachmentHostDirectory(executionRoot, sessionId, attachmentId, options);
-    const unlocked = await withAttachmentDirectoryLock(directory, async () => {
-      await rm(path.join(directory, pinName), { force: true });
-      return true;
-    }, {
-      waitMs: attachmentLockWaitMs(options, ATTACHMENT_RENEW_LOCK_WAIT_MS)
-    });
-    if (unlocked.exists && !unlocked.busy) {
-      released.push(attachmentId);
-      scheduleAttachmentCleanup(directory);
-    }
-  }
-  return { released };
-}
-
 async function storeCodexAttachment({
   beforeCreate = null,
   env = process.env,
@@ -1180,12 +1097,10 @@ export {
   CODEX_ATTACHMENT_REQUEST_BODY_LIMIT_BYTES,
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
   cleanupCodexAttachments,
-  pinCodexAttachments,
   prepareCodexAttachmentStorage,
   prepareCodexAttachmentRoot,
   releaseCodexSessionAttachments,
   renewCodexAttachments,
-  unpinCodexAttachments,
   withUploadedAgentAttachment,
   storeCodexAttachment
 };

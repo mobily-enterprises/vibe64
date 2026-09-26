@@ -2249,7 +2249,7 @@ test("model routing read and draft preview resolve the whole collaborator pair w
     assert.equal(codex.preview.collaborator.senior.effectiveSelection.engineId, "opencode");
     assert.equal(codex.preview.collaborator.junior.backupReason, "keep_workflow_together");
     assert.equal(codex.preview.collaborator.review.effectiveSelection.modelId, "big-pickle");
-    assert.equal(codex.preview.collaborator.auto.available, false);
+    assert.equal(codex.preview.collaborator.auto.available, true);
     assert.equal((await f.store.read()).revision, 0);
     assert.deepEqual(f.events, []);
     assert.doesNotMatch(JSON.stringify(preview), /private-identity|connectionIdentity/);
@@ -2324,12 +2324,32 @@ test("first-session setup offers included OpenCode chat without promising restri
     assert.equal(initialized.ok, true, initialized.error);
     const saved = await f.store.read();
     assert.deepEqual(Object.keys(saved.orchestrators), ["opencode"]);
-    for (const role of ["senior", "code", "sharedBackup"]) {
+    for (const role of ["senior", "junior", "sharedBackup"]) {
       assert.equal(saved.orchestrators.opencode[role].modelId, "big-pickle");
     }
     const after = await f.service.readModelRouting({ vibe64User: f.member });
     assert.equal(saved.orchestrators.opencode.router, undefined);
     assert.equal(saved.orchestrators.opencode.intern, undefined);
     assert.equal(after.engines.find(({ engineId }) => engineId === "opencode").preview.viewer.auto.available, false);
+  });
+});
+
+test("routing reads leave the retired temporary default inert and new saves omit it", async () => {
+  await withTempDir(async (root) => {
+    const f = await routingAccountsFixture(root);
+    const draft = { revision: 0, orchestrators: {}, vibe64User: f.owner };
+    assert.equal((await f.service.previewModelRouting(draft)).temporaryChatRole, undefined);
+    assert.deepEqual(await f.service.saveModelRouting({ ...draft, vibe64User: f.member }), f.denied);
+    const saved = await f.service.saveModelRouting(draft);
+    assert.equal(saved.ok, true, saved.error);
+    const routingPath = path.join(root, "ai-connections", "routing.json");
+    const original = JSON.stringify({ ...await f.store.read(), temporaryChatRole: "intern" });
+    await writeFile(routingPath, original);
+    assert.equal((await f.service.readModelRouting({ vibe64User: f.member })).temporaryChatRole, undefined);
+    assert.equal(await readFile(routingPath, "utf8"), original);
+    const updated = await f.service.saveModelRouting({ ...draft, revision: saved.revision });
+    assert.equal(updated.ok, true, updated.error);
+    assert.equal((await f.store.read()).temporaryChatRole, undefined);
+    assert.equal((await f.service.saveModelRouting(draft)).code, "vibe64_assistant_routing_stale");
   });
 });

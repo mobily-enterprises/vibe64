@@ -239,7 +239,6 @@ function useVibe64TemporaryAi({
     const ownerSessionId = currentSessionId();
     const apiPath = currentSessionsApiPath();
     if (!ownerSessionId || !apiPath) return;
-    const initiallyEmpty = tasks.value.length === 0;
     const persistedTasks = tasks.value.filter((task) => task.conversationId);
     try {
       const key = JSON.stringify([apiPath, ownerSessionId, actorKey.value]);
@@ -292,7 +291,6 @@ function useVibe64TemporaryAi({
         if (!activeTaskId.value) activeTaskId.value = task.id;
         if (task.busy) void pollTask(task.id);
       }
-      if (initiallyEmpty && tasks.value.length) open.value = true;
     } catch (error) {
       if (disposed || generation !== restoreGeneration) return;
       if (error.code === "vibe64_agent_write_mode_busy") {
@@ -495,31 +493,6 @@ function useVibe64TemporaryAi({
     });
     if (canApplyTaskResponse(task)) updateTask(taskId, { routingMetadata: result.routingMetadata, purposes: result.purposes });
     return result;
-  }
-
-  async function retryReview(taskId) {
-    const task = tasks.value.find((candidate) => candidate.id === taskId);
-    const route = JSON.parse(task?.routingMetadata?.assistant_routing_request || "null");
-    if (!route) return;
-    try {
-      await request(vibe64TemporaryConversationTurnsPath(task.apiPath, task.sessionId, task.conversationId), {
-        method: "POST", body: { messageId: route.messageId, message: route.input.message, reviewAction: "retry" }
-      });
-      updateTask(taskId, { busy: true, error: "" });
-      void pollTask(taskId);
-    } catch (error) { updateTask(taskId, { error: error.message }); }
-  }
-
-  async function implementPlan(taskId, planRevision) {
-    const task = tasks.value.find((candidate) => candidate.id === taskId);
-    if (!task || task.busy) return;
-    updateTask(taskId, { busy: true, error: "" });
-    try {
-      await request(vibe64TemporaryConversationTurnsPath(task.apiPath, task.sessionId, task.conversationId), {
-        method: "POST", body: { messageId: crypto.randomUUID(), message: "Implement the plan I have approved.", planRevision, submissionKind: "send" }
-      });
-      void pollTask(taskId);
-    } catch (error) { updateTask(taskId, { busy: false, error: error.message }); }
   }
 
   function updateAgentSetting(taskId = "", parameterId = "", value = "") {
@@ -1056,8 +1029,6 @@ function useVibe64TemporaryAi({
     updateAttachments,
     updateDraft,
     updateRouting,
-    retryReview,
-    implementPlan,
     updateRepairTask
   };
 }

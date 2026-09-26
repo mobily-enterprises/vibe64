@@ -56,6 +56,56 @@ it("hydrates a warm routing resource immediately and keeps engine identities dis
   expect(mocks.command.buildRawPayload().orchestrators.codex.junior).toBeUndefined();
 });
 
+it("reviews only changes to the current draft before applying recommendations to one workflow", () => {
+  const other = structuredClone(resourceData().engines[0]);
+  other.engineId = "opencode";
+  mocks.resource.data.value.engines.push(other);
+  mocks.resource.data.value.engines[0].roles.sharedBackup.recommendation = null;
+  const state = mount();
+  state.choose("junior", state.choiceId(deepseek));
+  state.changeEffort("senior", "high");
+  const before = JSON.stringify(state.draft);
+  state.reviewRecommendations();
+  expect(JSON.stringify(state.draft)).toBe(before);
+  expect(state.recommendationReview.changes.map(({ role }) => role)).toEqual(["router", "senior", "intern"]);
+  expect(state.recommendationReview.changes[1]).toMatchObject({
+    description: "default thinking", proposed: { modelId: "gpt-6-astra", variantId: "" }
+  });
+  expect(state.recommendationReview.changes[0].description).toBe("deepseek-flash · codex");
+  state.recommendationReview = null;
+  expect(JSON.stringify(state.draft)).toBe(before);
+  state.reviewRecommendations();
+  state.useRecommendations();
+  expect(state.draft.codex).toMatchObject({ senior: astra, junior: { modelId: "deepseek-flash", selectionSource: "explicit" }, intern: deepseek, router: deepseek, sharedBackup: pickle });
+  expect(state.draft.opencode.senior).toEqual(astra);
+  expect(state.recommendationReview).toBeNull();
+  expect(mocks.resource.reload).not.toHaveBeenCalled();
+  expect(state.recommendedChanges).toEqual([]);
+  state.reviewRecommendations();
+  expect(state.recommendationReview).toBeNull();
+});
+
+it("invalidates recommendation reviews when routing reloads or workflow ownership changes", async () => {
+  const state = mount();
+  state.reviewRecommendations();
+  state.selectedEngine = "other";
+  expect(state.recommendationReview).toBeNull();
+  state.selectedEngine = "codex";
+  state.reviewRecommendations();
+  mocks.resource.data.value = { ...resourceData(), revision: 4 };
+  await nextTick();
+  expect(state.recommendationReview).toBeNull();
+  state.choose("senior", state.choiceId(deepseek));
+  state.reviewRecommendations();
+  mocks.resource.data.value = { ...resourceData(), revision: 5 };
+  await nextTick();
+  expect(state.stale).toBe(true);
+  state.useRecommendations();
+  expect(state.draft.codex.router).toEqual(pickle);
+  mocks.scopeKey.value = "member:other";
+  expect(state.recommendationReview).toBeNull();
+});
+
 it("refreshes post-connection choices, proposes each role separately, and keeps custom Junior unchecked", async () => {
   const unavailable = structuredClone(resourceData().engines[0]);
   unavailable.engineId = "claude";
@@ -163,14 +213,42 @@ it("sends only edits without disabling absent roles in another workflow", () => 
 });
 
 
-it("collaborator preview does not offer automatic review when Auto is unavailable", () => {
+it("shows collaborators the effective assignment and preserves access restrictions", () => {
   const state = mount();
-  const auto = { available: false, message: "Auto requires direct access to Router, Senior and Junior." };
   state.preview = { engines: [{ engineId: "codex", preview: { collaborator: {
-    auto, senior: { available: true, effectiveSelection: pickle }, review: { available: true, effectiveSelection: pickle }
+    senior: { available: true, effectiveSelection: pickle, backupUsed: true },
+    junior: { available: true, effectiveSelection: deepseek },
+    request_routing: { available: false, message: "Router uses a personal connection." }
   } } }] };
-  state.audience = "collaborator";
-  expect(state.decisions.senior.available).toBe(true);
-  expect(state.decisions.review.available).toBe(false);
-  expect(state.decisions.review.message).toBe(auto.message);
+  expect(state.roleHint({ id: "senior" })).toBe("Collaborators: big-pickle · opencode / opencode (shared backup)");
+  expect(state.roleHint({ id: "junior" })).toBe("Collaborators: deepseek-flash · codex / deepseek");
+  expect(state.roleHint({ id: "router" })).toBe("Collaborators: Router uses a personal connection.");
+  expect(state.roleHint({ id: "sharedBackup" })).toBe("");
+  state.previewPending = true;
+  expect(state.roleHint({ id: "senior" })).toBe("Checking access…");
+});
+
+it("refreshes collaborator labels when a changed backup produces a new effective model", async () => {
+  mocks.resource.data.value.engines[0].preview.collaborator = {
+    senior: { available: true, effectiveSelection: pickle, backupUsed: true }
+  };
+  const state = mount();
+  expect(state.roleHint({ id: "senior" })).toContain("big-pickle");
+  const updated = resourceData();
+  updated.engines[0].preview.collaborator = {
+    senior: { available: true, effectiveSelection: deepseek, backupUsed: true }
+  };
+  mocks.request.mockResolvedValue(updated);
+  state.choose("sharedBackup", state.choiceId(deepseek));
+  await vi.advanceTimersByTimeAsync(250);
+  expect(mocks.request).toHaveBeenCalledOnce();
+  expect(mocks.request.mock.calls[0][1].body.orchestrators.codex.sharedBackup.modelId).toBe("deepseek-flash");
+  expect(state.roleHint({ id: "senior" })).toBe("Collaborators: deepseek-flash · codex / deepseek (shared backup)");
+});
+
+it("does not expose or submit the retired temporary chat default from cached data", () => {
+  mocks.resource.data.value.temporaryChatRole = "junior";
+  const state = mount();
+  expect(state.temporaryChatRole).toBeUndefined();
+  expect(mocks.command.buildRawPayload()).toEqual({ revision: 3, orchestrators: {}, reviewedHelperWorkflows: [] });
 });

@@ -45,6 +45,9 @@ progress must finish before their attachment references can be retained.
 Stopping routing before delivery restores the local prompt to the composer,
 preserving newer draft text and uploaded attachments. Reload recovers the same
 cancelled draft without resending it; the next explicit Send gets a fresh ID.
+A fully cancelled request no longer displays its earlier error above the composer,
+including after reload. Pending helper cleanup and unconfirmed delivery retain
+their notices. The saved request remains available as operational evidence.
 A provider abort after successful helper cleanup is reported as cancellation,
 while failed cleanup and uncertain native delivery keep their failure controls.
 Existing assistant status and message-delivery diagnostics include the requesting
@@ -59,6 +62,9 @@ Already admitted native turns keep their existing interruption/reconnect handlin
 shutdown does not start a review.
 
 The shared transcript groups adjacent reasoning summaries across storage rows.
+Main chat receives its actual visibility, including temporary and host chat
+selection and pane collapse. Returning to Main resumes the existing latest-message
+scroll behavior; scrolling back while Main is visible still preserves that position.
 User messages, commentary, answers and system messages separate progress groups.
 Vibe64 supplies the existing active execution state as `conversation.working`;
 the renderer previews only trailing progress while working. No provider-turn
@@ -203,7 +209,6 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
 - `packages/vibe64-sessions/src/server/service.js`
-- `packages/vibe64-sessions/src/server/sessionMessageSuggestions.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-runtime/src/shared/conversationAttachments.js`
 - `packages/vibe64-runtime/src/shared/assistantSelection.js`
@@ -340,7 +345,9 @@ in the existing conversation metadata. A role resolves to a live, available
 selection using its saved workflow, independently of the last native engine.
 Senior and Junior resolve as a pair even when review is off. A member's foreign
 shared Backup replaces both roles; same-engine Backup replaces restricted roles.
-Auto requires direct access to Router, Senior and Junior and never uses Backup.
+Auto resolves Router, Senior and Junior through the same actor-aware fallback
+policy. A compatible shared destination can replace each owner-only connection;
+the captured submitter remains the actor for routing, delivery and review.
 Goals cannot start or resume in Auto, and an unfinished goal blocks switching
 to Auto. When native goal observation is unavailable, that switch still respects
 the saved goal; a confirmed completion or removal releases the restriction.
@@ -363,7 +370,7 @@ Other users have no configuration action. The mode icon remains reachable when
 the current mode is unavailable. Its menu shows the actor's effective destination,
 Shared backup and pair-preservation reasons, and explains unavailable choices.
 Routing progress stays on the message bubble, without a duplicate composer banner.
-Main and temporary chats share the routing notice component: errors and review
+Main chat uses the routing notice component: errors and review
 recovery actions remain visible, while a newly interrupted or skipped coding review
 uses the shell's brief notification. Restoring a chat does not replay old notices.
 Auto choosing Senior planning completes without reporting a skipped coding review.
@@ -371,7 +378,7 @@ Saving a mode refreshes main-chat access immediately so Send reflects the new
 destination without waiting for a later session event. Main-chat availability
 uses the selected mode; steering checks the bound native
 connection. Members regain direct chat after an owner's personal turn finishes
-when their configured explicit mode is accessible. Suggestions independently use
+when their configured mode is accessible. Suggestions independently use
 `prompt_hint` availability, allowing private drafts through accessible Intern.
 An idle routed Send does not require the previous native connection to start.
 Unresolved activity or a running turn still prevents changing its destination.
@@ -385,9 +392,8 @@ Auto starts new implementation work with Senior, even when the user phrases it a
 an imperative. The Router classifies ordinary new requests by intent, including
 cleanup requests expressed without the word Deslop. The planner investigates and writes a very detailed working
 Markdown document outside project Git. Main chat owns
-`<sessionRoot>/work-plan/plan.md`; each temporary conversation owns
-`<conversationsRoot>/<conversationId>/work-plan/plan.md`, removed by its existing
-Close cleanup. Session archival retains the main plan with other runtime files;
+`<sessionRoot>/work-plan/plan.md`. Temporary chats use direct roles only and
+have no working-plan lifecycle. Session archival retains the main plan with other runtime files;
 normal session retention owns expiry. No application source document is created.
 The file has a Status line (drafting, ready, blocked or implemented) and sections
 for outcome/scope, findings, proposed changes, decisions, implementation steps,
@@ -1221,37 +1227,23 @@ message, preserving newer draft uploads and renumbering their references.
 Older conversation records that retained only file details cannot recover bytes
 already removed by upload expiry.
 
-When a host reserves an AI connection for its owner, collaborators can submit
-message suggestions for the owner's approval or dismissal. A new suggestion
-and each owner decision capture that person's preferred name, falling back to
-their trusted account name. Those stored names do not change when a person
-later edits their preference. Normal approved delivery sends the authored
-message unchanged; its visible attribution names the author and approving owner.
-Each approval checks its current caller, including requests that arrive while
-an owner's delivery is already pending. Duplicate owner approvals share that
-delivery; a failed delivery remains retryable with the same provider message id.
-Approval preserves its owner check, then sends through ordinary routing without
-requiring the previously selected native connection first.
+All AI features resolve the requesting person's effective destination through
+`resolveAssistantPurpose`. Owner-only connections use the workflow's compatible
+shared fallback for collaborators, including Router and Auto. Database and source
+explanations, prompt hints and save naming use the same policy through their
+existing purpose calls. Provider admission rechecks the effective connection.
+The fallback cannot grant access to personal credentials.
 
-The main composer clearly labels this mode Send for approval, allows attachments
-while the assistant is working, and accepts a request while its connection is
-recovering. Submission queues a proposal rather than steering the active turn.
-Pending requests appear above the composer, oldest first, with the author's name,
-full message and ordinary attachment preview/download controls. Owners approve
-and send or decline directly there; authors can withdraw their pending requests.
-Recent decisions remain available in the same panel. The existing session-scoped
-realtime refresh brings requests and decisions into other viewers' panels.
-Database questions and overview tasks can prefill this same editable composer.
-
-A successful assistant selection change publishes to every authorized project
-viewer. Each browser refreshes its access and reconciles the selected assistant
-immediately, cancelling any check of the previous selection. Members move between
-Send for approval and direct AI use without reload, focus or a retry timer;
-their drafts and attachments remain intact. Switching to a personal connection
-restores the restriction. Personal-only access is an expected restricted state,
-without a connection error or repeated retries. Client lifecycle tests cover
-pending and denied checks, and the assistant-status browser test exercises both
-transitions through real realtime sockets in separate browser contexts.
+An active owner-only turn remains bound to its native connection. Collaborators
+cannot steer it, submit a proposal, or queue a replacement request. Their composer
+is disabled until the turn ends; its draft and attachments remain intact. The
+existing realtime access refresh then restores ordinary Send through their
+permitted model. Independent helpers remain available during that turn.
+Proposal routes, actions, storage writers and review UI have been removed.
+Historical proposal artifacts and attachments are left untouched; no startup or
+request-time data repair runs. Previously delivered messages retain their history.
+Focused policy and lifecycle tests cover shared routing and denied personal
+steering; the browser check covers realtime draft preservation without proposals.
 
 New paginated Codex conversations persist their native identity and empty
 history before Vibe64 publishes them as ready. Their initial native name is
@@ -1588,9 +1580,8 @@ in the session's private assistant artifact and publishes a session refresh hint
 When effective Intern is unavailable, the server may return that snapshot
 only while its complete conversation/Blueprint basis still matches; this path
 does not invoke inference. Draft suggestions remain actor-specific and are never persisted in
-this shared artifact. The browser sends the person's draft only when effective
-`prompt_hint` is available; otherwise it requests conversation-only suggestions
-and rereads on the shared-hint realtime event. Missing,
+this shared artifact. The browser requests hints, including private drafts,
+whenever `prompt_hint` is available, using the same path for every actor. Missing,
 stale or unreadable shared hints stay absent until authorized generation succeeds.
 An empty conversation still uses its Blueprint or draft; generic starters are
 reserved for a session with none of those inputs.

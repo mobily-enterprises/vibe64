@@ -132,7 +132,7 @@ function routingAssignmentSelection(engine, assignment, { purpose = "senior" } =
 }
 
 function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configuration, catalogs = [], connectionAccess = [],
-  override, requirements = {}, reviewEnabled = false, allowSharedBackup = true, validateModels = true } = {}) {
+  override, requirements = {}, reviewEnabled = false, validateModels = true } = {}) {
   const role = ASSISTANT_PURPOSE_ROLES[purpose];
   const result = { available: false, reasonCode: "", message: "", role: role || purpose, workflowEngineId,
     settingsRevision: configuration?.revision, configuredSelection: null, effectiveSelection: null,
@@ -142,14 +142,20 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
     const assignments = configuration?.orchestrators?.[workflowEngineId];
     if (!assignments) throw routingError("Configure model routing for this workflow first.");
     if (purpose === "auto") {
-      const input = { workflowEngineId, actor, configuration, catalogs, connectionAccess, allowSharedBackup: false, validateModels };
+      const missingRoles = ["senior", "junior", "router"].filter((name) => !assignments[name]);
+      if (missingRoles.length) {
+        const labels = missingRoles.map(assistantModeLabel);
+        const names = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+        return { ...result, reasonCode: "vibe64_assistant_role_unconfigured", missingRoles,
+          message: labels.length === 1 ? `Auto needs a ${names} model. Choose one in Model routing.`
+            : `Auto needs models for ${names}. Choose them in Model routing.` };
+      }
+      const input = { workflowEngineId, actor, configuration, catalogs, connectionAccess, validateModels };
       const junior = resolveAssistantPurpose({ ...input, purpose: "junior", requirements, reviewEnabled });
       const router = resolveAssistantPurpose({ ...input, purpose: "request_routing" });
       const unavailable = [junior, router].find((decision) => !decision.available);
       if (unavailable) {
-        const restricted = unavailable.reasonCode === VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED;
-        return { ...result, reasonCode: restricted ? "vibe64_assistant_auto_requires_direct_roles" : unavailable.reasonCode,
-          message: restricted ? "Auto requires direct access to Router, Senior and Junior. Choose an available explicit mode." : unavailable.message };
+        return { ...result, reasonCode: unavailable.reasonCode, message: unavailable.message };
       }
       return { ...result, available: true, seniorJuniorPair: junior.seniorJuniorPair, router: router.effectiveSelection,
         routerConnectionIdentity: router.connectionIdentity };
@@ -163,8 +169,8 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
       throw routingError("A conversation override must identify its role and selection.");
     }
     const configured = { ...assignments, ...(override ? { [override.role]: override.selection } : {}) };
-    const identity = (value) => {
-      if (!value) throw routingError("Configure this role in Model routing first.");
+    const identity = (value, roleName) => {
+      if (!value) throw routingError(`Choose a ${assistantModeLabel(roleName) || "Shared backup"} model in Model routing.`);
       const selection = defineVibe64AssistantSelection(value);
       const access = routingConnectionAccess(selection, connectionAccess);
       if (!access || typeof access.ownerOnly !== "boolean" || typeof access.available !== "boolean" ||
@@ -175,11 +181,8 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
     };
     const restricted = ({ access }) => !canUseVibe64Assistant({ ...access, available: true }, actor);
     const backup = () => {
-      if (!allowSharedBackup || role === "router") {
-        throw routingError("This role uses a personal connection that only the owner can use.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED);
-      }
       if (!assignments.sharedBackup) throw routingError("Connect and configure a shared backup for collaborator access.", "vibe64_assistant_backup_required");
-      const destination = identity(assignments.sharedBackup);
+      const destination = identity(assignments.sharedBackup, "sharedBackup");
       if (destination.access.ownerOnly) throw routingError("Shared backup must use a workspace connection.", "vibe64_assistant_backup_invalid");
       return destination;
     };
@@ -204,7 +207,7 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
       connectionIdentity: effective.access.connectionIdentity, backupUsed: Boolean(backupReason), backupReason
     });
     if (role === "senior" || role === "junior") {
-      const original = { senior: identity(configured.senior), junior: identity(configured.junior) };
+      const original = { senior: identity(configured.senior, "senior"), junior: identity(configured.junior, "junior") };
       if (Object.values(original).some(({ selection }) => selection.engineId !== workflowEngineId)) {
         throw routingError("Configure Senior and Junior in the same workflow orchestrator.");
       }
@@ -225,7 +228,7 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
       result.seniorJuniorPair = Object.fromEntries(["senior", "junior"].map((key) => [key, snapshot(original[key], effective[key], reasons[key])]));
       Object.assign(result, result.seniorJuniorPair[role]);
     } else {
-      const original = identity(configured[role]);
+      const original = identity(configured[role], role);
       const needsBackup = restricted(original);
       const effective = validate(needsBackup ? backup() : original, purpose, requirements.capabilities);
       Object.assign(result, snapshot(original, effective, needsBackup ? "personal_connection" : ""));

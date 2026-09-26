@@ -542,101 +542,49 @@ test("two browsers recover independently without sending either draft", async ({
   }
 });
 
-test("a model change unlocks and relocks a member in another browser through realtime", async ({ page, browser }, info) => {
-  const memberContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  const sessionId = server.state.session.sessionId;
-  const selectionPath = `/api/vibe64/sessions/${sessionId}/assistant-selection`;
-  const attachmentId = "11111111-1111-4111-8111-111111111111";
-  const transitions: number[] = [];
+test("@collaborator-access fallback chat stays usable and personal turns cannot be steered", async ({ page }, info) => {
   server.state.session.agentSession.turn.active = false;
+  server.state.session.metadata.assistant_routing = JSON.stringify({ mode: "junior", workflowEngineId: "codex", review: false });
+  const shared = { available: true, backupUsed: true, effectiveSelection: { engineId: "opencode", modelId: "glm-4.7" } };
   Object.assign(server.state.assistantAccess, {
-    ownerOnly: true, canUse: false, canRequestMessage: true
+    ownerOnly: true, canUse: true, nativeCanUse: false, canUseAny: true, steering: false, currentMode: "junior",
+    purposes: { junior: shared, senior: shared, intern: shared, source_explanation: shared, prompt_hint: shared, auto: shared }
   });
-  await page.route("**/assistant-access", route => route.fulfill({ json: {
-    ...server.state.assistantAccess, canUse: true, canRequestMessage: false
+  await page.route("**/agent-session", route => route.fulfill({ status: 403, json: {
+    ok: false, code: "vibe64_assistant_owner_required", error: "Only the owner can use this connection."
   } }));
-  await page.route("**/assistant-selection", async route => {
-    const { assistantSelection, originId } = route.request().postDataJSON();
-    const personal = assistantSelection.modelProviderId === "openai";
-    Object.assign(server.state.assistantAccess, {
-      ownerOnly: personal, canUse: !personal, canRequestMessage: personal
-    });
-    server.sessionChanged("session-assistant-selection-updated", { originId });
-    await route.fulfill({ json: { ok: true, assistantSelection } });
-  });
-  try {
-    const member = await memberContext.newPage();
-    member.on("pageerror", error => pageErrors.push(error.message));
-    await member.route("**/agent-session", route => route.fulfill({
-      status: server.state.assistantAccess.ownerOnly ? 403 : 200,
-      json: server.state.assistantAccess.ownerOnly
-        ? { ok: false, code: "vibe64_assistant_owner_required", error: "Only the owner can use this connection." }
-        : { ok: true, ...server.state.session.agentSession }
-    }));
-    await member.route("**/message-suggestions", route => route.fulfill({ json: {
-      ok: true, canManage: false, suggestions: []
-    } }));
-    await member.route("**/agent-attachments", route => route.fulfill({ json: {
-      ok: true, attachmentId, fileName: "layout.txt", size: 12,
-      path: "/tmp/vibe64-attachments/layout.txt"
-    } }));
-    await member.goto(`${server.url}${DASHBOARD_PATH}/env`);
-    const requestComposer = member.getByLabel("Message for owner approval");
-    await expect(requestComposer).toBeVisible();
-    await requestComposer.fill("Please review the customer layout.");
-    await member.locator('input[type="file"]').first().setInputFiles({
-      name: "layout.txt", mimeType: "text/plain", buffer: Buffer.from("Draft layout")
-    });
-    await expect(member.getByRole("button", { name: "Send for approval", exact: true })).toBeEnabled();
-    const draft = await requestComposer.inputValue();
-    const memberDocumentStartedAt = await member.evaluate(() => performance.timeOrigin);
-    const aiTerminal = member.getByRole("link", { name: /^AI Terminal/u });
-    await expect(aiTerminal).toBeDisabled();
-    await expect(member.locator("[data-vibe64-connection-recovery]")).toHaveCount(0);
-    await expect(warning(member)).toHaveCount(0);
-    await openChat(page);
-    await page.bringToFront();
-
-    for (const modelProviderId of ["deepseek", "openai", "deepseek"]) {
-      const started = Date.now();
-      await page.evaluate(async ({ selectionPath, modelProviderId }) => {
-        const response = await fetch(selectionPath, {
-          method: "PATCH", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ assistantSelection: { modelProviderId }, originId: "owner-browser" })
-        });
-        if (!response.ok) throw new Error("Model change failed");
-      }, { selectionPath, modelProviderId });
-      const personal = modelProviderId === "openai";
-      const input = member.getByLabel(personal ? "Message for owner approval" : "Message AI assistant");
-      await expect(input).toBeVisible({ timeout: 3000 });
-      await expect(input).toHaveValue(draft);
-      await expect(member.getByRole("button", { name: /Remove.*layout.txt/u })).toBeVisible();
-      if (personal) {
-        await expect(member.getByRole("button", { name: "Send for approval", exact: true })).toBeEnabled();
-        await expect(aiTerminal).toBeDisabled();
-      } else {
-        await expect(member.getByRole("button", { name: "Send for approval", exact: true })).toHaveCount(0);
-        await expect(member.getByText("Send a request to the owner", { exact: true })).toHaveCount(0);
-        await expect(member.getByRole("button", { name: "Send message", exact: true })).toBeEnabled({ timeout: 3000 });
-        await expect(aiTerminal).toBeEnabled();
-      }
-      await expect(member.locator("[data-vibe64-connection-recovery]")).toHaveCount(0);
-      await expect(warning(member)).toHaveCount(0);
-      transitions.push(Date.now() - started);
-      await member.screenshot({ path: info.outputPath(`member-${transitions.length}-${modelProviderId}.png`) });
-    }
-    expect(await member.evaluate(() => performance.timeOrigin)).toBe(memberDocumentStartedAt);
+  await openChat(page);
+  const draft = "Please review the customer layout.";
+  await composer(page).fill(draft);
+  const send = page.getByRole("button", { name: "Send message", exact: true });
+  await expect(send).toBeEnabled();
+  const documentStartedAt = await page.evaluate(() => performance.timeOrigin);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    server.state.session.agentSession.turn.active = true;
+    Object.assign(server.state.assistantAccess, { canUse: false, steering: true });
+    server.publishTurn();
+    await expect(composer(page)).toBeDisabled();
+    await expect(page.getByText("Only the owner can steer this turn. You can send a message when it finishes.", { exact: true }).last()).toBeVisible();
+    await expect(composer(page)).toHaveValue(draft);
+    await expect(page.getByRole("button", { name: "Send for approval", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Send a request to the owner", { exact: true })).toHaveCount(0);
     expect(server.state.messages).toHaveLength(0);
-    await member.getByRole("button", { name: "Send message", exact: true }).click();
-    await expect.poll(() => server.state.messages.length).toBe(1);
-    expect(server.state.messages[0]).toMatchObject({ message: draft.trim(), attachmentIds: [attachmentId] });
-    await expect(composer(member)).toHaveValue("");
-    await info.attach("access-transition-times-ms", {
-      body: JSON.stringify(transitions), contentType: "application/json"
-    });
-  } finally {
-    await memberContext.close();
+    await page.screenshot({ path: info.outputPath(`collaborator-blocked-${width}.png`) });
+    server.state.session.agentSession.turn.active = false;
+    Object.assign(server.state.assistantAccess, { canUse: true, steering: false });
+    server.publishTurn();
+    await expect(composer(page)).toBeEnabled();
+    await expect(composer(page)).toHaveValue(draft);
+    await expect(send).toBeEnabled();
+    await page.screenshot({ path: info.outputPath(`collaborator-ready-${width}.png`) });
   }
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentStartedAt);
+  expect(server.state.requests.filter(request => request.includes("message-suggestions"))).toEqual([]);
+  await send.click();
+  await expect.poll(() => server.state.messages.length).toBe(1);
+  expect(server.state.messages[0]).toMatchObject({ message: draft, submissionKind: "send" });
+  await expect(composer(page)).toHaveValue("");
 });
 
 test("goal steering replies appear immediately, preserve the composer and survive reload", async ({ page }) => {

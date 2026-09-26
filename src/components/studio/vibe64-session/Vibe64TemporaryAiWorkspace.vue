@@ -175,15 +175,6 @@
           </div>
         </template>
         <template #composer>
-          <Vibe64RoutingNotice
-            :request="routingRequest"
-            :mode="assistantRoutingFromMetadata(activeTask.routingMetadata)?.mode || ''"
-            :active="props.active && temporary.open.value"
-            :busy="activeTask.busy"
-            @implement="temporary.implementPlan(activeTask.id, $event)"
-            @retry="temporary.retryReview(activeTask.id)"
-            @skip="stopTask(activeTask.id)"
-          />
           <Vibe64AutopilotPromptTextarea
             v-for="task in temporary.tasks.value"
             v-show="task.id === activeTask.id"
@@ -224,7 +215,7 @@
                 @stop="stopTask(task.id)"
               >
                 <Vibe64ChatModeControls
-                  v-if="task.id === activeTask.id && !task.recoveryOperation" :session="modeSession"
+                  v-if="task.id === activeTask.id && !task.recoveryOperation" :session="modeSession" temporary
                   :save-preferences="(preferences) => temporary.updateRouting(task.id, preferences)"
                   :active="task.busy" :disabled="props.repositoryBusy || task.status === 'closing'"
                   :can-configure="props.canConfigureRouting"
@@ -311,8 +302,7 @@
 
 <script setup>
 import { AssistantComposerActions } from "@jskit-ai/assistant-core/client/conversation";
-import { assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
-import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
+import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import { computed, inject, nextTick, ref, useId, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";

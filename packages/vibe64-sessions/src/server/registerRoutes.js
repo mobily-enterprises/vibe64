@@ -2,7 +2,6 @@ import {
   ACTION_REWIND_CONVERSATION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
-  ACTION_APPROVE_MESSAGE_SUGGESTION,
   ACTION_CANCEL_SESSION_RENEWAL,
   ACTION_CHECK_SESSION_UPDATES,
   ACTION_INSPECT_REPOSITORY_HISTORY,
@@ -12,7 +11,6 @@ import {
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
   ACTION_CREATE_SESSION,
   ACTION_CREATE_PULL_REQUEST,
-  ACTION_DISCARD_MESSAGE_SUGGESTION,
   ACTION_CONFIRM_SESSION_RENEWAL,
   ACTION_INSPECT_SESSION,
   ACTION_INSPECT_SESSION_RENEWAL,
@@ -24,21 +22,18 @@ import {
   ACTION_LIST_SESSIONS,
   ACTION_LIST_ARCHIVED_SESSIONS,
   ACTION_LIST_ASSISTANT_CAPABILITIES,
-  ACTION_LIST_MESSAGE_SUGGESTIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
   ACTION_REQUEST_SESSION_RENEWAL_DRAFT,
   ACTION_RETRY_SESSION_RENEWAL,
   ACTION_RETRY_WORKSPACE_SETUP,
   ACTION_SAVE_SESSION_WORK,
   ACTION_SEND_AGENT_MESSAGE,
-  ACTION_SUGGEST_AGENT_MESSAGE,
   ACTION_UPDATE_CURRENT_SESSION,
   ACTION_UPDATE_ASSISTANT_MODEL_ACCESS,
   ACTION_UPDATE_ASSISTANT_SELECTION,
   ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
   ACTION_UPDATE_SESSION_PRESENCE,
   ACTION_UPDATE_SESSION_WORK,
-  ACTION_WITHDRAW_MESSAGE_SUGGESTION
 } from "./actions.js";
 import {
   conversationRewindInputValidator,
@@ -47,7 +42,6 @@ import {
   agentTurnInterruptInputValidator,
   assistantModelAccessUpdateInputValidator,
   assistantSelectionUpdateInputValidator,
-  messageSuggestionDecisionInputValidator,
   sessionRenewalDraftGuardInputValidator,
   sessionRenewalConfirmationInputValidator,
   sessionRenewalDraftRequestInputValidator,
@@ -373,45 +367,6 @@ function registerRoutes(http, {
     }),
     summary: "Inspect whether the current identity may use this session's selected assistant."
   });
-
-  routes.actionRoute("GET", "/sessions/:sessionId/message-suggestions", {
-    actionId: ACTION_LIST_MESSAGE_SUGGESTIONS,
-    buildInput: (request) => withVibe64User(request, {
-      sessionId: request.params.sessionId
-    }),
-    summary: "Read the visible owner-approval message-suggestion queue."
-  });
-
-  routes.actionRoute("POST", "/sessions/:sessionId/message-suggestions", {
-    actionId: ACTION_SUGGEST_AGENT_MESSAGE,
-    body: agentMessageInputValidator,
-    buildInput: (request) => withVibe64User(request, {
-      ...routes.requestBody(request),
-      sessionId: request.params.sessionId
-    }),
-    summary: "Suggest a main-chat message for owner approval."
-  });
-
-  for (const [operation, actionId, summary] of [
-    ["withdraw", ACTION_WITHDRAW_MESSAGE_SUGGESTION, "Withdraw a pending message suggestion."],
-    ["approve", ACTION_APPROVE_MESSAGE_SUGGESTION, "Approve and deliver a pending message suggestion."],
-    ["discard", ACTION_DISCARD_MESSAGE_SUGGESTION, "Discard a pending message suggestion."]
-  ]) {
-    routes.actionRoute(
-      "POST",
-      `/sessions/:sessionId/message-suggestions/:suggestionId/${operation}`,
-      {
-        actionId,
-        body: messageSuggestionDecisionInputValidator,
-        buildInput: (request) => withVibe64User(request, {
-          ...routes.requestBody(request),
-          sessionId: request.params.sessionId,
-          suggestionId: request.params.suggestionId
-        }),
-        summary
-      }
-    );
-  }
 
   routes.actionRoute("POST", "/sessions/:sessionId/agent-turn/interrupt", {
     actionId: ACTION_INTERRUPT_AGENT_TURN,

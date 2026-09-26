@@ -47,7 +47,7 @@ function withSelection(context, selection) {
 
 // The ordinary conversation owns delivery and history. This record only holds
 // the one request being prepared, its working plan snapshot and follow-up.
-function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publish, prepareSelection = async () => {} }) {
+function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive, dispatch, publish, prepareSelection = async () => {} }) {
   const running = new Map();
   let closing = false;
   const liveFollowupRequests = new Map();
@@ -194,7 +194,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
   async function resolve(context, state, followup = false) {
     const purpose = followup ? continuationRole(state) : state.task || state.mode;
     const decision = await agent.resolveAssistantPurpose({ purpose, workflowEngineId: state.workflowEngineId,
-      allowSharedBackup: state.mode !== "auto", reviewEnabled: state.review,
+      reviewEnabled: state.review,
       override: state.task === "deslop" ? undefined : state.override }, { ...context,
       vibe64User: state.submittedBy, configuration: state.configuration });
     if (!decision.available) throw failure(decision.message, decision.reasonCode);
@@ -235,6 +235,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
   }
 
   async function deliver(sessionId, context, state, followup = false) {
+    if (!allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and choose Senior, Junior or Intern.");
     const store = context.runtime.store;
     context = { ...context, vibe64User: state.submittedBy };
     const role = followup ? continuationRole(state) : state.resolvedMode;
@@ -349,6 +350,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
         mode: options.purpose || "senior", review: false,
         workflowEngineId: vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId
       } : null);
+      if (!allowAuto && preferences?.mode === "auto") throw failure("Auto is available in Main chat only. Choose Senior, Junior or Intern.");
       if (input.reviewAction === "retry") {
         state = await read(context.runtime.store, sessionId);
         if (state?.messageId !== input.messageId || !["review_pending", "review_uncertain", "planning_pending", "planning_uncertain"].includes(state.status)) throw failure("There is no pending review or planning handoff to retry.");
@@ -394,6 +396,7 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
         throw failure("The coding turn is preparing its review. Wait for it, or skip the review before sending another request.");
       }
       if (state?.messageId === input.messageId) {
+        if (!allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and send a new one to Senior, Junior or Intern.");
         if (state.input.message !== input.message) throw failure("A retry must keep the original message. Cancel it to send an edited request.");
         if (state.status === "cancelled") throw failure("This request was cancelled. Send your draft as a new request.");
         await admitMigratedRequest(context, state);
@@ -586,6 +589,12 @@ function createAssistantRouting({ systemRoot, agent, exclusive, dispatch, publis
       }
       if (state.turnId !== (run.providerTurnId || run.turnId)) return;
       const role = ["reviewing", "planning"].includes(state.status) ? continuationRole(state) : state.resolvedMode;
+      if (!allowAuto && state.mode === "auto") {
+        liveFollowupRequests.delete(keyFor(sessionId, context));
+        state.status = "done";
+        state.error = "Auto is available in Main chat only. Choose Senior, Junior or Intern for your next request.";
+        await save(context, state); return;
+      }
       const usesPlan = state.mode === "auto";
       let plan;
       try { plan = usesPlan ? await readWorkPlan(context) : null; }

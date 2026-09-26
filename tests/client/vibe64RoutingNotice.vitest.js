@@ -65,6 +65,26 @@ it("keeps failures and review recovery controls visible", async () => {
   expect(feedback.report).not.toHaveBeenCalled();
 });
 
+it("removes a cancelled request's old error only after cleanup and delivery uncertainty are resolved", async () => {
+  const request = { messageId: "cancelled-request", status: "failed", error: "Renew the session to use model routing." };
+  const f = mount(request);
+  expect(f.state().actionable).toBe(true);
+  f.props.value.request = { ...request, status: "cancelled", helper: { executionId: "cleanup-pending" } };
+  await nextTick();
+  expect(f.state().actionable).toBe(true);
+  f.props.value.request = { ...request, status: "cancelled", attemptedMessageId: "delivery-unconfirmed" };
+  await nextTick();
+  expect(f.state().actionable).toBe(true);
+  f.props.value.request = { ...request, status: "cancelled", helper: null };
+  await nextTick();
+  expect(f.state().actionable).toBe(false);
+  expect(f.props.value.request.error).toBe(request.error);
+  app.unmount();
+  const restored = mount({ ...request, status: "cancelled" });
+  expect(restored.state().actionable).toBe(false);
+  expect(feedback.report).not.toHaveBeenCalled();
+});
+
 it("only offers implementation for a ready plan after completion; paused and revised plans stay read-only", async () => {
   const request = { mode: "auto", messageId: "planned", status: "done", resolvedMode: "senior", workPlan: { status: "ready", revision: "one", text: "Detailed plan" } };
   const f = mount(request);

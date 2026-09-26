@@ -87,6 +87,26 @@ describe("temporary AI mounted lifetime", () => {
     vi.unstubAllGlobals();
   });
 
+  it("restores saved temporary chats without taking Main chat's selection", async () => {
+    const saved = { conversationId: "conversation-1", title: "Resolve Update", status: "ready",
+      draft: "Keep this draft", messages: [{ id: "reply-1", role: "assistant", text: "Saved answer" }] };
+    http.request.mockResolvedValue({ conversations: [saved] });
+    const first = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(first.temporary.tasks.value).toHaveLength(1);
+    expect(first.temporary.open.value).toBe(false);
+    first.temporary.selectTask("conversation-1");
+    expect(first.temporary.open.value).toBe(true);
+    first.unmount();
+
+    const reloaded = mountTemporaryAi({ openTask: false });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reloaded.temporary.open.value).toBe(false);
+    reloaded.temporary.showWorkspace();
+    expect(reloaded.temporary.activeTask.value).toMatchObject(saved);
+    expect(reloaded.temporary.open.value).toBe(true);
+  });
+
   it("saves a routed draft without submitting the previous model as an override", async () => {
     http.request.mockImplementation(async (_path, options) => options?.method === "PATCH"
       ? { ok: true }
@@ -197,7 +217,7 @@ describe("temporary AI mounted lifetime", () => {
       http.request.mockResolvedValueOnce({ conversations: records });
       const { temporary, socket } = mountTemporaryAi({ openTask: false });
       await vi.advanceTimersByTimeAsync(0);
-      expect(temporary.open.value).toBe(true);
+      expect(temporary.open.value).toBe(false);
       temporary.selectTask("conversation-2");
       temporary.updateDraft("conversation-2", "Keep my unsent changes");
 
@@ -474,7 +494,7 @@ describe("temporary AI mounted lifetime", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(http.request).toHaveBeenCalledTimes(1);
     expect(temporary.activeTask.value.draft).toBe("Keep this");
-    expect(temporary.open.value).toBe(true);
+    expect(temporary.open.value).toBe(false);
   });
 
   it("restores when mounted after initialization without needing a ready event", async () => {
@@ -554,7 +574,7 @@ describe("temporary AI mounted lifetime", () => {
     expect(temporary.open.value).toBe(false);
     expect(temporary.restoreError.value).toBe("");
     await vi.advanceTimersByTimeAsync(1000);
-    expect(temporary.open.value).toBe(savedChat);
+    expect(temporary.open.value).toBe(false);
     expect(temporary.tasks.value).toHaveLength(savedChat ? 1 : 0);
     if (savedChat) expect(temporary.activeTask.value.draft).toBe("Keep this");
     expect(temporary.restoreError.value).toBe("");

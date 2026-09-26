@@ -410,28 +410,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(requestTemporaryAi).not.toHaveBeenCalled();
   });
 
-  it("queues member requests with attachments while personal AI is busy or reconnecting", async () => {
-    const sendMainChatMessage = vi.fn(async () => ({ ok: true, suggested: true }));
-    const props = viewProps();
-    props.agentConnectionStatus = "disconnected";
-    props.session.agentSession.turn = { active: true, id: "busy-turn", state: "active" };
-    const view = await createView(props, {
-      assistantCanUseAi: ref(false), assistantCanRequestMessage: ref(true), sendMainChatMessage
-    });
-    expect(view.composerDisabled.value).toBe(false);
-    expect(view.composerAttachmentsEnabled.value).toBe(true);
-    expect(view.composerSubmitMode.value).toBe("send");
-    expect(view.prefillComposer("Please explain these tables")).toBe(true);
-    view.updateComposerAttachments([{ attachmentId: "11111111-1111-4111-8111-111111111111", fileName: "schema.png", size: 10 }]);
-    expect(view.composerCanSubmit.value).toBe(true);
-    await view.submitComposerMessage();
-    expect(sendMainChatMessage).toHaveBeenCalledWith(expect.objectContaining({
-      message: "Please explain these tables", attachmentIds: ["11111111-1111-4111-8111-111111111111"]
-    }));
-    expect(props.sendAgentMessage).not.toHaveBeenCalled();
-    expect(view.composerDraft.value).toBe("");
-  });
-
   it("shows the active compaction phase and clears it for an idle or uncertain turn", async () => {
     const { props, view } = await createViewWithProps();
     props.session.agentSession.turn = { active: true, id: "turn-1", state: "active", phase: "compacting" };
@@ -466,23 +444,24 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.thinkingLabel.value).not.toContain("reasoning");
   });
 
-  it("presents personal AI access as approval mode without connection errors", async () => {
+  it("blocks collaborator steering of a personal turn and keeps the draft for later", async () => {
     const canUse = ref(false);
-    const canRequest = ref(true);
     const { props, view } = await createViewWithProps({ agentConnectionStatus: "restricted" }, {
-      assistantCanUseAi: canUse, assistantCanRequestMessage: canRequest
+      assistantCanUseAi: canUse
     });
     view.composerDraft.value = "Please review the layout.";
     expect(view.connectionRecoveryVisible.value).toBe(false);
     expect(view.thinkingVisible.value).toBe(false);
     expect(view.thinkingLabel.value).toBe("");
-    expect(view.composerCanSubmit.value).toBe(true);
+    expect(view.composerCanSubmit.value).toBe(false);
     props.session.agentSession.turn = { active: true, id: "owner-turn", state: "active" };
+    expect(view.composerCanSubmit.value).toBe(false);
+    await view.submitComposerMessage();
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
     expect(view.thinkingVisible.value).toBe(true);
     expect(view.thinkingLabel.value).toBe("Assistant is working...");
     props.session.agentSession.turn.active = false;
     canUse.value = true;
-    canRequest.value = false;
     props.agentConnectionStatus = "connected";
     expect(view.composerCanSubmit.value).toBe(true);
     expect(view.composerDraft.value).toBe("Please review the layout.");
@@ -2299,7 +2278,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
     const updating = update.requestSaveWork();
     await nextTick();
-    expect(update.saveWorkHeaderAriaLabel.value).toBe("Update selected session (rebase)");
+    expect(update.saveWorkHeaderAriaLabel.value).toBe("Update session");
     updateResult.resolve({ ok: true, status: "updated" });
     await expect(updating).resolves.toEqual({ ok: true, status: "updated" });
   });
@@ -2361,7 +2340,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       }
     });
     expect(updatePending.saveWorkDisabled.value).toBe(false);
-    expect(updatePending.saveWorkActionLabel.value).toBe("Update this session (rebase)");
+    expect(updatePending.saveWorkActionLabel.value).toBe("Update session");
     expect(updatePending.saveWorkTitle.value).toContain("preserving its unsaved work");
     await expect(updatePending.requestSaveWork()).resolves.toEqual({
       ok: true,
@@ -2391,7 +2370,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkDisabled.value).toBe(true);
     expect(view.saveWorkActionLabel.value).toBe("Review changes");
     expect(view.saveWorkActivityIsUpdate.value).toBe(true);
-    expect(view.saveWorkActivityLabel.value).toBe("Update this session (rebase)");
+    expect(view.saveWorkActivityLabel.value).toBe("Update session");
     expect(view.saveWorkOperation.value).toStrictEqual(updateOperation);
   });
 
@@ -2729,7 +2708,7 @@ describe("useVibe64AutopilotView direct chat", () => {
 
     expect(view.saveWorkOperation.value).toStrictEqual(liveUpdate);
     expect(view.saveWorkOperationActive.value).toBe(true);
-    expect(view.saveWorkActivityLabel.value).toBe("Update this session (rebase)");
+    expect(view.saveWorkActivityLabel.value).toBe("Update session");
     expect(view.saveWorkOutput.value).toContain("Live Update");
     expect(view.saveWorkOutput.value).not.toContain("Newer completed Save");
   });
@@ -2812,9 +2791,9 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
 
     expect(view.saveWorkDisabled.value).toBe(false);
-    expect(view.saveWorkActionLabel.value).toBe("Update this session (rebase)");
+    expect(view.saveWorkActionLabel.value).toBe("Update session");
     expect(view.saveWorkTitle.value).toBe(
-      "Update this session (rebase) to the latest saved project version."
+      "Update session to load its latest saved changes."
     );
     await expect(view.requestSaveWork()).resolves.toEqual({ ok: true, status: "updated" });
     expect(updateSessionWork).toHaveBeenCalledOnce();
@@ -2841,12 +2820,12 @@ describe("useVibe64AutopilotView direct chat", () => {
       queue.observe("session-1", oldWork);
       expect(view.saveWorkRequiresUpdate.value).toBe(false);
       queue.markUpdatePending("session-1", "new-version");
-      expect(view.saveWorkHeaderAriaLabel.value).toBe("Update selected session (rebase)");
+      expect(view.saveWorkHeaderAriaLabel.value).toBe("Update session");
 
       // A runtime inspection already in flight finishes after the notification.
       props.workState = { ...oldWork, checkedAt: "2026-09-08T02:26:05.000Z" };
       queue.observe("session-1", props.workState);
-      expect(view.saveWorkHeaderAriaLabel.value).toBe("Update selected session (rebase)");
+      expect(view.saveWorkHeaderAriaLabel.value).toBe("Update session");
 
       queue.enqueue(["session-1"], { force: true });
       await queue.waitForIdle();
@@ -2923,7 +2902,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
 
     expect(view.saveWorkRequiresUpdate.value).toBe(updateAvailable);
-    expect(view.saveWorkActionLabel.value).toBe(updateAvailable ? "Update this session (rebase)" : "Review changes");
+    expect(view.saveWorkActionLabel.value).toBe(updateAvailable ? "Update session" : "Review changes");
     expect(view.saveWorkDisabled.value).toBe(false);
     if (updateAvailable) {
       await view.requestSaveWork();
@@ -3009,7 +2988,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       }
     });
 
-    expect(view.saveWorkActionLabel.value).toBe("Update this session (rebase)");
+    expect(view.saveWorkActionLabel.value).toBe("Update session");
     expect(view.saveWorkDisabled.value).toBe(true);
     expect(view.saveWorkTitle.value).toBe("Wait for the current repository operation to finish");
   });

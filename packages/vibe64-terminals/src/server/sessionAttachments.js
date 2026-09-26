@@ -12,9 +12,7 @@ import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle"
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import {
   cleanupCodexAttachments as cleanupUploads,
-  pinCodexAttachments as pinUploads,
   storeCodexAttachment as storeUpload,
-  unpinCodexAttachments as unpinUploads,
   withUploadedAgentAttachment
 } from "./codexAttachments.js";
 
@@ -100,14 +98,6 @@ function createSessionAttachments({ projectService, env = process.env }) {
       }
       await cleanupUploads(executionRoot, sessionId, input.attachmentId, { env });
       return { ok: true, attachmentId: input.attachmentId };
-    },
-    async pinAttachments(context, input) {
-      const { executionRoot, sessionId } = await attachmentContext(context);
-      return { ok: true, ...await pinUploads(executionRoot, sessionId, input.attachmentIds, input.suggestionId, { env }) };
-    },
-    async unpinAttachments(context, input) {
-      const { executionRoot, sessionId } = await attachmentContext(context);
-      return { ok: true, ...await unpinUploads(executionRoot, sessionId, input.attachmentIds, input.suggestionId, { env }) };
     },
     async prepareMessage(context, input, { durable = true, conversationId = "" } = {}) {
       const ids = [...new Set(Array.isArray(input.attachmentIds) ? input.attachmentIds : [])];

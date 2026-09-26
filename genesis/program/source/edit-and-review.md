@@ -909,7 +909,7 @@ Connecting or checking an application integration, and dismissing its saved chat
 request, do not invoke AI and do not require access to the chat's personal model.
 Project access and the separate owner gates for payments, advertising and OAuth
 client registration still apply. AI preparation buttons only fill the main-chat
-draft; the selected chat mode or owner-approval path handles sending it.
+draft; the selected chat mode resolves the person's permitted model when sent.
 
 `runApplicationIntegrationSetup` also accepts a host-selected release source root
 and private Env-file reference. It reuses the same file policy, provider

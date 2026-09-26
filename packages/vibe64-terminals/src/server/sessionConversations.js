@@ -105,7 +105,8 @@ function createSessionConversations({
     const decisions = await sessionAgent.inspectAssistantPurposes({ ...preferences,
       workflowEngineId: preferences?.workflowEngineId || record.assistantSelection.engineId
     }, selected);
-    return JSON.parse(JSON.stringify(decisions, (key, value) =>
+    const autoUnavailable = { available: false, message: "Auto is available in Main chat only. Choose Senior, Junior or Intern." };
+    return JSON.parse(JSON.stringify({ ...decisions, auto: autoUnavailable, review: autoUnavailable }, (key, value) =>
       ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value));
   }
 
@@ -269,7 +270,7 @@ function createSessionConversations({
       return { admission: state.admitted ? "accepted" : "unknown", turnId: state.runId };
     }
   };
-  const routing = createAssistantRouting({ systemRoot, agent: routingAgent, publish: publishSessionChanged,
+  const routing = createAssistantRouting({ systemRoot, allowAuto: false, agent: routingAgent, publish: publishSessionChanged,
     exclusive: async (id, options, operation) => {
       const result = await write(id, options, async (ctx) => operation(await routingContext(ctx, options.conversationId)));
       if (result?.code === "vibe64_agent_write_mode_busy") throw Object.assign(new Error(result.error), result);
@@ -375,16 +376,21 @@ function createSessionConversations({
         const existing = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
         if (existing) return snapshot(ctx, existing, true);
         const parentPreferences = assistantRoutingFromMetadata(ctx.session.metadata);
+        const parentSelection = vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
+        const inheritedPreferences = parentPreferences
+          ? { ...parentPreferences, mode: parentPreferences.mode === "auto" ? "senior" : parentPreferences.mode }
+          : { mode: "senior", override: parentSelection };
         const requestedPreferences = input.presentation?.recoveryOperation ? { mode: "junior", review: false }
-          : input.assistantRouting || { mode: "senior", review: false };
-        const preferences = assistantRoutingPreferences({ ...requestedPreferences,
-          workflowEngineId: parentPreferences?.workflowEngineId || vibe64AssistantSelectionFromMetadata(ctx.session.metadata).engineId
+          : input.assistantRouting || inheritedPreferences;
+        if (requestedPreferences.mode === "auto") throw new Error("Temporary chats use Senior, Junior or Intern. Auto is available in Main chat only.");
+        const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false,
+          workflowEngineId: parentPreferences?.workflowEngineId || parentSelection.engineId
         });
         const record = await ctx.runtime.store.writeSessionConversation(sessionId, conversationId, {
           ...presentation(input.presentation),
           ...(preferences ? { routingMetadata: { assistant_routing: JSON.stringify(preferences) } } : {}),
           agentSettings: input.agentSettings || {},
-          assistantSelection: vibe64AssistantSelectionFromMetadata(ctx.session.metadata),
+          assistantSelection: parentSelection,
           providerConversationId: "", nativeBindings: {},
           state: "open",
           status: "ready",
@@ -430,7 +436,9 @@ function createSessionConversations({
         }
         if (input.assistantRouting) {
           if (record.recoveryOperation) throw new Error("Repair conversations keep their dedicated instructions and model settings.");
-          const preferences = assistantRoutingPreferences({ ...input.assistantRouting,
+          const requested = input.assistantRouting;
+          if (requested.mode === "auto") throw new Error("Temporary chats use Senior, Junior or Intern. Auto is available in Main chat only.");
+          const preferences = assistantRoutingPreferences({ ...requested, review: false,
             workflowEngineId: JSON.parse(record.routingMetadata?.assistant_routing || "null")?.workflowEngineId || record.assistantSelection.engineId });
           fields.routingMetadata = { ...record.routingMetadata, assistant_routing: JSON.stringify(preferences) };
         }

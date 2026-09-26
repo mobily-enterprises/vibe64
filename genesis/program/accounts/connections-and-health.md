@@ -72,14 +72,37 @@ an unrelated edit preserves unchanged unavailable references and their original
 recommendation provenance. Execution validates its actual destination again.
 The chat-mode menu also opens this same form in an owner-only overlay without
 navigating to AI Accounts. It initially selects the chat's saved workflow;
-the assignments remain shared across conversations.
+the assignments remain shared across conversations. The workflow selector is the
+first field; selecting it chooses which configuration to edit, without switching
+Main chat. All five assignments belong to that workflow. Intern, Router and
+Shared backup can use another orchestrator without becoming global settings.
+Only connected orchestrators and retained saved assignments appear; a retained
+disconnected workflow is marked Needs reconnection.
+Catalogue failure after a connection has been observed retains its error; an
+unconnected, unconfigured catalogue does not create a selectable workflow.
+Auto identifies missing Senior, Junior or Router assignments. Opening configuration
+from its disabled state brings the first missing assignment into view.
+User-created temporary chats inherit Main instead of using a workspace default.
+The retired optional `temporaryChatRole` field is ignored in older settings;
+reads do not rewrite those files. New explicit routing saves omit it. Existing
+conversation records need no format change or historical conversion.
+
+After connecting an account, the form shows only optional suggested changes,
+grouped by workflow with separate Current and Suggested model lines and the
+suggested connection's access scope. Keep current routing leaves the connection
+available. Apply saves only selected changes. Customize routing opens the full
+workflow editor; the connection-result view has no workflow selector or audience
+preview. Native login completion names Codex login or Claude login explicitly.
 
 Accounts delegates saved and unsaved previews to the central terminal runtime,
-using the same connection facts and purpose resolver as Send. Owners see Owner
-and Collaborator results; member reads expose their own result and cannot save
+using the same connection facts and purpose resolver as Send. Each assignment
+shows "Collaborators" with the effective model, shared backup or access
+restriction. There is no separate audience preview or explanatory role copy.
+Member reads expose their own result and cannot save
 or evaluate drafts. A foreign Backup moves both effective Senior and Junior even
-without review. Review uses effective Senior; Auto requires direct access to all
-three of Router, Senior and Junior. Connection identities never enter this response.
+without review. Review uses effective Senior; Auto resolves Router, Senior and
+Junior through the same collaborator fallback policy, validating each purpose.
+Connection identities never enter this response.
 OpenCode catalogue refreshes always use the clean catalogue process, including
 when a managed chat process is running; runtime output limits and defaults must
 not invalidate a verified provider connection. Pages are combined only at one revision, including models
@@ -103,8 +126,10 @@ completion uses the same path as realtime or polling completion. Overlapping or
 cancelled login reads cannot reopen the proposal, and refreshing ordinary account
 status does not imply a new successful login. This adds no saved account format.
 
-The form separates planning/coding, independent assistance and collaborator
-backup. Unsaved edits refresh a cancellable preview with a stable loading area;
+The form lists Router, Senior, Junior, Intern, then collaborator backup, with
+separate role headings. Shared backup is labelled "Fallback for personal models";
+accessible shared assignments retain their models when the backup changes.
+Unsaved edits refresh cancellable access checks beneath each assignment;
 stale replies are ignored. Conflicting saves preserve the draft. Migrated helper
 conflicts require the owner's explicit acknowledgement of a valid Intern choice;
 an unrelated edit keeps the migration evidence. Intern and Router assignments
@@ -113,6 +138,14 @@ helpers receive the central resolver's exact model; they do not read the retired
 preferences or select an implicit model. Only the stopped-service upgrade reads
 old helper choices and removes them after backup. Connection mutations reject
 unupgraded helper settings rather than erasing that evidence.
+Router appears first, below the outlined Review recommendations button. Its
+review lists only model or thinking changes against the current draft for the
+selected workflow, in one compact line per role with only the new values.
+Unchanged details are omitted and the button is disabled when there are no
+changes. Apply to form uses the reviewed recommendations without
+saving; Cancel preserves the draft. Save routing remains the persistence action.
+A routing reload or workflow/viewer change discards an open recommendation review;
+a conflicting revision prevents applying it.
 Late setup defaults refresh an untouched form, while edited roles or proposal
 checkboxes remain intact. Routing response caches include the host's actor,
 role and project identity; logout and actor switches cannot reuse another

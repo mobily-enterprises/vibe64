@@ -10,6 +10,7 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import { assistantModePrompt, assistantRoutingPrompt, parseRoutingDecision, recommendedRoutingAssignments,
   routingAssignmentSelection, routingModelChoices, routingModelScore, resolveAssistantPurpose,
   ASSISTANT_ROUTING_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
+import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/shared";
 import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRoutingScores.json" with { type: "json" };
 
 const revision = `sha256:${"a".repeat(64)}`;
@@ -221,6 +222,27 @@ test("independent recommendations compare engines, retain saved ties and filter 
   assert.equal(recommendedRoutingAssignments(engine, { assignments: { junior: saved } }).junior.modelId, "model-b");
 });
 
+test("Auto names missing assignments and preserves connection and access failure reasons", () => {
+  const f = routingFixture();
+  const roles = f.input.configuration.orchestrators.codex;
+  const router = roles.router;
+  roles.router = null;
+  const missing = f.resolve("auto", { actor: { role: "owner" } });
+  assert.equal(missing.available, false);
+  assert.deepEqual(missing.missingRoles, ["router"]);
+  assert.equal(missing.message, "Auto needs a Router model. Choose one in Model routing.");
+  const senior = roles.senior;
+  roles.senior = null;
+  assert.equal(f.resolve("auto").message, "Auto needs models for Senior and Router. Choose them in Model routing.");
+  assert.equal(f.resolve("junior").message, "Choose a Senior model in Model routing.");
+  roles.router = router;
+  roles.senior = senior;
+  const shared = f.resolve("auto");
+  assert.equal(shared.available, true, shared.message);
+  f.input.connectionAccess.find(({ modelProviderId }) => modelProviderId === "deepseek").available = false;
+  assert.match(f.resolve("auto", { actor: { role: "owner" } }).message, /connection is unavailable/);
+});
+
 test("owner retains the configured pair and captured review uses Senior", () => {
   const f = routingFixture();
   const result = f.resolve("junior", { actor: { role: "owner" }, reviewEnabled: true });
@@ -324,17 +346,6 @@ test("unresolved migration helper choices block only Intern helpers", () => {
   assert.equal(f.resolve("request_routing").available, true);
 });
 
-test("Auto requires direct Router/Senior/Junior and never depends on Intern or uses Backup", () => {
-  const f = routingFixture();
-  assert.equal(f.resolve("auto").reasonCode, "vibe64_assistant_auto_requires_direct_roles");
-  f.input.connectionAccess[0].ownerOnly = false;
-  delete f.input.configuration.orchestrators.codex.intern;
-  assert.equal(f.resolve("auto").available, true);
-  f.input.configuration.orchestrators.codex.router = { ...f.roles.senior, modelProviderId: "zai-coding-plan", modelId: "glm-5.3" };
-  assert.equal(f.resolve("request_routing").reasonCode, "vibe64_assistant_owner_required");
-  assert.equal(f.resolve("auto").reasonCode, "vibe64_assistant_auto_requires_direct_roles");
-});
-
 test("known personal connection health does not prevent shared access, but deleted identity does", () => {
   const f = routingFixture();
   f.input.connectionAccess[0].available = false;
@@ -426,4 +437,45 @@ test("included Pickle remains usable for chat and Backup but cannot route or run
     assert.equal(result.available, false);
     assert.match(result.message, /provider rejects restricted/);
   }
+});
+
+for (const purpose of ["senior", "junior", "intern", "review", "deslop", ...Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS)]) {
+  test(`${purpose} resolves a personal assignment through the same collaborator fallback`, () => {
+    const f = routingFixture();
+    const assignments = f.input.configuration.orchestrators.codex;
+    Object.assign(assignments, { senior: f.roles.senior, junior: f.roles.senior,
+      intern: f.roles.senior, router: f.roles.senior, sharedBackup: f.roles.junior });
+    const before = structuredClone(f.input.configuration);
+    const member = f.resolve(purpose);
+    assert.equal(member.available, true, member.message);
+    assert.equal(member.effectiveSelection.modelProviderId, "deepseek");
+    assert.equal(member.connectionIdentity, "deepseek-key-1");
+    assert.equal(member.backupUsed, true);
+    const owner = f.resolve(purpose, { actor: { role: "owner" } });
+    assert.equal(owner.available, true, owner.message);
+    assert.equal(owner.effectiveSelection.modelProviderId, "openai");
+    assert.equal(owner.backupUsed, false);
+    assert.deepEqual(f.input.configuration, before);
+    assignments.sharedBackup = f.roles.senior;
+    assert.equal(f.resolve(purpose).reasonCode, "vibe64_assistant_backup_invalid");
+  });
+}
+
+test("Auto resolves its pair and Router through fallback without depending on Intern", () => {
+  const f = routingFixture();
+  const assignments = f.input.configuration.orchestrators.codex;
+  assignments.router = f.roles.senior;
+  assignments.sharedBackup = f.roles.junior;
+  delete assignments.intern;
+  const result = f.resolve("auto", { reviewEnabled: true });
+  assert.equal(result.available, true, result.message);
+  assert.equal(result.router.modelProviderId, "deepseek");
+  assert.equal(result.routerConnectionIdentity, "deepseek-key-1");
+  for (const role of ["senior", "junior"]) {
+    assert.equal(result.seniorJuniorPair[role].effectiveSelection.modelProviderId, "deepseek");
+  }
+  assignments.sharedBackup = f.backup;
+  const unsupported = f.resolve("auto");
+  assert.equal(unsupported.available, false);
+  assert.match(unsupported.message, /provider rejects restricted/);
 });

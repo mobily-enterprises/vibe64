@@ -355,7 +355,6 @@ function repositoryTemporaryAiDedupeKey({
 
 function useVibe64AutopilotView(props, emit, {
   assistantAccessLoading = null,
-  assistantCanRequestMessage = null,
   assistantCanUseAi = null,
   assistantCanRouteChat = null,
   assistantCanUseJunior = null,
@@ -399,12 +398,6 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const assistantJuniorAllowed = computed(() => assistantCanUseJunior === null
     ? assistantDirectAllowed.value : unref(assistantCanUseJunior) === true);
-  const assistantRequestOnly = computed(() => unref(assistantCanRequestMessage) === true);
-  const assistantMainChatAllowed = computed(() => (
-    !assistantAccessConfigured ||
-    unref(assistantCanUseAi) === true ||
-    unref(assistantCanRequestMessage) === true
-  ));
   const sessionGithubActor = computed(() => sessionGithubCommandActor(props.session || {}));
   const sessionGithubActorHeaderVisible = computed(() => Boolean(
     props.active &&
@@ -613,7 +606,7 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const composerDisabled = computed(() => Boolean(
     sessionInteractionDisabled.value ||
-    !assistantMainChatAllowed.value
+    !assistantDirectAllowed.value
   ));
   const composerAttachmentsSupported = computed(() => true);
   const composerAttachmentsEnabled = computed(() => Boolean(
@@ -621,7 +614,7 @@ function useVibe64AutopilotView(props, emit, {
     !composerDisabled.value &&
     !composerSending.value &&
     !interrupting.value &&
-    (!agentActive.value || assistantRequestOnly.value) &&
+    !agentActive.value &&
     !repositoryOperationActive.value
   ));
   const composerRetryMatchesDraft = computed(() => {
@@ -633,7 +626,6 @@ function useVibe64AutopilotView(props, emit, {
     ));
   });
   const composerSubmitMode = computed(() => {
-    if (assistantRequestOnly.value) return composerSending.value ? "sending" : "send";
     if (assistantAccountUnavailable.value) {
       return "unavailable";
     }
@@ -696,9 +688,7 @@ function useVibe64AutopilotView(props, emit, {
   })[composerSubmitMode.value] || "Send message");
   const composerCanSubmit = computed(() => {
     if (composerDisabled.value || routingBusy.value && !agentSteerable.value) return false;
-    if (assistantRequestOnly.value) {
-      if (composerSending.value) return false;
-    } else if (
+    if (
       composerConnectionStatus.value !== "connected" ||
       (composerSending.value && !agentSteerable.value) ||
       interrupting.value ||
@@ -1172,8 +1162,7 @@ function useVibe64AutopilotView(props, emit, {
         return false;
       }
       const accepted = response !== false && response?.ok !== false;
-      if (accepted && response?.suggested === true) messageDelivery.remove(messageId);
-      if (accepted && response?.suggested !== true) {
+      if (accepted) {
         conversationFollowLatestKey.value += 1;
       }
       if (accepted && payload.attachmentIds?.length) {
@@ -1224,7 +1213,7 @@ function useVibe64AutopilotView(props, emit, {
     if (!payload) {
       return false;
     }
-    const submissionKind = retry?.submissionKind || (!assistantRequestOnly.value && agentSteerable.value ? "steer" : "send");
+    const submissionKind = retry?.submissionKind || (agentSteerable.value ? "steer" : "send");
     const questionTextSnapshot = retry?.questionTextSnapshot || (structuredQuestionActive.value
       ? latestAssistantQuestionText.value
       : "");
@@ -1533,8 +1522,8 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const saveWorkOutput = computed(() => (Array.isArray(saveWorkOperation.value?.events)
     ? saveWorkOperation.value.events
+      .filter((event) => normalizedAgentTurnText(event.message))
       .map((event) => [event.at, event.message].filter(Boolean).join("  "))
-      .filter(Boolean)
       .join("\n")
     : ""));
   const saveWorkStatus = computed(() => String(
@@ -1724,7 +1713,7 @@ function useVibe64AutopilotView(props, emit, {
       savedCommitDeslopSending.value ||
       composerSending.value ||
       agentActive.value ||
-      !assistantMainChatAllowed.value
+      !assistantDirectAllowed.value
     ) {
       return false;
     }
@@ -2088,7 +2077,7 @@ function useVibe64AutopilotView(props, emit, {
     props.active &&
     sessionId.value &&
     !props.sessionSelectionArchived &&
-    assistantMainChatAllowed.value
+    assistantDirectAllowed.value
   ));
 
   function prefillComposer(text = "", { append = false } = {}) {

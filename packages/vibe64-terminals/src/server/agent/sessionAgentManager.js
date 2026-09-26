@@ -406,12 +406,6 @@ function createSessionAgentManager({
     }));
     return { vibe64User, access: Object.freeze({
       ...access,
-      canRequestMessage: Boolean(
-        access.available &&
-        access.ownerOnly &&
-        vibe64User &&
-        vibe64User.role !== "owner"
-      ),
       canUse: canUseVibe64Assistant(access, vibe64User),
       engineId: provider.id,
       modelProviderId: assistantSelection?.modelProviderId || "",
@@ -690,8 +684,7 @@ function createSessionAgentManager({
       const fact = await readSelectionAccess(selection);
       if (canUseVibe64Assistant(fact, actor)) accessible.push(selection);
     }
-    const needsBackup = purpose !== "auto" && role !== "router" && input.allowSharedBackup !== false &&
-      connectionAccess.some((access) => !canUseVibe64Assistant({ ...access, available: true }, actor));
+    const needsBackup = connectionAccess.some((access) => !canUseVibe64Assistant({ ...access, available: true }, actor));
     if (needsBackup && assignments.sharedBackup) {
       const fact = await readSelectionAccess(assignments.sharedBackup);
       if (canUseVibe64Assistant(fact, actor)) accessible.push(assignments.sharedBackup);
@@ -725,7 +718,7 @@ function createSessionAgentManager({
       }
     }
     return resolveAssistantPurpose({ purpose, workflowEngineId, actor, configuration, catalogs,
-      connectionAccess, override, requirements, reviewEnabled, allowSharedBackup: input.allowSharedBackup !== false });
+      connectionAccess, override, requirements, reviewEnabled });
   }
 
   async function inspectAssistantPurposes(input = {}, options = {}) {
@@ -794,6 +787,7 @@ function createSessionAgentManager({
     if (options.workflowsOnly === true) return inspectWorkflowChoices(configuration, options);
     const catalogs = [];
     const catalogErrors = new Map();
+    const connectedEngineIds = new Set();
     for (const provider of providerById.values()) {
       try {
         let catalog;
@@ -804,6 +798,7 @@ function createSessionAgentManager({
             if (seen.has(cursor)) throw new Error("The model catalogue did not advance. Reload routing.");
             seen.add(cursor);
             const page = await providerCapabilities(provider, { connectedOnly: "true", limit: "200", ...input, cursor }, options);
+            if (page.modelProviders.some(({ connected }) => connected)) connectedEngineIds.add(provider.id);
             catalog = mergeRoutingCatalogPage(catalog, page, "The model catalogue changed. Reload routing.");
             cursor = page.page.hasMore ? page.page.nextCursor : "";
             if (page.page.hasMore && !cursor) throw new Error("The model catalogue page is incomplete. Reload routing.");
@@ -836,7 +831,10 @@ function createSessionAgentManager({
           ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value))];
       })
     );
-    const engineIds = new Set([...catalogs.map(({ engineId }) => engineId), ...catalogErrors.keys(), ...Object.keys(configuration.orchestrators)]);
+    const engineIds = new Set([...connectedEngineIds, ...Object.keys(configuration.orchestrators).filter((engineId) => {
+      const saved = configuration.orchestrators[engineId];
+      return ASSISTANT_ROUTING_ASSIGNMENTS.some((role) => saved[role]) || saved.helperRoutingReview;
+    })]);
     return { engines: [...engineIds].map((engineId) => {
       const engine = catalogs.find((entry) => entry.engineId === engineId);
       const assignments = configuration.orchestrators[engineId] || {};
@@ -873,7 +871,7 @@ function createSessionAgentManager({
         }
         return [role, { assignment, recommendation: recommendations[role], choices, error }];
       }));
-      return { engineId, label: engine?.label || engineId, roles, choices: roles.senior.choices,
+      return { engineId, label: engine?.label || engineId, connected: connectedEngineIds.has(engineId), roles, choices: roles.senior.choices,
         setupAssignments, setupPreview: preview(engineId, assistantUser(options), setupConfiguration),
         error: catalogErrors.get(engineId) || "", helperRoutingReview: assignments.helperRoutingReview || null,
         preview: { viewer: preview(engineId, assistantUser(options)), ...(options.includeCollaboratorPreview ? {
@@ -1266,7 +1264,6 @@ function createSessionAgentManager({
     readTerminal(sessionId = "", terminalSessionId = "", options = {}) {
       return callSessionProvider("readTerminal", sessionId, { terminalSessionId }, options);
     },
-    pinAttachments: sessionMethod("pinAttachments"),
     resizeTerminal(sessionId = "", terminalSessionId = "", size = {}, options = {}) {
       return callSessionProvider("resizeTerminal", sessionId, { size, terminalSessionId }, options);
     },
@@ -1293,7 +1290,6 @@ function createSessionAgentManager({
     unsubscribeSessions(sessions = [], options = {}) {
       return callProvider("unsubscribeSessions", sessions, options);
     },
-    unpinAttachments: sessionMethod("unpinAttachments"),
     uploadAttachment: sessionMethod("uploadAttachment"),
     waitForConversationTurn: sessionMethod("waitForConversationTurn"),
     waitForEphemeralConversationTurn: ephemeralScopeMethod("waitForConversationTurn"),

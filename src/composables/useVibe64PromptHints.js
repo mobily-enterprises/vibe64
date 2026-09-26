@@ -1,14 +1,12 @@
 import { computed, ref } from "vue";
 import { useAssistantSuggestions } from "@jskit-ai/assistant-core/client/conversation-suggestions";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
-import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
   normalizedPromptHintDraft,
   normalizedPromptHintSuggestion,
   normalizedPromptHintSuggestions
 } from "@local/vibe64-runtime/shared";
 import {
-  VIBE64_SESSION_CHANGED_EVENT,
   vibe64SessionPromptHintsCancelPath,
   vibe64SessionPromptHintsPath
 } from "@/lib/vibe64SessionRequestConfig.js";
@@ -51,8 +49,6 @@ function useVibe64PromptHints({
   existingProject = false,
   onSelect = () => false,
   policy = {},
-  projectSlug = "",
-  sharedOnly = false,
   sessionId = "",
   sessionsApiPath = ""
 } = {}, {
@@ -64,19 +60,6 @@ function useVibe64PromptHints({
   const currentSessionId = computed(() => normalizedPromptHintText(readRefOrGetterValue(sessionId)));
   const currentSessionsApiPath = computed(() => normalizedPromptHintText(readRefOrGetterValue(sessionsApiPath)));
   const currentPolicy = computed(() => readRefOrGetterValue(policy) || {});
-  const sharedRevision = ref(0);
-  useRealtimeEvent({
-    event: VIBE64_SESSION_CHANGED_EVENT,
-    enabled: computed(() => readRefOrGetterValue(active) !== false && readRefOrGetterValue(sharedOnly) === true),
-    matches: ({ payload }) => (
-      payload?.reason === "shared-prompt-hints-updated" &&
-      payload.sessionId === currentSessionId.value &&
-      payload.projectSlug === readRefOrGetterValue(projectSlug)
-    ),
-    onEvent() {
-      sharedRevision.value += 1;
-    }
-  });
   const controller = useAssistantSuggestions({
     active: computed(() => Boolean(
       readRefOrGetterValue(active) !== false && readRefOrGetterValue(canRequest) !== false &&
@@ -86,8 +69,7 @@ function useVibe64PromptHints({
     requestKey: computed(() => [
       currentSessionId.value, currentSessionsApiPath.value, readRefOrGetterValue(conversationKey),
       currentPolicy.value.revision, currentPolicy.value.version,
-      readRefOrGetterValue(blankConversation), readRefOrGetterValue(existingProject),
-      readRefOrGetterValue(sharedOnly), sharedRevision.value
+      readRefOrGetterValue(blankConversation), readRefOrGetterValue(existingProject)
     ]),
     draft: computed(() => normalizedPromptHintDraft(readRefOrGetterValue(draft))),
     debounceMs,
@@ -106,7 +88,7 @@ function useVibe64PromptHints({
         const response = await request(vibe64SessionPromptHintsPath(targetPath, targetSession), {
           method: "POST",
           body: {
-            draft: readRefOrGetterValue(sharedOnly) === true ? "" : requestDraft,
+            draft: requestDraft,
             operationId,
             originId
           },
