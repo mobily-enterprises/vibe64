@@ -109,6 +109,16 @@ function registerRoutes(http, {
   }, (request) => project.githubPullRequests({
     number: request.params.number, operation: "read", vibe64User: request.vibe64User || null
   }));
+  for (const operation of ["ready", "update-branch", "merge"]) {
+    routes.serviceRoute("POST", `/pull-requests/:number/${operation}`, {
+      summary: `Apply the reviewed ${operation} action to a GitHub pull request.`
+    }, (request) => project.githubPullRequests({
+      number: request.params.number, operation,
+      review: routes.requestBody(request).review,
+      mergeMethod: routes.requestBody(request).mergeMethod,
+      vibe64User: request.vibe64User || null
+    }));
+  }
   routes.serviceRoute("GET", "/issues/:number", {
     summary: "Read a GitHub issue and its comments."
   }, (request) => project.githubIssues({

@@ -1404,12 +1404,16 @@ function useVibe64AutopilotView(props, emit, {
     updateWorkDisabled.value ||
     (!saveWorkRequiresUpdate.value && !saveWorkUnsaved.value)
   ));
+  const sessionUpdateLabel = computed(() => {
+    const branch = saveWorkRepositoryState.value?.destination?.branch;
+    return branch ? `Update session from ${branch}` : "Update session";
+  });
   const saveWorkActionLabel = computed(() => (
-    saveWorkRequiresUpdate.value ? "Update this session (rebase)" : "Review changes"
+    saveWorkRequiresUpdate.value ? sessionUpdateLabel.value : "Review changes"
   ));
   const saveWorkHeaderAriaLabel = computed(() => (
     saveWorkRequiresUpdate.value
-      ? "Update selected session (rebase)"
+      ? sessionUpdateLabel.value
       : "Review selected session changes"
   ));
   const saveWorkHeaderVisible = computed(() => Boolean(
@@ -1438,8 +1442,8 @@ function useVibe64AutopilotView(props, emit, {
     }
     if (saveWorkRequiresUpdate.value) {
       return saveWorkUnsaved.value
-        ? "Update this session (rebase) with the latest saved project version while preserving its unsaved work. Save will be available when the update finishes."
-        : "Update this session (rebase) to the latest saved project version.";
+        ? `${sessionUpdateLabel.value}, preserving its unsaved work. Save will be available when the update finishes.`
+        : `${sessionUpdateLabel.value} to load its latest saved changes.`;
     }
     if (!saveWorkUnsaved.value) {
       return "No work to save";
@@ -1522,7 +1526,7 @@ function useVibe64AutopilotView(props, emit, {
     shortActionDismissals.value.saveWork === saveWorkActivityKey.value
   ));
   const saveWorkActivityLabel = computed(() => (
-    saveWorkActivityIsUpdate.value ? "Update this session (rebase)" : "Save work"
+    saveWorkActivityIsUpdate.value ? sessionUpdateLabel.value : "Save work"
   ));
   const saveWorkOperationActive = computed(() => ["queued", "running", "starting"].includes(
     String(saveWorkOperation.value?.status || "").trim().toLowerCase()

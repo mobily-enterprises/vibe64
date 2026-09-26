@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile, readdir } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, readFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "../../packages/vibe64-project/src/server/githubPullRequests.js";
@@ -9,16 +9,19 @@ import { assertSessionRepositoryReview, sessionRepositoryDestination, sessionRep
 import { repositoryBranches } from "../../packages/vibe64-project/src/server/repositoryBranches.js";
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
-import { prepareSessionPullRequestBranch, saveSessionWorkDirect, checkSessionUpdatesDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
+import { prepareSessionPullRequestBranch, saveSessionWorkDirect, checkSessionUpdatesDirect, updateSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
 import getPlacements from "../../src/placement.js";
+import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
+import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 const user = { username: "alice", home: "/home/alice", uid: 1001, gid: 1001 };
 const project = { repositoryMode: "github", repository: { defaultBranch: "main", mode: "github" },
   githubRepository: { fullName: "example/project", cloneUrl: "https://github.com/example/project.git" } };
 const pr = { number: 7, title: "Improve search", body: "A description", url: "https://github.com/example/project/pull/7",
-  state: "OPEN", headRefName: "feature/search", headRefOid: "a".repeat(40), headRef: { name: "feature/search" },
+  state: "OPEN", headRefName: "feature/search", headRefOid: "a".repeat(40), headRef: { name: "feature/search", target: { oid: "a".repeat(40) } },
+  baseRefOid: "b".repeat(40), baseRef: { name: "main", target: { oid: "b".repeat(40) } },
   baseRefName: "main", baseRepository: { nameWithOwner: "example/project" },
   headRepository: { nameWithOwner: "alice/project", viewerPermission: "WRITE", isArchived: false } };
 const success = (body) => ({ ok: true, stdout: JSON.stringify(body) });
@@ -44,10 +47,12 @@ test("session destination reviews fail closed when repository, branch or session
   assert.equal(sessionRepositoryProject(managed, session).repository.defaultBranch, "feature/search");
   assert.throws(() => sessionRepositoryProject(managed, { metadata: { repository_branch: "../main" } }));
 });
-function fixture(replies) {
+function fixture(replies, behindBase = 1) {
   const calls = [];
   return { calls, options: { env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" }, async runCommand(request) {
-    calls.push(request); assert.ok(replies.length, "Unexpected GitHub request"); return replies.shift();
+    calls.push(request);
+    if (request.args.some((arg) => arg.includes("/compare/"))) return success({ behind_by: behindBase });
+    assert.ok(replies.length, "Unexpected GitHub request"); return replies.shift();
   } } };
 }
 
@@ -195,6 +200,165 @@ test("create PR checks current GitHub write access and retries by finding the ex
   await assert.rejects(preparePullRequestSource(project, session, input, denied.options), { code: "vibe64_pull_request_permission_denied" });
 });
 
+const mergeablePr = {
+  ...pr, id: "PR_current", isDraft: false,
+  baseRepository: { ...pr.baseRepository, viewerPermission: "WRITE", isArchived: false,
+    mergeCommitAllowed: true, squashMergeAllowed: true, rebaseMergeAllowed: false },
+  viewerCanUpdate: true, viewerCanUpdateBranch: true, mergeable: "MERGEABLE", mergeStateStatus: "CLEAN",
+  reviewDecision: "APPROVED", commits: { nodes: [{ commit: { statusCheckRollup: { state: "SUCCESS" } } }] }
+};
+const review = { repository: "example/project", number: 7, headRepository: "alice/project",
+  headBranch: "feature/search", headCommit: "a".repeat(40), baseBranch: "main", baseCommit: "b".repeat(40) };
+const readPr = (value = mergeablePr) => success({ data: { repository: { pullRequest: value } } });
+
+test("PR details expose reviewed authority, checks and the repository's merge methods", async () => {
+  const f = fixture([readPr()]);
+  const result = await githubPullRequests(project, { operation: "read", number: 7, vibe64User: user }, f.options);
+  assert.deepEqual(result.pullRequest.review, review);
+  assert.deepEqual(result.pullRequest.mergeMethods, ["merge", "squash"]);
+  assert.equal(result.pullRequest.actions.merge, "");
+  assert.equal(result.pullRequest.actions["update-branch"], "");
+  assert.equal(result.pullRequest.checksState, "SUCCESS");
+});
+
+test("PR updates compare live refs even when GitHub's summary and update suggestion lag", async () => {
+  const current = { ...mergeablePr, viewerCanUpdateBranch: false,
+    baseRef: { name: "main", target: { oid: "c".repeat(40) } } };
+  const f = fixture([readPr(current), readPr(current), success({ message: "Updating pull request branch." })]);
+  const { pullRequest } = await githubPullRequests(project, { operation: "read", number: 7, vibe64User: user }, f.options);
+  assert.equal(pullRequest.review.baseCommit, "c".repeat(40));
+  assert.equal(pullRequest.actions["update-branch"], "");
+  assert.equal(pullRequest.behindBase, 1);
+  assert.ok(f.calls[1].args.includes(`repos/example/project/compare/${"c".repeat(40)}...${"a".repeat(40)}?per_page=1`));
+  const result = await githubPullRequests(project, { operation: "update-branch", number: 7,
+    review: pullRequest.review, vibe64User: user }, f.options);
+  assert.equal(result.pending, true);
+  const caughtUp = fixture([readPr(current)], 0);
+  const fresh = await githubPullRequests(project, { operation: "read", number: 7, vibe64User: user }, caughtUp.options);
+  assert.match(fresh.pullRequest.actions["update-branch"], /already includes/u);
+  const movedHead = fixture([readPr({ ...current, headRef: { name: "feature/search", target: { oid: "d".repeat(40) } } })]);
+  const moving = await githubPullRequests(project, { operation: "read", number: 7, vibe64User: user }, movedHead.options);
+  assert.equal(moving.pullRequest.review.headCommit, "d".repeat(40));
+  assert.match(moving.pullRequest.actions.merge, /still updating/u);
+});
+
+test("PR actions use the signed-in actor, current PR ID and reviewed head without retries", async () => {
+  for (const [operation, current, response] of [
+    ["ready", { ...mergeablePr, isDraft: true }, success({ data: {
+      markPullRequestReadyForReview: { pullRequest: { id: "PR_current", isDraft: false } }
+    } })],
+    ["update-branch", mergeablePr, success({ message: "Updating pull request branch." })],
+    ["merge", mergeablePr, success({ merged: true, sha: "c".repeat(40) })]
+  ]) {
+    const f = fixture([readPr(current), response]);
+    const result = await githubPullRequests(project, { operation, number: 7, review,
+      mergeMethod: "squash", vibe64User: user, id: "PR_forged", repository: "other/project" }, f.options);
+    assert.equal(result.ok, true);
+    assert.equal(f.calls.length, 3);
+    for (const call of f.calls) {
+      assert.equal(call.actor, "named-user");
+      assert.equal(call.credentialHome.username, "alice");
+    }
+    const sent = JSON.parse(f.calls[2].input);
+    if (operation === "ready") {
+      assert.deepEqual(sent.variables, { id: "PR_current" });
+    } else {
+      assert.ok(f.calls[2].args.includes(`repos/example/project/pulls/7/${operation}`));
+      assert.deepEqual(sent, operation === "merge"
+        ? { sha: review.headCommit, merge_method: "squash" } : { expected_head_sha: review.headCommit });
+    }
+    assert.equal(result.pending, operation === "update-branch" ? true : undefined);
+    if (result.pending) assert.match(result.message, /accepted.*Refresh/u);
+  }
+});
+
+test("PR actions refuse stale or missing reviews before mutating GitHub", async () => {
+  for (const operation of ["ready", "update-branch", "merge"]) {
+    for (const change of [null, ...Object.keys(review).map((key) => ({ ...review, [key]: "changed" }))]) {
+      const f = fixture([readPr({ ...mergeablePr, isDraft: operation === "ready" })]);
+      await assert.rejects(githubPullRequests(project, { operation, number: 7, review: change,
+        mergeMethod: "merge", vibe64User: user }, f.options), { code: "vibe64_pull_request_review_changed" });
+      assert.equal(f.calls.length, 2);
+    }
+  }
+});
+
+test("PR merge refuses drafts, conflicts, restrictions and unknown state without bypassing them", async () => {
+  for (const change of [
+    { state: "CLOSED" }, { state: "MERGED" }, { isDraft: true }, { baseRef: null }, { headRef: null },
+    { baseRepository: { ...mergeablePr.baseRepository, viewerPermission: "READ" } },
+    { baseRepository: { ...mergeablePr.baseRepository, isArchived: true } },
+    { mergeable: "CONFLICTING" }, { mergeable: "UNKNOWN" }, { mergeStateStatus: "UNKNOWN" },
+    { mergeStateStatus: "BEHIND" }, { mergeStateStatus: "BLOCKED" },
+    { reviewDecision: "REVIEW_REQUIRED" }, { reviewDecision: "CHANGES_REQUESTED" },
+    { baseRepository: { ...mergeablePr.baseRepository, mergeCommitAllowed: false, squashMergeAllowed: false } }
+  ]) {
+    const f = fixture([readPr({ ...mergeablePr, ...change, viewerCanMergeAsAdmin: true })]);
+    await assert.rejects(githubPullRequests(project, { operation: "merge", number: 7, review,
+      mergeMethod: "merge", vibe64User: user }, f.options), { code: "vibe64_pull_request_action_unavailable" });
+    assert.ok(f.calls.length <= 2);
+  }
+  const f = fixture([readPr()]);
+  await assert.rejects(githubPullRequests(project, { operation: "merge", number: 7, review,
+    mergeMethod: "rebase", vibe64User: user }, f.options), { code: "vibe64_pull_request_input_invalid" });
+  assert.equal(f.calls.length, 2);
+});
+
+test("PR updates and readiness obey GitHub capability checks", async () => {
+  for (const [operation, change] of [
+    ["update-branch", { viewerCanUpdateBranch: false, headRepository: { ...pr.headRepository, viewerPermission: "READ" } }],
+    ["update-branch", { headRepository: { ...pr.headRepository, isArchived: true } }],
+    ["update-branch", { mergeable: "CONFLICTING" }],
+    ["ready", { isDraft: true, viewerCanUpdate: false }], ["ready", { isDraft: false }]
+  ]) {
+    const f = fixture([readPr({ ...mergeablePr, ...change })]);
+    await assert.rejects(githubPullRequests(project, { operation, number: 7, review, vibe64User: user }, f.options),
+      { code: "vibe64_pull_request_action_unavailable" });
+    assert.equal(f.calls.length, 2);
+  }
+});
+
+test("GitHub races and unconfirmed writes remain explicit failures and are not retried", async () => {
+  for (const [operation, response, expected] of [
+    ["merge", { ok: false, stderr: "HTTP 409", stdout: JSON.stringify({ message: "Head branch was modified." }) }, /Head branch was modified/u],
+    ["merge", success({ merged: false }), /did not confirm/u],
+    ["update-branch", success({}), /did not confirm/u],
+    ["merge", { ok: false, stdout: "", stderr: "timeout" }, /could not be confirmed/u],
+    ["ready", success({ data: { markPullRequestReadyForReview: { pullRequest: { id: "PR_other", isDraft: false } } } }), /could not be confirmed/u]
+  ]) {
+    const f = fixture([readPr({ ...mergeablePr, isDraft: operation === "ready" }), response]);
+    await assert.rejects(githubPullRequests(project, { operation, number: 7, review,
+      mergeMethod: "merge", vibe64User: user }, f.options), expected);
+    assert.equal(f.calls.length, 3);
+  }
+});
+
+test("PR mutation routes bind the action, project, number and identity to the authenticated request", async () => {
+  await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const app = testRouteApp();
+    let received;
+    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app",
+      project: { async githubPullRequests(input) { received = input; return { ok: true }; } } });
+    for (const operation of ["ready", "update-branch", "merge"]) {
+      const route = findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/pull-requests/:number/${operation}` });
+      const body = { review, mergeMethod: "merge", operation: "forged", number: 999,
+        repository: "other/project", vibe64User: { username: "daemon" } };
+      const reply = testReply();
+      await route.handler({ body, input: { body }, params: routeProjectParams({ number: "7" }), vibe64User: user }, reply);
+      assert.equal(reply.statusCode, 200);
+      assert.deepEqual(received, { operation, number: "7", review, mergeMethod: "merge", vibe64User: user });
+    }
+  }));
+  for (const operation of ["ready", "update-branch", "merge"]) {
+    const f = fixture([]);
+    await assert.rejects(githubPullRequests(project, { operation, number: 7, review }, f.options),
+      { code: "vibe64_os_user_required" });
+    await assert.rejects(githubPullRequests({ ...project, repositoryMode: "managed_git" },
+      { operation, number: 7, review, vibe64User: user }, f.options), { code: "vibe64_github_project_required" });
+    assert.equal(f.calls.length, 0);
+  }
+});
+
 async function command(request) {
   return new Promise((resolve) => {
     const child = spawn(request.command, request.args, { cwd: request.cwd, env: { ...process.env,
@@ -249,6 +413,27 @@ test(`${withPullRequest ? "PR" : "Named branch"} sessions clone the head and kee
     const checked = await checkSessionUpdatesDirect({ project, session, runCommand });
     assert.equal(checked.canonicalCommit, saved.saveCommit);
     assert.ok(calls.some((request) => request.args.includes(remoteUrl)));
+    // GitHub's Update branch merges main into the head. Ordinary session Update
+    // must then load it without losing unsaved files or publishing them to main.
+    await git(seed, ["checkout", "main"]);
+    await writeFile(path.join(seed, "from-main.txt"), "main advanced\n");
+    await git(seed, ["add", "."]); await git(seed, ["commit", "-m", "Advance main"]);
+    await git(seed, ["push", "origin", "main"]);
+    const newerMain = await git(seed, ["rev-parse", "HEAD"]);
+    await git(seed, ["checkout", "feature/search"]);
+    await git(seed, ["pull", "--ff-only", "origin", "feature/search"]);
+    await git(seed, ["merge", "--no-ff", "main", "-m", "Update branch from main"]);
+    await git(seed, ["push", "origin", "feature/search"]);
+    const updatedHead = await git(seed, ["rev-parse", "HEAD"]);
+    await writeFile(path.join(session.sourcePath, "unsaved.txt"), "keep this draft\n");
+    assert.equal((await checkSessionUpdatesDirect({ project, session, runCommand })).updateAvailable, true);
+    const updated = await updateSessionWorkDirect({ project, session, runCommand });
+    assert.equal(updated.status, "updated");
+    assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), updatedHead);
+    assert.equal(await readFile(path.join(session.sourcePath, "from-main.txt"), "utf8"), "main advanced\n");
+    assert.equal(await readFile(path.join(session.sourcePath, "unsaved.txt"), "utf8"), "keep this draft\n");
+    assert.match(await git(session.sourcePath, ["status", "--porcelain"]), /unsaved.txt/u);
+    assert.equal(await git(root, ["--git-dir", remote, "rev-parse", "main"]), newerMain);
     // Creating a PR from a normal session supports baselines that have only been committed locally.
     await writeFile(path.join(session.sourcePath, "local.txt"), "locally committed\n");
     await git(session.sourcePath, ["add", "."]); await git(session.sourcePath, ["commit", "-m", "local baseline"]);
@@ -258,7 +443,7 @@ test(`${withPullRequest ? "PR" : "Named branch"} sessions clone the head and kee
     await prepareSessionPullRequestBranch({ project, session, runCommand });
     await prepareSessionPullRequestBranch({ project, session, runCommand });
     assert.equal(await git(root, ["--git-dir", remote, "rev-parse", "vibe64/pr-session-1"]), localCommit);
-    assert.equal(await git(root, ["--git-dir", remote, "rev-parse", "main"]), main);
+    assert.equal(await git(root, ["--git-dir", remote, "rev-parse", "main"]), newerMain);
     assert.equal(calls.filter((request) => request.args.some((arg) => arg.startsWith("--force-with-lease="))).length, 1);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

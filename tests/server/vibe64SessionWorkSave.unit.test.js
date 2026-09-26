@@ -13,6 +13,7 @@ import {
   inspectSessionChanges,
   inspectSessionWork,
   prepareSessionWorkSaveMessage,
+  prepareSessionPullRequestBranch,
   recoverSessionWorkUpdate,
   recoverSessionWorkSave,
   safeChangePath,
@@ -1814,6 +1815,61 @@ test("GitHub Saves never refresh the mirror before a publish is accepted and ver
     });
   } finally {
     await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("GitHub PR-required push rejection preserves session work and distinguishes other branch rules", async () => {
+  for (const [reason, expectedCode] of [
+    ["remote: error: GH006: Protected branch update failed.\nremote: Changes must be made through a pull request.", "vibe64_pull_request_required"],
+    ["remote: error: GH013: Repository rule violations found.\nremote: - Changes must be made through a pull request.", "vibe64_pull_request_required"],
+    ["remote: error: GH013: Repository rule violations found.\nremote: - Commits must have verified signatures.", "git_failed"]
+  ]) {
+    const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-pr-required-"));
+    try {
+      const fixture = await createRemoteFixture(root);
+      const session = await sessionForRemote(root, fixture);
+      const project = githubProject(root, fixture.remote);
+      await writeFile(path.join(session.sourcePath, "shared.txt"), "keep my changes\n");
+      await writeFile(path.join(session.sourcePath, "new.txt"), "keep my new file\n");
+      const before = await git(session.sourcePath, ["status", "--porcelain"]);
+      let pushes = 0;
+      await assert.rejects(saveSessionWork({
+        operationId: "save-pr-required", project, session,
+        runCommand: async request => {
+          if (request.command === "git" && request.args?.[0] === "push") {
+            pushes++;
+            return { ok: false, code: "git_failed", stderr: reason };
+          }
+          return commandRunner(request);
+        }
+      }), error => {
+        assert.equal(error.code, expectedCode);
+        assert.ok(error.message.includes(reason), "retain GitHub's actual rejection");
+        if (expectedCode === "vibe64_pull_request_required") assert.match(error.message, /Your work remains in this session/u);
+        return true;
+      });
+      assert.equal(pushes, 1);
+      assert.equal(await git(fixture.remote, ["rev-parse", "refs/heads/main"]), fixture.baseCommit);
+      assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
+      assert.equal(await git(session.sourcePath, ["status", "--porcelain"]), before);
+      assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "keep my changes\n");
+      assert.equal(await readFile(path.join(session.sourcePath, "new.txt"), "utf8"), "keep my new file\n");
+      if (expectedCode === "vibe64_pull_request_required") {
+        session.metadata.github_pull_request = JSON.stringify({ number: null, title: "Recover rejected Save", body: "", url: "",
+          baseRepository: "example/project", baseBranch: "main", headRepository: "example/project",
+          headBranch: "vibe64/recovered", headCommit: fixture.baseCommit });
+        const runCommand = request => commandRunner({ ...request,
+          args: request.args.map(arg => arg === "https://github.com/example/project.git" ? fixture.remote : arg) });
+        await prepareSessionPullRequestBranch({ project, session, runCommand });
+        const saved = await saveSessionWork({ project, session, runCommand, operationId: "save-to-pr" });
+        assert.equal(await git(fixture.remote, ["rev-parse", "refs/heads/main"]), fixture.baseCommit);
+        assert.equal(await git(fixture.remote, ["rev-parse", "refs/heads/vibe64/recovered"]), saved.saveCommit);
+        assert.equal(await git(fixture.remote, ["show", "vibe64/recovered:shared.txt"]), "keep my changes");
+        assert.equal(await git(fixture.remote, ["show", "vibe64/recovered:new.txt"]), "keep my new file");
+      }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   }
 });
 

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useQueryClient } from "@tanstack/vue-query";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { mdiArrowLeft, mdiArrowRight, mdiMagnify, mdiOpenInNew, mdiPlus, mdiRefresh,
   mdiSourceBranch, mdiSourceMerge, mdiSourcePull, mdiCloseCircleOutline } from "@mdi/js";
@@ -14,10 +15,12 @@ import { focusCreatedVibe64SessionTab } from "@/lib/vibe64SessionFocus.js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import { githubProjectAvailable, githubProjectRepositoryName } from "@/lib/vibe64GithubProject.js";
 import GithubBrowserTabs from "./GithubBrowserTabs.vue";
+import GithubPullRequestActions from "./GithubPullRequestActions.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, default: () => ({}) } });
 const route = useRoute();
 const router = useRouter();
+const queryClient = useQueryClient();
 const projectSlug = computed(() => projectSlugFromRoute(route));
 const repository = computed(() => githubProjectRepositoryName(props.dashboardContext.projectContext));
 const available = computed(() => githubProjectAvailable(props.dashboardContext.projectContext));
@@ -94,6 +97,12 @@ async function published(source) {
   await list.reload();
   await navigate({ pr: String(source.number), createPullRequest: undefined });
   await detail.reload();
+}
+async function actionFinished({ apiPath }) {
+  await queryClient.invalidateQueries({ queryKey: ["vibe64.pullRequests", apiPath.replace(/\/\d+$/u, "")] });
+  if (apiPath !== `${basePath.value}/${number.value}`) return;
+  await detail.reload();
+  void props.dashboardContext.refreshSessionWork?.();
 }
 </script>
 
@@ -197,12 +206,12 @@ async function published(source) {
               <div class="text-body-small text-medium-emphasis mt-1">Proposed into {{ repository }}:{{ pr.baseRefName }}</div>
             </div>
           </div>
-          <p class="text-body-medium ma-0">Open an isolated session with this PR’s changes and description. Save publishes further work to its source branch.</p>
-          <p v-if="pr.unavailableReason" class="text-body-medium ma-0">{{ pr.unavailableReason }}</p>
-          <p v-else-if="!toolbar.canCreateSession" class="text-body-medium ma-0">{{ toolbar.createSessionTitle }}</p>
+          <p v-if="pr.state === 'OPEN'" class="text-body-medium ma-0">Open an isolated session with this PR’s changes and description. Save publishes further work to its source branch.</p>
+          <p v-if="pr.state === 'OPEN' && pr.unavailableReason" class="text-body-medium ma-0">{{ pr.unavailableReason }}</p>
+          <p v-else-if="pr.state === 'OPEN' && !toolbar.canCreateSession" class="text-body-medium ma-0">{{ toolbar.createSessionTitle }}</p>
           <div class="d-flex flex-wrap ga-2">
             <v-btn
-              color="primary" rounded="pill" height="48" :prepend-icon="mdiSourcePull"
+              v-if="pr.state === 'OPEN'" color="primary" rounded="pill" height="48" :prepend-icon="mdiSourcePull"
               :disabled="Boolean(pr.unavailableReason) || !toolbar.canCreateSession || toolbar.createSessionRunning"
               @click="assistantDialog = true"
             >
@@ -211,6 +220,10 @@ async function published(source) {
             <v-btn :href="pr.url" target="_blank" rel="noopener noreferrer" variant="text" height="48" :append-icon="mdiOpenInNew">View on GitHub</v-btn>
           </div>
         </v-sheet>
+        <GithubPullRequestActions
+          :pull-request="pr" :api-path="`${basePath}/${number}`"
+          :disabled="detail.isFetching.value" @changed="actionFinished"
+        />
         <v-sheet rounded="xl" border class="pa-5 pull-requests__description">
           <h3 class="text-title-medium mb-4">Description</h3>
           <LongTextPreviewBlocks v-if="pr.body" :blocks="description" />

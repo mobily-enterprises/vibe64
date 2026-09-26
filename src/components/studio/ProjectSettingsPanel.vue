@@ -289,15 +289,18 @@
           <p>Choose how Vibe64 publishes changes to this repository.</p>
         </div>
         <div class="project-settings__content text-body-medium">
-          <v-switch
+          <v-radio-group
             v-model="requirePullRequest"
-            label="Require pull requests for Vibe64 publication"
+            label="GitHub save workflow"
             color="primary"
             hide-details
             :disabled="!repositoryWorkflow.canEdit || repositoryWorkflowCommand.isRunning"
-          />
-          <p>Reviewing changes will require Create pull request before commits can be published. Existing sessions keep their destinations and can explicitly create a PR from their work.</p>
-          <p>This controls Vibe64's publication actions. Use GitHub branch rules to restrict pushes made through terminals and other tools.</p>
+          >
+            <v-radio label="Allow direct commits and pushes" :value="false" class="py-1" />
+            <v-radio label="Require pull requests" :value="true" class="py-1" />
+          </v-radio-group>
+          <p>GitHub branch rules still apply. Requiring pull requests makes Create draft PR the main Save action until a session is attached to a PR.</p>
+          <p>This setting controls Vibe64's Save actions. GitHub rules control pushes from terminals and other tools.</p>
           <div class="project-settings__action text-body-small">
             <v-btn
               :color="requirePullRequest !== repositoryWorkflow.requirePullRequest ? 'primary' : undefined"

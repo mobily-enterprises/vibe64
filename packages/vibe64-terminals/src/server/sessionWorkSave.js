@@ -1439,7 +1439,7 @@ async function publishSaveCommit(runCommand, context, saveCommit, canonicalCommi
     const remoteCommit = output(remote).split(/\s+/u)[0] || "";
     if (remoteCommit && remoteCommit !== canonicalCommit) {
       throw saveError(
-        "The saved project changed while Save was publishing. Update this session (rebase), then save again.",
+        "The saved branch changed while Save was publishing. Update this session, then save again.",
         "vibe64_session_save_update_required",
         {
           canonicalCommit: remoteCommit,
@@ -1448,8 +1448,15 @@ async function publishSaveCommit(runCommand, context, saveCommit, canonicalCommi
         }
       );
     }
+    const reason = text(pushed?.stderr || pushed?.stdout || pushed?.output || pushed?.error) || "Git Save publication failed.";
+    if (context.mode === PROJECT_REPOSITORY_MODE_GITHUB && /changes must be made through a pull request/iu.test(reason)) {
+      throw saveError(
+        `GitHub requires a pull request to update ${context.branch}. Your work remains in this session.\n\n${reason}`,
+        "vibe64_pull_request_required"
+      );
+    }
     throw saveError(
-      text(pushed?.stderr || pushed?.stdout || pushed?.output || pushed?.error) || "Git Save publication failed.",
+      reason,
       text(pushed?.code) || "vibe64_session_save_git_failed"
     );
   }
@@ -2365,7 +2372,7 @@ async function prepareSessionWorkSave(runCommand, context, {
   );
   if (canonicalCommit !== context.baseCommit && !canonicalInSession) {
     throw saveError(
-      "The saved project has changed. Update this session (rebase) before saving its work.",
+      "The saved branch has changed. Update this session before saving its work.",
       "vibe64_session_save_update_required",
       {
         canonicalCommit,

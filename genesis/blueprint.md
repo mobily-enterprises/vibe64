@@ -110,7 +110,18 @@ Session actions also offer Create pull request: review the title, description,
 and draft choice, publish work on a new branch, and create the PR. The session
 then keeps saving to that branch. Interrupted publishing retains that destination
 and an explicit retry checks for an existing PR before creating another.
-Neither workflow merges a PR or publishes session work to the PR's base branch.
+Creating a PR and saving further work keep publishing to its source branch.
+Once a PR exists, the session's PR action opens its existing Dashboard detail.
+There people can mark a draft ready for review, merge the target branch into
+the PR branch, and merge the PR into its target using a repository-enabled method.
+Checks, review requirements and merge blockers are visible beside the actions;
+GitHub remains available for reviews, conflicts and repository rules.
+Actions recheck the reviewed PR destination and commits with the person's account.
+An accepted asynchronous branch update is shown as pending, with Refresh to check
+progress. Update session then loads changes from the session's own bound branch;
+its label names that branch rather than calling this a feature-branch rebase.
+Merging publishes the commits already on GitHub. Session work remains separate,
+and people archive their sessions using the existing unsaved-work checks.
 Current changes uses the full project pane, with the dashboard menu hidden and
 a Back to dashboard action, so file differences have room to read.
 Resizing chat keeps its contents, divider and project pane aligned through the
@@ -753,6 +764,7 @@ draft PR and Commit & push.
 The Save control uses a floppy disk, combined with a translucent Git commit
 symbol for GitHub destinations. Its hover hint includes the save operation and
 repository/branch; ordinary sessions no longer repeat that line above the chat.
+Update uses a branch-sync icon; Create/View PR uses a distinct pull-request icon.
 The server rejects an outdated destination
 review. Working files, recovery checkpoints, project versions, database rows,
 conversation history and application publishing have separate effects.
@@ -772,6 +784,12 @@ Explicit branch destinations survive renewal and archive indexing. Choosing a
 branch for a new session does not switch another session's files or database.
 GitHub project owners can require PR publication in the Vibe64 workflow. This
 does not retarget existing sessions or replace GitHub's own branch protection.
+The Save dialog follows that choice: Commit & push is primary when direct
+publication is allowed; Create draft PR is primary when a PR is required.
+Sessions already attached to a PR keep Commit & push as their primary action.
+If GitHub rejects a push because a PR is required, the failure preserves the
+work, shows GitHub's reason and offers Create draft PR. Other push failures
+keep their own explanation. Local and Vibe64 Git projects keep their Save flow.
 
 Standalone projects expose Fetch, Pull, Push, Switch branch, New branch and
 per-branch remote settings. Branch changes require a clean original folder and

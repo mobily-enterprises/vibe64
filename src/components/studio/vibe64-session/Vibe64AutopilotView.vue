@@ -63,7 +63,7 @@
               width="48"
               @click="requestSessionSaveWork"
             >
-              <v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourcePull" />
+              <v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceBranchSync" />
               <span v-else-if="props.workState?.destination?.mode === 'github'" class="studio-autopilot__save-symbol" aria-hidden="true">
                 <v-icon :icon="mdiContentSaveOutline" size="26" class="studio-autopilot__save-symbol-disk" />
                 <v-icon :icon="mdiSourceCommit" size="24" class="studio-autopilot__save-symbol-commit" />
@@ -105,9 +105,11 @@
                 :subtitle="rewindHint" min-height="48" @click="openConversationRewind"
               />
               <v-list-item
-                v-if="githubProject && !sessionPullRequest?.number" min-height="48"
-                :prepend-icon="mdiSourcePull" title="Create pull request" subtitle="Publish this session on a new branch"
-                :disabled="sourceOperationsSuspended" @click="createPullRequestOpen = true"
+                v-if="githubProject" min-height="48"
+                :prepend-icon="mdiSourcePull" :title="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
+                :subtitle="sessionPullRequest?.number ? `PR #${sessionPullRequest.number}` : 'Propose this work for merging'"
+                :to="sessionPullRequestTarget" :disabled="!sessionPullRequest?.number && sourceOperationsSuspended"
+                @click="!sessionPullRequest?.number && (createPullRequestOpen = true)"
               />
               <v-list-item
                 v-if="props.sessionRenewal?.visible"
@@ -141,9 +143,11 @@
             :icon="mdiUndo" size="48" variant="text" @click="openConversationRewind"
           />
           <v-btn
-            v-if="githubProject && !sessionPullRequest?.number" :icon="mdiSourcePull" size="48" variant="text"
-            aria-label="Create pull request" title="Create pull request" :disabled="sourceOperationsSuspended"
-            @click="createPullRequestOpen = true"
+            v-if="githubProject" :icon="mdiSourcePull" size="48" variant="text"
+            :aria-label="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
+            :title="sessionPullRequest?.number ? `View pull request #${sessionPullRequest.number}` : 'Create pull request'"
+            :to="sessionPullRequestTarget" :disabled="!sessionPullRequest?.number && sourceOperationsSuspended"
+            @click="!sessionPullRequest?.number && (createPullRequestOpen = true)"
           />
           <v-badge
             v-if="props.sessionRenewal?.visible"
@@ -268,13 +272,20 @@
           @dismiss="dismissSaveWorkActivity"
           @retry="retrySaveWork"
         >
-          <template v-if="saveWorkError && saveWorkCanResolveWithTemporaryAi" #error-actions>
+          <template v-if="saveWorkError && (saveWorkCanResolveWithTemporaryAi || saveWorkCanCreatePullRequest)" #error-actions>
             <Vibe64TemporaryAiFixAction
+              v-if="saveWorkCanResolveWithTemporaryAi"
               :disabled="repositoryRecoverySending || !assistantJuniorAllowed"
               :pending="repositoryRecoverySending"
               :title="assistantJuniorAllowed ? 'Open temporary AI to resolve this repository problem' : assistantJuniorRestrictionMessage"
               @click="fixRepositoryActionError"
             />
+            <v-btn
+              v-if="saveWorkCanCreatePullRequest" color="primary" variant="flat" height="48"
+              :disabled="saveWorkDisabled || sourceOperationsSuspended" @click="createPullRequestOpen = true"
+            >
+              Create draft PR
+            </v-btn>
           </template>
         </Vibe64TemporaryActionTerminal>
 
@@ -891,7 +902,7 @@
             v-if="githubProject && !sessionPullRequest?.number"
             color="primary"
             height="48"
-            variant="flat"
+            :variant="saveWorkNeedsPullRequest ? 'flat' : 'outlined'"
             :disabled="saveWorkDisabled || !saveWorkReview"
             @click="cancelSaveWork(); createPullRequestOpen = true"
           >
@@ -901,9 +912,9 @@
             :aria-busy="saveWorkSending ? 'true' : undefined"
             color="primary"
             min-height="48"
-            :disabled="saveWorkDisabled || !saveWorkReview || (props.workState?.publicationRequiresPullRequest && !sessionPullRequest?.number)"
+            :disabled="saveWorkDisabled || !saveWorkReview || saveWorkNeedsPullRequest"
             type="button"
-            :variant="githubProject && !sessionPullRequest?.number ? 'outlined' : 'flat'"
+            :variant="saveWorkNeedsPullRequest ? 'outlined' : 'flat'"
             @click="confirmSaveWork"
           >
             <span class="text-wrap" style="overflow-wrap: anywhere">{{ saveWorkSending ? "Committing…" : publicationLabel }}</span>
@@ -946,6 +957,7 @@ import {
   mdiPaperclip,
   mdiPlus,
   mdiSend,
+  mdiSourceBranchSync,
   mdiSourcePull,
   mdiStop,
   mdiUndo,
@@ -977,6 +989,7 @@ import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conve
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { githubProjectAvailable } from "@/lib/vibe64GithubProject.js";
+import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import {
   useVibe64AutopilotView,
   vibe64AutopilotViewEmits,
@@ -1246,6 +1259,7 @@ const {
   saveWorkDisabled,
   updateWorkDisabled,
   saveWorkError,
+  saveWorkFailure,
   saveWorkHeaderAriaLabel,
   saveWorkHeaderVisible,
   saveWorkCanResolveWithTemporaryAi,
@@ -1485,7 +1499,15 @@ const createPullRequestOpen = ref(false);
 const checkpointFailure = computed(() => (props.session?.backgroundTasks || [])
   .find((task) => task.id === "codex_turn_checkpoint" && task.status === "failed")?.error || "");
 const sessionPullRequest = computed(() => vibe64SessionPullRequest(props.session));
+const sessionPullRequestTarget = computed(() => sessionPullRequest.value?.number ? {
+  path: projectAppPath(projectSlug.value, '/dashboard/pull-requests'),
+  query: { pr: String(sessionPullRequest.value.number) }
+} : undefined);
 const githubProject = computed(() => githubProjectAvailable(props.projectContext));
+const saveWorkNeedsPullRequest = computed(() => githubProject.value &&
+  props.workState?.publicationRequiresPullRequest === true && !sessionPullRequest.value?.number);
+const saveWorkCanCreatePullRequest = computed(() => githubProject.value && !sessionPullRequest.value?.number &&
+  saveWorkFailure.value?.code === "vibe64_pull_request_required");
 const assistantJuniorRestrictionMessage = computed(() => assistantPurposes.value.junior?.message || "Junior is unavailable. Review model routing.");
 const publicationLabel = computed(() => {
   const destination = saveWorkReview.value;

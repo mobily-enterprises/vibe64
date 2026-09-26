@@ -21,6 +21,7 @@ work as a new PR. GitHub remains the PR store.
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `src/components/studio/GithubPullRequestsPanel.vue`
+- `src/components/studio/GithubPullRequestActions.vue`
 - `src/components/studio/GithubBrowserTabs.vue`
 - `src/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
@@ -81,6 +82,39 @@ Create PR operation can first publish its reviewed head. Repository-wide push
 restrictions remain GitHub's responsibility.
 GitHub mutations are never automatically retried. Saving to a PR branch does
 not merge it or advance the PR base branch.
+
+After creation, the session's PR action becomes View pull request and opens the
+existing Dashboard detail. That detail offers Ready for review for drafts,
+Update branch from the PR base when GitHub permits, and Merge into the base.
+It reports the latest head's check rollup, review decision and merge blockers.
+Drafts, missing branches, archived target repositories, conflicts, required reviews,
+blocked or unknown merge states and missing write permission disable merging.
+Non-required failing checks remain visible; GitHub enforces repository rules at
+the final write. Only repository-enabled merge methods are offered. Reviews,
+conflicts and merge queues that cannot be completed here use View on GitHub.
+
+Each confirmation captures repository, PR number, source repository/branch/head
+commit and base branch/commit. The server re-reads the PR with the same acting
+user and rejects stale reviews before writing. Update and merge also submit the
+expected head to GitHub. Ready for review uses the server-read PR ID and checks
+the returned draft state; merge requires an explicit successful merge response.
+Writes are never automatically retried; ambiguous outcomes tell the user to
+refresh or inspect GitHub before another attempt. Route changes cannot retarget
+an already reviewed command or put its result on another PR.
+The reviewed commits come from live branch refs, not the PR summary's cached
+commit IDs. A comparison of those exact refs determines whether the source is
+behind its target: GitHub's update suggestion may be false even when the target
+has advanced. Source writers can request that update; GitHub still enforces
+branch protection. A head whose PR status has not caught up cannot be merged
+until a refreshed read confirms its status.
+
+Branch update uses GitHub's merge-based update API, not history rewriting. Its
+asynchronous acceptance is reported as pending rather than completed; Refresh
+checks progress. The existing Update session operation then loads the bound
+branch's newer changes while preserving unsaved work. PR actions do not alter
+session worktrees or session metadata. Merging includes only commits on GitHub;
+the confirmation reminds people to save work first. The session keeps its source
+binding and can be archived through the existing unsaved-work checks.
 
 Save, Update and renewal use the bound source rather than the project's default
 branch. PR authority survives renewal and archive indexing, and canonical-change

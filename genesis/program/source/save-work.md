@@ -37,16 +37,30 @@ reminder to save open editor changes first.
 
 The confirmation is Save for local and Vibe64 Git projects, or Commit & push for
 GitHub, with the exact repository and branch shown once above the actions.
-GitHub also offers Create draft PR; a required-PR policy remains visible and
-disables direct publication. A PR session names its head destination and base.
+GitHub also offers Create draft PR. The existing project `requirePullRequest`
+setting makes it primary and disables direct publication until a session has
+a numbered PR; otherwise Commit & push is primary. Project settings exposes
+the same choice as Allow direct commits and pushes or Require pull requests.
+This setting applies only to GitHub projects and never overrides GitHub rules.
+A PR session names its head destination and base.
+An explicit GitHub "Changes must be made through a pull request" rejection
+returns `vibe64_pull_request_required` with the provider's reason and keeps the
+session work intact. The failed Save offers Create draft PR through the existing
+dialog when the session has no PR. Other branch-rule and credential errors
+retain their original classification; a generic protected-branch error does
+not establish that a PR will resolve it.
 The PR form keeps its destination, title, description and draft choice, with
 publication details collapsed. Repository automation is explained in those details.
 The header Save icon is a floppy disk for local and Vibe64 Git destinations;
 GitHub combines a floppy disk and Git commit symbol with partial transparency
-so both remain visible. Update retains its distinct existing icon and behavior.
+so both remain visible. Update uses a branch-sync icon, distinct from the
+pull-request icon used for Create/View PR.
 The Save icon's hover hint includes the operation and repository/branch alongside
 its current status. Update/rebase, status checks and unavailable actions use their
 own status with the repository/branch, without a save or push label.
+Update session labels name the session's bound branch. This action loads newer
+commits from that same branch; bringing a PR's target branch into its source is
+the separate Update branch action in PR details.
 Ordinary sessions do not repeat this destination above chat;
 PR sessions retain their separate PR context banner.
 The browser retains the reviewed destination across refreshes; the server

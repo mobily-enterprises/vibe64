@@ -44,7 +44,9 @@ export function githubApi(input, { env = process.env, runCommand = runVibe64Comm
       } else if (/403|Resource not accessible|permission/iu.test(output)) {
         message = "GitHub refused this action. Check your repository permissions and try again.";
       } else if (uncertainWriteMessage) {
-        message = uncertainWriteMessage;
+        const reason = value?.message || value?.errors?.[0]?.message;
+        message = typeof reason === "string" && reason.trim()
+          ? `GitHub: ${reason.slice(0, 1000)} ${uncertainWriteMessage}` : uncertainWriteMessage;
       }
       throw vibe64Error(message, failureCode);
     }

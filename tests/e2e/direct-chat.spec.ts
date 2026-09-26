@@ -796,17 +796,15 @@ test.describe("direct chat", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("Save changes", { exact: true })).toBeVisible();
     await expect(dialog.getByText("example-target-app:main", { exact: true })).toBeVisible();
-    await expect(dialog.getByText(/Database data and chat history are separate/iu)).not.toBeVisible();
-    await dialog.getByText("What's included", { exact: true }).focus();
-    await page.keyboard.press("Enter");
-    await expect(dialog.getByText(/Database data and chat history are separate/iu)).toBeVisible();
+    await expect(dialog.getByText("What's included", { exact: true })).toHaveCount(0);
+    await expect(dialog.getByText(/Database data and chat history are separate/iu)).toHaveCount(0);
 
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     expect(messages).toHaveLength(0);
 
     await saveButton.click();
-    await expect(dialog.getByText(/Database data and chat history are separate/iu)).not.toBeVisible();
+    await expect(dialog.getByText("What's included", { exact: true })).toHaveCount(0);
     const confirmButton = dialog.getByRole("button", { name: "Save", exact: true });
     await confirmButton.click();
 
@@ -858,6 +856,13 @@ test.describe("direct chat", () => {
       }
       const publish = review.getByRole("button", { name: scenario.mode === "github"
         ? "Commit & push" : "Save", exact: true });
+      await expect(publish).toHaveClass(scenario.requirePullRequest ? /v-btn--variant-outlined/ : /v-btn--variant-flat/);
+      const createPr = review.getByRole("button", { name: "Create draft PR", exact: true });
+      if (scenario.mode === "github") {
+        await expect(createPr).toHaveClass(scenario.requirePullRequest ? /v-btn--variant-flat/ : /v-btn--variant-outlined/);
+      } else {
+        await expect(createPr).toHaveCount(0);
+      }
       if (scenario.requirePullRequest) {
         await expect(publish).toBeDisabled();
         await review.getByRole("button", { name: "Create draft PR", exact: true }).click();
@@ -872,6 +877,32 @@ test.describe("direct chat", () => {
         await publish.click();
         await expect.poll(() => saves).toEqual([{ destinationReview }]);
       }
+    });
+  }
+
+  for (const width of [390, 1280]) {
+    test(`offers Create PR after GitHub requires a pull request at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      const destination = { sessionId: SESSION_ID, mode: "github", repository: "example/project", branch: "main" };
+      await mockDirectChat(page, { workState: { destination, unsaved: true } });
+      const project = { ...readyProjectSelectionPayload.currentProject, repositoryMode: "github",
+        repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/project" } } };
+      await routeApiEndpoint(page, "/vibe64/projects", route => fulfillJson(route, {
+        ...readyProjectSelectionPayload, currentProject: project, projects: [project]
+      }));
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/save`, route => route.fulfill({
+        status: 400, contentType: "application/json", body: JSON.stringify({ ok: false,
+          code: "vibe64_pull_request_required", error: "GitHub requires a pull request to update main. Your work remains in this session." })
+      }));
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      await page.getByRole("button", { name: "Review selected session changes", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Commit & push", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Save changes", exact: true })).not.toBeVisible();
+      const recovery = page.getByRole("region", { name: "Save work", exact: true }).getByRole("button", { name: "Create draft PR", exact: true });
+      await expect(recovery).toBeVisible();
+      await expect(page.getByText("GitHub requires a pull request to update main. Your work remains in this session.", { exact: true }).first()).toBeVisible();
+      await recovery.click();
+      await expect(page.getByRole("dialog").getByRole("heading", { name: "Create pull request", exact: true })).toBeVisible();
     });
   }
 
