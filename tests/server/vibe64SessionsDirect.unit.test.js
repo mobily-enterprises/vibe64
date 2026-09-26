@@ -3514,3 +3514,30 @@ test("chat mode changes retain the workflow after a foreign Economy answer", asy
   assert.equal(foreignOverride.ok, false);
   assert.match(foreignOverride.error, /workflow orchestrator/);
 });
+
+test("Auto cannot bypass an unfinished goal when native goal observation is unavailable", async () => {
+  const lock = agentWriteLockHarness();
+  const initialRouting = JSON.stringify({ mode: "code", review: false, workflowEngineId: "codex" });
+  const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
+    assistant_routing: initialRouting,
+    assistant_selection: JSON.stringify({ schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
+      modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` })
+  } };
+  const runtime = { async getSession() { return session; }, store: { ...lock.store,
+    async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
+  let observed = { status: "unavailable", goal: null };
+  const service = createService({ project: { async createRuntime() { return runtime; } },
+    terminals: { async readAgentGoal() { return observed; } } });
+  const input = { assistantRouting: { mode: "auto", review: false }, vibe64User: { role: "owner", username: "owner" } };
+  for (const status of ["active", "paused", "blocked", "budgetLimited", "usageLimited"]) {
+    session.metadata.assistant_routing_goal = JSON.stringify({ status, mode: "code" });
+    const denied = await service.updateAssistantSelection(session.sessionId, input);
+    assert.equal(denied.ok, false, status);
+    assert.match(denied.error, /unfinished goal/);
+    assert.equal(session.metadata.assistant_routing, initialRouting);
+  }
+  observed = { status: "available", goal: null };
+  const cleared = await service.updateAssistantSelection(session.sessionId, input);
+  assert.notEqual(cleared.ok, false, JSON.stringify(cleared));
+  assert.equal(JSON.parse(session.metadata.assistant_routing).mode, "auto");
+});

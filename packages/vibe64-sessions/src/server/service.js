@@ -2091,8 +2091,10 @@ function createService({
             if (["plan", "code"].includes(preferences.mode) && preferences.override?.engineId &&
                 preferences.override.engineId !== preferences.workflowEngineId) throw new Error("Plan and Code overrides must use the workflow orchestrator.");
             if (preferences.mode === "auto") {
-              const goal = await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User });
-              if (goal?.goal && !["complete", "completed"].includes(goal.goal.status)) throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
+              const observed = await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User });
+              const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
+              const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
+              if (goal && !["complete", "completed"].includes(goal.status)) throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
             }
             await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
             return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };

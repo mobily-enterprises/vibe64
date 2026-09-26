@@ -337,6 +337,9 @@ selection using its saved workflow, independently of the last native engine.
 Plan and Code resolve as a pair even when review is off. A member's foreign
 shared Backup replaces both roles; same-engine Backup replaces restricted roles.
 Auto requires direct access to Router, Plan and Code and never uses Backup.
+Goals cannot start or resume in Auto, and an unfinished goal blocks switching
+to Auto. When native goal observation is unavailable, that switch still respects
+the saved goal; a confirmed completion or removal releases the restriction.
 Exact model overrides apply only to explicit modes. Toggling review or selecting
 the current mode keeps its custom model/thinking choice; selecting another mode
 clears that override. Mode changes preserve the workflow; a deliberate
