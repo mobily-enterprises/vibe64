@@ -625,6 +625,16 @@ refusal when another subscriber retains old settings.
 Claude acknowledges process-local provider settings and then model
 selection before sending, preserving its native conversation. Partial settings
 acknowledgement stops that process before another prompt is admitted.
+The selected external model supplies the native `[1m]` model id, provider-owned
+auto-compaction window, and explicit main/background/subagent model mappings.
+Returning to Anthropic clears those overrides and the external credential.
+The native terminal receives the same configuration through its private process
+environment; command arguments contain no provider key. Chat and terminal retain
+one writer and the same native conversation. Claude owns reasoning-history
+compatibility and compaction; Vibe64 does not rewrite that native history or
+insert a provider-switch summary. Live Claude → DeepSeek Flash → Claude and
+Claude → GLM 5.3 → Claude checks covered tool use, manual compaction and resume;
+they do not establish every context size or future provider version.
 
 The composer exposes preparation state and the intended recipient; durable
 transcript metadata retains mode and model for each exchange. The current chat

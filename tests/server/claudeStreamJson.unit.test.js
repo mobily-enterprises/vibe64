@@ -6,7 +6,7 @@ import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createClaudeJsonClient, readClaudeJsonFrames } from "../../packages/vibe64-runtime/src/server/claudeStreamJson.js";
-import { claudeCodeArguments, createClaudeCodeProcess } from "../../packages/vibe64-terminals/src/server/claudeCodeProcess.js";
+import { claudeCodeArguments, claudeModelConfiguration, createClaudeCodeProcess } from "../../packages/vibe64-terminals/src/server/claudeCodeProcess.js";
 import { readClaudeHistory } from "../../packages/vibe64-terminals/src/server/claudeConversationHistory.js";
 import { claudeCapabilities, claudePlanUsage, createClaudeSessionAgentProvider, nativeMessageId } from "../../packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js";
 import { sessionRenewalManualHandoverTemplate, sessionRenewalHandoverHash } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
@@ -895,6 +895,7 @@ test("Claude helper choices apply to new tasks without changing an already resol
   f.behavior.afterSend = (native) => native.options.onEvent({ type: "result", subtype: "success", result: "Title", uuid: "title" });
   await f.provider.runDetachedChatTurn(f.context, { prompt: "Write a title", executionProfile: selected });
   assert.equal(f.processes.at(-1).options.model, "sonnet");
+  assert.equal(f.processes.at(-1).requests.at(-1).model, "sonnet");
   assert.equal(f.processes.at(-1).options.toolFree, true);
   f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "unavailable" };
   await assert.rejects(f.provider.resolveExecutionProfile(f.context, { profileId: "helper", workloadId: "commit_title" }), /helper model is unavailable/u);
@@ -1078,6 +1079,11 @@ test("Claude changes provider controls before model and keeps the native convers
   const flags = native.requests.at(-2).settings;
   assert.equal(flags.env.ANTHROPIC_BASE_URL, "https://api.deepseek.com/anthropic");
   assert.equal(flags.env.ANTHROPIC_AUTH_TOKEN, "fixture-deepseek-secret");
+  assert.equal(flags.env.ANTHROPIC_DEFAULT_HAIKU_MODEL, "deepseek-flash");
+  assert.equal(flags.env.ANTHROPIC_DEFAULT_SONNET_MODEL, "deepseek-flash[1m]");
+  assert.equal(flags.env.CLAUDE_CODE_SUBAGENT_MODEL, "deepseek-flash");
+  assert.equal(flags.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, "786432");
+  assert.equal(native.requests.at(-1).model, "deepseek-flash[1m]");
   assert.ok(flags.hooks.PreToolUse.length);
   assert.deepEqual(flags.fallbackModel, []);
   assert.ok(!JSON.stringify(native.options.env).includes("fixture-deepseek-secret"));
@@ -1086,7 +1092,57 @@ test("Claude changes provider controls before model and keeps the native convers
   await f.provider.sendMessage(f.context, { message: "Review it", messageId: "review" });
   assert.equal(native.requests.at(-2).settings.env.ANTHROPIC_AUTH_TOKEN, "");
   assert.equal(native.requests.at(-2).settings.env.ANTHROPIC_BASE_URL, "https://api.anthropic.com");
+  assert.equal(native.requests.at(-2).settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL, "");
+  assert.equal(native.requests.at(-2).settings.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, "");
+  assert.equal(native.requests.at(-2).settings.env.CLAUDE_CODE_SUBAGENT_MODEL, "");
   assert.equal(f.processes.length, 1);
+});
+
+test("Claude model configuration maps background calls and resets external settings", () => {
+  for (const [provider, model, window] of [["deepseek", "deepseek-flash", "786432"], ["zai-coding-plan", "glm-5.3", "1000000"]]) {
+    const configured = claudeModelConfiguration({ modelProviderId: provider, modelId: model }, { apiKey: "test-secret", baseUrl: "https://provider.test" });
+    assert.equal(configured.model, `${model}[1m]`);
+    assert.equal(configured.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, window);
+    for (const name of ["ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL"]) {
+      assert.equal(configured.env[name], `${model}[1m]`);
+    }
+    const native = claudeModelConfiguration({ modelProviderId: "anthropic", modelId: "opus" }, null);
+    for (const name of Object.keys(configured.env)) {
+      if (!["ANTHROPIC_BASE_URL", "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST"].includes(name)) assert.equal(native.env[name], "", name);
+    }
+    assert.equal(native.model, "opus");
+  }
+});
+
+test("Claude-only keys work in the catalogue, access check, chat and native terminal", async (t) => {
+  const f = await fixture(t);
+  t.after(() => f.provider.closeProject());
+  const root = path.join(f.providerOptions.systemRoot, "ai-connections", "codex", "deepseek");
+  await mkdir(path.join(root, "auth", "codex"), { recursive: true });
+  await writeFile(path.join(root, "connection.json"), JSON.stringify({ apiKey: "claude-only-key", codexDisabled: true, claudeReady: true }));
+  await writeFile(path.join(root, "auth", "codex", "status.json"), JSON.stringify({ connected: true, generation: "test" }));
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelProviderId: "deepseek", modelId: "deepseek-flash" };
+  const access = await f.provider.assistantAccess(f.context);
+  assert.equal(access.available, true);
+  assert.equal(access.ownerOnly, false);
+  const catalog = await f.provider.capabilities(f.context, { configuredOnly: true });
+  assert.equal(catalog.modelProviders.find(({ id }) => id === "deepseek").connected, true);
+  await f.provider.sendMessage(f.context, { message: "Hello", messageId: "hello" });
+  const native = f.processes.at(-1);
+  assert.equal(native.requests.at(-1).model, "deepseek-flash[1m]");
+  await native.options.onEvent({ type: "result", subtype: "success", result: "Done" });
+  await f.provider.closeProject();
+  let request;
+  const terminalProvider = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    commandRunner: async input => { request = input; return { ok: true }; }
+  });
+  t.after(() => terminalProvider.closeProject());
+  await terminalProvider.startTerminal(f.context);
+  assert.equal(request.mode, "pty");
+  assert.equal(request.args[request.args.indexOf("--model") + 1], "deepseek-flash[1m]");
+  assert.equal(request.baseEnv.ANTHROPIC_AUTH_TOKEN, "claude-only-key");
+  assert.equal(request.baseEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW, "786432");
+  assert.doesNotMatch(request.args.join(" "), /claude-only-key/u);
 });
 
 test("Claude does not send when a provider-settings acknowledgement fails", async (t) => {

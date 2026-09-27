@@ -138,6 +138,8 @@ const codexProviderInputValidator = deepFreeze({
   schema: createSchema({
     ...vibe64UserInputSchema,
     modelProviderId: { type: "string", enum: CURATED_CODEX_PROVIDERS.map(({ id }) => id), required: true },
+    engineId: { type: "string", enum: ["codex", "claude"], required: false },
+    useSavedKey: { type: "boolean", required: false },
     apiKey: { type: "string", maxLength: 16384, required: false }
   }), mode: "patch"
 });

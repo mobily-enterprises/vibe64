@@ -666,10 +666,10 @@ message or stopping the main assistant.
 
 Standalone Vibe64 and hosted Vibe64 use the same AI Accounts screen and provider
 configuration. Account settings offers Codex with GPT, DeepSeek and GLM, Claude
-Code, and OpenCode's provider catalogue. OpenCode Big Pickle is included without
+Code with Claude, DeepSeek and GLM Coding Plan, and OpenCode's provider catalogue. OpenCode Big Pickle is included without
 sign-in. Connection titles name their orchestrator first, including both Codex
 and Claude Code when an external key is verified for both. The Add GLM shortcut
-is hidden when GLM is already connected through either Codex or OpenCode.
+is hidden when GLM is already connected through Codex, Claude Code or OpenCode.
 Provider credentials and shared model-routing assignments belong to the
 editor's account storage, outside the project. Native Codex and Claude credentials keep
 using the host's existing account context, including in a nested development
@@ -1156,7 +1156,17 @@ verified, work stays stopped with a recoverable explanation.
 Claude Code uses the same chat, model selector, Send, Steer, Stop and native
 terminal surfaces. The owner signs in to their Claude subscription through a
 guided browser-and-code flow in AI Accounts. The official CLI owns credentials,
-and Vibe64 confirms the connected account automatically. Native Claude goals
+and Vibe64 confirms the connected account automatically. Its setup also offers
+DeepSeek API and GLM Coding Plan keys, using the same connection form as Codex.
+An existing external key can be checked for either orchestrator without entering
+it again. Each orchestrator is enabled only after its own verification succeeds;
+Claude can connect even when Codex verification fails. Disconnecting the shared
+key stops its use in both orchestrators.
+Senior and Junior can use Claude and an external model within one native Claude
+Code conversation. Provider switches retain native history, tool results and
+compaction. Background calls stay with the selected provider, and returning to
+Claude restores native model and context settings. The native terminal uses the
+same selected provider as chat. Native Claude goals
 appear in the chat toolbar: Pause stops the current turn and preserves the goal,
 Resume continues it, and Cancel clears it. Claude goals have no token-budget
 field. Tool-free helpers use the workflow's independent Helper role. New tasks

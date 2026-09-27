@@ -137,3 +137,51 @@ test("curated provider settings keep credential runtimes separate and cannot ret
     assert.equal(codexAppServerThreadIdForSession(session, "/different-workspace"), "");
   }
 });
+
+test("Claude-only verification saves a usable Claude connection without advertising Codex", async (t) => {
+  const f = await fixture(t);
+  const calls = [];
+  const store = createCodexProviderConnectionStore({ systemRoot: f.root, fetchImpl: async (url) => {
+    calls.push(url);
+    return url.endsWith("/messages")
+      ? Response.json({ id: "message", type: "message", content: [{ type: "text", text: "OK" }] })
+      : new Response("unsupported", { status: 404 });
+  } });
+  const [connection] = await store.change("deepseek", { engineId: "claude", apiKey: "claude-only-secret" });
+  assert.equal(calls[0], "https://api.deepseek.com/anthropic/v1/messages");
+  assert.equal(connection.connected, false);
+  assert.equal(connection.claudeReady, true);
+  assert.equal(connection.status, "connected");
+  assert.match(connection.connectionIdentity, /^curated:/u);
+  assert.equal((await store.claudeProviderSettings("deepseek")).apiKey, "claude-only-secret");
+  await assert.rejects(store.runtimeOptions("deepseek"), /Check the saved/u);
+  await assert.rejects(readFile(path.join(codexProviderPaths(f.root, "deepseek").codexHome, "config.toml")), { code: "ENOENT" });
+  assert.doesNotMatch(JSON.stringify(connection), /claude-only-secret/u);
+});
+
+test("a saved key can be checked for Claude without being re-entered; rejected checks preserve prior credentials", async (t) => {
+  const f = await fixture(t);
+  await f.store.change("deepseek", { apiKey: "original" });
+  const [checked] = await f.store.change("deepseek", { engineId: "claude", useSavedKey: true });
+  assert.equal(checked.claudeReady, true);
+  assert.equal(f.requests[2].url, "https://api.deepseek.com/anthropic/v1/messages");
+  assert.equal(f.requests[2].input.headers.Authorization, "Bearer original");
+  const before = await readFile(codexProviderPaths(f.root, "deepseek").connectionPath, "utf8");
+  f.reject();
+  await assert.rejects(f.store.change("deepseek", { engineId: "claude", apiKey: "replacement" }), /rejected this key/u);
+  assert.equal(await readFile(codexProviderPaths(f.root, "deepseek").connectionPath, "utf8"), before);
+});
+
+test("optional Claude failure leaves Codex available and cannot return provider error text", async (t) => {
+  const f = await fixture(t);
+  const store = createCodexProviderConnectionStore({ systemRoot: f.root, fetchImpl: async (url) =>
+    url.endsWith("/messages") ? new Response("secret request details", { status: 503 })
+      : Response.json({ id: "response", output: [], status: "completed" })
+  });
+  const [connection] = await store.change("deepseek", { apiKey: "codex-secret" });
+  assert.equal(connection.connected, true);
+  assert.equal(connection.claudeReady, false);
+  await assert.rejects(store.change("deepseek", { engineId: "claude", useSavedKey: true }), error =>
+    /HTTP 503/u.test(error.message) && !error.message.includes("secret request details"));
+  assert.equal((await store.list())[0].connected, true);
+});

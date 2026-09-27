@@ -7,9 +7,10 @@ import nativeConversationLifecycle from "./stateUpgrades/20260925-native-convers
 import assistantRoleNames from "./stateUpgrades/20260926-assistant-role-names.js";
 
 import assistantHelper from "./stateUpgrades/20260927-assistant-helper.js";
+import nativeProviderReadiness from "./stateUpgrades/20260927-native-provider-readiness.js";
 
 // Published entries are immutable. Append new upgrades in order; never remove one.
-const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper];
+const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness];
 
 async function readLedger(ledgerPath) {
   let source;

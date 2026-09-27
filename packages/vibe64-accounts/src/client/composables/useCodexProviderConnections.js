@@ -11,8 +11,8 @@ function useCodexProviderConnections({ enabled = true } = {}) {
     queryKey: ["vibe64", "codex-providers"],
     realtime: { event: VIBE64_ACCOUNTS_CHANGED_EVENT },
     queryOptions: { refetchOnMount: "always", retry: false },
-    fallbackLoadError: "Codex provider connections could not be loaded.",
-    requestRecoveryLabel: "Codex providers"
+    fallbackLoadError: "Provider connections could not be loaded.",
+    requestRecoveryLabel: "AI providers"
   });
   const busy = ref(false);
   const command = useCommand({
@@ -24,13 +24,13 @@ function useCodexProviderConnections({ enabled = true } = {}) {
     }),
     buildRawPayload: (_model, { context }) => ({
       modelProviderId: context.modelProviderId,
-      ...(!context.remove ? { apiKey: context.apiKey } : {})
+      ...(!context.remove ? { apiKey: context.apiKey, engineId: context.engineId, useSavedKey: context.useSavedKey } : {})
     }),
     onRunSuccess(response) {
       if (response?.ok !== true) throw new Error(response?.error || "The connection could not be updated.");
     },
-    fallbackRunError: "The Codex connection could not be updated.",
-    messages: { success: "Codex connection updated.", error: "The Codex connection could not be updated." },
+    fallbackRunError: "The AI connection could not be updated.",
+    messages: { success: "AI connection updated.", error: "The AI connection could not be updated." },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.accounts.codex-providers",
     surfaceId: "app",

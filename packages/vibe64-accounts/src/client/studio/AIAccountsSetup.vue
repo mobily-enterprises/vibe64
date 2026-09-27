@@ -1,7 +1,7 @@
 <template>
-  <CodexProviderConnections v-if="providerId === 'codex'" v-model="codexProviderId" :actions-enabled="actionsEnabled" />
+  <NativeProviderConnections v-if="['codex', 'claude'].includes(providerId)" :engine-id="providerId" v-model="modelProviderId" :actions-enabled="actionsEnabled" />
   <ProviderAccountsSetup
-    v-if="providerId !== 'codex' || codexProviderId === 'openai'"
+    v-if="['openai', 'anthropic'].includes(modelProviderId)"
     :accounts="accounts"
     :actions-disabled-message="actionsDisabledMessage"
     :actions-enabled="actionsEnabled"
@@ -20,8 +20,8 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
-import CodexProviderConnections from "./CodexProviderConnections.vue";
+import { computed, ref, watch } from "vue";
+import NativeProviderConnections from "./NativeProviderConnections.vue";
 import ProviderAccountsSetup from "./ProviderAccountsSetup.vue";
 import { useVibe64Accounts } from "../composables/useVibe64Accounts.js";
 
@@ -69,7 +69,8 @@ const props = defineProps({
   }
 });
 
-const codexProviderId = ref("openai");
+const modelProviderId = ref("");
+watch(() => props.providerId, (id) => { modelProviderId.value = id === "claude" ? "anthropic" : "openai"; }, { immediate: true });
 const emit = defineEmits(["back", "continue"]);
 const accounts = useVibe64Accounts({
   client: props.accountsClient

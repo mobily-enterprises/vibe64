@@ -288,3 +288,12 @@ Focused evidence: `assistantHelperUpgrade.unit.test.js` and `stateUpgrades.unit.
 Senior, Junior and Auto records and pending requests are unchanged, so this
 addition requires no historical transformation or numbered upgrade. Custom
 requests use the current request schema and the existing native context handoff.
+
+## Independent native provider verification
+
+`20260927-native-provider-readiness` records the release boundary for Claude-only
+external connections. Existing saved keys already passed Codex verification and
+retain their exact bytes and Claude readiness. New writes may set the optional
+`codexDisabled` flag when the selected Claude check succeeds and the independent
+Codex check fails. Absence means Codex is enabled. The script performs no
+conversion, provider call or backup; ordinary reads never rewrite credentials.

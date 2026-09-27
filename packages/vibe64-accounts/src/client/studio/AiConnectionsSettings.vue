@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useDisplay } from "vuetify";
-import CodexProviderConnections from "./CodexProviderConnections.vue";
+import NativeProviderConnections from "./NativeProviderConnections.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
 import ProviderAccountsSetup from "./ProviderAccountsSetup.vue";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
@@ -95,7 +95,7 @@ let zenProgressTimer = null;
 
 const nativeAccounts = useVibe64Accounts();
 const codexProviders = useCodexProviderConnections({ enabled: computed(() => props.isOwner) });
-const codexModelProviderId = ref("openai");
+const nativeModelProviderId = ref("openai");
 const codexProviderSaving = ref(false);
 
 const {
@@ -167,8 +167,8 @@ const nativeSetupDetails = computed(() => nativeSetupProviderId.value === "claud
 const nativeChoices = computed(() => [
   { id: "codex", label: "Codex", connected: codexConnected.value, description: "GPT, DeepSeek or GLM. Connect your account or API key." },
   { id: "codex-glm", label: "GLM Coding Plan", description: "Use your Z.AI Coding Plan with Codex. Connect your plan key to use GLM 5.3." },
-  { id: "claude", label: "Claude Code", connected: claudeConnected.value, description: "Sign in through Claude Code to use your own Claude plan. Available to the account owner." }
-].filter((choice) => choice.id === "codex" || !choice.connected));
+  { id: "claude", label: "Claude Code", connected: claudeConnected.value, description: "Claude, DeepSeek or GLM. Connect your account or API key." }
+]);
 const nativeSetupRows = computed(() => [{
   ...(nativeSetupAccount.value || { connected: false, id: nativeSetupProviderId.value, status: "missing" }),
   ...nativeSetupDetails.value,
@@ -203,12 +203,14 @@ const configuredAiRows = computed(() => [
     const provider = curatedCodexProvider(connection.id);
     return {
       ...connection,
+      connected: connection.connected || connection.claudeReady,
       kind: "codex-provider",
-      engineLabel: connection.claudeReady ? "Codex / Claude Code" : "Codex",
+      engineLabel: [connection.connected ? "Codex" : "", connection.claudeReady ? "Claude Code" : ""].filter(Boolean).join(" / "),
+      connectedEngines: [...(connection.connected ? ["codex"] : []), ...(connection.claudeReady ? ["claude"] : [])],
       providerLabel: provider.label,
       billingLabel: provider.description,
       accessLabel: provider.ownerOnly ? "Personal use" : "Workspace use",
-      keyHint: connection.connected ? "Connected" : "Reconnect required",
+      keyHint: connection.connected || connection.claudeReady ? "Connected" : "Reconnect required",
       modelLabel: provider.models.map(({ label }) => label).join(" · ")
     };
   }),
@@ -232,7 +234,7 @@ const glmConnected = computed(() => (
   connections.value.some((connection) => (
     (connection.id === "zai" || connection.id === "zai-coding-plan") && connection.connected === true
   )) || codexProviders.connections.value.some((connection) => (
-    connection.id === "zai-coding-plan" && connection.connected === true
+    connection.id === "zai-coding-plan" && (connection.connected || connection.claudeReady)
   ))
 ));
 const aiStatusLoaded = computed(() => Boolean(
@@ -425,8 +427,9 @@ async function openProviderPicker() {
 }
 
 function chooseAiType(type = "") {
+  if (type === "claude") nativeModelProviderId.value = "anthropic";
   if (type === "codex" || type === "codex-glm") {
-    codexModelProviderId.value = type === "codex-glm" ? "zai-coding-plan" : "openai";
+    nativeModelProviderId.value = type === "codex-glm" ? "zai-coding-plan" : "openai";
   }
   if (["codex", "codex-glm", "claude"].includes(type)) {
     nativeSetupProviderId.value = type === "codex-glm" ? "codex" : type;
@@ -706,9 +709,9 @@ async function confirmRemove() {
 }
 
 function manageConfiguredAi(account = {}) {
-  codexModelProviderId.value = account.kind === "codex-provider" ? account.id : "openai";
+  nativeModelProviderId.value = account.kind === "codex-provider" ? account.id : account.kind === "claude" ? "anthropic" : "openai";
   if (["codex", "claude", "codex-provider"].includes(account.kind)) {
-    nativeSetupProviderId.value = account.kind === "codex-provider" ? "codex" : account.kind;
+    nativeSetupProviderId.value = account.kind === "codex-provider" ? account.connectedEngines?.[0] || "codex" : account.kind;
     nativeSetupActivator.value = document.activeElement;
     nativeSetupOpen.value = true;
     return;
@@ -1262,9 +1265,10 @@ defineExpose({ openProvider });
       <v-card :rounded="smAndDown ? 0 : 'xl'">
         <v-card-text class="vibe64-codex-setup__body">
           <ModelRoutingForm v-if="nativeRoutingReady" :engine-id="nativeSetupProviderId" :connection-id="nativeSetupProviderId === 'codex' ? 'openai' : 'anthropic'" :connection-engines="[nativeSetupProviderId]" :connection-label="nativeSetupProviderId === 'codex' ? 'Codex login' : 'Claude login'" :setup-error="nativeRoutingSetupError" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
-          <CodexProviderConnections
-            v-else-if="nativeSetupProviderId === 'codex'"
-            v-model="codexModelProviderId"
+          <NativeProviderConnections
+            v-else
+            v-model="nativeModelProviderId"
+            :engine-id="nativeSetupProviderId"
             :actions-enabled="isOwner"
             show-close
             @busy="codexProviderSaving = $event"
@@ -1272,7 +1276,7 @@ defineExpose({ openProvider });
             @changed="codexProviders.resource.reload(); emit('changed')"
           />
           <ProviderAccountsSetup
-            v-if="!nativeRoutingReady && (nativeSetupProviderId !== 'codex' || codexModelProviderId === 'openai')"
+            v-if="!nativeRoutingReady && ['openai', 'anthropic'].includes(nativeModelProviderId)"
             :accounts="nativeAccounts"
             :actions-enabled="isOwner"
             actions-disabled-message="Only the Vibe64 owner can manage this connection."

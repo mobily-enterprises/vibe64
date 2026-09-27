@@ -29,7 +29,7 @@ and see whether the Studio host is ready to support them.
 
 - `packages/vibe64-core/src/shared/curatedCodexProviders.js`
 - `packages/vibe64-core/src/server/codexProviderConnections.js`
-- `packages/vibe64-accounts/src/client/studio/CodexProviderConnections.vue`
+- `packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue`
 - `packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js`
 - `src/components/studio/Vibe64AuthSettingsButton.vue`
 
@@ -190,7 +190,10 @@ proposals into the normal form; Keep current routing closes without saving.
 Adding a lower-priority provider does not replace a better choice.
 
 Curated external keys are checked separately against Responses for Codex and
-Messages for Claude Code. Claude readiness requires its successful protocol
+Messages for Claude Code. Setup requires the selected orchestrator's check to
+succeed, then checks the other independently. Failure of that optional check
+does not prevent connecting the selected orchestrator. Check saved key verifies
+the server-held credential without returning it to the browser. Claude readiness requires its successful protocol
 check; a failed Claude check leaves a working Codex connection usable. Older
 keys must be checked again before they become Claude-ready. Only readiness and
 redacted connection metadata reach the client. Provider URLs remain curated.
@@ -206,7 +209,8 @@ classification. Unknown or removed credentials have no usable identity.
 Standalone and hosted editors compose the same AI Accounts screen, catalogue
 validation, provider policy, connection store and runtime wiring. The local
 Account settings dialog has You, AI Accounts and GitHub tabs. AI Accounts offers
-Codex, Claude Code and OpenCode, including GPT, DeepSeek and GLM through Codex
+Codex, Claude Code and OpenCode, including GPT, DeepSeek and GLM through Codex,
+and Claude, DeepSeek and GLM Coding Plan through Claude Code,
 and the current OpenCode provider catalogue. An AI connection request opens the
 requested provider's setup. Hosts choose the API endpoint, credential context
 and account-management authorization; they do not duplicate these forms or
@@ -216,9 +220,10 @@ routing. Connecting GLM or a Zen key does not promise to replace saved defaults;
 recommendations and their application belong to the shared routing flow.
 Every configured connection title starts with its orchestrator. Included Big
 Pickle and OpenCode GLM retain the OpenCode prefix; curated keys list Codex and
-Claude Code together only when `claudeReady` confirms both. The regular Z.AI
+Claude Code together only when both protocol checks succeeded. A Claude-only
+connection names Claude Code and remains absent from Codex's usable catalogue. The regular Z.AI
 recommendation is hidden for a connected regular API or Coding Plan key in
-OpenCode, or a connected Codex Coding Plan key.
+OpenCode, or a Coding Plan key verified for Codex or Claude Code.
 
 OpenCode connections retain the existing versioned file at
 `<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login
@@ -251,8 +256,12 @@ The browser submits only a provider id and key. Connections use the provider's
 name automatically, and the browser cannot set an endpoint. The existing host Codex-management policy authorizes reads and
 mutations, and lists never return keys.
 
-A bounded Responses request checks a new key before changing a working
-connection. Replacement or removal marks that provider unavailable, drains only
+A bounded request to the selected orchestrator's protocol checks a new key before changing a working
+connection. The optional `codexDisabled` field records an unsuccessful Codex
+check; absence means Codex remains enabled, as it was for every previously
+saved key. `claudeReady` retains its independent opt-in meaning. The numbered
+native-provider-readiness release boundary needs no historical conversion or
+provider calls. Replacement or removal marks that provider unavailable, drains only
 its owned runtimes, and updates its private native configuration and auth
 generation. Failure to prove process exit leaves the transition unavailable for
 retry. Each curated provider has a separate home under the installation's

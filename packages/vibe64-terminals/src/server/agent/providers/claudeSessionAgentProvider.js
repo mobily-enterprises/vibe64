@@ -21,7 +21,7 @@ import {
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { resolveVibe64SystemRoot } from "@local/vibe64-core/server/studioRoots";
 import { STUDIO_MANAGED_CLAUDE_COMMAND } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeFlagSettings, createClaudeCodeProcess } from "../../claudeCodeProcess.js";
+import { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeFlagSettings, claudeModelConfiguration, createClaudeCodeProcess } from "../../claudeCodeProcess.js";
 import { claudeHistoryPath, claudeMessageBlocks, readClaudeHistory, requireClaudeSessionId, retireClaudeConversationHistory, listClaudeConversationStorage } from "../../claudeConversationHistory.js";
 import { prepareAgentSessionCommandEnvironment } from "../../agentCommandEnvironment.js";
 import { recordSessionGitCommandActor } from "../../sessionGitCommandActor.js";
@@ -66,7 +66,7 @@ function claudeCapabilities(initialization, connected, connections = []) {
   }));
   const external = CURATED_CODEX_PROVIDERS.map((provider) => ({
     id: provider.id, label: provider.label, description: provider.description,
-    connected: connections.some((item) => item.id === provider.id && item.connected && item.claudeReady),
+    connected: connections.some((item) => item.id === provider.id && item.claudeReady),
     models: provider.models.map((model) => ({ id: model.id, label: model.label, status: "available",
       variants: model.variants.map((id) => ({ id, label: id })), capabilities: { images: model.images === true } }))
   }));
@@ -76,7 +76,7 @@ function claudeCapabilities(initialization, connected, connections = []) {
   return {
     engineId: ENGINE, transportId: TRANSPORT, label: "Claude Code",
     agents: [{ id: ENGINE, label: "Claude Code", mode: "primary", description: "Anthropic's native coding agent" }],
-    authentication: { management: "account-owner", modes: ["oauth"] },
+    authentication: { management: "account-owner", modes: ["oauth", "api-key"] },
     defaults: { agentId: ENGINE, modelId: selected?.id || "", modelProviderId: defaultProvider?.id || "anthropic",
       variantId: selected?.variants.some((variant) => variant.id === "high") ? "high" : "" },
     health: { status: available ? "ready" : "unavailable", message: available ? "" : "Connect Claude Code to use your Claude plan." },
@@ -496,12 +496,9 @@ function createClaudeSessionAgentProvider({
     const selection = entry.context.selection;
     const profile = input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
     const external = await providerConnections.claudeProviderSettings(selection.modelProviderId);
-    const providerEnv = {
-      ANTHROPIC_BASE_URL: external?.baseUrl || "https://api.anthropic.com",
-      ANTHROPIC_AUTH_TOKEN: external?.apiKey || "", ANTHROPIC_API_KEY: "", CLAUDE_CODE_OAUTH_TOKEN: ""
-    };
+    const configuration = claudeModelConfiguration({ ...selection, modelId: profile?.model || selection.modelId }, external);
     const flagSettings = claudeFlagSettings({ toolFree: Boolean(profile || entry.context.assistantScope),
-      effort: profile ? profile.thinking : selection.variantId, providerEnv });
+      effort: profile ? profile.thinking : selection.variantId, providerEnv: configuration.env });
     const identity = JSON.stringify([selection, profile, input.outputSchema, entry.accountIdentity]);
     if (entry.process && !entry.stopping && entry.identity === identity) return entry.process;
     if (entry.process && !entry.stopping && entry.turn?.active) throw error("Stop the current Claude turn before changing its settings.");
@@ -511,7 +508,7 @@ function createClaudeSessionAgentProvider({
           entry.outputSchemaIdentity === JSON.stringify(input.outputSchema)) {
         try {
           await entry.process.client.request({ subtype: "apply_flag_settings", settings: flagSettings });
-          await entry.process.client.request({ subtype: "set_model", model: selection.modelId });
+          await entry.process.client.request({ subtype: "set_model", model: configuration.model });
           entry.identity = identity;
           return entry.process;
         } catch (failure) {
@@ -537,7 +534,7 @@ function createClaudeSessionAgentProvider({
         env: { ...env, ...prepared.env, ...guidanceEnvironment },
         shimDirs: !profile && !ctx.assistantScope ? withGenesisCommandShim(prepared.shimDirs) : prepared.shimDirs,
         workdir: entry.nativeWorkdir,
-        sessionId: entry.id, resume: entry.sent, model: external ? "" : profile?.model || selection.modelId,
+        sessionId: entry.id, resume: entry.sent, model: external ? "" : configuration.model,
         effort: profile ? profile.thinking : selection.variantId,
         toolFree: Boolean(profile || ctx.assistantScope), outputSchema: input.outputSchema,
         systemPrompt: ctx.assistantScope?.stableContext,
@@ -555,7 +552,7 @@ function createClaudeSessionAgentProvider({
       });
       try {
         await entry.process.client.request({ subtype: "apply_flag_settings", settings: flagSettings });
-        await entry.process.client.request({ subtype: "set_model", model: profile?.model || selection.modelId });
+        await entry.process.client.request({ subtype: "set_model", model: configuration.model });
       } catch (failure) {
         await stopEntry(entry, failure.message);
         throw failure;
@@ -789,7 +786,7 @@ function createClaudeSessionAgentProvider({
       const external = curatedCodexProvider(context.assistantSelection?.modelProviderId);
       if (external) {
         const connection = (await providerConnections.list()).find(({ id }) => id === external.id);
-        return { available: connection?.connected === true && connection?.claudeReady === true,
+        return { available: connection?.claudeReady === true,
           connectionIdentity: connection?.connectionIdentity || "", endpointCode: external.id,
           ownerOnly: external.ownerOnly };
       }
@@ -1094,9 +1091,6 @@ function createClaudeSessionAgentProvider({
       return { ok: true, results, failed: [], sessionCount: results.length };
     },
     async startTerminal(context, input = {}) {
-      if (curatedCodexProvider(context.assistantSelection?.modelProviderId)) {
-        throw error("Use chat for Claude Code with this external model. Its interactive terminal does not support this connection yet.");
-      }
       const entry = await entryFor(context);
       if (entry.turn?.active) throw error("Stop the current turn before opening the Claude Code terminal.");
       if (closing || closingSessions.has(entry.context.key) || sessionIsClosing(entry.context.session)) throw error("This session is closing.");
@@ -1113,10 +1107,12 @@ function createClaudeSessionAgentProvider({
       const history = await readClaudeHistory({ configRoot, workdir: ctx.workdir, conversationId: entry.id });
       entry.sent ||= history.exists;
       const guidanceEnvironment = await sessionGuidanceEnvironment(entry);
+      const external = await providerConnections.claudeProviderSettings(ctx.selection.modelProviderId);
+      const configuration = claudeModelConfiguration(ctx.selection, external);
       return commandRunner({ actor: "app", command,
         args: claudeCodeArguments({ terminal: true, sessionId: entry.id, resume: entry.sent,
-          model: ctx.selection.modelId, effort: ctx.selection.variantId }),
-        baseEnv: { ...env, ...prepared.env, ...guidanceEnvironment, DISABLE_AUTOUPDATER: "1" }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,
+          model: configuration.model, effort: ctx.selection.variantId }),
+        baseEnv: { ...env, ...prepared.env, ...guidanceEnvironment, ...configuration.env, DISABLE_AUTOUPDATER: "1" }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,
         allowedRoots: [ctx.workdir], envPolicy: "auth", purpose: "assistant", mode: "pty",
         shimDirs: withGenesisCommandShim(prepared.shimDirs), runtimes: ["operator-clis", "node26"], session: ctx.session,
         terminal: { namespace: claudeTerminalNamespace(ctx.sessionId), maxRunning: 1, reuseRunning: true,

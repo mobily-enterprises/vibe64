@@ -94,17 +94,27 @@ async function verifyCodexProviderKey(provider, apiKey, fetchImpl = fetch) {
 }
 
 async function verifyClaudeProviderKey(provider, apiKey, fetchImpl) {
+  let response;
   try {
-    const response = await fetchImpl(`${provider.claudeBaseUrl}/v1/messages`, {
+    response = await fetchImpl(`${provider.claudeBaseUrl}/v1/messages`, {
       method: "POST", redirect: "error", signal: AbortSignal.timeout(30_000),
       headers: { Authorization: `Bearer ${apiKey}`, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
       body: JSON.stringify({ model: provider.models[0].id, max_tokens: 64,
         messages: [{ role: "user", content: "Reply with OK." }] })
     });
-    if (!response.ok) { await response.body?.cancel?.(); return false; }
-    const result = await response.json().catch(() => null);
-    return Boolean(result?.id && result.type === "message" && !result.error && Array.isArray(result.content));
-  } catch { return false; }
+  } catch {
+    throw new Error(`${provider.label} could not be reached through Claude Code. Your previous connection is unchanged; try again.`);
+  }
+  if (!response.ok) {
+    await response.body?.cancel?.();
+    throw new Error(response.status === 401 || response.status === 403
+      ? `${provider.label} rejected this key. Check the key and the required account plan.`
+      : `${provider.label} could not complete a Claude Code test request (HTTP ${response.status}). Check your plan or API credit.`);
+  }
+  const result = await response.json().catch(() => null);
+  if (!result?.id || result.type !== "message" || result.error || !Array.isArray(result.content)) {
+    throw new Error(`${provider.label} did not return a usable Messages API result. The key was not saved.`);
+  }
 }
 
 function createCodexProviderConnectionStore({
@@ -132,7 +142,7 @@ function createCodexProviderConnectionStore({
       return {
         id: provider.id,
         label: provider.label,
-        connected: Boolean(saved && !status),
+        connected: Boolean(saved && !saved.codexDisabled && !status),
         claudeReady: Boolean(saved?.claudeReady && !status),
         connectionIdentity: marker?.connected === true && typeof marker.generation === "string"
           ? `curated:${provider.id}:${marker.generation}` : "",
@@ -144,6 +154,7 @@ function createCodexProviderConnectionStore({
     const provider = curatedCodexProvider(providerId);
     const connection = await read(providerId);
     if (!connection) throw new Error(`Connect Codex - ${provider.label} in AI Accounts first.`);
+    if (connection.codexDisabled) throw new Error(`Check the saved ${provider.label} key for Codex in AI Accounts first.`);
     const paths = codexProviderPaths(systemRoot, providerId);
     const status = await readCodexAuthStatus(paths.systemRoot);
     if (status) throw new Error(`Reconnect Codex - ${provider.label} in AI Accounts before continuing.`);
@@ -174,9 +185,11 @@ function createCodexProviderConnectionStore({
   async function claudeProviderSettings(providerId) {
     const provider = curatedCodexProvider(providerId);
     if (!provider) return null;
-    await runtimeOptions(providerId);
     const connection = await read(providerId);
     if (!connection) throw new Error(`Reconnect ${provider.label} before continuing.`);
+    if (await readCodexAuthStatus(codexProviderPaths(systemRoot, providerId).systemRoot)) {
+      throw new Error(`Reconnect ${provider.label} in AI Accounts before continuing.`);
+    }
     if (!connection.claudeReady) throw new Error(`Check and reconnect ${provider.label} in AI Accounts to verify its Claude Code connection.`);
     return { providerId, apiKey: connection.apiKey,
       baseUrl: provider.claudeBaseUrl };
@@ -188,15 +201,26 @@ function createCodexProviderConnectionStore({
     const operation = previous.catch(() => null).then(async () => {
       const previousConnection = await read(providerId);
       const removing = input.remove === true;
-      const key = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
-      let claudeReady = false;
+      const engineId = input.engineId || "codex";
+      if (!["codex", "claude"].includes(engineId)) throw new Error("Choose Codex or Claude Code.");
+      const key = input.useSavedKey === true ? previousConnection?.apiKey || ""
+        : typeof input.apiKey === "string" ? input.apiKey.trim() : "";
+      const ready = { codex: false, claude: false };
       if (!removing) {
         if (!key || key.length > 16384 || /\s/u.test(key) ||
             [...key].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
           throw new Error("Enter a valid provider API key.");
         }
-        await verifyCodexProviderKey(provider, key, fetchImpl);
-        claudeReady = await verifyClaudeProviderKey(provider, key, fetchImpl);
+        const checks = { codex: verifyCodexProviderKey, claude: verifyClaudeProviderKey };
+        await checks[engineId](provider, key, fetchImpl);
+        ready[engineId] = true;
+        const other = engineId === "claude" ? "codex" : "claude";
+        try {
+          await checks[other](provider, key, fetchImpl);
+          ready[other] = true;
+        } catch {
+          // An optional check cannot block the verified orchestrator.
+        }
       }
       await markCodexAuthReconnecting(paths.systemRoot, { reason: "provider-key-change" });
       const stopped = await invalidateRuntimes({
@@ -220,24 +244,28 @@ function createCodexProviderConnectionStore({
         await rm(paths.connectionPath, { force: true });
         await rm(path.join(paths.codexHome, "config.toml"), { force: true });
       } else {
-        const config = [
-          `model = ${JSON.stringify(provider.models[0].id)}`,
-          `model_provider = ${JSON.stringify(provider.id)}`,
-          `model_catalog_json = ${JSON.stringify(path.join(paths.codexHome, "models.json"))}`,
-          `model_reasoning_effort = ${JSON.stringify(provider.models[0].defaultThinking)}`,
-          'model_reasoning_summary = "none"',
-          `web_search = "${provider.webSearch ? "live" : "disabled"}"`,
-          `[model_providers.${provider.id}]`,
-          `name = ${JSON.stringify(provider.label)}`,
-          `base_url = ${JSON.stringify(provider.baseUrl)}`,
-          'wire_api = "responses"',
-          'requires_openai_auth = false',
-          `experimental_bearer_token = ${JSON.stringify(key)}`,
-          ""
-        ].join("\n");
-        await privateFile(path.join(paths.codexHome, "models.json"), JSON.stringify(codexProviderModelCatalog(provider)));
-        await privateFile(path.join(paths.codexHome, "config.toml"), config);
-        await privateFile(paths.connectionPath, JSON.stringify({ apiKey: key, claudeReady }));
+        if (ready.codex) {
+          const config = [
+            `model = ${JSON.stringify(provider.models[0].id)}`,
+            `model_provider = ${JSON.stringify(provider.id)}`,
+            `model_catalog_json = ${JSON.stringify(path.join(paths.codexHome, "models.json"))}`,
+            `model_reasoning_effort = ${JSON.stringify(provider.models[0].defaultThinking)}`,
+            'model_reasoning_summary = "none"',
+            `web_search = "${provider.webSearch ? "live" : "disabled"}"`,
+            `[model_providers.${provider.id}]`,
+            `name = ${JSON.stringify(provider.label)}`,
+            `base_url = ${JSON.stringify(provider.baseUrl)}`,
+            'wire_api = "responses"',
+            'requires_openai_auth = false',
+            `experimental_bearer_token = ${JSON.stringify(key)}`,
+            ""
+          ].join("\n");
+          await privateFile(path.join(paths.codexHome, "models.json"), JSON.stringify(codexProviderModelCatalog(provider)));
+          await privateFile(path.join(paths.codexHome, "config.toml"), config);
+        } else {
+          await rm(path.join(paths.codexHome, "config.toml"), { force: true });
+        }
+        await privateFile(paths.connectionPath, JSON.stringify({ apiKey: key, codexDisabled: !ready.codex, claudeReady: ready.claude }));
       }
       await privateFile(codexAuthMarkerPath(paths.systemRoot), JSON.stringify({
         connected: !removing,

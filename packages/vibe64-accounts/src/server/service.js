@@ -2492,7 +2492,8 @@ function createService({
         if (failure) return failure;
         const providers = await codexProviders.change(input.modelProviderId, input);
         const connected = providers.find((provider) => provider.id === input.modelProviderId);
-        const routing = await initializeModelRouting({ engineIds: ["codex", ...(connected?.claudeReady ? ["claude"] : [])], vibe64User: input.vibe64User });
+        const engineIds = [...(connected?.connected ? ["codex"] : []), ...(connected?.claudeReady ? ["claude"] : [])];
+        const routing = await initializeModelRouting({ engineIds, vibe64User: input.vibe64User });
         await publishAccountChanged("codex", { reason: "provider-key-saved" });
         return { ok: true, providers, routing };
       });

@@ -7,9 +7,34 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { runVibe64Command, shellQuote, stopVibe64Execution } from "@local/vibe64-execution/server";
 import { createClaudeJsonClient } from "@local/vibe64-runtime/server/claudeStreamJson";
+import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 
 const CLAUDE_CODE_VERSION = "2.1.283";
 const bridgePath = fileURLToPath(new URL("./claudeStdioBridge.js", import.meta.url));
+
+function claudeModelConfiguration(selection, connection) {
+  const provider = curatedCodexProvider(selection.modelProviderId);
+  const definition = provider?.models.find(({ id }) => id === selection.modelId);
+  if (provider && (!definition || !connection?.apiKey)) throw new Error("Choose a connected Claude Code model.");
+  const model = definition?.contextWindow >= 1000000 ? `${definition.id}[1m]` : selection.modelId;
+  const externalModel = provider ? model : "";
+  // Reset every provider override when returning to the native subscription.
+  // Background calls and subagents must stay on the selected provider too.
+  const env = {
+    ANTHROPIC_BASE_URL: connection?.baseUrl || "https://api.anthropic.com",
+    ANTHROPIC_AUTH_TOKEN: connection?.apiKey || "", ANTHROPIC_API_KEY: "", CLAUDE_CODE_OAUTH_TOKEN: "",
+    ANTHROPIC_MODEL: externalModel, ANTHROPIC_DEFAULT_MODEL: externalModel,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: externalModel,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: externalModel,
+    ANTHROPIC_DEFAULT_FABLE_MODEL: externalModel,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: definition?.id || "",
+    CLAUDE_CODE_SUBAGENT_MODEL: definition?.id || "",
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW: provider ? String(provider.claudeAutoCompactWindow) : "",
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: provider ? "1" : "",
+    CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: "1"
+  };
+  return { model, env };
+}
 
 function claudeFlagSettings({ toolFree = false, effort = "", providerEnv } = {}) {
   const commandHook = {
@@ -113,4 +138,4 @@ async function createClaudeCodeProcess({
   }
 }
 
-export { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeFlagSettings, createClaudeCodeProcess };
+export { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeFlagSettings, claudeModelConfiguration, createClaudeCodeProcess };

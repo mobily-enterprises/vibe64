@@ -1,7 +1,7 @@
 export { default as AiConnectionsSettings } from "./studio/AiConnectionsSettings.vue";
 export { default as ModelRoutingForm } from "./studio/ModelRoutingForm.vue";
 export { useModelRouting } from "./composables/useModelRouting.js";
-export { default as CodexProviderConnections } from "./studio/CodexProviderConnections.vue";
+export { default as NativeProviderConnections } from "./studio/NativeProviderConnections.vue";
 export { useCodexProviderConnections } from "./composables/useCodexProviderConnections.js";
 import AccountsSetup from "./studio/AccountsSetup.vue";
 import AIAccountsSetup from "./studio/AIAccountsSetup.vue";
