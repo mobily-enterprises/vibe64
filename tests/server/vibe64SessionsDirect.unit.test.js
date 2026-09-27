@@ -2910,8 +2910,37 @@ test("assistant model-access updates delegate the authenticated owner to the hos
   }]);
 });
 
+test("session listing reports unavailable sessions separately without changing creation policy inputs", async () => {
+  const healthy = { sessionId: "healthy", status: "active" };
+  const unavailable = { sessionId: "missing", unavailable: { code: "vibe64_session_source_required", message: "Missing checkout." } };
+  const creation = { canCreate: true };
+  const limits = { openSessionCount: 1 };
+  const service = createService({
+    project: {
+      async createRuntime() {
+        return {
+          async listSessionSummaries(options) {
+            assert.deepEqual(options, { statusGroup: "open", includeUnavailable: true });
+            return [unavailable, healthy];
+          }
+        };
+      },
+      async developmentDatabasePolicy({ openSessions }) {
+        assert.deepEqual(openSessions, [healthy]);
+        return { creation, limits };
+      }
+    },
+    terminals: {},
+    workspaceSetupRunner: { isRunning: () => false, wait: () => null }
+  });
+  assert.deepEqual(await service.listSessions(), {
+    ok: true, sessions: [healthy], unavailableSessions: [unavailable], creation, limits
+  });
+});
+
 test("archived session history is ordered by archive time with a stable session-id tie-break", async () => {
   const requestedOptions = [];
+  const unavailable = { sessionId: "unsupported", unavailable: { code: "vibe64_session_runtime_unsupported", message: "Unsupported format." } };
   const service = createService({
     project: {
       async createRuntime() {
@@ -2919,6 +2948,7 @@ test("archived session history is ordered by archive time with a stable session-
           async listSessionSummaries(options) {
             requestedOptions.push(options);
             return [
+              unavailable,
               { archivedAt: "2026-09-02T10:00:00.000Z", sessionId: "2026-09-02", status: "archived" },
               { archivedAt: "2026-09-04T10:00:00.000Z", sessionId: "session-a", status: "archived" },
               { archivedAt: "2026-09-04T10:00:00.000Z", sessionId: "session-z", status: "archived" },
@@ -2938,7 +2968,8 @@ test("archived session history is ordered by archive time with a stable session-
   const result = await service.listArchivedSessions();
 
   assert.equal(result.ok, true);
-  assert.deepEqual(requestedOptions, [{ statusGroup: "archived" }]);
+  assert.deepEqual(requestedOptions, [{ statusGroup: "archived", includeUnavailable: true }]);
+  assert.deepEqual(result.unavailableSessions, [unavailable]);
   assert.deepEqual(result.sessions.map(({ sessionId }) => sessionId), [
     "2026-08-01",
     "session-z",

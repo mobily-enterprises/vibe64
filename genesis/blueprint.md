@@ -19,6 +19,10 @@ People can open or create a project, work in isolated sessions, and have a
 direct conversation with the agent while seeing the source, changes, running
 application, environment, and the system's explained structure in one place.
 Each session keeps valuable work recoverable and separate from unrelated work.
+Sessions with an unsupported format or unexpectedly missing checkout remain
+visible in an attention notice while healthy sessions stay usable. People can
+recheck them and copy recovery details for their administrator. These notices
+do not start AI repair, convert formats, or remove stored work.
 Assistants have one discoverable command entry point for the session's preview,
 browser tests, environment, database and GitHub tools. Existing individual
 commands remain available so earlier conversation instructions keep working.

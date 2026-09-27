@@ -104,6 +104,7 @@ function useArchivedVibe64Sessions(emit) {
 
   return {
     archiveIcon: mdiArchiveOutline,
+    unavailableSessions: computed(() => sessionListResource.data.value?.unavailableSessions || []),
     error,
     loadSessions,
     loading,

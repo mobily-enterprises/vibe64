@@ -176,21 +176,27 @@ function sessionHasRenewalHandover(session = {}) {
   return acknowledged || delivered;
 }
 
-async function sessionIsListable(session = {}) {
+async function sessionAvailabilityIssue(session = {}) {
   if (!sessionIsSupported(session)) {
-    return false;
+    return {
+      code: "vibe64_session_runtime_unsupported",
+      message: "This session uses an unsupported format. Ask your Vibe64 administrator to preserve its remaining files and retire the record. Start a new session to continue working."
+    };
   }
-  if (session.archived === true || archivedSessionStatus(session.status)) {
-    return true;
-  }
-  if (sessionSourceCreationFailed(session)) {
-    return true;
-  }
-  if (normalizeText(session.metadata?.session_archive_operation)) {
-    return true;
+  if (
+    session.archived === true || archivedSessionStatus(session.status) ||
+    sessionSourceCreationFailed(session) || normalizeText(session.metadata?.session_archive_operation)
+  ) {
+    return null;
   }
   const sourcePath = sessionSourcePath(session);
-  return Boolean(sourcePath && await pathExists(sourcePath));
+  if (sourcePath && await pathExists(sourcePath)) {
+    return null;
+  }
+  return {
+    code: "vibe64_session_source_required",
+    message: "The source checkout is missing. Ask your Vibe64 administrator to restore it from a verified backup, then check again. A fresh checkout cannot recover missing unsaved work."
+  };
 }
 
 async function inspectSessionSource(runtime, session = {}) {
@@ -475,20 +481,29 @@ class Vibe64SessionRuntime {
 
   async listSessions(options = {}) {
     const sessions = await this.store.listSessions(options);
-    const listable = await Promise.all(sessions.map(sessionIsListable));
+    const issues = await Promise.all(sessions.map(sessionAvailabilityIssue));
     return Promise.all(sessions
-      .filter((_session, index) => listable[index])
+      .filter((_session, index) => !issues[index])
       .map((session) => this.sessionView(session)));
   }
 
-  async listSessionSummaries(options = {}) {
+  async listSessionSummaries({ includeUnavailable = false, ...options } = {}) {
     const sessions = await this.store.listSessionSummaries(options);
-    const listable = await Promise.all(sessions.map(sessionIsListable));
-    return sessions
-      .filter((_session, index) => listable[index])
-      .map((session) => plainSessionView(session, {
-        sourceInspection: null
-      }));
+    const issues = await Promise.all(sessions.map(sessionAvailabilityIssue));
+    return sessions.flatMap((session, index) => {
+      const unavailable = issues[index];
+      if (unavailable) {
+        return includeUnavailable ? [{
+          sessionId: normalizeText(session.sessionId),
+          sessionName: normalizeText(session.sessionName),
+          sessionRoot: normalizeText(session.sessionRoot),
+          archivePath: normalizeText(session.archivePath),
+          sourcePath: sessionSourcePath(session),
+          unavailable
+        }] : [];
+      }
+      return [plainSessionView(session)];
+    });
   }
 
   async updateCurrentSession(sessionId = "") {

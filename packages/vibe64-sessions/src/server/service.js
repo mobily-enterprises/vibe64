@@ -1439,7 +1439,8 @@ function createService({
         const runtime = await project.createRuntime({
           inspectSource: false
         });
-        const sessions = await runtime.listSessionSummaries({ statusGroup: "open" });
+        const summaries = await runtime.listSessionSummaries({ statusGroup: "open", includeUnavailable: true });
+        const sessions = summaries.filter((session) => !session.unavailable);
         if (typeof project.developmentDatabasePolicy !== "function") {
           throw new TypeError("Session listing requires the project session policy.");
         }
@@ -1449,7 +1450,8 @@ function createService({
           creation: policy.creation,
           limits: policy.limits,
           ok: true,
-          sessions
+          sessions,
+          unavailableSessions: summaries.filter((session) => session.unavailable)
         };
       });
     },
@@ -1459,10 +1461,11 @@ function createService({
         const runtime = await project.createRuntime({
           inspectSource: false
         });
-        const sessions = await runtime.listSessionSummaries({ statusGroup: "archived" });
+        const summaries = await runtime.listSessionSummaries({ statusGroup: "archived", includeUnavailable: true });
         return {
           ok: true,
-          sessions: [...sessions].sort((left, right) => (
+          unavailableSessions: summaries.filter((session) => session.unavailable),
+          sessions: summaries.filter((session) => !session.unavailable).sort((left, right) => (
             text(right.archivedAt).localeCompare(text(left.archivedAt)) ||
             text(right.sessionId).localeCompare(text(left.sessionId))
           ))

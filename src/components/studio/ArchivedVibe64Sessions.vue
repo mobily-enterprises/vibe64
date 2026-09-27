@@ -26,6 +26,8 @@
       {{ error }}
     </v-alert>
 
+    <Vibe64UnavailableSessions :sessions="unavailableSessions" :loading="loading" @recheck="loadSessions" />
+
     <div
       v-if="loading && sessions.length < 1"
       aria-label="Loading archived sessions"
@@ -52,7 +54,7 @@
       </v-card>
     </div>
 
-    <v-sheet v-if="!loading && sessions.length < 1 && !error" rounded="lg" border class="studio-archived-sessions__empty">
+    <v-sheet v-if="!loading && sessions.length < 1 && !unavailableSessions.length && !error" rounded="lg" border class="studio-archived-sessions__empty">
       <h2 class="text-subtitle-1 mb-1">{{ emptyTitle }}</h2>
       <p class="text-body-2 text-medium-emphasis mb-0">{{ emptyText }}</p>
     </v-sheet>
@@ -106,6 +108,7 @@
 </template>
 
 <script setup>
+import Vibe64UnavailableSessions from "@/components/studio/Vibe64UnavailableSessions.vue";
 import {
   archivedVibe64SessionsEmits,
   archivedVibe64SessionsProps,
@@ -125,6 +128,7 @@ const {
   mdiRefresh,
   sessionRoute,
   sessions,
+  unavailableSessions,
   shortSessionId,
   statusColor,
   statusLabel

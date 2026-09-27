@@ -2,7 +2,10 @@
   <v-sheet
     rounded="lg"
     class="studio-ai-sessions studio-ai-sessions--autopilot studio-screen__panel"
-    :class="{ 'studio-ai-sessions--resizing': chatColumnResizing }"
+    :class="{
+      'studio-ai-sessions--resizing': chatColumnResizing,
+      'studio-ai-sessions--unavailable': sessionData.sessionList.unavailableItems.length > 0
+    }"
     @pointermove="sessionTooltip.trackPointer"
     @pointerleave="sessionTooltip.resumeHover"
   >
@@ -20,6 +23,12 @@
         />
       </div>
     </Transition>
+
+    <Vibe64UnavailableSessions
+      :sessions="sessionData.sessionList.unavailableItems"
+      :loading="sessionData.sessionList.isLoading"
+      @recheck="sessionData.refreshSessionData"
+    />
 
     <Vibe64SessionArchiveDialog :archive="selectedArchive" :short-session-id="sessionData.shortSessionId" />
 
@@ -192,6 +201,7 @@ import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64S
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
+import Vibe64UnavailableSessions from "@/components/studio/Vibe64UnavailableSessions.vue";
 import {
   useVibe64ChatColumnResize
 } from "@/composables/useVibe64ChatColumnResize.js";
@@ -557,5 +567,8 @@ const {
   .studio-ai-sessions__empty-layout--chat-collapsed .studio-ai-sessions__empty-project-panel {
     display: grid;
   }
+}
+.studio-ai-sessions--autopilot.studio-ai-sessions--unavailable {
+  grid-template-rows: auto minmax(0, 1fr);
 }
 </style>

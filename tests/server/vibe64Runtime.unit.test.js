@@ -338,6 +338,48 @@ test("plain runtime excludes open state records whose managed source no longer e
   });
 });
 
+test("session summaries can report unavailable records without hiding healthy sessions or repairing state", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      projectContextRoot: targetRoot,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+    });
+    for (const sessionId of ["healthy", "missing", "unsupported", "failed-creation", "archiving"]) {
+      await runtime.store.createSession({
+        metadata: {
+          ...sourceMetadata(targetRoot, sessionId),
+          ...(sessionId === "failed-creation" ? { source_creation_failed: "yes" } : {}),
+          ...(sessionId === "archiving" ? { session_archive_operation: JSON.stringify({ status: "running" }) } : {})
+        },
+        runtimeKind: sessionId === "unsupported" ? "obsolete-runtime" : "genesis",
+        sessionId
+      });
+    }
+    await mkdir(sourcePath(targetRoot, "healthy"), { recursive: true });
+    const before = await runtime.store.readSession("missing");
+    const summaries = await runtime.listSessionSummaries({ statusGroup: "open", includeUnavailable: true });
+    assert.deepEqual(summaries.filter(s => !s.unavailable).map(s => s.sessionId).sort(), ["archiving", "failed-creation", "healthy"]);
+    assert.equal(summaries.find(s => s.sessionId === "missing").unavailable.code, "vibe64_session_source_required");
+    assert.equal(summaries.find(s => s.sessionId === "unsupported").unavailable.code, "vibe64_session_runtime_unsupported");
+    assert.equal(summaries.find(s => s.sessionId === "missing").sourcePath, sourcePath(targetRoot, "missing"));
+    assert.deepEqual(await runtime.store.readSession("missing"), before);
+    await assert.rejects(() => access(sourcePath(targetRoot, "missing")), { code: "ENOENT" });
+    await assert.rejects(() => runtime.getSession("unsupported"), { code: "vibe64_session_runtime_unsupported" });
+    assert.deepEqual((await runtime.listSessions()).map(s => s.sessionId).sort(), ["archiving", "failed-creation", "healthy"]);
+
+    await mkdir(sourcePath(targetRoot, "missing"), { recursive: true });
+    const checked = await runtime.listSessionSummaries({ statusGroup: "open", includeUnavailable: true });
+    assert.equal(checked.find(s => s.sessionId === "missing").unavailable, undefined);
+    assert.equal(checked.find(s => s.sessionId === "unsupported").unavailable.code, "vibe64_session_runtime_unsupported");
+
+    await runtime.store.writeStatus("healthy", "archived");
+    await runtime.store.writeStatus("unsupported", "archived");
+    const archived = await runtime.listSessionSummaries({ statusGroup: "archived", includeUnavailable: true });
+    assert.equal(archived.find(s => s.sessionId === "healthy").unavailable, undefined);
+    assert.equal(archived.find(s => s.sessionId === "unsupported").unavailable.code, "vibe64_session_runtime_unsupported");
+  });
+});
+
 test("plain runtime lists archive summaries without hydrating full session archives", async () => {
   const listOptions = { statusGroup: "archived" };
   let summaryReads = 0;

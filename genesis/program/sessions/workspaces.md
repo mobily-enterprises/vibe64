@@ -24,6 +24,7 @@ the canonical project and from other sessions.
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
 - `src/components/studio/Vibe64SessionPanel.vue`
+- `src/components/studio/Vibe64UnavailableSessions.vue`
 - `src/lib/vibe64SessionInfo.js`
 - `src/lib/vibe64SessionTooltip.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
@@ -34,6 +35,16 @@ the canonical project and from other sessions.
 - `src/composables/useVibe64SessionDialogs.js`
 
 ## Public contract
+
+Open-session and archive lists report unsupported runtime records and unexpectedly
+missing open checkouts separately from usable sessions. The existing summary
+reader can include these diagnostic entries for presentation; operational lists
+retain only usable entries. Known source-creation failures and in-progress archive
+operations keep their existing recovery paths. The UI retains an attention notice
+with Check again and copyable project/session identifiers, paths and recovery
+guidance for an administrator. A successful refreshed inspection clears a resolved
+issue. Reads do not repair, migrate or delete anything, and these unavailable
+records never become chat or Preview targets through the notice.
 
 `inspectCanonicalProjectStack` is a neutral saved-source inspection capability.
 Its caller holds the existing project source lock. It reuses ordinary Add session

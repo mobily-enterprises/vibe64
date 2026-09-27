@@ -232,6 +232,7 @@ function useVibe64SessionData({
     }
   });
   const sessionList = proxyRefs({
+    unavailableItems: computed(() => sessionListResource.data.value?.unavailableSessions || []),
     items: computed(() => {
       const payload = sessionListResource.data.value || {};
       return Array.isArray(payload.sessions) ? payload.sessions : [];
@@ -361,6 +362,9 @@ function useVibe64SessionData({
   const selectionRenewalPredecessorId = computed(() => {
     const selectedId = String(selectedSessionId.value || "").trim();
     if (!selectedId || sessionList.pages.length < 1 || String(sessionList.loadError || "").trim()) {
+      return "";
+    }
+    if (sessionList.unavailableItems.some((session) => session.sessionId === selectedId)) {
       return "";
     }
     if (selectedSessionMissing.value) {
