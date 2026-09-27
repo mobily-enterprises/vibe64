@@ -166,7 +166,6 @@ const nativeSetupDetails = computed(() => nativeSetupProviderId.value === "claud
 });
 const nativeChoices = computed(() => [
   { id: "codex", label: "Codex", connected: codexConnected.value, description: "GPT, DeepSeek or GLM. Connect your account or API key." },
-  { id: "codex-glm", label: "GLM Coding Plan", description: "Use your Z.AI Coding Plan with Codex. Connect your plan key to use GLM 5.3." },
   { id: "claude", label: "Claude Code", connected: claudeConnected.value, description: "Claude, DeepSeek or GLM. Connect your account or API key." }
 ]);
 const nativeSetupRows = computed(() => [{
@@ -178,9 +177,9 @@ const nativeSetupRows = computed(() => [{
 }]);
 const configuredAiRows = computed(() => [
   ...(codexConnected.value ? [{
-    accessLabel: "Account-wide",
+    accessLabel: codexAccount.value?.ownerOnly === true ? "Personal use" : codexAccount.value?.ownerOnly === false ? "Workspace use" : "",
     billingLabel: codexAccount.value?.username || "Codex account",
-    engineLabel: "Codex",
+    engineId: "codex",
     id: "codex",
     kind: "codex",
     keyHint: "Connected",
@@ -191,7 +190,7 @@ const configuredAiRows = computed(() => [
   ...(claudeConnected.value ? [{
     accessLabel: "Personal use",
     billingLabel: claudeAccount.value?.username || "Claude account",
-    engineLabel: "Claude Code",
+    engineId: "claude",
     id: "claude",
     kind: "claude",
     keyHint: "Connected",
@@ -199,24 +198,23 @@ const configuredAiRows = computed(() => [
     modelLabel: "Choose model roles in Model routing",
     providerLabel: "Anthropic"
   }] : []),
-  ...codexProviders.connections.value.filter((connection) => connection.status !== "not_connected").map((connection) => {
+  ...codexProviders.connections.value.flatMap((connection) => {
     const provider = curatedCodexProvider(connection.id);
-    return {
+    return (connection.configuredEngines || []).map((engineId) => ({
       ...connection,
-      connected: connection.connected || connection.claudeReady,
+      engineId,
+      connected: engineId === "claude" ? connection.claudeReady : connection.connected,
       kind: "codex-provider",
-      engineLabel: [connection.connected ? "Codex" : "", connection.claudeReady ? "Claude Code" : ""].filter(Boolean).join(" / "),
-      connectedEngines: [...(connection.connected ? ["codex"] : []), ...(connection.claudeReady ? ["claude"] : [])],
       providerLabel: provider.label,
       billingLabel: provider.description,
       accessLabel: provider.ownerOnly ? "Personal use" : "Workspace use",
       keyHint: connection.connected || connection.claudeReady ? "Connected" : "Reconnect required",
       modelLabel: provider.models.map(({ label }) => label).join(" · ")
-    };
+    }));
   }),
   ...connections.value.map((connection) => ({
     ...connection,
-    engineLabel: "OpenCode",
+    engineId: "opencode",
     kind: "opencode",
     modelLabel: connection.builtIn
       ? "Big Pickle is included and ready"
@@ -230,6 +228,12 @@ const configuredAiRows = computed(() => [
       : connection.productLabel || connection.label
   }))
 ]);
+const configuredAiGroups = computed(() => [
+  { id: "codex", label: "Codex" },
+  { id: "claude", label: "Claude Code" },
+  { id: "opencode", label: "OpenCode" }
+].map((engine) => ({ ...engine, accounts: configuredAiRows.value.filter((account) => account.engineId === engine.id) }))
+  .filter((engine) => engine.accounts.length));
 const glmConnected = computed(() => (
   connections.value.some((connection) => (
     (connection.id === "zai" || connection.id === "zai-coding-plan") && connection.connected === true
@@ -711,7 +715,7 @@ async function confirmRemove() {
 function manageConfiguredAi(account = {}) {
   nativeModelProviderId.value = account.kind === "codex-provider" ? account.id : account.kind === "claude" ? "anthropic" : "openai";
   if (["codex", "claude", "codex-provider"].includes(account.kind)) {
-    nativeSetupProviderId.value = account.kind === "codex-provider" ? account.connectedEngines?.[0] || "codex" : account.kind;
+    nativeSetupProviderId.value = account.kind === "codex-provider" ? account.engineId || "codex" : account.kind;
     nativeSetupActivator.value = document.activeElement;
     nativeSetupOpen.value = true;
     return;
@@ -890,9 +894,13 @@ defineExpose({ openProvider });
           </div>
 
           <section v-else aria-label="Configured AI accounts" class="vibe64-ai-connections__accounts">
-            <v-sheet border class="vibe64-ai-connections__account-list" rounded="xl">
+            <v-sheet
+              v-for="group in configuredAiGroups" :key="group.id" tag="section" :aria-label="group.label"
+              border class="vibe64-ai-connections__account-list" rounded="xl"
+            >
+              <h2 class="text-title-large vibe64-ai-connections__group-title">{{ group.label }}</h2>
               <article
-                v-for="account in configuredAiRows"
+                v-for="account in group.accounts"
                 :key="`${account.kind}:${account.id}`"
                 class="vibe64-ai-connections__row"
               >
@@ -902,7 +910,7 @@ defineExpose({ openProvider });
                   </v-avatar>
                   <span>
                     <strong>
-                      {{ account.engineLabel }}<template v-if="account.providerLabel"> - {{ account.providerLabel }}</template>
+                      {{ account.providerLabel }}
                     </strong>
                     <small v-if="account.id === 'zai'">{{ account.billingLabel }}</small>
                     <small v-else-if="account.id === 'opencode' && account.builtIn">OpenCode Zen · included with Vibe64</small>
@@ -915,6 +923,7 @@ defineExpose({ openProvider });
 
                 <div class="vibe64-ai-connections__status" aria-label="Connection status">
                   <v-chip
+                    v-if="account.accessLabel"
                     :color="account.accessLabel === 'Workspace use' ? 'primary' : undefined"
                     size="small"
                     variant="tonal"
@@ -1100,14 +1109,11 @@ defineExpose({ openProvider });
         <v-card-title class="vibe64-dialog-title">
           <span>
             <small class="vibe64-dialog-eyebrow">Add AI</small>
-            <strong>How do you want to connect?</strong>
+            <strong>Choose an orchestrator</strong>
           </span>
           <v-btn :icon="mdiClose" aria-label="Close Add AI" type="button" variant="text" @click="addAiOpen = false" />
         </v-card-title>
         <v-card-text class="vibe64-add-ai__body">
-          <p class="text-body-large text-medium-emphasis">
-            Choose the account type first. Vibe64 will ask only for the details that connection needs.
-          </p>
           <v-row align="stretch">
             <v-col v-for="choice in (aiStatusLoaded ? nativeChoices : [])" :key="choice.id" cols="12" sm="6">
               <v-card class="vibe64-add-ai__choice fill-height" rounded="xl" variant="outlined">
@@ -1118,7 +1124,7 @@ defineExpose({ openProvider });
                     </v-avatar>
                   </template>
                   <v-card-title>{{ choice.label }}</v-card-title>
-                  <v-card-subtitle>Connect your account</v-card-subtitle>
+                  <v-card-subtitle>Choose a provider</v-card-subtitle>
                 </v-card-item>
                 <v-card-text class="vibe64-add-ai__choice-copy text-body-medium">
                   {{ choice.description }}
@@ -1502,6 +1508,10 @@ defineExpose({ openProvider });
           <template v-if="removeTarget?.id === 'opencode'">
             The saved Zen key will be removed and paid or key-only Zen models will stop. Included Big Pickle remains available.
           </template>
+          <template v-else-if="removeTarget?.kind === 'codex-provider'">
+            Remove the shared {{ removeTarget.providerLabel }} key from Codex and Claude Code?
+            Turns using this key will stop. Conversations and files remain.
+          </template>
           <template v-else>
             New and resumed turns using this AI will stop until the owner connects it again.
             Existing conversation and project history remain intact.
@@ -1634,6 +1644,10 @@ defineExpose({ openProvider });
 
 .vibe64-ai-connections__account-list {
   overflow: hidden;
+}
+
+.vibe64-ai-connections__group-title {
+  padding: 1rem 1rem 0;
 }
 
 .vibe64-ai-connections__row {

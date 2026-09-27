@@ -1,6 +1,7 @@
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createAssistantRoutingStore, validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/assistantRoutingStore";
 import { ASSISTANT_ROUTING_ASSIGNMENTS } from "@local/vibe64-runtime/shared/assistantRouting";
+import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
@@ -567,6 +568,7 @@ function accountConnected({
   label,
   message,
   observed = "",
+  ownerOnly,
   scope = "",
   username = ""
 }) {
@@ -577,6 +579,7 @@ function accountConnected({
     gitIdentity,
     message,
     observed,
+    ...(typeof ownerOnly === "boolean" ? { ownerOnly } : {}),
     required: true,
     scope,
     status: "connected",
@@ -637,6 +640,7 @@ async function readCodexLocalStatus({
       label: "Codex",
       message: "Codex is authenticated for the shared Vibe64 app account.",
       observed: "Local Codex authentication marker is present.",
+      ownerOnly: (await readCodexSelectedAccountAccess(codexContext).catch(() => null))?.ownerOnly,
       scope: APP_CREDENTIAL_SCOPE,
       username: await readCodexUsername(codexContext)
     });
@@ -1120,6 +1124,7 @@ async function readCodexStatus({
     message: "Codex is authenticated for the shared Vibe64 app account.",
     observed: result.output,
     scope: APP_CREDENTIAL_SCOPE,
+    ownerOnly: (await readCodexSelectedAccountAccess(codexContext).catch(() => null))?.ownerOnly,
     username: await readCodexUsername(codexContext)
   });
 }

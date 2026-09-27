@@ -199,6 +199,9 @@ keys must be checked again before they become Claude-ready. Only readiness and
 redacted connection metadata reach the client. Provider URLs remain curated.
 Claude's access reader applies the connection's scope: DeepSeek API access is
 shared, while the GLM Coding Plan and native Claude subscription are personal.
+The native GPT badge uses the runtime's authentication access policy: ChatGPT
+login is Personal use; an OpenAI API key is Workspace use. Unreadable access
+metadata leaves the badge absent instead of guessing from account storage scope.
 External catalogue and access reads do not start a native Claude inference
 process. Connection facts retain a safe identity from the existing owner:
 Codex's login identity, curated key generation, native Claude account identity,
@@ -218,10 +221,15 @@ provider operations.
 Connection setup describes available models and directs role choices to Model
 routing. Connecting GLM or a Zen key does not promise to replace saved defaults;
 recommendations and their application belong to the shared routing flow.
-Every configured connection title starts with its orchestrator. Included Big
-Pickle and OpenCode GLM retain the OpenCode prefix; curated keys list Codex and
-Claude Code together only when both protocol checks succeeded. A Claude-only
-connection names Claude Code and remains absent from Codex's usable catalogue. The regular Z.AI
+Configured connections are grouped under Codex, Claude Code and OpenCode; empty
+orchestrator groups are omitted. A curated key verified for both native
+orchestrators has a separate row in each group. Manage opens that exact
+orchestrator/provider pair. Configured engine membership remains visible during
+a failed credential transition so reconnection opens the correct form. A
+Claude-only key remains absent from Codex's group and usable catalogue. Included
+Big Pickle retains its Default badge under OpenCode. Add AI starts with the
+orchestrator, then its providers. Shared keys remain one credential: removal
+explicitly identifies its effect on both Codex and Claude Code. The regular Z.AI
 recommendation is hidden for a connected regular API or Coding Plan key in
 OpenCode, or a Coding Plan key verified for Codex or Claude Code.
 

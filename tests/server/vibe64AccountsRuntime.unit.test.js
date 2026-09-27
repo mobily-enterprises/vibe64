@@ -1511,7 +1511,7 @@ test("cached GitHub status preserves proven invalid and logout states until live
   });
 });
 
-test("Codex status exposes only the current account email without rotating auth or starting a runtime", async () => {
+test("Codex status exposes the account email and access scope without rotating auth or starting a runtime", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
     const daemonHome = path.join(root, "daemon");
@@ -1542,23 +1542,28 @@ test("Codex status exposes only the current account email without rotating auth 
       }));
       const local = await service.getStatus({ accountIds: ["codex"] });
       assert.equal(local.accounts[0].username, expected);
+      assert.equal(local.accounts[0].ownerOnly, true);
       assert.equal(local.accounts[0].connected, true);
       assert.equal(commands.length, 0);
       assert.doesNotMatch(JSON.stringify(local), /private-access-token|private-refresh-token|header\./u);
     }
     await writeFile(authPath, JSON.stringify({
+      auth_mode: "chatgpt",
       tokens: { id_token: `header.${Buffer.from(JSON.stringify({ email: "live@example.com" })).toString("base64url")}.signature` }
     }));
-    assert.equal((await service.getCodexStatus()).account.username, "live@example.com");
+    const refreshed = (await service.getCodexStatus()).account;
+    assert.equal(refreshed.username, "live@example.com");
+    assert.equal(refreshed.ownerOnly, true);
     assert.equal(commands.length, 1);
-    for (const contents of [
-      JSON.stringify({ auth_mode: "apikey", OPENAI_API_KEY: "private-api-key" }),
-      JSON.stringify({ auth_mode: "chatgpt", tokens: { id_token: "invalid" } }),
-      "{invalid json"
+    for (const [contents, ownerOnly] of [
+      [JSON.stringify({ auth_mode: "apikey", OPENAI_API_KEY: "private-api-key" }), false],
+      [JSON.stringify({ auth_mode: "chatgpt", tokens: { id_token: "invalid" } }), true],
+      ["{invalid json", undefined]
     ]) {
       await writeFile(authPath, contents);
       const status = await service.getStatus({ accountIds: ["codex"] });
       assert.equal(status.accounts[0].username, "");
+      assert.equal(status.accounts[0].ownerOnly, ownerOnly);
       assert.equal(status.accounts[0].connected, true);
       assert.doesNotMatch(JSON.stringify(status), /private-api-key/u);
     }

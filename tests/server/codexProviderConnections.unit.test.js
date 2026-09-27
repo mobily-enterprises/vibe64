@@ -34,6 +34,7 @@ test("only the curated DeepSeek and GLM routes can receive a saved key", async (
   assert.equal(JSON.stringify(rows).includes("fixture-secret"), false);
   assert.equal(rows[0].label, "DeepSeek");
   assert.equal(rows[0].claudeReady, true);
+  assert.deepEqual(rows[0].configuredEngines, ["codex", "claude"]);
   assert.equal(f.requests[1].url, "https://api.deepseek.com/anthropic/v1/messages");
   await assert.rejects(f.store.change("unknown", { apiKey: "fixture-secret" }), /supported Codex provider/);
   await assert.rejects(f.store.change("deepseek", { apiKey: "bad\nkey" }), /valid provider API key/);
@@ -80,6 +81,10 @@ test("bad keys leave the previous connection intact; unverified process exit blo
   other.failStop();
   await assert.rejects(other.store.change("deepseek", { apiKey: "replacement" }), /could not be stopped/);
   await assert.rejects(other.store.runtimeOptions("deepseek"), /Reconnect/);
+  const [unavailable] = await other.store.list();
+  assert.deepEqual(unavailable.configuredEngines, ["codex", "claude"]);
+  assert.equal(unavailable.connected, false);
+  assert.equal(unavailable.claudeReady, false);
   assert.match(await readFile(codexProviderPaths(other.root, "deepseek").connectionPath, "utf8"), /original/);
 });
 
@@ -94,6 +99,7 @@ test("curated connection identity changes on replacement and disappears on disco
   const removed = (await f.store.change("deepseek", { remove: true }))[0];
   assert.equal(removed.connectionIdentity, "");
   assert.equal(removed.connected, false);
+  assert.deepEqual(removed.configuredEngines, []);
 });
 
 test("disconnect removes credentials after stopping only their owner and retains native conversations", async (t) => {
@@ -151,6 +157,7 @@ test("Claude-only verification saves a usable Claude connection without advertis
   assert.equal(calls[0], "https://api.deepseek.com/anthropic/v1/messages");
   assert.equal(connection.connected, false);
   assert.equal(connection.claudeReady, true);
+  assert.deepEqual(connection.configuredEngines, ["claude"]);
   assert.equal(connection.status, "connected");
   assert.match(connection.connectionIdentity, /^curated:/u);
   assert.equal((await store.claudeProviderSettings("deepseek")).apiKey, "claude-only-secret");
@@ -181,6 +188,7 @@ test("optional Claude failure leaves Codex available and cannot return provider 
   const [connection] = await store.change("deepseek", { apiKey: "codex-secret" });
   assert.equal(connection.connected, true);
   assert.equal(connection.claudeReady, false);
+  assert.deepEqual(connection.configuredEngines, ["codex"]);
   await assert.rejects(store.change("deepseek", { engineId: "claude", useSavedKey: true }), error =>
     /HTTP 503/u.test(error.message) && !error.message.includes("secret request details"));
   assert.equal((await store.list())[0].connected, true);

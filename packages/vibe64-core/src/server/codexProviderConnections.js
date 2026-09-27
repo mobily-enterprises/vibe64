@@ -144,6 +144,10 @@ function createCodexProviderConnectionStore({
         label: provider.label,
         connected: Boolean(saved && !saved.codexDisabled && !status),
         claudeReady: Boolean(saved?.claudeReady && !status),
+        configuredEngines: [
+          ...(saved && !saved.codexDisabled ? ["codex"] : []),
+          ...(saved?.claudeReady ? ["claude"] : [])
+        ],
         connectionIdentity: marker?.connected === true && typeof marker.generation === "string"
           ? `curated:${provider.id}:${marker.generation}` : "",
         status: status?.status || (saved ? "connected" : "not_connected")
