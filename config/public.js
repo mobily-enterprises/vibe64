@@ -2,7 +2,8 @@ import { surfaceAccessPolicies } from "./surfaceAccessPolicies.js";
 
 export const config = {};
 config.tenancyMode = "none";
-
+// Browser WebSocket handshakes include Origin; same-origin polling GETs do not.
+config.realtimeClient = { options: { transports: ["websocket"] } };
 
 config.surfaceModeAll = "all";
 config.surfaceDefaultId = "app";

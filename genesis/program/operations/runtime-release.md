@@ -8,6 +8,7 @@ Building a package leaves the development dependency installation intact.
 
 - `index.html`
 - `src/main.js`
+- `config/public.js`
 - `tooling/release/server-build.mjs`
 - `tooling/release/runtime-package.mjs`
 - `bin/upgrade-state.js`
@@ -60,6 +61,10 @@ example working-copy path, `--state-dir` selects its runtime directory, and
 `--host`/`--port` select the loopback frontend listener. The backend gets its own
 OS-assigned port. Vite proxies API and realtime traffic to that backend.
 The listener can be reached through an authenticated hosting preview proxy.
+The browser connects realtime directly over WebSocket, which supplies the Origin
+header required by hosted cookie authentication. It does not begin with a
+same-origin polling GET, where browsers omit that header. This uses JSKIT's
+existing client transport configuration; hosted origin validation remains strict.
 
 Initial preparation copies the bundled Genesis-authored application, initializes
 current Genesis skills/hooks, and creates an independent Git baseline. An existing
