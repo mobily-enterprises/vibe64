@@ -92,6 +92,23 @@ describe("useVibe64AutopilotView route hydration", () => {
   });
   afterEach(() => scope.stop());
 
+  it("hydrates history before appending a restored unsent message", async () => {
+    const props = viewProps();
+    props.conversationLog.initializing = true;
+    props.conversationLog.loading = true;
+    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "unsent", mode: "auto", status: "failed",
+      input: { message: "Keep my request" }, error: "Routing failed" });
+    const { useVibe64AutopilotView } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    expect(view.chatTurns.value).toEqual([]);
+    props.conversationLog.turns = [{ turnId: "first", user: { messageId: "first", text: "Earlier message" }, messages: [] }];
+    props.conversationLog.initializing = false;
+    props.conversationLog.loading = false;
+    expect(view.chatTurns.value.map(turn => turn.user.text)).toEqual(["Earlier message", "Keep my request"]);
+    props.conversationLog.loading = true;
+    expect(view.chatTurns.value).toHaveLength(2);
+  });
+
   it("shows Save messages without empty internal helper events", async () => {
     const props = viewProps();
     props.workState = { activeOperation: { kind: "save", operationId: "save-1" }, operation: { id: "save-work", operationId: "save-1", status: "ready", events: [

@@ -35,11 +35,11 @@ function routingManagerFixture({ resolveAssistantUser, disconnected = [] } = {})
   const senior = selection("codex", "openai", "gpt-6-astra");
   const junior = selection("codex", "deepseek", "deepseek-flash");
   const backup = selection("opencode", "opencode", "big-pickle");
-  const intern = selection("opencode", "deepseek", "deepseek-v4-flash");
-  const configuration = { schemaVersion: 3, revision: 7, orchestrators: { codex: {
-    senior, junior, sharedBackup: backup, intern, router: junior
+  const helper = selection("opencode", "deepseek", "deepseek-v4-flash");
+  const configuration = { schemaVersion: 4, revision: 7, orchestrators: { codex: {
+    senior, junior, sharedBackup: backup, helper, router: junior
   } } };
-  const facts = new Map([senior, junior, backup, intern].map((value) => [value.modelId, {
+  const facts = new Map([senior, junior, backup, helper].map((value) => [value.modelId, {
     available: true, ownerOnly: value === senior, connectionIdentity: `connection:${value.modelId}`
   }]));
   const calls = [];
@@ -53,7 +53,7 @@ function routingManagerFixture({ resolveAssistantUser, disconnected = [] } = {})
     providers: ["codex", "opencode"].map((id) => ({ id, transportId: `${id}_server`,
       async capabilities(context, input) {
         calls.push({ type: "catalog", context, input });
-        const choices = [senior, junior, backup, intern].filter((value) => value.engineId === id &&
+        const choices = [senior, junior, backup, helper].filter((value) => value.engineId === id &&
           (!input.modelProviderId || input.modelProviderId === value.modelProviderId) &&
           (!input.modelId || input.modelId === value.modelId));
         return { engineId: id, transportId: `${id}_server`, revision: catalogRevision,
@@ -67,7 +67,7 @@ function routingManagerFixture({ resolveAssistantUser, disconnected = [] } = {})
   });
   const session = { sessionId: "main", metadata: { assistant_selection: JSON.stringify(senior) } };
   const options = { session, vibe64User: { role: "user", username: "member" } };
-  return { manager, configuration, facts, calls, options, senior, junior, backup, intern };
+  return { manager, configuration, facts, calls, options, senior, junior, backup, helper };
 }
 
 test("routing configuration omits unconnected orchestrators and preserves saved disconnected workflows", async () => {
@@ -81,7 +81,7 @@ test("routing configuration omits unconnected orchestrators and preserves saved 
   f.configuration.orchestrators.codex = {};
   const connected = await f.manager.inspectRoutingConfiguration(f.configuration, f.options);
   assert.deepEqual(connected.engines.map(({ engineId }) => engineId), ["opencode"]);
-  assert.ok(connected.engines[0].roles.intern.choices.length, "cross-orchestrator helper choices do not create extra workflows");
+  assert.ok(connected.engines[0].roles.helper.choices.length, "cross-orchestrator helper choices do not create extra workflows");
   disconnected.push("opencode");
   assert.deepEqual((await f.manager.inspectRoutingConfiguration(f.configuration, f.options)).engines, []);
 });
@@ -157,7 +157,7 @@ test("routing configuration preview shares admission decisions and exposes no co
 
 test("workflow choices read saved pairs without model discovery and preserve collaborator backup decisions", async () => {
   const f = routingManagerFixture();
-  f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.intern };
+  f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.helper };
   for (const [actor, model, backupUsed] of [
     [{ role: "owner" }, "Codex · gpt-6-astra", false],
     [f.options.vibe64User, "OpenCode · big-pickle", true]
@@ -171,7 +171,7 @@ test("workflow choices read saved pairs without model discovery and preserve col
     assert.doesNotMatch(JSON.stringify(result), /connectionIdentity|connection:/);
   }
   assert.equal(f.calls.some(({ type }) => type === "catalog"), false);
-  assert.equal(f.calls.some(({ assistantSelection }) => assistantSelection?.modelId === f.intern.modelId), true);
+  assert.equal(f.calls.some(({ assistantSelection }) => assistantSelection?.modelId === f.helper.modelId), true);
   assert.equal(f.manager.binding("main"), "");
   f.facts.get(f.backup.modelId).available = false;
   const disconnected = await f.manager.inspectRoutingConfiguration(f.configuration, { ...f.options, workflowsOnly: true });
@@ -202,7 +202,7 @@ test("workflow choices offer first-use connections without live discovery or sav
 
 test("the lightweight workflow preview cannot bypass model validation at dispatch", async () => {
   const f = routingManagerFixture();
-  f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.intern };
+  f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.helper };
   f.configuration.orchestrators.codex.junior = { ...f.junior, modelId: "removed-model" };
   f.facts.set("removed-model", { ...f.facts.get(f.junior.modelId) });
   const options = { vibe64User: { role: "owner" }, workflowsOnly: true };
@@ -227,7 +227,7 @@ test("routing preview loads every connected OpenCode model page and refuses mixe
           : ["opencode", "deepseek"].map((id) => ({ id, connected: true, models: [] })),
         page: { hasMore: Boolean(input.modelProviderId && !input.cursor), nextCursor: input.modelProviderId && !input.cursor ? "second" : "" } };
     } }] });
-  const configuration = { schemaVersion: 3, revision: 1, orchestrators: {} };
+  const configuration = { schemaVersion: 4, revision: 1, orchestrators: {} };
   const view = await manager.inspectRoutingConfiguration(configuration);
   const choices = view.engines[0].roles.junior.choices;
   assert.equal(choices.length, 4);
@@ -281,7 +281,7 @@ test("captured member and preview actors do not inherit an ambient owner's acces
 
 test("purpose resolution merges exact OpenCode models without consulting its first catalogue page", async () => {
   const f = routingManagerFixture();
-  f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.intern };
+  f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.helper };
   const result = await f.manager.resolveAssistantPurpose({ purpose: "junior", workflowEngineId: "opencode" }, f.options);
   assert.equal(result.available, true, result.message);
   assert.equal(result.seniorJuniorPair.senior.effectiveSelection.modelId, "big-pickle");
@@ -289,16 +289,16 @@ test("purpose resolution merges exact OpenCode models without consulting its fir
   assert.deepEqual(f.calls.filter(({ type }) => type === "catalog").map(({ input }) => input.modelId), ["big-pickle", "deepseek-v4-flash"]);
 });
 
-test("independent Router and Intern resolve exact destinations without reading unrelated roles", async () => {
+test("independent Router and Helper resolve exact destinations without reading unrelated roles", async () => {
   const f = routingManagerFixture();
   const helper = await f.manager.resolveAssistantPurpose({ purpose: "prompt_hint", workflowEngineId: "codex" }, f.options);
   assert.equal(helper.available, true, helper.message);
-  assert.equal(helper.effectiveSelection.modelId, f.intern.modelId);
-  assert.deepEqual(helper.executionProfileRequest, { profileId: "economy", workloadId: "prompt_hint" });
+  assert.equal(helper.effectiveSelection.modelId, f.helper.modelId);
+  assert.deepEqual(helper.executionProfileRequest, { profileId: "helper", workloadId: "prompt_hint" });
   assert.deepEqual(f.calls.filter(({ type }) => type === "catalog").map(({ input }) => input), [{
     modelProviderId: "deepseek", modelId: "deepseek-v4-flash", limit: "1"
   }]);
-  assert.deepEqual(f.calls.filter(({ type }) => type === "access").map(({ assistantSelection }) => assistantSelection.modelId), [f.intern.modelId]);
+  assert.deepEqual(f.calls.filter(({ type }) => type === "access").map(({ assistantSelection }) => assistantSelection.modelId), [f.helper.modelId]);
   f.calls.length = 0;
   const router = await f.manager.resolveAssistantPurpose({ purpose: "request_routing", workflowEngineId: "codex" }, f.options);
   assert.equal(router.effectiveSelection.modelId, f.junior.modelId);
@@ -901,7 +901,7 @@ test("session agent manager rejects non-fingerprint account descriptions", async
   );
 });
 
-test("session agent manager never resolves a live model profile before economy cleanup", async () => {
+test("session agent manager never resolves a live model profile before helper cleanup", async () => {
   let deletes = 0;
   let resolutions = 0;
   const manager = createSessionAgentManager({
@@ -911,7 +911,7 @@ test("session agent manager never resolves a live model profile before economy c
       async deleteDetachedChatThread(_context, input) {
         deletes += 1;
         assert.deepEqual(input.executionProfile, {
-          profileId: "economy",
+          profileId: "helper",
           workloadId: "source_explanation"
         });
         return { ok: true };
@@ -925,7 +925,7 @@ test("session agent manager never resolves a live model profile before economy c
 
   const result = await manager.deleteDetachedChatThread("session-1", {
     executionProfile: {
-      profileId: "economy",
+      profileId: "helper",
       workloadId: "source_explanation"
     },
     threadId: "thread-1"
@@ -935,7 +935,7 @@ test("session agent manager never resolves a live model profile before economy c
   assert.equal(resolutions, 0);
 });
 
-test("session agent manager rejects malformed economy cleanup markers before provider work", async () => {
+test("session agent manager rejects malformed helper cleanup markers before provider work", async () => {
   let deletes = 0;
   const manager = createSessionAgentManager({
     providers: [{
@@ -950,7 +950,7 @@ test("session agent manager rejects malformed economy cleanup markers before pro
 
   await assert.rejects(
     manager.deleteDetachedChatThread("session-1", {
-      executionProfile: "economy",
+      executionProfile: "helper",
       threadId: "thread-1"
     }),
     (error) => (
@@ -990,7 +990,7 @@ test("session agent manager resolves semantic execution profiles before provider
             reasoning: true,
             summary: false
           },
-          revision: "codex-economy-v1",
+          revision: "codex-helper-v1",
           thinking: "low",
           workloadId: request.workloadId
         };
@@ -1008,7 +1008,7 @@ test("session agent manager resolves semantic execution profiles before provider
 
   const result = await manager.runDetachedChatTurn("session-1", {
     executionProfile: {
-      profileId: "economy",
+      profileId: "helper",
       workloadId: "source_explanation"
     },
     prompt: "Explain this source."
@@ -1018,13 +1018,13 @@ test("session agent manager resolves semantic execution profiles before provider
 
   assert.deepEqual(calls.map(([operation]) => operation), ["resolve", "run"]);
   assert.deepEqual(calls[0][2], {
-    profileId: "economy",
+    profileId: "helper",
     workloadId: "source_explanation"
   });
   assert.equal(calls[0][1].signal, abortController.signal);
   assert.equal(calls[1][1].signal, abortController.signal);
   assert.equal(calls[1][2].executionProfile.model, "provider-owned-model");
-  assert.equal(result.executionProfile.revision, "codex-economy-v1");
+  assert.equal(result.executionProfile.revision, "codex-helper-v1");
 });
 
 test("session agent manager executes its exact pre-resolved profile without resolving again", async () => {
@@ -1043,14 +1043,14 @@ test("session agent manager executes its exact pre-resolved profile without reso
       repositoryWrite: false,
       tools: "none"
     },
-    profileId: "economy",
+    profileId: "helper",
     providerId: "codex",
     request: {
       allowProviderModelFallback: false,
       reasoning: true,
       summary: false
     },
-    revision: "codex-economy-v1",
+    revision: "codex-helper-v1",
     thinking: "low",
     workloadId: "source_explanation"
   };
@@ -1082,7 +1082,7 @@ test("session agent manager executes its exact pre-resolved profile without reso
   });
 
   const resolved = await manager.resolveExecutionProfile("session-1", {
-    profileId: "economy",
+    profileId: "helper",
     workloadId: "source_explanation"
   });
   const result = await manager.runDetachedChatTurn("session-1", {
@@ -1116,14 +1116,14 @@ test("session agent manager rejects copied, forged, and cross-session pre-resolv
       repositoryWrite: false,
       tools: "none"
     },
-    profileId: "economy",
+    profileId: "helper",
     providerId: "codex",
     request: {
       allowProviderModelFallback: false,
       reasoning: true,
       summary: false
     },
-    revision: "codex-economy-v1",
+    revision: "codex-helper-v1",
     thinking: "low",
     workloadId: "source_explanation"
   };
@@ -1141,7 +1141,7 @@ test("session agent manager rejects copied, forged, and cross-session pre-resolv
     }]
   });
   const resolved = await manager.resolveExecutionProfile("session-1", {
-    profileId: "economy",
+    profileId: "helper",
     workloadId: "source_explanation"
   });
 
@@ -1246,7 +1246,7 @@ test("session agent manager rejects malformed provider resolutions before provid
             reasoning: true,
             summary: false
           },
-          revision: "codex-economy-v1",
+          revision: "codex-helper-v1",
           thinking: "low",
           workloadId: request.workloadId
         };
@@ -1261,7 +1261,7 @@ test("session agent manager rejects malformed provider resolutions before provid
   await assert.rejects(
     manager.runDetachedChatTurn("session-1", {
       executionProfile: {
-        profileId: "economy",
+        profileId: "helper",
         workloadId: "source_explanation"
       },
       prompt: "Explain this source."
@@ -1288,14 +1288,14 @@ test("session agent manager rejects provider resolution identity mismatches befo
       repositoryWrite: false,
       tools: "none"
     },
-    profileId: "economy",
+    profileId: "helper",
     providerId: "codex",
     request: {
       allowProviderModelFallback: false,
       reasoning: true,
       summary: false
     },
-    revision: "codex-economy-v1",
+    revision: "codex-helper-v1",
     thinking: "low",
     workloadId: "source_explanation"
   };
@@ -1351,7 +1351,7 @@ test("session agent manager rejects provider resolution identity mismatches befo
     await assert.rejects(
       manager.runDetachedChatTurn("session-1", {
         executionProfile: {
-          profileId: "economy",
+          profileId: "helper",
           workloadId: "source_explanation"
         },
         prompt: "Explain this source."
@@ -1389,7 +1389,7 @@ test("session agent manager validates direct provider resolution identity before
             reasoning: true,
             summary: false
           },
-          revision: "codex-economy-v1",
+          revision: "codex-helper-v1",
           thinking: "low",
           workloadId: request.workloadId
         };
@@ -1399,7 +1399,7 @@ test("session agent manager validates direct provider resolution identity before
 
   await assert.rejects(
     manager.resolveExecutionProfile("session-1", {
-      profileId: "economy",
+      profileId: "helper",
       workloadId: "source_explanation"
     }),
     (error) => (
@@ -1431,7 +1431,7 @@ test("session agent manager rejects consumer-owned execution details before prov
   await assert.rejects(manager.runDetachedChatTurn("session-1", {
     executionProfile: {
       model: "consumer-must-not-control-this",
-      profileId: "economy",
+      profileId: "helper",
       workloadId: "source_explanation"
     },
     prompt: "Explain this source."
@@ -1456,7 +1456,7 @@ test("session agent manager fails closed when a provider cannot resolve a reques
   await assert.rejects(
     manager.runDetachedChatTurn("session-1", {
       executionProfile: {
-        profileId: "economy",
+        profileId: "helper",
         workloadId: "source_explanation"
       },
       prompt: "Explain this source."
@@ -1465,7 +1465,7 @@ test("session agent manager fails closed when a provider cannot resolve a reques
   );
 });
 
-test("session agent manager surfaces required Codex authentication before economy work starts", async () => {
+test("session agent manager surfaces required Codex authentication before helper work starts", async () => {
   let detachedTurns = 0;
   const manager = createSessionAgentManager({
     providers: [{
@@ -1473,14 +1473,14 @@ test("session agent manager surfaces required Codex authentication before econom
       transportId: "codex_app_server",
       async resolveExecutionProfile() {
         const error = new Error(
-          "Codex could not activate the selected account for isolated economy work. Reconnect Codex and retry."
+          "Codex could not activate the selected account for isolated helper work. Reconnect Codex and retry."
         );
-        error.code = "vibe64_codex_economy_auth_unavailable";
+        error.code = "vibe64_codex_helper_auth_unavailable";
         throw error;
       },
       async runDetachedChatTurn() {
         detachedTurns += 1;
-        throw new Error("Unauthenticated economy work must not start.");
+        throw new Error("Unauthenticated helper work must not start.");
       }
     }]
   });
@@ -1488,13 +1488,13 @@ test("session agent manager surfaces required Codex authentication before econom
   await assert.rejects(
     manager.runDetachedChatTurn("session-1", {
       executionProfile: {
-        profileId: "economy",
+        profileId: "helper",
         workloadId: "source_explanation"
       },
       prompt: "Explain this source."
     }),
     (error) => (
-      error.code === "vibe64_codex_economy_auth_unavailable" &&
+      error.code === "vibe64_codex_helper_auth_unavailable" &&
       /Reconnect Codex and retry/u.test(error.message)
     )
   );
@@ -1788,12 +1788,12 @@ test("purpose availability shares one response's facts and preserves member-spec
     assert.equal(purposes[purpose].settingsRevision, 7);
   }
   assert.equal(purposes.auto.available, true, purposes.auto.message);
-  assert.equal(purposes.prompt_hint.effectiveSelection.modelId, f.intern.modelId);
-  assert.equal(purposes.source_explanation.effectiveSelection.modelId, f.intern.modelId);
+  assert.equal(purposes.prompt_hint.effectiveSelection.modelId, f.helper.modelId);
+  assert.equal(purposes.source_explanation.effectiveSelection.modelId, f.helper.modelId);
   assert.equal(purposes.request_routing.effectiveSelection.modelId, f.junior.modelId);
   assert.equal(f.calls.filter(({ type }) => type === "access").length, 4, "each connection/model is inspected once per response");
   assert.equal(f.manager.binding("main"), "", "availability never binds the main chat");
-  f.facts.get(f.intern.modelId).available = false;
+  f.facts.get(f.helper.modelId).available = false;
   const refreshed = await f.manager.inspectAssistantPurposes({ workflowEngineId: "codex" }, f.options);
   assert.equal(refreshed.prompt_hint.available, false, "a later response reads fresh connection facts");
   assert.equal(refreshed.junior.available, true, "independent role failure does not disable chat");
@@ -1808,26 +1808,26 @@ test("purpose availability applies an explicit mode override without modifying o
   assert.equal(purposes.review.seniorJuniorPair.junior.effectiveSelection.modelId, f.junior.modelId);
   assert.equal(purposes.senior.seniorJuniorPair.junior.effectiveSelection.modelId, f.junior.modelId);
   assert.equal(purposes.auto.seniorJuniorPair.junior.effectiveSelection.modelId, f.junior.modelId);
-  assert.equal(purposes.prompt_hint.effectiveSelection.modelId, f.intern.modelId);
+  assert.equal(purposes.prompt_hint.effectiveSelection.modelId, f.helper.modelId);
   assert.equal(f.configuration.orchestrators.codex.junior.modelId, f.junior.modelId);
 });
 
 test("Auto and helper discovery reads only the permitted fallback catalogue for a member", async () => {
   const f = routingManagerFixture();
   Object.assign(f.configuration.orchestrators.codex, {
-    senior: f.senior, junior: f.senior, intern: f.senior, router: f.senior, sharedBackup: f.intern
+    senior: f.senior, junior: f.senior, helper: f.senior, router: f.senior, sharedBackup: f.helper
   });
   const purposes = await f.manager.inspectAssistantPurposes({ workflowEngineId: "codex", mode: "auto", review: true }, f.options);
   for (const [purpose, decision] of Object.entries(purposes)) {
     assert.equal(decision.available, true, `${purpose}: ${decision.message}`);
     if (purpose === "auto") {
-      assert.equal(decision.router.modelId, f.intern.modelId);
-      assert.equal(decision.seniorJuniorPair.senior.effectiveSelection.modelId, f.intern.modelId);
-    } else assert.equal(decision.effectiveSelection.modelId, f.intern.modelId);
+      assert.equal(decision.router.modelId, f.helper.modelId);
+      assert.equal(decision.seniorJuniorPair.senior.effectiveSelection.modelId, f.helper.modelId);
+    } else assert.equal(decision.effectiveSelection.modelId, f.helper.modelId);
   }
   const catalogs = f.calls.filter(({ type }) => type === "catalog");
   assert.equal(catalogs.length, 1);
-  assert.equal(catalogs[0].input.modelId, f.intern.modelId);
+  assert.equal(catalogs[0].input.modelId, f.helper.modelId);
   assert.equal(catalogs[0].context.vibe64User.username, "member");
   await assert.rejects(f.manager.requireAssistantAccessForSelection(f.senior, f.options), { code: "vibe64_assistant_owner_required" });
 });

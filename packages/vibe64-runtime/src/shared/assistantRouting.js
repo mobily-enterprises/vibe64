@@ -7,14 +7,14 @@ import { canUseVibe64Assistant, VIBE64_ASSISTANT_ACCESS_ERROR_CODES } from "./as
 const ASSISTANT_MODES = Object.freeze([
   { id: "senior", label: "Senior", description: "Talk directly to your most capable model. Ask questions or request changes." },
   { id: "junior", label: "Junior", description: "Talk directly to your everyday model. Ask questions or request changes." },
-  { id: "intern", label: "Intern", description: "Talk directly to your economical model. Also used for suggestions and helpers." },
   { id: "auto", label: "Auto", description: "Senior plans; you approve; Junior implements. Optional Senior review and Deslop." }
 ]);
 const ASSISTANT_ROUTING_METADATA = "assistant_routing";
-const ASSISTANT_ROUTING_ROLES = Object.freeze(["senior", "junior", "intern", "router"]);
+const ASSISTANT_ROUTING_ROLES = Object.freeze(["senior", "junior", "helper", "router"]);
 const ASSISTANT_ROUTING_ASSIGNMENTS = Object.freeze([...ASSISTANT_ROUTING_ROLES, "sharedBackup"]);
 const ASSISTANT_ROUTING_ROLE_DEFINITIONS = Object.freeze([
   ...ASSISTANT_MODES.filter(({ id }) => id !== "auto"),
+  { id: "helper", label: "Helper", description: "Used for suggestions, naming, summaries and explanations." },
   { id: "router", label: "Router", description: "Recognizes planning, plan approval and Deslop in Auto." }
 ]);
 const ROUTING_REASONS = Object.freeze([
@@ -23,13 +23,13 @@ const ROUTING_REASONS = Object.freeze([
 ]);
 const AUTO_MIXED_DESLOP_MESSAGE = "In Auto, please request feature work and Deslop separately. Send the feature request first, then ask for Deslop after implementation.";
 const ASSISTANT_PURPOSE_ROLES = Object.freeze({
-  senior: "senior", junior: "junior", intern: "intern", review: "senior", deslop: "senior",
-  ...Object.fromEntries(Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).map((purpose) => [purpose, purpose === "request_routing" ? "router" : "intern"]))
+  senior: "senior", junior: "junior", helper: "helper", review: "senior", deslop: "senior",
+  ...Object.fromEntries(Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).map((purpose) => [purpose, purpose === "request_routing" ? "router" : "helper"]))
 });
 
 function assistantModeLabel(mode) {
   return ASSISTANT_MODES.find(({ id }) => id === mode)?.label ||
-    ({ review: "Senior review", deslop: "Senior Deslop", router: "Router" })[mode] || "";
+    ({ review: "Senior review", deslop: "Senior Deslop", router: "Router", helper: "Helper" })[mode] || "";
 }
 
 function routingError(message, code = "vibe64_assistant_routing_invalid") {
@@ -38,7 +38,7 @@ function routingError(message, code = "vibe64_assistant_routing_invalid") {
 
 function assistantRoutingPreferences(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) || !ASSISTANT_MODES.some(({ id }) => id === value.mode)) {
-    throw routingError("Choose Senior, Junior, Intern, or Auto.");
+    throw routingError("Choose Senior, Junior, or Auto.");
   }
   if (value.workflowEngineId !== undefined && !Object.values(VIBE64_ASSISTANT_ENGINE_IDS).includes(value.workflowEngineId)) {
     throw routingError("Choose a supported workflow orchestrator.");
@@ -82,7 +82,7 @@ function routingModelChoices(engine, { purpose = "senior" } = {}) {
 function routingModelScore(selection, role) {
   const row = routingScores.models.find((candidate) => ["engineId", "modelProviderId", "modelId"]
     .every((key) => candidate[key] === selection[key]));
-  return (row?.scores || routingScores.defaultScores)[role === "sharedBackup" ? "intern" : role];
+  return (row?.scores || routingScores.defaultScores)[role === "sharedBackup" ? "helper" : role];
 }
 
 function routingConnectionAccess(selection, connections = []) {
@@ -93,7 +93,7 @@ function routingConnectionAccess(selection, connections = []) {
 function recommendedRoutingAssignments(engine, { catalogs = engine ? [engine] : [], assignments = {}, connectionAccess = [] } = {}) {
   return Object.fromEntries(ASSISTANT_ROUTING_ASSIGNMENTS.map((role) => {
     const candidates = ["senior", "junior"].includes(role) ? (engine ? [engine] : []) : catalogs;
-    const purpose = role === "router" ? "request_routing" : role === "sharedBackup" ? "junior" : role === "intern" ? "prompt_hint" : role;
+    const purpose = role === "router" ? "request_routing" : role === "sharedBackup" ? "junior" : role === "helper" ? "prompt_hint" : role;
     const choices = candidates.flatMap((catalog) => routingModelChoices(catalog, { purpose }))
       .filter((choice) => !choice.compatibilityError && (role !== "junior" && role !== "sharedBackup" || choice.capabilities?.toolcall !== false))
       .filter((choice) => {
@@ -112,7 +112,7 @@ function recommendedRoutingAssignments(engine, { catalogs = engine ? [engine] : 
       try { return [role, { ...routingAssignmentSelection(selectedEngine, assignments[role], { purpose }), selectionSource: "recommended" }]; }
       catch { /* An obsolete variant must not prevent an otherwise eligible recommendation. */ }
     }
-    const preferredEffort = ["intern", "router", "sharedBackup"].includes(role) ? "low" : "high";
+    const preferredEffort = ["helper", "router", "sharedBackup"].includes(role) ? "low" : "high";
     const agent = selectedEngine.agents.find(({ id }) => id === choice.agentId);
     const selection = resolveVibe64AssistantSelection(selectedEngine, { ...choice,
       variantId: agent.variantId || (choice.variants.some(({ id }) => id === preferredEffort) ? preferredEffort : choice.variantId) });
@@ -161,11 +161,11 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
         routerConnectionIdentity: router.connectionIdentity };
     }
     if (!role) throw routingError("Unknown assistant purpose.");
-    if (role === "intern" && purpose !== "intern" && assignments.helperRoutingReview) {
+    if (role === "helper" && purpose !== "helper" && assignments.helperRoutingReview) {
       throw routingError("Review the migrated helper choices in Model routing before using background assistance.",
         "vibe64_assistant_helper_review_required");
     }
-    if (override && (!["senior", "junior", "intern"].includes(override.role) || !override.selection)) {
+    if (override && (!["senior", "junior"].includes(override.role) || !override.selection)) {
       throw routingError("A conversation override must identify its role and selection.");
     }
     const configured = { ...assignments, ...(override ? { [override.role]: override.selection } : {}) };
@@ -234,8 +234,7 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
       Object.assign(result, snapshot(original, effective, needsBackup ? "personal_connection" : ""));
     }
     if (Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).includes(purpose)) {
-      // This execution profile sets helper limits; Intern is the model-selection role.
-      result.executionProfileRequest = { profileId: "economy", workloadId: purpose };
+      result.executionProfileRequest = { profileId: "helper", workloadId: purpose };
     }
     return { ...result, available: true };
   } catch (error) {
@@ -298,7 +297,6 @@ function assistantModePrompt(mode, message, { planInstructions = "" } = {}) {
     junior: planInstructions
       ? "You are Junior in Auto's implementation stage. Implement the approved outcome and verify changes with relevant checks. Make ordinary local choices using established project patterns. Stop for an unresolved architectural or product decision outside the agreed scope and follow the working-plan handoff instructions. Preserve unrelated work."
       : direct,
-    intern: direct,
     deslop: [
       "Perform Deslop directly using the project's Deslop guidance.",
       "You may edit code for behavior-preserving cleanup; earlier Auto planning restrictions do not apply.",
@@ -322,7 +320,7 @@ function assistantModePrompt(mode, message, { planInstructions = "" } = {}) {
     ].join(" ")
   };
   if (!instructions[mode]) throw routingError("Unknown assistant mode.");
-  if (!planInstructions && ["senior", "junior", "intern", "review", "deslop"].includes(mode)) {
+  if (!planInstructions && ["senior", "junior", "review", "deslop"].includes(mode)) {
     planInstructions = "Do not read or update Vibe64's temporary working plan, even if earlier turns referenced one. This request is independent of that document.";
   }
   return `[Vibe64 role: ${assistantModeLabel(mode)}. Applies only to this request; earlier per-turn mode instructions no longer apply.]\n${instructions[mode]}${planInstructions ? `\n${planInstructions}` : ""}\n\n${message}`;

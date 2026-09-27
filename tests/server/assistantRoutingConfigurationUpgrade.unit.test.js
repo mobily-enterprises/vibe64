@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
 import { validateAssistantRoutingConfiguration } from "../../packages/vibe64-core/src/server/stateUpgrades/routingV2Format.js";
+import { upgradeAssistantHelpers } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
 import { upgradeAssistantRoles } from "../../packages/vibe64-accounts/src/server/assistantRoleUpgrade.js";
 import { upgradeAssistantRouting, upgradeAssistantRoutingConfiguration } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
 import { defineVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
@@ -158,14 +159,16 @@ test("preflight is read-only on fresh state and on active, temporary and archive
 test("the live routing store reads only the current format and never upgrades during reads", async (t) => {
   const f = await fixture(t, { populated: false });
   const store = createAssistantRoutingStore({ systemRoot: f.systemRoot });
-  assert.deepEqual(await store.read(), { schemaVersion: 3, revision: 0, orchestrators: {} });
+  assert.deepEqual(await store.read(), { schemaVersion: 4, revision: 0, orchestrators: {} });
   await assert.rejects(stat(f.systemRoot), { code: "ENOENT" });
   const config = upgradeAssistantRoutingConfiguration({ configuration: old({ economy: pickle }), connections: [included] });
   await mkdir(path.dirname(f.routingPath), { recursive: true });
   await writeFile(f.routingPath, JSON.stringify(config));
   await upgradeAssistantRoles({ systemRoot: f.systemRoot, backupRoot: path.join(f.systemRoot, "upgrades/backups/roles"), apply: true, report() {} });
+  await assert.rejects(store.read(), { code: "vibe64_assistant_routing_upgrade_required" });
+  await upgradeAssistantHelpers({ systemRoot: f.systemRoot, backupRoot: path.join(f.systemRoot, "upgrades/backups/helper"), apply: true, report() {} });
   const saved = await store.read();
-  assert.equal(saved.schemaVersion, 3);
+  assert.equal(saved.schemaVersion, 4);
   assert.deepEqual((await store.read()).orchestrators.codex.helperRoutingReview, { ...config.orchestrators.codex.helperRoutingReview, reason: "helper_choices_differ" });
   await assert.rejects(store.write({ codex: { senior: pickle } }, saved.revision), /unsupported shape/u);
   assert.deepEqual(await store.read(), saved);

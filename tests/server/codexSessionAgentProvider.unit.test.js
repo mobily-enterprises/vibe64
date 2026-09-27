@@ -11,13 +11,13 @@ import {
   VIBE64_PROMPT_HINT_OUTPUT_SCHEMA
 } from "../../packages/vibe64-runtime/src/shared/index.js";
 import {
-  codexAppServerEconomyTurnSettings
+  codexAppServerHelperTurnSettings
 } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
 import {
-  CODEX_ECONOMY_PROFILE_REVISION,
-  CODEX_ECONOMY_WORKLOAD_LIMITS,
+  CODEX_HELPER_PROFILE_REVISION,
+  CODEX_HELPER_WORKLOAD_LIMITS,
   createCodexSessionAgentProvider,
-  resolveCodexEconomyExecutionProfile
+  resolveCodexHelperExecutionProfile
 } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
 
 test("Codex picker discovers new models and thinking levels and preserves the validated selection for execution", async () => {
@@ -63,7 +63,7 @@ test("Codex discovery failures stay visible and disconnected accounts do not dis
   assert.equal(disconnected.modelProviders[0].connected, false);
 });
 
-test("Codex adapter forwards trusted renewal operations without selecting an economy profile", async () => {
+test("Codex adapter forwards trusted renewal operations without selecting a helper profile", async () => {
   const calls = [];
   const runtime = { stateRoot: "/runtime/project" };
   const session = { sessionId: "session-1" };
@@ -307,9 +307,9 @@ function catalogModel({
   };
 }
 
-function economyRequest(workloadId = VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION) {
+function helperRequest(workloadId = VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION) {
   return {
-    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
     workloadId
   };
 }
@@ -348,14 +348,14 @@ function retainedAttachmentLease(ids = []) {
   };
 }
 
-test("Codex economy resolves Luna-low from the live catalog with bounded tool-free policy", () => {
-  const result = resolveCodexEconomyExecutionProfile(economyRequest(), {
+test("Codex helper resolves Luna-low from the live catalog with bounded tool-free policy", () => {
+  const result = resolveCodexHelperExecutionProfile(helperRequest(), {
     data: [catalogModel()]
-  }, "gpt-5.6-luna");
+  }, "gpt-5.6-luna", "low");
 
   assert.equal(result.model, "gpt-5.6-luna");
   assert.equal(result.thinking, "low");
-  assert.equal(result.revision, CODEX_ECONOMY_PROFILE_REVISION);
+  assert.equal(result.revision, CODEX_HELPER_PROFILE_REVISION);
   assert.deepEqual(result.request, {
     allowProviderModelFallback: false,
     reasoning: true,
@@ -369,20 +369,20 @@ test("Codex economy resolves Luna-low from the live catalog with bounded tool-fr
   });
   assert.deepEqual(
     result.limits,
-    CODEX_ECONOMY_WORKLOAD_LIMITS[VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION]
+    CODEX_HELPER_WORKLOAD_LIMITS[VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION]
   );
 
 });
 
 test("Codex prompt-hint profile can enforce its complete three-suggestion schema", () => {
-  const profile = resolveCodexEconomyExecutionProfile({
-    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+  const profile = resolveCodexHelperExecutionProfile({
+    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
     workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.PROMPT_HINT
   }, {
     data: [catalogModel()]
-  }, "gpt-5.6-luna");
+  }, "gpt-5.6-luna", "low");
 
-  const settings = codexAppServerEconomyTurnSettings({
+  const settings = codexAppServerHelperTurnSettings({
     cwd: "/workspace/session",
     executionProfile: profile,
     outputSchema: VIBE64_PROMPT_HINT_OUTPUT_SCHEMA
@@ -392,31 +392,31 @@ test("Codex prompt-hint profile can enforce its complete three-suggestion schema
   assert.equal(settings.outputSchema, VIBE64_PROMPT_HINT_OUTPUT_SCHEMA);
 });
 
-test("Codex economy ignores catalog upgrade advice and never falls back to an interactive model", () => {
-  assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), {
+test("Codex helper ignores catalog upgrade advice and never falls back to an interactive model", () => {
+  assert.throws(() => resolveCodexHelperExecutionProfile(helperRequest(), {
     data: [catalogModel({
       model: "gpt-5.6-sol",
       upgrade: "gpt-5.7-sol"
     })]
-  }, "gpt-5.6-luna"), (error) => {
+  }, "gpt-5.6-luna", "low"), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE);
-    assert.match(error.message, /No interactive-model fallback was attempted/u);
-    assert.deepEqual(error.candidates, ["gpt-5.6-luna"]);
+    assert.match(error.message, /Choose another in Model routing/u);
+    assert.equal(error.model, "gpt-5.6-luna");
     return true;
   });
 });
 
-test("Codex economy fails closed when Luna-low is hidden or low reasoning is unavailable", () => {
-  assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), {
+test("Codex helper fails closed when Luna-low is hidden or low reasoning is unavailable", () => {
+  assert.throws(() => resolveCodexHelperExecutionProfile(helperRequest(), {
     data: [catalogModel({ hidden: true })]
-  }, "gpt-5.6-luna"), (error) => {
+  }, "gpt-5.6-luna", "low"), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE);
     return true;
   });
 
-  assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), {
+  assert.throws(() => resolveCodexHelperExecutionProfile(helperRequest(), {
     data: [catalogModel({ reasoning: ["medium", "high"] })]
-  }, "gpt-5.6-luna"), (error) => {
+  }, "gpt-5.6-luna", "low"), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.REASONING_UNSUPPORTED);
     assert.equal(error.model, "gpt-5.6-luna");
     assert.equal(error.thinking, "low");
@@ -424,16 +424,16 @@ test("Codex economy fails closed when Luna-low is hidden or low reasoning is una
   });
 });
 
-test("Codex declares one provider-owned economy capability with limits for every bounded workload", () => {
+test("Codex declares one provider-owned helper capability with limits for every bounded workload", () => {
   const provider = createCodexSessionAgentProvider({
     controller: {
       executionProfileModelCatalog: async () => ({ data: [catalogModel()] })
     }
   });
 
-  assert.deepEqual(provider.executionProfiles, [VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY]);
+  assert.deepEqual(provider.executionProfiles, [VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER]);
   assert.deepEqual(
-    Object.keys(CODEX_ECONOMY_WORKLOAD_LIMITS).sort(),
+    Object.keys(CODEX_HELPER_WORKLOAD_LIMITS).sort(),
     Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).sort()
   );
 
@@ -466,7 +466,7 @@ test("Codex adapter resolves the live profile before a detached run and returns 
     session,
     sessionId: "session-a",
     signal: abortController.signal
-  }, economyRequest());
+  }, helperRequest());
   const result = await provider.runDetachedChatTurn({
     runtime,
     session,
@@ -488,7 +488,7 @@ test("Codex adapter resolves the live profile before a detached run and returns 
   assert.equal(calls[1][3].runtime, runtime);
   assert.equal(calls[1][3].session, session);
   assert.equal(result.executionProfile.model, "gpt-5.6-luna");
-  assert.equal(result.executionProfile.revision, CODEX_ECONOMY_PROFILE_REVISION);
+  assert.equal(result.executionProfile.revision, CODEX_HELPER_PROFILE_REVISION);
   assert.equal(Object.hasOwn(result.executionProfile, "enforcement"), false);
 });
 
@@ -501,10 +501,10 @@ test("Codex helper changes affect the next task while an already resolved task k
     }
   } });
   const context = { sessionId: "session-a", assistantSelection: { modelId: "chosen-helper" } };
-  const first = await provider.resolveExecutionProfile(context, economyRequest());
+  const first = await provider.resolveExecutionProfile(context, helperRequest());
   assert.equal(first.model, "chosen-helper");
   context.assistantSelection = { modelId: "gpt-5.6-luna" };
-  const next = await provider.resolveExecutionProfile(context, economyRequest());
+  const next = await provider.resolveExecutionProfile(context, helperRequest());
   assert.equal(next.model, "gpt-5.6-luna");
   const result = await provider.runDetachedChatTurn(context, { executionProfile: first, prompt: "Continue" });
   assert.equal(result.executionProfile.model, "chosen-helper");
@@ -520,7 +520,7 @@ test("Codex adapter publishes the resolved audit profile before a streamed detac
       assert.equal(options.runtime, runtime);
       assert.equal(options.session, session);
       options.onEvent({
-        threadId: "economy-thread",
+        threadId: "helper-thread",
         type: "thread"
       });
       return {
@@ -530,9 +530,9 @@ test("Codex adapter publishes the resolved audit profile before a streamed detac
     }
   };
   const provider = createCodexSessionAgentProvider({ controller });
-  const resolution = resolveCodexEconomyExecutionProfile(economyRequest(), {
+  const resolution = resolveCodexHelperExecutionProfile(helperRequest(), {
     data: [catalogModel()]
-  }, "gpt-5.6-luna");
+  }, "gpt-5.6-luna", "low");
 
   const result = await provider.streamDetachedChatTurn({
     onEvent(event) {
@@ -551,7 +551,7 @@ test("Codex adapter publishes the resolved audit profile before a streamed detac
     "thread"
   ]);
   assert.equal(events[0].executionProfile.model, "gpt-5.6-luna");
-  assert.equal(events[0].executionProfile.revision, CODEX_ECONOMY_PROFILE_REVISION);
+  assert.equal(events[0].executionProfile.revision, CODEX_HELPER_PROFILE_REVISION);
   assert.deepEqual(result.executionProfile, events[0].executionProfile);
 });
 
@@ -1101,9 +1101,9 @@ test("Codex adapter rejects consumer-supplied model knobs", async () => {
   await assert.rejects(provider.resolveExecutionProfile({
     sessionId: "session-a"
   }, {
-    ...economyRequest(),
+    ...helperRequest(),
     model: "gpt-5.6-sol"
-  }, "gpt-5.6-luna"), (error) => {
+  }, "gpt-5.6-luna", "low"), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.INVALID);
     assert.equal(error.field, "request.model");
     return true;
@@ -1117,7 +1117,7 @@ test("Codex adapter fails closed when live model discovery is not wired", async 
 
   await assert.rejects(provider.resolveExecutionProfile({
     sessionId: "session-a"
-  }, economyRequest()), (error) => {
+  }, helperRequest()), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE);
     return true;
   });
@@ -1173,10 +1173,10 @@ test("Codex adapter propagates explicit runtime and session through detached cle
     session,
     sessionId: "session-a"
   };
-  const deleteInput = { threadId: "economy-thread" };
+  const deleteInput = { threadId: "helper-thread" };
   const interruptInput = {
-    threadId: "economy-thread",
-    turnId: "economy-turn"
+    threadId: "helper-thread",
+    turnId: "helper-turn"
   };
 
   await provider.deleteDetachedChatThread(context, deleteInput);
@@ -1195,9 +1195,9 @@ test("Codex adapter propagates explicit runtime and session through detached cle
 
 test("Codex bounded profiles require the resolved model and never silently fall back", () => {
   const catalog = { data: [catalogModel(), { ...catalogModel(), model: "chosen-model" }] };
-  assert.equal(resolveCodexEconomyExecutionProfile(economyRequest(), catalog, "chosen-model").model, "chosen-model");
-  assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), catalog, ""), /not available/);
-  assert.throws(() => resolveCodexEconomyExecutionProfile(economyRequest(), catalog, "missing-model"), /not available/);
+  assert.equal(resolveCodexHelperExecutionProfile(helperRequest(), catalog, "chosen-model").model, "chosen-model");
+  assert.throws(() => resolveCodexHelperExecutionProfile(helperRequest(), catalog, ""), /unavailable/);
+  assert.throws(() => resolveCodexHelperExecutionProfile(helperRequest(), catalog, "missing-model"), /unavailable/);
 });
 
 
@@ -1216,3 +1216,20 @@ test("a curated connection works without an OpenAI login or model discovery", as
     assert.equal(catalog.modelProviders[0].connected, false);
   }
 });
+
+for (const thinking of ["", "low", "high", "max"]) {
+  test(`Codex Helper and Router use the saved thinking preference: ${thinking || "default"}`, async () => {
+    const provider = createCodexSessionAgentProvider({ controller: { executionProfileModelCatalog: async () => ({
+      data: [catalogModel({ reasoning: ["low", "high", "max"] })]
+    }) } });
+    for (const workloadId of ["prompt_hint", "request_routing"]) {
+      const profile = await provider.resolveExecutionProfile({ sessionId: "session-a",
+        assistantSelection: { modelId: "gpt-5.6-luna", variantId: thinking }
+      }, { profileId: "helper", workloadId });
+      assert.equal(profile.thinking, thinking);
+      const settings = codexAppServerHelperTurnSettings({ cwd: "/workspace", executionProfile: profile, outputSchema: { type: "string", maxLength: 32 } });
+      assert.equal(settings.effort, thinking || undefined);
+      assert.equal(profile.policy.tools, "none");
+    }
+  });
+}

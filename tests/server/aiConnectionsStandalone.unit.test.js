@@ -64,7 +64,7 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
     await route.handler({ hostname: "localhost", ip: "127.0.0.1", params: { providerId: "deepseek" },
       body: { modelId: "retired-setting" } }, retired);
     assert.equal(retired.statusCode, 410);
-    assert.match(retired.payload.error, /Reload.*Economy/);
+    assert.match(retired.payload.error, /Reload.*Helper/);
   }
   const storedBefore = await readFile(aiConnections.filePath, "utf8");
   const reopened = createAiConnectionRuntime({ systemRoot, terminals });

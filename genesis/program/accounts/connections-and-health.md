@@ -10,6 +10,7 @@ and see whether the Studio host is ready to support them.
 - `packages/vibe64-core/src/server/assistantRoutingStore.js`
 - `packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js`
 - `packages/vibe64-accounts/src/server/assistantRoleUpgrade.js`
+- `packages/vibe64-accounts/src/server/assistantHelperUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20260926-assistant-role-names.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
 - `packages/vibe64-runtime/src/shared/assistantRoutingScores.json`
@@ -59,7 +60,7 @@ and see whether the Studio host is ready to support them.
 ## Public contract
 
 Model routing is a shared Accounts surface. Each workflow keeps Senior and Junior
-in one orchestrator, with independent Intern and Router choices and a shared
+in one orchestrator, with independent Helper and Router choices and a shared
 Backup across connected orchestrators. Thinking choices and Personal/Workspace
 scope appear with each exact route. Saves are atomic and revision-checked in private installation state at
 `ai-connections/routing.json`; unreadable settings are preserved for recovery.
@@ -74,7 +75,7 @@ The chat-mode menu also opens this same form in an owner-only overlay without
 navigating to AI Accounts. It initially selects the chat's saved workflow;
 the assignments remain shared across conversations. The workflow selector is the
 first field; selecting it chooses which configuration to edit, without switching
-Main chat. All five assignments belong to that workflow. Intern, Router and
+Main chat. All five assignments belong to that workflow. Helper, Router and
 Shared backup can use another orchestrator without becoming global settings.
 Only connected orchestrators and retained saved assignments appear; a retained
 disconnected workflow is marked Needs reconnection.
@@ -126,13 +127,13 @@ completion uses the same path as realtime or polling completion. Overlapping or
 cancelled login reads cannot reopen the proposal, and refreshing ordinary account
 status does not imply a new successful login. This adds no saved account format.
 
-The form lists Router, Senior, Junior, Intern, then collaborator backup, with
+The form lists Router, Senior, Junior, Helper, then collaborator backup, with
 separate role headings. Shared backup is labelled "Fallback for personal models";
 accessible shared assignments retain their models when the backup changes.
 Unsaved edits refresh cancellable access checks beneath each assignment;
 stale replies are ignored. Conflicting saves preserve the draft. Migrated helper
-conflicts require the owner's explicit acknowledgement of a valid Intern choice;
-an unrelated edit keeps the migration evidence. Intern and Router assignments
+conflicts require the owner's explicit acknowledgement of a valid Helper choice;
+an unrelated edit keeps the migration evidence. Helper and Router assignments
 replace the former per-account Helper model controls and endpoints. Native
 helpers receive the central resolver's exact model; they do not read the retired
 preferences or select an implicit model. Only the stopped-service upgrade reads
@@ -155,7 +156,7 @@ identity through the same optional public host injection.
 Recommendation values live in the checked-in `assistantRoutingScores.json`,
 keyed by exact orchestrator/provider/model route and role. The shared routing
 policy filters eligible choices before applying those scores. It prefers Astra
-for Codex Senior and DeepSeek Flash for Junior, Intern and Router. Sol ranks
+for Codex Senior and DeepSeek Flash for Junior, Helper and Router. Sol ranks
 above GLM for Junior; Luna ranks above GLM for economical assistance. Claude's
 listed native aliases use corresponding tiers. Other eligible models receive
 the JSON default scores, with included Pickle ranked last. Saved eligible
@@ -216,8 +217,8 @@ its own runtime state.
 The connection store supplies included OpenCode Big Pickle, with no Codex login
 required. Live native OpenCode checks show that its free provider rejects the
 restricted, tool-free profile used by Router and background helpers. Pickle remains
-eligible for Senior, Junior, explicit Intern chat and shared Backup, but is not
-recommended for Intern or Router; previews reject those helper purposes before
+eligible for Senior, Junior and shared Backup, but is not
+recommended for Helper or Router; previews reject those helper purposes before
 sending. Another connected model is needed for Auto and background assistance.
 New OpenCode keys are checked against the complete trusted provider
 catalogue and verified before replacing a working connection. The browser cannot
@@ -425,7 +426,17 @@ outcome. No provider URL override is required: the pinned OpenCode runtime owns
 its native provider destinations.
 
 Older clients reaching the retired native or OpenCode helper-setting endpoints
-receive HTTP 410 with a reload instruction pointing to Intern in Model routing.
+receive HTTP 410 with a reload instruction pointing to Helper in Model routing.
 Those endpoints cannot recreate the retired preferences. Provider profiles
 continue validating the resolved model's availability and supported thinking
 controls; configuration changes do not rewrite already captured tasks.
+
+The Helper assignment replaces the retired third chat role, preserving its exact
+model, thinking, explicit-choice provenance and recommendation scores. It is a
+background assignment only. Helper and Router execution respects each saved
+thinking preference, including provider default; a task cannot silently force Low.
+The restricted execution profile is `helper` across all three providers.
+`assistantHelperUpgrade.js` owns the schema-4 conversion through the existing
+verified publication engine and session inventory, including archived metadata,
+helper ownership and pending cleanup references. New chat preferences use Junior;
+already accepted work keeps its recorded destination and receipts.

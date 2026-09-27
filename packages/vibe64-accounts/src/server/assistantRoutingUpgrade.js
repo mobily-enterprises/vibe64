@@ -208,6 +208,7 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
   const connections = await createAiConnectionStore({ filePath: connectionsPath,
     verifyConnection: () => { throw new Error("Offline routing upgrade cannot call a provider."); } }).listConnections()
     .then((rows) => rows.map((connection) => ({ ...connection,
+      economyModelId: connectionState?.connections[connection.id]?.economyModelId || connection.defaultModelId,
       helperModelId: connectionState?.connections[connection.id]?.helperModelId || "" })));
   const previous = parse(original, "Model routing");
   const configuration = upgradeAssistantRoutingConfiguration({ configuration: previous, nativeHelpers, connections, curatedConnections, historicalSelections });

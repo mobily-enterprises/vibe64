@@ -1,7 +1,7 @@
 import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/studioProjectContext";
-import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/assistantRoutingStore";
+import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
 import { validateAssistantRoutingConfiguration as validateV2 } from "@local/vibe64-core/server/stateUpgrades/routingV2Format";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { publishAssistantRoutingUpgrade } from "./assistantRoutingUpgrade.js";

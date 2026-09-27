@@ -66,13 +66,13 @@ describe("vibe64AgentSettings", () => {
     });
   });
 
-  it("advertises immutable economy support only for implemented providers", () => {
+  it("advertises immutable helper support only for implemented providers", () => {
     for (const provider of VIBE64_AGENT_PROVIDERS) {
       expect(Object.isFrozen(provider)).toBe(true);
       expect(Object.isFrozen(provider.executionProfiles)).toBe(true);
       expect(vibe64AgentProviderSupportsExecutionProfile(
         provider,
-        VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY
+        VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER
       )).toBe(provider.implemented);
     }
   });

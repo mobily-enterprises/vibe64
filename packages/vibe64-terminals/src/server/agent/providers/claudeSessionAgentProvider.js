@@ -8,7 +8,7 @@ import { rm } from "node:fs/promises";
 import { VIBE64_AGENT_RUN_STATE as RUN } from "@local/vibe64-runtime/server";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import {
-  VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileResolution,
+  VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileResolution,
   vibe64AgentExecutionProfileAuditSnapshot, vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
 import { composeVibe64SessionContext } from "@local/vibe64-genesis/server";
@@ -781,7 +781,7 @@ function createClaudeSessionAgentProvider({
   }
 
   const provider = {
-    id: ENGINE, transportId: TRANSPORT, executionProfiles: ["economy"],
+    id: ENGINE, transportId: TRANSPORT, executionProfiles: ["helper"],
     async assistantAccess(context) {
       const external = curatedCodexProvider(context.assistantSelection?.modelProviderId);
       if (external) {
@@ -999,17 +999,17 @@ function createClaudeSessionAgentProvider({
       return { ok: true, active: [...entries.values()].some((entry) => entry.context.key === ctx.key && !entry.main && entry.turn?.active) };
     },
     async resolveExecutionProfile(context, request) {
-      const limits = VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS[request.workloadId];
-      if (request.profileId !== "economy" || !limits) throw error("Unsupported Claude helper execution profile.");
+      const limits = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[request.workloadId];
+      if (request.profileId !== "helper" || !limits) throw error("Unsupported Claude helper execution profile.");
       const modelId = context.assistantSelection?.modelId;
       const modelProviderId = context.assistantSelection?.modelProviderId;
       const catalog = await provider.capabilities(context, { modelProviderId });
       const model = catalog.modelProviders.filter((provider) => provider.connected && (!modelProviderId || provider.id === modelProviderId))
         .flatMap((provider) => provider.models).find((model) => model.id === modelId);
-      if (!model || (model.variants.length && !model.variants.some((variant) => variant.id === "low"))) {
+      const thinking = context.assistantSelection?.variantId || "";
+      if (!model || (thinking && !model.variants.some((variant) => variant.id === thinking))) {
         throw error("The selected Claude helper model is unavailable. Choose another in AI Accounts.");
       }
-      const thinking = model.variants.length ? "low" : "";
       return defineVibe64AgentExecutionProfileResolution({
         ...request,
         limits,

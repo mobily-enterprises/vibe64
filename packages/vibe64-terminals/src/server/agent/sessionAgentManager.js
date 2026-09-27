@@ -825,7 +825,7 @@ function createSessionAgentManager({
     // Illustrative actors affect only these read-only decisions. They never enter
     // a provider execution context. Preview uses the same policy as admission.
     const preview = (workflowEngineId, actor, previewConfiguration = configuration) => Object.fromEntries(
-      ["senior", "junior", "intern", "prompt_hint", "request_routing", "review", "auto"].map((purpose) => {
+      ["senior", "junior", "helper", "prompt_hint", "request_routing", "review", "auto"].map((purpose) => {
         const decision = resolveAssistantPurpose({ purpose, workflowEngineId, actor, configuration: previewConfiguration, catalogs, connectionAccess });
         return [purpose, JSON.parse(JSON.stringify(decision, (key, value) =>
           ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value))];

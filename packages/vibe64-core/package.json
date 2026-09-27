@@ -43,7 +43,8 @@
     "./server/assistantRoutingStore": "./src/server/assistantRoutingStore.js",
     "./shared/curatedCodexProviders": "./src/shared/curatedCodexProviders.js",
     "./server/codexProviderConnections": "./src/server/codexProviderConnections.js",
-    "./server/stateUpgrades/routingV2Format": "./src/server/stateUpgrades/routingV2Format.js"
+    "./server/stateUpgrades/routingV2Format": "./src/server/stateUpgrades/routingV2Format.js",
+    "./server/stateUpgrades/routingV3Format": "./src/server/stateUpgrades/routingV3Format.js"
   },
   "jskit": {
     "kind": "runtime",

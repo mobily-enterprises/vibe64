@@ -719,7 +719,7 @@ const assistantStatusLabel = computed(() => {
   return `${engine} · ${assistant.model}${assistant.backupUsed ? ' · Shared backup' : ''}`;
 });
 const assistantUnavailableCopy = computed(() => {
-  return state.value?.assistant?.message || "Ask the owner to configure Intern in Model routing. Database browsing and editing work without AI.";
+  return state.value?.assistant?.message || "Ask the owner to configure Helper in Model routing. Database browsing and editing work without AI.";
 });
 const selectedTable = computed(() => schema.value.tables.find((table) => table.qualifiedName === selectedTableName.value) || null);
 const assistantTableName = computed(() => {

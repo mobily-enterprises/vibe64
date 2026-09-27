@@ -2629,7 +2629,7 @@ function createVibe64SessionStore({
       actorId: normalizeText(value.actorId),
       ...(["claude", "codex", "opencode"].includes(value.engineId) ? { engineId: value.engineId } : {}),
       ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
-      ...(isPlainObject(value.assistantRouting) && ["senior", "junior", "intern", "review", "deslop"].includes(value.assistantRouting.resolvedMode) ? {
+      ...(isPlainObject(value.assistantRouting) && ["senior", "junior", "helper", "review", "deslop"].includes(value.assistantRouting.resolvedMode) ? {
         assistantRouting: Object.fromEntries(["requestedMode", "resolvedMode", "reason", "parentMessageId", "settingsRevision"]
           .filter((key) => value.assistantRouting[key] !== undefined).map((key) => [key, value.assistantRouting[key]]))
       } : {}),
@@ -4970,7 +4970,7 @@ function createVibe64SessionStore({
 
   // The stopped-service upgrade owns backups and publication. This operation
   // only stages routing changes, using this store's native/archive layout.
-  async function prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform, transformTurnMetadata }) {
+  async function prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform, transformTurnMetadata, transformHelperRecord }) {
     const relativeScratch = path.relative(normalizedStateRoot, temporaryRoot || normalizedStateRoot);
     if (!path.isAbsolute(temporaryRoot || "") || typeof transform !== "function" ||
         !(relativeScratch === ".." || relativeScratch.startsWith(`..${path.sep}`))) {
@@ -5054,6 +5054,21 @@ function createVibe64SessionStore({
             }
           }
         }
+      }
+      if (transformHelperRecord) {
+        const inspectHelpers = async root => {
+          for (const entry of await inventory(root)) {
+            const filePath = path.join(root, entry.name);
+            if (entry.isDirectory()) { await inspectHelpers(filePath); continue; }
+            if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+            const original = await readRegularText(filePath);
+            const record = JSON.parse(original);
+            const next = transformHelperRecord(record);
+            if (JSON.stringify(record) !== JSON.stringify(next)) changes.push({ filePath, original, contents: `${JSON.stringify(next)}\n` });
+          }
+        };
+        await inspectHelpers(sessionPaths.backgroundTasksRoot);
+        await inspectHelpers(path.join(sessionPaths.artifactsRoot, "assistant"));
       }
       return changes;
     };

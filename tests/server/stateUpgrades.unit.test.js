@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runStateUpgrades } from "../../packages/vibe64-core/src/server/stateUpgrades.js";
+import { upgradeAssistantHelpers } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
 import { upgradeAssistantRoles } from "../../packages/vibe64-accounts/src/server/assistantRoleUpgrade.js";
 import { upgradeAssistantRouting } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
 import { readCodexLoginId } from "../../packages/vibe64-core/src/server/codexAuthState.js";
@@ -18,7 +19,7 @@ import { RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
 const exec = promisify(execFile);
 const id = "20260923-codex-login-id";
 const routingId = "20260923-routing-v2";
-const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names"];
+const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper"];
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
 async function fixture(t) {
@@ -34,7 +35,7 @@ async function fixture(t) {
       await mkdir(path.dirname(markerPath), { recursive: true });
       await writeFile(markerPath, typeof value === "string" ? value : JSON.stringify(value));
     },
-    run: (apply = false) => runStateUpgrades({ systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, report: (level, message) => messages.push({ level, message }) })
+    run: (apply = false) => runStateUpgrades({ systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, report: (level, message) => messages.push({ level, message }) })
   };
 }
 
@@ -195,7 +196,7 @@ test("the packaged standalone CLI checks, applies and reports failure without so
   await exec(process.execPath, [...args, "--apply"], { cwd: f.root });
   assert.ok(await readCodexLoginId(f.systemRoot));
   const routing = JSON.parse(await readFile(routingPath, "utf8"));
-  assert.equal(routing.schemaVersion, 3);
+  assert.equal(routing.schemaVersion, 4);
   assert.equal(routing.orchestrators.opencode.junior.modelId, "big-pickle");
   assert.equal(JSON.parse(await store.readMetadataValue("archived", "assistant_routing")).workflowEngineId, "opencode");
   await assert.rejects(exec(process.execPath, args), error => error.code === 1 && error.stderr.includes("Usage:"));
@@ -221,7 +222,7 @@ test("a crash after routing publication but before its ledger entry resumes the 
   await mkdir(path.dirname(routingPath), { recursive: true });
   const original = JSON.stringify({ schemaVersion: 1, revision: 4, orchestrators: {} });
   await writeFile(routingPath, original);
-  await assert.rejects(runStateUpgrades({ systemRoot: f.systemRoot, apply: true, upgradeAssistantRoles, report: () => {},
+  await assert.rejects(runStateUpgrades({ systemRoot: f.systemRoot, apply: true, upgradeAssistantRoles, upgradeAssistantHelpers, report: () => {},
     upgradeAssistantRouting: (context) => upgradeAssistantRouting({ ...context, report: (_level, message) => {
       if (message.startsWith("Published routing state:")) throw new Error("lost before ledger commit");
     } })
@@ -229,7 +230,7 @@ test("a crash after routing publication but before its ledger entry resumes the 
   assert.deepEqual(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied.map((entry) => entry.id), [id]);
   const published = await readFile(routingPath, "utf8");
   assert.deepEqual((await f.run(true)).applied, upgradeIds.slice(1));
-  assert.equal(JSON.parse(await readFile(routingPath, "utf8")).schemaVersion, 3);
+  assert.equal(JSON.parse(await readFile(routingPath, "utf8")).schemaVersion, 4);
   assert.equal(JSON.parse(await readFile(routingPath, "utf8")).revision, JSON.parse(published).revision);
   assert.equal(await readFile(path.join(f.systemRoot, "upgrades/backups", routingId, "before/ai-connections/routing.json"), "utf8"), original);
   assert.equal(JSON.parse(published).revision, 5);

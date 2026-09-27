@@ -6,12 +6,12 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  CODEX_ECONOMY_THREAD_LEDGER_SCHEMA_VERSION,
-  CODEX_ECONOMY_THREAD_LIFECYCLES,
-  codexEconomyThreadRecordId,
-  createCodexEconomyThreadLedger,
-  defineCodexEconomyThreadRecord
-} from "../../packages/vibe64-terminals/src/server/codexEconomyThreadLedger.js";
+  CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION,
+  CODEX_HELPER_THREAD_LIFECYCLES,
+  codexHelperThreadRecordId,
+  createCodexHelperThreadLedger,
+  defineCodexHelperThreadRecord
+} from "../../packages/vibe64-terminals/src/server/codexHelperThreadLedger.js";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
@@ -19,7 +19,7 @@ import {
   vibe64AgentExecutionProfileAuditSnapshot
 } from "../../packages/vibe64-runtime/src/shared/agentExecutionProfiles.js";
 
-function economyProfile() {
+function helperProfile() {
   return vibe64AgentExecutionProfileAuditSnapshot(
     defineVibe64AgentExecutionProfileResolution({
       limits: {
@@ -34,14 +34,14 @@ function economyProfile() {
         repositoryWrite: false,
         tools: "none"
       },
-      profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+      profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
       providerId: "codex",
       request: {
         allowProviderModelFallback: false,
         reasoning: true,
         summary: false
       },
-      revision: "codex-economy-luna-low-v2",
+      revision: "codex-helper-luna-low-v2",
       thinking: "low",
       workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION
     })
@@ -50,9 +50,9 @@ function economyProfile() {
 
 function ownershipRecord(root, overrides = {}) {
   const now = new Date().toISOString();
-  return defineCodexEconomyThreadRecord({
+  return defineCodexHelperThreadRecord({
     createdAt: now,
-    executionProfile: economyProfile(),
+    executionProfile: helperProfile(),
     identity: {
       providerId: "codex",
       providerKeyFingerprint: `sha256:${"c".repeat(64)}`,
@@ -74,12 +74,12 @@ function ownershipRecord(root, overrides = {}) {
       },
       transportId: "codex_app_server"
     },
-    lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.READY,
+    lifecycle: CODEX_HELPER_THREAD_LIFECYCLES.READY,
     ownershipId: "ownership-1",
     projectContextRoot: path.join(root, "authority"),
     projectRuntimeRoot: root,
     revision: 1,
-    schemaVersion: CODEX_ECONOMY_THREAD_LEDGER_SCHEMA_VERSION,
+    schemaVersion: CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION,
     sessionId: "session-1",
     threadId: "thread-1",
     turnId: "",
@@ -90,10 +90,10 @@ function ownershipRecord(root, overrides = {}) {
 }
 
 async function withLedger(operation) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-economy-ledger-"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-helper-ledger-"));
   try {
     await operation({
-      ledger: createCodexEconomyThreadLedger({ projectRuntimeRoot: root }),
+      ledger: createCodexHelperThreadLedger({ projectRuntimeRoot: root }),
       root
     });
   } finally {
@@ -111,14 +111,14 @@ function deferred() {
 
 async function isolatedLedgerModule(label = "ledger") {
   const moduleUrl = new URL(
-    "../../packages/vibe64-terminals/src/server/codexEconomyThreadLedger.js",
+    "../../packages/vibe64-terminals/src/server/codexHelperThreadLedger.js",
     import.meta.url
   );
   moduleUrl.searchParams.set("test-instance", `${label}-${crypto.randomUUID()}`);
   return import(moduleUrl.href);
 }
 
-test("economy ownership ledger round-trips and enforces revision CAS", async () => {
+test("helper ownership ledger round-trips and enforces revision CAS", async () => {
   await withLedger(async ({ ledger, root }) => {
     const first = ownershipRecord(root);
     await assert.rejects(
@@ -144,7 +144,7 @@ test("economy ownership ledger round-trips and enforces revision CAS", async () 
         revision: 3,
         updatedAt: second.updatedAt
       }), { expected: first }),
-      (error) => error.code === "vibe64_codex_economy_ledger_conflict"
+      (error) => error.code === "vibe64_codex_helper_ledger_conflict"
     );
     await assert.rejects(
       ledger.write(ownershipRecord(root, {
@@ -157,7 +157,7 @@ test("economy ownership ledger round-trips and enforces revision CAS", async () 
         revision: 2,
         updatedAt: second.updatedAt
       }), { expected: first }),
-      (error) => error.code === "vibe64_codex_economy_ledger_conflict"
+      (error) => error.code === "vibe64_codex_helper_ledger_conflict"
     );
     assert.deepEqual(await ledger.write(second, { expected: first }), second);
     await assert.rejects(
@@ -167,23 +167,23 @@ test("economy ownership ledger round-trips and enforces revision CAS", async () 
         revision: 3,
         updatedAt: new Date(Date.parse(first.updatedAt) + 2).toISOString()
       }), { expected: first }),
-      (error) => error.code === "vibe64_codex_economy_ledger_conflict"
+      (error) => error.code === "vibe64_codex_helper_ledger_conflict"
     );
     await assert.rejects(
       ledger.remove(first),
-      (error) => error.code === "vibe64_codex_economy_ledger_conflict"
+      (error) => error.code === "vibe64_codex_helper_ledger_conflict"
     );
     assert.equal(await ledger.remove(second), true);
     await assert.rejects(
       ledger.remove(second),
-      (error) => error.code === "vibe64_codex_economy_ledger_conflict"
+      (error) => error.code === "vibe64_codex_helper_ledger_conflict"
     );
   });
 });
 
-test("economy ownership ledger serializes competing creates and updates", async () => {
+test("helper ownership ledger serializes competing creates and updates", async () => {
   await withLedger(async ({ ledger, root }) => {
-    const otherLedger = createCodexEconomyThreadLedger({ projectRuntimeRoot: root });
+    const otherLedger = createCodexHelperThreadLedger({ projectRuntimeRoot: root });
     const first = ownershipRecord(root);
     const competing = ownershipRecord(root, { ownershipId: "ownership-2" });
     const creates = await Promise.allSettled([
@@ -194,13 +194,13 @@ test("economy ownership ledger serializes competing creates and updates", async 
     assert.equal(creates.filter(({ status }) => status === "rejected").length, 1);
     assert.equal(
       creates.find(({ status }) => status === "rejected").reason.code,
-      "vibe64_codex_economy_ledger_conflict"
+      "vibe64_codex_helper_ledger_conflict"
     );
 
     const current = (await ledger.readAll()).records[0];
     const update = (suffix) => ownershipRecord(root, {
       createdAt: current.createdAt,
-      lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.ACTIVE,
+      lifecycle: CODEX_HELPER_THREAD_LIFECYCLES.ACTIVE,
       ownershipId: current.ownershipId,
       revision: 2,
       turnId: `turn-${suffix}`,
@@ -214,19 +214,19 @@ test("economy ownership ledger serializes competing creates and updates", async 
     assert.equal(updates.filter(({ status }) => status === "rejected").length, 1);
     assert.equal(
       updates.find(({ status }) => status === "rejected").reason.code,
-      "vibe64_codex_economy_ledger_conflict"
+      "vibe64_codex_helper_ledger_conflict"
     );
   });
 });
 
-test("economy ownership ledger never overwrites or removes mismatched durable state", async () => {
+test("helper ownership ledger never overwrites or removes mismatched durable state", async () => {
   await withLedger(async ({ ledger, root }) => {
     const first = ownershipRecord(root);
     await ledger.write(first);
-    const filePath = path.join(ledger.root, `${codexEconomyThreadRecordId(first)}.json`);
+    const filePath = path.join(ledger.root, `${codexHelperThreadRecordId(first)}.json`);
     const tampered = {
       ...first,
-      lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED
+      lifecycle: CODEX_HELPER_THREAD_LIFECYCLES.CLEANUP_REQUIRED
     };
     await writeFile(filePath, `${JSON.stringify(tampered, null, 2)}\n`, "utf8");
     const second = ownershipRecord(root, {
@@ -238,17 +238,17 @@ test("economy ownership ledger never overwrites or removes mismatched durable st
 
     await assert.rejects(
       ledger.write(second, { expected: first }),
-      (error) => error.code === "vibe64_codex_economy_ledger_conflict"
+      (error) => error.code === "vibe64_codex_helper_ledger_conflict"
     );
     await assert.rejects(
       ledger.remove(first),
-      (error) => error.code === "vibe64_codex_economy_ledger_conflict"
+      (error) => error.code === "vibe64_codex_helper_ledger_conflict"
     );
     assert.deepEqual(JSON.parse(await readFile(filePath, "utf8")), tampered);
   });
 });
 
-test("economy ownership ledger recovers a lock left by a dead process", async () => {
+test("helper ownership ledger recovers a lock left by a dead process", async () => {
   await withLedger(async ({ ledger, root }) => {
     const record = ownershipRecord(root);
     const locksRoot = path.join(ledger.root, ".locks");
@@ -266,8 +266,8 @@ test("economy ownership ledger recovers a lock left by a dead process", async ()
   });
 });
 
-test("economy ownership ledger serializes stale-lock recovery across module instances", async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-economy-ledger-race-"));
+test("helper ownership ledger serializes stale-lock recovery across module instances", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-helper-ledger-race-"));
   const staleVerified = deferred();
   const releaseStaleRecovery = deferred();
   const contenderBlocked = deferred();
@@ -279,7 +279,7 @@ test("economy ownership ledger serializes stale-lock recovery across module inst
       isolatedLedgerModule("stale-recovery-a"),
       isolatedLedgerModule("stale-recovery-b")
     ]);
-    const firstLedger = firstModule.createCodexEconomyThreadLedger({
+    const firstLedger = firstModule.createCodexHelperThreadLedger({
       observeLock: async ({ stage }) => {
         if (stage === "stale-verified") {
           staleVerified.resolve();
@@ -288,7 +288,7 @@ test("economy ownership ledger serializes stale-lock recovery across module inst
       },
       projectRuntimeRoot: root
     });
-    const secondLedger = secondModule.createCodexEconomyThreadLedger({
+    const secondLedger = secondModule.createCodexHelperThreadLedger({
       observeLock: ({ stage }) => {
         if (stage === "host-acquired") {
           contenderAcquired = true;
@@ -350,7 +350,7 @@ test("economy ownership ledger serializes stale-lock recovery across module inst
     assert.deepEqual(await firstWrite, record);
     await assert.rejects(
       secondWrite,
-      (error) => error.code === "vibe64_codex_economy_ledger_conflict"
+      (error) => error.code === "vibe64_codex_helper_ledger_conflict"
     );
     assert.equal(contenderAcquired, true);
     assert.deepEqual(await readdir(locksRoot), []);
@@ -362,11 +362,11 @@ test("economy ownership ledger serializes stale-lock recovery across module inst
   }
 });
 
-test("economy ownership ledger preserves malformed and oversized state as blockers", async () => {
+test("helper ownership ledger preserves malformed and oversized state as blockers", async () => {
   await withLedger(async ({ ledger, root }) => {
     const record = ownershipRecord(root);
     await ledger.write(record);
-    const recordPath = path.join(ledger.root, `${codexEconomyThreadRecordId(record)}.json`);
+    const recordPath = path.join(ledger.root, `${codexHelperThreadRecordId(record)}.json`);
     await writeFile(recordPath, "x".repeat((64 * 1024) + 1));
 
     const listed = await ledger.readAll();
@@ -389,22 +389,22 @@ test("economy ownership ledger preserves malformed and oversized state as blocke
   });
 });
 
-test("economy ownership records reject relative, non-normalized, and unbounded identity", async () => {
+test("helper ownership records reject relative, non-normalized, and unbounded identity", async () => {
   await withLedger(async ({ root }) => {
     const valid = ownershipRecord(root);
     assert.throws(
-      () => defineCodexEconomyThreadRecord({ ...valid, workdir: "relative/source" }),
+      () => defineCodexHelperThreadRecord({ ...valid, workdir: "relative/source" }),
       /normalized absolute path/u
     );
     assert.throws(
-      () => defineCodexEconomyThreadRecord({
+      () => defineCodexHelperThreadRecord({
         ...valid,
         projectContextRoot: `${root}/authority/../authority`
       }),
       /normalized absolute path/u
     );
     assert.throws(
-      () => defineCodexEconomyThreadRecord({
+      () => defineCodexHelperThreadRecord({
         ...valid,
         identity: {
           ...valid.identity,
@@ -417,7 +417,7 @@ test("economy ownership records reject relative, non-normalized, and unbounded i
       /exceeds 8192 characters/u
     );
     assert.throws(
-      () => defineCodexEconomyThreadRecord({
+      () => defineCodexHelperThreadRecord({
         ...valid,
         identity: {
           ...valid.identity,
@@ -427,7 +427,7 @@ test("economy ownership records reject relative, non-normalized, and unbounded i
       /must be a SHA-256 signature/u
     );
     assert.throws(
-      () => defineCodexEconomyThreadRecord({
+      () => defineCodexHelperThreadRecord({
         ...valid,
         identity: {
           ...valid.identity,
@@ -440,7 +440,7 @@ test("economy ownership records reject relative, non-normalized, and unbounded i
       /managed Codex app-server/u
     );
     assert.throws(
-      () => defineCodexEconomyThreadRecord({
+      () => defineCodexHelperThreadRecord({
         ...valid,
         identity: {
           ...valid.identity,
@@ -453,7 +453,7 @@ test("economy ownership records reject relative, non-normalized, and unbounded i
       /versioned state signature/u
     );
     assert.throws(
-      () => defineCodexEconomyThreadRecord({
+      () => defineCodexHelperThreadRecord({
         ...valid,
         identity: {
           ...valid.identity,
@@ -466,7 +466,7 @@ test("economy ownership records reject relative, non-normalized, and unbounded i
       /managed Codex app-server/u
     );
     assert.doesNotThrow(
-      () => defineCodexEconomyThreadRecord({
+      () => defineCodexHelperThreadRecord({
         ...valid,
         identity: {
           ...valid.identity,
@@ -478,7 +478,7 @@ test("economy ownership records reject relative, non-normalized, and unbounded i
       })
     );
     assert.throws(
-      () => defineCodexEconomyThreadRecord({
+      () => defineCodexHelperThreadRecord({
         ...valid,
         updatedAt: new Date(Date.parse(valid.createdAt) - 1000).toISOString()
       }),
@@ -487,7 +487,7 @@ test("economy ownership records reject relative, non-normalized, and unbounded i
   });
 });
 
-test("economy ownership ledger bounds record inventory before parsing it", async () => {
+test("helper ownership ledger bounds record inventory before parsing it", async () => {
   await withLedger(async ({ ledger, root }) => {
     await mkdir(ledger.root, { recursive: true });
     await Promise.all(Array.from({ length: 1024 }, (_, index) => {

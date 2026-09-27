@@ -25,7 +25,7 @@ function resourceData() {
   const choices = [astra, deepseek, foreign, pickle].map((item) => ({ ...item, label: item.modelId, engineLabel: item.engineId,
     providerLabel: item.modelProviderId, accessLabel: item === astra ? "Personal use" : "Workspace use", available: true, variants: [] }));
   return { ok: true, revision: 3, canConfigure: true, engines: [{ engineId: "codex", label: "Codex",
-    roles: Object.fromEntries(["senior", "junior", "intern", "router", "sharedBackup"].map((role) => [role, {
+    roles: Object.fromEntries(["senior", "junior", "helper", "router", "sharedBackup"].map((role) => [role, {
       assignment: role === "senior" ? astra : role === "junior" ? { ...astra, selectionSource: "explicit" } : pickle,
       recommendation: role === "senior" ? astra : deepseek, choices, error: ""
     }])), preview: { owner: {}, collaborator: {} } }] };
@@ -51,8 +51,8 @@ it("hydrates a warm routing resource immediately and keeps engine identities dis
   expect(state.baseRevision).toBe(3);
   expect(state.draft.codex.router.modelId).toBe("big-pickle");
   expect(state.choiceId(deepseek)).not.toBe(state.choiceId(foreign));
-  state.choose("intern", state.choiceId(foreign));
-  expect(mocks.command.buildRawPayload().orchestrators.codex.intern).toMatchObject({ engineId: "opencode", selectionSource: "explicit" });
+  state.choose("helper", state.choiceId(foreign));
+  expect(mocks.command.buildRawPayload().orchestrators.codex.helper).toMatchObject({ engineId: "opencode", selectionSource: "explicit" });
   expect(mocks.command.buildRawPayload().orchestrators.codex.junior).toBeUndefined();
 });
 
@@ -67,7 +67,7 @@ it("reviews only changes to the current draft before applying recommendations to
   const before = JSON.stringify(state.draft);
   state.reviewRecommendations();
   expect(JSON.stringify(state.draft)).toBe(before);
-  expect(state.recommendationReview.changes.map(({ role }) => role)).toEqual(["router", "senior", "intern"]);
+  expect(state.recommendationReview.changes.map(({ role }) => role)).toEqual(["router", "senior", "helper"]);
   expect(state.recommendationReview.changes[1]).toMatchObject({
     description: "default thinking", proposed: { modelId: "gpt-6-astra", variantId: "" }
   });
@@ -76,7 +76,7 @@ it("reviews only changes to the current draft before applying recommendations to
   expect(JSON.stringify(state.draft)).toBe(before);
   state.reviewRecommendations();
   state.useRecommendations();
-  expect(state.draft.codex).toMatchObject({ senior: astra, junior: { modelId: "deepseek-flash", selectionSource: "explicit" }, intern: deepseek, router: deepseek, sharedBackup: pickle });
+  expect(state.draft.codex).toMatchObject({ senior: astra, junior: { modelId: "deepseek-flash", selectionSource: "explicit" }, helper: deepseek, router: deepseek, sharedBackup: pickle });
   expect(state.draft.opencode.senior).toEqual(astra);
   expect(state.recommendationReview).toBeNull();
   expect(mocks.resource.reload).not.toHaveBeenCalled();
@@ -120,12 +120,12 @@ it("refreshes post-connection choices, proposes each role separately, and keeps 
   refreshed.resolve();
   await vi.advanceTimersByTimeAsync(0);
   expect(state.baseRevision).toBe(3);
-  expect(state.suggestedChanges.map(({ id }) => id)).toEqual(["codex:junior", "codex:intern", "codex:router", "codex:sharedBackup"]);
-  expect(state.proposals).toEqual(["codex:intern", "codex:router", "codex:sharedBackup"]);
+  expect(state.suggestedChanges.map(({ id }) => id)).toEqual(["codex:junior", "codex:helper", "codex:router", "codex:sharedBackup"]);
+  expect(state.proposals).toEqual(["codex:helper", "codex:router", "codex:sharedBackup"]);
   const payload = mocks.command.buildRawPayload();
   expect(payload.orchestrators.codex.junior).toBeUndefined();
   expect(payload.orchestrators.claude).toBeUndefined();
-  expect(payload.orchestrators.codex.intern.modelId).toBe("deepseek-flash");
+  expect(payload.orchestrators.codex.helper.modelId).toBe("deepseek-flash");
   state.customize();
   expect(state.draft.codex.router.modelId).toBe("deepseek-flash");
   expect(state.draft.codex.senior.modelId).toBe("gpt-6-astra");
@@ -137,11 +137,11 @@ it("ignores superseded draft previews and preserves edits when the saved revisio
   const second = Promise.withResolvers();
   mocks.request.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
   const state = mount();
-  state.choose("intern", state.choiceId(deepseek));
+  state.choose("helper", state.choiceId(deepseek));
   await nextTick();
   await vi.advanceTimersByTimeAsync(250);
   expect(state.previewPending).toBe(true);
-  state.choose("intern", state.choiceId(foreign));
+  state.choose("helper", state.choiceId(foreign));
   await nextTick();
   await vi.advanceTimersByTimeAsync(250);
   expect(mocks.request.mock.calls[0][1].signal.aborted).toBe(true);
@@ -156,7 +156,7 @@ it("ignores superseded draft previews and preserves edits when the saved revisio
   await nextTick();
   expect(state.stale).toBe(true);
   expect(state.baseRevision).toBe(3);
-  expect(state.draft.codex.intern.engineId).toBe("opencode");
+  expect(state.draft.codex.helper.engineId).toBe("opencode");
 });
 
 it("members receive the saved viewer result without calling the owner draft endpoint", async () => {
@@ -187,7 +187,7 @@ it("accepts late setup defaults while untouched and preserves changed proposal c
 
 it("drops an unsaved owner draft immediately when the active viewer changes", async () => {
   const state = mount();
-  state.choose("intern", state.choiceId(deepseek));
+  state.choose("helper", state.choiceId(deepseek));
   mocks.scopeKey.value = "member:first";
   expect(state.baseRevision).toBe(null);
   expect(state.draft).toEqual({});
@@ -195,7 +195,7 @@ it("drops an unsaved owner draft immediately when the active viewer changes", as
   mocks.resource.data.value = { ...resourceData(), canConfigure: false };
   await nextTick();
   expect(state.canEdit).toBe(false);
-  expect(state.draft.codex.intern.modelId).toBe("big-pickle");
+  expect(state.draft.codex.helper.modelId).toBe("big-pickle");
 });
 
 
@@ -206,8 +206,8 @@ it("sends only edits without disabling absent roles in another workflow", () => 
   mocks.resource.data.value.engines.push(empty);
   const state = mount();
   expect(mocks.command.buildRawPayload().orchestrators).toEqual({});
-  state.choose("intern", state.choiceId(foreign));
-  expect(mocks.command.buildRawPayload().orchestrators).toEqual({ codex: { intern: expect.objectContaining({ modelId: "deepseek-flash" }) } });
+  state.choose("helper", state.choiceId(foreign));
+  expect(mocks.command.buildRawPayload().orchestrators).toEqual({ codex: { helper: expect.objectContaining({ modelId: "deepseek-flash" }) } });
   state.choose("router", "");
   expect(mocks.command.buildRawPayload().orchestrators.codex.router).toBeNull();
 });

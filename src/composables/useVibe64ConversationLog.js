@@ -835,6 +835,7 @@ function useVibe64ConversationLog({
     loadMore: loadMoreConversationLog,
     loadMoreError,
     loading: resource.isLoading,
+    initializing: resource.isInitialLoading,
     rewind: computed(() => resource.data.value?.rewind || null),
     loadingMore,
     reload: reloadConversationLog,

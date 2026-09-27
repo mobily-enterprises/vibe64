@@ -2197,7 +2197,7 @@ for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     const selection = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra" };
     const junior = { ...selection, modelProviderId: "deepseek", modelId: "deepseek-flash" };
-    const assignments = { senior: selection, junior, intern: junior, router: junior, sharedBackup: junior };
+    const assignments = { senior: selection, junior, helper: junior, router: junior, sharedBackup: junior };
     await mockDirectChat(page, { conversationLog: Object.entries(assignments).slice(0, 3).map(([role, model], index) => ({
       turnId: String(index + 1), user: { role: "user", text: `Question ${index + 1}` },
       assistant: { role: "assistant", text: `Answer ${index + 1}` },
@@ -2227,7 +2227,7 @@ for (const width of [390, 1280]) {
     }));
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
     await expect(page.getByLabel("Message AI assistant")).toBeVisible();
-    for (const label of ["Senior", "Junior", "Intern"]) {
+    for (const label of ["Senior", "Junior", "Helper"]) {
       await expect(page.locator(".assistant-transcript__assistant-header").getByText(new RegExp(`^${label} · Codex · `)).first()).toBeVisible();
     }
     const trigger = page.getByRole("button", { name: /^Chat mode:/ });
@@ -2243,7 +2243,7 @@ for (const width of [390, 1280]) {
     await expect(trigger).toBeFocused();
     await page.keyboard.press("Enter");
     const modes = page.getByRole("list", { name: "Choose chat mode" });
-    for (const label of ["Senior", "Junior", "Intern", "Auto"]) await expect(modes.getByRole("button", { name: new RegExp(`^${label}`) })).toBeVisible();
+    for (const label of ["Senior", "Junior", "Auto"]) await expect(modes.getByRole("button", { name: new RegExp(`^${label}`) })).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "Automatic deslop by Senior" })).toHaveCount(0);
     await page.screenshot({ path: info.outputPath(`roles-${width}.png`), animations: "disabled" });
     await modes.getByRole("button", { name: /^Auto/ }).click();
@@ -2251,12 +2251,11 @@ for (const width of [390, 1280]) {
     await modes.getByRole("button", { name: /^Senior/ }).click();
     await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
     await expect(page.getByRole("checkbox", { name: "Automatic deslop by Senior" })).toHaveCount(0);
-    await modes.getByRole("button", { name: /^Intern/ }).click();
-    await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Intern\./);
+    await expect(modes.getByRole("button", { name: /^Helper/ })).toHaveCount(0);
     await page.getByRole("button", { name: "Configure model routing", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Model routing", exact: true });
     await expect(dialog).toBeVisible();
-    for (const label of ["Senior", "Junior", "Intern", "Router"]) await expect(dialog.getByRole("combobox", { name: label, exact: true })).toBeVisible();
+    for (const label of ["Senior", "Junior", "Helper", "Router"]) await expect(dialog.getByRole("combobox", { name: label, exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath(`routing-roles-${width}.png`), animations: "disabled" });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -2266,7 +2265,7 @@ for (const width of [390, 1280]) {
     await page.reload();
     await expect(trigger).toBeVisible();
     await trigger.click();
-    await expect(modes.getByRole("button", { name: /^Intern/ })).toBeVisible();
+    await expect(modes.getByRole("button", { name: /^Helper/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Configure model routing", exact: true })).toHaveCount(0);
   });
 }
@@ -2343,7 +2342,8 @@ for (const width of [390, 820, 1280]) {
       await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
       routingRequest.status = "failed";
       await page.getByRole("button", { name: "Reload chat", exact: true }).click();
-      await expect(page.locator('.v-alert[role="status"]').filter({ hasText: "Request not sent" })).toBeVisible();
+      await expect(page.locator('.v-alert[role="status"]').filter({ hasText: "Request not sent" })).toHaveCount(0);
+      await expect(body.getByText(routingRequest.error, { exact: false })).toBeVisible();
       await body.getByRole("button", { name: "Cancel", exact: true }).click();
       await expect.poll(() => cancellations).toBe(1);
       await expect(page.getByText("Request not sent", { exact: true })).toHaveCount(0);
@@ -2368,7 +2368,7 @@ for (const width of [390, 820, 1280]) {
       await mockDirectChat(page);
       const senior = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra", catalogRevision: ASSISTANT_CATALOG.engines[0].revision };
       const junior = { ...senior, modelProviderId: "deepseek", modelId: "deepseek-flash" };
-      const assignments: Record<string, any> = { senior: junior, junior, intern: junior, router: null, sharedBackup: junior };
+      const assignments: Record<string, any> = { senior: junior, junior, helper: junior, router: null, sharedBackup: junior };
       const choices = [senior, junior].map(selection => ({ ...selection, label: selection.modelId,
         engineLabel: "Codex", providerLabel: selection.modelProviderId, accessLabel: "Workspace use", available: true, variants: [] }));
       const purposes = (roles = assignments) => ({
@@ -2424,7 +2424,7 @@ for (const width of [390, 820, 1280]) {
             if (chatRoute.request().method() === "PATCH") {
               const change = chatRoute.request().postDataJSON();
               if (change.assistantRouting) {
-                expect(["senior", "junior", "intern"]).toContain(change.assistantRouting.mode);
+                expect(["senior", "junior"]).toContain(change.assistantRouting.mode);
                 record.routingMetadata.assistant_routing = JSON.stringify({ ...change.assistantRouting, review: false, workflowEngineId: "codex" });
               }
               Object.assign(record, change.presentation || {});
@@ -2443,8 +2443,9 @@ for (const width of [390, 820, 1280]) {
       const modes = page.getByRole("list", { name: "Choose chat mode" });
       await expect(modes.getByRole("button", { name: /^Auto/ })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Use workspace default", exact: true })).toHaveCount(0);
-      await modes.getByRole("button", { name: /^Intern/ }).click();
-      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Intern\./);
+      await expect(modes.getByRole("button", { name: /^Helper/ })).toHaveCount(0);
+      await modes.getByRole("button", { name: /^Senior/ }).click();
+      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
       await page.getByRole("button", { name: "Close", exact: true }).click();
       await workspace.getByRole("textbox", { name: "Message temporary AI", exact: true }).fill("Keep this independent draft");
       await expect.poll(() => [...chats.values()][0]?.draft).toBe("Keep this independent draft");
@@ -2461,7 +2462,7 @@ for (const width of [390, 820, 1280]) {
       await expect(router).toBeInViewport();
       await expect(dialog.locator('input[role="combobox"]').first()).toHaveAccessibleName("Workflow orchestrator");
       await expect(dialog.locator('input[role="combobox"]').nth(1)).toHaveAccessibleName("Router");
-      await expect(dialog.getByRole("heading", { level: 3 })).toHaveText(["Router", "Senior", "Junior", "Intern", "Fallback for personal models"]);
+      await expect(dialog.getByRole("heading", { level: 3 })).toHaveText(["Router", "Senior", "Junior", "Helper", "Fallback for personal models"]);
       await expect(dialog.getByRole("combobox", { name: "Default role for temporary chats", exact: true })).toHaveCount(0);
       await dialog.locator(".model-routing__body").evaluate(element => { element.scrollTop = 0; });
       await page.screenshot({ path: info.outputPath(`routing-${width}.png`), animations: "disabled" });
@@ -2491,10 +2492,10 @@ for (const width of [390, 820, 1280]) {
       await expect(page.getByText(/Router reads your request|Uses one additional turn|Assign missing models in Configure/)).toHaveCount(0);
       await page.getByRole("button", { name: "Close", exact: true }).click();
       await openTemporaryAiWorkspace(page);
-      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Intern\./);
+      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
       await workspace.getByRole("button", { name: "New temporary AI task", exact: true }).click();
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
-      expect([...chats.values()].map(chat => JSON.parse(chat.routingMetadata.assistant_routing).mode)).toEqual(["intern", "senior"]);
+      expect([...chats.values()].map(chat => JSON.parse(chat.routingMetadata.assistant_routing).mode)).toEqual(["senior", "senior"]);
       await trigger.click();
       await page.screenshot({ path: info.outputPath(`temporary-inherited-${width}.png`), animations: "disabled" });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -2502,7 +2503,7 @@ for (const width of [390, 820, 1280]) {
       await page.reload();
       await expect(workspace).toBeHidden();
       await openTemporaryAiWorkspace(page);
-      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Intern\./);
+      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
       await expect(workspace.getByRole("textbox", { name: "Message temporary AI", exact: true })).toHaveValue("Keep this independent draft");
       await trigger.click();
       await expect(page.getByRole("button", { name: "Configure model routing", exact: true })).toHaveCount(0);
@@ -2534,13 +2535,13 @@ for (const width of [390, 820, 1280]) {
       const senior = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra",
         catalogRevision: ASSISTANT_CATALOG.engines[0].revision, selectionSource: "recommended" };
       const junior = { ...senior, modelProviderId: "deepseek", modelId: "deepseek-flash" };
-      const assignments: Record<string, any> = { senior: junior, junior, intern: junior, router: junior, sharedBackup: junior };
+      const assignments: Record<string, any> = { senior: junior, junior, helper: junior, router: junior, sharedBackup: junior };
       const choices = [senior, junior].map(selection => ({ ...selection, label: selection.modelId, engineLabel: "Codex",
         providerLabel: selection.modelProviderId, accessLabel: selection === senior ? "Personal use" : "Workspace use", available: true, variants: [] }));
       const patches: any[] = [];
       const routing = (roles = assignments) => ({ ok: true, revision: 1 + patches.length, canConfigure: true, engines: [{ engineId: "codex", label: "Codex",
         roles: Object.fromEntries(Object.entries(roles).map(([id, assignment]) => [id, { assignment, recommendation: id === "senior" ? senior : junior, choices }])),
-        preview: { collaborator: Object.fromEntries(["senior", "junior", "intern", "request_routing"].map(id => [id, { available: true, effectiveSelection: junior, backupUsed: id === "senior" }])) }
+        preview: { collaborator: Object.fromEntries(["senior", "junior", "helper", "request_routing"].map(id => [id, { available: true, effectiveSelection: junior, backupUsed: id === "senior" }])) }
       }] });
       await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => {
         if (route.request().method() === "PATCH") {
@@ -2588,3 +2589,53 @@ for (const width of [390, 820, 1280]) {
     }
   });
 }
+
+
+test("@helper-hydration delayed history opens at the failed request and reports its error once", async ({ page }, info) => {
+  const server = await assistantStatusServer();
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  let releaseHistory: () => void = () => {};
+  let historyReady = new Promise<void>(resolve => { releaseHistory = resolve; });
+  let reads = 0;
+  try {
+    await page.setViewportSize({ width: 390, height: 900 });
+    const turns = Array.from({ length: 24 }, (_, index) => scrollTestTurn(index + 1));
+    await mockDirectChat(page, { conversationPage: async () => {
+      reads++;
+      await historyReady;
+      return { conversationLog: turns, pagination: { count: turns.length, hasMoreBefore: false, totalTurnCount: turns.length } };
+    } });
+    const request = { messageId: "failed-send", mode: "auto", status: "failed",
+      input: { message: "Keep this unsent request", displayMessage: "Keep this unsent request" },
+      error: "The routing connection needs attention." };
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
+      ok: true, ...directSession(), metadata: {
+        assistant_routing: JSON.stringify({ mode: "auto", workflowEngineId: "codex" }),
+        assistant_routing_request: JSON.stringify(request)
+      }
+    }));
+    await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+    const body = page.locator(".studio-autopilot__conversation .assistant-transcript__body");
+    for (let load = 1; load <= 2; load++) {
+      await expect.poll(() => reads).toBeGreaterThanOrEqual(load);
+      await expect(page.getByText("Keep this unsent request", { exact: true })).toHaveCount(0);
+      releaseHistory();
+      await expect(body.getByText("Keep this unsent request", { exact: true })).toBeVisible();
+      await expect.poll(() => conversationDistanceFromBottom(body)).toBeLessThanOrEqual(2);
+      await expect(page.getByText(request.error, { exact: false })).toHaveCount(1);
+      await expect(page.locator('.v-alert[role="status"]').filter({ hasText: request.error })).toHaveCount(0);
+      await expect(body.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+      if (load === 1) {
+        historyReady = new Promise<void>(resolve => { releaseHistory = resolve; });
+        await page.reload();
+      }
+    }
+    expect(errors).toEqual([]);
+    await page.screenshot({ path: info.outputPath("restored-failed-request.png") });
+  } finally {
+    releaseHistory();
+    await page.close();
+    await server.close();
+  }
+});

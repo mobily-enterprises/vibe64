@@ -66,7 +66,7 @@ it("isolates real access caches when users or projects change", async () => {
   expect(request).toHaveBeenCalledTimes(3);
 });
 
-it("isolates database private workspaces and Economy availability for owner, member and sign-out", async () => {
+it("isolates database private workspaces and Helper availability for owner, member and sign-out", async () => {
   configureHttpWebClient({ request });
   const viewer = ref({ actorKey: "owner" });
   const slug = ref("first");

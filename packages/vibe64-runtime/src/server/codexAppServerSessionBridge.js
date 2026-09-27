@@ -48,28 +48,28 @@ const CODEX_SESSION_RENEWAL_THREAD_CLAIM_METADATA =
   "agent_renewal_seed_thread_claim";
 const CODEX_SESSION_RENEWAL_THREAD_CLAIM_SCHEMA =
   "vibe64.codex-renewal-thread-claim.v1";
-const CODEX_APP_SERVER_ECONOMY_SANDBOX = "read-only";
-const CODEX_APP_SERVER_ECONOMY_USER_AGENT_MAX_LENGTH = 512;
-const CODEX_APP_SERVER_ECONOMY_MCP_SERVER_MAX_COUNT = 128;
-const CODEX_APP_SERVER_ECONOMY_MCP_SERVER_NAME_MAX_LENGTH = 256;
-const CODEX_APP_SERVER_ECONOMY_CONFIG_RESPONSE_MAX_BYTES = 256 * 1024;
-const CODEX_APP_SERVER_ECONOMY_HOOK_MAX_COUNT = 256;
-const CODEX_APP_SERVER_ECONOMY_HOOK_ERROR_MAX_COUNT = 256;
-const CODEX_APP_SERVER_ECONOMY_HOOK_FIELD_MAX_LENGTH = 2048;
-const CODEX_APP_SERVER_ECONOMY_HOOK_FINGERPRINT_MAX_LENGTH = 256 * 1024;
-const CODEX_APP_SERVER_ECONOMY_HOOK_RESPONSE_MAX_BYTES = 512 * 1024;
-const CODEX_APP_SERVER_ECONOMY_DEVELOPER_INSTRUCTIONS_MAX_LENGTH = 8192;
-const CODEX_APP_SERVER_ECONOMY_OUTPUT_SCHEMA_MAX_BYTES = 64 * 1024;
-const CODEX_APP_SERVER_ECONOMY_OUTPUT_SCHEMA_MAX_DEPTH = 8;
-const CODEX_APP_SERVER_ECONOMY_OUTPUT_SCHEMA_MAX_PROPERTIES = 64;
-const CODEX_APP_SERVER_ECONOMY_OUTPUT_SCHEMA_MAX_ENUM_VALUES = 64;
-const CODEX_APP_SERVER_ECONOMY_THREAD_SOURCE = "vibe64-economy";
-const CODEX_APP_SERVER_ECONOMY_BASE_INSTRUCTIONS = [
+const CODEX_APP_SERVER_HELPER_SANDBOX = "read-only";
+const CODEX_APP_SERVER_HELPER_USER_AGENT_MAX_LENGTH = 512;
+const CODEX_APP_SERVER_HELPER_MCP_SERVER_MAX_COUNT = 128;
+const CODEX_APP_SERVER_HELPER_MCP_SERVER_NAME_MAX_LENGTH = 256;
+const CODEX_APP_SERVER_HELPER_CONFIG_RESPONSE_MAX_BYTES = 256 * 1024;
+const CODEX_APP_SERVER_HELPER_HOOK_MAX_COUNT = 256;
+const CODEX_APP_SERVER_HELPER_HOOK_ERROR_MAX_COUNT = 256;
+const CODEX_APP_SERVER_HELPER_HOOK_FIELD_MAX_LENGTH = 2048;
+const CODEX_APP_SERVER_HELPER_HOOK_FINGERPRINT_MAX_LENGTH = 256 * 1024;
+const CODEX_APP_SERVER_HELPER_HOOK_RESPONSE_MAX_BYTES = 512 * 1024;
+const CODEX_APP_SERVER_HELPER_DEVELOPER_INSTRUCTIONS_MAX_LENGTH = 8192;
+const CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_BYTES = 64 * 1024;
+const CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_DEPTH = 8;
+const CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_PROPERTIES = 64;
+const CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_ENUM_VALUES = 64;
+const CODEX_APP_SERVER_HELPER_THREAD_SOURCE = "vibe64-helper";
+const CODEX_APP_SERVER_HELPER_BASE_INSTRUCTIONS = [
   "Complete only the bounded structured task in the user input.",
   "Return one response matching the supplied JSON schema.",
   "Do not use tools, environments, network access, or repository writes."
 ].join(" ");
-const CODEX_APP_SERVER_ECONOMY_TOOL_FEATURES = Object.freeze([
+const CODEX_APP_SERVER_HELPER_TOOL_FEATURES = Object.freeze([
   "apps",
   "artifact",
   "browser_use",
@@ -103,7 +103,7 @@ const CODEX_APP_SERVER_ECONOMY_TOOL_FEATURES = Object.freeze([
   "unified_exec_zsh_fork",
   "view_image"
 ]);
-const codexAppServerEconomyIsolationConfigs = new WeakSet();
+const codexAppServerHelperIsolationConfigs = new WeakSet();
 function normalizeWorkdir(value = "") {
   return normalizeAgentText(value);
 }
@@ -123,48 +123,48 @@ function codexAppServerTextHasControlCharacters(value = "") {
   });
 }
 
-function deepFreezeCodexAppServerEconomyConfig(value) {
+function deepFreezeCodexAppServerHelperConfig(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) {
     return value;
   }
   for (const nested of Object.values(value)) {
-    deepFreezeCodexAppServerEconomyConfig(nested);
+    deepFreezeCodexAppServerHelperConfig(nested);
   }
   return Object.freeze(value);
 }
 
-function codexAppServerEconomyPolicyError(message = "", details = {}) {
+function codexAppServerHelperPolicyError(message = "", details = {}) {
   return new Vibe64AgentExecutionProfileError(
     VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE,
-    normalizeAgentText(message) || "Codex cannot prove the economy execution policy.",
+    normalizeAgentText(message) || "Codex cannot prove the helper execution policy.",
     details
   );
 }
 
-function assertCodexAppServerEconomyResponseBounded(value, maxBytes, label) {
+function assertCodexAppServerHelperResponseBounded(value, maxBytes, label) {
   let bytes = 0;
   try {
     bytes = Buffer.byteLength(JSON.stringify(value), "utf8");
   } catch {
-    throw codexAppServerEconomyPolicyError(
-      `Codex economy execution received an invalid ${label}.`
+    throw codexAppServerHelperPolicyError(
+      `Codex helper execution received an invalid ${label}.`
     );
   }
   if (bytes > maxBytes) {
-    throw codexAppServerEconomyPolicyError(
-      `Codex economy execution received an oversized ${label}.`
+    throw codexAppServerHelperPolicyError(
+      `Codex helper execution received an oversized ${label}.`
     );
   }
 }
 
-function codexAppServerEconomyProfile(executionProfile = null) {
+function codexAppServerHelperProfile(executionProfile = null) {
   const profile = defineVibe64AgentExecutionProfileResolution(executionProfile);
   if (
-    profile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY ||
+    profile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER ||
     profile.providerId !== VIBE64_AGENT_PROVIDER_IDS.CODEX
   ) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution requires a server-resolved Codex economy profile.",
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution requires a server-resolved Codex helper profile.",
       {
         profileId: profile.profileId,
         providerId: profile.providerId
@@ -177,8 +177,8 @@ function codexAppServerEconomyProfile(executionProfile = null) {
 function assertCodexAppServerOutputSchemaKeys(schema = {}, allowed = [], schemaPath = "$") {
   const allowedKeys = new Set(["description", "title", "type", ...allowed]);
   if (Object.keys(schema).some((key) => !allowedKeys.has(key))) {
-    throw codexAppServerEconomyPolicyError(
-      `Economy output schema ${schemaPath} contains an unsupported keyword.`,
+    throw codexAppServerHelperPolicyError(
+      `Helper output schema ${schemaPath} contains an unsupported keyword.`,
       { field: "outputSchema" }
     );
   }
@@ -186,20 +186,20 @@ function assertCodexAppServerOutputSchemaKeys(schema = {}, allowed = [], schemaP
 
 function strictOutputSchemaMaximumCharacters(schema = null, schemaPath = "$", depth = 0) {
   if (!isPlainRecord(schema)) {
-    throw codexAppServerEconomyPolicyError(
-      `Economy output schema ${schemaPath} must be an object.`,
+    throw codexAppServerHelperPolicyError(
+      `Helper output schema ${schemaPath} must be an object.`,
       { field: "outputSchema" }
     );
   }
-  if (depth > CODEX_APP_SERVER_ECONOMY_OUTPUT_SCHEMA_MAX_DEPTH) {
-    throw codexAppServerEconomyPolicyError(
-      "Economy output schema is nested too deeply.",
+  if (depth > CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_DEPTH) {
+    throw codexAppServerHelperPolicyError(
+      "Helper output schema is nested too deeply.",
       { field: "outputSchema" }
     );
   }
   if (typeof schema.type !== "string") {
-    throw codexAppServerEconomyPolicyError(
-      `Economy output schema ${schemaPath} must declare one type.`,
+    throw codexAppServerHelperPolicyError(
+      `Helper output schema ${schemaPath} must declare one type.`,
       { field: "outputSchema" }
     );
   }
@@ -210,8 +210,8 @@ function strictOutputSchemaMaximumCharacters(schema = null, schemaPath = "$", de
       schemaPath
     );
     if (schema.additionalProperties !== false || !isPlainRecord(schema.properties)) {
-      throw codexAppServerEconomyPolicyError(
-        `Economy object schema ${schemaPath} must declare properties and reject additional properties.`,
+      throw codexAppServerHelperPolicyError(
+        `Helper object schema ${schemaPath} must declare properties and reject additional properties.`,
         { field: "outputSchema" }
       );
     }
@@ -219,14 +219,14 @@ function strictOutputSchemaMaximumCharacters(schema = null, schemaPath = "$", de
     const required = Array.isArray(schema.required) ? schema.required : [];
     if (
       propertyNames.length === 0 ||
-      propertyNames.length > CODEX_APP_SERVER_ECONOMY_OUTPUT_SCHEMA_MAX_PROPERTIES ||
+      propertyNames.length > CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_PROPERTIES ||
       propertyNames.some((name) => !name || name.length > 128) ||
       required.length !== propertyNames.length ||
       new Set(required).size !== required.length ||
       propertyNames.some((name) => !required.includes(name))
     ) {
-      throw codexAppServerEconomyPolicyError(
-        `Economy object schema ${schemaPath} must require every declared property.`,
+      throw codexAppServerHelperPolicyError(
+        `Helper object schema ${schemaPath} must require every declared property.`,
         { field: "outputSchema" }
       );
     }
@@ -241,8 +241,8 @@ function strictOutputSchemaMaximumCharacters(schema = null, schemaPath = "$", de
   if (schema.type === "array") {
     assertCodexAppServerOutputSchemaKeys(schema, ["items", "maxItems", "minItems"], schemaPath);
     if (!Number.isSafeInteger(schema.maxItems) || schema.maxItems < 0) {
-      throw codexAppServerEconomyPolicyError(
-        `Economy array schema ${schemaPath} must have a finite maxItems value.`,
+      throw codexAppServerHelperPolicyError(
+        `Helper array schema ${schemaPath} must have a finite maxItems value.`,
         { field: "outputSchema" }
       );
     }
@@ -250,16 +250,16 @@ function strictOutputSchemaMaximumCharacters(schema = null, schemaPath = "$", de
       schema.minItems !== undefined &&
       (!Number.isSafeInteger(schema.minItems) || schema.minItems < 0 || schema.minItems > schema.maxItems)
     ) {
-      throw codexAppServerEconomyPolicyError(
-        `Economy array schema ${schemaPath} has an invalid minItems value.`,
+      throw codexAppServerHelperPolicyError(
+        `Helper array schema ${schemaPath} has an invalid minItems value.`,
         { field: "outputSchema" }
       );
     }
     const itemMaximum = strictOutputSchemaMaximumCharacters(schema.items, `${schemaPath}[]`, depth + 1);
     const maximum = 2 + (schema.maxItems * itemMaximum) + Math.max(0, schema.maxItems - 1);
     if (!Number.isSafeInteger(maximum)) {
-      throw codexAppServerEconomyPolicyError(
-        "Economy output schema exceeds its finite bound.",
+      throw codexAppServerHelperPolicyError(
+        "Helper output schema exceeds its finite bound.",
         { field: "outputSchema" }
       );
     }
@@ -269,19 +269,19 @@ function strictOutputSchemaMaximumCharacters(schema = null, schemaPath = "$", de
     assertCodexAppServerOutputSchemaKeys(schema, ["enum", "maxLength", "minLength"], schemaPath);
     if (Array.isArray(schema.enum) && schema.enum.length > 0) {
       if (
-        schema.enum.length > CODEX_APP_SERVER_ECONOMY_OUTPUT_SCHEMA_MAX_ENUM_VALUES ||
+        schema.enum.length > CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_ENUM_VALUES ||
         schema.enum.some((value) => typeof value !== "string")
       ) {
-        throw codexAppServerEconomyPolicyError(
-          `Economy string schema ${schemaPath} has an invalid enum.`,
+        throw codexAppServerHelperPolicyError(
+          `Helper string schema ${schemaPath} has an invalid enum.`,
           { field: "outputSchema" }
         );
       }
       return Math.max(...schema.enum.map((value) => JSON.stringify(value).length));
     }
     if (!Number.isSafeInteger(schema.maxLength) || schema.maxLength <= 0) {
-      throw codexAppServerEconomyPolicyError(
-        `Economy string schema ${schemaPath} must have a finite positive maxLength.`,
+      throw codexAppServerHelperPolicyError(
+        `Helper string schema ${schemaPath} must have a finite positive maxLength.`,
         { field: "outputSchema" }
       );
     }
@@ -289,8 +289,8 @@ function strictOutputSchemaMaximumCharacters(schema = null, schemaPath = "$", de
       schema.minLength !== undefined &&
       (!Number.isSafeInteger(schema.minLength) || schema.minLength < 0 || schema.minLength > schema.maxLength)
     ) {
-      throw codexAppServerEconomyPolicyError(
-        `Economy string schema ${schemaPath} has an invalid minLength value.`,
+      throw codexAppServerHelperPolicyError(
+        `Helper string schema ${schemaPath} has an invalid minLength value.`,
         { field: "outputSchema" }
       );
     }
@@ -299,8 +299,8 @@ function strictOutputSchemaMaximumCharacters(schema = null, schemaPath = "$", de
     // resolved response limit even when every string character needs escaping.
     const maximum = (schema.maxLength * 6) + 2;
     if (!Number.isSafeInteger(maximum)) {
-      throw codexAppServerEconomyPolicyError(
-        "Economy output schema exceeds its finite bound.",
+      throw codexAppServerHelperPolicyError(
+        "Helper output schema exceeds its finite bound.",
         { field: "outputSchema" }
       );
     }
@@ -310,32 +310,32 @@ function strictOutputSchemaMaximumCharacters(schema = null, schemaPath = "$", de
     assertCodexAppServerOutputSchemaKeys(schema, [], schemaPath);
     return 5;
   }
-  throw codexAppServerEconomyPolicyError(
-    `Economy output schema ${schemaPath} uses an unsupported type.`,
+  throw codexAppServerHelperPolicyError(
+    `Helper output schema ${schemaPath} uses an unsupported type.`,
     { field: "outputSchema" }
   );
 }
 
-function codexAppServerEconomyOutputSchema(outputSchema, profile) {
+function codexAppServerHelperOutputSchema(outputSchema, profile) {
   let schemaBytes = 0;
   try {
     schemaBytes = Buffer.byteLength(JSON.stringify(outputSchema), "utf8");
   } catch {
-    throw codexAppServerEconomyPolicyError(
-      "Economy output schema is not serializable.",
+    throw codexAppServerHelperPolicyError(
+      "Helper output schema is not serializable.",
       { field: "outputSchema" }
     );
   }
-  if (schemaBytes > CODEX_APP_SERVER_ECONOMY_OUTPUT_SCHEMA_MAX_BYTES) {
-    throw codexAppServerEconomyPolicyError(
-      "Economy output schema exceeds its request limit.",
+  if (schemaBytes > CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_BYTES) {
+    throw codexAppServerHelperPolicyError(
+      "Helper output schema exceeds its request limit.",
       { field: "outputSchema" }
     );
   }
   const maximumCharacters = strictOutputSchemaMaximumCharacters(outputSchema);
   if (maximumCharacters > profile.limits.maxOutputCharacters) {
-    throw codexAppServerEconomyPolicyError(
-      "Economy output schema can exceed the resolved output limit.",
+    throw codexAppServerHelperPolicyError(
+      "Helper output schema can exceed the resolved output limit.",
       {
         maximumCharacters,
         maxOutputCharacters: profile.limits.maxOutputCharacters
@@ -345,16 +345,16 @@ function codexAppServerEconomyOutputSchema(outputSchema, profile) {
   return outputSchema;
 }
 
-function assertCodexAppServerEconomyOutputWithinLimit({
+function assertCodexAppServerHelperOutputWithinLimit({
   executionProfile = null,
   rawOutput = ""
 } = {}) {
-  const profile = codexAppServerEconomyProfile(executionProfile);
+  const profile = codexAppServerHelperProfile(executionProfile);
   const output = String(rawOutput ?? "");
   if (output.length > profile.limits.maxOutputCharacters) {
     throw new Vibe64AgentExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.UNBOUNDED,
-      "Codex economy output exceeds the resolved output limit.",
+      "Codex helper output exceeds the resolved output limit.",
       {
         maxOutputCharacters: profile.limits.maxOutputCharacters,
         outputCharacters: output.length
@@ -364,44 +364,44 @@ function assertCodexAppServerEconomyOutputWithinLimit({
   return output;
 }
 
-function codexAppServerEconomyConnectionGeneration(provider) {
+function codexAppServerHelperConnectionGeneration(provider) {
   if (typeof provider?.currentConnectionGeneration !== "function") {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution cannot verify the app-server connection generation."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution cannot verify the app-server connection generation."
     );
   }
   const generation = provider.currentConnectionGeneration();
   if (!Number.isSafeInteger(generation) || generation <= 0) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution found no active app-server connection."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution found no active app-server connection."
     );
   }
   return generation;
 }
 
-async function codexAppServerEconomyExecutionContext(provider) {
-  if (typeof provider?.currentEconomyExecutionContext !== "function") {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution requires its dedicated isolated provider."
+async function codexAppServerHelperExecutionContext(provider) {
+  if (typeof provider?.currentHelperExecutionContext !== "function") {
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution requires its dedicated isolated provider."
     );
   }
-  const context = await provider.currentEconomyExecutionContext();
+  const context = await provider.currentHelperExecutionContext();
   const cwd = normalizeWorkdir(context?.cwd);
   const accountIdentitySignature = normalizeAgentText(context?.accountIdentitySignature);
   if (
-    context?.executionMode !== "economy" ||
+    context?.executionMode !== "helper" ||
     !cwd ||
     !path.isAbsolute(cwd) ||
     !/^sha256:[a-f0-9]{64}$/u.test(accountIdentitySignature)
   ) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy runtime isolation could not be verified."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper runtime isolation could not be verified."
     );
   }
   return Object.freeze({
     accountIdentitySignature,
     cwd,
-    executionMode: "economy"
+    executionMode: "helper"
   });
 }
 
@@ -418,7 +418,7 @@ function codexAppServerUserAgentVersionParts(value = "") {
   const userAgent = normalizeAgentText(value);
   if (
     !userAgent ||
-    userAgent.length > CODEX_APP_SERVER_ECONOMY_USER_AGENT_MAX_LENGTH ||
+    userAgent.length > CODEX_APP_SERVER_HELPER_USER_AGENT_MAX_LENGTH ||
     codexAppServerTextHasControlCharacters(userAgent)
   ) {
     return null;
@@ -427,18 +427,18 @@ function codexAppServerUserAgentVersionParts(value = "") {
   return match ? codexAppServerSemanticVersionParts(match[1]) : null;
 }
 
-function assertCodexAppServerEconomyCompatibility(provider) {
+function assertCodexAppServerHelperCompatibility(provider) {
   if (typeof provider?.currentServerInfo !== "function") {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution cannot verify the app-server version. Update Codex and retry.",
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution cannot verify the app-server version. Update Codex and retry.",
       { minimumVersion: MINIMUM_CODEX_VERSION }
     );
   }
   const userAgent = normalizeAgentText(provider.currentServerInfo()?.userAgent);
   const actualParts = codexAppServerUserAgentVersionParts(userAgent);
   if (!actualParts) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution received an unrecognised app-server version. Update Codex and retry.",
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution received an unrecognised app-server version. Update Codex and retry.",
       {
         minimumVersion: MINIMUM_CODEX_VERSION
       }
@@ -448,8 +448,8 @@ function assertCodexAppServerEconomyCompatibility(provider) {
   const minimumParts = codexAppServerSemanticVersionParts(MINIMUM_CODEX_VERSION);
   const differingPart = actualParts.findIndex((part, index) => part !== minimumParts[index]);
   if (differingPart !== -1 && actualParts[differingPart] < minimumParts[differingPart]) {
-    throw codexAppServerEconomyPolicyError(
-      `Codex economy execution requires app-server ${MINIMUM_CODEX_VERSION} or newer; current version is ${actualVersion}. Update Codex and retry.`,
+    throw codexAppServerHelperPolicyError(
+      `Codex helper execution requires app-server ${MINIMUM_CODEX_VERSION} or newer; current version is ${actualVersion}. Update Codex and retry.`,
       {
         actualVersion,
         minimumVersion: MINIMUM_CODEX_VERSION
@@ -462,10 +462,10 @@ function assertCodexAppServerEconomyCompatibility(provider) {
   });
 }
 
-function codexAppServerEconomyMcpServerNames(configResult = null) {
+function codexAppServerHelperMcpServerNames(configResult = null) {
   if (!isPlainRecord(configResult?.config)) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution could not read the effective app-server configuration."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution could not read the effective app-server configuration."
     );
   }
   const servers = configResult.config.mcp_servers;
@@ -474,64 +474,64 @@ function codexAppServerEconomyMcpServerNames(configResult = null) {
   }
   // Only the MCP inventory participates in this isolation check. The native
   // response can also contain large model catalogues and configuration layers.
-  assertCodexAppServerEconomyResponseBounded(
+  assertCodexAppServerHelperResponseBounded(
     servers,
-    CODEX_APP_SERVER_ECONOMY_CONFIG_RESPONSE_MAX_BYTES,
+    CODEX_APP_SERVER_HELPER_CONFIG_RESPONSE_MAX_BYTES,
     "MCP configuration"
   );
   if (!isPlainRecord(servers)) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution received an invalid MCP server configuration."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution received an invalid MCP server configuration."
     );
   }
   const names = Object.keys(servers);
   if (
-    names.length > CODEX_APP_SERVER_ECONOMY_MCP_SERVER_MAX_COUNT ||
+    names.length > CODEX_APP_SERVER_HELPER_MCP_SERVER_MAX_COUNT ||
     names.some((name) => (
       !name ||
-      name.length > CODEX_APP_SERVER_ECONOMY_MCP_SERVER_NAME_MAX_LENGTH ||
+      name.length > CODEX_APP_SERVER_HELPER_MCP_SERVER_NAME_MAX_LENGTH ||
       codexAppServerTextHasControlCharacters(name)
     ))
   ) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution received an oversized or invalid MCP server inventory."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution received an oversized or invalid MCP server inventory."
     );
   }
   return names.sort();
 }
 
-function codexAppServerEconomyHookState(result = null, cwd = "") {
-  assertCodexAppServerEconomyResponseBounded(
+function codexAppServerHelperHookState(result = null, cwd = "") {
+  assertCodexAppServerHelperResponseBounded(
     result,
-    CODEX_APP_SERVER_ECONOMY_HOOK_RESPONSE_MAX_BYTES,
+    CODEX_APP_SERVER_HELPER_HOOK_RESPONSE_MAX_BYTES,
     "hook inventory"
   );
   if (!Array.isArray(result?.data)) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution could not enumerate app-server hooks."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution could not enumerate app-server hooks."
     );
   }
   if (result.data.length !== 1) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution received an unexpected hook inventory."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution received an unexpected hook inventory."
     );
   }
   const record = result.data[0];
   if (
     normalizeWorkdir(record?.cwd) !== cwd ||
-    normalizeWorkdir(record?.cwd).length > CODEX_APP_SERVER_ECONOMY_HOOK_FIELD_MAX_LENGTH ||
+    normalizeWorkdir(record?.cwd).length > CODEX_APP_SERVER_HELPER_HOOK_FIELD_MAX_LENGTH ||
     !Array.isArray(record.hooks) ||
     !Array.isArray(record.errors) ||
-    record.hooks.length > CODEX_APP_SERVER_ECONOMY_HOOK_MAX_COUNT ||
-    record.errors.length > CODEX_APP_SERVER_ECONOMY_HOOK_ERROR_MAX_COUNT
+    record.hooks.length > CODEX_APP_SERVER_HELPER_HOOK_MAX_COUNT ||
+    record.errors.length > CODEX_APP_SERVER_HELPER_HOOK_ERROR_MAX_COUNT
   ) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution received an incomplete hook inventory."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution received an incomplete hook inventory."
     );
   }
   if (record.errors.length > 0) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution cannot continue while hook discovery has errors.",
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution cannot continue while hook discovery has errors.",
       { hookErrorCount: record.errors.length }
     );
   }
@@ -543,17 +543,17 @@ function codexAppServerEconomyHookState(result = null, cwd = "") {
     if (
       !key ||
       [key, currentHash, handlerType, sourcePath].some((field) => (
-        field.length > CODEX_APP_SERVER_ECONOMY_HOOK_FIELD_MAX_LENGTH ||
+        field.length > CODEX_APP_SERVER_HELPER_HOOK_FIELD_MAX_LENGTH ||
         codexAppServerTextHasControlCharacters(field)
       ))
     ) {
-      throw codexAppServerEconomyPolicyError(
-        "Codex economy execution found an invalid hook inventory entry."
+      throw codexAppServerHelperPolicyError(
+        "Codex helper execution found an invalid hook inventory entry."
       );
     }
     if (hook?.isManaged === true && hook?.enabled === true) {
-      throw codexAppServerEconomyPolicyError(
-        "Codex economy execution cannot disable a managed hook."
+      throw codexAppServerHelperPolicyError(
+        "Codex helper execution cannot disable a managed hook."
       );
     }
     return {
@@ -566,9 +566,9 @@ function codexAppServerEconomyHookState(result = null, cwd = "") {
     };
   }).sort((left, right) => left.key.localeCompare(right.key));
   const fingerprint = JSON.stringify(hooks);
-  if (fingerprint.length > CODEX_APP_SERVER_ECONOMY_HOOK_FINGERPRINT_MAX_LENGTH) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution received an oversized hook inventory."
+  if (fingerprint.length > CODEX_APP_SERVER_HELPER_HOOK_FINGERPRINT_MAX_LENGTH) {
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution received an oversized hook inventory."
     );
   }
   return {
@@ -577,15 +577,15 @@ function codexAppServerEconomyHookState(result = null, cwd = "") {
   };
 }
 
-function codexAppServerEconomyIsolationConfig({
+function codexAppServerHelperIsolationConfig({
   executionProfile = null,
   hookKeys = [],
   mcpServerNames = []
 } = {}) {
-  const profile = codexAppServerEconomyProfile(executionProfile);
+  const profile = codexAppServerHelperProfile(executionProfile);
   const config = {
     features: Object.fromEntries(
-      CODEX_APP_SERVER_ECONOMY_TOOL_FEATURES.map((feature) => [feature, false])
+      CODEX_APP_SERVER_HELPER_TOOL_FEATURES.map((feature) => [feature, false])
     ),
     hooks: {
       state: Object.fromEntries(hookKeys.map((key) => [key, { enabled: false }]))
@@ -594,7 +594,7 @@ function codexAppServerEconomyIsolationConfig({
     include_collaboration_mode_instructions: false,
     include_environment_context: false,
     include_permissions_instructions: false,
-    model_reasoning_effort: profile.thinking,
+    ...(profile.thinking ? { model_reasoning_effort: profile.thinking } : {}),
     model_reasoning_summary: "none",
     mcp_servers: Object.fromEntries(
       mcpServerNames.map((name) => [name, { enabled: false }])
@@ -631,43 +631,43 @@ function codexAppServerEconomyIsolationConfig({
     },
     web_search: "disabled"
   };
-  const frozenConfig = deepFreezeCodexAppServerEconomyConfig(config);
-  codexAppServerEconomyIsolationConfigs.add(frozenConfig);
+  const frozenConfig = deepFreezeCodexAppServerHelperConfig(config);
+  codexAppServerHelperIsolationConfigs.add(frozenConfig);
   return frozenConfig;
 }
 
-async function codexAppServerEconomyIsolationState(provider, executionProfile = null) {
-  assertCodexAppServerEconomyCompatibility(provider);
+async function codexAppServerHelperIsolationState(provider, executionProfile = null) {
+  assertCodexAppServerHelperCompatibility(provider);
   if (
     typeof provider?.readConfig !== "function" ||
     typeof provider?.listHooks !== "function"
   ) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution cannot inventory configuration and hooks."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution cannot inventory configuration and hooks."
     );
   }
-  const executionContext = await codexAppServerEconomyExecutionContext(provider);
-  const generation = codexAppServerEconomyConnectionGeneration(provider);
+  const executionContext = await codexAppServerHelperExecutionContext(provider);
+  const generation = codexAppServerHelperConnectionGeneration(provider);
   const configResult = await provider.readConfig({
     cwd: executionContext.cwd,
     includeLayers: false
   });
-  if (codexAppServerEconomyConnectionGeneration(provider) !== generation) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex app-server reconnected during economy policy verification."
+  if (codexAppServerHelperConnectionGeneration(provider) !== generation) {
+    throw codexAppServerHelperPolicyError(
+      "Codex app-server reconnected during helper policy verification."
     );
   }
   const hookResult = await provider.listHooks([executionContext.cwd]);
-  if (codexAppServerEconomyConnectionGeneration(provider) !== generation) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex app-server reconnected during economy policy verification."
+  if (codexAppServerHelperConnectionGeneration(provider) !== generation) {
+    throw codexAppServerHelperPolicyError(
+      "Codex app-server reconnected during helper policy verification."
     );
   }
-  const mcpServerNames = codexAppServerEconomyMcpServerNames(configResult);
-  const hookState = codexAppServerEconomyHookState(hookResult, executionContext.cwd);
+  const mcpServerNames = codexAppServerHelperMcpServerNames(configResult);
+  const hookState = codexAppServerHelperHookState(hookResult, executionContext.cwd);
   return Object.freeze({
     accountIdentitySignature: executionContext.accountIdentitySignature,
-    config: codexAppServerEconomyIsolationConfig({
+    config: codexAppServerHelperIsolationConfig({
       executionProfile,
       hookKeys: hookState.hookKeys,
       mcpServerNames
@@ -793,7 +793,7 @@ function codexAppServerTurnSettings({
   return settings;
 }
 
-function codexAppServerEconomyThreadSettings({
+function codexAppServerHelperThreadSettings({
   config = null,
   cwd = "",
   developerInstructions = "",
@@ -801,30 +801,30 @@ function codexAppServerEconomyThreadSettings({
 } = {}) {
   const normalizedCwd = normalizeWorkdir(cwd);
   if (!normalizedCwd) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy thread requires a working directory."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper thread requires a working directory."
     );
   }
-  if (!isPlainRecord(config) || !codexAppServerEconomyIsolationConfigs.has(config)) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy thread requires verified tool-isolation configuration."
+  if (!isPlainRecord(config) || !codexAppServerHelperIsolationConfigs.has(config)) {
+    throw codexAppServerHelperPolicyError(
+      "Codex helper thread requires verified tool-isolation configuration."
     );
   }
-  const profile = codexAppServerEconomyProfile(executionProfile);
+  const profile = codexAppServerHelperProfile(executionProfile);
   const normalizedDeveloperInstructions = normalizeAgentText(developerInstructions);
-  if (normalizedDeveloperInstructions.length > CODEX_APP_SERVER_ECONOMY_DEVELOPER_INSTRUCTIONS_MAX_LENGTH) {
+  if (normalizedDeveloperInstructions.length > CODEX_APP_SERVER_HELPER_DEVELOPER_INSTRUCTIONS_MAX_LENGTH) {
     throw new Vibe64AgentExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.UNBOUNDED,
-      "Codex economy developer instructions exceed their request limit.",
+      "Codex helper developer instructions exceed their request limit.",
       {
-        maxDeveloperInstructionCharacters: CODEX_APP_SERVER_ECONOMY_DEVELOPER_INSTRUCTIONS_MAX_LENGTH
+        maxDeveloperInstructionCharacters: CODEX_APP_SERVER_HELPER_DEVELOPER_INSTRUCTIONS_MAX_LENGTH
       }
     );
   }
   return {
     allowProviderModelFallback: false,
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
-    baseInstructions: CODEX_APP_SERVER_ECONOMY_BASE_INSTRUCTIONS,
+    baseInstructions: CODEX_APP_SERVER_HELPER_BASE_INSTRUCTIONS,
     config,
     cwd: normalizedCwd,
     developerInstructions: normalizedDeveloperInstructions || null,
@@ -832,21 +832,21 @@ function codexAppServerEconomyThreadSettings({
     environments: [],
     model: profile.model,
     runtimeWorkspaceRoots: [],
-    sandbox: CODEX_APP_SERVER_ECONOMY_SANDBOX,
+    sandbox: CODEX_APP_SERVER_HELPER_SANDBOX,
     selectedCapabilityRoots: []
   };
 }
 
-function codexAppServerEconomyThreadStartSettings(options = {}) {
+function codexAppServerHelperThreadStartSettings(options = {}) {
   return {
-    ...codexAppServerEconomyThreadSettings(options),
+    ...codexAppServerHelperThreadSettings(options),
     sessionStartSource: "startup",
-    threadSource: CODEX_APP_SERVER_ECONOMY_THREAD_SOURCE
+    threadSource: CODEX_APP_SERVER_HELPER_THREAD_SOURCE
   };
 }
 
-function codexAppServerEconomyThreadResumeSettings(options = {}) {
-  const settings = codexAppServerEconomyThreadSettings(options);
+function codexAppServerHelperThreadResumeSettings(options = {}) {
+  const settings = codexAppServerHelperThreadSettings(options);
   return {
     approvalPolicy: settings.approvalPolicy,
     baseInstructions: settings.baseInstructions,
@@ -859,24 +859,24 @@ function codexAppServerEconomyThreadResumeSettings(options = {}) {
   };
 }
 
-function codexAppServerEconomyTurnSettings({
+function codexAppServerHelperTurnSettings({
   cwd = "",
   executionProfile = null,
   outputSchema = null
 } = {}) {
   const normalizedCwd = normalizeWorkdir(cwd);
   if (!normalizedCwd) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy turn requires a working directory."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper turn requires a working directory."
     );
   }
-  const profile = codexAppServerEconomyProfile(executionProfile);
+  const profile = codexAppServerHelperProfile(executionProfile);
   const settings = {
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
     cwd: normalizedCwd,
     environments: [],
     model: profile.model,
-    outputSchema: codexAppServerEconomyOutputSchema(outputSchema, profile),
+    outputSchema: codexAppServerHelperOutputSchema(outputSchema, profile),
     runtimeWorkspaceRoots: [],
     sandboxPolicy: {
       networkAccess: false,
@@ -890,21 +890,21 @@ function codexAppServerEconomyTurnSettings({
   return settings;
 }
 
-async function prepareCodexAppServerEconomyThreadStartSettings({
+async function prepareCodexAppServerHelperThreadStartSettings({
   developerInstructions = "",
   ephemeral = false,
   executionProfile = null,
   provider = null
 } = {}) {
-  const profile = codexAppServerEconomyProfile(executionProfile);
-  const enforcement = await codexAppServerEconomyIsolationState(
+  const profile = codexAppServerHelperProfile(executionProfile);
+  const enforcement = await codexAppServerHelperIsolationState(
     provider,
     profile
   );
   return Object.freeze({
     enforcement,
     executionProfile: profile,
-    settings: { ...codexAppServerEconomyThreadStartSettings({
+    settings: { ...codexAppServerHelperThreadStartSettings({
       config: enforcement.config,
       cwd: enforcement.executionCwd,
       developerInstructions,
@@ -913,7 +913,7 @@ async function prepareCodexAppServerEconomyThreadStartSettings({
   });
 }
 
-function codexAppServerEconomyIsolationMatches(left = null, right = null) {
+function codexAppServerHelperIsolationMatches(left = null, right = null) {
   return left?.accountIdentitySignature === right?.accountIdentitySignature &&
     left?.connectionGeneration === right?.connectionGeneration &&
     left?.executionCwd === right?.executionCwd &&
@@ -921,26 +921,26 @@ function codexAppServerEconomyIsolationMatches(left = null, right = null) {
     JSON.stringify(left?.mcpServerNames || []) === JSON.stringify(right?.mcpServerNames || []);
 }
 
-function codexAppServerEconomyVerificationFailure(error, cleanupError, threadId = "") {
+function codexAppServerHelperVerificationFailure(error, cleanupError, threadId = "") {
   const normalizedThreadId = normalizeAgentText(threadId);
   if (!cleanupError) {
-    error.codexAppServerEconomyThreadId = normalizedThreadId;
-    error.codexAppServerEconomyThreadRetired = true;
+    error.codexAppServerHelperThreadId = normalizedThreadId;
+    error.codexAppServerHelperThreadRetired = true;
     return error;
   }
-  const failure = codexAppServerEconomyPolicyError(
-    "Codex could not retire an economy thread after policy verification failed.",
+  const failure = codexAppServerHelperPolicyError(
+    "Codex could not retire a helper thread after policy verification failed.",
     {
       cleanupFailed: true,
       threadId: normalizedThreadId
     }
   );
-  failure.codexAppServerEconomyThreadCleanupRequired = true;
-  failure.codexAppServerEconomyThreadId = normalizedThreadId;
+  failure.codexAppServerHelperThreadCleanupRequired = true;
+  failure.codexAppServerHelperThreadId = normalizedThreadId;
   return failure;
 }
 
-async function throwAfterCodexAppServerEconomyVerificationFailure({
+async function throwAfterCodexAppServerHelperVerificationFailure({
   error = null,
   provider = null,
   threadId = ""
@@ -951,35 +951,35 @@ async function throwAfterCodexAppServerEconomyVerificationFailure({
   } catch (caught) {
     cleanupError = caught;
   }
-  throw codexAppServerEconomyVerificationFailure(error, cleanupError, threadId);
+  throw codexAppServerHelperVerificationFailure(error, cleanupError, threadId);
 }
 
-async function startCodexAppServerEconomyThread(options = {}) {
+async function startCodexAppServerHelperThread(options = {}) {
   const provider = options.provider;
   if (
     typeof provider?.startThread !== "function" ||
     typeof provider?.deleteThread !== "function"
   ) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution cannot own and clean up its app-server thread."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution cannot own and clean up its app-server thread."
     );
   }
-  const prepared = await prepareCodexAppServerEconomyThreadStartSettings(options);
+  const prepared = await prepareCodexAppServerHelperThreadStartSettings(options);
   const thread = await provider.startThread(prepared.settings);
   const threadId = normalizeAgentText(thread?.id);
   if (!threadId) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex app-server did not return an economy thread id."
+    throw codexAppServerHelperPolicyError(
+      "Codex app-server did not return a helper thread id."
     );
   }
   try {
-    const verified = await codexAppServerEconomyIsolationState(
+    const verified = await codexAppServerHelperIsolationState(
       provider,
       prepared.executionProfile
     );
-    if (!codexAppServerEconomyIsolationMatches(prepared.enforcement, verified)) {
-      throw codexAppServerEconomyPolicyError(
-        "Codex execution surfaces changed while the economy thread was starting."
+    if (!codexAppServerHelperIsolationMatches(prepared.enforcement, verified)) {
+      throw codexAppServerHelperPolicyError(
+        "Codex execution surfaces changed while the helper thread was starting."
       );
     }
     return Object.freeze({
@@ -989,7 +989,7 @@ async function startCodexAppServerEconomyThread(options = {}) {
       threadId
     });
   } catch (error) {
-    await throwAfterCodexAppServerEconomyVerificationFailure({
+    await throwAfterCodexAppServerHelperVerificationFailure({
       error,
       provider,
       threadId
@@ -997,7 +997,7 @@ async function startCodexAppServerEconomyThread(options = {}) {
   }
 }
 
-async function resumeCodexAppServerEconomyThread({
+async function resumeCodexAppServerHelperThread({
   developerInstructions = "",
   executionProfile = null,
   provider = null,
@@ -1007,24 +1007,24 @@ async function resumeCodexAppServerEconomyThread({
     typeof provider?.resumeThread !== "function" ||
     typeof provider?.deleteThread !== "function"
   ) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution cannot safely resume and clean up its app-server thread."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution cannot safely resume and clean up its app-server thread."
     );
   }
   const normalizedThreadId = normalizeAgentText(threadId);
   if (!normalizedThreadId) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy resume requires a controller-owned thread id."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper resume requires a controller-owned thread id."
     );
   }
-  const profile = codexAppServerEconomyProfile(executionProfile);
-  const enforcement = await codexAppServerEconomyIsolationState(
+  const profile = codexAppServerHelperProfile(executionProfile);
+  const enforcement = await codexAppServerHelperIsolationState(
     provider,
     profile
   );
   const thread = await provider.resumeThread(
     normalizedThreadId,
-    codexAppServerEconomyThreadResumeSettings({
+    codexAppServerHelperThreadResumeSettings({
       config: enforcement.config,
       cwd: enforcement.executionCwd,
       developerInstructions,
@@ -1032,13 +1032,13 @@ async function resumeCodexAppServerEconomyThread({
     })
   );
   try {
-    const verified = await codexAppServerEconomyIsolationState(
+    const verified = await codexAppServerHelperIsolationState(
       provider,
       profile
     );
-    if (!codexAppServerEconomyIsolationMatches(enforcement, verified)) {
-      throw codexAppServerEconomyPolicyError(
-        "Codex execution surfaces changed while the economy thread was resuming."
+    if (!codexAppServerHelperIsolationMatches(enforcement, verified)) {
+      throw codexAppServerHelperPolicyError(
+        "Codex execution surfaces changed while the helper thread was resuming."
       );
     }
     return Object.freeze({
@@ -1048,7 +1048,7 @@ async function resumeCodexAppServerEconomyThread({
       threadId: normalizedThreadId
     });
   } catch (error) {
-    await throwAfterCodexAppServerEconomyVerificationFailure({
+    await throwAfterCodexAppServerHelperVerificationFailure({
       error,
       provider,
       threadId: normalizedThreadId
@@ -1056,7 +1056,7 @@ async function resumeCodexAppServerEconomyThread({
   }
 }
 
-async function sendCodexAppServerEconomyTurn({
+async function sendCodexAppServerHelperTurn({
   executionProfile = null,
   outputSchema = null,
   prompt = "",
@@ -1064,19 +1064,19 @@ async function sendCodexAppServerEconomyTurn({
   threadId = ""
 } = {}) {
   if (typeof provider?.sendTurn !== "function") {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy execution cannot send an app-server turn."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper execution cannot send an app-server turn."
     );
   }
-  const profile = codexAppServerEconomyProfile(executionProfile);
+  const profile = codexAppServerHelperProfile(executionProfile);
   const input = String(prompt ?? "").trim();
   if (!input) {
-    throw codexAppServerEconomyPolicyError("Codex economy prompt is empty.");
+    throw codexAppServerHelperPolicyError("Codex helper prompt is empty.");
   }
   if (input.length > profile.limits.maxInputCharacters) {
     throw new Vibe64AgentExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.UNBOUNDED,
-      "Codex economy prompt exceeds the resolved input limit.",
+      "Codex helper prompt exceeds the resolved input limit.",
       {
         inputCharacters: input.length,
         maxInputCharacters: profile.limits.maxInputCharacters
@@ -1085,15 +1085,15 @@ async function sendCodexAppServerEconomyTurn({
   }
   const normalizedThreadId = normalizeAgentText(threadId);
   if (!normalizedThreadId) {
-    throw codexAppServerEconomyPolicyError(
-      "Codex economy turn requires an app-server thread id."
+    throw codexAppServerHelperPolicyError(
+      "Codex helper turn requires an app-server thread id."
     );
   }
   const turn = await provider.sendTurn(
     normalizedThreadId,
     input,
-    codexAppServerEconomyTurnSettings({
-      cwd: (await codexAppServerEconomyExecutionContext(provider)).cwd,
+    codexAppServerHelperTurnSettings({
+      cwd: (await codexAppServerHelperExecutionContext(provider)).cwd,
       executionProfile: profile,
       outputSchema
     })
@@ -2023,12 +2023,12 @@ export {
   CODEX_SESSION_REASONING_EFFORT,
   CODEX_SESSION_REASONING_SUMMARY,
   CODEX_SESSION_SANDBOX,
-  assertCodexAppServerEconomyOutputWithinLimit,
-  assertCodexAppServerEconomyCompatibility,
-  codexAppServerEconomyThreadResumeSettings,
-  codexAppServerEconomyThreadSettings,
-  codexAppServerEconomyThreadStartSettings,
-  codexAppServerEconomyTurnSettings,
+  assertCodexAppServerHelperOutputWithinLimit,
+  assertCodexAppServerHelperCompatibility,
+  codexAppServerHelperThreadResumeSettings,
+  codexAppServerHelperThreadSettings,
+  codexAppServerHelperThreadStartSettings,
+  codexAppServerHelperTurnSettings,
   codexAppServerIdentityMetadata,
   codexAppServerProjectHookTrustConfig,
   codexAppServerThreadHasReadableHistory,
@@ -2037,12 +2037,12 @@ export {
   codexAppServerThreadSettings,
   codexAppServerTurnSettings,
   ensureCodexAppServerThreadForSession,
-  prepareCodexAppServerEconomyThreadStartSettings,
-  resumeCodexAppServerEconomyThread,
+  prepareCodexAppServerHelperThreadStartSettings,
+  resumeCodexAppServerHelperThread,
   resumeExactCodexAppServerThreadForSession,
-  sendCodexAppServerEconomyTurn,
+  sendCodexAppServerHelperTurn,
   sendCodexAppServerPromptForSession,
-  startCodexAppServerEconomyThread,
+  startCodexAppServerHelperThread,
   startFreshCodexAppServerThreadForSession,
   writeCodexAppServerIdentityMetadata
 };

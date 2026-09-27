@@ -25,8 +25,8 @@ import {
   CodexAppServerAgentProvider,
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
-  codexAppServerEconomyHomeDir,
-  codexAppServerEconomyWorkspaceDir,
+  codexAppServerHelperHomeDir,
+  codexAppServerHelperWorkspaceDir,
   codexAppServerMetadataIsLive,
   codexAppServerRequestIsInvalid,
   codexAppServerRuntimeBaseDir,
@@ -150,7 +150,7 @@ async function writeChatgptAuth(toolHomeSource, {
   }, null, 2)}\n`, { mode: 0o600 });
 }
 
-async function writeApiKeyAuth(toolHomeSource, apiKey = "sk-test-economy-key") {
+async function writeApiKeyAuth(toolHomeSource, apiKey = "sk-test-helper-key") {
   const codexHome = path.join(toolHomeSource, ".codex");
   await mkdir(codexHome, { mode: 0o700, recursive: true });
   await writeFile(path.join(codexHome, "auth.json"), `${JSON.stringify({
@@ -560,7 +560,7 @@ test("codex provider preserves observers across connection replacement and rejec
   }
 });
 
-class EconomyResponsiveFakeWebSocket extends ResponsiveFakeWebSocket {
+class HelperResponsiveFakeWebSocket extends ResponsiveFakeWebSocket {
   send(payload) {
     super.send(payload);
     const message = this.sent.at(-1);
@@ -620,7 +620,7 @@ class UnresponsiveFakeWebSocket extends FakeWebSocket {
   }
 }
 
-class EconomyLoginErrorFakeWebSocket extends ResponsiveFakeWebSocket {
+class HelperLoginErrorFakeWebSocket extends ResponsiveFakeWebSocket {
   send(payload) {
     super.send(payload);
     const message = this.sent.at(-1);
@@ -2539,7 +2539,7 @@ test("codex provider starts a host-native app-server", async () => {
   });
 });
 
-test("codex economy provider starts from a private empty home and strips project execution inputs", async () => {
+test("codex helper provider starts from a private empty home and strips project execution inputs", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const toolHomeSource = path.join(runtimeDir, "canonical-account-home");
     const projectWorkdir = path.join(runtimeDir, "project", "source");
@@ -2549,7 +2549,7 @@ test("codex economy provider starts from a private empty home and strips project
     ]);
     const commandCalls = [];
     const runtime = await ensureCodexAppServerRuntime({
-      authStateSignature: "economy-auth-state",
+      authStateSignature: "helper-auth-state",
       env: {
         DB_PASSWORD: "host-db-secret",
         LANG: "en_AU.UTF-8",
@@ -2557,7 +2557,7 @@ test("codex economy provider starts from a private empty home and strips project
         PATH: process.env.PATH,
         PROJECT_HOST_SECRET: "host-project-secret"
       },
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       executionRoot: projectWorkdir,
       project: {
         runtimeConfigEnv: {
@@ -2567,7 +2567,7 @@ test("codex economy provider starts from a private empty home and strips project
       },
       readyTimeoutMs: 2000,
       runtimeDir,
-      runtimeInstanceId: "session-1:economy",
+      runtimeInstanceId: "session-1:helper",
       runtimes: ["project-secret-runtime"],
       session: {
         databaseEnv: {
@@ -2587,26 +2587,26 @@ test("codex economy provider starts from a private empty home and strips project
       commandRunner: codexAppServerCommandRunner(runtimeDir, commandCalls)
     });
 
-    const economyHome = codexAppServerEconomyHomeDir(runtimeDir);
-    const economyWorkspace = codexAppServerEconomyWorkspaceDir(runtimeDir);
+    const helperHome = codexAppServerHelperHomeDir(runtimeDir);
+    const helperWorkspace = codexAppServerHelperWorkspaceDir(runtimeDir);
     const runCall = commandCalls[0];
     const serializedCall = JSON.stringify(runCall);
-    assert.equal(runtime.executionMode, CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY);
-    assert.equal(runtime.processCwd, economyWorkspace);
+    assert.equal(runtime.executionMode, CODEX_APP_SERVER_EXECUTION_MODES.HELPER);
+    assert.equal(runtime.processCwd, helperWorkspace);
     assert.equal(runtime.toolHomeSource, "");
     assert.equal(runtime.accountIdentitySignature, await currentCodexAccountIdentitySignature({
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       toolHomeSource
     }));
-    assert.equal(runCall.cwd, economyWorkspace);
-    assert.deepEqual(runCall.allowedRoots, [economyWorkspace]);
-    assert.equal(runCall.credentialHome.home, economyHome);
+    assert.equal(runCall.cwd, helperWorkspace);
+    assert.deepEqual(runCall.allowedRoots, [helperWorkspace]);
+    assert.equal(runCall.credentialHome.home, helperHome);
     assert.deepEqual(runCall.project, {});
     assert.deepEqual(runCall.session, {});
     assert.equal(runCall.userKey, "");
     assert.deepEqual(runCall.shimDirs, []);
     assert.equal(runCall.execution.label, "Codex assistant");
-    assert.equal(runCall.baseEnv.CODEX_HOME, economyHome);
+    assert.equal(runCall.baseEnv.CODEX_HOME, helperHome);
     assert.equal(runCall.baseEnv.DB_PASSWORD, "");
     assert.equal(runCall.baseEnv.OPENAI_API_KEY, "");
     assert.equal(runCall.baseEnv.PROJECT_HOST_SECRET, "");
@@ -2622,7 +2622,7 @@ test("codex economy provider starts from a private empty home and strips project
       args: [
         "-c",
         runCall.args[1],
-        "vibe64-economy-env-probe",
+        "vibe64-helper-env-probe",
         process.execPath,
         "-e",
         "console.log(JSON.stringify(process.env));"
@@ -2633,8 +2633,8 @@ test("codex economy provider starts from a private empty home and strips project
     });
     assert.equal(envProbe.ok, true, envProbe.output);
     const childEnv = JSON.parse(envProbe.stdout);
-    assert.equal(childEnv.CODEX_HOME, economyHome);
-    assert.equal(childEnv.HOME, economyHome);
+    assert.equal(childEnv.CODEX_HOME, helperHome);
+    assert.equal(childEnv.HOME, helperHome);
     for (const secretName of [
       "DB_PASSWORD",
       "OPENAI_API_KEY",
@@ -2668,15 +2668,15 @@ test("codex economy provider starts from a private empty home and strips project
   });
 });
 
-test("codex economy provider retires a detached child when startup never becomes ready", async () => {
+test("codex helper provider retires a detached child when startup never becomes ready", async () => {
   await withTemporaryDirectory(async (root) => {
-    const runtimeDir = path.join(root, "codex-app-server-economy-unready");
+    const runtimeDir = path.join(root, "codex-app-server-helper-unready");
     let child = null;
     try {
       await assert.rejects(startCodexAppServerProcess({
         accountIdentitySignature: `sha256:${"e".repeat(64)}`,
         authStateSignature: "test-auth-state",
-        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
         readyTimeoutMs: 50,
         runtimeDir,
         WebSocketImpl: UnresponsiveFakeWebSocket,
@@ -2703,14 +2703,14 @@ test("codex economy provider retires a detached child when startup never becomes
           };
         }
       }), (error) => {
-        assert.equal(error.code, "vibe64_codex_economy_runtime_start_failed");
+        assert.equal(error.code, "vibe64_codex_helper_runtime_start_failed");
         assert.equal(error.cleanupRequired, false);
         return true;
       });
       assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" });
       for (const artifact of [
-        codexAppServerEconomyHomeDir(runtimeDir),
-        codexAppServerEconomyWorkspaceDir(runtimeDir),
+        codexAppServerHelperHomeDir(runtimeDir),
+        codexAppServerHelperWorkspaceDir(runtimeDir),
         socketPathForRuntime(runtimeDir),
         path.join(runtimeDir, "app-server.log")
       ]) {
@@ -2729,15 +2729,15 @@ test("codex economy provider retires a detached child when startup never becomes
   });
 });
 
-test("codex economy provider retires a started child when metadata persistence fails", async () => {
+test("codex helper provider retires a started child when metadata persistence fails", async () => {
   await withTemporaryDirectory(async (root) => {
-    const runtimeDir = path.join(root, "codex-app-server-economy-metadata");
+    const runtimeDir = path.join(root, "codex-app-server-helper-metadata");
     let child = null;
     try {
       await assert.rejects(ensureCodexAppServerRuntime({
         accountIdentitySignature: `sha256:${"f".repeat(64)}`,
         authStateSignature: "test-auth-state",
-        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
         readyTimeoutMs: 1000,
         runtimeDir,
         WebSocketImpl: ResponsiveFakeWebSocket,
@@ -2767,15 +2767,15 @@ test("codex economy provider retires a started child when metadata persistence f
           throw new Error("metadata-secret-must-not-escape");
         }
       }), (error) => {
-        assert.equal(error.code, "vibe64_codex_economy_runtime_metadata_failed");
+        assert.equal(error.code, "vibe64_codex_helper_runtime_metadata_failed");
         assert.equal(error.cleanupRequired, false);
         assert.doesNotMatch(error.message, /metadata-secret/u);
         return true;
       });
       assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" });
       for (const artifact of [
-        codexAppServerEconomyHomeDir(runtimeDir),
-        codexAppServerEconomyWorkspaceDir(runtimeDir),
+        codexAppServerHelperHomeDir(runtimeDir),
+        codexAppServerHelperWorkspaceDir(runtimeDir),
         socketPathForRuntime(runtimeDir),
         path.join(runtimeDir, "app-server.log"),
         path.join(runtimeDir, "runtime.json")
@@ -2787,14 +2787,14 @@ test("codex economy provider retires a started child when metadata persistence f
       const retry = await ensureCodexAppServerRuntime({
         accountIdentitySignature: `sha256:${"f".repeat(64)}`,
         authStateSignature: "test-auth-state",
-        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
         readyTimeoutMs: 1000,
         runtimeDir,
         WebSocketImpl: ResponsiveFakeWebSocket,
         commandRunner: codexAppServerCommandRunner(runtimeDir)
       });
       assert.equal(retry.reused, false);
-      assert.equal(retry.executionMode, CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY);
+      assert.equal(retry.executionMode, CODEX_APP_SERVER_EXECUTION_MODES.HELPER);
       assert.equal((await readdir(runtimeDir)).includes("runtime.json"), true);
       const stoppedRetry = await stopCodexAppServerRuntime({ runtimeDir });
       assert.equal(stoppedRetry.runtimeDirRemoved, true);
@@ -2830,9 +2830,9 @@ test("shared Codex login identity accepts missing account metadata and survives 
     provider.ensureRuntime = async () => ({
       runtimeDir: path.join(root, "shared-runtime")
     });
-    const economyContext = await provider.currentEconomyExecutionContext();
-    assert.equal(economyContext.accountIdentitySignature, first);
-    assert.equal(economyContext.executionMode, CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY);
+    const helperContext = await provider.currentHelperExecutionContext();
+    assert.equal(helperContext.accountIdentitySignature, first);
+    assert.equal(helperContext.executionMode, CODEX_APP_SERVER_EXECUTION_MODES.HELPER);
     assert.equal(await readFile(authPath, "utf8"), originalAuth);
     await writeChatgptAuth(chatgptHome, {
       accessToken: "second-access-token",
@@ -2843,10 +2843,10 @@ test("shared Codex login identity accepts missing account metadata and survives 
     assert.equal((await restarted.currentRuntimeInfo()).accountIdentitySignature, first);
     assert.equal(JSON.parse(await readFile(authPath, "utf8")).tokens.account_id, null);
     await assert.rejects(currentCodexAccountIdentitySignature({
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       systemRoot,
       toolHomeSource: chatgptHome
-    }), (error) => error.code === "vibe64_codex_economy_auth_invalid");
+    }), (error) => error.code === "vibe64_codex_helper_auth_invalid");
 
     await writeCodexAuthMarker(systemRoot);
     const switched = (await provider.currentRuntimeInfo()).accountIdentitySignature;
@@ -2862,13 +2862,13 @@ test("isolated Codex account identity uses the actual selected account and API k
   await withTemporaryDirectory(async (root) => {
     const chatgptHome = path.join(root, "chatgpt-home");
     await writeChatgptAuth(chatgptHome);
-    const options = { executionMode: "economy", toolHomeSource: chatgptHome };
+    const options = { executionMode: "helper", toolHomeSource: chatgptHome };
     const first = await currentCodexAccountIdentitySignature(options);
     await writeChatgptAuth(chatgptHome, { accessToken: "second-access-token" });
     assert.equal(await currentCodexAccountIdentitySignature(options), first);
     await writeChatgptAuth(chatgptHome, { accountId: "account-two" });
     const switched = await currentCodexAccountIdentitySignature({
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       toolHomeSource: chatgptHome
     });
     assert.notEqual(switched, first);
@@ -2876,12 +2876,12 @@ test("isolated Codex account identity uses the actual selected account and API k
     const apiKeyHome = path.join(root, "api-key-home");
     await writeApiKeyAuth(apiKeyHome, "sk-first-selected-key");
     const firstApiKey = await currentCodexAccountIdentitySignature({
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       toolHomeSource: apiKeyHome
     });
     await writeApiKeyAuth(apiKeyHome, "sk-second-selected-key");
     const secondApiKey = await currentCodexAccountIdentitySignature({
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       toolHomeSource: apiKeyHome
     });
     assert.notEqual(secondApiKey, firstApiKey);
@@ -2939,10 +2939,10 @@ test("Codex access distinguishes account authentication from API keys without ex
     assert.equal(factsOnly.endpointCode, "codex_subscription");
     await assert.rejects(
       currentCodexAccountIdentitySignature({
-        executionMode: "economy",
+        executionMode: "helper",
         toolHomeSource: factsOnlyHome
       }),
-      (error) => error.code === "vibe64_codex_economy_auth_invalid"
+      (error) => error.code === "vibe64_codex_helper_auth_invalid"
     );
   });
 });
@@ -3606,9 +3606,9 @@ test("codex provider forwards cancellation through every model catalog page", as
   assert.equal(capturedSignal.aborted, true);
 });
 
-test("codex economy provider authoritatively inventories active and archived threads with bounded pagination", async () => {
+test("codex helper provider authoritatively inventories active and archived threads with bounded pagination", async () => {
   const calls = [];
-  const runtimeDir = "/tmp/vibe64-economy-thread-inventory";
+  const runtimeDir = "/tmp/vibe64-helper-thread-inventory";
   const accountIdentitySignature = `sha256:${"b".repeat(64)}`;
   const responses = [{
     data: [{ id: "thread-two" }],
@@ -3622,14 +3622,14 @@ test("codex economy provider authoritatively inventories active and archived thr
   }];
   const provider = new CodexAppServerAgentProvider({
     accountIdentitySignature,
-    executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+    executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
     runtimeDir
   });
   provider.ensureRuntime = async () => {
     provider.runtime = {
       accountIdentitySignature,
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
-      processCwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
+      processCwd: codexAppServerHelperWorkspaceDir(runtimeDir),
       runtimeDir
     };
     return provider.runtime;
@@ -3641,7 +3641,7 @@ test("codex economy provider authoritatively inventories active and archived thr
     }
   });
 
-  const result = await provider.listEconomyThreads();
+  const result = await provider.listHelperThreads();
 
   assert.deepEqual(result.threadIds, [
     "thread-archived",
@@ -3653,7 +3653,7 @@ test("codex economy provider authoritatively inventories active and archived thr
     method: "thread/list",
     params: {
       archived: false,
-      cwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
+      cwd: codexAppServerHelperWorkspaceDir(runtimeDir),
       limit: 100,
       modelProviders: [],
       sourceKinds: ["appServer"],
@@ -3664,7 +3664,7 @@ test("codex economy provider authoritatively inventories active and archived thr
     params: {
       archived: false,
       cursor: "next-active",
-      cwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
+      cwd: codexAppServerHelperWorkspaceDir(runtimeDir),
       limit: 100,
       modelProviders: [],
       sourceKinds: ["appServer"],
@@ -3674,7 +3674,7 @@ test("codex economy provider authoritatively inventories active and archived thr
     method: "thread/list",
     params: {
       archived: true,
-      cwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
+      cwd: codexAppServerHelperWorkspaceDir(runtimeDir),
       limit: 100,
       modelProviders: [],
       sourceKinds: ["appServer"],
@@ -3767,19 +3767,19 @@ test("codex session thread inventory fails closed for another cwd or repeated pa
   );
 });
 
-test("codex economy thread inventory fails closed on repeated or oversized provider data", async () => {
-  const runtimeDir = "/tmp/vibe64-economy-thread-inventory-invalid";
+test("codex helper thread inventory fails closed on repeated or oversized provider data", async () => {
+  const runtimeDir = "/tmp/vibe64-helper-thread-inventory-invalid";
   const accountIdentitySignature = `sha256:${"c".repeat(64)}`;
   const provider = new CodexAppServerAgentProvider({
     accountIdentitySignature,
-    executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+    executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
     runtimeDir
   });
   provider.ensureRuntime = async () => {
     provider.runtime = {
       accountIdentitySignature,
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
-      processCwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
+      processCwd: codexAppServerHelperWorkspaceDir(runtimeDir),
       runtimeDir
     };
     return provider.runtime;
@@ -3792,8 +3792,8 @@ test("codex economy thread inventory fails closed on repeated or oversized provi
       };
     }
   });
-  await assert.rejects(provider.listEconomyThreads(), (error) => {
-    assert.equal(error.code, "vibe64_codex_economy_thread_inventory_invalid");
+  await assert.rejects(provider.listHelperThreads(), (error) => {
+    assert.equal(error.code, "vibe64_codex_helper_thread_inventory_invalid");
     assert.doesNotMatch(error.message, /same-cursor/u);
     return true;
   });
@@ -3809,8 +3809,8 @@ test("codex economy thread inventory fails closed on repeated or oversized provi
       };
     }
   });
-  await assert.rejects(provider.listEconomyThreads(), (error) => {
-    assert.equal(error.code, "vibe64_codex_economy_thread_inventory_invalid");
+  await assert.rejects(provider.listHelperThreads(), (error) => {
+    assert.equal(error.code, "vibe64_codex_helper_thread_inventory_invalid");
     return true;
   });
 });
@@ -3948,11 +3948,11 @@ test("codex provider drops oversized app-server identity fields", async () => {
   provider.close();
 });
 
-test("codex economy provider redacts app-server request failures and refuses external server requests", async () => {
+test("codex helper provider redacts app-server request failures and refuses external server requests", async () => {
   const provider = new CodexAppServerAgentProvider({
     accountIdentitySignature: `sha256:${"d".repeat(64)}`,
     authStateSignature: "test-auth-state",
-    executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY
+    executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER
   });
   let externalHandlerCalls = 0;
   provider.setServerRequestHandler(async () => {
@@ -3971,7 +3971,7 @@ test("codex economy provider redacts app-server request failures and refuses ext
   });
 
   await assert.rejects(provider.startThread({}), (error) => {
-    assert.equal(error.code, "vibe64_codex_economy_provider_request_failed");
+    assert.equal(error.code, "vibe64_codex_helper_provider_request_failed");
     assert.equal(error.providerCode, -32600);
     assert.equal(error.operation, "codex-app-server-thread-start");
     assert.doesNotMatch(JSON.stringify(error), /selected-api-key|project-secret/u);
@@ -3991,15 +3991,15 @@ test("codex economy provider redacts app-server request failures and refuses ext
   assert.equal(externalHandlerCalls, 0);
 });
 
-test("codex economy provider retires its runtime when in-memory account activation fails", async () => {
+test("codex helper provider retires its runtime when in-memory account activation fails", async () => {
   await withTemporaryDirectory(async (root) => {
     FakeWebSocket.instances = [];
-    const runtimeDir = path.join(root, "codex-app-server-economy-login");
+    const runtimeDir = path.join(root, "codex-app-server-helper-login");
     const toolHomeSource = path.join(root, "selected-home");
     await writeChatgptAuth(toolHomeSource);
     await Promise.all([
-      mkdir(codexAppServerEconomyHomeDir(runtimeDir), { recursive: true }),
-      mkdir(codexAppServerEconomyWorkspaceDir(runtimeDir), { recursive: true })
+      mkdir(codexAppServerHelperHomeDir(runtimeDir), { recursive: true }),
+      mkdir(codexAppServerHelperWorkspaceDir(runtimeDir), { recursive: true })
     ]);
     const runtimeToken = randomUUID();
     const commandHash = randomUUID().replaceAll("-", "").slice(0, 12);
@@ -4020,24 +4020,24 @@ test("codex economy provider retires its runtime when in-memory account activati
         commandHash
       );
       const accountIdentitySignature = await currentCodexAccountIdentitySignature({
-        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
         toolHomeSource
       });
       const provider = new CodexAppServerAgentProvider({
         authStateSignature: "test-auth-state",
-        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
         requestTimeoutMs: 1000,
         runtimeDir,
         toolHomeSource,
-        WebSocketImpl: EconomyLoginErrorFakeWebSocket
+        WebSocketImpl: HelperLoginErrorFakeWebSocket
       });
       provider.ensureRuntime = async () => {
         provider.runtime = {
           accountIdentitySignature,
           endpoint: "ws://127.0.0.1:48123",
-          executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+          executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
           pid: child.pid,
-          processCwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
+          processCwd: codexAppServerHelperWorkspaceDir(runtimeDir),
           processIdentity,
           runtimeDir
         };
@@ -4045,15 +4045,15 @@ test("codex economy provider retires its runtime when in-memory account activati
       };
 
       await assert.rejects(provider.connect(), (error) => {
-        assert.equal(error.code, "vibe64_codex_economy_auth_unavailable");
+        assert.equal(error.code, "vibe64_codex_helper_auth_unavailable");
         assert.doesNotMatch(error.message, /secret-token/u);
         return true;
       });
       assert.throws(() => process.kill(-child.pid, 0), { code: "ESRCH" });
       assert.equal(provider.runtime, null);
       assert.equal(provider.client, null);
-      await assert.rejects(access(codexAppServerEconomyHomeDir(runtimeDir)), { code: "ENOENT" });
-      await assert.rejects(access(codexAppServerEconomyWorkspaceDir(runtimeDir)), { code: "ENOENT" });
+      await assert.rejects(access(codexAppServerHelperHomeDir(runtimeDir)), { code: "ENOENT" });
+      await assert.rejects(access(codexAppServerHelperWorkspaceDir(runtimeDir)), { code: "ENOENT" });
     } finally {
       try {
         process.kill(-child.pid, "SIGKILL");
@@ -4064,7 +4064,7 @@ test("codex economy provider retires its runtime when in-memory account activati
   });
 });
 
-test("codex economy provider injects only the selected ChatGPT account and refreshes from an advanced canonical token", async () => {
+test("codex helper provider injects only the selected ChatGPT account and refreshes from an advanced canonical token", async () => {
   await withTemporaryDirectory(async (root) => {
     FakeWebSocket.instances = [];
     const toolHomeSource = path.join(root, "selected-home");
@@ -4075,12 +4075,12 @@ test("codex economy provider injects only the selected ChatGPT account and refre
       refreshToken: "refresh-token-never-forward"
     });
     const accountIdentitySignature = await currentCodexAccountIdentitySignature({
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       toolHomeSource
     });
     const provider = new CodexAppServerAgentProvider({
       authStateSignature: "test-auth-state",
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       project: {
         secretProjectIdentity: "project-identity-must-be-stripped"
       },
@@ -4095,14 +4095,14 @@ test("codex economy provider injects only the selected ChatGPT account and refre
       },
       toolHomeSource,
       userKey: "user-key-must-be-stripped",
-      WebSocketImpl: EconomyResponsiveFakeWebSocket
+      WebSocketImpl: HelperResponsiveFakeWebSocket
     });
     provider.ensureRuntime = async () => {
       provider.runtime = {
         accountIdentitySignature,
         endpoint: "ws://127.0.0.1:48123",
-        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
-        processCwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
+        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
+        processCwd: codexAppServerHelperWorkspaceDir(runtimeDir),
         runtimeDir,
         transport: "unix"
       };
@@ -4124,7 +4124,7 @@ test("codex economy provider injects only the selected ChatGPT account and refre
     });
     const runtimeInfo = await provider.currentRuntimeInfo();
     assert.equal(runtimeInfo.accountIdentitySignature, accountIdentitySignature);
-    assert.equal(runtimeInfo.executionMode, CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY);
+    assert.equal(runtimeInfo.executionMode, CODEX_APP_SERVER_EXECUTION_MODES.HELPER);
     assert.equal(runtimeInfo.executionContextHash, executionContextHash({
       project: {},
       session: {},
@@ -4160,35 +4160,35 @@ test("codex economy provider injects only the selected ChatGPT account and refre
         previousAccountId: "account-one",
         reason: "unauthorized"
       }
-    }), (error) => error.code === "vibe64_codex_economy_auth_refresh_pending");
+    }), (error) => error.code === "vibe64_codex_helper_auth_refresh_pending");
     provider.close();
   });
 });
 
-test("codex economy provider injects API-key auth without persisting or exposing the key", async () => {
+test("codex helper provider injects API-key auth without persisting or exposing the key", async () => {
   await withTemporaryDirectory(async (root) => {
     FakeWebSocket.instances = [];
     const toolHomeSource = path.join(root, "selected-api-home");
     const runtimeDir = path.join(root, "runtime");
-    await writeApiKeyAuth(toolHomeSource, "sk-selected-economy-key");
+    await writeApiKeyAuth(toolHomeSource, "sk-selected-helper-key");
     const accountIdentitySignature = await currentCodexAccountIdentitySignature({
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       toolHomeSource
     });
     const provider = new CodexAppServerAgentProvider({
       authStateSignature: "test-auth-state",
-      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
+      executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       requestTimeoutMs: 1000,
       runtimeDir,
       toolHomeSource,
-      WebSocketImpl: EconomyResponsiveFakeWebSocket
+      WebSocketImpl: HelperResponsiveFakeWebSocket
     });
     provider.ensureRuntime = async () => {
       provider.runtime = {
         accountIdentitySignature,
         endpoint: "ws://127.0.0.1:48123",
-        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY,
-        processCwd: codexAppServerEconomyWorkspaceDir(runtimeDir),
+        executionMode: CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
+        processCwd: codexAppServerHelperWorkspaceDir(runtimeDir),
         runtimeDir
       };
       return provider.runtime;
@@ -4198,7 +4198,7 @@ test("codex economy provider injects API-key auth without persisting or exposing
     const login = FakeWebSocket.instances.at(-1).sent
       .find((entry) => entry.method === "account/login/start");
     assert.deepEqual(login.params, {
-      apiKey: "sk-selected-economy-key",
+      apiKey: "sk-selected-helper-key",
       type: "apiKey"
     });
     const runtimeInfo = await provider.currentRuntimeInfo();
@@ -4210,7 +4210,7 @@ test("codex economy provider injects API-key auth without persisting or exposing
     }));
     assert.equal(runtimeInfo.runtimesHash, runtimesHash([]));
     assert.equal(runtimeInfo.terminalEnvHash, terminalEnvHash({}));
-    assert.doesNotMatch(JSON.stringify(runtimeInfo), /sk-selected-economy-key|selected-api-home/u);
+    assert.doesNotMatch(JSON.stringify(runtimeInfo), /sk-selected-helper-key|selected-api-home/u);
     provider.close();
   });
 });

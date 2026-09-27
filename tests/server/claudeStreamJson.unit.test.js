@@ -512,8 +512,8 @@ test("Claude admission inspection uses the shared contract and native history pr
 
 test("Claude bounded helpers use the selected Haiku without tools or the project's command environment", async (t) => {
   const f = await fixture(t);
-  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku" };
-  const executionProfile = await f.provider.resolveExecutionProfile(f.context, { profileId: "economy", workloadId: "commit_title" });
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku", variantId: "" };
+  const executionProfile = await f.provider.resolveExecutionProfile(f.context, { profileId: "helper", workloadId: "commit_title" });
   f.behavior.afterSend = (native) => native.options.onEvent({ type: "result", subtype: "success", result: "Fix the title", uuid: "title" });
   const result = await f.provider.runDetachedChatTurn(f.context, { prompt: "Write a title", executionProfile });
   assert.equal(result.text, "Fix the title");
@@ -825,20 +825,20 @@ test("Claude goals use native commands, preserve the goal on pause and reject st
 });
 
 
-test("Claude economy choices apply to new tasks without changing an already resolved task", async (t) => {
+test("Claude helper choices apply to new tasks without changing an already resolved task", async (t) => {
   const f = await fixture(t);
   f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "sonnet" };
-  const selected = await f.provider.resolveExecutionProfile(f.context, { profileId: "economy", workloadId: "commit_title" });
+  const selected = await f.provider.resolveExecutionProfile(f.context, { profileId: "helper", workloadId: "commit_title" });
   assert.equal(selected.model, "sonnet");
-  assert.equal(selected.thinking, "low");
-  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku" };
-  assert.equal((await f.provider.resolveExecutionProfile(f.context, { profileId: "economy", workloadId: "commit_title" })).model, "haiku");
+  assert.equal(selected.thinking, f.context.assistantSelection.variantId);
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku", variantId: "" };
+  assert.equal((await f.provider.resolveExecutionProfile(f.context, { profileId: "helper", workloadId: "commit_title" })).model, "haiku");
   f.behavior.afterSend = (native) => native.options.onEvent({ type: "result", subtype: "success", result: "Title", uuid: "title" });
   await f.provider.runDetachedChatTurn(f.context, { prompt: "Write a title", executionProfile: selected });
   assert.equal(f.processes.at(-1).options.model, "sonnet");
   assert.equal(f.processes.at(-1).options.toolFree, true);
   f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "unavailable" };
-  await assert.rejects(f.provider.resolveExecutionProfile(f.context, { profileId: "economy", workloadId: "commit_title" }), /helper model is unavailable/u);
+  await assert.rejects(f.provider.resolveExecutionProfile(f.context, { profileId: "helper", workloadId: "commit_title" }), /helper model is unavailable/u);
 });
 
 
@@ -941,16 +941,16 @@ test("scoped Claude helpers use the resolved model and can stop while main chat 
   const context = { assistantSelection: f.context.assistantSelection, sessionId: "router_job",
     assistantScope: { id: "router_job", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "helper-runtime"),
       stableContext: "Classify only the supplied text." } };
-  const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "economy", workloadId: "request_routing" });
+  const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "helper", workloadId: "request_routing" });
   assert.equal(executionProfile.model, f.context.assistantSelection.modelId);
-  assert.equal(executionProfile.thinking, "low");
+  assert.equal(executionProfile.thinking, context.assistantSelection.variantId);
   const { conversationId } = await f.provider.createConversation(context, { ephemeral: true, executionProfile });
   await f.provider.startConversationTurn(context, { conversationId, executionProfile, message: "Classify", messageId: "helper-turn" });
   const helper = f.processes.at(-1);
   assert.notEqual(helper, main);
   assert.equal(helper.options.toolFree, true);
   assert.equal(helper.options.model, executionProfile.model);
-  assert.equal(helper.options.effort, "low");
+  assert.equal(helper.options.effort, context.assistantSelection.variantId);
   assert.equal(helper.options.systemPrompt, context.assistantScope.stableContext);
   assert.equal(helper.options.appendSystemPrompt, undefined);
   await f.provider.stopConversation(context, { conversationId });
@@ -967,7 +967,7 @@ test("Claude router reasoning does not consume the structured answer limit", asy
   const f = await fixture(t);
   const context = { assistantSelection: f.context.assistantSelection, sessionId: "router_output",
     assistantScope: { id: "router_output", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "helper-runtime") } };
-  const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "economy", workloadId: "request_routing" });
+  const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "helper", workloadId: "request_routing" });
   const { conversationId } = await f.provider.createConversation(context, { ephemeral: true, executionProfile });
   await f.provider.startConversationTurn(context, { conversationId, executionProfile, message: "Classify", messageId: "router-output" });
   const event = f.processes.at(-1).options.onEvent;
@@ -990,7 +990,7 @@ test("Claude helpers still reject oversized answer text and structured results",
   const f = await fixture(t);
   const context = { assistantSelection: f.context.assistantSelection, sessionId: "helper_limit",
     assistantScope: { id: "helper_limit", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "helper-runtime") } };
-  const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "economy", workloadId: "request_routing" });
+  const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "helper", workloadId: "request_routing" });
   const { conversationId } = await f.provider.createConversation(context, { ephemeral: true, executionProfile });
   await f.provider.startConversationTurn(context, { conversationId, executionProfile, message: "Classify", messageId: "helper-limit" });
   const event = f.processes.at(-1).options.onEvent;
@@ -1054,7 +1054,7 @@ test("scoped Claude helper cleanup recovers the captured managed process after r
     assistantScope: { id: "router_cleanup", environment: {}, workdir: path.join(f.root, "work"), runtimeRoot: path.join(f.root, "runtime"),
       stableContext: "Classify only the supplied text." },
     async onEvent(event) { if (event.type === "helper-execution") captured = event; } };
-  const executionProfile = await provider.resolveExecutionProfile(context, { profileId: "economy", workloadId: "request_routing" });
+  const executionProfile = await provider.resolveExecutionProfile(context, { profileId: "helper", workloadId: "request_routing" });
   const created = await provider.createConversation(context, { ephemeral: true, executionProfile });
   await provider.startConversationTurn(context, { conversationId: created.conversationId, executionProfile, message: "Classify", messageId: "helper-turn" });
   assert.equal(captured.conversationId, created.conversationId);

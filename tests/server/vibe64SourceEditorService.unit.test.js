@@ -40,14 +40,14 @@ function resolvedSourceExplanationProfile() {
       repositoryWrite: false,
       tools: "none"
     },
-    profileId: "economy",
+    profileId: "helper",
     providerId: "codex",
     request: {
       allowProviderModelFallback: false,
       reasoning: true,
       summary: false
     },
-    revision: "codex-economy-v1",
+    revision: "codex-helper-v1",
     thinking: "low",
     workloadId: "source_explanation"
   };
@@ -2115,7 +2115,7 @@ test("source editor cache invalidates on source or provider changes and force by
   }
 });
 
-test("source editor cache identity follows the resolved economy profile revision and model", async () => {
+test("source editor cache identity follows the resolved helper profile revision and model", async () => {
   let agentCalls = 0;
   let executionProfile = resolvedSourceExplanationProfile();
   const fixture = await createSourceEditorFixture({
@@ -2156,25 +2156,25 @@ test("source editor cache identity follows the resolved economy profile revision
     const initial = await explain("exp_profile_cache_initial");
     executionProfile = {
       ...executionProfile,
-      revision: "codex-economy-v2"
+      revision: "codex-helper-v2"
     };
     const revised = await explain("exp_profile_cache_revised");
     executionProfile = {
       ...executionProfile,
       model: "gpt-5.4-nano",
-      revision: "codex-economy-v3"
+      revision: "codex-helper-v3"
     };
     const replacedModel = await explain("exp_profile_cache_replaced_model");
     const cachedReplacement = await explain("exp_profile_cache_replaced_model_cached");
 
     assert.equal(agentCalls, 3);
-    assert.equal(initial.explanation.executionProfile.revision, "codex-economy-v1");
-    assert.equal(revised.explanation.executionProfile.revision, "codex-economy-v2");
+    assert.equal(initial.explanation.executionProfile.revision, "codex-helper-v1");
+    assert.equal(revised.explanation.executionProfile.revision, "codex-helper-v2");
     assert.equal(replacedModel.explanation.executionProfile.model, "gpt-5.4-nano");
     assert.equal(replacedModel.explanation.engine, "agent-chat");
     assert.equal(cachedReplacement.explanation.engine, "agent-cache");
     assert.equal(cachedReplacement.explanation.executionProfile.model, "gpt-5.4-nano");
-    assert.equal(cachedReplacement.explanation.executionProfile.revision, "codex-economy-v3");
+    assert.equal(cachedReplacement.explanation.executionProfile.revision, "codex-helper-v3");
   } finally {
     await rm(fixture.root, {
       force: true,
@@ -2357,7 +2357,7 @@ test("source editor never coalesces an in-flight explanation across resolved pro
     executionProfile = {
       ...executionProfile,
       model: "gpt-5.4-nano",
-      revision: "codex-economy-v2"
+      revision: "codex-helper-v2"
     };
     const second = await explain("exp_profile_flight_second");
     assert.equal(agentCalls, 2);
@@ -2370,7 +2370,7 @@ test("source editor never coalesces an in-flight explanation across resolved pro
     assert.equal(second.explanation.executionProfile.model, "gpt-5.4-nano");
     assert.equal(second.explanation.engine, "agent-chat");
     assert.equal(cachedSecond.explanation.engine, "agent-cache");
-    assert.equal(cachedSecond.explanation.executionProfile.revision, "codex-economy-v2");
+    assert.equal(cachedSecond.explanation.executionProfile.revision, "codex-helper-v2");
   } finally {
     releaseFirst();
     await rm(fixture.root, {
@@ -2842,7 +2842,7 @@ test("source editor preserves failed explanation details for recovery", async ()
   }
 });
 
-test("source editor fails closed when the economy profile observation is missing", async () => {
+test("source editor fails closed when the helper profile observation is missing", async () => {
   const events = [];
   const fixture = await createSourceEditorFixture({
     terminalService: {
@@ -2886,7 +2886,7 @@ test("source editor fails closed when the economy profile observation is missing
   }
 });
 
-test("source editor fails closed before generation when economy profile resolution is unavailable", async () => {
+test("source editor fails closed before generation when helper profile resolution is unavailable", async () => {
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
@@ -2959,11 +2959,11 @@ test("source editor blocks required explanations when the selected assistant acc
   }
 });
 
-test("source editor surfaces economy availability blockers without an interactive fallback", async (t) => {
+test("source editor surfaces helper availability blockers without an interactive fallback", async (t) => {
   for (const outcome of [
     {
       code: "vibe64_agent_execution_profile_model_unavailable",
-      error: "The provider economy model is unavailable. Retry after refreshing the model catalog.",
+      error: "The provider helper model is unavailable. Retry after refreshing the model catalog.",
       name: "model-unavailable",
       statusCode: 503
     },
@@ -3069,7 +3069,7 @@ test("source editor never reuses an unverified explanation thread for follow-ups
   }
 });
 
-test("source editor asks for regeneration when an economy follow-up thread is unavailable", async () => {
+test("source editor asks for regeneration when a helper follow-up thread is unavailable", async () => {
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
@@ -3078,7 +3078,7 @@ test("source editor asks for regeneration when an economy follow-up thread is un
         if (agentCalls > 1) {
           return {
             code: "vibe64_agent_execution_profile_policy_unenforceable",
-            error: "The recorded economy thread is no longer available.",
+            error: "The recorded helper thread is no longer available.",
             ok: false,
             statusCode: 409
           };
@@ -3087,8 +3087,8 @@ test("source editor asks for regeneration when an economy follow-up thread is un
           executionProfile: resolvedSourceExplanationProfile(),
           ok: true,
           text: structuredExplanation("Verified explanation."),
-          threadId: "economy-thread",
-          turnId: "economy-turn"
+          threadId: "helper-thread",
+          turnId: "helper-turn"
         };
       }
     }
@@ -3137,7 +3137,7 @@ test("source editor asks for regeneration when an economy follow-up thread is un
   }
 });
 
-test("source editor retires a non-stream economy thread after an invalid follow-up", async () => {
+test("source editor retires a non-stream helper thread after an invalid follow-up", async () => {
   const deletedThreads = [];
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
@@ -3160,15 +3160,15 @@ test("source editor retires a non-stream economy thread after an invalid follow-
               executionProfile: resolvedSourceExplanationProfile(),
               ok: true,
               text: structuredExplanation("Verified explanation."),
-              threadId: "economy-followup-invalid",
-              turnId: "economy-turn-initial"
+              threadId: "helper-followup-invalid",
+              turnId: "helper-turn-initial"
             }
           : {
               executionProfile: resolvedSourceExplanationProfile(),
               ok: true,
               text: "not-json",
-              threadId: "economy-followup-invalid",
-              turnId: "economy-turn-invalid"
+              threadId: "helper-followup-invalid",
+              turnId: "helper-turn-invalid"
             };
       }
     }
@@ -3194,7 +3194,7 @@ test("source editor retires a non-stream economy thread after an invalid follow-
     assert.equal(invalidFollowup.details.cleanupRequired, false);
     assert.deepEqual(deletedThreads, [{
       executionProfile: resolvedSourceExplanationProfile(),
-      threadId: "economy-followup-invalid"
+      threadId: "helper-followup-invalid"
     }]);
 
     const blockedFollowup = await fixture.service.addExplanationFollowup({
@@ -3236,14 +3236,14 @@ test("source editor preserves retryable ownership when a failed non-stream follo
             executionProfile: resolvedSourceExplanationProfile(),
             ok: true,
             text: structuredExplanation("Verified explanation."),
-            threadId: "economy-followup-retry",
-            turnId: "economy-turn-initial"
+            threadId: "helper-followup-retry",
+            turnId: "helper-turn-initial"
           };
         }
         await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
-          threadId: "economy-followup-retry",
-          turnId: "economy-turn-failed",
+          threadId: "helper-followup-retry",
+          turnId: "helper-turn-failed",
           type: "turn"
         });
         throw new Error("The follow-up transport failed.");
@@ -3268,7 +3268,7 @@ test("source editor preserves retryable ownership when a failed non-stream follo
     });
     assert.equal(failedFollowup.ok, false);
     assert.equal(failedFollowup.details.cleanupRequired, true);
-    assert.equal(failedFollowup.details.cleanupThreadId, "economy-followup-retry");
+    assert.equal(failedFollowup.details.cleanupThreadId, "helper-followup-retry");
 
     const blockedFollowup = await fixture.service.addExplanationFollowup({
       explanationId: created.explanation.id,
@@ -4202,7 +4202,7 @@ test("source editor rejects path traversal outside the session source", async ()
   }
 });
 
-test("source explanations use a member's shared Economy without the personal working conversation", async (t) => {
+test("source explanations use a member's shared Helper without the personal working conversation", async (t) => {
   const member = { role: "member", username: "ada" };
   const selection = { ...sourceRoutingDecision("opencode").effectiveSelection,
     modelProviderId: "deepseek", modelId: "deepseek-chat" };

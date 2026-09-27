@@ -52,7 +52,7 @@ test("Big Pickle is always available through the built-in public OpenCode connec
 
   assert.equal(included.id, "opencode");
   assert.equal(included.builtIn, true);
-  assert.equal(included.economyModelId, "big-pickle");
+  assert.equal(included.defaultModelId, "big-pickle");
   assert.equal(included.keyHint, "Included");
   assert.equal(included.preferred, true);
   assert.equal(included.removable, false);
@@ -288,7 +288,7 @@ test("AI connection store redacts keys and resolves native OpenCode connections 
   assert.deepEqual(await store.resolveConnection("deepseek"), {
     apiKey: "deepseek-secret-value",
     canonicalUrl: "",
-    economyModelId: "deepseek-flash",
+    defaultModelId: "deepseek-flash",
     endpointCode: "opencode-native",
     fingerprint: saved.fingerprint,
     modelProviderId: "deepseek",
@@ -314,7 +314,7 @@ test("unknown providers use their catalog default and ignore client routing flag
   });
 
   assert.equal(saved.productLabel, "Acme AI");
-  assert.equal(saved.economyModelId, "acme-small");
+  assert.equal(saved.defaultModelId, "acme-small");
   assert.equal(saved.accessLabel, "Personal use");
   assert.equal(saved.canonicalUrl, "");
   assert.deepEqual(verificationCalls[0], {
@@ -364,8 +364,8 @@ test("GLM API and Coding Plan stay independent even when they use the same key",
   assert.equal(regularApi.modelAccess.mode, "recommended");
   assert.equal(personalPlan.productLabel, "GLM · Personal Coding Plan");
   assert.equal(personalPlan.accessLabel, "Personal use");
-  assert.equal((await store.resolveConnection("zai")).economyModelId, "glm-4.7-flash");
-  assert.equal((await store.resolveConnection("zai-coding-plan")).economyModelId, "glm-5.3-flash");
+  assert.equal((await store.resolveConnection("zai")).defaultModelId, "glm-4.7-flash");
+  assert.equal((await store.resolveConnection("zai-coding-plan")).defaultModelId, "glm-5.3-flash");
   assert.equal((await store.assistantAccess("zai", { modelId: "glm-4.7-flash" })).available, true);
   assert.equal((await store.assistantAccess("zai", { modelId: "glm-paid" })).available, false);
 
@@ -392,7 +392,7 @@ test("recognized connections replace legacy display labels with current trusted 
     connections: {
       zai: {
         apiKey: "legacy-zai-key",
-        economyModelId: "glm-4.7-flash",
+        defaultModelId: "glm-4.7-flash",
         label: "Z.AI",
         ownerOnly: false,
         productLabel: "GLM · Multiuser API key",
@@ -603,7 +603,7 @@ test("retired helper settings never select a runtime model or disappear through 
   const original = await readFile(filePath, "utf8");
   assert.equal((await store.listConnections()).find(({ id }) => id === "zai").helperModelId, undefined);
   assert.equal((await store.assistantAccess("zai", { modelId: "glm-4.7-flash" })).available, true);
-  assert.equal((await store.assistantAccess("zai")).economyModelId, undefined);
+  assert.equal((await store.assistantAccess("zai")).defaultModelId, undefined);
   assert.equal((await store.resolveConnection("zai")).fingerprint, before.fingerprint);
   for (const operation of [() => store.updateModelAccess("zai", { unlocked: true }),
     () => store.removeConnection("zai"),

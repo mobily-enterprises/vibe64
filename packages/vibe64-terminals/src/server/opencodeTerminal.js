@@ -52,7 +52,7 @@ import {
   prepareAgentSessionCommandEnvironment
 } from "./agentCommandEnvironment.js";
 import {
-  OPENCODE_ECONOMY_AGENT_ID,
+  OPENCODE_HELPER_AGENT_ID,
   OPENCODE_EPHEMERAL_AGENT_ID,
   createOpenCodeServerProcess,
   readOpenCodeCatalog,
@@ -161,7 +161,7 @@ function openCodeExecutionProfile(input = {}) {
     return null;
   }
   const profile = vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile);
-  if (profile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY) {
+  if (profile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER) {
     throw openCodeError(
       "vibe64_opencode_execution_profile_unsupported",
       `OpenCode does not support execution profile ${profile.profileId}.`
@@ -171,7 +171,7 @@ function openCodeExecutionProfile(input = {}) {
 }
 
 function openCodeAgent(selection = {}, executionProfile = null, assistantScope = null) {
-  if (executionProfile) return OPENCODE_ECONOMY_AGENT_ID;
+  if (executionProfile) return OPENCODE_HELPER_AGENT_ID;
   return assistantScope ? OPENCODE_EPHEMERAL_AGENT_ID : text(selection.agentId);
 }
 
@@ -282,7 +282,7 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
   return {
     apiKey,
     canonicalUrl,
-    economyModelId: text(connection.economyModelId),
+    defaultModelId: text(connection.defaultModelId),
     endpointCode,
     fingerprint: connectionIdentity(connection, apiKey),
     modelProviderId: actualProviderId
@@ -669,7 +669,7 @@ function createOpenCodeTerminalController({
       await mkdir(helper.scope.workdir, { recursive: true });
       await mkdir(helper.scope.runtimeRoot, { recursive: true });
       const executionProfile = await agent.resolveEphemeralExecutionProfile(helper.scope, {
-        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY, workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.CONVERSATION_SUMMARY
+        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER, workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.CONVERSATION_SUMMARY
       }, options);
       helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
       await retain();
@@ -1269,20 +1269,20 @@ function createOpenCodeTerminalController({
     }
     const projectContextRoot = path.resolve(context.runtime.projectContextRoot);
     const start = Promise.resolve().then(async () => {
-      let internModelId = "";
+      let helperModelId = "";
       if (!context.assistantScope && getAssistantManager()) {
         const workflowEngineId = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId || context.selection.engineId;
-        const intern = await getAssistantManager().resolveAssistantPurpose({ purpose: "intern", workflowEngineId }, {
+        const helper = await getAssistantManager().resolveAssistantPurpose({ purpose: "helper", workflowEngineId }, {
           ...context, vibe64User: options.vibe64User || null
         }).catch(() => null);
-        if (intern?.available && intern.effectiveSelection.engineId === VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE &&
-            intern.effectiveSelection.modelProviderId === context.selection.modelProviderId) {
-          internModelId = intern.effectiveSelection.modelId;
+        if (helper?.available && helper.effectiveSelection.engineId === VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE &&
+            helper.effectiveSelection.modelProviderId === context.selection.modelProviderId) {
+          helperModelId = helper.effectiveSelection.modelId;
         }
       }
       const commands = await managedCommandEnvironment(context);
       sessionEnvironments.set(context.key, {
-        internModelId,
+        helperModelId,
         modelProviderId: context.selection.modelProviderId,
         env: commands.env,
         pathEntries: commands.shimDirs,
@@ -1316,7 +1316,7 @@ function createOpenCodeTerminalController({
         text(current.selection?.catalogRevision) === text(context.selection.catalogRevision) &&
         sameOpenCodeSelection(current.selection, context.selection)
       ) {
-        current.internModelId = internModelId;
+        current.helperModelId = helperModelId;
         current.server = openCodeServerForDirectory(shared.server, context.workdir);
         return current;
       }
@@ -1328,7 +1328,7 @@ function createOpenCodeTerminalController({
         upstreamSessionId: nativeId
       };
       Object.assign(created, {
-        internModelId,
+        helperModelId,
         canonicalUrl: connection.canonicalUrl,
         connectionFingerprint: connection.fingerprint,
         endpointCode: connection.endpointCode,

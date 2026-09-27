@@ -53,9 +53,9 @@ it("does not replay finished notices on restore, background completion or Senior
   expect(f.state().actionable).toBe(false);
 });
 
-it("keeps failures and review recovery controls visible", async () => {
+it("keeps delivery failures in their bubble and review recovery controls in the notice", async () => {
   const f = mount({ messageId: "one", status: "failed", error: "Reconnect the AI" });
-  expect(f.state().actionable).toBe(true);
+  expect(f.state().actionable).toBe(false);
   for (const status of ["review_pending", "review_uncertain"]) {
     f.props.value.request = { messageId: "one", status };
     await nextTick();
@@ -68,7 +68,7 @@ it("keeps failures and review recovery controls visible", async () => {
 it("removes a cancelled request's old error only after cleanup and delivery uncertainty are resolved", async () => {
   const request = { messageId: "cancelled-request", status: "failed", error: "Renew the session to use model routing." };
   const f = mount(request);
-  expect(f.state().actionable).toBe(true);
+  expect(f.state().actionable).toBe(false);
   f.props.value.request = { ...request, status: "cancelled", helper: { executionId: "cleanup-pending" } };
   await nextTick();
   expect(f.state().actionable).toBe(true);
@@ -118,7 +118,7 @@ it("leaves a mixed-request explanation on the unsent bubble instead of adding an
   expect(feedback.report).not.toHaveBeenCalled();
 });
 
-for (const mode of ["senior", "junior", "intern"]) {
+for (const mode of ["senior", "junior", "helper"]) {
   it(`hides Auto's plan when the user switches to direct ${mode}`, async () => {
     const f = mount({ mode: "auto", status: "done", workPlan: { status: "ready", text: "Detailed plan" } });
     expect(f.state().planReady).toBe(true);

@@ -24,7 +24,7 @@ const DATABASE_ASSISTANT_ANSWER_MAX_CHARACTERS = 1_200;
 const DATABASE_ASSISTANT_SCHEMA_SEARCH_MAX_CHARACTERS = 300;
 const DATABASE_ASSISTANT_SQL_MAX_CHARACTERS = 1_000;
 const DATABASE_ASSISTANT_EXECUTION_PROFILE = defineVibe64AgentExecutionProfileRequest({
-  profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+  profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
   workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.DATABASE_ASSISTANT
 });
 
@@ -392,7 +392,7 @@ async function runDatabaseAssistant({
     } catch (error) {
       if (
         !failure ||
-        text(error?.code) !== "vibe64_codex_economy_thread_unavailable"
+        text(error?.code) !== "vibe64_codex_helper_thread_unavailable"
       ) {
         if (failure && error !== failure) {
           error.cause = failure;

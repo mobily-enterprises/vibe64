@@ -37,7 +37,7 @@ const VIBE64_CODEX_SOL_THINKING_VALUES = Object.freeze([
 const VIBE64_AGENT_PROVIDERS = Object.freeze([
   Object.freeze({
     executionProfiles: Object.freeze([
-      VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY
+      VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER
     ]),
     id: VIBE64_AGENT_PROVIDER_IDS.CODEX,
     implemented: true,
@@ -106,7 +106,7 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
     ])
   }),
   Object.freeze({
-    executionProfiles: Object.freeze([VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY]),
+    executionProfiles: Object.freeze([VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER]),
     id: VIBE64_AGENT_PROVIDER_IDS.CLAUDE,
     implemented: true,
     label: "Claude Code",

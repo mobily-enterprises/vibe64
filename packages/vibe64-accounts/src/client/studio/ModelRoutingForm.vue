@@ -262,9 +262,9 @@ async function reload() {
               <v-autocomplete :ref="field => roleFields[role.id] = field" :model-value="choiceId(draft[selectedEngine]?.[role.id])" :items="items(role.id)" item-title="label" item-value="id" :label="role.label" variant="outlined" :disabled="saving || !canEdit" :hint="roleHint(role)" persistent-hint :error-messages="roleError(role.id)" @update:model-value="choose(role.id, $event)" />
               <v-select v-if="variants(role.id).length" :model-value="draft[selectedEngine]?.[role.id]?.variantId || ''" :items="[{ id: '', label: 'Default' }, ...variants(role.id)]" item-title="label" item-value="id" :label="`${role.label} thinking`" variant="outlined" hide-details :disabled="saving || !canEdit" @update:model-value="changeEffort(role.id, $event)" />
             </div>
-            <v-alert v-if="role.id === 'intern' && engine?.helperRoutingReview" type="warning" variant="tonal" class="mb-4">
-              Older helpers used {{ engine.helperRoutingReview.previous.map(item => `${item.modelId} (${item.engineId})`).join(', ') }}. Choose Intern for future helpers.
-              <v-checkbox v-model="reviewedHelpers" :value="selectedEngine" label="I reviewed the Intern choice for helpers" :disabled="saving || !canEdit || !draft[selectedEngine]?.intern" hide-details />
+            <v-alert v-if="role.id === 'helper' && engine?.helperRoutingReview" type="warning" variant="tonal" class="mb-4">
+              Older helpers used {{ engine.helperRoutingReview.previous.map(item => `${item.modelId} (${item.engineId})`).join(', ') }}. Choose Helper for future helpers.
+              <v-checkbox v-model="reviewedHelpers" :value="selectedEngine" label="I reviewed the Helper choice for helpers" :disabled="saving || !canEdit || !draft[selectedEngine]?.helper" hide-details />
             </v-alert>
           </template>
         </template>

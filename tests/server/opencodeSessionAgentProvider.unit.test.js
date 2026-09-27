@@ -8,9 +8,9 @@ import {
   VIBE64_ASSISTANT_ENGINE_IDS
 } from "../../packages/vibe64-runtime/src/shared/index.js";
 import {
-  OPENCODE_ECONOMY_PROFILE_REVISION,
+  OPENCODE_HELPER_PROFILE_REVISION,
   createOpenCodeSessionAgentProvider,
-  resolveOpenCodeEconomyExecutionProfile
+  resolveOpenCodeHelperExecutionProfile
 } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js";
 
 const selection = Object.freeze({
@@ -23,24 +23,24 @@ const selection = Object.freeze({
   variantId: "high"
 });
 const assistantAccess = Object.freeze({
-  economyModelId: "retired-setting-must-not-override-routing"
+  defaultModelId: "retired-setting-must-not-override-routing"
 });
 
 test("OpenCode resolves every Vibe64 helper workload to the selected model and a deny-all policy", () => {
   for (const workloadId of Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS)) {
-    const profile = resolveOpenCodeEconomyExecutionProfile({
+    const profile = resolveOpenCodeHelperExecutionProfile({
       assistantSelection: selection,
       assistantAccess
     }, {
-      profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+      profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
       workloadId
     });
-    assert.equal(profile.profileId, VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY);
+    assert.equal(profile.profileId, VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER);
     assert.equal(profile.workloadId, workloadId);
     assert.equal(profile.providerId, VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE);
     assert.equal(profile.model, "deepseek-chat");
-    assert.equal(profile.thinking, "");
-    assert.equal(profile.revision, OPENCODE_ECONOMY_PROFILE_REVISION);
+    assert.equal(profile.thinking, selection.variantId);
+    assert.equal(profile.revision, OPENCODE_HELPER_PROFILE_REVISION);
     assert.deepEqual(profile.policy, {
       environmentAccess: false,
       networkAccess: false,
@@ -56,11 +56,11 @@ test("OpenCode gives live commit-title and prompt-hint helpers enough bounded ti
     VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.COMMIT_TITLE,
     VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.PROMPT_HINT
   ]) {
-    const profile = resolveOpenCodeEconomyExecutionProfile({
+    const profile = resolveOpenCodeHelperExecutionProfile({
       assistantSelection: selection,
       assistantAccess
     }, {
-      profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+      profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
       workloadId
     });
     assert.equal(profile.limits.timeoutMs, 120_000);
@@ -69,11 +69,11 @@ test("OpenCode gives live commit-title and prompt-hint helpers enough bounded ti
 
 test("OpenCode refuses helper profiles without its durable provider and model selection", () => {
   assert.throws(
-    () => resolveOpenCodeEconomyExecutionProfile({
+    () => resolveOpenCodeHelperExecutionProfile({
       assistantAccess,
       assistantSelection: { ...selection, engineId: "codex" }
     }, {
-      profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+      profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
       workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.COMMIT_TITLE
     }),
     (error) => error?.code === "vibe64_agent_execution_profile_model_unavailable"
@@ -102,11 +102,11 @@ test("OpenCode provider advertises and audits its helper execution profile on tu
     }
   };
   const provider = createOpenCodeSessionAgentProvider({ controller });
-  const profile = resolveOpenCodeEconomyExecutionProfile({
+  const profile = resolveOpenCodeHelperExecutionProfile({
     assistantSelection: selection,
     assistantAccess
   }, {
-    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
     workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.COMMIT_TITLE
   });
   const result = await provider.runDetachedChatTurn({
@@ -132,7 +132,7 @@ test("OpenCode provider advertises and audits its helper execution profile on tu
     prompt: "Name streamed work"
   });
 
-  assert.deepEqual(provider.executionProfiles, [VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY]);
+  assert.deepEqual(provider.executionProfiles, [VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER]);
   assert.equal(calls.length, 2);
   assert.equal(calls[0][0], "session-1");
   assert.equal(calls[0][1].executionProfile, profile);

@@ -216,7 +216,7 @@ describe("Database Workspace automatic table admission", () => {
       expect(messages[2]).toMatchObject({ content: "And this one?", table: "public.orders" });
     } finally { await fixture.close(); }
   });
-  it("uses Economy availability independently of Code and shows the shared helper model", async () => {
+  it("uses Helper availability independently of Code and shows the shared helper model", async () => {
     const fixture = mountDatabaseWorkspace({ initialState: { ...firstState, assistant: {
       available: true, engineId: "opencode", model: "deepseek-flash", backupUsed: true
     } } });
@@ -227,10 +227,10 @@ describe("Database Workspace automatic table admission", () => {
       fixture.workspace.assistantDraft = "Explain this table";
       await fixture.workspace.askCopilot();
       expect(mocks.database.askAssistant).toHaveBeenCalledTimes(1);
-      fixture.state.value = { ...firstState, assistant: { available: false, message: "The Economy model was disabled." } };
+      fixture.state.value = { ...firstState, assistant: { available: false, message: "The Helper model was disabled." } };
       fixture.props.assistantAvailable = true;
       await flushWorkspace(fixture.runQuery);
-      expect(fixture.workspace.assistantUnavailableCopy).toBe("The Economy model was disabled.");
+      expect(fixture.workspace.assistantUnavailableCopy).toBe("The Helper model was disabled.");
       fixture.workspace.assistantDraft = "Another question";
       await fixture.workspace.askCopilot();
       expect(mocks.database.askAssistant).toHaveBeenCalledTimes(1);

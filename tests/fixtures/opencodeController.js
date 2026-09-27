@@ -200,7 +200,7 @@ async function controllerHarness({
   const connection = {
     apiKey: "deepseek-key-one",
     canonicalUrl: "https://api.deepseek.com",
-    economyModelId: "deepseek-chat",
+    defaultModelId: "deepseek-chat",
     endpointCode: "deepseek_api",
     fingerprint: `sha256:${"1".repeat(64)}`,
     modelProviderId: "deepseek",
@@ -441,7 +441,7 @@ async function controllerHarness({
         accessLabel: "Workspace use",
         billingLabel: "Usage-based API billing",
         connected: true,
-        economyModelId: connection.economyModelId,
+        defaultModelId: connection.defaultModelId,
         fingerprint: connection.fingerprint,
         modelProviderId: connection.modelProviderId,
         productLabel: "DeepSeek",

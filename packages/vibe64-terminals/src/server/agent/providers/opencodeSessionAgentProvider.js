@@ -1,5 +1,5 @@
 import {
-  VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS,
+  VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_TOOL_POLICIES,
@@ -12,48 +12,48 @@ import {
 } from "@local/vibe64-runtime/shared";
 import { OPENCODE_EXPECTED_VERSION } from "../../opencodeServerProcess.js";
 
-const OPENCODE_ECONOMY_PROFILE_REVISION =
+const OPENCODE_HELPER_PROFILE_REVISION =
   `opencode-${OPENCODE_EXPECTED_VERSION}-selected-model-tool-free-v1`;
-const OPENCODE_ECONOMY_WORKLOAD_LIMITS = VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS;
+const OPENCODE_HELPER_WORKLOAD_LIMITS = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS;
 
 function openCodeExecutionProfileError(code, message, details = {}) {
   return new Vibe64AgentExecutionProfileError(code, message, details);
 }
 
-function resolveOpenCodeEconomyExecutionProfile(context = {}, request = {}) {
+function resolveOpenCodeHelperExecutionProfile(context = {}, request = {}) {
   const executionProfile = defineVibe64AgentExecutionProfileRequest(request);
-  if (executionProfile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY) {
+  if (executionProfile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER) {
     throw openCodeExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.PROFILE_UNKNOWN,
       `OpenCode does not provide execution profile ${executionProfile.profileId}.`,
       { profileId: executionProfile.profileId }
     );
   }
-  const limits = OPENCODE_ECONOMY_WORKLOAD_LIMITS[executionProfile.workloadId];
+  const limits = OPENCODE_HELPER_WORKLOAD_LIMITS[executionProfile.workloadId];
   if (!limits) {
     throw openCodeExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.WORKLOAD_UNSUPPORTED,
-      `OpenCode economy does not support workload ${executionProfile.workloadId}.`,
+      `OpenCode helper does not support workload ${executionProfile.workloadId}.`,
       { workloadId: executionProfile.workloadId }
     );
   }
   const selection = context.assistantSelection || {};
-  const economyModelId = String(selection.modelId || "").trim();
+  const modelId = String(selection.modelId || "").trim();
   if (
     selection.engineId !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE ||
     !String(selection.modelProviderId || "").trim() ||
-    !economyModelId
+    !modelId
   ) {
     throw openCodeExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE,
-      "Choose an Intern model in Model routing."
+      "Choose a Helper model in Model routing."
     );
   }
-  const thinking = "";
+  const thinking = String(selection.variantId || "").trim();
   return defineVibe64AgentExecutionProfileResolution({
     ...executionProfile,
     limits,
-    model: economyModelId,
+    model: modelId,
     policy: {
       environmentAccess: false,
       networkAccess: false,
@@ -66,7 +66,7 @@ function resolveOpenCodeEconomyExecutionProfile(context = {}, request = {}) {
       reasoning: Boolean(thinking),
       summary: false
     },
-    revision: OPENCODE_ECONOMY_PROFILE_REVISION,
+    revision: OPENCODE_HELPER_PROFILE_REVISION,
     thinking
   });
 }
@@ -98,7 +98,7 @@ function createOpenCodeSessionAgentProvider({ controller } = {}) {
   }
   return Object.freeze({
     executionProfiles: Object.freeze([
-      VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY
+      VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER
     ]),
     id: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
     transportId: VIBE64_ASSISTANT_TRANSPORT_IDS.OPENCODE_SERVER,
@@ -239,7 +239,7 @@ function createOpenCodeSessionAgentProvider({ controller } = {}) {
       return controller.resizeTerminal(context.sessionId, input.terminalSessionId, input.size);
     },
     resolveExecutionProfile(context, input = {}) {
-      return resolveOpenCodeEconomyExecutionProfile(context, input);
+      return resolveOpenCodeHelperExecutionProfile(context, input);
     },
     async runDetachedChatTurn(context, input = {}) {
       const executionProfile = emitOpenCodeExecutionProfile(context, input.executionProfile);
@@ -357,9 +357,9 @@ function createOpenCodeSessionAgentProvider({ controller } = {}) {
 }
 
 export {
-  OPENCODE_ECONOMY_PROFILE_REVISION,
-  OPENCODE_ECONOMY_WORKLOAD_LIMITS,
+  OPENCODE_HELPER_PROFILE_REVISION,
+  OPENCODE_HELPER_WORKLOAD_LIMITS,
   createOpenCodeSessionAgentProvider,
-  resolveOpenCodeEconomyExecutionProfile,
+  resolveOpenCodeHelperExecutionProfile,
   unsupportedOperation
 };

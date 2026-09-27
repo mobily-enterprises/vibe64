@@ -64,7 +64,7 @@ import {
   quoteQualifiedTable
 } from "../../packages/vibe64-database-tools/src/server/sqlPolicy.js";
 import {
-  codexAppServerEconomyTurnSettings
+  codexAppServerHelperTurnSettings
 } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
 
 function testSchema() {
@@ -150,7 +150,7 @@ function databaseExecutionProfile({
       repositoryWrite: false,
       tools: "none"
     },
-    profileId: "economy",
+    profileId: "helper",
     providerId,
     request: {
       allowProviderModelFallback: false,
@@ -222,8 +222,8 @@ test("database dialect registry is the single PostgreSQL and MySQL capability se
   );
 });
 
-test("database assistant structured schema stays inside the verified economy output bound", () => {
-  assert.doesNotThrow(() => codexAppServerEconomyTurnSettings({
+test("database assistant structured schema stays inside the verified helper output bound", () => {
+  assert.doesNotThrow(() => codexAppServerHelperTurnSettings({
     cwd: "/runtime/database-assistant-test",
     executionProfile: databaseExecutionProfile({
       model: "gpt-5.6-luna",
@@ -785,7 +785,7 @@ test("database assistant uses one selected-provider secondary conversation and a
   assert.doesNotMatch(turns[0].input.prompt, /Ignore prior instructions/u);
   assert.equal(turns[0].input.ephemeral, true);
   assert.deepEqual(turns[0].input.executionProfile, {
-    profileId: "economy",
+    profileId: "helper",
     workloadId: "database_assistant"
   });
   assert.equal(turns[0].input.threadId, undefined);
@@ -828,11 +828,11 @@ test("database assistant uses one selected-provider secondary conversation and a
   }]);
 });
 
-test("database assistant availability describes the resolved Economy destination", () => {
+test("database assistant availability describes the resolved Helper destination", () => {
   assert.deepEqual(databaseAssistantAvailability({ available: true, effectiveSelection: sharedDatabaseSelection,
     backupUsed: true }), { available: true, engineId: "opencode", model: "deepseek-chat", backupUsed: true, message: "" });
-  assert.deepEqual(databaseAssistantAvailability({ available: false, message: "Economy is unavailable" }), {
-    available: false, engineId: "", model: "", backupUsed: false, message: "Economy is unavailable"
+  assert.deepEqual(databaseAssistantAvailability({ available: false, message: "Helper is unavailable" }), {
+    available: false, engineId: "", model: "", backupUsed: false, message: "Helper is unavailable"
   });
 });
 
@@ -865,7 +865,7 @@ test("database assistant deletes its secondary conversation after a failed turn"
     conversationId: "failed-database-thread",
     ephemeral: true,
     executionProfile: {
-      profileId: "economy",
+      profileId: "helper",
       workloadId: "database_assistant"
     },
     threadId: "failed-database-thread"
@@ -949,7 +949,7 @@ test("database assistant reports a bounded conversation context failure", async 
       },
       messages: [{ content: "Explain the schema.", role: "user" }],
       runAgentTurn: async () => {
-        const error = new Error("Codex economy prompt exceeds the resolved input limit.");
+        const error = new Error("Codex helper prompt exceeds the resolved input limit.");
         error.code = "vibe64_agent_execution_profile_unbounded";
         throw error;
       },
@@ -966,7 +966,7 @@ test("database assistant preserves a failed turn when its thread was already ret
   await assert.rejects(
     runDatabaseAssistant({
       deleteThread: async () => ({
-        code: "vibe64_codex_economy_thread_unavailable",
+        code: "vibe64_codex_helper_thread_unavailable",
         error: "This low-cost assistant thread is no longer available.",
         ok: false
       }),
@@ -985,7 +985,7 @@ test("database assistant preserves a failed turn when its thread was already ret
             inputCharacters: 1_000_001,
             maxInputCharacters: 1_000_000
           },
-          error: "Codex economy prompt exceeds the resolved input limit.",
+          error: "Codex helper prompt exceeds the resolved input limit.",
           ok: false,
           threadId: "already-retired-database-thread"
         };
@@ -1125,7 +1125,7 @@ test("database members can browse, run SQL and use a shared assistant through th
   const statements = [];
   const assistantTurns = [];
   const assistantDeletions = [];
-  let economyAvailable = true;
+  let helperAvailable = true;
   const store = {
     async readArtifact(_sessionId, artifactPath) {
       return artifacts.get(artifactPath) || "";
@@ -1235,8 +1235,8 @@ test("database members can browse, run SQL and use a shared assistant through th
     async resolveAssistantPurpose(input, options) {
       assert.equal(input.purpose, "database_assistant");
       assert.equal(options.vibe64User.role, "member");
-      return economyAvailable ? { available: true, effectiveSelection: sharedDatabaseSelection, connectionIdentity: "shared-api" }
-        : { available: false, message: "The Economy model was disabled.", reasonCode: "vibe64_assistant_routing_unavailable" };
+      return helperAvailable ? { available: true, effectiveSelection: sharedDatabaseSelection, connectionIdentity: "shared-api" }
+        : { available: false, message: "The Helper model was disabled.", reasonCode: "vibe64_assistant_routing_unavailable" };
     },
     async resolveEphemeralAgentExecutionProfile() { return databaseExecutionProfile(); },
     async runEphemeralAgentChatTurn(scope, input, options) {
@@ -1292,7 +1292,7 @@ test("database members can browse, run SQL and use a shared assistant through th
   assert.equal(assistantDeletions[0].input.conversationId, "database-service-thread");
   await assert.rejects(access(assistantTurns[0].scope.workdir), { code: "ENOENT" });
 
-  economyAvailable = false;
+  helperAvailable = false;
   const disabled = await service.readState({ sessionId: "service-session", vibe64User: { role: "member", username: "member" } });
   assert.equal(disabled.ok, true);
   assert.equal(disabled.assistant.available, false);

@@ -5,15 +5,15 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  CODEX_ECONOMY_PROFILE_REVISION,
-  resolveCodexEconomyExecutionProfile
+  CODEX_HELPER_PROFILE_REVISION,
+  resolveCodexHelperExecutionProfile
 } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
-const corpusPath = path.join(testDirectory, "../fixtures/codex-economy-quality-corpus.json");
+const corpusPath = path.join(testDirectory, "../fixtures/codex-helper-quality-corpus.json");
 const adversarialProbePath = path.join(
   testDirectory,
-  "../fixtures/codex-economy-adversarial-bridge-probe.json"
+  "../fixtures/codex-helper-adversarial-bridge-probe.json"
 );
 
 async function readCorpus() {
@@ -30,7 +30,7 @@ function lunaCatalog() {
   };
 }
 
-test("recorded Codex economy corpus retains its evidence and fits the current bounded policy", async () => {
+test("recorded Codex helper corpus retains its evidence and fits the current bounded policy", async () => {
   const corpus = await readCorpus();
 
   assert.equal(corpus.schemaVersion, 1);
@@ -42,11 +42,11 @@ test("recorded Codex economy corpus retains its evidence and fits the current bo
   assert.equal(corpus.cases.length, 2);
 
   for (const corpusCase of corpus.cases) {
-    const profile = resolveCodexEconomyExecutionProfile({
-      profileId: corpus.profile.profileId,
+    const profile = resolveCodexHelperExecutionProfile({
+      profileId: "helper",
       workloadId: corpusCase.workloadId
-    }, lunaCatalog(), corpus.profile.model);
-    assert.equal(profile.revision, CODEX_ECONOMY_PROFILE_REVISION, corpusCase.id);
+    }, lunaCatalog(), corpus.profile.model, corpus.profile.thinking);
+    assert.equal(profile.revision, CODEX_HELPER_PROFILE_REVISION, corpusCase.id);
     assert.equal(profile.model, corpus.profile.model, corpusCase.id);
     assert.equal(profile.thinking, corpus.profile.thinking, corpusCase.id);
     assert.ok(corpusCase.prompt.length <= profile.limits.maxInputCharacters, corpusCase.id);

@@ -6,7 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 import { upgradeAssistantRoles, upgradeAssistantRoleSession, upgradeAssistantRoleTurn } from "../../packages/vibe64-accounts/src/server/assistantRoleUpgrade.js";
-import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
+import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 
 const exec = promisify(execFile);
@@ -113,7 +113,7 @@ test("preflight creates no state and changes no bytes; publication preserves rou
   await f.run();
   assert.deepEqual(await snapshot(f.systemRoot), before);
   await f.run(true);
-  const saved = await createAssistantRoutingStore({ systemRoot: f.systemRoot }).read();
+  const saved = validateAssistantRoutingConfiguration(JSON.parse(await readFile(f.file, "utf8")));
   assert.equal(saved.schemaVersion, 3);
   assert.equal(saved.revision, 7);
   assert.deepEqual(saved.orchestrators.codex, { senior, junior, intern: junior, router: junior, sharedBackup: junior,

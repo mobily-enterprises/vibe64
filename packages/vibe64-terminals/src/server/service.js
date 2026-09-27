@@ -2903,7 +2903,7 @@ function createService({
         return runMainAgentWrite(sessionId, input, async (context) => {
           requireCompletedConversationRewind(context.session);
           if (assistantRoutingFromMetadata(context.session.metadata)?.mode === "auto") {
-            return { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Senior, Junior, or Intern before starting or resuming a goal." };
+            return { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Senior or Junior before starting or resuming a goal." };
           }
           const pendingRoute = JSON.parse(context.session.metadata.assistant_routing_request || "null");
           if (assistantRoutingStatusIsPending(pendingRoute?.status) || pendingRoute?.helper) {

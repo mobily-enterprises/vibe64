@@ -1410,7 +1410,7 @@ test("an active attachment upload finishes before renewal can freeze and cleanup
 });
 
 for (const personalMember of [false, true]) {
-  test(`Save publishes captured work with unconfigured Economy and ${personalMember ? "a member's personal main chat" : "unavailable AI"}`, async (t) => {
+  test(`Save publishes captured work with unconfigured Helper and ${personalMember ? "a member's personal main chat" : "unavailable AI"}`, async (t) => {
     const events = [];
     const { projectService, root, service, session } = await terminalServiceFixture(t, { store: {} });
     if (personalMember) {
@@ -1498,7 +1498,7 @@ test("purpose access enables a member's configured chat after a personal turn wh
   session.metadata.assistant_selection = JSON.stringify(personal);
   session.metadata.assistant_routing = JSON.stringify({ mode: "junior", workflowEngineId: "opencode", review: true });
   await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({ opencode: {
-    senior: personal, junior: shared, router: shared, intern: shared, sharedBackup: shared
+    senior: personal, junior: shared, router: shared, helper: shared, sharedBackup: shared
   } }, 0);
   service.configureAssistantRuntime({
     listConnections: provider.controllerOptions.listConnections,

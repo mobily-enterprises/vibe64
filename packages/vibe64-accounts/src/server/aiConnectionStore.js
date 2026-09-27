@@ -136,7 +136,7 @@ function normalizedZenModelCheck(value = null) {
 function connectionPolicy(connection = {}, id = "") {
   try {
     const policy = assistantProviderPolicy({
-      defaultModelId: connection.economyModelId,
+      defaultModelId: connection.defaultModelId,
       id,
       label: connection.productLabel || connection.label
     });
@@ -147,7 +147,7 @@ function connectionPolicy(connection = {}, id = "") {
       ...policy,
       accessLabel: ownerOnly ? "Personal use" : "Workspace use",
       billingLabel: text(connection.billingLabel) || policy.billingLabel,
-      economyModelId: text(connection.economyModelId) || policy.economyModelId,
+      defaultModelId: text(connection.defaultModelId) || policy.defaultModelId,
       managementUrl: text(connection.managementUrl) || policy.managementUrl,
       modelAccess: policy.modelAccess
         ? {
@@ -183,7 +183,7 @@ function normalizedState(value = null) {
       billingLabel: text(candidate.billingLabel) || policy?.billingLabel || "",
       createdAt: text(candidate.createdAt),
       ...(Object.hasOwn(candidate, "helperModelId") ? { helperModelId: candidate.helperModelId } : {}),
-      economyModelId: text(candidate.economyModelId) || policy?.economyModelId || "",
+      defaultModelId: text(candidate.defaultModelId) || policy?.defaultModelId || "",
       endpointCode: OPENCODE_NATIVE_ENDPOINT_CODE,
       fingerprint: connectionFingerprint(id, key),
       label: text(candidate.label) || id,
@@ -275,7 +275,7 @@ function publicConnection(connection = {}, id = "", options = {}) {
     canonicalUrl: "",
     builtIn,
     connected: Boolean(route),
-    economyModelId: route?.economyModelId || "",
+    defaultModelId: route?.defaultModelId || "",
     endpointCode: text(connection.endpointCode),
     fingerprint: text(connection.fingerprint),
     id,
@@ -303,7 +303,7 @@ function builtInOpenCodeConnection({ preferred = false } = {}) {
     apiKey: BUILT_IN_OPENCODE_API_KEY,
     billingLabel: route.billingLabel,
     builtIn: true,
-    economyModelId: BUILT_IN_OPENCODE_MODEL_ID,
+    defaultModelId: BUILT_IN_OPENCODE_MODEL_ID,
     endpointCode: route.endpointCode,
     fingerprint: connectionFingerprint(
       BUILT_IN_OPENCODE_PROVIDER_ID,
@@ -352,7 +352,7 @@ async function verifyOpenCodeConnection({
     const result = await verifyConnection({
       apiKey: key,
       engineId: "opencode",
-      modelId: policy.economyModelId,
+      modelId: policy.defaultModelId,
       modelProviderId: policy.modelProviderId
     });
     if (result?.ok !== true) {
@@ -670,7 +670,7 @@ function createAiConnectionStore({
       return {
         apiKey: connection.apiKey,
         canonicalUrl: "",
-        economyModelId: route.economyModelId,
+        defaultModelId: route.defaultModelId,
         endpointCode: route.endpointCode,
         fingerprint: connection.fingerprint,
         modelProviderId: id,
@@ -721,7 +721,7 @@ function createAiConnectionStore({
           apiKey: key,
           billingLabel: route.billingLabel,
           createdAt: text(previous?.createdAt) || now,
-          economyModelId: route.economyModelId,
+          defaultModelId: route.defaultModelId,
           endpointCode: route.endpointCode,
           fingerprint,
           label: connectionLabel(input.label, text(previous?.label) || route.productLabel || id),

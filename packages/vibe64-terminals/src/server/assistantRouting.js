@@ -5,14 +5,18 @@ import path from "node:path";
 import { readWorkPlan, prepareWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
 import { parseNumberedQuestionPrompt, parseAnswerChoicePrompt } from "@jskit-ai/assistant-core/shared/conversation";
 import { latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
-import { VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
+  serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
   ROUTING_REASONS, AUTO_MIXED_DESLOP_MESSAGE, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingFromMetadata,
   assistantRoutingPrompt, parseRoutingDecision
 } from "@local/vibe64-runtime/shared/assistantRouting";
 
 const STATE_KEY = "assistant_routing_request";
-const PROFILE = Object.freeze({ profileId: "intern", workloadId: "request_routing" });
+const PROFILE = Object.freeze({
+  profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
+  workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.REQUEST_ROUTING
+});
 const OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -206,7 +210,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     return decision.seniorJuniorPair
       ? { ...decision.seniorJuniorPair, ...(decision.router ? { router: {
         effectiveSelection: decision.router, connectionIdentity: decision.routerConnectionIdentity } } : {}) }
-      : { intern: decision };
+      : { helper: decision };
   }
   async function validateDecision(context, state, followup = false) {
     if (!state.decision || state.admissionRequired) throw failure("This request needs fresh admission. Retry it before continuing.");
@@ -235,7 +239,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   }
 
   async function deliver(sessionId, context, state, followup = false) {
-    if (!allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and choose Senior, Junior or Intern.");
+    if (!allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and choose Senior or Junior.");
     const store = context.runtime.store;
     context = { ...context, vibe64User: state.submittedBy };
     const role = followup ? continuationRole(state) : state.resolvedMode;
@@ -350,7 +354,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         mode: options.purpose || "senior", review: false,
         workflowEngineId: vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId
       } : null);
-      if (!allowAuto && preferences?.mode === "auto") throw failure("Auto is available in Main chat only. Choose Senior, Junior or Intern.");
+      if (!allowAuto && preferences?.mode === "auto") throw failure("Auto is available in Main chat only. Choose Senior or Junior.");
       if (input.reviewAction === "retry") {
         state = await read(context.runtime.store, sessionId);
         if (state?.messageId !== input.messageId || !["review_pending", "review_uncertain", "planning_pending", "planning_uncertain"].includes(state.status)) throw failure("There is no pending review or planning handoff to retry.");
@@ -396,7 +400,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         throw failure("The coding turn is preparing its review. Wait for it, or skip the review before sending another request.");
       }
       if (state?.messageId === input.messageId) {
-        if (!allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and send a new one to Senior, Junior or Intern.");
+        if (!allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and send a new one to Senior or Junior.");
         if (state.input.message !== input.message) throw failure("A retry must keep the original message. Cancel it to send an edited request.");
         if (state.status === "cancelled") throw failure("This request was cancelled. Send your draft as a new request.");
         await admitMigratedRequest(context, state);
@@ -409,7 +413,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         const { goal, pinned: savedGoal } = await currentGoal(sessionId, context);
         if (explicitDeslop && activeGoal(goal)) throw failure("Finish or cancel the current goal before starting Deslop.");
-        if (!options.purpose && preferences.mode === "auto" && activeGoal(goal)) throw failure("Choose Senior, Junior, or Intern before working on a goal.");
+        if (!options.purpose && preferences.mode === "auto" && activeGoal(goal)) throw failure("Choose Senior or Junior before working on a goal.");
         const saved = await createAssistantRoutingStore({ systemRoot }).read();
         const pinnedGoal = activeGoal(goal) && savedGoal;
         if (options.purpose && activeGoal(goal) && pinnedGoal?.mode !== options.purpose) {
@@ -446,7 +450,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
             status: readyPlan ? "ready" : "drafting",
             ...(approving ? { approvedRevision: plan.revision } : {})
           } : null,
-          schemaVersion: 3,
+          schemaVersion: 4,
           workflowEngineId,
           observedSelection: selection,
           configuration: pinnedGoal?.configuration || { revision: saved.revision,
@@ -592,7 +596,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (!allowAuto && state.mode === "auto") {
         liveFollowupRequests.delete(keyFor(sessionId, context));
         state.status = "done";
-        state.error = "Auto is available in Main chat only. Choose Senior, Junior or Intern for your next request.";
+        state.error = "Auto is available in Main chat only. Choose Senior or Junior for your next request.";
         await save(context, state); return;
       }
       const usesPlan = state.mode === "auto";
@@ -707,7 +711,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   async function prepareGoal(sessionId, input, context) {
     const preferences = assistantRoutingFromMetadata(context.session.metadata);
     if (!preferences) return { input, context };
-    if (preferences.mode === "auto") throw failure("Choose Senior, Junior, or Intern before starting or resuming a goal.");
+    if (preferences.mode === "auto") throw failure("Choose Senior or Junior before starting or resuming a goal.");
     const previous = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
     const saved = await createAssistantRoutingStore({ systemRoot }).read();
     const current = vibe64AssistantSelectionFromMetadata(context.session.metadata);

@@ -840,14 +840,14 @@ describe("useVibe64SourceEditor", () => {
         repositoryWrite: false,
         tools: "none"
       },
-      profileId: "economy",
+      profileId: "helper",
       providerId: "codex",
       request: {
         allowProviderModelFallback: false,
         reasoning: true,
         summary: false
       },
-      revision: "codex-economy-v1",
+      revision: "codex-helper-v1",
       thinking: "low",
       workloadId: "source_explanation"
     };

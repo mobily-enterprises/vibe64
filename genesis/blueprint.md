@@ -183,7 +183,7 @@ starts with an empty Drop Zone.
 Files refreshes after the assistant finishes a turn without discarding the
 person's place or unsaved edits. People can download individual files and keep
 personal project-wide stars, reachable from chat and the file browser in any session.
-Code explanations use the workflow's Intern model and show which AI answered.
+Code explanations use the workflow's Helper model and show which AI answered.
 A collaborator can ask for explanations when that model or its shared backup is
 available, even when the main conversation uses the owner's personal account.
 Changing the effective AI connection or user requires a new explanation before
@@ -239,11 +239,11 @@ independently of the AI selected in Main chat.
 Hovering a reply's name shows its saved model, provider and thinking choice.
 Reply labels put the role first, followed by the orchestrator and model.
 Older replies without a saved AI identity simply say "agent".
-Main chat offers Senior, Junior, Intern and Auto; ordinary temporary chats offer
-Senior, Junior and Intern only. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
+Main chat offers Senior, Junior and Auto; ordinary temporary chats offer
+Senior and Junior only. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
 role and comes first; Settings comes last before Send and Stop. Its menu shows
 model assignments and the selected role. Auto alone offers
-automatic Senior review and Deslop. Direct Senior, Junior and Intern conversations
+automatic Senior review and Deslop. Direct Senior and Junior conversations
 answer questions or implement requested changes without a temporary plan,
 automatic handoff or review. These names describe the model roles, not limits
 on the kinds of work they can do.
@@ -267,7 +267,7 @@ User-created temporary chats inherit Main chat's role, workflow and custom model
 choice when created. Main's Auto mode starts them as Senior. Each temporary chat
 then keeps its own selection and can change role independently; later changes in
 Main do not retarget existing temporary chats. Automatic tasks retain their
-explicit Junior or Intern assignments. There is no temporary-chat default setting.
+explicit Junior assignments; bounded background tasks use Helper. There is no temporary-chat default setting.
 Temporary chats never run Auto, working plans or automatic review.
 Model routing puts the workflow orchestrator first and edits only that workflow's
 assignments. It shows connected orchestrators and retained saved configurations;
@@ -287,7 +287,7 @@ Creating the first chat explicitly fills missing defaults, so included OpenCode
 works without a credential-setup step. Reading those defaults does not save them.
 Owners can open Model routing directly over the chat, with its saved workflow
 selected, without visiting account settings. The form separates Senior/Junior from
-independent Router/Intern and Shared backup. It previews what owners and
+independent Router/Helper and Shared backup. It previews what owners and
 collaborators will use before Save; a foreign Backup keeps planning and coding
 together there, including when review is off. Missing assignments point to this
 setup; other users are directed to the owner. Each assistant application has its own saved models for
@@ -317,7 +317,7 @@ selected and skips review so the user can answer first. Goals require a concrete
 mode and model, with Auto and automatic review unavailable. In Auto, the goal
 menu explains that a concrete
 mode must be selected before offering Start or Resume. Background helpers use
-the independent Intern role.
+the independent Helper role.
 When the service shuts down, pending routing is cancelled and its helper cleanup
 finishes before the assistant processes close. Restart does not send that request.
 AI controls includes a Close button that remains available while the assistant
@@ -421,7 +421,7 @@ Save and Update wait for active assistant preparation to finish. Save can procee
 without assistant naming, using a checkpoint-based version name and a visible
 notice when naming is unavailable. Members can Save and create pull requests
 when the main chat uses a personal connection. Optional naming uses effective
-Intern or its eligible shared Backup; ordinary repository permissions still
+Helper or its eligible shared Backup; ordinary repository permissions still
 apply. A request that
 overlaps preparation waits briefly at the server and explains a timeout. Failed
 requests remain readable and dismissible even before an operation starts;
@@ -452,8 +452,8 @@ including persistent SQLite databases as well as MySQL and PostgreSQL. SQLite
 uses the project's declared filename, enforces read-only inspection, and supports
 deliberate row edits through the same explicit unlock and confirmation controls.
 Project members can browse and work with the database regardless of AI access.
-Database Copilot uses the workflow's Intern model and checks that destination
-for the person asking. A shared Intern model remains usable when the main chat
+Database Copilot uses the workflow's Helper model and checks that destination
+for the person asking. A shared Helper model remains usable when the main chat
 last used an owner's personal subscription. The Copilot names its effective
 model; unavailable AI does not prevent database browsing or editing.
 The diagram lets people explore their data,
@@ -634,7 +634,7 @@ composer becomes available when that turn finishes, preserving its draft and
 attachments. There is no prompt-proposal queue or owner-approval interface.
 A migrated AI request with no recorded submitter cannot borrow the current
 viewer's identity on Retry; cancel it and send a new request.
-Prompt hints use the actor's effective Intern independently of the connection
+Prompt hints use the actor's effective Helper independently of the connection
 answering Main chat. Draft hints remain private to their author.
 
 Prompt suggestions follow the person's current draft first, then the latest
@@ -726,7 +726,7 @@ Compatibility pending. The Codex runtime preserves native history and translates
 recognized foreign reasoning into readable historical context when OpenAI needs
 it. Handoffs do not add a summarization call.
 Undo cannot cross a Codex provider switch.
-Helper work uses the actor's effective Intern model and its connection.
+Helper work uses the actor's effective Helper model and its connection.
 The GPT models and thinking choices come from the connected Codex service,
 so newly available GPT models appear without an editor update.
 After Codex login or logout, an unfinished account transition automatically
@@ -871,7 +871,7 @@ to a view refreshes it promptly, and repeated failures slow recovery checks.
 Open sessions that choose the same coding-assistant application
 share one running assistant service, and that service stops when its final
 session is archived. Suggestions and focused helpers use their configured
-Intern destination in independent scopes; cleanup ends their native work without
+Helper destination in independent scopes; cleanup ends their native work without
 rebinding or stopping the working chat. A helper may use another orchestrator.
 Suggestions and tool-free helper conversations can run alongside preview and
 foreground work. Only operations that change shared source or prepare its
@@ -1132,7 +1132,7 @@ guided browser-and-code flow in AI Accounts. The official CLI owns credentials,
 and Vibe64 confirms the connected account automatically. Native Claude goals
 appear in the chat toolbar: Pause stops the current turn and preserves the goal,
 Resume continues it, and Cancel clears it. Claude goals have no token-budget
-field. Tool-free helpers use the workflow's independent Intern role. New tasks
+field. Tool-free helpers use the workflow's independent Helper role. New tasks
 capture that choice without changing main chat or tasks already running.
 
 Main conversation, temporary assistance, and database copilot share the same
@@ -1141,7 +1141,7 @@ capabilities and project access in Codex, Claude Code and OpenCode, without sepa
 modes.
 Temporary model and thinking choices come from the connected service's current
 catalogue, including new Codex models and OpenJunior models. Each chat retains its own workflow and selected model without changing Main chat.
-An Intern or shared Backup turn can use another assistant application; returning
+A Helper or shared Backup turn can use another assistant application; returning
 to Senior or Junior retains the conversation already held by its effective assistant.
 The server keeps their conversations, settings, drafts and sent attachments
 until explicit Close. Reloading or navigating away does not stop their work;
@@ -1193,14 +1193,18 @@ the editor or replacing the conversation. Recovery never repeats a sent message.
 The composer updates from external state without losing
 focus or selection.
 
-People configure Router and Intern independently in Model routing. Hints,
-commit naming and other bounded helpers capture the actor's effective Intern
+People configure Router and Helper independently in Model routing. Hints,
+commit naming and other bounded helpers capture the actor's effective Helper
 choice, which may use another orchestrator, without retargeting the working chat.
+Helper is available to background tasks, not as a chat mode. Its model and thinking
+are user-configured; task limits and tool restrictions still apply. Router keeps
+its own model and thinking. Existing Helper choices retain their preferences
+through the numbered upgrade, while the retired third chat role becomes Junior.
 The old per-account Helper model preference is retired. Existing choices are
 backed up and incorporated or presented for review by the state upgrade.
-OpenCode's native Intern subagent is available only when the resolved choice
+OpenCode's native Helper subagent is available only when the resolved choice
 uses the same OpenCode account; it inherits its parent's command controls.
-Compact progress summaries use isolated, tool-free Intern tasks. Incomplete
+Compact progress summaries use isolated, tool-free Helper tasks. Incomplete
 fragments do not suppress later reasoning, and finishing the main answer never
 waits for a summary model. Cancellation suppresses late results. Failed cleanup
 retains its exact reference for retry, including after a service restart.
@@ -1236,7 +1240,7 @@ In Auto, coding starts only after approval of that version, through the button o
 a clear reply. Junior keeps progress and blockers in the document. A material
 decision returns work to Senior, preserving edits, and a revised plan needs
 approval again. Optional Senior review checks implementation against the plan.
-Direct Senior, Junior and Intern use the request and conversation, without
+Direct Senior and Junior use the request and conversation, without
 reading, updating or requiring that document; automatic review is unavailable.
 The View plan and Implement controls belong to Auto and disappear when selecting
 a direct role. Stop never starts another agent; interrupted handoffs wait for an

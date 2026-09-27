@@ -3,19 +3,19 @@ const OPENCODE_NATIVE_ENDPOINT_CODE = "opencode-native";
 const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
   anthropic: Object.freeze({
     billingLabel: "Usage-based API billing",
-    economyModelId: "claude-haiku-4-5",
+    defaultModelId: "claude-haiku-4-5",
     managementUrl: "https://platform.claude.com/settings/billing",
     ownerOnly: false
   }),
   deepseek: Object.freeze({
     billingLabel: "Usage-based API billing",
-    economyModelId: "deepseek-flash",
+    defaultModelId: "deepseek-flash",
     managementUrl: "https://platform.deepseek.com/top_up",
     ownerOnly: false
   }),
   opencode: Object.freeze({
     billingLabel: "Big Pickle included; a Zen key unlocks every Zen model",
-    economyModelId: "big-pickle",
+    defaultModelId: "big-pickle",
     includedModelId: "big-pickle",
     managementUrl: "https://opencode.ai/zen",
     ownerOnly: false,
@@ -23,13 +23,13 @@ const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
   }),
   openai: Object.freeze({
     billingLabel: "Usage-based API billing",
-    economyModelId: "gpt-5-mini",
+    defaultModelId: "gpt-5-mini",
     managementUrl: "https://platform.openai.com/settings/organization/billing/overview",
     ownerOnly: false
   }),
   zai: Object.freeze({
     billingLabel: "Free and usage-based API",
-    economyModelId: "glm-4.7-flash",
+    defaultModelId: "glm-4.7-flash",
     managementUrl: "https://z.ai/manage-apikey/billing",
     modelAccess: Object.freeze({
       configurable: true,
@@ -44,7 +44,7 @@ const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
   }),
   "zai-coding-plan": Object.freeze({
     billingLabel: "Coding Plan quota",
-    economyModelId: "glm-5.3-flash",
+    defaultModelId: "glm-5.3-flash",
     managementUrl: "https://z.ai/subscribe",
     ownerOnly: true,
     productLabel: "GLM · Personal Coding Plan",
@@ -72,8 +72,8 @@ function assistantProviderPolicy(provider = {}) {
     );
   }
   const configured = ASSISTANT_PROVIDER_POLICIES[modelProviderId] || {};
-  const economyModelId = text(configured.economyModelId || provider.defaultModelId);
-  if (!economyModelId) {
+  const defaultModelId = text(configured.defaultModelId || provider.defaultModelId);
+  if (!defaultModelId) {
     throw assistantProviderError(
       "vibe64_ai_provider_default_model_missing",
       "OpenCode did not identify a default model for this provider.",
@@ -85,7 +85,7 @@ function assistantProviderPolicy(provider = {}) {
     accessLabel: ownerOnly ? "Personal use" : "Workspace use",
     billingLabel: text(configured.billingLabel) || "Provider API key",
     canonicalUrl: "",
-    economyModelId,
+    defaultModelId,
     endpointCode: OPENCODE_NATIVE_ENDPOINT_CODE,
     includedModelId: text(configured.includedModelId),
     managementUrl: text(configured.managementUrl),

@@ -320,7 +320,7 @@ routing. It loads saved or server-supplied draft configuration, trusted actor
 and connection facts, and the exact required catalogue models before invoking
 the shared deterministic policy. It does not authorize against the last chat
 selection or change a conversation binding. Senior/Junior decisions capture the
-whole effective pair; independent Router/Intern decisions read only their own
+whole effective pair; independent Router/Helper decisions read only their own
 dependencies. OpenJunior model pages must share one catalogue revision. Unknown
 credentials and unavailable catalogues produce unavailable decisions rather
 than provider-failure substitution. Execution retains the direct provider
@@ -338,9 +338,9 @@ new Send. Recorded submitters still receive fresh admission; inspecting a prior
 delivery receipt requires no new inference. Standalone admission without hosted
 users remains supported. Access responses omit the user record. Reads,
 Stop and cleanup remain separate from admission of new inference. Source
-explanations and Database Copilot use their own resolved Intern destination too.
+explanations and Database Copilot use their own resolved Helper destination too.
 
-Main chat can save Senior, Junior, Intern or Auto plus an optional Auto review preference
+Main chat can save Senior, Junior or Auto plus an optional Auto review preference
 in the existing conversation metadata. A role resolves to a live, available
 selection using its saved workflow, independently of the last native engine.
 Senior and Junior resolve as a pair even when review is off. A member's foreign
@@ -351,8 +351,9 @@ the captured submitter remains the actor for routing, delivery and review.
 Goals cannot start or resume in Auto, and an unfinished goal blocks switching
 to Auto. When native goal observation is unavailable, that switch still respects
 the saved goal; a confirmed completion or removal releases the restriction.
-The runtime, API and saved role keys are `senior`, `junior` and `intern`.
-Configuration and request snapshots use schema 3. The numbered stopped-service
+Chat modes are `senior`, `junior` and `auto`. Model assignments additionally
+include `helper` and `router`; neither is selectable as a direct chat mode.
+Configuration and request snapshots use schema 4. The numbered stopped-service
 role upgrade renames owned routing fields in settings, sessions, temporary chats,
 renewal records and transcript attribution, including archived histories. It
 preserves model choices, native histories and message text; the live runtime has
@@ -379,7 +380,7 @@ destination without waiting for a later session event. Main-chat availability
 uses the selected mode; steering checks the bound native
 connection. Members regain direct chat after an owner's personal turn finishes
 when their configured mode is accessible. Suggestions independently use
-`prompt_hint` availability, allowing private drafts through accessible Intern.
+`prompt_hint` availability, allowing private drafts through accessible Helper.
 An idle routed Send does not require the previous native connection to start.
 Unresolved activity or a running turn still prevents changing its destination.
 Access and approval query caches separate actor/role, project and session; user
@@ -411,7 +412,7 @@ only unambiguous approval of a currently ready plan can select Junior. The runti
 checks the ready file and approved revision again before changing model or sending.
 No file, an incomplete document, a new request, or a stale approval cannot start
 Auto coding. Planning completion never starts coding automatically.
-Direct Senior, Junior and Intern answer questions or implement changes from the
+Direct Senior and Junior answer questions or implement changes from the
 message and conversation, without reading, preparing, updating or requiring the
 temporary working plan. Senior has no planning-only restriction outside Auto.
 A saved review preference applies only to Auto; direct roles never schedule an
@@ -459,7 +460,7 @@ rejection message. Cancellation and receipt recovery use the ordinary coordinato
 
 Auto captures Router and the effective Senior–Junior pair, the actor, connection
 identities and configuration revision before invoking the existing tool-free
-classification workload in a separate non-project scope. Intern is not an Auto
+classification workload in a separate non-project scope. Helper is not an Auto
 dependency. The classifier sees the submitted text, attachment labels and bounded
 recent visible exchanges plus the ready plan revision and bounded outline; it returns only a mode and reason. Its native reference
 and any managed execution ID stay in the parent request until verified cleanup.
@@ -468,7 +469,7 @@ cancellation. A late native start is stopped before delivery; failed cleanup
 blocks new work and is retried during reconciliation or explicit cancellation.
 Vibe64 then rechecks the captured decision and sends the original request through
 ordinary native delivery with a Senior or Junior instruction. Main chat uses both
-existing changeover preparation and Send when Intern or a member Backup selects
+existing changeover preparation and Send when Helper or a member Backup selects
 another orchestrator. The workflow stays fixed across that excursion. Returning
 to Codex looks up its retained native history in the shared workflow storage,
 even when the next turn selects a different model provider. Temporary chat scopes
@@ -754,7 +755,7 @@ The interactive Codex app-server starts with explicit `approval_policy="never"`
 and `sandbox_mode="danger-full-access"` configuration overrides. Codex does not
 apply its top-level sandbox bypass flag to app-server defaults. Setting those
 defaults prevents native work restored without per-turn overrides from falling
-back to a network-disabled sandbox that denies managed command sockets. Intern
+back to a network-disabled sandbox that denies managed command sockets. Helper
 startup retains its separate isolation. The native paginated-history test runs
 the production launcher and verifies the effective defaults and automatic goal
 continuation permissions after a cold restart.
@@ -1514,17 +1515,17 @@ running. OpenCode and Codex shell commands and any descendants they leave
 running are attributed to the originating project session through their
 ordinary provider command boundaries, and closing that session drains those
 descendants.
-The shared OpenCode configuration defines economy subagents for connected
+The shared OpenCode configuration defines helper subagents for connected
 providers, while task admission and native chat/model hooks restrict use to the
-registered parent's selected provider and effective Intern model. A foreign
-Intern choice is not exposed as a native subagent. Resuming a
+registered parent's selected provider and effective Helper model. A foreign
+Helper choice is not exposed as a native subagent. Resuming a
 helper from another parent is rejected. The plugin resolves native child
 `parentID` ancestry for command control, history unwrapping and host capabilities;
 unknown or unverifiable ancestry fails closed. Helpers gain no extra account or
 command permissions.
 OpenCode progress broadcasts coalesce to at most one per second per session,
 with the first state published immediately. A meaningful reasoning sentence or
-completed part can queue one bounded, tool-free summary through effective Intern
+completed part can queue one bounded, tool-free summary through effective Helper
 using the common scoped manager and the submitting actor. This helper may run
 under another orchestrator without changing the working OpenJunior model. Streaming and final projection share turn-owned entries, so
 replayed parts never submit duplicate requests and initial partial words do not
@@ -1538,11 +1539,11 @@ by a fresh controller after restart. A restored turn without an evidenced actor
 uses mechanical headlines instead of requesting a model summary. Full provider
 reasoning is not persisted.
 
-Tool-free economy turns run without the session source lock, while provider
+Tool-free helper turns run without the session source lock, while provider
 thread ownership and terminal admission still protect cleanup and renewal.
 Environment inspection retains the same provider identity as interactive chat
 without preparing the project again. Writable detached turns keep their source
-lock. The economy compatibility gate accepts stable Codex versions at or above
+lock. The helper compatibility gate accepts stable Codex versions at or above
 `MINIMUM_CODEX_VERSION`, defined once in
 `packages/vibe64-runtime/src/server/minimumCodexVersion.js`. Tests import
 that minimum and derive version boundaries from it. Versions compare numerically
@@ -1563,7 +1564,7 @@ origin, without resending the private draft. The HTTP route preserves omitted
 optional fields so action validation can admit that cancellation. Draft context
 is bounded to its latest 4,000 characters;
 it is sent only to the tool-free suggestion helper, not saved as a chat message.
-The server resolves the saved workflow's effective Intern destination for the
+The server resolves the saved workflow's effective Helper destination for the
 requesting actor before creating a provider profile; a personal main-chat
 selection does not block an accessible shared helper. Cache identity includes
 the actor, exact destination and connection generation, routing revision, draft,
@@ -1577,7 +1578,7 @@ by the next request or session close, including after restart. Cancelling a
 session also waits for requests still preparing their context.
 Successful generation without a draft also stores a shared suggestion snapshot
 in the session's private assistant artifact and publishes a session refresh hint.
-When effective Intern is unavailable, the server may return that snapshot
+When effective Helper is unavailable, the server may return that snapshot
 only while its complete conversation/Blueprint basis still matches; this path
 does not invoke inference. Draft suggestions remain actor-specific and are never persisted in
 this shared artifact. The browser requests hints, including private drafts,
@@ -1773,8 +1774,14 @@ continues to use transcript selection snapshots and per-application receipts.
 Changing the selection alone sends nothing and is rejected while a turn is active.
 
 Curated provider homes project only their fixed endpoint, key and model
-metadata. Main chat, ephemeral tasks and isolated Intern helpers use that
-selected connection. Intern copies only this server-owned projection into
+metadata. Main chat, ephemeral tasks and isolated background helpers use that
+selected connection. Helper copies only this server-owned projection into
 its existing temporary private home, checks canonical identity before and after
 requests, and never activates OpenAI authentication. Its existing no-tool,
 no-project-access contract and verified process cleanup still apply.
+
+Initial history loading completes before a restored unsent request is appended.
+This gives the transcript its complete initial tail for bottom positioning.
+Manual refreshes retain rendered history and do not reset the reader's position.
+Delivery failures and retry controls appear on the unsent bubble once; the lower
+notice remains for follow-up recovery and unresolved cancellation cleanup.

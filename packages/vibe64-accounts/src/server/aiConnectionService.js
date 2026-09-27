@@ -122,7 +122,7 @@ function createAiConnectionService({ aiConnections, readAssistantCapabilities, i
     }
     const policy = assistantProviderPolicy(provider);
     if (!models.some((model) => (
-      model?.id === policy.economyModelId && model?.status === "available"
+      model?.id === policy.defaultModelId && model?.status === "available"
     ))) {
       throw aiConnectionError(
         "vibe64_ai_provider_policy_stale",

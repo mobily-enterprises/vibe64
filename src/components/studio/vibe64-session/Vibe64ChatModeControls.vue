@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiSchoolOutline, mdiTuneVariant } from "@mdi/js";
+import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiTuneVariant } from "@mdi/js";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { ModelRoutingForm, useModelRouting } from "@local/vibe64-accounts/client";
@@ -21,7 +21,7 @@ const modeMenu = ref(null);
 const routingOpen = ref(false);
 const routingFocusRole = ref("");
 const routingSaving = ref(false);
-const modeIcons = { senior: mdiAccountStarOutline, junior: mdiAccountOutline, intern: mdiSchoolOutline, auto: mdiAutoFix };
+const modeIcons = { senior: mdiAccountStarOutline, junior: mdiAccountOutline, auto: mdiAutoFix };
 const modes = computed(() => ASSISTANT_MODES.filter(({ id }) => !props.temporary || id !== "auto"));
 const modeLabel = computed(() => assistantModeLabel(mode.value));
 const { engines, loadError, resource } = useModelRouting({ enabled: computed(() => Boolean(props.session?.sessionId)) });
@@ -73,7 +73,7 @@ const command = useCommand({
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
 });
 async function save(nextMode = mode.value, nextReview = review.value) {
-  if (saving.value || props.disabled || !nextMode || nextMode === "auto" && (hasGoal.value || props.temporary)) return;
+  if (saving.value || props.disabled || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && (hasGoal.value || props.temporary)) return;
   const previous = { mode: mode.value, review: review.value };
   mode.value = nextMode; review.value = !props.temporary && nextReview; saving.value = true;
   saveError.value = "";

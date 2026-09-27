@@ -14,10 +14,10 @@ import {
   openCodeAssistantCapabilities
 } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js";
 import {
-  resolveOpenCodeEconomyExecutionProfile
+  resolveOpenCodeHelperExecutionProfile
 } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js";
 import {
-  OPENCODE_ECONOMY_AGENT_ID,
+  OPENCODE_HELPER_AGENT_ID,
   OPENCODE_EPHEMERAL_AGENT_ID
 } from "../../packages/vibe64-terminals/src/server/opencodeServerProcess.js";
 import {
@@ -1275,7 +1275,7 @@ test("OpenCode recovers a reasoning-only completion into a final answer", async 
 
   assert.equal(completed.state, "completed");
   const turnPrompts = harness.promptCalls.filter((entry) => (
-    entry.input?.agent !== "vibe64-economy"
+    entry.input?.agent !== "vibe64-helper"
   ));
   assert.equal(turnPrompts.length, 2);
   assert.match(
@@ -1324,7 +1324,7 @@ test("OpenCode fails explicitly after two reasoning-only completions", async (t)
   });
 
   const turnPrompts = harness.promptCalls.filter((entry) => (
-    entry.input?.agent !== "vibe64-economy"
+    entry.input?.agent !== "vibe64-helper"
   ));
   assert.equal(turnPrompts.length, 2);
   assert.equal(completed.state, "failed");
@@ -1882,7 +1882,7 @@ test("OpenCode switches connected providers while preserving its database and na
 
   harness.connection.apiKey = "zai-key-one";
   harness.connection.canonicalUrl = "https://api.z.ai/api/coding/paas/v4";
-  harness.connection.economyModelId = "glm-5.3";
+  harness.connection.defaultModelId = "glm-5.3";
   harness.connection.endpointCode = "zai_coding_plan";
   harness.connection.fingerprint = `sha256:${"3".repeat(64)}`;
   harness.connection.modelProviderId = "zai-coding-plan";
@@ -1933,16 +1933,16 @@ test("OpenCode helper turns use the hidden deny-all agent and bounded structured
     await harness.controller.closeAllForProject();
     await rm(harness.root, { force: true, recursive: true });
   });
-  const executionProfile = resolveOpenCodeEconomyExecutionProfile({
+  const executionProfile = resolveOpenCodeHelperExecutionProfile({
     assistantSelection: {
       ...harness.selection,
       schema: "vibe64.assistant-selection.v1"
     },
     assistantAccess: {
-      economyModelId: harness.connection.economyModelId
+      defaultModelId: harness.connection.defaultModelId
     }
   }, {
-    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
     workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.COMMIT_TITLE
   });
   const conversation = await harness.controller.createConversation("session-1", {
@@ -1973,7 +1973,7 @@ test("OpenCode helper turns use the hidden deny-all agent and bounded structured
     type: "thread"
   });
   const helperSession = harness.createdSessions.find((entry) => entry.id === result.threadId);
-  assert.equal(helperSession.agent, OPENCODE_ECONOMY_AGENT_ID);
+  assert.equal(helperSession.agent, OPENCODE_HELPER_AGENT_ID);
   assert.deepEqual(helperSession.model, {
     id: "deepseek-chat",
     providerID: "deepseek"
@@ -1997,7 +1997,7 @@ test("OpenCode helper turns use the hidden deny-all agent and bounded structured
     harness.promptDirectories.find(({ id }) => id === result.threadId),
     { directory: helperWorkdir, id: result.threadId }
   );
-  assert.equal(helperPrompt.agent, OPENCODE_ECONOMY_AGENT_ID);
+  assert.equal(helperPrompt.agent, OPENCODE_HELPER_AGENT_ID);
   assert.deepEqual(helperPrompt.model, {
     id: "deepseek-chat",
     providerID: "deepseek"
@@ -2117,9 +2117,9 @@ test("scoped OpenCode helpers retain bounded policy and cleanup without rebindin
     runtimeRoot: path.join(harness.root, "router-runtime"), stableContext: "Classify supplied text." };
   const options = { assistantScope, assistantSelection: { ...harness.selection, modelId: "deepseek-reasoner",
     schema: "vibe64.assistant-selection.v1" } };
-  const executionProfile = resolveOpenCodeEconomyExecutionProfile({ ...options,
-    assistantAccess: { economyModelId: "legacy-helper-model" }
-  }, { profileId: "economy", workloadId: "request_routing" });
+  const executionProfile = resolveOpenCodeHelperExecutionProfile({ ...options,
+    assistantAccess: { defaultModelId: "legacy-helper-model" }
+  }, { profileId: "helper", workloadId: "request_routing" });
   assert.equal(executionProfile.model, "deepseek-reasoner");
   const created = await harness.controller.createConversation(assistantScope.id, { ephemeral: true, executionProfile }, options);
   const input = { ephemeral: true, conversationId: created.conversationId, executionProfile, message: "Classify" };
@@ -2129,9 +2129,9 @@ test("scoped OpenCode helpers retain bounded policy and cleanup without rebindin
     /output exceeded/, "an explicit wait timeout cannot bypass the stored workload's bounded completion");
   await assert.rejects(harness.controller.readConversation(assistantScope.id, input, options), /output exceeded/);
   const helper = harness.createdSessions.find(({ id }) => id === created.conversationId);
-  assert.equal(helper.agent, OPENCODE_ECONOMY_AGENT_ID);
+  assert.equal(helper.agent, OPENCODE_HELPER_AGENT_ID);
   assert.equal(helper.model.id, "deepseek-reasoner");
-  assert.equal(harness.promptCalls.at(-1).input.agent, OPENCODE_ECONOMY_AGENT_ID);
+  assert.equal(harness.promptCalls.at(-1).input.agent, OPENCODE_HELPER_AGENT_ID);
   const registry = JSON.parse(await readFile(harness.processStarts.at(-1).options.sessionEnvironmentRegistry, "utf8"));
   const environment = registry.sessions.find(({ sessionId }) => sessionId === assistantScope.id);
   assert.deepEqual(environment.env, {});
@@ -2155,8 +2155,8 @@ test("sequential scoped OpenCode helpers reuse the service after removing their 
     const assistantScope = { id, environment: {}, workdir: path.join(harness.root, id),
       runtimeRoot: path.join(harness.root, id, "runtime"), stableContext: "Classify supplied text." };
     const options = { assistantScope, assistantSelection: harness.selection };
-    const executionProfile = resolveOpenCodeEconomyExecutionProfile(options,
-      { profileId: "economy", workloadId: "request_routing" });
+    const executionProfile = resolveOpenCodeHelperExecutionProfile(options,
+      { profileId: "helper", workloadId: "request_routing" });
     const { conversationId } = await harness.controller.createConversation(id, { ephemeral: true, executionProfile }, options);
     const input = { conversationId, executionProfile, ephemeral: true, message: "Classify this request." };
     await harness.controller.startConversationTurn(id, input, options);

@@ -9,7 +9,7 @@ import {
 } from "../../packages/vibe64-execution/src/server/index.js";
 
 import {
-  OPENCODE_ECONOMY_AGENT_ID,
+  OPENCODE_HELPER_AGENT_ID,
   OPENCODE_EPHEMERAL_AGENT_ID,
   OPENCODE_EXPECTED_VERSION,
   createOpenCodeServerProcess,
@@ -142,7 +142,7 @@ test("OpenCode verifies API keys with one bounded pure no-tools turn", async (t)
     "run",
     "--pure",
     "--agent",
-    OPENCODE_ECONOMY_AGENT_ID,
+    OPENCODE_HELPER_AGENT_ID,
     "--model",
     "zai/glm-4.7-flash",
     "--format",
@@ -219,7 +219,7 @@ test("OpenCode process environment is minimal and injects Vibe64's deny-all help
     LANG: "en_AU.UTF-8",
     npm_config_cache: "/host/npm-cache",
     npm_config_userconfig: "/host/private-npmrc",
-    OPENCODE_CONFIG_CONTENT: '{"agent":{"vibe64-economy":{"permission":"allow"}}}',
+    OPENCODE_CONFIG_CONTENT: '{"agent":{"vibe64-helper":{"permission":"allow"}}}',
     PATH: "/usr/bin",
     RANDOM_APPLICATION_SECRET: "must-not-leak"
   }, {
@@ -265,7 +265,7 @@ test("OpenCode process environment is minimal and injects Vibe64's deny-all help
   const config = JSON.parse(env.OPENCODE_CONFIG_CONTENT);
   assert.equal(config.plugin.length, 1);
   assert.match(config.plugin[0], /^file:.*opencodeSessionEnvironmentPlugin\.js$/u);
-  assert.deepEqual(config.agent[OPENCODE_ECONOMY_AGENT_ID], {
+  assert.deepEqual(config.agent[OPENCODE_HELPER_AGENT_ID], {
     description: "Vibe64 bounded helper turns without tools.",
     hidden: true,
     mode: "primary",
@@ -293,7 +293,7 @@ test("non-project OpenCode tools stay behind approval and require the execution 
   assert.equal(guarded.agent[OPENCODE_EPHEMERAL_AGENT_ID].permission["*"], "ask");
   assert.equal(guarded.plugin.length, 1);
   assert.match(guarded.plugin[0], /opencodeSessionEnvironmentPlugin\.js$/u);
-  assert.equal(guarded.agent[OPENCODE_ECONOMY_AGENT_ID].permission["*"], "deny");
+  assert.equal(guarded.agent[OPENCODE_HELPER_AGENT_ID].permission["*"], "deny");
 });
 
 test("OpenCode forces Z.AI API and Coding Senior through distinct canonical billing routes", () => {
@@ -346,27 +346,27 @@ test("OpenCode uses native provider routes when no URL override is supplied", ()
   assert.equal(JSON.stringify(native).includes("not-written-to-config"), false);
 });
 
-test("OpenCode injects one low-cost subagent per configured provider economy model", () => {
+test("OpenCode injects one low-cost subagent per configured provider helper model", () => {
   const config = JSON.parse(openCodeInlineConfig({
     providerConnections: [
-      { economyModelId: "glm-5.3-flash", modelProviderId: "zai-coding-plan" },
-      { economyModelId: "deepseek-v4-flash", modelProviderId: "deepseek" },
+      { defaultModelId: "glm-5.3-flash", modelProviderId: "zai-coding-plan" },
+      { defaultModelId: "deepseek-v4-flash", modelProviderId: "deepseek" },
       { modelProviderId: "anthropic" }
     ]
   }));
 
-  assert.deepEqual(config.agent["vibe64-intern-zai-coding-plan"], {
+  assert.deepEqual(config.agent["vibe64-helper-zai-coding-plan"], {
     description: "Vibe64 low-cost helper on the zai-coding-plan connection for delegating simple, inexpensive work.",
     mode: "subagent",
     model: "zai-coding-plan/glm-5.3-flash"
   });
-  assert.deepEqual(config.agent["vibe64-intern-deepseek"], {
+  assert.deepEqual(config.agent["vibe64-helper-deepseek"], {
     description: "Vibe64 low-cost helper on the deepseek connection for delegating simple, inexpensive work.",
     mode: "subagent",
     model: "deepseek/deepseek-v4-flash"
   });
-  assert.equal(config.agent["vibe64-intern-anthropic"], undefined);
-  assert.equal(config.agent[OPENCODE_ECONOMY_AGENT_ID].hidden, true);
+  assert.equal(config.agent["vibe64-helper-anthropic"], undefined);
+  assert.equal(config.agent[OPENCODE_HELPER_AGENT_ID].hidden, true);
   assert.equal(Object.keys(config.agent).length, 4);
 });
 

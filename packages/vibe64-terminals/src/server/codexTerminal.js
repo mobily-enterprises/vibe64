@@ -65,18 +65,18 @@ import {
   vibe64AgentRunStateIsTerminal
 } from "@local/vibe64-runtime/server/sessionStore";
 import {
-  assertCodexAppServerEconomyCompatibility,
-  assertCodexAppServerEconomyOutputWithinLimit,
+  assertCodexAppServerHelperCompatibility,
+  assertCodexAppServerHelperOutputWithinLimit,
   codexAppServerProjectHookTrustConfig,
   codexAppServerThreadIdForSession,
   codexAppServerThreadHasReadableHistory,
   codexAppServerThreadSettings,
   ensureCodexAppServerThreadForSession,
   resumeExactCodexAppServerThreadForSession,
-  resumeCodexAppServerEconomyThread,
-  sendCodexAppServerEconomyTurn,
+  resumeCodexAppServerHelperThread,
+  sendCodexAppServerHelperTurn,
   sendCodexAppServerPromptForSession,
-  startCodexAppServerEconomyThread,
+  startCodexAppServerHelperThread,
   startFreshCodexAppServerThreadForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import {
@@ -149,11 +149,11 @@ import {
   sessionGitCommandActorFromMetadata
 } from "./sessionGitCommandActor.js";
 import {
-  CODEX_ECONOMY_THREAD_LEDGER_SCHEMA_VERSION,
-  CODEX_ECONOMY_THREAD_LIFECYCLES,
-  createCodexEconomyThreadLedger,
-  defineCodexEconomyThreadRecord
-} from "./codexEconomyThreadLedger.js";
+  CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION,
+  CODEX_HELPER_THREAD_LIFECYCLES,
+  createCodexHelperThreadLedger,
+  defineCodexHelperThreadRecord
+} from "./codexHelperThreadLedger.js";
 import {
   VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV
@@ -1356,7 +1356,7 @@ function createCodexTerminalController({
   codexAppServerProviderOptions = {},
   codexAppServerProviderFactory = createCodexAppServerAgentProvider,
   codexAppServerPromptDeliveryEnabled = CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED,
-  codexEconomyThreadLedgerFactory = createCodexEconomyThreadLedger,
+  codexHelperThreadLedgerFactory = createCodexHelperThreadLedger,
   composeSessionContext = composeVibe64SessionContext,
   codexToolHomeRequired = false,
   codexToolHomeSource = "",
@@ -1392,13 +1392,13 @@ function createCodexTerminalController({
   const codexAppServerProviderOwners = new Map();
   const codexAppServerModelCatalogs = new WeakMap();
   let codexAppServerChatModelCatalog = null;
-  const codexAppServerEconomyThreads = new Map();
-  const codexAppServerEconomyProjectOperations = new Map();
-  const codexAppServerEconomyThreadCleanups = new Map();
-  const codexAppServerEconomyThreadLedgers = new Map();
-  const codexAppServerEconomyThreadMutations = new Map();
-  const codexAppServerEconomyTurnStarts = new Map();
-  const codexAppServerEconomyThreadRestores = new Map();
+  const codexAppServerHelperThreads = new Map();
+  const codexAppServerHelperProjectOperations = new Map();
+  const codexAppServerHelperThreadCleanups = new Map();
+  const codexAppServerHelperThreadLedgers = new Map();
+  const codexAppServerHelperThreadMutations = new Map();
+  const codexAppServerHelperTurnStarts = new Map();
+  const codexAppServerHelperThreadRestores = new Map();
   const codexAppServerConversations = new Map();
   const codexAppServerSessionContexts = new Map();
   const codexAppServerSessionClosures = new Map();
@@ -2495,9 +2495,9 @@ function createCodexTerminalController({
     const sessionId = normalizeText(session?.sessionId || session?.id);
     return {
       ...runtimeContext.providerOptions,
-      economyWorkdir: path.join(
+      helperWorkdir: path.join(
         sharedRuntimeDir,
-        "economy-workspaces",
+        "helper-workspaces",
         stableHash(sessionId || normalizeText(workdir) || "unattributed")
       ),
       executionMode: "",
@@ -2570,7 +2570,7 @@ function createCodexTerminalController({
     }), routingModelProviderId: vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })?.modelProviderId };
   }
 
-  async function codexAppServerEconomyRuntimeOptionsForSession(session = {}, options = {}) {
+  async function codexAppServerHelperRuntimeOptionsForSession(session = {}, options = {}) {
     // Resolve without provisioning, retaining the shared provider identity used
     // by interactive chat and durable helper-thread cleanup.
     return codexAppServerRuntimeOptionsForSession(session, options);
@@ -3447,7 +3447,7 @@ function createCodexTerminalController({
       codexAppServerProviderOwners.delete(normalizedProviderKey);
       return;
     }
-    if (codexAppServerEconomyThreadRecords({ provider }).length > 0) {
+    if (codexAppServerHelperThreadRecords({ provider }).length > 0) {
       throw new Error(
         "Codex provider cannot close while it still owns low-cost assistant threads."
       );
@@ -3471,8 +3471,8 @@ function createCodexTerminalController({
     const normalizedProviderKey = normalizeText(providerKey);
     const provider = codexAppServerProviders.get(normalizedProviderKey);
     if (provider) {
-      assertCodexAppServerEconomyThreadsRetired(
-        await retireCodexAppServerEconomyThreads({ provider })
+      assertCodexAppServerHelperThreadsRetired(
+        await retireCodexAppServerHelperThreads({ provider })
       );
     }
     closeCodexAppServerProvider(normalizedProviderKey, options);
@@ -3510,8 +3510,8 @@ function createCodexTerminalController({
     const provider = record.provider;
     const providerKey = normalizeText(record.providerKey);
     const retirement = Promise.resolve().then(async () => {
-      assertCodexAppServerEconomyThreadsRetired(
-        await retireCodexAppServerEconomyThreads({ provider })
+      assertCodexAppServerHelperThreadsRetired(
+        await retireCodexAppServerHelperThreads({ provider })
       );
     });
     const runtimeStop = Promise.resolve().then(async () => {
@@ -3539,7 +3539,7 @@ function createCodexTerminalController({
       // Stopping the isolated runtime can win the race with thread/delete.
       // Reconcile its now-absent storage without reconnecting to the old account.
       [retired] = await Promise.allSettled([
-        retireCodexAppServerEconomyThreads({ provider }).then(assertCodexAppServerEconomyThreadsRetired)
+        retireCodexAppServerHelperThreads({ provider }).then(assertCodexAppServerHelperThreadsRetired)
       ]);
     }
     if (
@@ -3548,14 +3548,14 @@ function createCodexTerminalController({
       stopped.value?.processExitVerified === true &&
       stopped.value?.runtimeDirPreserved === true
     ) {
-      const pending = codexAppServerEconomyThreadRecords({ provider });
-      if (pending.every((thread) => thread.lifecycle === CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED)) {
+      const pending = codexAppServerHelperThreadRecords({ provider });
+      if (pending.every((thread) => thread.lifecycle === CODEX_HELPER_THREAD_LIFECYCLES.CLEANUP_REQUIRED)) {
         // Shared history survives process shutdown. Keep its durable cleanup
         // records for the next connection, without retaining the stopped client
         // as an account-transition blocker or claiming its history was deleted.
         pendingThreadCleanup = retired.reason.details?.failed || [];
         for (const thread of pending) {
-          codexAppServerEconomyThreads.delete(codexAppServerEconomyThreadKey(thread));
+          codexAppServerHelperThreads.delete(codexAppServerHelperThreadKey(thread));
         }
         retired = { status: "fulfilled" };
       }
@@ -3606,8 +3606,8 @@ function createCodexTerminalController({
         stopped: false
       };
     }
-    assertCodexAppServerEconomyThreadsRetired(
-      await retireCodexAppServerEconomyThreads({ provider })
+    assertCodexAppServerHelperThreadsRetired(
+      await retireCodexAppServerHelperThreads({ provider })
     );
     const sharedProcessRetained = codexAppServerRuntimeIsShared(
       normalizedProviderKey, codexAppServerProviderOwners.get(normalizedProviderKey)?.providerOptions
@@ -3843,7 +3843,7 @@ function createCodexTerminalController({
       const fields = codexAppServerProviderKeyFields(target.providerKey);
       const preserveProcessExitProof = Boolean(
         fields.sessionId &&
-        fields.executionMode !== CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY
+        fields.executionMode !== CODEX_APP_SERVER_EXECUTION_MODES.HELPER
       );
       try {
         const result = stopOwnedRuntimes && target.record
@@ -3957,8 +3957,8 @@ function createCodexTerminalController({
         stopped: 0
       };
     }
-    const economyProviders = new Set(
-      codexAppServerEconomyThreadRecords({
+    const helperProviders = new Set(
+      codexAppServerHelperThreadRecords({
         projectContextRoot: normalizedProjectContextRoot
       }).map((record) => record.provider)
     );
@@ -3966,7 +3966,7 @@ function createCodexTerminalController({
       .filter((providerKey) => {
         const managed = codexAppServerManagedSessions.get(providerKey);
         return normalizeText(managed?.projectContext?.targetRoot) === normalizedProjectContextRoot ||
-          economyProviders.has(codexAppServerProviders.get(providerKey));
+          helperProviders.has(codexAppServerProviders.get(providerKey));
       });
     const failed = [];
     const results = [];
@@ -3977,7 +3977,7 @@ function createCodexTerminalController({
           preserveProcessExitProof: Boolean(
             preserveProcessExitProof &&
             fields.sessionId &&
-            fields.executionMode !== CODEX_APP_SERVER_EXECUTION_MODES.ECONOMY
+            fields.executionMode !== CODEX_APP_SERVER_EXECUTION_MODES.HELPER
           )
         }));
       } catch (error) {
@@ -4032,11 +4032,11 @@ function createCodexTerminalController({
     while (true) {
       const pending = new Set([
         ...codexAppServerConversationTurnStarts.values(),
-        ...codexAppServerEconomyProjectOperations.values(),
-        ...codexAppServerEconomyThreadCleanups.values(),
-        ...codexAppServerEconomyThreadMutations.values(),
-        ...codexAppServerEconomyThreadRestores.values(),
-        ...codexAppServerEconomyTurnStarts.values(),
+        ...codexAppServerHelperProjectOperations.values(),
+        ...codexAppServerHelperThreadCleanups.values(),
+        ...codexAppServerHelperThreadMutations.values(),
+        ...codexAppServerHelperThreadRestores.values(),
+        ...codexAppServerHelperTurnStarts.values(),
         ...codexAppServerMessageDeliveries.values(),
         ...codexAppServerReasoningPersistQueues.values(),
         ...codexAppServerResultFinalizations.values(),
@@ -8420,7 +8420,7 @@ function createCodexTerminalController({
     const runtime = await createRuntimeForSession();
     assertCodexAppServerControllerOpen();
     const projectContextRoot = normalizeText(runtime.projectContextRoot);
-    const economyRestore = await restoreCodexAppServerEconomyThreads({ runtime });
+    const helperRestore = await restoreCodexAppServerHelperThreads({ runtime });
     const reconcileGeneration = ++codexAppServerThreadReconcileGeneration;
     const sessionIds = [...new Set((Array.isArray(sessions) ? sessions : [])
       .map((session) => codexAppServerReconcileSessionId(session))
@@ -8428,17 +8428,17 @@ function createCodexTerminalController({
     const results = await Promise.all(sessionIds.map(async (sessionId) => {
       try {
         const session = await runtime.getSession(sessionId, { inspectSource: false });
-        let economyFailure = null;
-        let economyInventory = null;
-        if (economyRestore.ok !== false) {
+        let helperFailure = null;
+        let helperInventory = null;
+        if (helperRestore.ok !== false) {
           try {
-            economyInventory = await reconcileCodexAppServerEconomyRuntime({ runtime, session });
+            helperInventory = await reconcileCodexAppServerHelperRuntime({ runtime, session });
           } catch (error) {
-            economyFailure = codexAppServerEconomyFailure({
+            helperFailure = codexAppServerHelperFailure({
               projectRuntimeRoot: runtime.stateRoot,
               sessionId
             }, error);
-            vibe64SessionDebugLog("server.codexTerminal.appServerEconomy.reconcile.error", {
+            vibe64SessionDebugLog("server.codexTerminal.appServerHelper.reconcile.error", {
               error: vibe64SessionDebugError(error),
               sessionId
             });
@@ -8449,8 +8449,8 @@ function createCodexTerminalController({
         });
         return {
           ...result,
-          economyFailure,
-          economyInventory
+          helperFailure,
+          helperInventory
         };
       } catch (error) {
         vibe64SessionDebugLog("server.codexTerminal.appServerThread.reconcile.error", {
@@ -8471,10 +8471,10 @@ function createCodexTerminalController({
       }
     }));
     const failed = [
-      ...economyRestore.failed,
+      ...helperRestore.failed,
       ...results.flatMap((result) => [
         result?.ok === false ? result : null,
-        result?.economyFailure || null
+        result?.helperFailure || null
       ].filter(Boolean))
     ];
     const keepProviderKeys = new Set();
@@ -8516,7 +8516,7 @@ function createCodexTerminalController({
       sessionCount: sessionIds.length
     });
     return {
-      economyRestore,
+      helperRestore,
       failed,
       ok: failed.length === 0,
       results,
@@ -9022,7 +9022,7 @@ function createCodexTerminalController({
     }
   }
 
-  function codexAppServerEconomyThreadKey({
+  function codexAppServerHelperThreadKey({
     projectRuntimeRoot = "",
     sessionId = "",
     threadId = ""
@@ -9034,46 +9034,46 @@ function createCodexTerminalController({
     ].join("\u001f");
   }
 
-  async function withCodexAppServerEconomyProjectOperation(
+  async function withCodexAppServerHelperProjectOperation(
     projectRuntimeRoot = "",
     operation
   ) {
     const key = normalizeText(projectRuntimeRoot);
     if (!key || typeof operation !== "function") {
-      throw codexAppServerEconomyOwnershipError(
+      throw codexAppServerHelperOwnershipError(
         "Vibe64 project runtime state is unavailable for low-cost assistant ownership."
       );
     }
-    const previous = codexAppServerEconomyProjectOperations.get(key) || Promise.resolve();
+    const previous = codexAppServerHelperProjectOperations.get(key) || Promise.resolve();
     const current = previous.catch(() => null).then(operation);
-    codexAppServerEconomyProjectOperations.set(key, current);
+    codexAppServerHelperProjectOperations.set(key, current);
     try {
       return await current;
     } finally {
-      if (codexAppServerEconomyProjectOperations.get(key) === current) {
-        codexAppServerEconomyProjectOperations.delete(key);
+      if (codexAppServerHelperProjectOperations.get(key) === current) {
+        codexAppServerHelperProjectOperations.delete(key);
       }
     }
   }
 
-  function codexAppServerEconomyThreadUnavailableError(threadId = "") {
+  function codexAppServerHelperThreadUnavailableError(threadId = "") {
     const error = new Error(
       "This low-cost assistant thread is no longer available. Start the background task again instead of reusing another assistant conversation."
     );
-    error.code = "vibe64_codex_economy_thread_unavailable";
+    error.code = "vibe64_codex_helper_thread_unavailable";
     error.statusCode = 409;
     error.threadId = normalizeText(threadId);
     return error;
   }
 
-  function codexAppServerEconomyThreadLedger(projectRuntimeRoot = "") {
+  function codexAppServerHelperThreadLedger(projectRuntimeRoot = "") {
     const normalizedProjectRuntimeRoot = normalizeText(projectRuntimeRoot);
-    let ledger = codexAppServerEconomyThreadLedgers.get(normalizedProjectRuntimeRoot);
+    let ledger = codexAppServerHelperThreadLedgers.get(normalizedProjectRuntimeRoot);
     if (!ledger) {
-      ledger = codexEconomyThreadLedgerFactory({
+      ledger = codexHelperThreadLedgerFactory({
         projectRuntimeRoot: normalizedProjectRuntimeRoot
       });
-      codexAppServerEconomyThreadLedgers.set(normalizedProjectRuntimeRoot, ledger);
+      codexAppServerHelperThreadLedgers.set(normalizedProjectRuntimeRoot, ledger);
     }
     return ledger;
   }
@@ -9093,7 +9093,7 @@ function createCodexTerminalController({
       .digest("hex")}`;
   }
 
-  async function codexAppServerEconomyThreadIdentity({
+  async function codexAppServerHelperThreadIdentity({
     executionProfile = null,
     provider = null
   } = {}) {
@@ -9101,13 +9101,13 @@ function createCodexTerminalController({
       typeof provider?.currentRuntimeInfo !== "function" ||
       typeof provider?.currentServerInfo !== "function"
     ) {
-      throw new Error("Codex provider cannot prove durable economy thread ownership.");
+      throw new Error("Codex provider cannot prove durable helper thread ownership.");
     }
     const runtime = await provider.currentRuntimeInfo();
     const server = provider.currentServerInfo();
     const providerKey = codexAppServerProviderKeyForProvider(provider);
     if (!providerKey) {
-      throw new Error("Codex economy provider is not owned by this controller.");
+      throw new Error("Codex helper provider is not owned by this controller.");
     }
     return Object.freeze({
       providerId: normalizeText(executionProfile?.providerId),
@@ -9120,13 +9120,13 @@ function createCodexTerminalController({
     });
   }
 
-  function attachCodexAppServerEconomyThread({
+  function attachCodexAppServerHelperThread({
     durable = null,
     ledger = null,
     onRetired = null,
     provider = null
   } = {}) {
-    const key = codexAppServerEconomyThreadKey(durable);
+    const key = codexAppServerHelperThreadKey(durable);
     const record = Object.freeze({
       ...durable,
       durable,
@@ -9134,13 +9134,13 @@ function createCodexTerminalController({
       onRetired,
       provider
     });
-    codexAppServerEconomyThreads.set(key, record);
+    codexAppServerHelperThreads.set(key, record);
     return record;
   }
 
-  async function rememberCodexAppServerEconomyThread({
+  async function rememberCodexAppServerHelperThread({
     executionProfile = null,
-    lifecycle = CODEX_ECONOMY_THREAD_LIFECYCLES.READY,
+    lifecycle = CODEX_HELPER_THREAD_LIFECYCLES.READY,
     onRetired = null,
     projectContextRoot = "",
     projectRuntimeRoot = "",
@@ -9156,57 +9156,57 @@ function createCodexTerminalController({
       !normalizeText(threadId) ||
       !provider
     ) {
-      throw codexAppServerEconomyThreadUnavailableError(threadId);
+      throw codexAppServerHelperThreadUnavailableError(threadId);
     }
     const now = new Date().toISOString();
-    const durable = defineCodexEconomyThreadRecord({
+    const durable = defineCodexHelperThreadRecord({
       createdAt: now,
       executionProfile: vibe64AgentExecutionProfileAuditSnapshot(executionProfile),
-      identity: await codexAppServerEconomyThreadIdentity({ executionProfile, provider }),
+      identity: await codexAppServerHelperThreadIdentity({ executionProfile, provider }),
       lifecycle,
       ownershipId: crypto.randomUUID(),
       projectContextRoot: normalizeText(projectContextRoot),
       projectRuntimeRoot: normalizeText(projectRuntimeRoot),
       revision: 1,
-      schemaVersion: CODEX_ECONOMY_THREAD_LEDGER_SCHEMA_VERSION,
+      schemaVersion: CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION,
       sessionId: normalizeText(sessionId),
       threadId: normalizeText(threadId),
       turnId: normalizeText(turnId),
       updatedAt: now,
       workdir: normalizeText(workdir)
     });
-    const ledger = codexAppServerEconomyThreadLedger(projectRuntimeRoot);
+    const ledger = codexAppServerHelperThreadLedger(projectRuntimeRoot);
     await ledger.write(durable);
-    return attachCodexAppServerEconomyThread({ durable, ledger, onRetired, provider });
+    return attachCodexAppServerHelperThread({ durable, ledger, onRetired, provider });
   }
 
-  async function withCodexAppServerEconomyThreadMutation(record = null, operation) {
-    const key = codexAppServerEconomyThreadKey(record);
+  async function withCodexAppServerHelperThreadMutation(record = null, operation) {
+    const key = codexAppServerHelperThreadKey(record);
     if (!record || typeof operation !== "function") {
-      throw codexAppServerEconomyThreadUnavailableError(record?.threadId);
+      throw codexAppServerHelperThreadUnavailableError(record?.threadId);
     }
-    const previous = codexAppServerEconomyThreadMutations.get(key) || Promise.resolve();
+    const previous = codexAppServerHelperThreadMutations.get(key) || Promise.resolve();
     const mutation = previous.catch(() => null).then(operation);
-    codexAppServerEconomyThreadMutations.set(key, mutation);
+    codexAppServerHelperThreadMutations.set(key, mutation);
     try {
       return await mutation;
     } finally {
-      if (codexAppServerEconomyThreadMutations.get(key) === mutation) {
-        codexAppServerEconomyThreadMutations.delete(key);
+      if (codexAppServerHelperThreadMutations.get(key) === mutation) {
+        codexAppServerHelperThreadMutations.delete(key);
       }
     }
   }
 
-  async function updateCodexAppServerEconomyThreadUnlocked(record = null, {
+  async function updateCodexAppServerHelperThreadUnlocked(record = null, {
     lifecycle = record?.lifecycle,
     onRetired = record?.onRetired,
     turnId = record?.turnId
   } = {}) {
-    const key = codexAppServerEconomyThreadKey(record);
-    if (!record || codexAppServerEconomyThreads.get(key) !== record) {
-      throw codexAppServerEconomyThreadUnavailableError(record?.threadId);
+    const key = codexAppServerHelperThreadKey(record);
+    if (!record || codexAppServerHelperThreads.get(key) !== record) {
+      throw codexAppServerHelperThreadUnavailableError(record?.threadId);
     }
-    const durable = defineCodexEconomyThreadRecord({
+    const durable = defineCodexHelperThreadRecord({
       ...record.durable,
       lifecycle,
       revision: record.revision + 1,
@@ -9214,7 +9214,7 @@ function createCodexTerminalController({
       turnId: normalizeText(turnId)
     });
     await record.ledger.write(durable, { expected: record.durable });
-    return attachCodexAppServerEconomyThread({
+    return attachCodexAppServerHelperThread({
       durable,
       ledger: record.ledger,
       onRetired,
@@ -9222,40 +9222,40 @@ function createCodexTerminalController({
     });
   }
 
-  async function updateCodexAppServerEconomyThread(record = null, changes = {}) {
-    return withCodexAppServerEconomyThreadMutation(record, () => (
-      updateCodexAppServerEconomyThreadUnlocked(record, changes)
+  async function updateCodexAppServerHelperThread(record = null, changes = {}) {
+    return withCodexAppServerHelperThreadMutation(record, () => (
+      updateCodexAppServerHelperThreadUnlocked(record, changes)
     ));
   }
 
-  function forgetCodexAppServerEconomyThreadInMemory(record = null) {
-    const key = codexAppServerEconomyThreadKey(record);
-    if (!record || codexAppServerEconomyThreads.get(key) !== record) {
+  function forgetCodexAppServerHelperThreadInMemory(record = null) {
+    const key = codexAppServerHelperThreadKey(record);
+    if (!record || codexAppServerHelperThreads.get(key) !== record) {
       return false;
     }
-    codexAppServerEconomyThreadCleanups.delete(key);
-    codexAppServerEconomyThreads.delete(key);
+    codexAppServerHelperThreadCleanups.delete(key);
+    codexAppServerHelperThreads.delete(key);
     record.onRetired?.({ threadId: record.threadId });
     return true;
   }
 
-  async function removeCodexAppServerEconomyThreadUnlocked(record = null) {
-    const key = codexAppServerEconomyThreadKey(record);
-    if (!record || codexAppServerEconomyThreads.get(key) !== record) {
-      throw codexAppServerEconomyThreadUnavailableError(record?.threadId);
+  async function removeCodexAppServerHelperThreadUnlocked(record = null) {
+    const key = codexAppServerHelperThreadKey(record);
+    if (!record || codexAppServerHelperThreads.get(key) !== record) {
+      throw codexAppServerHelperThreadUnavailableError(record?.threadId);
     }
     await record.ledger.remove(record.durable);
-    forgetCodexAppServerEconomyThreadInMemory(record);
+    forgetCodexAppServerHelperThreadInMemory(record);
     return true;
   }
 
-  async function removeCodexAppServerEconomyThread(record = null) {
-    return withCodexAppServerEconomyThreadMutation(record, () => (
-      removeCodexAppServerEconomyThreadUnlocked(record)
+  async function removeCodexAppServerHelperThread(record = null) {
+    return withCodexAppServerHelperThreadMutation(record, () => (
+      removeCodexAppServerHelperThreadUnlocked(record)
     ));
   }
 
-  function codexAppServerEconomyThreadRecords({
+  function codexAppServerHelperThreadRecords({
     projectContextRoot = "",
     projectRuntimeRoot = "",
     provider = null,
@@ -9264,7 +9264,7 @@ function createCodexTerminalController({
     const normalizedProjectContextRoot = normalizeText(projectContextRoot);
     const normalizedProjectRuntimeRoot = normalizeText(projectRuntimeRoot);
     const normalizedSessionId = normalizeText(sessionId);
-    return [...codexAppServerEconomyThreads.values()].filter((record) => {
+    return [...codexAppServerHelperThreads.values()].filter((record) => {
       return (!provider || record.provider === provider) &&
         (!normalizedSessionId || record.sessionId === normalizedSessionId) &&
         (!normalizedProjectContextRoot || record.projectContextRoot === normalizedProjectContextRoot) &&
@@ -9272,17 +9272,17 @@ function createCodexTerminalController({
     });
   }
 
-  function codexAppServerEconomyThreadCleanupError(record = {}, error = null, interruptError = null) {
+  function codexAppServerHelperThreadCleanupError(record = {}, error = null, interruptError = null) {
     const failure = new Error(
       "Vibe64 could not retire a low-cost assistant thread. Retry cleanup before shutting down its Codex provider."
     );
-    failure.code = "vibe64_codex_economy_thread_cleanup_failed";
+    failure.code = "vibe64_codex_helper_thread_cleanup_failed";
     failure.statusCode = 503;
     failure.retryable = true;
     failure.details = {
-      cleanupError: errorMessage(error, "Codex economy thread deletion failed."),
+      cleanupError: errorMessage(error, "Codex helper thread deletion failed."),
       ...(interruptError
-        ? { interruptError: errorMessage(interruptError, "Codex economy turn interruption failed.") }
+        ? { interruptError: errorMessage(interruptError, "Codex helper turn interruption failed.") }
         : {}),
       retryable: true,
       sessionId: normalizeText(record.sessionId),
@@ -9292,13 +9292,13 @@ function createCodexTerminalController({
     return failure;
   }
 
-  async function retireCodexAppServerEconomyThread(record = null) {
-    const key = codexAppServerEconomyThreadKey(record);
-    const pendingTurnStart = codexAppServerEconomyTurnStarts.get(key);
+  async function retireCodexAppServerHelperThread(record = null) {
+    const key = codexAppServerHelperThreadKey(record);
+    const pendingTurnStart = codexAppServerHelperTurnStarts.get(key);
     if (pendingTurnStart) {
       await pendingTurnStart.catch(() => null);
     }
-    const current = codexAppServerEconomyThreads.get(key);
+    const current = codexAppServerHelperThreads.get(key);
     if (!record || !current) {
       return {
         deleted: false,
@@ -9307,12 +9307,12 @@ function createCodexTerminalController({
         threadId: normalizeText(record?.threadId)
       };
     }
-    const pending = codexAppServerEconomyThreadCleanups.get(key);
+    const pending = codexAppServerHelperThreadCleanups.get(key);
     if (pending) {
       return pending;
     }
-    const cleanup = withCodexAppServerEconomyThreadMutation(record, async () => {
-      let cleanupRecord = codexAppServerEconomyThreads.get(key);
+    const cleanup = withCodexAppServerHelperThreadMutation(record, async () => {
+      let cleanupRecord = codexAppServerHelperThreads.get(key);
       if (!cleanupRecord || cleanupRecord.ownershipId !== record.ownershipId) {
         return {
           deleted: false,
@@ -9321,17 +9321,17 @@ function createCodexTerminalController({
           threadId: normalizeText(record.threadId)
         };
       }
-      if (cleanupRecord.lifecycle !== CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED) {
+      if (cleanupRecord.lifecycle !== CODEX_HELPER_THREAD_LIFECYCLES.CLEANUP_REQUIRED) {
         try {
-          cleanupRecord = await updateCodexAppServerEconomyThreadUnlocked(cleanupRecord, {
-            lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED
+          cleanupRecord = await updateCodexAppServerHelperThreadUnlocked(cleanupRecord, {
+            lifecycle: CODEX_HELPER_THREAD_LIFECYCLES.CLEANUP_REQUIRED
           });
         } catch (error) {
-          throw codexAppServerEconomyThreadCleanupError(cleanupRecord, error);
+          throw codexAppServerHelperThreadCleanupError(cleanupRecord, error);
         }
       }
       if (!await directoryExists(cleanupRecord.identity.runtime.runtimeDir)) {
-        await removeCodexAppServerEconomyThreadUnlocked(cleanupRecord);
+        await removeCodexAppServerHelperThreadUnlocked(cleanupRecord);
         return {
           deleted: false,
           ok: true,
@@ -9350,13 +9350,13 @@ function createCodexTerminalController({
             interruptError = error;
           }
         } else {
-          interruptError = new Error("Codex provider cannot interrupt an active economy turn.");
+          interruptError = new Error("Codex provider cannot interrupt an active helper turn.");
         }
       }
       if (typeof provider?.deleteThread !== "function") {
-        throw codexAppServerEconomyThreadCleanupError(
+        throw codexAppServerHelperThreadCleanupError(
           cleanupRecord,
-          new Error("Codex provider cannot delete an economy thread."),
+          new Error("Codex provider cannot delete a helper thread."),
           interruptError
         );
       }
@@ -9364,10 +9364,10 @@ function createCodexTerminalController({
         const result = await provider.deleteThread(cleanupRecord.threadId);
         if (!isRecord(result)) {
           const error = new Error("Codex app-server returned an invalid thread deletion result.");
-          error.code = "vibe64_codex_economy_thread_delete_unconfirmed";
+          error.code = "vibe64_codex_helper_thread_delete_unconfirmed";
           throw error;
         }
-        await removeCodexAppServerEconomyThreadUnlocked(cleanupRecord);
+        await removeCodexAppServerHelperThreadUnlocked(cleanupRecord);
         return {
           deleted: true,
           interrupted: Boolean(cleanupRecord.turnId) && !interruptError,
@@ -9388,9 +9388,9 @@ function createCodexTerminalController({
         }
         if (absent) {
           try {
-            await removeCodexAppServerEconomyThreadUnlocked(cleanupRecord);
+            await removeCodexAppServerHelperThreadUnlocked(cleanupRecord);
           } catch (ledgerError) {
-            throw codexAppServerEconomyThreadCleanupError(
+            throw codexAppServerHelperThreadCleanupError(
               cleanupRecord,
               ledgerError,
               interruptError
@@ -9405,26 +9405,26 @@ function createCodexTerminalController({
             turnId: cleanupRecord.turnId
           };
         }
-        throw codexAppServerEconomyThreadCleanupError(cleanupRecord, error, interruptError);
+        throw codexAppServerHelperThreadCleanupError(cleanupRecord, error, interruptError);
       }
     });
-    codexAppServerEconomyThreadCleanups.set(key, cleanup);
+    codexAppServerHelperThreadCleanups.set(key, cleanup);
     try {
       return await cleanup;
     } finally {
-      if (codexAppServerEconomyThreadCleanups.get(key) === cleanup) {
-        codexAppServerEconomyThreadCleanups.delete(key);
+      if (codexAppServerHelperThreadCleanups.get(key) === cleanup) {
+        codexAppServerHelperThreadCleanups.delete(key);
       }
     }
   }
 
-  async function retireCodexAppServerEconomyThreads(filters = {}) {
-    const records = codexAppServerEconomyThreadRecords(filters);
+  async function retireCodexAppServerHelperThreads(filters = {}) {
+    const records = codexAppServerHelperThreadRecords(filters);
     const results = [];
     const failed = [];
     for (const record of records) {
       try {
-        results.push(await retireCodexAppServerEconomyThread(record));
+        results.push(await retireCodexAppServerHelperThread(record));
       } catch (error) {
         failed.push({
           code: normalizeText(error?.code),
@@ -9444,14 +9444,14 @@ function createCodexTerminalController({
     };
   }
 
-  function assertCodexAppServerEconomyThreadsRetired(result = {}) {
+  function assertCodexAppServerHelperThreadsRetired(result = {}) {
     if (result.ok !== false) {
       return result;
     }
     const failure = new Error(
       "Vibe64 could not retire every low-cost assistant thread. Retry cleanup before shutting down Codex."
     );
-    failure.code = "vibe64_codex_economy_thread_cleanup_failed";
+    failure.code = "vibe64_codex_helper_thread_cleanup_failed";
     failure.statusCode = 503;
     failure.retryable = true;
     failure.details = {
@@ -9461,12 +9461,12 @@ function createCodexTerminalController({
     throw failure;
   }
 
-  function codexAppServerEconomyOwnershipError(message = "", details = {}) {
+  function codexAppServerHelperOwnershipError(message = "", details = {}) {
     const error = new Error(
       normalizeText(message) ||
       "Vibe64 could not prove ownership of a persisted low-cost assistant thread."
     );
-    error.code = "vibe64_codex_economy_ownership_blocked";
+    error.code = "vibe64_codex_helper_ownership_blocked";
     error.statusCode = 409;
     error.retryable = details.retryable !== false;
     error.details = {
@@ -9492,7 +9492,7 @@ function createCodexTerminalController({
       expected.transport === normalizeText(actual.transport);
   }
 
-  function codexAppServerEconomyThreadOwnershipMatches(record = {}, {
+  function codexAppServerHelperThreadOwnershipMatches(record = {}, {
     providerKey = "",
     runtime = {},
     server = null
@@ -9507,9 +9507,9 @@ function createCodexTerminalController({
       );
   }
 
-  function codexAppServerEconomyFailure(record = null, error = null) {
+  function codexAppServerHelperFailure(record = null, error = null) {
     return {
-      code: normalizeText(error?.code) || "vibe64_codex_economy_ownership_blocked",
+      code: normalizeText(error?.code) || "vibe64_codex_helper_ownership_blocked",
       error: errorMessage(error),
       projectRuntimeRoot: normalizeText(record?.projectRuntimeRoot),
       retryable: error?.retryable !== false,
@@ -9518,7 +9518,7 @@ function createCodexTerminalController({
     };
   }
 
-  async function restoreCodexAppServerEconomyThread(record = {}, {
+  async function restoreCodexAppServerHelperThread(record = {}, {
     ledger = null,
     runtime = null,
     session = null
@@ -9531,40 +9531,40 @@ function createCodexTerminalController({
       normalizeText(runtime?.projectContextRoot) !== record.projectContextRoot ||
       terminalWorktreePath(session) !== record.workdir
     ) {
-      throw codexAppServerEconomyOwnershipError(
-        "Persisted Codex economy ownership does not match the current project session.",
+      throw codexAppServerHelperOwnershipError(
+        "Persisted Codex helper ownership does not match the current project session.",
         {
           sessionId: record.sessionId,
           threadId: record.threadId
         }
       );
     }
-    const key = codexAppServerEconomyThreadKey(record);
-    const pendingMutation = codexAppServerEconomyThreadMutations.get(key);
+    const key = codexAppServerHelperThreadKey(record);
+    const pendingMutation = codexAppServerHelperThreadMutations.get(key);
     if (pendingMutation) {
       await pendingMutation.catch(() => null);
     }
-    const existing = codexAppServerEconomyThreads.get(key);
+    const existing = codexAppServerHelperThreads.get(key);
     if (existing && (
       existing.ownershipId !== record.ownershipId ||
       existing.revision < record.revision
     )) {
-      throw codexAppServerEconomyOwnershipError(
-        "Persisted Codex economy ownership changed while the controller was running.",
+      throw codexAppServerHelperOwnershipError(
+        "Persisted Codex helper ownership changed while the controller was running.",
         { sessionId: record.sessionId, threadId: record.threadId }
       );
     }
-    const cleanupRequired = record.lifecycle === CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED;
+    const cleanupRequired = record.lifecycle === CODEX_HELPER_THREAD_LIFECYCLES.CLEANUP_REQUIRED;
     if (existing && !cleanupRequired) {
       if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED && !sessionIsClosing(session)) {
         return { record: existing, retiredThreadId: "" };
       }
-      await retireCodexAppServerEconomyThread(existing);
+      await retireCodexAppServerHelperThread(existing);
       return { record: null, retiredThreadId: existing.threadId };
     }
     if (!await directoryExists(record.identity.runtime.runtimeDir)) {
       if (existing) {
-        await retireCodexAppServerEconomyThread(existing);
+        await retireCodexAppServerHelperThread(existing);
       } else {
         await ledger.remove(record);
       }
@@ -9572,12 +9572,12 @@ function createCodexTerminalController({
     }
     const toolHome = await codexToolHomeResult(session);
     if (toolHome.ok === false) {
-      throw codexAppServerEconomyOwnershipError(toolHome.error, {
+      throw codexAppServerHelperOwnershipError(toolHome.error, {
         sessionId: record.sessionId,
         threadId: record.threadId
       });
     }
-    const providerOptions = await codexAppServerEconomyRuntimeOptionsForSession(session, {
+    const providerOptions = await codexAppServerHelperRuntimeOptionsForSession(session, {
       runtime,
       executionRoot: terminalSessionSourceRoot(session),
       toolHomeSource: toolHome.toolHomeSource,
@@ -9596,7 +9596,7 @@ function createCodexTerminalController({
         const accountChanged = record.identity.runtime.accountIdentitySignature !==
           normalizeText(currentRuntime.accountIdentitySignature);
         if (accountChanged && !cleanupRequired) {
-          throw codexAppServerEconomyOwnershipError(
+          throw codexAppServerHelperOwnershipError(
             "Reconnect the original Codex account to resume or delete this helper thread.",
             { retryable: false, sessionId: record.sessionId, threadId: record.threadId }
           );
@@ -9610,13 +9610,13 @@ function createCodexTerminalController({
             ? stopped?.ownershipSuperseded === true || stopped?.processExitVerified === true
             : codexAppServerRuntimeStopWasVerified(stopped);
           if (!retired) {
-            throw codexAppServerEconomyOwnershipError(
+            throw codexAppServerHelperOwnershipError(
               "The earlier Codex runtime could not be verified as retired; its cleanup record has been preserved.",
               { sessionId: record.sessionId, threadId: record.threadId }
             );
           }
           await ledger.remove(record);
-          codexAppServerEconomyThreads.delete(key);
+          codexAppServerHelperThreads.delete(key);
           return { record: null, retiredThreadId: record.threadId };
         }
       } finally {
@@ -9624,7 +9624,7 @@ function createCodexTerminalController({
       }
     }
     if (existing) {
-      await retireCodexAppServerEconomyThread(existing);
+      await retireCodexAppServerHelperThread(existing);
       return { record: null, retiredThreadId: existing.threadId };
     }
     let provider = codexAppServerProviders.get(providerKey);
@@ -9643,7 +9643,7 @@ function createCodexTerminalController({
       );
     }
     if (typeof provider.currentRuntimeInfo !== "function") {
-      throw codexAppServerEconomyOwnershipError(
+      throw codexAppServerHelperOwnershipError(
         "The Codex provider cannot prove persisted runtime ownership.",
         {
           sessionId: record.sessionId,
@@ -9652,7 +9652,7 @@ function createCodexTerminalController({
       );
     }
     const expectedRuntime = await provider.currentRuntimeInfo();
-    if (!codexAppServerEconomyThreadOwnershipMatches(record, {
+    if (!codexAppServerHelperThreadOwnershipMatches(record, {
       providerKey,
       runtime: expectedRuntime
     }, {
@@ -9660,8 +9660,8 @@ function createCodexTerminalController({
       requireAccount: !cleanupRequired,
       requireEndpoint: false
     })) {
-      throw codexAppServerEconomyOwnershipError(
-        "The current Codex runtime/auth identity does not match persisted economy ownership.",
+      throw codexAppServerHelperOwnershipError(
+        "The current Codex runtime/auth identity does not match persisted helper ownership.",
         {
           retryable: record.identity.runtime.accountIdentitySignature === normalizeText(expectedRuntime.accountIdentitySignature),
           sessionId: record.sessionId,
@@ -9677,7 +9677,7 @@ function createCodexTerminalController({
     });
     const currentRuntime = await provider.currentRuntimeInfo();
     const currentServer = provider.currentServerInfo?.();
-    if (!codexAppServerEconomyThreadOwnershipMatches(record, {
+    if (!codexAppServerHelperThreadOwnershipMatches(record, {
       providerKey,
       runtime: currentRuntime,
       server: currentServer
@@ -9686,8 +9686,8 @@ function createCodexTerminalController({
       requireEndpoint: true,
       requireServer: !cleanupRequired
     })) {
-      throw codexAppServerEconomyOwnershipError(
-        "The connected Codex server identity does not match persisted economy ownership.",
+      throw codexAppServerHelperOwnershipError(
+        "The connected Codex server identity does not match persisted helper ownership.",
         {
           sessionId: record.sessionId,
           threadId: record.threadId
@@ -9696,8 +9696,8 @@ function createCodexTerminalController({
     }
     const currentLedger = await ledger.readAll();
     if (currentLedger.failures.length > 0) {
-      throw codexAppServerEconomyOwnershipError(
-        "Persisted Codex economy ownership could not be revalidated before restore.",
+      throw codexAppServerHelperOwnershipError(
+        "Persisted Codex helper ownership could not be revalidated before restore.",
         {
           failed: currentLedger.failures,
           sessionId: record.sessionId,
@@ -9706,7 +9706,7 @@ function createCodexTerminalController({
       );
     }
     const currentDurable = currentLedger.records.find((candidate) => (
-      codexAppServerEconomyThreadKey(candidate) === key
+      codexAppServerHelperThreadKey(candidate) === key
     ));
     if (!currentDurable) {
       return { record: null, retiredThreadId: record.threadId };
@@ -9715,31 +9715,31 @@ function createCodexTerminalController({
       currentDurable.ownershipId !== record.ownershipId ||
       currentDurable.revision !== record.revision
     ) {
-      throw codexAppServerEconomyOwnershipError(
-        "Persisted Codex economy ownership changed before it could be restored.",
+      throw codexAppServerHelperOwnershipError(
+        "Persisted Codex helper ownership changed before it could be restored.",
         {
           sessionId: record.sessionId,
           threadId: record.threadId
         }
       );
     }
-    const attached = attachCodexAppServerEconomyThread({
+    const attached = attachCodexAppServerHelperThread({
       durable: currentDurable,
       ledger,
       provider
     });
     if (
-      attached.lifecycle !== CODEX_ECONOMY_THREAD_LIFECYCLES.READY ||
+      attached.lifecycle !== CODEX_HELPER_THREAD_LIFECYCLES.READY ||
       session.status === VIBE64_SESSION_STATUS.ARCHIVED ||
       sessionIsClosing(session)
     ) {
-      await retireCodexAppServerEconomyThread(attached);
+      await retireCodexAppServerHelperThread(attached);
       return { record: null, retiredThreadId: attached.threadId };
     }
     return { record: attached, retiredThreadId: "" };
   }
 
-  async function restoreCodexAppServerEconomyThreads({
+  async function restoreCodexAppServerHelperThreads({
     runtime = null,
     session = null,
     sessionId = ""
@@ -9747,13 +9747,13 @@ function createCodexTerminalController({
     const effectiveRuntime = runtime || await createRuntimeForSession();
     const projectRuntimeRoot = normalizeText(effectiveRuntime?.stateRoot);
     if (!projectRuntimeRoot) {
-      throw codexAppServerEconomyOwnershipError(
-        "Vibe64 project runtime state is unavailable for Codex economy ownership."
+      throw codexAppServerHelperOwnershipError(
+        "Vibe64 project runtime state is unavailable for Codex helper ownership."
       );
     }
-    const previous = codexAppServerEconomyThreadRestores.get(projectRuntimeRoot) || Promise.resolve();
+    const previous = codexAppServerHelperThreadRestores.get(projectRuntimeRoot) || Promise.resolve();
     const restore = previous.catch(() => null).then(async () => {
-      const ledger = codexAppServerEconomyThreadLedger(projectRuntimeRoot);
+      const ledger = codexAppServerHelperThreadLedger(projectRuntimeRoot);
       const listed = await ledger.readAll();
       const failed = listed.failures.map((failure) => ({
         ...failure,
@@ -9770,7 +9770,7 @@ function createCodexTerminalController({
           const currentSession = normalizeText(session?.sessionId || session?.id) === record.sessionId
             ? session
             : await effectiveRuntime.getSession(record.sessionId, { inspectSource: false });
-          const restored = await restoreCodexAppServerEconomyThread(record, {
+          const restored = await restoreCodexAppServerHelperThread(record, {
             ledger,
             runtime: effectiveRuntime,
             session: currentSession
@@ -9782,7 +9782,7 @@ function createCodexTerminalController({
             retiredBySession.set(record.sessionId, retired);
           }
         } catch (error) {
-          failed.push(codexAppServerEconomyFailure(record, error));
+          failed.push(codexAppServerHelperFailure(record, error));
         }
       }
       const sessionIds = new Set(records.map((record) => record.sessionId));
@@ -9799,7 +9799,7 @@ function createCodexTerminalController({
         const message = failures.length
           ? `${failures.length} helper cleanup record(s) still need attention: ${failures[0].error}`
           : `Cleaned up ${retired.length} stale helper ownership record(s).`;
-        await effectiveRuntime.store.writeBackgroundTaskEvent(id, "codex-economy-cleanup", {
+        await effectiveRuntime.store.writeBackgroundTaskEvent(id, "codex-helper-cleanup", {
           event: {
             kind: "cleanup-reconciled",
             message,
@@ -9826,21 +9826,21 @@ function createCodexTerminalController({
         retiredThreadIds: [...new Set(retiredThreadIds)]
       };
     });
-    codexAppServerEconomyThreadRestores.set(projectRuntimeRoot, restore);
+    codexAppServerHelperThreadRestores.set(projectRuntimeRoot, restore);
     try {
       return await restore;
     } finally {
-      if (codexAppServerEconomyThreadRestores.get(projectRuntimeRoot) === restore) {
-        codexAppServerEconomyThreadRestores.delete(projectRuntimeRoot);
+      if (codexAppServerHelperThreadRestores.get(projectRuntimeRoot) === restore) {
+        codexAppServerHelperThreadRestores.delete(projectRuntimeRoot);
       }
     }
   }
 
-  function assertCodexAppServerEconomyThreadsRestored(result = {}) {
+  function assertCodexAppServerHelperThreadsRestored(result = {}) {
     if (result.ok !== false) {
       return result;
     }
-    throw codexAppServerEconomyOwnershipError(
+    throw codexAppServerHelperOwnershipError(
       "Vibe64 could not reconcile persisted low-cost assistant thread ownership.",
       {
         failed: result.failed,
@@ -9850,22 +9850,22 @@ function createCodexTerminalController({
     );
   }
 
-  async function reconcileCodexAppServerEconomyRuntimeUnlocked({
+  async function reconcileCodexAppServerHelperRuntimeUnlocked({
     runtime = null,
     session = null
   } = {}) {
     const sessionId = normalizeText(session?.sessionId || session?.id);
     const projectRuntimeRoot = normalizeText(runtime?.stateRoot);
     if (!sessionId || !projectRuntimeRoot) {
-      throw codexAppServerEconomyOwnershipError(
-        "Vibe64 cannot inventory economy threads without project/session ownership."
+      throw codexAppServerHelperOwnershipError(
+        "Vibe64 cannot inventory helper threads without project/session ownership."
       );
     }
-    const ledger = codexAppServerEconomyThreadLedger(projectRuntimeRoot);
+    const ledger = codexAppServerHelperThreadLedger(projectRuntimeRoot);
     const listed = await ledger.readAll();
     if (listed.failures.length > 0) {
-      throw codexAppServerEconomyOwnershipError(
-        "Vibe64 cannot inventory economy threads while durable ownership is malformed.",
+      throw codexAppServerHelperOwnershipError(
+        "Vibe64 cannot inventory helper threads while durable ownership is malformed.",
         { failed: listed.failures, sessionId }
       );
     }
@@ -9877,30 +9877,30 @@ function createCodexTerminalController({
       const retiredThreadIds = [];
       for (const durable of ownedRecords) {
         if (
-          durable.lifecycle !== CODEX_ECONOMY_THREAD_LIFECYCLES.READY ||
+          durable.lifecycle !== CODEX_HELPER_THREAD_LIFECYCLES.READY ||
           inventoryThreadIds.has(durable.threadId)
         ) {
           continue;
         }
-        const record = codexAppServerEconomyThreads.get(
-          codexAppServerEconomyThreadKey(durable)
+        const record = codexAppServerHelperThreads.get(
+          codexAppServerHelperThreadKey(durable)
         );
         if (!record || record.ownershipId !== durable.ownershipId) {
-          throw codexAppServerEconomyOwnershipError(
-            "Vibe64 cannot retire missing economy ownership without its verified controller record.",
+          throw codexAppServerHelperOwnershipError(
+            "Vibe64 cannot retire missing helper ownership without its verified controller record.",
             { sessionId, threadId: durable.threadId }
           );
         }
         if (
-          record.lifecycle !== CODEX_ECONOMY_THREAD_LIFECYCLES.READY ||
+          record.lifecycle !== CODEX_HELPER_THREAD_LIFECYCLES.READY ||
           record.revision !== durable.revision
         ) {
           continue;
         }
         try {
-          await removeCodexAppServerEconomyThread(record);
+          await removeCodexAppServerHelperThread(record);
         } catch (error) {
-          if (error?.code === "vibe64_codex_economy_thread_unavailable") {
+          if (error?.code === "vibe64_codex_helper_thread_unavailable") {
             continue;
           }
           throw error;
@@ -9914,9 +9914,9 @@ function createCodexTerminalController({
     const workdir = terminalWorktreePath(session);
     const toolHome = await codexToolHomeResult(session);
     if (toolHome.ok === false) {
-      throw codexAppServerEconomyOwnershipError(toolHome.error, { sessionId });
+      throw codexAppServerHelperOwnershipError(toolHome.error, { sessionId });
     }
-    const providerOptions = await codexAppServerEconomyRuntimeOptionsForSession(session, {
+    const providerOptions = await codexAppServerHelperRuntimeOptionsForSession(session, {
       executionRoot,
       runtime,
       toolHomeSource: toolHome.toolHomeSource,
@@ -9940,16 +9940,16 @@ function createCodexTerminalController({
       };
     }
     provider ||= await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
-    if (typeof provider.listEconomyThreads !== "function") {
-      throw codexAppServerEconomyOwnershipError(
-        "The Codex economy provider cannot authoritatively inventory its threads.",
+    if (typeof provider.listHelperThreads !== "function") {
+      throw codexAppServerHelperOwnershipError(
+        "The Codex helper provider cannot authoritatively inventory its threads.",
         { sessionId }
       );
     }
-    const inventory = await provider.listEconomyThreads();
+    const inventory = await provider.listHelperThreads();
     if (!Array.isArray(inventory?.threadIds)) {
-      throw codexAppServerEconomyOwnershipError(
-        "The Codex economy provider returned an invalid thread inventory.",
+      throw codexAppServerHelperOwnershipError(
+        "The Codex helper provider returned an invalid thread inventory.",
         { sessionId }
       );
     }
@@ -9961,8 +9961,8 @@ function createCodexTerminalController({
     for (const threadId of unknownThreadIds) {
       const result = await provider.deleteThread(threadId);
       if (!isRecord(result)) {
-        throw codexAppServerEconomyOwnershipError(
-          "Codex did not confirm deletion of an unowned economy thread.",
+        throw codexAppServerHelperOwnershipError(
+          "Codex did not confirm deletion of an unowned helper thread.",
           { sessionId, threadId }
         );
       }
@@ -9981,16 +9981,16 @@ function createCodexTerminalController({
     };
   }
 
-  async function reconcileCodexAppServerEconomyRuntime({
+  async function reconcileCodexAppServerHelperRuntime({
     runtime = null,
     session = null
   } = {}) {
-    return withCodexAppServerEconomyProjectOperation(runtime?.stateRoot, () => (
-      reconcileCodexAppServerEconomyRuntimeUnlocked({ runtime, session })
+    return withCodexAppServerHelperProjectOperation(runtime?.stateRoot, () => (
+      reconcileCodexAppServerHelperRuntimeUnlocked({ runtime, session })
     ));
   }
 
-  function codexAppServerEconomyExecutionProfileMatches(recorded = {}, expected = {}) {
+  function codexAppServerHelperExecutionProfileMatches(recorded = {}, expected = {}) {
     const expectedKeys = Object.keys(expected).sort();
     if (
       expectedKeys.length === 2 &&
@@ -10006,9 +10006,9 @@ function createCodexTerminalController({
     );
   }
 
-  function codexAppServerEconomyThreadForOperation({
+  function codexAppServerHelperThreadForOperation({
     executionProfile = null,
-    lifecycles = [CODEX_ECONOMY_THREAD_LIFECYCLES.READY],
+    lifecycles = [CODEX_HELPER_THREAD_LIFECYCLES.READY],
     projectRuntimeRoot = "",
     provider = null,
     sessionId = "",
@@ -10016,8 +10016,8 @@ function createCodexTerminalController({
     turnId = "",
     workdir = ""
   } = {}) {
-    const record = codexAppServerEconomyThreads.get(
-      codexAppServerEconomyThreadKey({ projectRuntimeRoot, sessionId, threadId })
+    const record = codexAppServerHelperThreads.get(
+      codexAppServerHelperThreadKey({ projectRuntimeRoot, sessionId, threadId })
     );
     if (
       !record ||
@@ -10025,40 +10025,40 @@ function createCodexTerminalController({
       record.provider !== provider ||
       record.workdir !== normalizeText(workdir) ||
       (normalizeText(turnId) && record.turnId !== normalizeText(turnId)) ||
-      !codexAppServerEconomyExecutionProfileMatches(
+      !codexAppServerHelperExecutionProfileMatches(
         record.executionProfile,
         executionProfile || {}
       )
     ) {
-      throw codexAppServerEconomyThreadUnavailableError(threadId);
+      throw codexAppServerHelperThreadUnavailableError(threadId);
     }
     return record;
   }
 
-  function knownCodexAppServerEconomyThread(options = {}) {
-    return codexAppServerEconomyThreadForOperation(options);
+  function knownCodexAppServerHelperThread(options = {}) {
+    return codexAppServerHelperThreadForOperation(options);
   }
 
-  async function assertCodexAppServerEconomyAccountIdentity(provider, expectedSignature = "") {
+  async function assertCodexAppServerHelperAccountIdentity(provider, expectedSignature = "") {
     const expected = normalizeText(expectedSignature);
     if (!expected) {
       return;
     }
     if (!/^sha256:[a-f0-9]{64}$/u.test(expected) || typeof provider?.currentRuntimeInfo !== "function") {
-      throw codexAppServerEconomyOwnershipError(
+      throw codexAppServerHelperOwnershipError(
         "The requested low-cost assistant account identity is invalid. Refresh the task and retry."
       );
     }
     const actual = normalizeText((await provider.currentRuntimeInfo())?.accountIdentitySignature);
     if (actual !== expected) {
-      throw codexAppServerEconomyOwnershipError(
+      throw codexAppServerHelperOwnershipError(
         "The selected Codex account changed before low-cost assistant work could run. Retry the task with the current account."
       );
     }
   }
 
   async function codexAppServerEphemeralIsolationConfig(provider = null, workdir = "") {
-    assertCodexAppServerEconomyCompatibility(provider);
+    assertCodexAppServerHelperCompatibility(provider);
     if (
       typeof provider?.readConfig !== "function" ||
       typeof provider?.listHooks !== "function" ||
@@ -10180,7 +10180,7 @@ function createCodexTerminalController({
       agentSettings: isRecord(input.agentSettings) ? input.agentSettings : {},
       assistantScope: scope,
       actorMetadata: {},
-      economyRestore: null,
+      helperRestore: null,
       executionRoot: workdir,
       isolationConfig: await codexAppServerEphemeralIsolationConfig(provider, workdir),
       ok: true,
@@ -10219,23 +10219,23 @@ function createCodexTerminalController({
       workdir
     } = context;
     if (hasOwn(input, "executionProfile") && !isRecord(input.executionProfile)) {
-      throw codexAppServerEconomyOwnershipError(
+      throw codexAppServerHelperOwnershipError(
         "The low-cost assistant execution profile is invalid."
       );
     }
-    const economyTurn = isRecord(input.executionProfile);
-    const economyRestore = economyTurn
-      ? assertCodexAppServerEconomyThreadsRestored(
-          await restoreCodexAppServerEconomyThreads({ runtime, session })
+    const helperTurn = isRecord(input.executionProfile);
+    const helperRestore = helperTurn
+      ? assertCodexAppServerHelperThreadsRestored(
+          await restoreCodexAppServerHelperThreads({ runtime, session })
         )
       : null;
-    if (!economyTurn) {
+    if (!helperTurn) {
       const threadId = normalizeText(input.threadId || input.codexSessionId || input.conversationId);
       if (threadId) {
-        const ledger = codexAppServerEconomyThreadLedger(runtime.stateRoot);
+        const ledger = codexAppServerHelperThreadLedger(runtime.stateRoot);
         const { records } = await ledger.readAll();
         if (records.some((record) => record.threadId === threadId)) {
-          throw codexAppServerEconomyThreadUnavailableError(threadId);
+          throw codexAppServerHelperThreadUnavailableError(threadId);
         }
       }
     }
@@ -10243,7 +10243,7 @@ function createCodexTerminalController({
     if (restoredAdmissionError) {
       throw restoredAdmissionError;
     }
-    const activeProvider = economyTurn
+    const activeProvider = helperTurn
       ? null
       : await ensureCodexAppServerProviderForActiveTurn(session, {
           executionRoot,
@@ -10255,8 +10255,8 @@ function createCodexTerminalController({
     }
     const providerOptions = activeProvider
       ? null
-      : await (economyTurn
-          ? codexAppServerEconomyRuntimeOptionsForSession
+      : await (helperTurn
+          ? codexAppServerHelperRuntimeOptionsForSession
           : codexAppServerRuntimeOptionsForSession)(session, {
         runtime,
         executionRoot,
@@ -10282,7 +10282,7 @@ function createCodexTerminalController({
       actorMetadata: isRecord(input.executionProfile)
         ? {}
         : await currentConversationActorMetadata(input.vibe64User || null),
-      economyRestore,
+      helperRestore,
       provider,
       providerOptions: activeProvider?.providerOptions || providerOptions
     };
@@ -10334,12 +10334,12 @@ function createCodexTerminalController({
       toolHomeSource,
       workdir
     } = context;
-    if (!assistantScope) assertCodexAppServerEconomyThreadsRestored(
-      await restoreCodexAppServerEconomyThreads({ runtime, session })
+    if (!assistantScope) assertCodexAppServerHelperThreadsRestored(
+      await restoreCodexAppServerHelperThreads({ runtime, session })
     );
     const provider = context.provider || await ensureCodexAppServerDaemonForSession(
       sessionId,
-      await codexAppServerEconomyRuntimeOptionsForSession(session, {
+      await codexAppServerHelperRuntimeOptionsForSession(session, {
         runtime,
         executionRoot,
         toolHomeSource,
@@ -10373,7 +10373,7 @@ function createCodexTerminalController({
       limit: 100
     }, { signal }).then((result) => {
       if (codexAppServerProviderConnectionGeneration(provider) !== connectionGeneration) {
-        const error = new Error("Codex reconnected while resolving the economy model catalog.");
+        const error = new Error("Codex reconnected while resolving the helper model catalog.");
         error.code = "vibe64_codex_model_catalog_stale";
         throw error;
       }
@@ -10422,12 +10422,12 @@ function createCodexTerminalController({
       toolHomeSource,
       workdir
     } = context;
-    assertCodexAppServerEconomyThreadsRestored(
-      await restoreCodexAppServerEconomyThreads({ runtime, session })
+    assertCodexAppServerHelperThreadsRestored(
+      await restoreCodexAppServerHelperThreads({ runtime, session })
     );
     const provider = await codexAppServerProviderForSession(
       sessionId,
-      await codexAppServerEconomyRuntimeOptionsForSession(session, {
+      await codexAppServerHelperRuntimeOptionsForSession(session, {
         executionRoot,
         runtime,
         toolHomeSource,
@@ -10435,14 +10435,14 @@ function createCodexTerminalController({
       })
     );
     if (typeof provider.currentRuntimeInfo !== "function") {
-      throw codexAppServerEconomyOwnershipError(
+      throw codexAppServerHelperOwnershipError(
         "The Codex provider cannot identify the selected account."
       );
     }
     const runtimeInfo = await provider.currentRuntimeInfo();
     const accountIdentitySignature = normalizeText(runtimeInfo?.accountIdentitySignature);
     if (!/^sha256:[a-f0-9]{64}$/u.test(accountIdentitySignature)) {
-      throw codexAppServerEconomyOwnershipError(
+      throw codexAppServerHelperOwnershipError(
         "The Codex provider did not return a stable selected-account identity."
       );
     }
@@ -11391,7 +11391,7 @@ function createCodexTerminalController({
         ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
       if (executionProfile && input.ephemeral !== true) throw new Error("Scoped helpers require an ephemeral conversation.");
       const thread = executionProfile
-        ? (await startCodexAppServerEconomyThread({ provider: context.provider, executionProfile,
+        ? (await startCodexAppServerHelperThread({ provider: context.provider, executionProfile,
             developerInstructions: context.assistantScope.stableContext, ephemeral: true })).thread
         : await context.provider.startThread({ ...await codexAppServerConversationThreadSettings(context),
             ...(input.ephemeral === true ? { ephemeral: true } : {}) });
@@ -11499,7 +11499,7 @@ function createCodexTerminalController({
         };
       }
       if (!conversationState || input.persistent === true) {
-        if (executionProfile) await resumeCodexAppServerEconomyThread({ provider: context.provider,
+        if (executionProfile) await resumeCodexAppServerHelperThread({ provider: context.provider,
           threadId: conversationId, executionProfile, developerInstructions: context.assistantScope.stableContext });
         else await context.provider.resumeThread(conversationId, await codexAppServerConversationThreadSettings(context));
       }
@@ -11539,7 +11539,7 @@ function createCodexTerminalController({
       let delivery = null;
       try {
         await input.onPromptSending?.({ threadId: conversationId });
-        delivery = executionProfile ? await sendCodexAppServerEconomyTurn({
+        delivery = executionProfile ? await sendCodexAppServerHelperTurn({
           executionProfile, outputSchema: input.outputSchema, prompt, provider: context.provider, threadId: conversationId
         }) : await sendCodexAppServerPromptForSession({
           agentSettings: context.agentSettings,
@@ -11588,7 +11588,7 @@ function createCodexTerminalController({
             return;
           }
           current.status = result.status || "completed";
-          if (executionProfile) assertCodexAppServerEconomyOutputWithinLimit({ executionProfile, rawOutput: result.text });
+          if (executionProfile) assertCodexAppServerHelperOutputWithinLimit({ executionProfile, rawOutput: result.text });
           const response = codexAppServerConversationResponse(result.text);
           Object.assign(current, {
             error: "",
@@ -11852,7 +11852,7 @@ function createCodexTerminalController({
     codexAppServerConversations.delete(key);
   }
 
-  async function startAndRememberCodexAppServerEconomyThread({
+  async function startAndRememberCodexAppServerHelperThread({
     context = {},
     executionProfile = null,
     onRetired = null,
@@ -11861,24 +11861,24 @@ function createCodexTerminalController({
     sessionId = "",
     workdir = ""
   } = {}) {
-    return withCodexAppServerEconomyProjectOperation(projectRuntimeRoot, async () => {
+    return withCodexAppServerHelperProjectOperation(projectRuntimeRoot, async () => {
       const projectContextRoot = normalizeText(context.runtime?.projectContextRoot);
       let thread = null;
       try {
-        const started = await startCodexAppServerEconomyThread({
+        const started = await startCodexAppServerHelperThread({
           executionProfile,
           provider
         });
         thread = started.thread;
       } catch (error) {
-        const failedThreadId = normalizeText(error?.codexAppServerEconomyThreadId);
+        const failedThreadId = normalizeText(error?.codexAppServerHelperThreadId);
         if (
-          error?.codexAppServerEconomyThreadCleanupRequired === true &&
+          error?.codexAppServerHelperThreadCleanupRequired === true &&
           failedThreadId
         ) {
-          await rememberCodexAppServerEconomyThread({
+          await rememberCodexAppServerHelperThread({
             executionProfile,
-            lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED,
+            lifecycle: CODEX_HELPER_THREAD_LIFECYCLES.CLEANUP_REQUIRED,
             projectContextRoot,
             projectRuntimeRoot,
             provider,
@@ -11891,12 +11891,12 @@ function createCodexTerminalController({
       }
       const threadId = normalizeText(thread?.id || thread?.response?.thread?.id);
       if (!threadId) {
-        throw new Error("Codex app-server did not return an economy thread id.");
+        throw new Error("Codex app-server did not return a helper thread id.");
       }
       try {
-        const record = await rememberCodexAppServerEconomyThread({
+        const record = await rememberCodexAppServerHelperThread({
           executionProfile,
-          lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.STARTING_TURN,
+          lifecycle: CODEX_HELPER_THREAD_LIFECYCLES.STARTING_TURN,
           onRetired,
           projectContextRoot,
           projectRuntimeRoot,
@@ -11913,7 +11913,7 @@ function createCodexTerminalController({
             throw new Error("Codex app-server returned an invalid thread deletion result.");
           }
         } catch (cleanupError) {
-          const failure = codexAppServerEconomyOwnershipError(
+          const failure = codexAppServerHelperOwnershipError(
             "Vibe64 could not persist or retire a newly created low-cost assistant thread.",
             {
               cleanupError: errorMessage(cleanupError),
@@ -11983,23 +11983,23 @@ function createCodexTerminalController({
       } = context;
       const projectRuntimeRoot = normalizeText(runtime?.stateRoot);
       const executionProfile = isRecord(input.executionProfile) ? input.executionProfile : null;
-      const economyTurn = Boolean(executionProfile);
+      const helperTurn = Boolean(executionProfile);
       const onRetired = ({ threadId }) => emitDetachedEvent({ threadId, type: "thread-retired" });
-      if (economyTurn) {
-        await assertCodexAppServerEconomyAccountIdentity(
+      if (helperTurn) {
+        await assertCodexAppServerHelperAccountIdentity(
           provider,
           input.expectedAccountIdentitySignature
         );
       }
-      const threadSettings = economyTurn
+      const threadSettings = helperTurn
         ? null
         : await codexAppServerConversationThreadSettings(context);
       const requestedThreadId = normalizeText(input.threadId || input.codexSessionId);
       let thread = null;
-      let economyThreadRecord = null;
+      let helperThreadRecord = null;
       if (requestedThreadId) {
-        if (economyTurn) {
-          economyThreadRecord = knownCodexAppServerEconomyThread({
+        if (helperTurn) {
+          helperThreadRecord = knownCodexAppServerHelperThread({
             executionProfile,
             projectRuntimeRoot,
             provider,
@@ -12008,47 +12008,47 @@ function createCodexTerminalController({
             workdir
           });
           try {
-            economyThreadRecord = await updateCodexAppServerEconomyThread(
-              economyThreadRecord,
+            helperThreadRecord = await updateCodexAppServerHelperThread(
+              helperThreadRecord,
               {
-                lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.STARTING_TURN,
+                lifecycle: CODEX_HELPER_THREAD_LIFECYCLES.STARTING_TURN,
                 onRetired,
                 turnId: ""
               }
             );
-            const resumed = await resumeCodexAppServerEconomyThread({
+            const resumed = await resumeCodexAppServerHelperThread({
               executionProfile,
               provider,
               threadId: requestedThreadId
             });
             thread = resumed.thread;
           } catch (error) {
-            if (error?.codexAppServerEconomyThreadRetired === true) {
+            if (error?.codexAppServerHelperThreadRetired === true) {
               try {
-                await removeCodexAppServerEconomyThread(economyThreadRecord);
+                await removeCodexAppServerHelperThread(helperThreadRecord);
               } catch (ledgerError) {
-                throw codexAppServerEconomyThreadCleanupError(
-                  economyThreadRecord,
+                throw codexAppServerHelperThreadCleanupError(
+                  helperThreadRecord,
                   ledgerError
                 );
               }
-            } else if (error?.codexAppServerEconomyThreadCleanupRequired === true) {
+            } else if (error?.codexAppServerHelperThreadCleanupRequired === true) {
               try {
-                economyThreadRecord = await updateCodexAppServerEconomyThread(
-                  economyThreadRecord,
+                helperThreadRecord = await updateCodexAppServerHelperThread(
+                  helperThreadRecord,
                   {
-                    lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED
+                    lifecycle: CODEX_HELPER_THREAD_LIFECYCLES.CLEANUP_REQUIRED
                   }
                 );
               } catch (ledgerError) {
-                throw codexAppServerEconomyThreadCleanupError(
-                  economyThreadRecord,
+                throw codexAppServerHelperThreadCleanupError(
+                  helperThreadRecord,
                   ledgerError
                 );
               }
             } else {
               try {
-                await retireCodexAppServerEconomyThread(economyThreadRecord);
+                await retireCodexAppServerHelperThread(helperThreadRecord);
               } catch (cleanupError) {
                 cleanupError.cause = error;
                 throw cleanupError;
@@ -12061,8 +12061,8 @@ function createCodexTerminalController({
         }
       }
       if (!thread) {
-        if (economyTurn) {
-          const started = await startAndRememberCodexAppServerEconomyThread({
+        if (helperTurn) {
+          const started = await startAndRememberCodexAppServerHelperThread({
             context,
             executionProfile,
             onRetired,
@@ -12071,7 +12071,7 @@ function createCodexTerminalController({
             sessionId,
             workdir
           });
-          economyThreadRecord = started.record;
+          helperThreadRecord = started.record;
           thread = started.thread;
         } else {
           thread = await provider.startThread({
@@ -12084,11 +12084,11 @@ function createCodexTerminalController({
       if (!threadId) {
         throw new Error("Codex app-server did not return a detached chat thread id.");
       }
-      const discardEconomyThread = async () => {
-        if (!economyTurn || !economyThreadRecord) {
+      const discardHelperThread = async () => {
+        if (!helperTurn || !helperThreadRecord) {
           return;
         }
-        await retireCodexAppServerEconomyThread(economyThreadRecord);
+        await retireCodexAppServerHelperThread(helperThreadRecord);
       };
       emitDetachedEvent({
         threadId,
@@ -12105,7 +12105,7 @@ function createCodexTerminalController({
             type: "notification"
           });
         },
-        timeoutMs: economyTurn
+        timeoutMs: helperTurn
           ? Math.min(
               requestedTimeoutMs > 0 ? requestedTimeoutMs : profileTimeoutMs,
               profileTimeoutMs
@@ -12128,7 +12128,7 @@ function createCodexTerminalController({
           () => fallbackError,
           (watcherError) => watcherError
         );
-        await discardEconomyThread();
+        await discardHelperThread();
         throw codexDetachedChatTurnError(error, {
           agentSettings,
           executionProfile,
@@ -12138,12 +12138,12 @@ function createCodexTerminalController({
       let delivery = null;
       let turnId = "";
       let status = "";
-      let economyTurnStart = null;
+      let helperTurnStart = null;
       try {
-        if (economyTurn) {
-          const economyThreadKey = codexAppServerEconomyThreadKey(economyThreadRecord);
-          economyTurnStart = (async () => {
-            const currentDelivery = await sendCodexAppServerEconomyTurn({
+        if (helperTurn) {
+          const helperThreadKey = codexAppServerHelperThreadKey(helperThreadRecord);
+          helperTurnStart = (async () => {
+            const currentDelivery = await sendCodexAppServerHelperTurn({
               executionProfile,
               outputSchema: input.outputSchema,
               prompt,
@@ -12154,10 +12154,10 @@ function createCodexTerminalController({
             const currentStatus = normalizeText(
               currentDelivery.turn?.status || currentDelivery.turn?.raw?.status
             );
-            economyThreadRecord = await updateCodexAppServerEconomyThread(
-              economyThreadRecord,
+            helperThreadRecord = await updateCodexAppServerHelperThread(
+              helperThreadRecord,
               {
-                lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.ACTIVE,
+                lifecycle: CODEX_HELPER_THREAD_LIFECYCLES.ACTIVE,
                 turnId: currentTurnId
               }
             );
@@ -12167,8 +12167,8 @@ function createCodexTerminalController({
               turnId: currentTurnId
             };
           })();
-          codexAppServerEconomyTurnStarts.set(economyThreadKey, economyTurnStart);
-          ({ delivery, status, turnId } = await economyTurnStart);
+          codexAppServerHelperTurnStarts.set(helperThreadKey, helperTurnStart);
+          ({ delivery, status, turnId } = await helperTurnStart);
         } else {
           delivery = await sendCodexAppServerPromptForSession({
             agentSettings,
@@ -12183,10 +12183,10 @@ function createCodexTerminalController({
       } catch (error) {
         await throwWatcherFailure(error);
       } finally {
-        if (economyTurnStart) {
-          const economyThreadKey = codexAppServerEconomyThreadKey(economyThreadRecord);
-          if (codexAppServerEconomyTurnStarts.get(economyThreadKey) === economyTurnStart) {
-            codexAppServerEconomyTurnStarts.delete(economyThreadKey);
+        if (helperTurnStart) {
+          const helperThreadKey = codexAppServerHelperThreadKey(helperThreadRecord);
+          if (codexAppServerHelperTurnStarts.get(helperThreadKey) === helperTurnStart) {
+            codexAppServerHelperTurnStarts.delete(helperThreadKey);
           }
         }
       }
@@ -12215,44 +12215,44 @@ function createCodexTerminalController({
       try {
         result = await waitForResult;
       } catch (error) {
-        await discardEconomyThread();
+        await discardHelperThread();
         throw codexDetachedChatTurnError(error, {
           agentSettings,
           executionProfile,
           status
         });
       }
-      if (economyTurn) {
+      if (helperTurn) {
         try {
-          await assertCodexAppServerEconomyAccountIdentity(
+          await assertCodexAppServerHelperAccountIdentity(
             provider,
             input.expectedAccountIdentitySignature
           );
         } catch (error) {
-          await discardEconomyThread();
+          await discardHelperThread();
           throw error;
         }
       }
       try {
-        if (economyTurn) {
-          assertCodexAppServerEconomyOutputWithinLimit({
+        if (helperTurn) {
+          assertCodexAppServerHelperOutputWithinLimit({
             executionProfile,
             rawOutput: result.text
           });
         }
       } catch (error) {
-        await discardEconomyThread();
+        await discardHelperThread();
         throw error;
       }
-      if (economyTurn) {
+      if (helperTurn) {
         try {
-          economyThreadRecord = await updateCodexAppServerEconomyThread(economyThreadRecord, {
-            lifecycle: CODEX_ECONOMY_THREAD_LIFECYCLES.READY,
+          helperThreadRecord = await updateCodexAppServerHelperThread(helperThreadRecord, {
+            lifecycle: CODEX_HELPER_THREAD_LIFECYCLES.READY,
             turnId: ""
           });
         } catch (error) {
           try {
-            await retireCodexAppServerEconomyThread(economyThreadRecord);
+            await retireCodexAppServerHelperThread(helperThreadRecord);
           } catch (cleanupError) {
             cleanupError.cause = error;
             throw cleanupError;
@@ -12272,7 +12272,7 @@ function createCodexTerminalController({
         text: result.text,
         threadId,
         turnId: result.turnId || turnId,
-        ...(economyTurn
+        ...(helperTurn
           ? {
               inputCharacters: prompt.length,
               outputCharacters: result.text.length,
@@ -12325,7 +12325,7 @@ function createCodexTerminalController({
         if (codexAppServerAdmissionError(sessionId)) {
           return codexAppServerFrozenThreadDeleteResponse(threadId);
         }
-        if (context.economyRestore?.retiredThreadIds?.includes(threadId)) {
+        if (context.helperRestore?.retiredThreadIds?.includes(threadId)) {
           return {
             deleted: true,
             ok: true,
@@ -12333,21 +12333,21 @@ function createCodexTerminalController({
             threadId
           };
         }
-        const economyThread = codexAppServerEconomyThreads.get(
-          codexAppServerEconomyThreadKey({
+        const helperThread = codexAppServerHelperThreads.get(
+          codexAppServerHelperThreadKey({
             projectRuntimeRoot: context.runtime?.stateRoot,
             sessionId,
             threadId
           })
         );
-        if (economyThread) {
+        if (helperThread) {
           if (!isRecord(input.executionProfile)) {
-            throw codexAppServerEconomyThreadUnavailableError(threadId);
+            throw codexAppServerHelperThreadUnavailableError(threadId);
           }
-          return retireCodexAppServerEconomyThread(
-            codexAppServerEconomyThreadForOperation({
+          return retireCodexAppServerHelperThread(
+            codexAppServerHelperThreadForOperation({
               executionProfile: input.executionProfile,
-              lifecycles: Object.values(CODEX_ECONOMY_THREAD_LIFECYCLES),
+              lifecycles: Object.values(CODEX_HELPER_THREAD_LIFECYCLES),
               projectRuntimeRoot: context.runtime?.stateRoot,
               provider: context.provider,
               sessionId,
@@ -12357,7 +12357,7 @@ function createCodexTerminalController({
           );
         }
         if (isRecord(input.executionProfile)) {
-          throw codexAppServerEconomyThreadUnavailableError(threadId);
+          throw codexAppServerHelperThreadUnavailableError(threadId);
         }
         const provider = context.provider;
         if (typeof provider.deleteThread !== "function") {
@@ -12441,9 +12441,9 @@ function createCodexTerminalController({
           return codexAppServerFrozenTurnInterruptResponse({ threadId, turnId });
         }
         if (isRecord(input.executionProfile)) {
-          codexAppServerEconomyThreadForOperation({
+          codexAppServerHelperThreadForOperation({
             executionProfile: input.executionProfile,
-            lifecycles: [CODEX_ECONOMY_THREAD_LIFECYCLES.ACTIVE],
+            lifecycles: [CODEX_HELPER_THREAD_LIFECYCLES.ACTIVE],
             projectRuntimeRoot: context.runtime?.stateRoot,
             provider: context.provider,
             sessionId,
@@ -13411,11 +13411,11 @@ function createCodexTerminalController({
         try {
           runtime = renewalCleanup?.runtime || await createRuntimeForSession();
           session = renewalCleanup?.session || await runtime.getSession(normalizedSessionId);
-          assertCodexAppServerEconomyThreadsRestored(
-            await restoreCodexAppServerEconomyThreads({ runtime, session })
+          assertCodexAppServerHelperThreadsRestored(
+            await restoreCodexAppServerHelperThreads({ runtime, session })
           );
-          assertCodexAppServerEconomyThreadsRetired(
-            await retireCodexAppServerEconomyThreads({
+          assertCodexAppServerHelperThreadsRetired(
+            await retireCodexAppServerHelperThreads({
               projectRuntimeRoot: runtime.stateRoot,
               sessionId: normalizedSessionId
             })
@@ -13689,7 +13689,7 @@ function createCodexTerminalController({
       const sessionKey = codexTerminalNamespace(sessionId);
       for (const [key, provider] of codexAppServerProviders) {
         if (codexAppServerProviderOwners.get(key)?.sessionKey === sessionKey &&
-            !provider.isEconomyProvider() && provider.isAvailable()) {
+            !provider.isHelperProvider() && provider.isAvailable()) {
           const result = await provider.readGoal(threadId);
           return { status: "available", threadId, goal: result.goal || null };
         }
@@ -13797,7 +13797,7 @@ function createCodexTerminalController({
       const sessionKey = codexTerminalNamespace(sessionId);
       for (const [key, provider] of codexAppServerProviders) {
         if (codexAppServerProviderOwners.get(key)?.sessionKey === sessionKey &&
-            !provider.isEconomyProvider() && provider.isAvailable()) {
+            !provider.isHelperProvider() && provider.isAvailable()) {
           return provider.readPlanUsage();
         }
       }
@@ -14008,8 +14008,8 @@ function createCodexTerminalController({
           });
         }
         const runtime = await createRuntimeForSession();
-        assertCodexAppServerEconomyThreadsRestored(
-          await restoreCodexAppServerEconomyThreads({ runtime })
+        assertCodexAppServerHelperThreadsRestored(
+          await restoreCodexAppServerHelperThreads({ runtime })
         );
         return invalidateCodexAppServerRuntimes({
           ...input,
@@ -14025,8 +14025,8 @@ function createCodexTerminalController({
           return codexAppServerControlDisabledResult();
         }
         const runtime = await createRuntimeForSession();
-        assertCodexAppServerEconomyThreadsRestored(
-          await restoreCodexAppServerEconomyThreads({ runtime })
+        assertCodexAppServerHelperThreadsRestored(
+          await restoreCodexAppServerHelperThreads({ runtime })
         );
         const sessionNamespacePrefix = codexTerminalNamespace("");
         for (const sessionKey of [...codexAppServerConversations.keys()]) {

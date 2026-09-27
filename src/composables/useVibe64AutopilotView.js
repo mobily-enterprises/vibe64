@@ -89,8 +89,8 @@ const EXECUTION_SAFETY_ERROR_CODES = new Set([
   "vibe64_codex_app_server_cleanup_required",
   "vibe64_codex_app_server_metadata_failed",
   "vibe64_codex_app_server_process_identity_unverified",
-  "vibe64_codex_economy_runtime_cleanup_required",
-  "vibe64_codex_economy_runtime_metadata_failed",
+  "vibe64_codex_helper_runtime_cleanup_required",
+  "vibe64_codex_helper_runtime_metadata_failed",
   "vibe64_execution_cleanup_required",
   "vibe64_execution_drain_failed",
   "vibe64_execution_ownership_unknown",
@@ -1771,6 +1771,8 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   const chatTurns = computed(() => {
+    // Hydrate history before appending a restored unsent request to its tail.
+    if (props.conversationLog?.initializing) return [];
     const turns = messageDelivery.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []);
     const request = routingRequest.value;
     if (!request || !["routing", "sending", "uncertain", "failed"].includes(request.status)) return turns;

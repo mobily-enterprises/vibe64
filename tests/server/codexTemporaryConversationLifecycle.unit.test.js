@@ -41,9 +41,9 @@ import {
   createVibe64SessionStore
 } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import {
-  CODEX_ECONOMY_THREAD_LIFECYCLES,
-  createCodexEconomyThreadLedger
-} from "../../packages/vibe64-terminals/src/server/codexEconomyThreadLedger.js";
+  CODEX_HELPER_THREAD_LIFECYCLES,
+  createCodexHelperThreadLedger
+} from "../../packages/vibe64-terminals/src/server/codexHelperThreadLedger.js";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
@@ -141,11 +141,11 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
         executionMode: providerOptions.executionMode || "interactive"
       };
     },
-    async currentEconomyExecutionContext() {
+    async currentHelperExecutionContext() {
       return {
         accountIdentitySignature: captures.runtimeInfo.accountIdentitySignature,
-        cwd: providerOptions.economyWorkdir,
-        executionMode: "economy"
+        cwd: providerOptions.helperWorkdir,
+        executionMode: "helper"
       };
     },
     async ensureAvailable() {
@@ -203,18 +203,18 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
         nextCursor: null
       };
     },
-    async listEconomyThreads() {
-      calls.push(["economyThreads"]);
-      captures.economyThreadInventories += 1;
-      if (captures.failEconomyThreadInventories > 0) {
-        captures.failEconomyThreadInventories -= 1;
-        throw new Error("economy inventory temporarily unavailable");
+    async listHelperThreads() {
+      calls.push(["helperThreads"]);
+      captures.helperThreadInventories += 1;
+      if (captures.failHelperThreadInventories > 0) {
+        captures.failHelperThreadInventories -= 1;
+        throw new Error("helper inventory temporarily unavailable");
       }
-      if (captures.economyThreadInventoryWait) {
-        await captures.economyThreadInventoryWait;
+      if (captures.helperThreadInventoryWait) {
+        await captures.helperThreadInventoryWait;
       }
       return {
-        threadIds: [...captures.economyThreadIds]
+        threadIds: [...captures.helperThreadIds]
       };
     },
     async deleteThread(threadId) {
@@ -419,9 +419,9 @@ test("repeated chat model discovery uses one short-lived runtime per auth genera
 });
 
 for (const outcome of ["cancelled", "provider failure", "account switch", "cleanup retry", "cleanup failure"]) {
-  test(`detached economy work reports automatic thread retirement after ${outcome}`, async () => {
+  test(`detached helper work reports automatic thread retirement after ${outcome}`, async () => {
     await withConversationController(async ({ captures, controller, projectRuntimeRoot, session, subscribers }) => {
-      const profile = sourceExplanationEconomyProfile({ workloadId: "prompt_hint" });
+      const profile = sourceExplanationHelperProfile({ workloadId: "prompt_hint" });
       const retired = [];
       const pending = controller.streamDetachedChatTurn(session.sessionId, {
         executionProfile: profile, expectedAccountIdentitySignature: TEST_ACCOUNT_IDENTITY_SIGNATURE,
@@ -433,7 +433,7 @@ for (const outcome of ["cancelled", "provider failure", "account switch", "clean
         waitForCapturedTurns(captures, 1).then(() => ({ started: true }))
       ]);
       assert.equal(startup.started, true, JSON.stringify(startup.result));
-      await waitForEconomyLedgerLifecycle(projectRuntimeRoot, CODEX_ECONOMY_THREAD_LIFECYCLES.ACTIVE);
+      await waitForHelperLedgerLifecycle(projectRuntimeRoot, CODEX_HELPER_THREAD_LIFECYCLES.ACTIVE);
       if (outcome === "cleanup failure") captures.failDeletes = 100;
       if (outcome === "cleanup retry") {
         captures.failDeletes = 1;
@@ -460,9 +460,9 @@ for (const outcome of ["cancelled", "provider failure", "account switch", "clean
       assert.equal(result.ok, false);
       if (outcome === "cleanup failure") {
         assert.deepEqual(retired, [], "failed cleanup must retain ownership");
-        const { records } = await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll();
+        const { records } = await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll();
         assert.equal(records.length, 1);
-        assert.equal(records[0].lifecycle, CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED);
+        assert.equal(records[0].lifecycle, CODEX_HELPER_THREAD_LIFECYCLES.CLEANUP_REQUIRED);
         captures.failDeletes = 0;
         assert.equal((await controller.deleteDetachedChatThread(session.sessionId, {
           threadId: records[0].threadId, executionProfile: profile
@@ -473,12 +473,12 @@ for (const outcome of ["cancelled", "provider failure", "account switch", "clean
       assert.deepEqual(captures.deletes, outcome === "cleanup retry"
         ? ["conversation-1", "conversation-1"]
         : ["conversation-1"]);
-      assert.deepEqual((await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll()).records, []);
+      assert.deepEqual((await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll()).records, []);
     });
   });
 }
 
-test("economy model discovery uses one live provider catalog per connection generation", async () => {
+test("helper model discovery uses one live provider catalog per connection generation", async () => {
   await withConversationController(async ({ calls, controller }) => {
     const first = await controller.executionProfileModelCatalog("session-1");
     const second = await controller.executionProfileModelCatalog("session-1");
@@ -503,7 +503,7 @@ test("economy model discovery uses one live provider catalog per connection gene
   });
 });
 
-test("economy model discovery does not cache failures and invalidates on reconnect", async () => {
+test("helper model discovery does not cache failures and invalidates on reconnect", async () => {
   await withConversationController(async ({ calls, captures, controller }) => {
     captures.failModelLists = 1;
     await assert.rejects(
@@ -531,11 +531,11 @@ test("Codex provider description uses the session's shared runtime and stable ac
     assert.equal(captures.providerOptions.length, 1);
     assert.equal(captures.providerOptions[0].executionMode, "");
     assert.equal(captures.providerOptions[0].runtimeInstanceId, "");
-    assert.match(captures.providerOptions[0].economyWorkdir, /economy-workspaces/u);
+    assert.match(captures.providerOptions[0].helperWorkdir, /helper-workspaces/u);
   });
 });
 
-test("economy work consumes the caller runtime and session without an implicit project runtime lookup", async () => {
+test("helper work consumes the caller runtime and session without an implicit project runtime lookup", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -562,7 +562,7 @@ test("economy work consumes the caller runtime and session without an implicit p
     };
     projectService.createRuntime = () => {
       implicitRuntimeLookups += 1;
-      throw new Error("Explicit economy context must not create another project runtime.");
+      throw new Error("Explicit helper context must not create another project runtime.");
     };
 
     try {
@@ -575,7 +575,7 @@ test("economy work consumes the caller runtime and session without an implicit p
         session: callerSession
       });
       const pending = controller.runDetachedChatTurn("session-1", {
-        executionProfile: sourceExplanationEconomyProfile(),
+        executionProfile: sourceExplanationHelperProfile(),
         outputSchema: sourceExplanationOutputSchema(),
         prompt: "Use the session selected by this browser request."
       }, {
@@ -593,7 +593,7 @@ test("economy work consumes the caller runtime and session without an implicit p
       assert.equal(result.ok, true, JSON.stringify(result));
       assert.equal(implicitRuntimeLookups, 0);
       assert.equal(explicitRuntimeSessionLookups, 0);
-      const ownership = await createCodexEconomyThreadLedger({
+      const ownership = await createCodexHelperThreadLedger({
         projectRuntimeRoot
       }).readAll();
       assert.equal(ownership.records.length, 1);
@@ -627,7 +627,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
       })
     );
     captures.runtimeInfo.accountIdentitySignature = await currentCodexAccountIdentitySignature({
-      executionMode: "economy",
+      executionMode: "helper",
       toolHomeSource: codexToolHomeSource
     });
     const terminalProjectService = {
@@ -669,7 +669,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
     });
     await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
     await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ codex: {
-      intern: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
+      helper: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
     } }, 0);
     let firstResolvedProfile = null;
     let resolvedProfile = null;
@@ -780,7 +780,7 @@ for (const startFails of [false, true]) {
         })
       );
       captures.runtimeInfo.accountIdentitySignature = await currentCodexAccountIdentitySignature({
-        executionMode: "economy",
+        executionMode: "helper",
         toolHomeSource: codexToolHomeSource
       });
       captures.interruptCompletesTurns = true;
@@ -839,7 +839,7 @@ for (const startFails of [false, true]) {
       });
       await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
       await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ codex: {
-        intern: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
+        helper: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
       } }, 0);
       const sourceEditor = createSourceEditorService({
         projectService: terminalProjectService,
@@ -1358,8 +1358,8 @@ async function waitForCapturedTurns(captures, expectedCount) {
   assert.fail(`Expected ${expectedCount} captured Codex turns; found ${captures.turns.length}.`);
 }
 
-async function waitForEconomyLedgerLifecycle(projectRuntimeRoot, lifecycle) {
-  const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+async function waitForHelperLedgerLifecycle(projectRuntimeRoot, lifecycle) {
+  const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
   const startedAt = Date.now();
   while (Date.now() - startedAt < FIXTURE_WAIT_TIMEOUT_MS) {
     const listed = await ledger.readAll();
@@ -1370,11 +1370,11 @@ async function waitForEconomyLedgerLifecycle(projectRuntimeRoot, lifecycle) {
   }
   const listed = await ledger.readAll();
   assert.fail(
-    `Expected one ${lifecycle} economy record; found ${JSON.stringify(listed)}.`
+    `Expected one ${lifecycle} helper record; found ${JSON.stringify(listed)}.`
   );
 }
 
-function sourceExplanationEconomyProfile(overrides = {}) {
+function sourceExplanationHelperProfile(overrides = {}) {
   const {
     limits = {},
     ...profileOverrides
@@ -1393,14 +1393,14 @@ function sourceExplanationEconomyProfile(overrides = {}) {
       repositoryWrite: false,
       tools: "none"
     },
-    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
     providerId: "codex",
     request: {
       allowProviderModelFallback: false,
       reasoning: true,
       summary: false
     },
-    revision: "codex-economy-luna-low-v2",
+    revision: "codex-helper-luna-low-v2",
     thinking: "low",
     workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION,
     ...profileOverrides
@@ -1606,7 +1606,7 @@ test("routing refuses to relocate an existing Codex conversation into another pr
 
 async function withConversationController(operation, {
   promptHints = null,
-  codexEconomyThreadLedgerFactory = null
+  codexHelperThreadLedgerFactory = null
 } = {}) {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-temporary-conversation-"));
   const previousRuntimeNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
@@ -1618,13 +1618,13 @@ async function withConversationController(operation, {
     connectionGeneration: 1,
     deletes: [],
     environmentVersion: "one",
-    economyThreadIds: [],
-    economyThreadInventories: 0,
-    economyThreadInventoryWait: null,
+    helperThreadIds: [],
+    helperThreadInventories: 0,
+    helperThreadInventoryWait: null,
     ensureAvailableWait: null,
     failModelLists: 0,
     failDeletes: 0,
-    failEconomyThreadInventories: 0,
+    failHelperThreadInventories: 0,
     failInterrupts: 0,
     failThreadStarts: 0,
     hangModelLists: false,
@@ -1735,7 +1735,7 @@ async function withConversationController(operation, {
       captures.onProviderFactory?.();
       return createProvider(calls, subscribers, captures, providerOptions);
     },
-    ...(codexEconomyThreadLedgerFactory ? { codexEconomyThreadLedgerFactory } : {}),
+    ...(codexHelperThreadLedgerFactory ? { codexHelperThreadLedgerFactory } : {}),
     env: {
       VIBE64_AGENT_RUNTIME_DIR: projectService.agentRuntimeRoot,
       VIBE64_RUNTIME_NAMESPACE: "test",
@@ -1779,11 +1779,11 @@ function restartedCaptures(source = {}, overrides = {}) {
     closes: 0,
     configReads: [],
     deletes: [],
-    economyThreadInventories: 0,
-    economyThreadInventoryWait: null,
+    helperThreadInventories: 0,
+    helperThreadInventoryWait: null,
     ensureAvailableWait: null,
     failDeletes: 0,
-    failEconomyThreadInventories: 0,
+    failHelperThreadInventories: 0,
     failInterrupts: 0,
     hookLists: [],
     interrupts: [],
@@ -1808,7 +1808,7 @@ function restartedCaptures(source = {}, overrides = {}) {
 function createRestartedController({
   calls = [],
   captures,
-  codexEconomyThreadLedgerFactory,
+  codexHelperThreadLedgerFactory,
   projectService,
   subscribers = new Set()
 } = {}) {
@@ -1825,7 +1825,7 @@ function createRestartedController({
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
-    ...(codexEconomyThreadLedgerFactory ? { codexEconomyThreadLedgerFactory } : {}),
+    ...(codexHelperThreadLedgerFactory ? { codexHelperThreadLedgerFactory } : {}),
     projectService
   });
 }
@@ -1971,7 +1971,7 @@ async function withAgentMessageController(operation, {
             supportedReasoningEfforts: [{ reasoningEffort: "high", description: "High" }]
           }], nextCursor: null };
         },
-        isEconomyProvider() { return false; },
+        isHelperProvider() { return false; },
         async currentRuntimeInfo() {
           return { runtimeDir: path.join(temporaryRoot, "provider-runtime") };
         },
@@ -1980,7 +1980,7 @@ async function withAgentMessageController(operation, {
             data: [provider.threadId]
           };
         },
-        async listEconomyThreads() {
+        async listHelperThreads() {
           return {
             threadIds: []
           };
@@ -2808,24 +2808,24 @@ test("session renewal requires manual fallback when the exact old thread has no 
   });
 });
 
-test("session renewal provider primitives reject every economy execution profile before provider work", async () => {
+test("session renewal provider primitives reject every helper execution profile before provider work", async () => {
   await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
     const source = RENEWAL_SOURCE;
     const handover = renewalHandoverText();
     const handoverHash = sessionRenewalHandoverHash(handover);
     const generation = await controller.generateSessionRenewalHandover(sessionId, {
       executionProfile: null,
-      operationKey: "renewal:economy-generate",
+      operationKey: "renewal:helper-generate",
       source
     });
     const seed = await controller.seedSessionRenewalHandover(sessionId, {
       executionProfile: {
-        profileId: "economy"
+        profileId: "helper"
       },
       handover,
       handoverHash,
       oldThreadId: "22222222-2222-4222-8222-222222222222",
-      operationKey: "renewal:economy-seed",
+      operationKey: "renewal:helper-seed",
       source
     }, {
       runtime,
@@ -5241,7 +5241,7 @@ test("temporary conversations start turns without resuming a nonexistent rollout
 test("temporary Repair conversations do not depend on failed helper cleanup after a restart", async () => {
   await withConversationController(async ({ captures, controller, projectRuntimeRoot, projectService,
     simulateControllerCrash, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const pending = controller.runDetachedChatTurn("session-1", {
       executionProfile, outputSchema: sourceExplanationOutputSchema(), prompt: "Disposable helper."
     });
@@ -5252,7 +5252,7 @@ test("temporary Repair conversations do not depend on failed helper cleanup afte
     assert.equal((await controller.deleteDetachedChatThread("session-1", {
       executionProfile, threadId: helper.threadId
     })).ok, false);
-    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
     const before = (await ledger.readAll()).records;
     simulateControllerCrash();
     const calls = [];
@@ -5452,7 +5452,7 @@ test("scoped Codex helpers enforce the selected bounded profile without touching
       stableContext: "Classify only the supplied request." };
     const options = { assistantScope: scope };
     const before = structuredClone(session);
-    const executionProfile = sourceExplanationEconomyProfile({ workloadId: "request_routing",
+    const executionProfile = sourceExplanationHelperProfile({ workloadId: "request_routing",
       limits: { maxInputCharacters: 24, maxOutputCharacters: 128, timeoutMs: 1000 } });
     const catalog = await controller.executionProfileModelCatalog(scope.id, options);
     assert.equal(catalog.data[0].model, executionProfile.model);
@@ -5497,7 +5497,7 @@ test("scoped Codex helpers reject oversized output and keep their original deadl
     const scope = { id: "bounded_job", environment: {}, workdir: temporaryRoot, runtimeRoot: path.join(temporaryRoot, "helper-runtime"),
       stableContext: "Use supplied text only." };
     const options = { assistantScope: scope };
-    const executionProfile = sourceExplanationEconomyProfile({ limits: { maxOutputCharacters: 128, timeoutMs: oversized ? 1000 : 25 } });
+    const executionProfile = sourceExplanationHelperProfile({ limits: { maxOutputCharacters: 128, timeoutMs: oversized ? 1000 : 25 } });
     const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
     assert.equal(created.ok, true, JSON.stringify(created));
     const input = { ephemeral: true, conversationId: created.conversationId, executionProfile, message: "Answer",
@@ -5523,7 +5523,7 @@ test("scoped Codex helper cleanup after a restart deletes its captured native th
     const scope = { id: "restart_job", environment: {}, workdir: temporaryRoot, runtimeRoot: path.join(temporaryRoot, "helper-runtime"),
       stableContext: "Use supplied text only." };
     const options = { assistantScope: scope };
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
     assert.equal(created.ok, true, JSON.stringify(created));
     const after = restartedCaptures(captures);
@@ -5951,7 +5951,7 @@ test("helper discovery, overlapping turns and cleanup inspect the environment wi
     };
     await controller.executionProfileModelCatalog(session.sessionId);
     const input = {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Explain this bounded excerpt."
     };
@@ -5982,7 +5982,7 @@ test("helper discovery, overlapping turns and cleanup inspect the environment wi
   });
 });
 
-test("economy detached turns apply the resolved Luna-low profile and strict tool isolation", async () => {
+test("helper detached turns apply the resolved Luna-low profile and strict tool isolation", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -5991,7 +5991,7 @@ test("economy detached turns apply the resolved Luna-low profile and strict tool
     session,
     subscribers
   }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const outputSchema = sourceExplanationOutputSchema();
     const prompt = "Explain only this bounded source excerpt.";
     const pending = controller.runDetachedChatTurn("session-1", {
@@ -6011,7 +6011,7 @@ test("economy detached turns apply the resolved Luna-low profile and strict tool
     assert.equal(threadSettings.approvalPolicy, "never");
     assert.equal(threadSettings.model, "gpt-5.6-luna");
     assert.equal(threadSettings.sandbox, "read-only");
-    assert.equal(threadSettings.threadSource, "vibe64-economy");
+    assert.equal(threadSettings.threadSource, "vibe64-helper");
     assert.deepEqual(threadSettings.dynamicTools, []);
     assert.deepEqual(threadSettings.environments, []);
     assert.deepEqual(threadSettings.runtimeWorkspaceRoots, []);
@@ -6080,7 +6080,7 @@ test("economy detached turns apply the resolved Luna-low profile and strict tool
       reasoningOutputTokens: 5,
       totalTokens: 57
     });
-    const ownership = await createCodexEconomyThreadLedger({
+    const ownership = await createCodexHelperThreadLedger({
       projectRuntimeRoot
     }).readAll();
     assert.equal(Object.hasOwn(session, "projectContextRoot"), false);
@@ -6089,9 +6089,9 @@ test("economy detached turns apply the resolved Luna-low profile and strict tool
   });
 });
 
-test("economy follow-ups resume only a controller-owned thread with the same profile", async () => {
+test("helper follow-ups resume only a controller-owned thread with the same profile", async () => {
   await withConversationController(async ({ captures, controller, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const outputSchema = sourceExplanationOutputSchema();
     const firstPending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
@@ -6144,31 +6144,31 @@ test("economy follow-ups resume only a controller-owned thread with the same pro
       threadId: "not-controller-owned"
     });
     assert.equal(arbitrary.ok, false);
-    assert.equal(arbitrary.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(arbitrary.code, "vibe64_codex_helper_thread_unavailable");
     assert.equal(captures.resumes.length, 1);
 
     const drifted = await controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile({
-        revision: "codex-economy-luna-low-v3"
+      executionProfile: sourceExplanationHelperProfile({
+        revision: "codex-helper-luna-low-v3"
       }),
       outputSchema,
       prompt: "Try profile drift.",
       threadId: first.threadId
     });
     assert.equal(drifted.ok, false);
-    assert.equal(drifted.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(drifted.code, "vibe64_codex_helper_thread_unavailable");
     assert.equal(captures.resumes.length, 1);
   });
 });
 
-test("concurrent economy follow-ups admit exactly one turn for an owned thread", async () => {
+test("concurrent helper follow-ups admit exactly one turn for an owned thread", async () => {
   await withConversationController(async ({ captures, controller, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const outputSchema = sourceExplanationOutputSchema();
     const initialPending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
       outputSchema,
-      prompt: "Create one reusable economy thread."
+      prompt: "Create one reusable helper thread."
     });
     await waitForCapturedTurns(captures, 1);
     completeDetachedTurn(subscribers, {
@@ -6193,15 +6193,15 @@ test("concurrent economy follow-ups admit exactly one turn for an owned thread",
     const results = await Promise.all(followUps);
     assert.equal(results.filter(({ ok }) => ok === true).length, 1);
     assert.equal(results.filter(({ code }) => (
-      code === "vibe64_codex_economy_thread_unavailable"
+      code === "vibe64_codex_helper_thread_unavailable"
     )).length, 1);
     assert.equal(captures.resumes.length, 1);
   });
 });
 
-test("economy detached turns reject oversized raw output and retire the thread", async () => {
+test("helper detached turns reject oversized raw output and retire the thread", async () => {
   await withConversationController(async ({ captures, controller, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile({
+    const executionProfile = sourceExplanationHelperProfile({
       limits: {
         maxOutputCharacters: 64
       }
@@ -6229,16 +6229,16 @@ test("economy detached turns reject oversized raw output and retire the thread",
       threadId: "conversation-1"
     });
     assert.equal(retired.ok, false);
-    assert.equal(retired.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(retired.code, "vibe64_codex_helper_thread_unavailable");
     assert.equal(captures.resumes.length, 0);
   });
 });
 
-test("a delayed restore cannot revive economy ownership retired after its ledger read", async () => {
+test("a delayed restore cannot revive helper ownership retired after its ledger read", async () => {
   const restoreRead = createDeterministicHold();
   let pauseNextRead = false;
-  const codexEconomyThreadLedgerFactory = ({ projectRuntimeRoot }) => {
-    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+  const codexHelperThreadLedgerFactory = ({ projectRuntimeRoot }) => {
+    const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
     return Object.freeze({
       ...ledger,
       async readAll() {
@@ -6254,7 +6254,7 @@ test("a delayed restore cannot revive economy ownership retired after its ledger
   };
 
   await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile({
+    const executionProfile = sourceExplanationHelperProfile({
       limits: {
         maxOutputCharacters: 64
       }
@@ -6278,7 +6278,7 @@ test("a delayed restore cannot revive economy ownership retired after its ledger
       assert.equal(failed.code, "vibe64_agent_execution_profile_unbounded");
       assert.deepEqual(captures.deletes, ["conversation-1"]);
       assert.deepEqual(
-        await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll(),
+        await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll(),
         { failures: [], records: [] }
       );
     } finally {
@@ -6288,10 +6288,10 @@ test("a delayed restore cannot revive economy ownership retired after its ledger
     assert.equal((await restoring).data[0].model, "gpt-5.6-luna");
     await controller.closeAllForSession("session-1");
     assert.deepEqual(captures.deletes, ["conversation-1"]);
-  }, { codexEconomyThreadLedgerFactory });
+  }, { codexHelperThreadLedgerFactory });
 });
 
-test("economy detached turn timeout is clamped to the resolved profile", {
+test("helper detached turn timeout is clamped to the resolved profile", {
   concurrency: false
 }, async (t) => {
   t.mock.timers.enable({
@@ -6300,7 +6300,7 @@ test("economy detached turn timeout is clamped to the resolved profile", {
   try {
     await withConversationController(async ({ captures, controller }) => {
       const pending = controller.runDetachedChatTurn("session-1", {
-        executionProfile: sourceExplanationEconomyProfile({
+        executionProfile: sourceExplanationHelperProfile({
           limits: {
             timeoutMs: 25
           }
@@ -6374,7 +6374,7 @@ test("interactive detached turns retain their existing writable settings and res
   });
 });
 
-test("session shutdown interrupts and deletes an active economy thread before stopping its provider", async () => {
+test("session shutdown interrupts and deletes an active helper thread before stopping its provider", async () => {
   await withConversationController(async ({
     calls,
     captures,
@@ -6384,7 +6384,7 @@ test("session shutdown interrupts and deletes an active economy thread before st
   }) => {
     captures.interruptCompletesTurns = true;
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Keep this bounded turn active until shutdown."
     });
@@ -6411,7 +6411,7 @@ test("session shutdown interrupts and deletes an active economy thread before st
     });
     const result = await pending;
     assert.equal(result.ok, false);
-    assert.equal(result.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(result.code, "vibe64_codex_helper_thread_unavailable");
   });
 });
 
@@ -6542,10 +6542,10 @@ test("account-wide Codex auth invalidation stops a pruned runtime without a sele
   });
 });
 
-test("auth turnover retires economy ownership when runtime removal wins the deletion race", async () => {
+test("auth turnover retires helper ownership when runtime removal wins the deletion race", async () => {
   await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Create a temporary thread before reconnecting."
     });
@@ -6564,18 +6564,18 @@ test("auth turnover retires economy ownership when runtime removal wins the dele
       reason: "auth-session-exited"
     });
     assert.equal(invalidated.ok, true, JSON.stringify(invalidated));
-    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
     assert.deepEqual((await ledger.readAll()).records, []);
     const stale = await controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Never resume the retired thread.",
       threadId: first.threadId
     });
-    assert.equal(stale.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(stale.code, "vibe64_codex_helper_thread_unavailable");
     captures.failDeletes = 0;
     const next = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Continue after reconnecting without restarting Vibe64."
     });
@@ -6587,10 +6587,10 @@ test("auth turnover retires economy ownership when runtime removal wins the dele
   });
 });
 
-test("auth turnover retries stale in-memory economy ownership after an earlier runtime removal", async () => {
+test("auth turnover retries stale in-memory helper ownership after an earlier runtime removal", async () => {
   await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Create ownership retained by an earlier failed cleanup."
     });
@@ -6604,13 +6604,13 @@ test("auth turnover retries stale in-memory economy ownership after an earlier r
     });
     assert.equal(invalidated.ok, true, JSON.stringify(invalidated));
     assert.deepEqual(captures.deletes, []);
-    assert.deepEqual((await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll()).records, []);
+    assert.deepEqual((await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll()).records, []);
   });
 });
 
 test("auth turnover defers shared helper cleanup after verified exit and retries it on the next connection", async () => {
   await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const pending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
       outputSchema: sourceExplanationOutputSchema(),
@@ -6630,7 +6630,7 @@ test("auth turnover defers shared helper cleanup after verified exit and retries
     assert.equal(invalidated.ok, true, JSON.stringify(invalidated));
     assert.equal(invalidated.stopped, 1);
     assert.deepEqual(invalidated.results[0].pendingThreadCleanup.map((failure) => failure.threadId), [first.threadId]);
-    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
     const retained = (await ledger.readAll()).records;
     assert.equal(retained.length, 1);
     assert.equal(retained[0].lifecycle, "cleanup_required");
@@ -6653,14 +6653,14 @@ test("auth turnover still fails when deferred helper cleanup cannot be persisted
   let failWrite = false;
   await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Preserve ownership if cleanup cannot be recorded."
     });
     await waitForCapturedTurns(captures, 1);
     completeDetachedTurn(subscribers, { text: JSON.stringify({ answer: "Ready." }) });
     assert.equal((await pending).ok, true);
-    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
     const retained = (await ledger.readAll()).records;
     failWrite = true;
     captures.stopRuntimeResult = {
@@ -6669,14 +6669,14 @@ test("auth turnover still fails when deferred helper cleanup cannot be persisted
     const failed = await controller.invalidateAppServerRuntimes({ includeOwned: true, reason: "logout" });
     failWrite = false;
     assert.equal(failed.ok, false);
-    assert.equal(failed.failed[0].code, "vibe64_codex_economy_thread_cleanup_failed");
+    assert.equal(failed.failed[0].code, "vibe64_codex_helper_thread_cleanup_failed");
     assert.deepEqual((await ledger.readAll()).records, retained);
     const retry = await controller.invalidateAppServerRuntimes({ includeOwned: true, reason: "auth-session-status" });
     assert.equal(retry.ok, true, JSON.stringify(retry));
     assert.deepEqual((await ledger.readAll()).records, []);
   }, {
-    codexEconomyThreadLedgerFactory(options) {
-      const ledger = createCodexEconomyThreadLedger(options);
+    codexHelperThreadLedgerFactory(options) {
+      const ledger = createCodexHelperThreadLedger(options);
       return {
         ...ledger,
         async write(record, options) {
@@ -6688,10 +6688,10 @@ test("auth turnover still fails when deferred helper cleanup cannot be persisted
   });
 });
 
-test("auth turnover preserves economy ownership when thread deletion and runtime removal are unproven", async () => {
+test("auth turnover preserves helper ownership when thread deletion and runtime removal are unproven", async () => {
   await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Retain cleanup evidence until removal is proven."
     });
@@ -6704,7 +6704,7 @@ test("auth turnover preserves economy ownership when thread deletion and runtime
       includeOwned: true, reason: "auth-session-exited"
     });
     assert.equal(invalidated.ok, false);
-    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
     assert.equal((await ledger.readAll()).records.length, 1);
     captures.failDeletes = 0;
     const retry = await controller.invalidateAppServerRuntimes({
@@ -6719,7 +6719,7 @@ test("auth turnover retries ledger removal after the owned runtime has already s
   let failRemoval = true;
   await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Preserve the ownership record when its removal fails."
     });
@@ -6734,15 +6734,15 @@ test("auth turnover retries ledger removal after the owned runtime has already s
     const input = { includeOwned: true, reason: "auth-session-status" };
     const failed = await controller.invalidateAppServerRuntimes(input);
     assert.equal(failed.ok, false);
-    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
     assert.equal((await ledger.readAll()).records.length, 1);
     failRemoval = false;
     const recovered = await controller.invalidateAppServerRuntimes(input);
     assert.equal(recovered.ok, true, JSON.stringify(recovered));
     assert.deepEqual((await ledger.readAll()).records, []);
   }, {
-    codexEconomyThreadLedgerFactory(options) {
-      const ledger = createCodexEconomyThreadLedger(options);
+    codexHelperThreadLedgerFactory(options) {
+      const ledger = createCodexHelperThreadLedger(options);
       return {
         ...ledger,
         async remove(record) {
@@ -8229,7 +8229,7 @@ test("renewal freeze cannot cross any Codex provider acquisition boundary", asyn
   }
 });
 
-test("renewal freeze cannot cross persisted economy runtime identity recovery", async () => {
+test("renewal freeze cannot cross persisted helper runtime identity recovery", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -8238,11 +8238,11 @@ test("renewal freeze cannot cross persisted economy runtime identity recovery", 
     simulateControllerCrash,
     subscribers
   }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const pending = controller.runDetachedChatTurn(session.sessionId, {
       executionProfile,
       outputSchema: sourceExplanationOutputSchema(),
-      prompt: "Persist one economy thread before the cleanup race."
+      prompt: "Persist one helper thread before the cleanup race."
     });
     await waitForCapturedTurns(captures, 1);
     completeDetachedTurn(subscribers, {
@@ -8288,14 +8288,14 @@ test("renewal freeze cannot cross persisted economy runtime identity recovery", 
   });
 });
 
-test("failed session cleanup retains economy ownership and retries during later helper admission", async () => {
+test("failed session cleanup retains helper ownership and retries during later helper admission", async () => {
   await withConversationController(async ({ captures, controller, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const outputSchema = sourceExplanationOutputSchema();
     const firstPending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
       outputSchema,
-      prompt: "Create one economy thread to clean up."
+      prompt: "Create one helper thread to clean up."
     });
     await waitForCapturedTurns(captures, 1);
     completeDetachedTurn(subscribers, {
@@ -8308,7 +8308,7 @@ test("failed session cleanup retains economy ownership and retries during later 
     await assert.rejects(
       controller.closeAllForSession("session-1"),
       (error) => {
-        assert.equal(error.code, "vibe64_codex_economy_thread_cleanup_failed");
+        assert.equal(error.code, "vibe64_codex_helper_thread_cleanup_failed");
         assert.equal(error.retryable, true);
         return true;
       }
@@ -8323,7 +8323,7 @@ test("failed session cleanup retains economy ownership and retries during later 
       threadId: first.threadId
     });
     assert.equal(followUp.ok, false);
-    assert.equal(followUp.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(followUp.code, "vibe64_codex_helper_thread_unavailable");
     assert.equal(captures.turns.length, 1);
     assert.deepEqual(captures.deletes, ["conversation-1", "conversation-1"]);
 
@@ -8335,7 +8335,7 @@ test("failed session cleanup retains economy ownership and retries during later 
 
 test("resume verification failure removes retired ownership and never revives the stale thread", async () => {
   await withConversationController(async ({ captures, controller, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const outputSchema = sourceExplanationOutputSchema();
     const firstPending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
@@ -8372,7 +8372,7 @@ test("resume verification failure removes retired ownership and never revives th
       threadId: first.threadId
     });
     assert.equal(staleRetry.ok, false);
-    assert.equal(staleRetry.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(staleRetry.code, "vibe64_codex_helper_thread_unavailable");
     assert.equal(captures.resumes.length, 1);
     assert.deepEqual(captures.deletes, ["conversation-1"]);
   });
@@ -8380,7 +8380,7 @@ test("resume verification failure removes retired ownership and never revives th
 
 test("resume verification cleanup failure keeps ownership until deletion is retried", async () => {
   await withConversationController(async ({ captures, controller, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const outputSchema = sourceExplanationOutputSchema();
     const firstPending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
@@ -8408,7 +8408,7 @@ test("resume verification cleanup failure keeps ownership until deletion is retr
     });
     assert.equal(failedResume.ok, false);
     assert.equal(failedResume.code, "vibe64_agent_execution_profile_policy_unenforceable");
-    assert.match(failedResume.error, /could not retire an economy thread/u);
+    assert.match(failedResume.error, /could not retire a helper thread/u);
 
     const retriedCleanup = await controller.deleteDetachedChatThread("session-1", {
       executionProfile,
@@ -8425,13 +8425,13 @@ test("resume verification cleanup failure keeps ownership until deletion is retr
       threadId: first.threadId
     });
     assert.equal(staleRetry.ok, false);
-    assert.equal(staleRetry.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(staleRetry.code, "vibe64_codex_helper_thread_unavailable");
   });
 });
 
 test("start verification cleanup failure records the orphan until deletion is retried", async () => {
   await withConversationController(async ({ captures, controller }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     captures.hookInventories[0] = captures.hooks;
     captures.hookInventories[1] = captures.hooks.map((hook) => ({
       ...hook,
@@ -8446,7 +8446,7 @@ test("start verification cleanup failure records the orphan until deletion is re
     });
     assert.equal(failedStart.ok, false);
     assert.equal(failedStart.code, "vibe64_agent_execution_profile_policy_unenforceable");
-    assert.match(failedStart.error, /could not retire an economy thread/u);
+    assert.match(failedStart.error, /could not retire a helper thread/u);
     assert.deepEqual(captures.deletes, ["conversation-1"]);
     assert.equal(captures.turns.length, 0);
 
@@ -8465,7 +8465,7 @@ test("start verification cleanup failure records the orphan until deletion is re
       threadId: "conversation-1"
     });
     assert.equal(staleRetry.ok, false);
-    assert.equal(staleRetry.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(staleRetry.code, "vibe64_codex_helper_thread_unavailable");
     assert.equal(captures.resumes.length, 0);
   });
 });
@@ -8478,13 +8478,13 @@ test("a completed result is not exposed when READY ownership cannot be persisted
     subscribers
   }) => {
     const failingLedgerFactory = ({ projectRuntimeRoot: ledgerRoot }) => {
-      const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot: ledgerRoot });
+      const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot: ledgerRoot });
       return Object.freeze({
         ...ledger,
         async write(record, options = {}) {
           if (
             options.expected &&
-            record.lifecycle === CODEX_ECONOMY_THREAD_LIFECYCLES.READY
+            record.lifecycle === CODEX_HELPER_THREAD_LIFECYCLES.READY
           ) {
             const error = new Error("simulated READY ownership persistence failure");
             error.code = "simulated_ready_ledger_failure";
@@ -8496,13 +8496,13 @@ test("a completed result is not exposed when READY ownership cannot be persisted
     };
     const failingController = createRestartedController({
       captures,
-      codexEconomyThreadLedgerFactory: failingLedgerFactory,
+      codexHelperThreadLedgerFactory: failingLedgerFactory,
       projectService,
       subscribers
     });
     try {
       const pending = failingController.runDetachedChatTurn("session-1", {
-        executionProfile: sourceExplanationEconomyProfile(),
+        executionProfile: sourceExplanationHelperProfile(),
         outputSchema: sourceExplanationOutputSchema(),
         prompt: "Do not expose this result without durable READY ownership."
       });
@@ -8515,7 +8515,7 @@ test("a completed result is not exposed when READY ownership cannot be persisted
       assert.equal(failed.code, "simulated_ready_ledger_failure");
       assert.deepEqual(captures.deletes, ["conversation-1"]);
       assert.deepEqual(
-        await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll(),
+        await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll(),
         { failures: [], records: [] }
       );
     } finally {
@@ -8524,7 +8524,7 @@ test("a completed result is not exposed when READY ownership cannot be persisted
   });
 });
 
-test("project shutdown finds and deletes economy-only providers by project ownership", async () => {
+test("project shutdown finds and deletes helper-only providers by project ownership", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -8533,9 +8533,9 @@ test("project shutdown finds and deletes economy-only providers by project owner
     subscribers
   }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
-      prompt: "Create an economy-only provider for project shutdown."
+      prompt: "Create a helper-only provider for project shutdown."
     });
     await waitForCapturedTurns(captures, 1);
     completeDetachedTurn(subscribers, {
@@ -8555,10 +8555,10 @@ test("project shutdown finds and deletes economy-only providers by project owner
   });
 });
 
-test("provider replacement retires economy ownership before closing the old connection", async () => {
+test("provider replacement retires helper ownership before closing the old connection", async () => {
   await withConversationController(async ({ calls, captures, controller, subscribers }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Create a thread before the provider environment changes."
     });
@@ -8639,41 +8639,41 @@ test("model catalog resolution follows explicit caller cancellation", async () =
   });
 });
 
-test("startup reports an absent economy runtime only when it has no durable ownership", async () => {
+test("startup reports an absent helper runtime only when it has no durable ownership", async () => {
   await withConversationController(async ({ captures, controller, session }) => {
     const reconciliation = await controller.reconcileThreads([session]);
     assert.equal(reconciliation.ok, true, JSON.stringify(reconciliation));
-    assert.deepEqual(reconciliation.results[0].economyInventory, {
+    assert.deepEqual(reconciliation.results[0].helperInventory, {
       deletedThreadIds: [],
       ok: true,
       ownedThreadIds: [],
-      providerKey: reconciliation.results[0].economyInventory.providerKey,
+      providerKey: reconciliation.results[0].helperInventory.providerKey,
       retiredMissingThreadIds: [],
       status: "runtimeAbsent"
     });
-    assert.equal(captures.economyThreadInventories, 0);
+    assert.equal(captures.helperThreadInventories, 0);
   });
 });
 
-test("startup economy inventory failures do not block primary assistant reconciliation", async () => {
+test("startup helper inventory failures do not block primary assistant reconciliation", async () => {
   await withConversationController(async ({ captures, controller, session }) => {
     await controller.executionProfileModelCatalog("session-1");
-    captures.failEconomyThreadInventories = 1;
+    captures.failHelperThreadInventories = 1;
 
     const reconciliation = await controller.reconcileThreads([session]);
 
     assert.equal(reconciliation.ok, false);
     assert.equal(reconciliation.results[0].ok, true, JSON.stringify(reconciliation));
-    assert.equal(reconciliation.results[0].economyInventory, null);
+    assert.equal(reconciliation.results[0].helperInventory, null);
     assert.match(
-      reconciliation.results[0].economyFailure?.error || "",
-      /economy inventory temporarily unavailable/u
+      reconciliation.results[0].helperFailure?.error || "",
+      /helper inventory temporarily unavailable/u
     );
     assert.equal(reconciliation.failed.length, 1);
   });
 });
 
-test("a completed economy thread survives a controller crash and resumes only after identity proof", async () => {
+test("a completed helper thread survives a controller crash and resumes only after identity proof", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -8684,12 +8684,12 @@ test("a completed economy thread survives a controller crash and resumes only af
     simulateControllerCrash,
     subscribers
   }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const outputSchema = sourceExplanationOutputSchema();
     const firstPending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
       outputSchema,
-      prompt: "Persist this economy thread before the controller crashes."
+      prompt: "Persist this helper thread before the controller crashes."
     });
     await waitForCapturedTurns(captures, 1);
     completeDetachedTurn(subscribers, {
@@ -8697,7 +8697,7 @@ test("a completed economy thread survives a controller crash and resumes only af
     });
     const first = await firstPending;
     assert.equal(first.ok, true, JSON.stringify(first));
-    const persisted = await createCodexEconomyThreadLedger({
+    const persisted = await createCodexHelperThreadLedger({
       projectRuntimeRoot
     }).readAll();
     assert.equal(Object.hasOwn(session, "projectContextRoot"), false);
@@ -8717,7 +8717,7 @@ test("a completed economy thread survives a controller crash and resumes only af
     const followUpPending = restartedController.runDetachedChatTurn("session-1", {
       executionProfile,
       outputSchema,
-      prompt: "Resume the exact persisted economy thread.",
+      prompt: "Resume the exact persisted helper thread.",
       threadId: first.threadId
     });
     await waitForCapturedTurns(restarted, 1);
@@ -8729,7 +8729,7 @@ test("a completed economy thread survives a controller crash and resumes only af
 
     await restartedController.closeAllForSession("session-1");
     assert.deepEqual(restarted.deletes, [first.threadId]);
-    assert.deepEqual(await createCodexEconomyThreadLedger({
+    assert.deepEqual(await createCodexHelperThreadLedger({
       projectRuntimeRoot
     }).readAll(), {
       failures: [],
@@ -8738,7 +8738,7 @@ test("a completed economy thread survives a controller crash and resumes only af
   });
 });
 
-test("a missing economy runtime retires stale ownership before provider identity comparison", async () => {
+test("a missing helper runtime retires stale ownership before provider identity comparison", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -8747,7 +8747,7 @@ test("a missing economy runtime retires stale ownership before provider identity
     simulateControllerCrash,
     subscribers
   }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const firstPending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
       outputSchema: sourceExplanationOutputSchema(),
@@ -8760,7 +8760,7 @@ test("a missing economy runtime retires stale ownership before provider identity
     const first = await firstPending;
     assert.equal(first.ok, true, JSON.stringify(first));
     assert.equal(
-      (await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll())
+      (await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll())
         .records.length,
       1
     );
@@ -8790,7 +8790,7 @@ test("a missing economy runtime retires stale ownership before provider identity
     assert.equal(restarted.stopRuntimes, 0);
     assert.equal(restarted.threads.length, 1);
     assert.equal(
-      (await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll())
+      (await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll())
         .records.length,
       1
     );
@@ -8798,7 +8798,7 @@ test("a missing economy runtime retires stale ownership before provider identity
   });
 });
 
-test("provider context drift retires a verified stale economy runtime", async () => {
+test("provider context drift retires a verified stale helper runtime", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -8807,7 +8807,7 @@ test("provider context drift retires a verified stale economy runtime", async ()
     simulateControllerCrash,
     subscribers
   }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const firstPending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
       outputSchema: sourceExplanationOutputSchema(),
@@ -8844,7 +8844,7 @@ test("provider context drift retires a verified stale economy runtime", async ()
     assert.equal(restarted.stopRuntimes, 1);
     assert.equal(restarted.threads.length, 1);
     assert.equal(
-      (await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll())
+      (await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll())
         .records.length,
       1
     );
@@ -8852,7 +8852,7 @@ test("provider context drift retires a verified stale economy runtime", async ()
   });
 });
 
-test("startup inventory retires READY ownership missing after an economy runtime restart", async () => {
+test("startup inventory retires READY ownership missing after a helper runtime restart", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -8862,7 +8862,7 @@ test("startup inventory retires READY ownership missing after an economy runtime
     simulateControllerCrash,
     subscribers
   }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const outputSchema = sourceExplanationOutputSchema();
     const firstPending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
@@ -8876,15 +8876,15 @@ test("startup inventory retires READY ownership missing after an economy runtime
     const first = await firstPending;
     assert.equal(first.ok, true, JSON.stringify(first));
     assert.equal(
-      (await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll())
+      (await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll())
         .records[0]?.lifecycle,
-      CODEX_ECONOMY_THREAD_LIFECYCLES.READY
+      CODEX_HELPER_THREAD_LIFECYCLES.READY
     );
     simulateControllerCrash();
 
     const restartedSubscribers = new Set();
     const restarted = restartedCaptures(captures, {
-      economyThreadIds: []
+      helperThreadIds: []
     });
     const restartedController = createRestartedController({
       captures: restarted,
@@ -8893,15 +8893,15 @@ test("startup inventory retires READY ownership missing after an economy runtime
     });
     const reconciliation = await restartedController.reconcileThreads([session]);
     assert.equal(reconciliation.ok, true, JSON.stringify(reconciliation));
-    assert.equal(restarted.economyThreadInventories, 1);
+    assert.equal(restarted.helperThreadInventories, 1);
     assert.deepEqual(restarted.deletes, []);
     assert.deepEqual(
-      reconciliation.results[0].economyInventory.retiredMissingThreadIds,
+      reconciliation.results[0].helperInventory.retiredMissingThreadIds,
       [first.threadId]
     );
-    assert.deepEqual(reconciliation.results[0].economyInventory.ownedThreadIds, []);
+    assert.deepEqual(reconciliation.results[0].helperInventory.ownedThreadIds, []);
     assert.deepEqual(
-      await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll(),
+      await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll(),
       { failures: [], records: [] }
     );
 
@@ -8912,7 +8912,7 @@ test("startup inventory retires READY ownership missing after an economy runtime
       threadId: first.threadId
     });
     assert.equal(staleFollowUp.ok, false);
-    assert.equal(staleFollowUp.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(staleFollowUp.code, "vibe64_codex_helper_thread_unavailable");
 
     const freshPending = restartedController.runDetachedChatTurn("session-1", {
       executionProfile,
@@ -8927,16 +8927,16 @@ test("startup inventory retires READY ownership missing after an economy runtime
     assert.equal(fresh.ok, true, JSON.stringify(fresh));
     assert.equal(fresh.threadId, first.threadId);
     assert.equal(
-      (await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll())
+      (await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll())
         .records[0]?.lifecycle,
-      CODEX_ECONOMY_THREAD_LIFECYCLES.READY
+      CODEX_HELPER_THREAD_LIFECYCLES.READY
     );
 
     await restartedController.closeAllForSession("session-1");
   });
 });
 
-test("an active economy turn is interrupted and deleted during crash reconciliation", async () => {
+test("an active helper turn is interrupted and deleted during crash reconciliation", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -8947,15 +8947,15 @@ test("an active economy turn is interrupted and deleted during crash reconciliat
     subscribers
   }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Remain active across the simulated crash."
     });
     void pending.catch(() => null);
     await waitForCapturedTurns(captures, 1);
-    const before = await waitForEconomyLedgerLifecycle(
+    const before = await waitForHelperLedgerLifecycle(
       projectRuntimeRoot,
-      CODEX_ECONOMY_THREAD_LIFECYCLES.ACTIVE
+      CODEX_HELPER_THREAD_LIFECYCLES.ACTIVE
     );
     assert.equal(before.turnId, "turn-1");
     simulateControllerCrash();
@@ -8972,7 +8972,7 @@ test("an active economy turn is interrupted and deleted during crash reconciliat
       turnId: "turn-1"
     }]);
     assert.deepEqual(restarted.deletes, ["conversation-1"]);
-    assert.equal((await createCodexEconomyThreadLedger({
+    assert.equal((await createCodexHelperThreadLedger({
       projectRuntimeRoot
     }).readAll()).records.length, 0);
 
@@ -8992,7 +8992,7 @@ test("startup reconciliation deletes a thread orphaned before its first ledger w
     subscribers
   }) => {
     const failingLedgerFactory = ({ projectRuntimeRoot }) => {
-      const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+      const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
       return Object.freeze({
         ...ledger,
         async write() {
@@ -9005,27 +9005,27 @@ test("startup reconciliation deletes a thread orphaned before its first ledger w
     captures.failDeletes = 1;
     const failedController = createRestartedController({
       captures,
-      codexEconomyThreadLedgerFactory: failingLedgerFactory,
+      codexHelperThreadLedgerFactory: failingLedgerFactory,
       projectService,
       subscribers
     });
     const failed = await failedController.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Create the crash-window orphan."
     });
     assert.equal(failed.ok, false);
-    assert.equal(failed.code, "vibe64_codex_economy_ownership_blocked");
+    assert.equal(failed.code, "vibe64_codex_helper_ownership_blocked");
     assert.deepEqual(captures.deletes, ["conversation-1"]);
-    const sharedOptions = captures.providerOptions.find(({ economyWorkdir }) => (
-      Boolean(economyWorkdir)
+    const sharedOptions = captures.providerOptions.find(({ helperWorkdir }) => (
+      Boolean(helperWorkdir)
     ));
     assert.ok(sharedOptions?.runtimeDir);
     await mkdir(sharedOptions.runtimeDir, { recursive: true });
     simulateControllerCrash();
 
     const restarted = restartedCaptures(captures, {
-      economyThreadIds: ["conversation-1"]
+      helperThreadIds: ["conversation-1"]
     });
     const restartedController = createRestartedController({
       captures: restarted,
@@ -9033,16 +9033,16 @@ test("startup reconciliation deletes a thread orphaned before its first ledger w
     });
     const reconciliation = await restartedController.reconcileThreads(["session-1"]);
     assert.equal(reconciliation.ok, true, JSON.stringify(reconciliation));
-    assert.equal(restarted.economyThreadInventories, 1);
+    assert.equal(restarted.helperThreadInventories, 1);
     assert.deepEqual(restarted.deletes, ["conversation-1"]);
     assert.deepEqual(
-      reconciliation.results[0].economyInventory.deletedThreadIds,
+      reconciliation.results[0].helperInventory.deletedThreadIds,
       ["conversation-1"]
     );
   });
 });
 
-test("startup inventory cannot delete a new economy thread before ownership is durable", async () => {
+test("startup inventory cannot delete a new helper thread before ownership is durable", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -9059,24 +9059,24 @@ test("startup inventory cannot delete a new economy thread before ownership is d
     });
     captures.onStartThread = reportStart;
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Create ownership while startup inventory is waiting."
     });
     await startObserved;
-    captures.economyThreadIds = ["conversation-1"];
+    captures.helperThreadIds = ["conversation-1"];
 
     const reconciliation = controller.reconcileThreads([session]);
     await flushPromises();
-    assert.equal(captures.economyThreadInventories, 0);
+    assert.equal(captures.helperThreadInventories, 0);
     releaseStart();
     await waitForCapturedTurns(captures, 1);
     const reconciled = await reconciliation;
     assert.equal(reconciled.ok, true, JSON.stringify(reconciled));
-    assert.equal(captures.economyThreadInventories, 1);
+    assert.equal(captures.helperThreadInventories, 1);
     assert.deepEqual(captures.deletes, []);
     assert.deepEqual(
-      reconciled.results[0].economyInventory.ownedThreadIds,
+      reconciled.results[0].helperInventory.ownedThreadIds,
       ["conversation-1"]
     );
 
@@ -9094,7 +9094,7 @@ test("startup inventory cannot retire a READY thread claimed by a concurrent fol
     session,
     subscribers
   }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const outputSchema = sourceExplanationOutputSchema();
     const firstPending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
@@ -9109,11 +9109,11 @@ test("startup inventory cannot retire a READY thread claimed by a concurrent fol
     assert.equal(first.ok, true, JSON.stringify(first));
 
     let releaseInventory = null;
-    captures.economyThreadInventoryWait = new Promise((resolve) => {
+    captures.helperThreadInventoryWait = new Promise((resolve) => {
       releaseInventory = resolve;
     });
     const reconciliation = controller.reconcileThreads([session]);
-    while (captures.economyThreadInventories === 0) {
+    while (captures.helperThreadInventories === 0) {
       await flushPromises();
     }
 
@@ -9127,8 +9127,8 @@ test("startup inventory cannot retire a READY thread claimed by a concurrent fol
     releaseInventory();
     const reconciled = await reconciliation;
     assert.equal(reconciled.ok, true, JSON.stringify(reconciled));
-    assert.deepEqual(reconciled.results[0].economyInventory.retiredMissingThreadIds, []);
-    assert.deepEqual(reconciled.results[0].economyInventory.ownedThreadIds, [first.threadId]);
+    assert.deepEqual(reconciled.results[0].helperInventory.retiredMissingThreadIds, []);
+    assert.deepEqual(reconciled.results[0].helperInventory.ownedThreadIds, [first.threadId]);
     assert.deepEqual(captures.deletes, []);
 
     completeDetachedTurn(subscribers, {
@@ -9139,11 +9139,11 @@ test("startup inventory cannot retire a READY thread claimed by a concurrent fol
   });
 });
 
-test("economy project lifecycle gate releases after a rejected thread start", async () => {
+test("helper project lifecycle gate releases after a rejected thread start", async () => {
   await withConversationController(async ({ captures, controller, subscribers }) => {
     captures.failThreadStarts = 1;
     const failed = await controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Fail this start."
     });
@@ -9151,7 +9151,7 @@ test("economy project lifecycle gate releases after a rejected thread start", as
     assert.equal(failed.code, "thread_start_failed");
 
     const retried = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "The next start must not deadlock."
     });
@@ -9163,7 +9163,7 @@ test("economy project lifecycle gate releases after a rejected thread start", as
   });
 });
 
-test("an account switch blocks persisted economy ownership without deleting it", async () => {
+test("an account switch blocks persisted helper ownership without deleting it", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -9172,7 +9172,7 @@ test("an account switch blocks persisted economy ownership without deleting it",
     simulateControllerCrash,
     subscribers
   }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const pending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
       outputSchema: sourceExplanationOutputSchema(),
@@ -9203,10 +9203,10 @@ test("an account switch blocks persisted economy ownership without deleting it",
       threadId: first.threadId
     });
     assert.equal(blocked.ok, false);
-    assert.equal(blocked.code, "vibe64_codex_economy_ownership_blocked");
+    assert.equal(blocked.code, "vibe64_codex_helper_ownership_blocked");
     assert.equal(switched.resumes.length, 0);
     assert.equal(switched.deletes.length, 0);
-    assert.equal((await createCodexEconomyThreadLedger({
+    assert.equal((await createCodexHelperThreadLedger({
       projectRuntimeRoot
     }).readAll()).records.length, 1);
 
@@ -9220,13 +9220,13 @@ test("an account switch blocks persisted economy ownership without deleting it",
       threadId: first.threadId
     });
     assert.equal(cleanup.ok, true, JSON.stringify(cleanup));
-    assert.equal((await createCodexEconomyThreadLedger({
+    assert.equal((await createCodexHelperThreadLedger({
       projectRuntimeRoot
     }).readAll()).records.length, 0);
   });
 });
 
-test("a same-account auth refresh can resume persisted economy ownership", async () => {
+test("a same-account auth refresh can resume persisted helper ownership", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -9234,7 +9234,7 @@ test("a same-account auth refresh can resume persisted economy ownership", async
     simulateControllerCrash,
     subscribers
   }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const pending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
       outputSchema: sourceExplanationOutputSchema(),
@@ -9276,7 +9276,7 @@ test("a same-account auth refresh can resume persisted economy ownership", async
   });
 });
 
-test("an archived session retires its persisted economy thread during reconciliation", async () => {
+test("an archived session retires its persisted helper thread during reconciliation", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -9287,7 +9287,7 @@ test("an archived session retires its persisted economy thread during reconcilia
     subscribers
   }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist before archiving."
     });
@@ -9307,13 +9307,13 @@ test("an archived session retires its persisted economy thread during reconcilia
     const reconciliation = await restartedController.reconcileThreads([session]);
     assert.equal(reconciliation.ok, true, JSON.stringify(reconciliation));
     assert.deepEqual(restarted.deletes, ["conversation-1"]);
-    assert.equal((await createCodexEconomyThreadLedger({
+    assert.equal((await createCodexHelperThreadLedger({
       projectRuntimeRoot
     }).readAll()).records.length, 0);
   });
 });
 
-test("concurrent session closes coalesce economy deletion and clear durable ownership once", async () => {
+test("concurrent session closes coalesce helper deletion and clear durable ownership once", async () => {
   await withConversationController(async ({
     captures,
     controller,
@@ -9322,7 +9322,7 @@ test("concurrent session closes coalesce economy deletion and clear durable owne
     subscribers
   }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist before concurrent close."
     });
@@ -9339,7 +9339,7 @@ test("concurrent session closes coalesce economy deletion and clear durable owne
     simulateControllerCrash();
     assert.equal(closed.filter(({ status }) => status === "rejected").length, 0);
     assert.deepEqual(captures.deletes, ["conversation-1"]);
-    assert.equal((await createCodexEconomyThreadLedger({
+    assert.equal((await createCodexHelperThreadLedger({
       projectRuntimeRoot
     }).readAll()).records.length, 0);
   });
@@ -9354,7 +9354,7 @@ test("an unconfirmed delete result preserves cleanup-required ownership for retr
     subscribers
   }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Persist before an unconfirmed delete."
     });
@@ -9367,29 +9367,29 @@ test("an unconfirmed delete result preserves cleanup-required ownership for retr
 
     await assert.rejects(
       controller.closeAllForSession("session-1"),
-      (error) => error.code === "vibe64_codex_economy_thread_cleanup_failed"
+      (error) => error.code === "vibe64_codex_helper_thread_cleanup_failed"
     );
-    const retained = await createCodexEconomyThreadLedger({ projectRuntimeRoot }).readAll();
+    const retained = await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll();
     assert.equal(retained.records.length, 1);
     assert.equal(
       retained.records[0].lifecycle,
-      CODEX_ECONOMY_THREAD_LIFECYCLES.CLEANUP_REQUIRED
+      CODEX_HELPER_THREAD_LIFECYCLES.CLEANUP_REQUIRED
     );
     const retried = await controller.deleteDetachedChatThread("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       threadId: "conversation-1"
     });
     assert.equal(retried.ok, true, JSON.stringify(retried));
-    assert.equal((await createCodexEconomyThreadLedger({
+    assert.equal((await createCodexHelperThreadLedger({
       projectRuntimeRoot
     }).readAll()).records.length, 0);
     simulateControllerCrash();
   });
 });
 
-test("economy deletion requires the owned thread's exact semantic profile", async () => {
+test("helper deletion requires the owned thread's exact semantic profile", async () => {
   await withConversationController(async ({ captures, controller, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const pending = controller.runDetachedChatTurn("session-1", {
       executionProfile,
       outputSchema: sourceExplanationOutputSchema(),
@@ -9404,31 +9404,31 @@ test("economy deletion requires the owned thread's exact semantic profile", asyn
 
     const wrongWorkload = await controller.deleteDetachedChatThread("session-1", {
       executionProfile: {
-        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
         workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.COMMIT_TITLE
       },
       threadId: completed.threadId
     });
     assert.equal(wrongWorkload.ok, false);
-    assert.equal(wrongWorkload.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(wrongWorkload.code, "vibe64_codex_helper_thread_unavailable");
 
     const missingProfile = await controller.deleteDetachedChatThread("session-1", {
       threadId: completed.threadId
     });
     assert.equal(missingProfile.ok, false);
-    assert.equal(missingProfile.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(missingProfile.code, "vibe64_codex_helper_thread_unavailable");
 
     const malformedProfile = await controller.deleteDetachedChatThread("session-1", {
-      executionProfile: "economy",
+      executionProfile: "helper",
       threadId: completed.threadId
     });
     assert.equal(malformedProfile.ok, false);
-    assert.equal(malformedProfile.code, "vibe64_codex_economy_ownership_blocked");
+    assert.equal(malformedProfile.code, "vibe64_codex_helper_ownership_blocked");
     assert.deepEqual(captures.deletes, []);
 
     const deleted = await controller.deleteDetachedChatThread("session-1", {
       executionProfile: {
-        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
         workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION
       },
       threadId: completed.threadId
@@ -9439,58 +9439,58 @@ test("economy deletion requires the owned thread's exact semantic profile", asyn
   });
 });
 
-test("economy deletion rejects an unknown thread without calling the provider", async () => {
+test("helper deletion rejects an unknown thread without calling the provider", async () => {
   await withConversationController(async ({ captures, controller }) => {
     const result = await controller.deleteDetachedChatThread("session-1", {
       executionProfile: {
-        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
         workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION
       },
-      threadId: "unowned-economy-thread"
+      threadId: "unowned-helper-thread"
     });
     assert.equal(result.ok, false);
-    assert.equal(result.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(result.code, "vibe64_codex_helper_thread_unavailable");
     assert.deepEqual(captures.deletes, []);
   });
 });
 
-test("economy interruption rejects an unowned thread without calling the provider", async () => {
+test("helper interruption rejects an unowned thread without calling the provider", async () => {
   await withConversationController(async ({ captures, controller }) => {
     const result = await controller.interruptDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
-      threadId: "unowned-economy-thread",
-      turnId: "unowned-economy-turn"
+      executionProfile: sourceExplanationHelperProfile(),
+      threadId: "unowned-helper-thread",
+      turnId: "unowned-helper-turn"
     });
     assert.equal(result.ok, false);
-    assert.equal(result.code, "vibe64_codex_economy_thread_unavailable");
+    assert.equal(result.code, "vibe64_codex_helper_thread_unavailable");
     assert.deepEqual(captures.interrupts, []);
   });
 });
 
-test("economy work rejects a stale expected account before creating a thread", async () => {
+test("helper work rejects a stale expected account before creating a thread", async () => {
   await withConversationController(async ({ captures, controller }) => {
     const result = await controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       expectedAccountIdentitySignature: TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE,
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Never run under a different selected account."
     });
     assert.equal(result.ok, false);
-    assert.equal(result.code, "vibe64_codex_economy_ownership_blocked");
+    assert.equal(result.code, "vibe64_codex_helper_ownership_blocked");
     assert.match(result.error, /selected Codex account changed/u);
     assert.deepEqual(captures.threads, []);
     assert.deepEqual(captures.turns, []);
   });
 });
 
-test("economy work rejects an account switch before exposing the result", async () => {
+test("helper work rejects an account switch before exposing the result", async () => {
   await withConversationController(async ({
     captures,
     controller,
     subscribers
   }) => {
     const pending = controller.runDetachedChatTurn("session-1", {
-      executionProfile: sourceExplanationEconomyProfile(),
+      executionProfile: sourceExplanationHelperProfile(),
       expectedAccountIdentitySignature: TEST_ACCOUNT_IDENTITY_SIGNATURE,
       outputSchema: sourceExplanationOutputSchema(),
       prompt: "Do not expose work after an account switch."
@@ -9502,7 +9502,7 @@ test("economy work rejects an account switch before exposing the result", async 
     });
     const result = await pending;
     assert.equal(result.ok, false);
-    assert.equal(result.code, "vibe64_codex_economy_ownership_blocked");
+    assert.equal(result.code, "vibe64_codex_helper_ownership_blocked");
     assert.deepEqual(captures.deletes, ["conversation-1"]);
   });
 });
@@ -9514,7 +9514,7 @@ for (const [outcome, deleteFailures] of [
   test(`account-switch cleanup deletes only its persisted helper: ${outcome}`, async () => {
     await withConversationController(async ({ captures, controller, projectRuntimeRoot, projectService,
       simulateControllerCrash, subscribers }) => {
-      const executionProfile = sourceExplanationEconomyProfile();
+      const executionProfile = sourceExplanationHelperProfile();
       const pending = controller.runDetachedChatTurn("session-1", {
         executionProfile, outputSchema: sourceExplanationOutputSchema(), prompt: "Temporary work."
       });
@@ -9526,7 +9526,7 @@ for (const [outcome, deleteFailures] of [
         executionProfile, threadId: first.threadId
       });
       assert.equal(failed.ok, false);
-      const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+      const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
       assert.equal((await ledger.readAll()).records[0].lifecycle, "cleanup_required");
       const runtime = projectService.createRuntime();
       const auditStore = createVibe64SessionStore({
@@ -9556,7 +9556,7 @@ for (const [outcome, deleteFailures] of [
       assert.deepEqual(switched.resumes, [], "Cleanup must not resume the previous account's work");
       assert.deepEqual(switched.turns, []);
       assert.equal((await ledger.readAll()).records.length, succeeds ? 0 : 1);
-      const audit = await auditStore.readBackgroundTask("session-1", "codex-economy-cleanup");
+      const audit = await auditStore.readBackgroundTask("session-1", "codex-helper-cleanup");
       assert.equal(audit.status, succeeds ? "ready" : "failed");
       assert.ok(audit.events.some((event) => succeeds
         ? event.retiredThreadIds.includes(first.threadId)
@@ -9573,7 +9573,7 @@ for (const [outcome, deleteFailures] of [
 
 test("helper admission retries same-account cleanup without a controller restart", async () => {
   await withConversationController(async ({ captures, controller, projectRuntimeRoot, subscribers }) => {
-    const executionProfile = sourceExplanationEconomyProfile();
+    const executionProfile = sourceExplanationHelperProfile();
     const pending = controller.runDetachedChatTurn("session-1", {
       executionProfile, outputSchema: sourceExplanationOutputSchema(), prompt: "Disposable helper."
     });
@@ -9584,7 +9584,7 @@ test("helper admission retries same-account cleanup without a controller restart
     assert.equal((await controller.deleteDetachedChatThread("session-1", {
       executionProfile, threadId: first.threadId
     })).ok, false);
-    const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+    const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
     assert.equal((await ledger.readAll()).records.length, 1);
     await controller.executionProfileModelCatalog("session-1");
     assert.equal((await ledger.readAll()).records.length, 0);
@@ -9599,7 +9599,7 @@ for (const failureIndex of [0, 1]) {
       captures.uniqueThreadIds = true;
       for (let index = 1; index <= 2; index += 1) {
         const pending = controller.runDetachedChatTurn("session-1", {
-          executionProfile: sourceExplanationEconomyProfile(),
+          executionProfile: sourceExplanationHelperProfile(),
           outputSchema: sourceExplanationOutputSchema(), prompt: "Disposable helper."
         });
         await waitForCapturedTurns(captures, index);
@@ -9610,7 +9610,7 @@ for (const failureIndex of [0, 1]) {
         assert.equal((await pending).ok, true);
       }
       simulateControllerCrash();
-      const ledger = createCodexEconomyThreadLedger({ projectRuntimeRoot });
+      const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
       const { records } = await ledger.readAll();
       assert.equal(records.length, 2);
       for (const record of records) {
@@ -9640,19 +9640,19 @@ for (const failureIndex of [0, 1]) {
       });
       const restarted = createRestartedController({ captures: switched, projectService });
       await assert.rejects(restarted.executionProfileModelCatalog("session-1"), {
-        code: "vibe64_codex_economy_ownership_blocked"
+        code: "vibe64_codex_helper_ownership_blocked"
       });
       const failedId = records[failureIndex].threadId;
       const retiredId = records[1 - failureIndex].threadId;
       assert.deepEqual((await ledger.readAll()).records.map((record) => record.threadId), [failedId]);
-      const audit = await auditStore.readBackgroundTask("session-1", "codex-economy-cleanup");
+      const audit = await auditStore.readBackgroundTask("session-1", "codex-helper-cleanup");
       assert.equal(audit.status, "failed");
       assert.deepEqual(audit.details.failed.map((failure) => failure.threadId), [failedId]);
       assert.deepEqual(audit.events.at(-1).retiredThreadIds, [retiredId]);
       switched.deleteThreadHandler = null;
       await restarted.executionProfileModelCatalog("session-1");
       assert.equal((await ledger.readAll()).records.length, 0);
-      const recovered = await auditStore.readBackgroundTask("session-1", "codex-economy-cleanup");
+      const recovered = await auditStore.readBackgroundTask("session-1", "codex-helper-cleanup");
       assert.equal(recovered.status, "ready");
       assert.deepEqual(recovered.details.failed, []);
       assert.ok(recovered.events.some((event) => event.status === "failed"));
@@ -9686,7 +9686,7 @@ test("setting a goal uses the observed main thread and rejects overwriting a liv
     const provider = captures.provider;
     let goal = null;
     const calls = [];
-    provider.isEconomyProvider = () => false;
+    provider.isHelperProvider = () => false;
     provider.readGoal = async () => ({ goal });
     provider.setGoal = async (threadId, input) => {
       assert.ok(captures.subscribers.size, "A goal needs an observer before activation");
@@ -9727,7 +9727,7 @@ test("goal UI controls reject stale goals and pause without interrupting the cur
     const goal = { threadId: provider.threadId, status: "active", objective: "Finish fixture", createdAt: 10, tokensUsed: 99 };
     const subscriptionCount = captures.subscribers.size;
     const calls = [];
-    provider.isEconomyProvider = () => false;
+    provider.isHelperProvider = () => false;
     provider.readGoal = async () => ({ goal: { ...goal } });
     provider.setGoalStatus = async (threadId, status) => {
       calls.push(status);
@@ -9768,7 +9768,7 @@ for (const status of ["active", "paused", "blocked", "usageLimited", "budgetLimi
       const input = { action: "cancel", threadId: provider.threadId, objective: "Finish fixture", createdAt: 10 };
       let goal = { ...input, status };
       const calls = [];
-      provider.isEconomyProvider = () => false;
+      provider.isHelperProvider = () => false;
       provider.readGoal = async () => ({ goal });
       provider.clearGoal = async (threadId) => {
         calls.push(threadId);
@@ -9802,7 +9802,7 @@ test("failed goal cancellation preserves the goal for retry", async () => {
       message: "Exercise cancellation failure", messageId: "goal-cancel-failure"
     })).ok, true);
     const provider = captures.provider;
-    provider.isEconomyProvider = () => false;
+    provider.isHelperProvider = () => false;
     const goal = { threadId: provider.threadId, status: "blocked", objective: "Finish fixture", createdAt: 10 };
     provider.readGoal = async () => ({ goal });
     provider.clearGoal = async () => { throw new Error("Codex unavailable"); };
@@ -10286,7 +10286,7 @@ test("a suspended Codex goal remains readable and only explicit Resume clears it
     await controller.sendMessage(sessionId, { message: "Work", messageId: "goal-loss-owner" });
     const provider = captures.provider;
     const goal = { threadId: provider.threadId, status: "active", objective: "Finish fixture", createdAt: 10, tokensUsed: 99 };
-    provider.isEconomyProvider = () => false;
+    provider.isHelperProvider = () => false;
     provider.readGoal = async () => ({ goal: { ...goal } });
     provider.stopThreadForObservationLoss = async () => { goal.status = "paused"; provider.status = "idle"; };
     provider.setGoalStatus = async (_threadId, status) => {

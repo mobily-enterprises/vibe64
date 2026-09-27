@@ -13,8 +13,8 @@ import { zstdDecompressSync, gunzipSync } from "node:zlib";
 import { createCodexProviderConnectionStore, codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
 import { createCodexTerminalController } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
 import { createCodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
-import { startCodexAppServerEconomyThread, sendCodexAppServerEconomyTurn } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
-import { resolveCodexEconomyExecutionProfile } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
+import { startCodexAppServerHelperThread, sendCodexAppServerHelperTurn } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
+import { resolveCodexHelperExecutionProfile } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 
 const version = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5000 });
@@ -139,7 +139,7 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   for (const [id, model] of [["openai", "gpt-5.6-luna"], ["deepseek", "deepseek-flash"], ["zai-coding-plan", "glm-5.3"], ["openai", "gpt-5.6-luna"]]) {
     if (id !== "openai") {
       await connections.change(id, { apiKey: `fixture-${id}` });
-      // Economy threads use the isolated provider home; the main thread override
+      // Helper threads use the isolated provider home; the main thread override
       // above replaces the fixed upstream at the native test boundary.
       const configPath = path.join(codexProviderPaths(systemRoot, id).codexHome, "config.toml");
       await writeFile(configPath, (await readFile(configPath, "utf8")).replace(/base_url = "[^"]+"/u, `base_url = "${fixtureUrl}"`));
@@ -179,15 +179,15 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   for (const id of ["deepseek", "zai-coding-plan"]) {
     const interactive = providers.find((candidate) => candidate.options.modelProviderId === id);
     const helper = createCodexAppServerAgentProvider({ ...interactive.options,
-      executionMode: "economy", runtimeDir: path.join(root, `codex-app-server-helper-${id}`), runtimeInstanceId: `codex-app-server-helper-${id}` });
+      executionMode: "helper", runtimeDir: path.join(root, `codex-app-server-helper-${id}`), runtimeInstanceId: `codex-app-server-helper-${id}` });
     providers.push(helper);
     try {
       await helper.connect();
       const catalog = await helper.listModels({ includeHidden: false, limit: 100 });
       const helperModel = id === "deepseek" ? "deepseek-flash" : "glm-5.3";
       assert.ok(catalog.data.some((model) => model.model === helperModel));
-      const executionProfile = resolveCodexEconomyExecutionProfile({ profileId: "economy", workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION }, catalog, helperModel);
-      const thread = await startCodexAppServerEconomyThread({ provider: helper, executionProfile });
+      const executionProfile = resolveCodexHelperExecutionProfile({ profileId: "helper", workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION }, catalog, helperModel);
+      const thread = await startCodexAppServerHelperThread({ provider: helper, executionProfile });
       const completed = new Promise((resolve, reject) => {
         const timer = setTimeout(() => { unsubscribe(); reject(new Error("Helper turn timed out")); }, 12000);
         const unsubscribe = helper.subscribe((event) => {
@@ -196,7 +196,7 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
           }
         });
       });
-      await sendCodexAppServerEconomyTurn({ provider: helper, executionProfile, threadId: thread.threadId,
+      await sendCodexAppServerHelperTurn({ provider: helper, executionProfile, threadId: thread.threadId,
         prompt: "Return the JSON answer OK.", outputSchema: { type: "object", additionalProperties: false,
           properties: { answer: { type: "string", maxLength: 20 } }, required: ["answer"] } });
       assert.equal((await completed).status, "completed");

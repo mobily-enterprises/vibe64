@@ -34,7 +34,7 @@ function validResolution(overrides = {}) {
       tools: VIBE64_AGENT_EXECUTION_TOOL_POLICIES.NONE,
       ...policyOverrides
     },
-    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
     providerId: "provider",
     request: {
       allowProviderModelFallback: false,
@@ -42,7 +42,7 @@ function validResolution(overrides = {}) {
       summary: false,
       ...requestOverrides
     },
-    revision: "economy-v1",
+    revision: "helper-v1",
     thinking: "low",
     workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION,
     ...resolutionOverrides
@@ -80,12 +80,12 @@ describe("vibe64 agent execution profiles", () => {
 
   it("normalizes and freezes semantic requests without provider details", () => {
     const request = defineVibe64AgentExecutionProfileRequest({
-      profileId: " economy ",
+      profileId: " helper ",
       workloadId: " prompt_hint "
     });
 
     expect(request).toEqual({
-      profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+      profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
       workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.PROMPT_HINT
     });
     expect(Object.isFrozen(request)).toBe(true);
@@ -93,9 +93,9 @@ describe("vibe64 agent execution profiles", () => {
 
   it("does not treat a disabled provider's advertised profile as executable", () => {
     expect(vibe64AgentProviderSupportsExecutionProfile({
-      executionProfiles: [VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY],
+      executionProfiles: [VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER],
       implemented: false
-    }, VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY)).toBe(false);
+    }, VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER)).toBe(false);
   });
 
   it("rejects malformed and unsupported semantic requests with stable codes", () => {
@@ -113,7 +113,7 @@ describe("vibe64 agent execution profiles", () => {
     );
     expectProfileError(
       () => defineVibe64AgentExecutionProfileRequest({
-        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
         workloadId: "implementation"
       }),
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.WORKLOAD_UNSUPPORTED
@@ -121,7 +121,7 @@ describe("vibe64 agent execution profiles", () => {
     expectProfileError(
       () => defineVibe64AgentExecutionProfileRequest({
         model: "consumer-selected-model",
-        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
         workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.PROMPT_HINT
       }),
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.INVALID,
@@ -165,7 +165,7 @@ describe("vibe64 agent execution profiles", () => {
     ["policy.repositoryWrite", { policy: { repositoryWrite: true } }],
     ["policy.tools", { policy: { tools: "read" } }],
     ["thinking", { thinking: "", request: { reasoning: true } }]
-  ])("rejects unsafe economy capability at %s", (field, overrides) => {
+  ])("rejects unsafe helper capability at %s", (field, overrides) => {
     expectProfileError(
       () => defineVibe64AgentExecutionProfileResolution(validResolution(overrides)),
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.UNSAFE,

@@ -6,22 +6,22 @@ import test from "node:test";
 
 import { MINIMUM_CODEX_VERSION } from "@local/vibe64-runtime/server/minimumCodexVersion";
 import {
-  assertCodexAppServerEconomyCompatibility,
-  assertCodexAppServerEconomyOutputWithinLimit,
-  codexAppServerEconomyThreadSettings,
-  codexAppServerEconomyTurnSettings,
+  assertCodexAppServerHelperCompatibility,
+  assertCodexAppServerHelperOutputWithinLimit,
+  codexAppServerHelperThreadSettings,
+  codexAppServerHelperTurnSettings,
   codexAppServerIdentityMetadata,
   codexAppServerProjectHookTrustConfig,
   codexAppServerThreadStartSettings,
   codexAppServerThreadSettings,
   codexAppServerTurnSettings,
   ensureCodexAppServerThreadForSession,
-  prepareCodexAppServerEconomyThreadStartSettings,
-  resumeCodexAppServerEconomyThread,
+  prepareCodexAppServerHelperThreadStartSettings,
+  resumeCodexAppServerHelperThread,
   resumeExactCodexAppServerThreadForSession,
-  sendCodexAppServerEconomyTurn,
+  sendCodexAppServerHelperTurn,
   sendCodexAppServerPromptForSession,
-  startCodexAppServerEconomyThread,
+  startCodexAppServerHelperThread,
   startFreshCodexAppServerThreadForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import {
@@ -108,7 +108,7 @@ function renewalThreadClaim({
   });
 }
 
-function sourceExplanationEconomyProfile(overrides = {}) {
+function sourceExplanationHelperProfile(overrides = {}) {
   return defineVibe64AgentExecutionProfileResolution({
     limits: {
       maxInputCharacters: 100_000,
@@ -122,14 +122,14 @@ function sourceExplanationEconomyProfile(overrides = {}) {
       repositoryWrite: false,
       tools: "none"
     },
-    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
     providerId: "codex",
     request: {
       allowProviderModelFallback: false,
       reasoning: true,
       summary: false
     },
-    revision: "codex-economy-luna-low-v1",
+    revision: "codex-helper-luna-low-v1",
     thinking: "low",
     workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION,
     ...overrides
@@ -151,22 +151,22 @@ function sourceExplanationOutputSchema(maxLength = 2_000) {
   };
 }
 
-const ECONOMY_EXECUTION_CWD = "/runtime/vibe64/codex-economy/workspace";
-const ECONOMY_ACCOUNT_IDENTITY_SIGNATURE = `sha256:${"a".repeat(64)}`;
+const HELPER_EXECUTION_CWD = "/runtime/vibe64/codex-helper/workspace";
+const HELPER_ACCOUNT_IDENTITY_SIGNATURE = `sha256:${"a".repeat(64)}`;
 
-function economyExecutionProviderParts() {
+function helperExecutionProviderParts() {
   return {
-    async currentEconomyExecutionContext() {
+    async currentHelperExecutionContext() {
       return {
-        accountIdentitySignature: ECONOMY_ACCOUNT_IDENTITY_SIGNATURE,
-        cwd: ECONOMY_EXECUTION_CWD,
-        executionMode: "economy"
+        accountIdentitySignature: HELPER_ACCOUNT_IDENTITY_SIGNATURE,
+        cwd: HELPER_EXECUTION_CWD,
+        executionMode: "helper"
       };
     }
   };
 }
 
-function economyInventoryProvider({
+function helperInventoryProvider({
   generation = 1,
   hooks = [],
   mcpServers = {},
@@ -175,7 +175,7 @@ function economyInventoryProvider({
 } = {}) {
   const calls = [];
   return {
-    ...economyExecutionProviderParts(),
+    ...helperExecutionProviderParts(),
     calls,
     currentConnectionGeneration() {
       return generation;
@@ -325,8 +325,8 @@ test("Codex thread summary defaults respect model support and explicit isolation
   assert.deepEqual(isolated.config, { model_reasoning_summary: "none", model_reasoning_effort: "low" });
 });
 
-test("Codex economy settings are Luna-low, bounded, tool-free, and never fall back", async () => {
-  const provider = economyInventoryProvider({
+test("Codex helper settings are Luna-low, bounded, tool-free, and never fall back", async () => {
+  const provider = helperInventoryProvider({
     hooks: [{
       currentHash: "sha256:malicious-hook",
       enabled: true,
@@ -351,8 +351,8 @@ test("Codex economy settings are Luna-low, bounded, tool-free, and never fall ba
       }
     }
   });
-  const executionProfile = sourceExplanationEconomyProfile();
-  const prepared = await prepareCodexAppServerEconomyThreadStartSettings({
+  const executionProfile = sourceExplanationHelperProfile();
+  const prepared = await prepareCodexAppServerHelperThreadStartSettings({
     developerInstructions: "Explain only the bounded excerpt in the prompt.",
     executionProfile,
     provider
@@ -369,7 +369,7 @@ test("Codex economy settings are Luna-low, bounded, tool-free, and never fall ba
     approvalPolicy: "never",
     baseInstructions: "Complete only the bounded structured task in the user input. Return one response matching the supplied JSON schema. Do not use tools, environments, network access, or repository writes.",
     config: prepared.enforcement.config,
-    cwd: ECONOMY_EXECUTION_CWD,
+    cwd: HELPER_EXECUTION_CWD,
     developerInstructions: "Explain only the bounded excerpt in the prompt.",
     dynamicTools: [],
     environments: [],
@@ -378,7 +378,7 @@ test("Codex economy settings are Luna-low, bounded, tool-free, and never fall ba
     sandbox: "read-only",
     selectedCapabilityRoots: [],
     sessionStartSource: "startup",
-    threadSource: "vibe64-economy"
+    threadSource: "vibe64-helper"
   });
   assert.deepEqual(prepared.settings.config.mcp_servers, {
     "danger.server": {
@@ -418,7 +418,7 @@ test("Codex economy settings are Luna-low, bounded, tool-free, and never fall ba
   assert.equal(Object.isFrozen(prepared.settings.config), true);
   assert.equal(Object.isFrozen(prepared.settings.config.mcp_servers["danger.server"]), true);
 
-  assert.deepEqual(codexAppServerEconomyTurnSettings({
+  assert.deepEqual(codexAppServerHelperTurnSettings({
     cwd: "/repo/worktree",
     executionProfile,
     outputSchema: sourceExplanationOutputSchema()
@@ -439,16 +439,16 @@ test("Codex economy settings are Luna-low, bounded, tool-free, and never fall ba
   assert.deepEqual(provider.calls, [[
     "readConfig",
     {
-      cwd: ECONOMY_EXECUTION_CWD,
+      cwd: HELPER_EXECUTION_CWD,
       includeLayers: false
     }
   ], [
     "listHooks",
-    [ECONOMY_EXECUTION_CWD]
+    [HELPER_EXECUTION_CWD]
   ]]);
 });
 
-test("Codex economy accepts the minimum and newer patch, minor and major versions with isolation", async () => {
+test("Codex helper accepts the minimum and newer patch, minor and major versions with isolation", async () => {
   const [major, minor, patch] = MINIMUM_CODEX_VERSION.split(".").map(Number);
   for (const version of [
     MINIMUM_CODEX_VERSION,
@@ -458,13 +458,13 @@ test("Codex economy accepts the minimum and newer patch, minor and major version
     `${major}.${minor + 10}.0`,
     `${major + 1}.0.0`
   ]) {
-    const provider = economyInventoryProvider({ userAgent: `vibe64/${version} (unit test)` });
-    assert.deepEqual(assertCodexAppServerEconomyCompatibility(provider), {
+    const provider = helperInventoryProvider({ userAgent: `vibe64/${version} (unit test)` });
+    assert.deepEqual(assertCodexAppServerHelperCompatibility(provider), {
       minimumVersion: MINIMUM_CODEX_VERSION,
       version
     });
-    const prepared = await prepareCodexAppServerEconomyThreadStartSettings({
-      executionProfile: sourceExplanationEconomyProfile(),
+    const prepared = await prepareCodexAppServerHelperThreadStartSettings({
+      executionProfile: sourceExplanationHelperProfile(),
       provider
     });
     assert.equal(prepared.settings.sandbox, "read-only", version);
@@ -475,7 +475,7 @@ test("Codex economy accepts the minimum and newer patch, minor and major version
   }
 });
 
-test("Codex economy rejects versions below the minimum before inventory", async () => {
+test("Codex helper rejects versions below the minimum before inventory", async () => {
   const minimumParts = MINIMUM_CODEX_VERSION.split(".").map(Number);
   for (const [index, part] of minimumParts.entries()) {
     if (part === 0) {
@@ -485,51 +485,51 @@ test("Codex economy rejects versions below the minimum before inventory", async 
     olderParts[index] -= 1;
     olderParts.fill(999, index + 1);
     const version = olderParts.join(".");
-    const provider = economyInventoryProvider({ userAgent: `vibe64/${version} (unit test)` });
-    await assert.rejects(prepareCodexAppServerEconomyThreadStartSettings({
-      executionProfile: sourceExplanationEconomyProfile(),
+    const provider = helperInventoryProvider({ userAgent: `vibe64/${version} (unit test)` });
+    await assert.rejects(prepareCodexAppServerHelperThreadStartSettings({
+      executionProfile: sourceExplanationHelperProfile(),
       provider
     }), (error) => {
       assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE);
       assert.equal(error.minimumVersion, MINIMUM_CODEX_VERSION);
       assert.equal(error.actualVersion, version);
-      assert.equal(error.message, `Codex economy execution requires app-server ${MINIMUM_CODEX_VERSION} or newer; current version is ${version}. Update Codex and retry.`);
+      assert.equal(error.message, `Codex helper execution requires app-server ${MINIMUM_CODEX_VERSION} or newer; current version is ${version}. Update Codex and retry.`);
       return true;
     });
     assert.deepEqual(provider.calls, [], version);
   }
 });
 
-test("Codex economy fails closed before inventory when app-server cannot enforce the policy", async () => {
+test("Codex helper fails closed before inventory when app-server cannot enforce the policy", async () => {
   for (const [label, provider] of [
     ["missing version API", {
-      ...economyInventoryProvider(),
+      ...helperInventoryProvider(),
       currentServerInfo: undefined
     }],
-    ["malformed version", economyInventoryProvider({
+    ["malformed version", helperInventoryProvider({
       userAgent: "vibe64/development"
     })],
-    ["spoofed product", economyInventoryProvider({
+    ["spoofed product", helperInventoryProvider({
       userAgent: `attacker/999.0.0 vibe64/${MINIMUM_CODEX_VERSION}`
     })],
-    ["leading zero", economyInventoryProvider({
+    ["leading zero", helperInventoryProvider({
       userAgent: `vibe64/0${MINIMUM_CODEX_VERSION}`
     })],
-    ["control character", economyInventoryProvider({
+    ["control character", helperInventoryProvider({
       userAgent: `vibe64/${MINIMUM_CODEX_VERSION}\nattacker/999.0.0`
     })],
-    ["oversized user agent", economyInventoryProvider({
+    ["oversized user agent", helperInventoryProvider({
       userAgent: `vibe64/${MINIMUM_CODEX_VERSION} ${"x".repeat(600)}`
     })],
-    ["prerelease version", economyInventoryProvider({
+    ["prerelease version", helperInventoryProvider({
       userAgent: `vibe64/${MINIMUM_CODEX_VERSION}-beta.1 (unit test)`
     })],
-    ["unsafe version component", economyInventoryProvider({
+    ["unsafe version component", helperInventoryProvider({
       userAgent: `vibe64/${Number.MAX_SAFE_INTEGER + 1}.0.0 (unit test)`
     })]
   ]) {
-    await assert.rejects(prepareCodexAppServerEconomyThreadStartSettings({
-      executionProfile: sourceExplanationEconomyProfile(),
+    await assert.rejects(prepareCodexAppServerHelperThreadStartSettings({
+      executionProfile: sourceExplanationHelperProfile(),
       provider
     }), (error) => {
       assert.equal(
@@ -544,19 +544,19 @@ test("Codex economy fails closed before inventory when app-server cannot enforce
     assert.deepEqual(provider.calls, [], label);
   }
 
-  const supported = economyInventoryProvider();
-  await prepareCodexAppServerEconomyThreadStartSettings({
-    executionProfile: sourceExplanationEconomyProfile(),
+  const supported = helperInventoryProvider();
+  await prepareCodexAppServerHelperThreadStartSettings({
+    executionProfile: sourceExplanationHelperProfile(),
     provider: supported
   });
   assert.equal(supported.calls.length, 2);
 });
 
-test("Codex economy rejects unsafe profiles and non-strict or unbounded output schemas", () => {
-  assert.throws(() => codexAppServerEconomyThreadSettings({
+test("Codex helper rejects unsafe profiles and non-strict or unbounded output schemas", () => {
+  assert.throws(() => codexAppServerHelperThreadSettings({
     config: {},
     cwd: "/repo/worktree",
-    executionProfile: sourceExplanationEconomyProfile()
+    executionProfile: sourceExplanationHelperProfile()
   }), (error) => {
     assert.equal(
       error.code,
@@ -566,9 +566,9 @@ test("Codex economy rejects unsafe profiles and non-strict or unbounded output s
     return true;
   });
 
-  assert.throws(() => codexAppServerEconomyTurnSettings({
+  assert.throws(() => codexAppServerHelperTurnSettings({
     cwd: "/repo/worktree",
-    executionProfile: sourceExplanationEconomyProfile({
+    executionProfile: sourceExplanationHelperProfile({
       providerId: "claude"
     }),
     outputSchema: sourceExplanationOutputSchema()
@@ -580,9 +580,9 @@ test("Codex economy rejects unsafe profiles and non-strict or unbounded output s
     return true;
   });
 
-  assert.throws(() => codexAppServerEconomyTurnSettings({
+  assert.throws(() => codexAppServerHelperTurnSettings({
     cwd: "/repo/worktree",
-    executionProfile: sourceExplanationEconomyProfile(),
+    executionProfile: sourceExplanationHelperProfile(),
     outputSchema: {
       properties: {
         answer: {
@@ -602,9 +602,9 @@ test("Codex economy rejects unsafe profiles and non-strict or unbounded output s
     return true;
   });
 
-  assert.throws(() => codexAppServerEconomyTurnSettings({
+  assert.throws(() => codexAppServerHelperTurnSettings({
     cwd: "/repo/worktree",
-    executionProfile: sourceExplanationEconomyProfile(),
+    executionProfile: sourceExplanationHelperProfile(),
     outputSchema: sourceExplanationOutputSchema(16_001)
   }), (error) => {
     assert.equal(
@@ -615,9 +615,9 @@ test("Codex economy rejects unsafe profiles and non-strict or unbounded output s
     return true;
   });
 
-  assert.throws(() => codexAppServerEconomyTurnSettings({
+  assert.throws(() => codexAppServerHelperTurnSettings({
     cwd: "/repo/worktree",
-    executionProfile: sourceExplanationEconomyProfile(),
+    executionProfile: sourceExplanationHelperProfile(),
     outputSchema: {
       additionalProperties: false,
       properties: {
@@ -639,9 +639,9 @@ test("Codex economy rejects unsafe profiles and non-strict or unbounded output s
     return true;
   });
 
-  assert.throws(() => codexAppServerEconomyTurnSettings({
+  assert.throws(() => codexAppServerHelperTurnSettings({
     cwd: "/repo/worktree",
-    executionProfile: sourceExplanationEconomyProfile(),
+    executionProfile: sourceExplanationHelperProfile(),
     outputSchema: {
       maximum: 1,
       minimum: 2,
@@ -656,14 +656,14 @@ test("Codex economy rejects unsafe profiles and non-strict or unbounded output s
     return true;
   });
 
-  const escapedStringProfile = sourceExplanationEconomyProfile({
+  const escapedStringProfile = sourceExplanationHelperProfile({
     limits: {
       maxInputCharacters: 100,
       maxOutputCharacters: 18,
       timeoutMs: 1000
     }
   });
-  assert.throws(() => codexAppServerEconomyTurnSettings({
+  assert.throws(() => codexAppServerHelperTurnSettings({
     cwd: "/repo/worktree",
     executionProfile: escapedStringProfile,
     outputSchema: sourceExplanationOutputSchema(1)
@@ -676,9 +676,9 @@ test("Codex economy rejects unsafe profiles and non-strict or unbounded output s
     assert.match(error.message, /exceed the resolved output limit/u);
     return true;
   });
-  assert.doesNotThrow(() => codexAppServerEconomyTurnSettings({
+  assert.doesNotThrow(() => codexAppServerHelperTurnSettings({
     cwd: "/repo/worktree",
-    executionProfile: sourceExplanationEconomyProfile({
+    executionProfile: sourceExplanationHelperProfile({
       limits: {
         maxInputCharacters: 100,
         maxOutputCharacters: JSON.stringify({ answer: "\u0000" }).length,
@@ -696,9 +696,9 @@ test("Codex economy rejects unsafe profiles and non-strict or unbounded output s
   };
   cyclicSchema.properties.answer = cyclicSchema;
   cyclicSchema.required.push("answer");
-  assert.throws(() => codexAppServerEconomyTurnSettings({
+  assert.throws(() => codexAppServerHelperTurnSettings({
     cwd: "/repo/worktree",
-    executionProfile: sourceExplanationEconomyProfile(),
+    executionProfile: sourceExplanationHelperProfile(),
     outputSchema: cyclicSchema
   }), (error) => {
     assert.equal(
@@ -710,10 +710,10 @@ test("Codex economy rejects unsafe profiles and non-strict or unbounded output s
   });
 });
 
-test("Codex economy fails closed for managed hooks and incomplete hook discovery", async () => {
-  await assert.rejects(prepareCodexAppServerEconomyThreadStartSettings({
-    executionProfile: sourceExplanationEconomyProfile(),
-    provider: economyInventoryProvider({
+test("Codex helper fails closed for managed hooks and incomplete hook discovery", async () => {
+  await assert.rejects(prepareCodexAppServerHelperThreadStartSettings({
+    executionProfile: sourceExplanationHelperProfile(),
+    provider: helperInventoryProvider({
       hooks: [{
         currentHash: "sha256:managed-hook",
         enabled: true,
@@ -732,11 +732,11 @@ test("Codex economy fails closed for managed hooks and incomplete hook discovery
     return true;
   });
 
-  await assert.rejects(prepareCodexAppServerEconomyThreadStartSettings({
-    executionProfile: sourceExplanationEconomyProfile(),
-    provider: economyInventoryProvider({
+  await assert.rejects(prepareCodexAppServerHelperThreadStartSettings({
+    executionProfile: sourceExplanationHelperProfile(),
+    provider: helperInventoryProvider({
       records: [{
-        cwd: ECONOMY_EXECUTION_CWD,
+        cwd: HELPER_EXECUTION_CWD,
         errors: [{ message: "malformed hook configuration" }],
         hooks: [],
         warnings: []
@@ -753,16 +753,16 @@ test("Codex economy fails closed for managed hooks and incomplete hook discovery
   });
 });
 
-test("Codex economy inventories MCP servers independently of a large unrelated native model catalogue", async () => {
-  const provider = economyInventoryProvider({ mcpServers: { example: { command: "example" } } });
+test("Codex helper inventories MCP servers independently of a large unrelated native model catalogue", async () => {
+  const provider = helperInventoryProvider({ mcpServers: { example: { command: "example" } } });
   const read = provider.readConfig;
   provider.readConfig = async (params) => {
     const response = await read(params);
     response.config.model_catalog = { notes: "catalogue".repeat(100_000) };
     return response;
   };
-  const prepared = await prepareCodexAppServerEconomyThreadStartSettings({
-    executionProfile: sourceExplanationEconomyProfile(), provider,
+  const prepared = await prepareCodexAppServerHelperThreadStartSettings({
+    executionProfile: sourceExplanationHelperProfile(), provider,
     developerInstructions: "Classify the bounded request."
   });
   assert.deepEqual(prepared.enforcement.mcpServerNames, ["example"]);
@@ -770,10 +770,10 @@ test("Codex economy inventories MCP servers independently of a large unrelated n
   assert.equal(prepared.settings.config.model_catalog, undefined);
 });
 
-test("Codex economy bounds config, hook, and instruction inventories without exposing their payloads", async () => {
+test("Codex helper bounds config, hook, and instruction inventories without exposing their payloads", async () => {
   const cases = [{
     label: "too many MCP servers",
-    provider: economyInventoryProvider({
+    provider: helperInventoryProvider({
       mcpServers: Object.fromEntries(Array.from({ length: 129 }, (_, index) => [
         `server-${index}`,
         { command: "unsafe" }
@@ -781,7 +781,7 @@ test("Codex economy bounds config, hook, and instruction inventories without exp
     })
   }, {
     label: "oversized MCP configuration",
-    provider: economyInventoryProvider({
+    provider: helperInventoryProvider({
       mcpServers: {
         malicious: {
           secret: `config-secret-${"x".repeat(300 * 1024)}`
@@ -790,7 +790,7 @@ test("Codex economy bounds config, hook, and instruction inventories without exp
     })
   }, {
     label: "oversized hook inventory",
-    provider: economyInventoryProvider({
+    provider: helperInventoryProvider({
       hooks: [{
         currentHash: "hash",
         enabled: false,
@@ -803,8 +803,8 @@ test("Codex economy bounds config, hook, and instruction inventories without exp
   }];
 
   for (const { label, provider } of cases) {
-    await assert.rejects(prepareCodexAppServerEconomyThreadStartSettings({
-      executionProfile: sourceExplanationEconomyProfile(),
+    await assert.rejects(prepareCodexAppServerHelperThreadStartSettings({
+      executionProfile: sourceExplanationHelperProfile(),
       provider
     }), (error) => {
       assert.equal(
@@ -817,10 +817,10 @@ test("Codex economy bounds config, hook, and instruction inventories without exp
     });
   }
 
-  await assert.rejects(prepareCodexAppServerEconomyThreadStartSettings({
+  await assert.rejects(prepareCodexAppServerHelperThreadStartSettings({
     developerInstructions: "x".repeat(8193),
-    executionProfile: sourceExplanationEconomyProfile(),
-    provider: economyInventoryProvider()
+    executionProfile: sourceExplanationHelperProfile(),
+    provider: helperInventoryProvider()
   }), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.UNBOUNDED);
     assert.match(error.message, /developer instructions exceed/u);
@@ -828,11 +828,11 @@ test("Codex economy bounds config, hook, and instruction inventories without exp
   });
 });
 
-test("Codex economy deletes a new thread when execution surfaces change during startup", async () => {
+test("Codex helper deletes a new thread when execution surfaces change during startup", async () => {
   const calls = [];
   let inventory = 0;
   const provider = {
-    ...economyExecutionProviderParts(),
+    ...helperExecutionProviderParts(),
     currentConnectionGeneration() {
       return 4;
     },
@@ -869,13 +869,13 @@ test("Codex economy deletes a new thread when execution surfaces change during s
     async startThread(params) {
       calls.push(["startThread", params]);
       return {
-        id: "economy-thread"
+        id: "helper-thread"
       };
     }
   };
 
-  await assert.rejects(startCodexAppServerEconomyThread({
-    executionProfile: sourceExplanationEconomyProfile(),
+  await assert.rejects(startCodexAppServerHelperThread({
+    executionProfile: sourceExplanationHelperProfile(),
     provider
   }), (error) => {
     assert.equal(
@@ -885,12 +885,12 @@ test("Codex economy deletes a new thread when execution surfaces change during s
     assert.match(error.message, /execution surfaces changed/u);
     return true;
   });
-  assert.deepEqual(calls.at(-1), ["deleteThread", "economy-thread"]);
+  assert.deepEqual(calls.at(-1), ["deleteThread", "helper-thread"]);
 });
 
-test("Codex economy reports retryable ownership when post-start deletion fails", async () => {
+test("Codex helper reports retryable ownership when post-start deletion fails", async () => {
   let inventory = 0;
-  const provider = economyInventoryProvider();
+  const provider = helperInventoryProvider();
   provider.readConfig = async () => {
     inventory += 1;
     return {
@@ -903,31 +903,31 @@ test("Codex economy reports retryable ownership when post-start deletion fails",
       }
     };
   };
-  provider.startThread = async () => ({ id: "unclean-economy-thread" });
+  provider.startThread = async () => ({ id: "unclean-helper-thread" });
   provider.deleteThread = async () => {
     throw new Error("delete transport failed");
   };
 
-  await assert.rejects(startCodexAppServerEconomyThread({
-    executionProfile: sourceExplanationEconomyProfile(),
+  await assert.rejects(startCodexAppServerHelperThread({
+    executionProfile: sourceExplanationHelperProfile(),
     provider
   }), (error) => {
     assert.equal(
       error.code,
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE
     );
-    assert.equal(error.codexAppServerEconomyThreadCleanupRequired, true);
-    assert.equal(error.codexAppServerEconomyThreadId, "unclean-economy-thread");
+    assert.equal(error.codexAppServerHelperThreadCleanupRequired, true);
+    assert.equal(error.codexAppServerHelperThreadId, "unclean-helper-thread");
     assert.equal(error.cleanupFailed, true);
-    assert.match(error.message, /could not retire an economy thread/u);
+    assert.match(error.message, /could not retire a helper thread/u);
     assert.equal(error.cause, undefined);
     return true;
   });
 });
 
-test("Codex economy turn enforces the input bound before contacting the provider", async () => {
+test("Codex helper turn enforces the input bound before contacting the provider", async () => {
   const calls = [];
-  const executionProfile = sourceExplanationEconomyProfile({
+  const executionProfile = sourceExplanationHelperProfile({
     limits: {
       maxInputCharacters: 8,
       maxOutputCharacters: 16_000,
@@ -935,7 +935,7 @@ test("Codex economy turn enforces the input bound before contacting the provider
     }
   });
   const provider = {
-    ...economyExecutionProviderParts(),
+    ...helperExecutionProviderParts(),
     async sendTurn(...args) {
       calls.push(args);
       return {
@@ -944,36 +944,36 @@ test("Codex economy turn enforces the input bound before contacting the provider
     }
   };
 
-  await assert.rejects(sendCodexAppServerEconomyTurn({
+  await assert.rejects(sendCodexAppServerHelperTurn({
     executionProfile,
     outputSchema: sourceExplanationOutputSchema(),
     prompt: "123456789",
     provider,
-    threadId: "economy-thread"
+    threadId: "helper-thread"
   }), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.UNBOUNDED);
     return true;
   });
   assert.equal(calls.length, 0);
 
-  const result = await sendCodexAppServerEconomyTurn({
+  const result = await sendCodexAppServerHelperTurn({
     executionProfile,
     outputSchema: sourceExplanationOutputSchema(),
     prompt: "bounded",
     provider,
-    threadId: "economy-thread"
+    threadId: "helper-thread"
   });
   assert.deepEqual(result.executionProfile, executionProfile);
   assert.equal(result.turn.id, "turn-1");
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].slice(0, 2), ["economy-thread", "bounded"]);
+  assert.deepEqual(calls[0].slice(0, 2), ["helper-thread", "bounded"]);
   assert.deepEqual(calls[0][2].environments, []);
   assert.equal(calls[0][2].sandboxPolicy.type, "readOnly");
   assert.equal(calls[0][2].sandboxPolicy.networkAccess, false);
 });
 
-test("Codex economy rejects raw structured output beyond the resolved bound", () => {
-  const executionProfile = sourceExplanationEconomyProfile({
+test("Codex helper rejects raw structured output beyond the resolved bound", () => {
+  const executionProfile = sourceExplanationHelperProfile({
     limits: {
       maxInputCharacters: 100_000,
       maxOutputCharacters: 20,
@@ -981,11 +981,11 @@ test("Codex economy rejects raw structured output beyond the resolved bound", ()
     }
   });
 
-  assert.equal(assertCodexAppServerEconomyOutputWithinLimit({
+  assert.equal(assertCodexAppServerHelperOutputWithinLimit({
     executionProfile,
     rawOutput: "{\"answer\":\"short\"}"
   }), "{\"answer\":\"short\"}");
-  assert.throws(() => assertCodexAppServerEconomyOutputWithinLimit({
+  assert.throws(() => assertCodexAppServerHelperOutputWithinLimit({
     executionProfile,
     rawOutput: "{\"answer\":\"too long\"}"
   }), (error) => {
@@ -996,10 +996,10 @@ test("Codex economy rejects raw structured output beyond the resolved bound", ()
   });
 });
 
-test("Codex economy safely reapplies isolation when resuming a controller-owned thread", async () => {
+test("Codex helper safely reapplies isolation when resuming a controller-owned thread", async () => {
   const calls = [];
   const provider = {
-    ...economyExecutionProviderParts(),
+    ...helperExecutionProviderParts(),
     currentConnectionGeneration() {
       return 7;
     },
@@ -1040,18 +1040,18 @@ test("Codex economy safely reapplies isolation when resuming a controller-owned 
     }
   };
 
-  const result = await resumeCodexAppServerEconomyThread({
+  const result = await resumeCodexAppServerHelperThread({
     developerInstructions: "Continue only this source explanation.",
-    executionProfile: sourceExplanationEconomyProfile(),
+    executionProfile: sourceExplanationHelperProfile(),
     provider,
-    threadId: "registered-economy-thread"
+    threadId: "registered-helper-thread"
   });
 
-  assert.equal(result.threadId, "registered-economy-thread");
+  assert.equal(result.threadId, "registered-helper-thread");
   assert.equal(calls.filter(([method]) => method === "readConfig").length, 2);
   assert.equal(calls.filter(([method]) => method === "listHooks").length, 2);
   const resumeCall = calls.find(([method]) => method === "resumeThread");
-  assert.equal(resumeCall[1], "registered-economy-thread");
+  assert.equal(resumeCall[1], "registered-helper-thread");
   assert.deepEqual(resumeCall[2].runtimeWorkspaceRoots, []);
   assert.equal(resumeCall[2].sandbox, "read-only");
   assert.equal(resumeCall[2].config.mcp_servers.filesystem.enabled, false);

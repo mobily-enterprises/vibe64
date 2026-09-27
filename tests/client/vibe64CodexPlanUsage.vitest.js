@@ -243,11 +243,11 @@ it("offers goal creation before the first goal and hides it for OpenCode", async
 it("explains Auto before goal creation or resume while keeping pause and cancel available", async () => {
   for (const engineId of ["codex", "claude"]) {
     const props = { session: { sessionId: "one", assistantSelection: { engineId },
-      metadata: { assistant_routing: JSON.stringify({ schemaVersion: 3, workflowEngineId: engineId, mode: "auto", review: false }) } } };
+      metadata: { assistant_routing: JSON.stringify({ schemaVersion: 4, workflowEngineId: engineId, mode: "auto", review: false }) } } };
     for (const status of [null, "paused", "active"]) {
       mocks.goal = { status: "available", goal: status ? { status, objective: "Finish the agreed work" } : null };
       const html = await render(null, props);
-      expect(html).toContain("Choose Plan, Code, or Economy before starting or resuming a goal.");
+      expect(html).toContain("Choose Senior or Junior before starting or resuming a goal.");
       expect(html).not.toContain("Goal objective");
       expect(html).not.toContain("Start goal");
       expect(html).not.toContain("Resume goal");

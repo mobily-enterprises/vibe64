@@ -45,8 +45,8 @@ async function sessionEnvironmentForUpstreamSession(sessionId = "", client = nul
   return null;
 }
 
-function isSelectedEconomyAgent(agent, selected) {
-  return Boolean(selected?.internModelId && agent === `vibe64-intern-${selected.modelProviderId}`);
+function isSelectedHelperAgent(agent, selected) {
+  return Boolean(selected?.helperModelId && agent === `vibe64-helper-${selected.modelProviderId}`);
 }
 
 function shellQuote(value = "") {
@@ -111,21 +111,21 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => ({
     output.system.splice(0, output.system.length, vibe64Driver(selected.promptContext));
   },
   "chat.message": async (input = {}, output = {}) => {
-    if (!text(input.agent).startsWith("vibe64-intern-")) return;
+    if (!text(input.agent).startsWith("vibe64-helper-")) return;
     const selected = await sessionEnvironmentForUpstreamSession(input.sessionID, client);
-    if (!isSelectedEconomyAgent(input.agent, selected)) {
+    if (!isSelectedHelperAgent(input.agent, selected)) {
       throw new Error("This helper is not available through the session's selected AI account.");
     }
-    output.message.model = { providerID: selected.modelProviderId, modelID: selected.internModelId };
+    output.message.model = { providerID: selected.modelProviderId, modelID: selected.helperModelId };
   },
   "chat.params": async (input = {}, output = {}) => {
     const selected = await sessionEnvironmentForUpstreamSession(input.sessionID, client);
     if (selected?.modelProviderId && input.model?.providerID !== selected.modelProviderId) {
       throw new Error("Assistants must use the session's selected AI account.");
     }
-    if (text(input.agent).startsWith("vibe64-intern-") && (
-      !isSelectedEconomyAgent(input.agent, selected) ||
-      input.model?.providerID !== selected.modelProviderId || input.model?.id !== selected.internModelId
+    if (text(input.agent).startsWith("vibe64-helper-") && (
+      !isSelectedHelperAgent(input.agent, selected) ||
+      input.model?.providerID !== selected.modelProviderId || input.model?.id !== selected.helperModelId
     )) {
       throw new Error("This helper is not available through the session's selected AI account.");
     }
@@ -214,8 +214,8 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => ({
       throw new Error("Tools are unavailable in this host conversation. Use only the supplied context.");
     }
     if (input.tool === "task") {
-      if (text(output.args?.subagent_type).startsWith("vibe64-intern-") &&
-          !isSelectedEconomyAgent(output.args.subagent_type, selected)) {
+      if (text(output.args?.subagent_type).startsWith("vibe64-helper-") &&
+          !isSelectedHelperAgent(output.args.subagent_type, selected)) {
         throw new Error("Choose the helper belonging to this session's selected AI account.");
       }
       if (text(output.args?.task_id)) {

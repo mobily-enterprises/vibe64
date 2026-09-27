@@ -2,6 +2,7 @@
 import { parseArgs } from "node:util";
 import { runStateUpgrades } from "@local/vibe64-core/server/stateUpgrades";
 import { upgradeAssistantRouting } from "@local/vibe64-accounts/server/assistantRoutingUpgrade";
+import { upgradeAssistantHelpers } from "@local/vibe64-accounts/server/assistantHelperUpgrade";
 import { upgradeAssistantRoles } from "@local/vibe64-accounts/server/assistantRoleUpgrade";
 
 try {
@@ -18,6 +19,7 @@ try {
     apply: Boolean(values.apply),
     upgradeAssistantRouting,
     upgradeAssistantRoles,
+    upgradeAssistantHelpers,
     report: (level, message) => {
       const line = `[vibe64-upgrade] ${level.toUpperCase()}: ${message}`;
       if (level === "warning") console.error(line);

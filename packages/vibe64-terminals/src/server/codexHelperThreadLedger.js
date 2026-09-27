@@ -9,22 +9,22 @@ import {
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 
-const CODEX_ECONOMY_THREAD_LEDGER_SCHEMA_VERSION = 1;
-const CODEX_ECONOMY_THREAD_LEDGER_DIRECTORY = "codex-economy-thread-ownership";
-const CODEX_ECONOMY_THREAD_LEDGER_MAX_FILE_BYTES = 64 * 1024;
-const CODEX_ECONOMY_THREAD_LEDGER_MAX_RECORDS = 1024;
-const CODEX_ECONOMY_THREAD_LEDGER_LOCK_WAIT_MS = 5000;
-const CODEX_ECONOMY_THREAD_LEDGER_LOCK_POLL_MS = 20;
-const codexEconomyThreadLedgerMutationQueues = new Map();
-const codexEconomyThreadLedgerProcessId = crypto.randomUUID();
-const CODEX_ECONOMY_THREAD_LIFECYCLES = Object.freeze({
+const CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION = 1;
+const CODEX_HELPER_THREAD_LEDGER_DIRECTORY = "codex-helper-thread-ownership";
+const CODEX_HELPER_THREAD_LEDGER_MAX_FILE_BYTES = 64 * 1024;
+const CODEX_HELPER_THREAD_LEDGER_MAX_RECORDS = 1024;
+const CODEX_HELPER_THREAD_LEDGER_LOCK_WAIT_MS = 5000;
+const CODEX_HELPER_THREAD_LEDGER_LOCK_POLL_MS = 20;
+const codexHelperThreadLedgerMutationQueues = new Map();
+const codexHelperThreadLedgerProcessId = crypto.randomUUID();
+const CODEX_HELPER_THREAD_LIFECYCLES = Object.freeze({
   ACTIVE: "active",
   CLEANUP_REQUIRED: "cleanup_required",
   READY: "ready",
   STARTING_TURN: "starting_turn"
 });
-const CODEX_ECONOMY_THREAD_LIFECYCLE_VALUES = new Set(
-  Object.values(CODEX_ECONOMY_THREAD_LIFECYCLES)
+const CODEX_HELPER_THREAD_LIFECYCLE_VALUES = new Set(
+  Object.values(CODEX_HELPER_THREAD_LIFECYCLES)
 );
 const RECORD_KEYS = Object.freeze([
   "createdAt",
@@ -101,8 +101,8 @@ function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function ledgerError(message = "", code = "vibe64_codex_economy_ledger_invalid") {
-  const error = new Error(normalizeText(message) || "Codex economy ownership record is invalid.");
+function ledgerError(message = "", code = "vibe64_codex_helper_ledger_invalid") {
+  const error = new Error(normalizeText(message) || "Codex helper ownership record is invalid.");
   error.code = code;
   error.retryable = true;
   return error;
@@ -228,7 +228,7 @@ function strictIdentity(value) {
   const endpointPath = endpoint.startsWith("unix://") ? endpoint.slice("unix://".length) : "";
   if (
     providerId !== "codex" ||
-    !["economy", "interactive"].includes(executionMode) ||
+    !["helper", "interactive"].includes(executionMode) ||
     provider !== "codex_app_server" ||
     transport !== "unix" ||
     !endpointPath ||
@@ -237,7 +237,7 @@ function strictIdentity(value) {
     transportId !== "codex_app_server"
   ) {
     throw ledgerError(
-      "Codex economy ownership identity must use the managed Codex app-server."
+      "Codex helper ownership identity must use the managed Codex app-server."
     );
   }
   return Object.freeze({
@@ -281,7 +281,7 @@ function strictIdentity(value) {
   });
 }
 
-function codexEconomyThreadRecordId({
+function codexHelperThreadRecordId({
   projectRuntimeRoot = "",
   sessionId = "",
   threadId = ""
@@ -293,23 +293,23 @@ function codexEconomyThreadRecordId({
   ].join("\0")).digest("hex");
 }
 
-function defineCodexEconomyThreadRecord(value = {}) {
-  assertExactKeys(value, RECORD_KEYS, "Codex economy ownership record");
-  if (Number(value.schemaVersion) !== CODEX_ECONOMY_THREAD_LEDGER_SCHEMA_VERSION) {
+function defineCodexHelperThreadRecord(value = {}) {
+  assertExactKeys(value, RECORD_KEYS, "Codex helper ownership record");
+  if (Number(value.schemaVersion) !== CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION) {
     throw ledgerError(
-      `Unsupported Codex economy ownership schema: ${String(value.schemaVersion ?? "missing")}.`
+      `Unsupported Codex helper ownership schema: ${String(value.schemaVersion ?? "missing")}.`
     );
   }
   const lifecycle = requiredText(value.lifecycle, "lifecycle");
-  if (!CODEX_ECONOMY_THREAD_LIFECYCLE_VALUES.has(lifecycle)) {
-    throw ledgerError(`Unsupported Codex economy ownership lifecycle: ${lifecycle}.`);
+  if (!CODEX_HELPER_THREAD_LIFECYCLE_VALUES.has(lifecycle)) {
+    throw ledgerError(`Unsupported Codex helper ownership lifecycle: ${lifecycle}.`);
   }
   const turnId = optionalText(value.turnId);
-  if (lifecycle === CODEX_ECONOMY_THREAD_LIFECYCLES.ACTIVE && !turnId) {
-    throw ledgerError("An active Codex economy ownership record requires turnId.");
+  if (lifecycle === CODEX_HELPER_THREAD_LIFECYCLES.ACTIVE && !turnId) {
+    throw ledgerError("An active Codex helper ownership record requires turnId.");
   }
-  if (lifecycle === CODEX_ECONOMY_THREAD_LIFECYCLES.READY && turnId) {
-    throw ledgerError(`${lifecycle} Codex economy ownership cannot retain turnId.`);
+  if (lifecycle === CODEX_HELPER_THREAD_LIFECYCLES.READY && turnId) {
+    throw ledgerError(`${lifecycle} Codex helper ownership cannot retain turnId.`);
   }
   const createdAt = timestamp(value.createdAt, "createdAt");
   const updatedAt = timestamp(value.updatedAt, "updatedAt");
@@ -325,7 +325,7 @@ function defineCodexEconomyThreadRecord(value = {}) {
     projectContextRoot: absolutePath(value.projectContextRoot, "projectContextRoot"),
     projectRuntimeRoot: absolutePath(value.projectRuntimeRoot, "projectRuntimeRoot"),
     revision: positiveInteger(value.revision, "revision"),
-    schemaVersion: CODEX_ECONOMY_THREAD_LEDGER_SCHEMA_VERSION,
+    schemaVersion: CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION,
     sessionId: requiredText(value.sessionId, "sessionId", 256),
     threadId: requiredText(value.threadId, "threadId", 256),
     turnId: optionalText(turnId, "turnId", 256),
@@ -334,10 +334,10 @@ function defineCodexEconomyThreadRecord(value = {}) {
   });
 }
 
-function codexEconomyThreadLedgerRoot(projectRuntimeRoot = "") {
+function codexHelperThreadLedgerRoot(projectRuntimeRoot = "") {
   return path.join(
     absolutePath(projectRuntimeRoot, "projectRuntimeRoot"),
-    CODEX_ECONOMY_THREAD_LEDGER_DIRECTORY
+    CODEX_HELPER_THREAD_LEDGER_DIRECTORY
   );
 }
 
@@ -363,7 +363,7 @@ function delay(milliseconds = 0) {
 
 async function readBoundedFile(
   filePath = "",
-  maxBytes = CODEX_ECONOMY_THREAD_LEDGER_MAX_FILE_BYTES
+  maxBytes = CODEX_HELPER_THREAD_LEDGER_MAX_FILE_BYTES
 ) {
   const handle = await open(filePath, "r");
   try {
@@ -371,7 +371,7 @@ async function readBoundedFile(
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
     if (bytesRead > maxBytes) {
       throw ledgerError(
-        `Codex economy ownership state exceeds ${maxBytes} bytes: ${path.basename(filePath)}.`
+        `Codex helper ownership state exceeds ${maxBytes} bytes: ${path.basename(filePath)}.`
       );
     }
     return buffer.subarray(0, bytesRead).toString("utf8");
@@ -398,32 +398,32 @@ async function readRecordFile(filePath = "") {
       throw error;
     }
     throw ledgerError(
-      `Codex economy ownership record cannot be read: ${path.basename(filePath)} (${error.message})`
+      `Codex helper ownership record cannot be read: ${path.basename(filePath)} (${error.message})`
     );
   }
-  const record = defineCodexEconomyThreadRecord(value);
-  if (path.basename(filePath) !== `${codexEconomyThreadRecordId(record)}.json`) {
+  const record = defineCodexHelperThreadRecord(value);
+  if (path.basename(filePath) !== `${codexHelperThreadRecordId(record)}.json`) {
     throw ledgerError(
-      `Codex economy ownership record filename does not match its identity: ${path.basename(filePath)}.`
+      `Codex helper ownership record filename does not match its identity: ${path.basename(filePath)}.`
     );
   }
   return record;
 }
 
 async function withMutationQueue(key = "", callback = async () => undefined) {
-  const previous = codexEconomyThreadLedgerMutationQueues.get(key) || Promise.resolve();
+  const previous = codexHelperThreadLedgerMutationQueues.get(key) || Promise.resolve();
   let release = () => undefined;
   const current = new Promise((resolve) => {
     release = resolve;
   });
-  codexEconomyThreadLedgerMutationQueues.set(key, current);
+  codexHelperThreadLedgerMutationQueues.set(key, current);
   await previous.catch(() => null);
   try {
     return await callback();
   } finally {
     release();
-    if (codexEconomyThreadLedgerMutationQueues.get(key) === current) {
-      codexEconomyThreadLedgerMutationQueues.delete(key);
+    if (codexHelperThreadLedgerMutationQueues.get(key) === current) {
+      codexHelperThreadLedgerMutationQueues.delete(key);
     }
   }
 }
@@ -432,7 +432,7 @@ function defineLockOwner(value = {}) {
   assertExactKeys(
     value,
     ["createdAt", "pid", "processId", "token"],
-    "Codex economy ownership lock"
+    "Codex helper ownership lock"
   );
   return Object.freeze({
     createdAt: timestamp(value.createdAt, "lock.createdAt"),
@@ -450,7 +450,7 @@ async function readLockOwner(lockPath = "") {
       throw error;
     }
     throw ledgerError(
-      `Codex economy ownership lock cannot be verified: ${path.basename(lockPath)} (${error.message})`
+      `Codex helper ownership lock cannot be verified: ${path.basename(lockPath)} (${error.message})`
     );
   }
 }
@@ -477,7 +477,7 @@ async function acquireHostLock(root = "", recordId = "", {
     root,
     `.${requiredText(recordId, "recordId", 128)}.host-lock`
   );
-  const deadline = Date.now() + CODEX_ECONOMY_THREAD_LEDGER_LOCK_WAIT_MS;
+  const deadline = Date.now() + CODEX_HELPER_THREAD_LEDGER_LOCK_WAIT_MS;
   while (true) {
     let releaseFileLock = null;
     try {
@@ -486,11 +486,11 @@ async function acquireHostLock(root = "", recordId = "", {
         await observeLock?.({ stage: "host-contended" });
         if (Date.now() >= deadline) {
           throw ledgerError(
-            "Codex economy ownership is busy in another process.",
-            "vibe64_codex_economy_ledger_busy"
+            "Codex helper ownership is busy in another process.",
+            "vibe64_codex_helper_ledger_busy"
           );
         }
-        await delay(CODEX_ECONOMY_THREAD_LEDGER_LOCK_POLL_MS);
+        await delay(CODEX_HELPER_THREAD_LEDGER_LOCK_POLL_MS);
         continue;
       }
       await observeLock?.({ stage: "host-acquired" });
@@ -503,13 +503,13 @@ async function acquireHostLock(root = "", recordId = "", {
         try {
           await releaseFileLock();
         } catch (error) {
-          throw ledgerError(`Codex economy ownership host lock failed: ${error.message}`);
+          throw ledgerError(`Codex helper ownership host lock failed: ${error.message}`);
         }
       };
     } catch (error) {
-      throw error?.code?.startsWith?.("vibe64_codex_economy_")
+      throw error?.code?.startsWith?.("vibe64_codex_helper_")
         ? error
-        : ledgerError(`Codex economy ownership host lock failed: ${error.message}`);
+        : ledgerError(`Codex helper ownership host lock failed: ${error.message}`);
     }
   }
 }
@@ -522,11 +522,11 @@ async function acquireFilesystemLock(root = "", recordId = "", {
   const releaseHostLock = await acquireHostLock(root, recordId, { observeLock });
   try {
     const lockPath = path.join(locksRoot, `${requiredText(recordId, "recordId", 128)}.lock`);
-    const deadline = Date.now() + CODEX_ECONOMY_THREAD_LEDGER_LOCK_WAIT_MS;
+    const deadline = Date.now() + CODEX_HELPER_THREAD_LEDGER_LOCK_WAIT_MS;
     const owner = defineLockOwner({
       createdAt: new Date().toISOString(),
       pid: process.pid,
-      processId: codexEconomyThreadLedgerProcessId,
+      processId: codexHelperThreadLedgerProcessId,
       token: crypto.randomUUID()
     });
     const candidatePath = `${lockPath}.${owner.token}.candidate`;
@@ -577,11 +577,11 @@ async function acquireFilesystemLock(root = "", recordId = "", {
           }
           if (Date.now() >= deadline) {
             throw ledgerError(
-              "Codex economy ownership is busy in another process.",
-              "vibe64_codex_economy_ledger_busy"
+              "Codex helper ownership is busy in another process.",
+              "vibe64_codex_helper_ledger_busy"
             );
           }
-          await delay(CODEX_ECONOMY_THREAD_LEDGER_LOCK_POLL_MS);
+          await delay(CODEX_HELPER_THREAD_LEDGER_LOCK_POLL_MS);
         }
       }
     } finally {
@@ -593,8 +593,8 @@ async function acquireFilesystemLock(root = "", recordId = "", {
         const current = await readLockOwner(lockPath);
         if (current.token !== owner.token || current.processId !== owner.processId) {
           throw ledgerError(
-            "Codex economy ownership lock changed before it could be released.",
-            "vibe64_codex_economy_ledger_conflict"
+            "Codex helper ownership lock changed before it could be released.",
+            "vibe64_codex_helper_ledger_conflict"
           );
         }
         await rm(lockPath);
@@ -625,12 +625,12 @@ async function withFilesystemMutationLock(
   });
 }
 
-function createCodexEconomyThreadLedger({
+function createCodexHelperThreadLedger({
   observeLock = null,
   projectRuntimeRoot = ""
 } = {}) {
   const normalizedProjectRuntimeRoot = absolutePath(projectRuntimeRoot, "projectRuntimeRoot");
-  const root = codexEconomyThreadLedgerRoot(normalizedProjectRuntimeRoot);
+  const root = codexHelperThreadLedgerRoot(normalizedProjectRuntimeRoot);
 
   async function readAll() {
     let entries;
@@ -645,11 +645,11 @@ function createCodexEconomyThreadLedger({
     const recordEntries = entries.filter(
       (entry) => entry.isFile() && entry.name.endsWith(".json")
     );
-    if (recordEntries.length > CODEX_ECONOMY_THREAD_LEDGER_MAX_RECORDS) {
+    if (recordEntries.length > CODEX_HELPER_THREAD_LEDGER_MAX_RECORDS) {
       return {
         failures: [Object.freeze({
-          code: "vibe64_codex_economy_ledger_invalid",
-          error: `Codex economy ownership ledger exceeds ${CODEX_ECONOMY_THREAD_LEDGER_MAX_RECORDS} records.`,
+          code: "vibe64_codex_helper_ledger_invalid",
+          error: `Codex helper ownership ledger exceeds ${CODEX_HELPER_THREAD_LEDGER_MAX_RECORDS} records.`,
           fileName: "",
           retryable: true
         })],
@@ -675,20 +675,20 @@ function createCodexEconomyThreadLedger({
   }
 
   async function write(recordValue = {}, { expected = null } = {}) {
-    const record = defineCodexEconomyThreadRecord(recordValue);
-    const expectedRecord = expected ? defineCodexEconomyThreadRecord(expected) : null;
+    const record = defineCodexHelperThreadRecord(recordValue);
+    const expectedRecord = expected ? defineCodexHelperThreadRecord(expected) : null;
     if (record.projectRuntimeRoot !== normalizedProjectRuntimeRoot) {
-      throw ledgerError("Codex economy ownership project runtime root does not match its ledger.");
+      throw ledgerError("Codex helper ownership project runtime root does not match its ledger.");
     }
-    const recordId = codexEconomyThreadRecordId(record);
-    if (expectedRecord && codexEconomyThreadRecordId(expectedRecord) !== recordId) {
+    const recordId = codexHelperThreadRecordId(record);
+    if (expectedRecord && codexHelperThreadRecordId(expectedRecord) !== recordId) {
       throw ledgerError(
-        "Codex economy ownership identity cannot change during an update.",
-        "vibe64_codex_economy_ledger_conflict"
+        "Codex helper ownership identity cannot change during an update.",
+        "vibe64_codex_helper_ledger_conflict"
       );
     }
     if (!expectedRecord && record.revision !== 1) {
-      throw ledgerError("New Codex economy ownership must start at revision 1.");
+      throw ledgerError("New Codex helper ownership must start at revision 1.");
     }
     if (expectedRecord && (
       record.revision !== expectedRecord.revision + 1 ||
@@ -696,8 +696,8 @@ function createCodexEconomyThreadLedger({
       !stableOwnershipMatches(record, expectedRecord)
     )) {
       throw ledgerError(
-        "Codex economy ownership update changed immutable identity, revision, or time.",
-        "vibe64_codex_economy_ledger_conflict"
+        "Codex helper ownership update changed immutable identity, revision, or time.",
+        "vibe64_codex_helper_ledger_conflict"
       );
     }
     const filePath = path.join(root, `${recordId}.json`);
@@ -710,16 +710,16 @@ function createCodexEconomyThreadLedger({
         } catch (error) {
           if (error?.code === "ENOENT") {
             throw ledgerError(
-              "Codex economy ownership changed before it could be updated.",
-              "vibe64_codex_economy_ledger_conflict"
+              "Codex helper ownership changed before it could be updated.",
+              "vibe64_codex_helper_ledger_conflict"
             );
           }
           throw error;
         }
         if (!recordsMatch(current, expectedRecord)) {
           throw ledgerError(
-            "Codex economy ownership changed before it could be updated.",
-            "vibe64_codex_economy_ledger_conflict"
+            "Codex helper ownership changed before it could be updated.",
+            "vibe64_codex_helper_ledger_conflict"
           );
         }
       } else {
@@ -727,16 +727,16 @@ function createCodexEconomyThreadLedger({
         const recordCount = entries.filter(
           (entry) => entry.isFile() && entry.name.endsWith(".json")
         ).length;
-        if (recordCount >= CODEX_ECONOMY_THREAD_LEDGER_MAX_RECORDS) {
+        if (recordCount >= CODEX_HELPER_THREAD_LEDGER_MAX_RECORDS) {
           throw ledgerError(
-            `Codex economy ownership ledger cannot exceed ${CODEX_ECONOMY_THREAD_LEDGER_MAX_RECORDS} records.`
+            `Codex helper ownership ledger cannot exceed ${CODEX_HELPER_THREAD_LEDGER_MAX_RECORDS} records.`
           );
         }
         try {
           await readBoundedFile(filePath);
           throw ledgerError(
-            "Codex economy ownership already exists for this thread.",
-            "vibe64_codex_economy_ledger_conflict"
+            "Codex helper ownership already exists for this thread.",
+            "vibe64_codex_helper_ledger_conflict"
           );
         } catch (error) {
           if (error?.code !== "ENOENT") {
@@ -745,9 +745,9 @@ function createCodexEconomyThreadLedger({
         }
       }
       const serialized = `${JSON.stringify(record, null, 2)}\n`;
-      if (Buffer.byteLength(serialized) > CODEX_ECONOMY_THREAD_LEDGER_MAX_FILE_BYTES) {
+      if (Buffer.byteLength(serialized) > CODEX_HELPER_THREAD_LEDGER_MAX_FILE_BYTES) {
         throw ledgerError(
-          `Codex economy ownership state exceeds ${CODEX_ECONOMY_THREAD_LEDGER_MAX_FILE_BYTES} bytes.`
+          `Codex helper ownership state exceeds ${CODEX_HELPER_THREAD_LEDGER_MAX_FILE_BYTES} bytes.`
         );
       }
       const temporaryPath = path.join(
@@ -773,8 +773,8 @@ function createCodexEconomyThreadLedger({
   }
 
   async function remove(expectedValue = {}) {
-    const expected = defineCodexEconomyThreadRecord(expectedValue);
-    const recordId = codexEconomyThreadRecordId(expected);
+    const expected = defineCodexHelperThreadRecord(expectedValue);
+    const recordId = codexHelperThreadRecordId(expected);
     const filePath = path.join(root, `${recordId}.json`);
     await mkdir(root, { mode: 0o770, recursive: true });
     return withFilesystemMutationLock(root, async () => {
@@ -784,16 +784,16 @@ function createCodexEconomyThreadLedger({
       } catch (error) {
         if (error?.code === "ENOENT") {
           throw ledgerError(
-            "Codex economy ownership changed before it could be removed.",
-            "vibe64_codex_economy_ledger_conflict"
+            "Codex helper ownership changed before it could be removed.",
+            "vibe64_codex_helper_ledger_conflict"
           );
         }
         throw error;
       }
       if (!recordsMatch(current, expected)) {
         throw ledgerError(
-          "Codex economy ownership changed before it could be removed.",
-          "vibe64_codex_economy_ledger_conflict"
+          "Codex helper ownership changed before it could be removed.",
+          "vibe64_codex_helper_ledger_conflict"
         );
       }
       await rm(filePath);
@@ -812,9 +812,9 @@ function createCodexEconomyThreadLedger({
 }
 
 export {
-  CODEX_ECONOMY_THREAD_LEDGER_SCHEMA_VERSION,
-  CODEX_ECONOMY_THREAD_LIFECYCLES,
-  codexEconomyThreadRecordId,
-  createCodexEconomyThreadLedger,
-  defineCodexEconomyThreadRecord
+  CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION,
+  CODEX_HELPER_THREAD_LIFECYCLES,
+  codexHelperThreadRecordId,
+  createCodexHelperThreadLedger,
+  defineCodexHelperThreadRecord
 };

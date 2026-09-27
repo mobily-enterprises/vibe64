@@ -9,7 +9,7 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
-import { VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
+import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileRequest } from "@local/vibe64-runtime/shared";
 import { AUTO_MIXED_DESLOP_MESSAGE, assistantRoutingStatusLabel, recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRouting";
 
 function planDocument(status = "ready") {
@@ -73,9 +73,9 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
     requireAssistantAccessForSelection: async () => {},
     sessionState: async () => ({ turn: { active: false } }),
     readGoal: async () => ({ goal: null }),
-    resolveEphemeralExecutionProfile: async (_scope, _input, options) => ({ model: options.assistantSelection.modelId,
-      profileId: "economy", workloadId: "request_routing", providerId: options.assistantSelection.engineId,
-      revision: "test", thinking: "low", limits: VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS.request_routing,
+    resolveEphemeralExecutionProfile: async (_scope, input, options) => ({ model: options.assistantSelection.modelId,
+      ...defineVibe64AgentExecutionProfileRequest(input), providerId: options.assistantSelection.engineId,
+      revision: "test", thinking: "low", limits: VIBE64_AGENT_HELPER_WORKLOAD_LIMITS.request_routing,
       policy: { environmentAccess: false, networkAccess: false, repositoryWrite: false, tools: "none" },
       request: { allowProviderModelFallback: false, reasoning: true, summary: false } }),
     createEphemeralConversation: async () => ({ ok: true, conversationId: "helper-1" }),
@@ -136,7 +136,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
 const completion = (turnId = "turn-1", state = "completed") => ({ payload: { agentRun: { active: false, state, providerTurnId: turnId } } });
 
-for (const mode of ["senior", "junior", "intern"]) {
+for (const mode of ["senior", "junior"]) {
   for (const planState of ["absent", "blocked", "unreadable"]) {
     test(`direct ${mode} ignores a ${planState} working plan and never starts automatic review`, async (t) => {
       const f = await fixture(t, { mode, review: true }, { readyPlan: false });
@@ -786,10 +786,10 @@ function sharedOpenCode(f, modelProviderId = "opencode", modelId = "big-pickle")
     variantId: "", catalogRevision: catalog.revision, selectionSource: "explicit" };
 }
 
-test("Auto uses a foreign Router and does not require Intern", async (t) => {
+test("Auto uses a foreign Router and does not require Helper", async (t) => {
   const f = await fixture(t);
   const router = sharedOpenCode(f, "deepseek", "deepseek-chat");
-  await f.configuration.write({ codex: { ...f.assignments, router, intern: null } }, 1);
+  await f.configuration.write({ codex: { ...f.assignments, router, helper: null } }, 1);
   const start = f.agent.startEphemeralConversationTurn;
   f.agent.startEphemeralConversationTurn = async (scope, input, options) => {
     assert.equal(options.assistantSelection.engineId, "opencode");
@@ -799,7 +799,7 @@ test("Auto uses a foreign Router and does not require Intern", async (t) => {
   };
   await f.service.send("session-1", request, f.context);
   assert.equal(f.state().assignments.router.modelId, "deepseek-chat");
-  assert.equal(f.state().assignments.intern, undefined);
+  assert.equal(f.state().assignments.helper, undefined);
   assert.equal(f.sends[0].selection.engineId, "codex");
   assert.equal(f.state().helper, null);
 });
@@ -812,7 +812,7 @@ for (const review of [false, true]) {
     const senior = { ...f.assignments.senior, engineId: "opencode", agentId: "build" };
     const junior = { ...f.assignments.junior, engineId: "opencode", agentId: "build" };
     await f.configuration.write({ codex: f.assignments, opencode: {
-      senior, junior, intern: junior, router: junior, sharedBackup: backup
+      senior, junior, helper: junior, router: junior, sharedBackup: backup
     } }, 1);
     const configuration = await f.configuration.read();
     f.context.vibe64User = { role: "member", username: "collaborator" };
@@ -1082,18 +1082,11 @@ test("Stop during native helper startup stops the late turn before delivery", as
   assert.equal(f.sends.length, 0);
 });
 
-test("foreign Intern returns to the saved workflow's Senior role", async (t) => {
-  const f = await fixture(t, { mode: "intern", review: true });
-  const intern = sharedOpenCode(f);
-  await f.configuration.write({ codex: { ...f.assignments, intern } }, 1);
-  await f.service.send("session-1", request, f.context);
-  assert.equal(f.sends[0].selection.modelId, "big-pickle");
-  assert.equal(f.state().review, false);
-  await f.service.afterTurn("session-1", completion(), f.context);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "senior", workflowEngineId: "codex", review: false });
-  await f.service.send("session-1", { ...request, messageId: "plan-again" }, f.context);
-  assert.equal(f.sends[1].selection.modelId, "gpt-6-astra");
-  assert.equal(f.state().workflowEngineId, "codex");
+test("Helper cannot be selected for direct chat or sent as a chat mode", async (t) => {
+  const f = await fixture(t, { mode: "helper", review: false });
+  await assert.rejects(f.service.send("session-1", request, f.context), /Choose Senior, Junior, or Auto/);
+  assert.equal(f.sends.length, 0);
+  assert.equal(f.helperCalls(), 0);
 });
 
 test("a goal switching orchestrators requires ordinary Send before native goal admission", async (t) => {
@@ -1111,7 +1104,7 @@ test("a migrated unsent request goes through fresh admission while retaining its
   const f = await fixture(t, { mode: "junior", review: false });
   const backup = sharedOpenCode(f);
   await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
-  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 3, admissionRequired: true, workflowEngineId: "codex",
+  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 4, admissionRequired: true, workflowEngineId: "codex",
     messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "failed", review: false,
     assignments: { junior: f.assignments.junior }, settingsRevision: 1, submittedBy: { role: "member", username: "original-member" } });
   await f.service.send("session-1", request, f.context);
@@ -1133,7 +1126,7 @@ for (const actorFields of [{}, { submittedBy: null }]) {
         return actor;
       }
     });
-    const original = JSON.stringify({ schemaVersion: 3, admissionRequired: true, workflowEngineId: "codex",
+    const original = JSON.stringify({ schemaVersion: 4, admissionRequired: true, workflowEngineId: "codex",
       messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "failed", review: false,
       assignments: { junior: f.assignments.junior }, settingsRevision: 1, ...actorFields });
     f.metadata.assistant_routing_request = original;
@@ -1154,7 +1147,7 @@ for (const actorFields of [{}, { submittedBy: null }]) {
 test("standalone admission can retry a migrated request without a hosted actor", async (t) => {
   const f = await fixture(t, { mode: "junior", review: false });
   f.context.vibe64User = null;
-  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 3, admissionRequired: true, workflowEngineId: "codex",
+  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 4, admissionRequired: true, workflowEngineId: "codex",
     messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "failed", review: false,
     assignments: { junior: f.assignments.junior }, settingsRevision: 1, submittedBy: null });
   await f.service.send("session-1", request, f.context);
@@ -1165,7 +1158,7 @@ test("standalone admission can retry a migrated request without a hosted actor",
 
 test("a migrated uncertain request can inspect admission without authorizing fresh inference", async (t) => {
   const f = await fixture(t, { mode: "junior", review: false });
-  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 3, admissionRequired: true, workflowEngineId: "codex",
+  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 4, admissionRequired: true, workflowEngineId: "codex",
     messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "uncertain", review: false,
     assignments: { junior: f.assignments.junior }, attemptedMessageId: request.messageId, threadId: "retained-thread", settingsRevision: 1 });
   f.agent.resolveAssistantPurpose = async () => { throw new Error("No inference admission should run for receipt inspection"); };
@@ -1384,7 +1377,7 @@ test("a planning handoff with lost admission checks its receipt without resendin
   assert.equal(f.state().status, "planning");
 });
 
-for (const mode of ["auto", "senior", "junior", "intern"]) {
+for (const mode of ["auto", "senior", "junior"]) {
   test(`explicit Deslop uses the configured Plan model directly from ${mode} without review`, async (t) => {
     const f = await fixture(t, { mode, review: true });
     const preferences = f.metadata.assistant_routing;

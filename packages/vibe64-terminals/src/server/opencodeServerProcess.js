@@ -25,8 +25,8 @@ import {
 import { genesisParserEnvironment } from "@local/vibe64-genesis/server";
 
 const OPENCODE_EXPECTED_VERSION = "1.18.31";
-const OPENCODE_ECONOMY_AGENT_ID = "vibe64-economy";
-const OPENCODE_INTERN_SUBAGENT_PREFIX = "vibe64-intern-";
+const OPENCODE_HELPER_AGENT_ID = "vibe64-helper";
+const OPENCODE_HELPER_SUBAGENT_PREFIX = "vibe64-helper-";
 const OPENCODE_EPHEMERAL_AGENT_ID = "vibe64-ephemeral";
 const OPENCODE_HOST = "127.0.0.1";
 const OPENCODE_LOG_LIMIT_BYTES = 64 * 1024;
@@ -56,7 +56,7 @@ const OPENCODE_MANAGED_STARTUP_SCRIPT = [
 ].join("\n");
 const OPENCODE_INLINE_CONFIG_BASE = Object.freeze({
   agent: {
-    [OPENCODE_ECONOMY_AGENT_ID]: {
+    [OPENCODE_HELPER_AGENT_ID]: {
       description: "Vibe64 bounded helper turns without tools.",
       hidden: true,
       mode: "primary",
@@ -161,16 +161,16 @@ function canonicalProviderUrl(value = "") {
   return source;
 }
 
-function openCodeInternSubagents(providerConnections = []) {
+function openCodeHelperSubagents(providerConnections = []) {
   const agents = {};
   for (const connection of Array.isArray(providerConnections) ? providerConnections : []) {
     const providerId = text(connection?.modelProviderId);
-    const internModelId = text(connection?.economyModelId);
-    if (providerId && internModelId) {
-      agents[`${OPENCODE_INTERN_SUBAGENT_PREFIX}${providerId}`] = {
+    const helperModelId = text(connection?.defaultModelId);
+    if (providerId && helperModelId) {
+      agents[`${OPENCODE_HELPER_SUBAGENT_PREFIX}${providerId}`] = {
         description: `Vibe64 low-cost helper on the ${providerId} connection for delegating simple, inexpensive work.`,
         mode: "subagent",
-        model: `${providerId}/${internModelId}`
+        model: `${providerId}/${helperModelId}`
       };
     }
   }
@@ -195,12 +195,12 @@ function openCodeInlineConfig({
   if ([...routes].some(([providerId]) => !providerId)) {
     throw new TypeError("OpenCode provider URL overrides require a provider id.");
   }
-  const internSubagents = openCodeInternSubagents(providerConnections);
+  const helperSubagents = openCodeHelperSubagents(providerConnections);
   return JSON.stringify({
     ...OPENCODE_INLINE_CONFIG_BASE,
     agent: {
       ...OPENCODE_INLINE_CONFIG_BASE.agent,
-      ...internSubagents,
+      ...helperSubagents,
       ...(text(sessionEnvironmentRegistry) ? {
         // Preserve OpenCode's native tool definitions. The session plugin rejects
         // every ephemeral tool call before execution; "deny" removes the tools
@@ -836,7 +836,7 @@ async function verifyOpenCodeApiKey({
           "run",
           "--pure",
           "--agent",
-          OPENCODE_ECONOMY_AGENT_ID,
+          OPENCODE_HELPER_AGENT_ID,
           "--model",
           `${providerId}/${selectedModelId}`,
           "--format",
@@ -907,8 +907,8 @@ async function verifyOpenCodeApiKey({
 }
 
 export {
-  OPENCODE_ECONOMY_AGENT_ID,
-  OPENCODE_INTERN_SUBAGENT_PREFIX,
+  OPENCODE_HELPER_AGENT_ID,
+  OPENCODE_HELPER_SUBAGENT_PREFIX,
   OPENCODE_EPHEMERAL_AGENT_ID,
   OPENCODE_EXPECTED_VERSION,
   OPENCODE_HOST,

@@ -1666,7 +1666,7 @@ function createService({
           });
           const routing = assistantRoutingFromMetadata(session.metadata);
           const changingWorkflow = routing && (routing.workflowEngineId || current.engineId) !== next.engineId;
-          if (routing && !changingWorkflow && routing.mode === "auto") throw new Error("Choose Senior, Junior, or Intern before selecting a custom model.");
+          if (routing && !changingWorkflow && routing.mode === "auto") throw new Error("Choose Senior or Junior before selecting a custom model.");
           const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
           if (assistantRoutingStatusIsPending(routingRequest?.status) ||
               routingRequest?.status === "sent" && routingRequest.review && routingRequest.resolvedMode === "junior") {

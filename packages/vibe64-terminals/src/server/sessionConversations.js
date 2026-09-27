@@ -105,7 +105,7 @@ function createSessionConversations({
     const decisions = await sessionAgent.inspectAssistantPurposes({ ...preferences,
       workflowEngineId: preferences?.workflowEngineId || record.assistantSelection.engineId
     }, selected);
-    const autoUnavailable = { available: false, message: "Auto is available in Main chat only. Choose Senior, Junior or Intern." };
+    const autoUnavailable = { available: false, message: "Auto is available in Main chat only. Choose Senior or Junior." };
     return JSON.parse(JSON.stringify({ ...decisions, auto: autoUnavailable, review: autoUnavailable }, (key, value) =>
       ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value));
   }
@@ -382,7 +382,7 @@ function createSessionConversations({
           : { mode: "senior", override: parentSelection };
         const requestedPreferences = input.presentation?.recoveryOperation ? { mode: "junior", review: false }
           : input.assistantRouting || inheritedPreferences;
-        if (requestedPreferences.mode === "auto") throw new Error("Temporary chats use Senior, Junior or Intern. Auto is available in Main chat only.");
+        if (requestedPreferences.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
         const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false,
           workflowEngineId: parentPreferences?.workflowEngineId || parentSelection.engineId
         });
@@ -437,14 +437,14 @@ function createSessionConversations({
         if (input.assistantRouting) {
           if (record.recoveryOperation) throw new Error("Repair conversations keep their dedicated instructions and model settings.");
           const requested = input.assistantRouting;
-          if (requested.mode === "auto") throw new Error("Temporary chats use Senior, Junior or Intern. Auto is available in Main chat only.");
+          if (requested.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
           const preferences = assistantRoutingPreferences({ ...requested, review: false,
             workflowEngineId: JSON.parse(record.routingMetadata?.assistant_routing || "null")?.workflowEngineId || record.assistantSelection.engineId });
           fields.routingMetadata = { ...record.routingMetadata, assistant_routing: JSON.stringify(preferences) };
         }
         if (settingsChanged && !input.assistantRouting) {
           const preferences = assistantRoutingFromMetadata(record.routingMetadata);
-          if (preferences.mode === "auto") throw new Error("Choose Senior, Junior or Intern before customizing its model.");
+          if (preferences.mode === "auto") throw new Error("Choose Senior or Junior before customizing its model.");
           const selection = record.assistantSelection;
           if (["senior", "junior"].includes(preferences.mode) && selection.engineId !== preferences.workflowEngineId) {
             throw new Error("Senior and Junior model overrides must use the workflow orchestrator. Configure its shared backup in Model routing.");

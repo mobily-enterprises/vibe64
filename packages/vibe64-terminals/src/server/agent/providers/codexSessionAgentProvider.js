@@ -9,7 +9,7 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
-  VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS,
+  VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_TOOL_POLICIES,
@@ -25,8 +25,8 @@ const CODEX_PRODUCT_PROVIDER_ID = "codex";
 const CODEX_APP_SERVER_TRANSPORT_ID = "codex_app_server";
 const CODEX_ATTACHMENT_MAX_ITEMS = 10;
 const CODEX_ATTACHMENT_RENEW_RETRY_DELAYS_MS = Object.freeze([500, 1_000, 2_000, 5_000]);
-const CODEX_ECONOMY_PROFILE_REVISION = "codex-economy-low-v3";
-const CODEX_ECONOMY_WORKLOAD_LIMITS = VIBE64_AGENT_ECONOMY_WORKLOAD_LIMITS;
+const CODEX_HELPER_PROFILE_REVISION = "codex-helper-selected-v4";
+const CODEX_HELPER_WORKLOAD_LIMITS = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS;
 const acceptedAttachmentRenewalTimers = new WeakMap();
 
 function codexAssistantSettings(context = {}, input = {}) {
@@ -147,20 +147,20 @@ function codexCatalogReasoningEfforts(model = {}) {
     .filter(Boolean));
 }
 
-function codexEconomyExecutionProfileRequest(request = {}) {
+function codexHelperExecutionProfileRequest(request = {}) {
   const executionProfile = defineVibe64AgentExecutionProfileRequest(request);
-  if (executionProfile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY) {
+  if (executionProfile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER) {
     throw codexExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.PROFILE_UNKNOWN,
       `Codex does not provide execution profile ${executionProfile.profileId}.`,
       { profileId: executionProfile.profileId }
     );
   }
-  const limits = CODEX_ECONOMY_WORKLOAD_LIMITS[executionProfile.workloadId];
+  const limits = CODEX_HELPER_WORKLOAD_LIMITS[executionProfile.workloadId];
   if (!limits) {
     throw codexExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.WORKLOAD_UNSUPPORTED,
-      `Codex economy does not support workload ${executionProfile.workloadId}.`,
+      `Codex helper does not support workload ${executionProfile.workloadId}.`,
       { workloadId: executionProfile.workloadId }
     );
   }
@@ -170,54 +170,27 @@ function codexEconomyExecutionProfileRequest(request = {}) {
   };
 }
 
-function resolveCodexEconomyExecutionProfile(request = {}, catalog = null, modelId = "") {
-  const {
-    executionProfile,
-    limits
-  } = codexEconomyExecutionProfileRequest(request);
-
-  const models = codexCatalogRows(catalog);
-  let unsupportedReasoningModel = "";
-  let selected = null;
-  const candidates = modelId ? [{ model: modelId, thinking: "low" }] : [];
-  for (const candidate of candidates) {
-    const model = models.find((row) => (
-      row?.hidden !== true && normalizeText(row?.model) === candidate.model
-    ));
-    if (!model) {
-      continue;
-    }
-    if (!codexCatalogReasoningEfforts(model).has(candidate.thinking)) {
-      unsupportedReasoningModel ||= candidate.model;
-      continue;
-    }
-    selected = candidate;
-    break;
-  }
-  if (!selected) {
-    if (unsupportedReasoningModel) {
-      throw codexExecutionProfileError(
-        VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.REASONING_UNSUPPORTED,
-        `Codex economy model ${unsupportedReasoningModel} does not support low reasoning.`,
-        {
-          model: unsupportedReasoningModel,
-          thinking: "low"
-        }
-      );
-    }
+function resolveCodexHelperExecutionProfile(request = {}, catalog = null, modelId = "", thinking = "") {
+  const { executionProfile, limits } = codexHelperExecutionProfileRequest(request);
+  const model = codexCatalogRows(catalog).find((row) => row?.hidden !== true && normalizeText(row?.model) === modelId);
+  if (!model) {
     throw codexExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE,
-      "The Codex economy model is not available for this account. No interactive-model fallback was attempted.",
-      {
-        candidates: candidates.map(({ model }) => model)
-      }
+      "The selected Codex helper model is unavailable. Choose another in Model routing.",
+      { model: modelId }
     );
   }
-
+  if (thinking && !codexCatalogReasoningEfforts(model).has(thinking)) {
+    throw codexExecutionProfileError(
+      VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.REASONING_UNSUPPORTED,
+      `The selected Codex helper model does not support ${thinking} thinking.`,
+      { model: modelId, thinking }
+    );
+  }
   return defineVibe64AgentExecutionProfileResolution({
     ...executionProfile,
     limits,
-    model: selected.model,
+    model: modelId,
     policy: {
       environmentAccess: false,
       networkAccess: false,
@@ -225,13 +198,9 @@ function resolveCodexEconomyExecutionProfile(request = {}, catalog = null, model
       tools: VIBE64_AGENT_EXECUTION_TOOL_POLICIES.NONE
     },
     providerId: CODEX_PRODUCT_PROVIDER_ID,
-    request: {
-      allowProviderModelFallback: false,
-      reasoning: true,
-      summary: false
-    },
-    revision: CODEX_ECONOMY_PROFILE_REVISION,
-    thinking: selected.thinking
+    request: { allowProviderModelFallback: false, reasoning: Boolean(thinking), summary: false },
+    revision: CODEX_HELPER_PROFILE_REVISION,
+    thinking
   });
 }
 
@@ -519,7 +488,7 @@ function createCodexSessionAgentProvider({
   }
   return Object.freeze({
     executionProfiles: Object.freeze([
-      VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY
+      VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER
     ]),
     id: CODEX_PRODUCT_PROVIDER_ID,
     transportId: CODEX_APP_SERVER_TRANSPORT_ID,
@@ -668,15 +637,15 @@ function createCodexSessionAgentProvider({
       if (typeof controller.executionProfileModelCatalog !== "function") {
         throw codexExecutionProfileError(
           VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE,
-          "Codex economy model discovery is unavailable."
+          "Codex helper model discovery is unavailable."
         );
       }
       const {
         executionProfile,
         limits
-      } = codexEconomyExecutionProfileRequest(input);
+      } = codexHelperExecutionProfileRequest(input);
       const helperModelId = context.assistantSelection?.modelId;
-      return resolveCodexEconomyExecutionProfile(
+      return resolveCodexHelperExecutionProfile(
         executionProfile,
         await controller.executionProfileModelCatalog(context.sessionId, {
           ...(context.assistantScope ? { assistantScope: context.assistantScope,
@@ -686,7 +655,8 @@ function createCodexSessionAgentProvider({
           signal: context.signal,
           timeoutMs: limits.timeoutMs
         }),
-        helperModelId
+        helperModelId,
+        context.assistantSelection?.variantId || ""
       );
     },
     async readTerminal(context, input = {}) {
@@ -858,9 +828,9 @@ function createCodexSessionAgentProvider({
 export {
   CODEX_APP_SERVER_TRANSPORT_ID,
   CODEX_ATTACHMENT_MAX_ITEMS,
-  CODEX_ECONOMY_PROFILE_REVISION,
-  CODEX_ECONOMY_WORKLOAD_LIMITS,
+  CODEX_HELPER_PROFILE_REVISION,
+  CODEX_HELPER_WORKLOAD_LIMITS,
   CODEX_PRODUCT_PROVIDER_ID,
   createCodexSessionAgentProvider,
-  resolveCodexEconomyExecutionProfile
+  resolveCodexHelperExecutionProfile
 };

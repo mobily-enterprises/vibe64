@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
-  ACTION_APPROVE_MESSAGE_SUGGESTION,
   ACTION_CANCEL_SESSION_RENEWAL,
   ACTION_CONFIRM_SESSION_RENEWAL,
   ACTION_INSPECT_REPOSITORY_HISTORY,
@@ -13,7 +12,6 @@ import {
   ACTION_ARCHIVE_SESSION,
   ACTION_CREATE_PULL_REQUEST,
   ACTION_CREATE_SESSION,
-  ACTION_DISCARD_MESSAGE_SUGGESTION,
   ACTION_INSPECT_ASSISTANT_ACCESS,
   ACTION_INSPECT_SESSION,
   ACTION_INSPECT_SESSION_RENEWAL,
@@ -23,7 +21,6 @@ import {
   ACTION_LIST_ASSISTANT_CAPABILITIES,
   ACTION_LIST_ARCHIVED_SESSIONS,
   ACTION_LIST_SESSIONS,
-  ACTION_LIST_MESSAGE_SUGGESTIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
   ACTION_REQUEST_SESSION_RENEWAL_DRAFT,
   ACTION_RETRY_SESSION_RENEWAL,
@@ -38,10 +35,8 @@ import {
   ACTION_UPDATE_SESSION_PRESENCE,
   ACTION_REWIND_CONVERSATION,
   ACTION_SEND_AGENT_MESSAGE,
-  ACTION_SUGGEST_AGENT_MESSAGE,
   ACTION_INTERRUPT_AGENT_TURN,
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
-  ACTION_WITHDRAW_MESSAGE_SUGGESTION,
   createSessionActions
 } from "../../packages/vibe64-sessions/src/server/actions.js";
 import {
@@ -264,11 +259,6 @@ test("sessions expose only direct chat and source actions", () => {
     ACTION_REWIND_CONVERSATION,
   ACTION_SEND_AGENT_MESSAGE,
     ACTION_INSPECT_ASSISTANT_ACCESS,
-    ACTION_LIST_MESSAGE_SUGGESTIONS,
-    ACTION_SUGGEST_AGENT_MESSAGE,
-    ACTION_WITHDRAW_MESSAGE_SUGGESTION,
-    ACTION_APPROVE_MESSAGE_SUGGESTION,
-    ACTION_DISCARD_MESSAGE_SUGGESTION,
     ACTION_INTERRUPT_AGENT_TURN,
     ACTION_UPDATE_SESSION_PRESENCE,
     ACTION_BROADCAST_SESSION_PREVIEW_STATE
@@ -1324,21 +1314,21 @@ test("native Save persists its semantic commit-title profile across a durable ta
         maxOutputCharacters: 1_000,
         timeoutMs: 45_000
       },
-      model: "provider-owned-economy-model",
+      model: "provider-owned-helper-model",
       policy: {
         environmentAccess: false,
         networkAccess: false,
         repositoryWrite: false,
         tools: "none"
       },
-      profileId: "economy",
+      profileId: "helper",
       providerId: "codex",
       request: {
         allowProviderModelFallback: false,
         reasoning: true,
         summary: false
       },
-      revision: "codex-economy-v2",
+      revision: "codex-helper-v2",
       thinking: "low",
       workloadId: "commit_title"
     };
@@ -1390,8 +1380,8 @@ test("native Save persists its semantic commit-title profile across a durable ta
     const reloadedTask = await reloadedStore.readBackgroundTask(sessionId, "save-work");
     assert.deepEqual(reloadedTask.executionProfile, executionProfile);
     assert.deepEqual(reloadedTask.commitTitleExecutionProfile, executionProfile);
-    assert.equal(reloadedTask.commitTitleExecutionProfile.profileId, "economy");
-    assert.equal(reloadedTask.commitTitleExecutionProfile.revision, "codex-economy-v2");
+    assert.equal(reloadedTask.commitTitleExecutionProfile.profileId, "helper");
+    assert.equal(reloadedTask.commitTitleExecutionProfile.revision, "codex-helper-v2");
     assert.equal(reloadedTask.commitTitleExecutionProfile.workloadId, "commit_title");
   });
 });
@@ -3495,12 +3485,12 @@ test("PR session creation binds only the server-resolved source and exact head c
   });
 });
 
-test("chat mode changes retain the workflow after a foreign Intern answer", async () => {
+test("chat mode changes retain the workflow after an answer using a foreign shared backup", async () => {
   const lock = agentWriteLockHarness();
   const current = { agentId: "build", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "opencode",
     modelId: "big-pickle", modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: "" };
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
-    assistant_selection: JSON.stringify(current), assistant_routing: JSON.stringify({ mode: "intern", review: false, workflowEngineId: "codex" }) } };
+    assistant_selection: JSON.stringify(current), assistant_routing: JSON.stringify({ mode: "junior", review: false, workflowEngineId: "codex" }) } };
   const runtime = { async getSession() { return session; }, store: { ...lock.store,
     async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
   const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {} });

@@ -36,14 +36,14 @@ function resolvedPromptHintProfile() {
       repositoryWrite: false,
       tools: "none"
     },
-    profileId: "economy",
+    profileId: "helper",
     providerId: "codex",
     request: {
       allowProviderModelFallback: false,
       reasoning: true,
       summary: false
     },
-    revision: "codex-economy-luna-low-v2",
+    revision: "codex-helper-luna-low-v2",
     thinking: "low",
     workloadId: "prompt_hint"
   };
@@ -679,7 +679,7 @@ test("restricted members read shared conversation suggestions without provider i
   );
 });
 
-test("prompt hints resolve Intern before creating an independent bounded scope", async () => {
+test("prompt hints resolve Helper before creating an independent bounded scope", async () => {
   const fixture = createFixture({
     promptHints: {
       customNote: "Never suggest tests.",
@@ -711,7 +711,7 @@ test("prompt hints resolve Intern before creating an independent bounded scope",
     sessionId
   })), [{
     input: {
-      profileId: "economy",
+      profileId: "helper",
       workloadId: "prompt_hint"
     },
     sessionId: "session-1"
@@ -1536,7 +1536,7 @@ test("prompt hints fail closed when a successful detached turn exposes no thread
   );
 });
 
-test("prompt hints reject a result that does not prove the resolved economy profile was used", async () => {
+test("prompt hints reject a result that does not prove the resolved helper profile was used", async () => {
   let agentCalls = 0;
   const fixture = createFixture({
     async runAgentTurn({ options }) {
@@ -1957,8 +1957,8 @@ test("shared hints survive restart, exclude drafts and stale conversations, and 
   assert.equal(owner.calls.published.length, 1);
 });
 
-test("a member's hints use foreign shared Intern independently of a personal working chat", async () => {
-  const intern = { ...CODEX_SELECTION, engineId: "opencode", agentId: "build", modelProviderId: "opencode", modelId: "big-pickle", variantId: "" };
+test("a member's hints use foreign shared Helper independently of a personal working chat", async () => {
+  const helper = { ...CODEX_SELECTION, engineId: "opencode", agentId: "build", modelProviderId: "opencode", modelId: "big-pickle", variantId: "" };
   const profile = { ...resolvedPromptHintProfile(), providerId: "opencode", model: "opencode/big-pickle" };
   const member = { username: "collaborator", role: "member" };
   const fixture = createFixture({
@@ -1966,17 +1966,17 @@ test("a member's hints use foreign shared Intern independently of a personal wor
       assert.deepEqual(input, { purpose: "prompt_hint", workflowEngineId: "codex" });
       assert.deepEqual(JSON.parse(options.session.metadata.assistant_selection), CODEX_SELECTION);
       assert.deepEqual(options.vibe64User, member);
-      return { available: true, effectiveSelection: intern, connectionIdentity: "shared-pickle", settingsRevision: "routing-1" };
+      return { available: true, effectiveSelection: helper, connectionIdentity: "shared-pickle", settingsRevision: "routing-1" };
     },
     resolveExecutionProfile({ options, scope }) {
-      assert.deepEqual(options.assistantSelection, intern);
+      assert.deepEqual(options.assistantSelection, helper);
       assert.equal(options.expectedConnectionIdentity, "shared-pickle");
       assert.match(scope.workdir, /assistant-helpers\/hints_[^/]+\/workdir$/u);
       assert.deepEqual(scope.environment, {});
       return profile;
     },
     async runAgentTurn({ options }) {
-      assert.deepEqual(options.assistantSelection, intern);
+      assert.deepEqual(options.assistantSelection, helper);
       assert.equal(options.runtime, undefined);
       assert.equal(options.session, undefined);
       await options.onEvent({ type: "thread", threadId: "pickle-hints" });
@@ -1984,11 +1984,11 @@ test("a member's hints use foreign shared Intern independently of a personal wor
       return { ...readyAgentResult({ threadId: "pickle-hints", turnId: "pickle-turn" }), executionProfile: profile };
     }
   });
-  const result = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:shared-intern", member));
+  const result = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:shared-helper", member));
   assert.equal(result.status, "ready");
   assert.equal(fixture.calls.run.length, 1);
   assert.equal(fixture.calls.delete.length, 1);
-  assert.deepEqual(fixture.calls.delete[0].options.assistantSelection, intern);
+  assert.deepEqual(fixture.calls.delete[0].options.assistantSelection, helper);
   assert.deepEqual(fixture.calls.delete[0].input.executionProfile, profile);
   assert.deepEqual(JSON.parse((await fixture.runtime.getSession("session-1")).metadata.assistant_selection), CODEX_SELECTION);
 });

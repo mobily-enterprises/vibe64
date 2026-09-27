@@ -84,8 +84,9 @@ const followupNeedsAction = computed(() => ["review_pending", "review_uncertain"
 const actionable = computed(() => {
   const request = props.request;
   if (request?.status === "cancelled" && !request.helper && !request.attemptedMessageId) return false;
-  // The unsent bubble already explains why a mixed request needs separating.
-  return Boolean(label.value && request?.reason !== "mixed_deslop_request" && (request?.error || followupNeedsAction.value));
+  // These delivery failures and retry controls already appear on the unsent bubble.
+  if (["failed", "uncertain"].includes(request?.status)) return false;
+  return Boolean(label.value && (request?.error || followupNeedsAction.value));
 });
 
 // Announce a newly finished review once. Restoring a conversation must not

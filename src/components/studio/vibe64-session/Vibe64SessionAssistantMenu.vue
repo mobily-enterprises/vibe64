@@ -11,7 +11,7 @@
     @apply="save" @reload="reloadCatalog"
   >
     <template #before-choices>
-      <p v-if="routingMode" class="text-body-small" role="status">{{ routingMode === 'auto' ? 'Choose Senior, Junior, or Intern in chat before selecting a custom model. You can still change orchestrators here.' : `A model selected here overrides ${assistantModeLabel(routingMode)} for this conversation.` }}</p>
+      <p v-if="routingMode" class="text-body-small" role="status">{{ routingMode === 'auto' ? 'Choose Senior or Junior in chat before selecting a custom model. You can still change orchestrators here.' : `A model selected here overrides ${assistantModeLabel(routingMode)} for this conversation.` }}</p>
       <p v-if="engineId !== assistantSelection?.engineId" class="text-body-small" role="status">
         Your conversation and files stay here. This AI will receive the recent or missed messages with your next message.
       </p>

@@ -49,7 +49,7 @@ const PROMPT_HINT_ACTIVE_TASK_IDS = Object.freeze([
   "update-session"
 ]);
 const PROMPT_HINT_EXECUTION_PROFILE_REQUEST = Object.freeze({
-  profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+  profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
   workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.PROMPT_HINT
 });
 
@@ -671,7 +671,7 @@ function createSessionPromptHintsService({
         sessionState: job.context.sessionState
       });
       if (Array.from(prompt).length > profile.limits.maxInputCharacters) {
-        throw new Error("Prompt hint context exceeds the selected economy profile limit.");
+        throw new Error("Prompt hint context exceeds the selected helper profile limit.");
       }
       result = await agent.runEphemeralChatTurn(helper.scope, {
         executionProfile,

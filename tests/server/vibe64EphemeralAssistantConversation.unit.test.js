@@ -179,7 +179,7 @@ test("a foreign scoped helper retains its exact model, profile provenance and in
   const manager = createSessionAgentManager({
     providers: [provider, { id: "codex", transportId: "codex_app_server" }],
     readAssistantAccess: async () => ({ available: true, ownerOnly: false,
-      connectionIdentity: identity, economyModelId: "legacy-helper-model" })
+      connectionIdentity: identity, defaultModelId: "legacy-helper-model" })
   });
   const mainSelection = { engineId: "codex", agentId: "codex", modelProviderId: "openai",
     modelId: "gpt-6-astra", variantId: "", catalogRevision };
@@ -191,7 +191,7 @@ test("a foreign scoped helper retains its exact model, profile provenance and in
     modelId: "selected-router-model", variantId: "", catalogRevision };
   const options = { assistantSelection: selection, session, runtime: { stateRoot: "/tmp/parent-runtime" },
     routingConversationId: "temporary-parent", vibe64User: { username: "member", role: "user" } };
-  const profile = await manager.resolveEphemeralExecutionProfile(scope, { profileId: "economy", workloadId: "prompt_hint" }, options);
+  const profile = await manager.resolveEphemeralExecutionProfile(scope, { profileId: "helper", workloadId: "prompt_hint" }, options);
   assert.equal(profile.model, selection.modelId, "scoped helpers ignore the old per-connection helper model");
   assert.equal(manager.binding("main"), "codex");
   assert.equal(manager.binding(scope.id), "opencode");
@@ -239,7 +239,7 @@ test("Codex scoped profile discovery and every lifecycle operation keep the sele
     stableContext: "Summarize supplied text only." };
   const options = { assistantSelection: { engineId: "codex", agentId: "codex", modelProviderId: "deepseek",
     modelId: "deepseek-flash", variantId: "high", catalogRevision } };
-  const profile = await manager.resolveEphemeralExecutionProfile(scope, { profileId: "economy", workloadId: "conversation_summary" }, options);
+  const profile = await manager.resolveEphemeralExecutionProfile(scope, { profileId: "helper", workloadId: "conversation_summary" }, options);
   assert.equal(profile.model, "deepseek-flash");
   assert.equal(profile.thinking, "low");
   const created = await manager.createEphemeralConversation(scope, { ephemeral: true, executionProfile: profile }, options);
@@ -293,7 +293,7 @@ test("a bounded helper turn awaits parent ownership and leaves the working chat 
     async onEvent(event) {
       if (event.type === "thread") { threadObserved.resolve(event); await retained.promise; }
     } };
-  const executionProfile = await manager.resolveEphemeralExecutionProfile(scope, { profileId: "economy", workloadId: "commit_title" }, options);
+  const executionProfile = await manager.resolveEphemeralExecutionProfile(scope, { profileId: "helper", workloadId: "commit_title" }, options);
   const running = manager.runEphemeralChatTurn(scope, { executionProfile, prompt: "Name this work." }, options);
   assert.equal((await threadObserved.promise).threadId, "conversation_1");
   assert.equal(calls.some(({ name }) => name === "start"), false);
@@ -330,7 +330,7 @@ for (const phase of ["starting", "waiting"]) {
       stableContext: "Supplied text only." };
     const options = { signal: abort.signal, assistantSelection: { engineId: "opencode", agentId: "build", modelProviderId: "opencode",
       modelId: "big-pickle", variantId: "", catalogRevision } };
-    const executionProfile = await manager.resolveEphemeralExecutionProfile(scope, { profileId: "economy", workloadId: "prompt_hint" }, options);
+    const executionProfile = await manager.resolveEphemeralExecutionProfile(scope, { profileId: "helper", workloadId: "prompt_hint" }, options);
     const running = manager.runEphemeralChatTurn(scope, { executionProfile, prompt: "Suggest." }, options);
     const rejected = assert.rejects(running, /cancelled/);
     await started.promise;

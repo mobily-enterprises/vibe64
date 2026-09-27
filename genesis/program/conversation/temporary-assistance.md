@@ -41,7 +41,7 @@ Restore failures retain a readable retry action in a tonal error notice.
 - `packages/vibe64-database-tools/src/server/databaseDialect.js`
 - `packages/vibe64-database-tools/src/server/schemaAccess.js`
 - `packages/vibe64-database-tools/src/server/service.js`
-- `packages/vibe64-terminals/src/server/codexEconomyThreadLedger.js`
+- `packages/vibe64-terminals/src/server/codexHelperThreadLedger.js`
 - `packages/vibe64-terminals/src/server/codexTerminal.js`
 - `packages/vibe64-terminals/src/server/sessionConversations.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
@@ -68,7 +68,7 @@ Restore failures retain a readable retry action in a tonal error notice.
 
 ## Public contract
 
-Ordinary persistent temporary chats offer Senior, Junior and Intern through
+Ordinary persistent temporary chats offer Senior and Junior through
 the same compact role icon as main chat. Auto, plan approval and automatic
 review are unavailable in temporary chats, including through direct API calls
 and pending handoff retries. Owners can open the shared Model routing overlay directly
@@ -142,7 +142,7 @@ main chat's last model. An active turn reports its separate native steering
 permission; a collaborator may be unable to steer that turn while still having a
 shared route for the next request.
 
-Foreign Intern and Backup turns use the same changeover preparation and Send
+Foreign Helper and Backup turns use the same changeover preparation and Send
 owner as Main chat, scoped to this chat's metadata and visible transcript. The
 previous native conversation is stopped and retained before selection changes;
 a failed stop leaves that selection unchanged. Returning resumes the recorded
@@ -424,7 +424,7 @@ The manager also composes these scoped operations into one bounded helper turn,
 awaiting the parent's native-identity event before starting. Abort during startup
 stops the late native turn; abort while waiting stops that same scoped turn.
 Save naming, suggestions, source explanations and database help resolve effective
-Intern through this seam. Each feature retains its own durable helper-cleanup
+Helper through this seam. Each feature retains its own durable helper-cleanup
 references, exact destination and connection identity; the last main-chat model
 does not determine helper access.
 
@@ -506,3 +506,7 @@ retains the model for that task. Codex requires low thinking; Claude validates
 low effort when the model exposes effort controls. Claude's tool-free process
 uses the selected account's private home without the project's command
 environment, Genesis prompt or driver. Routing changes affect new tasks.
+
+Bounded operations use the `helper` execution profile and the configured Helper
+model and thinking; Auto classification uses Router's separate assignment. The
+profile constrains tools, environment access, output and time, not model selection.

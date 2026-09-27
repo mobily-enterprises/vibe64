@@ -42,13 +42,10 @@ for (const temporary of [false, true]) {
     expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false });
     expect(state.modeLabel).toBe("Senior");
     expect(state.reviewAvailable).toBe(false);
-    await state.save("intern", false);
-    expect(state.modeLabel).toBe("Intern");
-    expect(state.reviewAvailable).toBe(false);
     await state.save("auto", true);
     expect(state.reviewAvailable).toBe(!temporary);
-    expect(mocks.save).toHaveBeenLastCalledWith(temporary ? { mode: "intern", review: false } : { mode: "auto", review: true });
-    expect(state.modes.map(({ id }) => id)).toEqual(temporary ? ["senior", "junior", "intern"] : ["senior", "junior", "intern", "auto"]);
+    expect(mocks.save).toHaveBeenLastCalledWith(temporary ? { mode: "senior", review: false } : { mode: "auto", review: true });
+    expect(state.modes.map(({ id }) => id)).toEqual(temporary ? ["senior", "junior"] : ["senior", "junior", "auto"]);
   });
 }
 
@@ -61,4 +58,11 @@ it("a failed switch to Auto keeps the direct role and custom model", async () =>
   expect(state.saveError).toBe("Connection interrupted.");
   await state.save("auto", true);
   expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true });
+});
+
+it("does not save Helper as a chat mode", async () => {
+  const state = mount();
+  await state.save("helper", false);
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(state.mode).toBe("junior");
 });

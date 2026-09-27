@@ -108,7 +108,7 @@ const SOURCE_EDITOR_EXPLANATION_CLEANUP_MAX_AGE_MS = 30 * 60 * 1000;
 const SOURCE_EDITOR_EXPLANATION_CACHE_MAX_ENTRIES = 64;
 const SOURCE_EDITOR_EXPLANATION_CACHE_TTL_MS = 5 * 60 * 1000;
 const SOURCE_EDITOR_EXPLANATION_EXECUTION_PROFILE = defineVibe64AgentExecutionProfileRequest({
-  profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.ECONOMY,
+  profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
   workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION
 });
 const SOURCE_EDITOR_EXPLANATION_OUTPUT_SCHEMA = Object.freeze({
@@ -4144,7 +4144,7 @@ function sourceEditorExplanationFollowupMessage(value = "") {
   return message;
 }
 
-function sourceEditorEconomyFollowupThread(explanation = {}) {
+function sourceEditorHelperFollowupThread(explanation = {}) {
   const agentThreadId = normalizeText(explanation.agentThreadId);
   const executionProfile = sourceEditorExecutionProfileSnapshot(explanation.executionProfile);
   if (
@@ -4192,7 +4192,7 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
   const baseExplanation = await readSourceEditorExplanation(context, input.explanationId, {
     explanationChats
   });
-  const agentThreadId = sourceEditorEconomyFollowupThread(baseExplanation);
+  const agentThreadId = sourceEditorHelperFollowupThread(baseExplanation);
   const createdAt = new Date().toISOString();
   const userMessageId = sourceEditorClientMessageId(input.userMessageId) || sourceEditorExplanationMessageId();
   const assistantMessageId = sourceEditorClientMessageId(input.assistantMessageId) || sourceEditorExplanationMessageId();
@@ -4513,7 +4513,7 @@ async function generateSourceEditorExplanationFollowupWithAgentService(explanati
   if (!terminalService || typeof terminalService.runEphemeralAgentChatTurn !== "function") {
     throw sourceEditorError("Agent chat is not available for source explanations.", "vibe64_source_explanation_agent_unavailable", {}, 409);
   }
-  const agentThreadId = sourceEditorEconomyFollowupThread(explanation);
+  const agentThreadId = sourceEditorHelperFollowupThread(explanation);
   let observedExecutionProfile = sourceEditorExecutionProfileSnapshot(explanation.executionProfile);
   let observedThreadId = agentThreadId;
   let observedTurnId = "";

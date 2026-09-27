@@ -548,7 +548,7 @@ test("@collaborator-access fallback chat stays usable and personal turns cannot 
   const shared = { available: true, backupUsed: true, effectiveSelection: { engineId: "opencode", modelId: "glm-4.7" } };
   Object.assign(server.state.assistantAccess, {
     ownerOnly: true, canUse: true, nativeCanUse: false, canUseAny: true, steering: false, currentMode: "junior",
-    purposes: { junior: shared, senior: shared, intern: shared, source_explanation: shared, prompt_hint: shared, auto: shared }
+    purposes: { junior: shared, senior: shared, helper: shared, source_explanation: shared, prompt_hint: shared, auto: shared }
   });
   await page.route("**/agent-session", route => route.fulfill({ status: 403, json: {
     ok: false, code: "vibe64_assistant_owner_required", error: "Only the owner can use this connection."

@@ -59,7 +59,7 @@ const agents = [
   {
     hidden: true,
     mode: "primary",
-    name: "vibe64-economy"
+    name: "vibe64-helper"
   },
   {
     hidden: false,
@@ -74,7 +74,7 @@ test("configured OpenCode choices come only from saved Vibe64 connections", () =
       accessLabel: "Workspace use",
       billingLabel: "Usage-based API billing",
       connected: true,
-      economyModelId: "deepseek-v4-flash",
+      defaultModelId: "deepseek-v4-flash",
       fingerprint: `sha256:${"1".repeat(64)}`,
       modelProviderId: "deepseek",
       productLabel: "DeepSeek",
@@ -83,7 +83,7 @@ test("configured OpenCode choices come only from saved Vibe64 connections", () =
       accessLabel: "Personal use",
       billingLabel: "Coding Plan quota",
       connected: true,
-      economyModelId: "glm-5.3-flash",
+      defaultModelId: "glm-5.3-flash",
       fingerprint: `sha256:${"3".repeat(64)}`,
       modelProviderId: "zai-coding-plan",
       productLabel: "GLM · Personal Coding Plan",
@@ -131,13 +131,13 @@ test("configured OpenCode choices put the host-preferred free provider first", (
   const result = openCodeConfiguredAssistantCapabilities({
     connections: [{
       connected: true,
-      economyModelId: "big-pickle",
+      defaultModelId: "big-pickle",
       modelProviderId: "opencode",
       preferred: false,
       productLabel: "OpenCode Zen"
     }, {
       connected: true,
-      economyModelId: "glm-4.7-flash",
+      defaultModelId: "glm-4.7-flash",
       modelProviderId: "zai",
       preferred: true,
       productLabel: "Z.AI"
@@ -178,7 +178,7 @@ test("Zen exposes only current live models and a real key unlocks all of them", 
     connections: [{
       builtIn: true,
       connected: true,
-      economyModelId: "big-pickle",
+      defaultModelId: "big-pickle",
       fingerprint: "sha256:public",
       modelAccess: {
         configurable: false,
@@ -216,7 +216,7 @@ test("Zen exposes only current live models and a real key unlocks all of them", 
     agents,
     connections: [{
       connected: true,
-      economyModelId: "big-pickle",
+      defaultModelId: "big-pickle",
       fingerprint: "sha256:real-key",
       modelAccess: {
         configurable: true,
@@ -242,7 +242,7 @@ test("Zen exposes only current live models and a real key unlocks all of them", 
     agents,
     connections: [{
       connected: true,
-      economyModelId: "big-pickle",
+      defaultModelId: "big-pickle",
       fingerprint: "sha256:real-key",
       modelAccess: {
         configurable: true,
@@ -403,7 +403,7 @@ test("Zen model rotation does not disconnect its saved key or Big Pickle", () =>
   const result = openCodeAssistantCapabilities({
     agents,
     connections: [{
-      economyModelId: "big-pickle",
+      defaultModelId: "big-pickle",
       fingerprint: "sha256:key-a",
       modelAccess: {
         enabledModelIds: ["big-pickle"],

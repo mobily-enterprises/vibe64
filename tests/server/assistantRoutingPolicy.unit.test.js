@@ -32,9 +32,9 @@ test("JSON recommendations keep Astra for Senior and prefer DeepSeek, then Sol, 
     const roles = recommendedRoutingAssignments(catalog(providers));
     assert.equal(roles.senior.modelId, "gpt-6-astra");
     assert.equal(roles.junior.modelId, expected);
-    assert.equal(roles.intern.modelId, providers.includes("deepseek") ? "deepseek-flash" : "gpt-6-luna");
-    assert.equal(roles.router.modelId, roles.intern.modelId);
-    assert.equal(roles.intern.variantId, "low");
+    assert.equal(roles.helper.modelId, providers.includes("deepseek") ? "deepseek-flash" : "gpt-6-luna");
+    assert.equal(roles.router.modelId, roles.helper.modelId);
+    assert.equal(roles.helper.variantId, "low");
   }
 });
 
@@ -65,7 +65,7 @@ test("the classifier cannot supply executable destinations or malformed decision
   assert.deepEqual(parseRoutingDecision('{"mode":"junior","reason":"explicit_implementation"}'), { mode: "junior", reason: "explicit_implementation" });
   assert.deepEqual(parseRoutingDecision('{"mode":"deslop","reason":"deslop"}'), { mode: "deslop", reason: "deslop" });
   assert.deepEqual(parseRoutingDecision('{"mode":"senior","reason":"mixed_deslop_request"}'), { mode: "senior", reason: "mixed_deslop_request" });
-  for (const output of ["junior", "null", '{"mode":"intern","reason":"unclear"}',
+  for (const output of ["junior", "null", '{"mode":"helper","reason":"unclear"}',
     '{"mode":"deslop","reason":"planning"}', '{"mode":"junior","reason":"deslop"}',
     '{"mode":"junior","reason":"mixed_deslop_request"}',
     '{"mode":"junior","reason":"explicit_implementation","url":"https://example.invalid"}',
@@ -201,14 +201,14 @@ test("independent recommendations compare engines, retain saved ties and filter 
   const recommended = recommendedRoutingAssignments(f.input.catalogs[1], options);
   assert.equal(recommended.senior.engineId, "opencode");
   assert.equal(recommended.junior.engineId, "opencode");
-  assert.equal(recommended.intern.engineId, "codex");
+  assert.equal(recommended.helper.engineId, "codex");
   assert.equal(recommended.router.modelId, "deepseek-flash");
   assert.equal(recommended.sharedBackup.modelProviderId, "deepseek");
   assert.deepEqual(f.input, before, "recommendations do not rewrite saved assignments");
   const withoutDeepSeek = { ...options, catalogs: [catalog(["openai"]), f.input.catalogs[1]] };
   for (const catalogs of [withoutDeepSeek.catalogs, [...withoutDeepSeek.catalogs].reverse()]) {
     const choices = recommendedRoutingAssignments(f.input.catalogs[1], { ...withoutDeepSeek, catalogs });
-    assert.equal(choices.intern.modelId, "gpt-6-luna");
+    assert.equal(choices.helper.modelId, "gpt-6-luna");
     assert.equal(choices.router.modelId, "gpt-6-luna");
     assert.equal(choices.sharedBackup.modelId, "big-pickle");
   }
@@ -319,7 +319,7 @@ test("same-engine Backup substitutes personal Senior without replacing an access
   }
 });
 
-test("Intern helpers stay independent of the Backup pair and Router has a distinct assignment", () => {
+test("background helpers stay independent of the Backup pair and Router has a distinct assignment", () => {
   const f = routingFixture();
   const external = { ...f.backup, modelId: "external-helper" };
   f.input.catalogs[1].modelProviders[0].models.push({ id: external.modelId, status: "available", variants: [] });
@@ -328,20 +328,20 @@ test("Intern helpers stay independent of the Backup pair and Router has a distin
   assert.equal(result.available, true, result.message);
   assert.equal(result.effectiveSelection.modelId, "deepseek-flash");
   assert.equal(result.seniorJuniorPair, undefined);
-  assert.deepEqual(result.executionProfileRequest, { profileId: "economy", workloadId: "prompt_hint" });
+  assert.deepEqual(result.executionProfileRequest, { profileId: "helper", workloadId: "prompt_hint" });
   const router = f.resolve("request_routing");
   assert.equal(router.effectiveSelection.modelId, "external-helper");
   assert.equal(router.executionProfileRequest.workloadId, "request_routing");
-  f.input.configuration.orchestrators.codex.intern = f.roles.senior;
+  f.input.configuration.orchestrators.codex.helper = f.roles.senior;
   f.input.configuration.orchestrators.codex.sharedBackup = external;
   assert.equal(f.resolve("prompt_hint").effectiveSelection.engineId, "opencode");
 });
 
-test("unresolved migration helper choices block only Intern helpers", () => {
+test("unresolved migration helper choices block only background helpers", () => {
   const f = routingFixture();
   f.input.configuration.orchestrators.codex.helperRoutingReview = { reason: "helper_choices_differ", previous: [] };
   assert.equal(f.resolve("prompt_hint").reasonCode, "vibe64_assistant_helper_review_required");
-  assert.equal(f.resolve("intern").available, true);
+  assert.equal(f.resolve("helper").available, true);
   assert.equal(f.resolve("junior").available, true);
   assert.equal(f.resolve("request_routing").available, true);
 });
@@ -410,7 +410,7 @@ test("overrides cannot split a required Backup pair and direct Senior/Junior can
   assert.deepEqual(override, originalOverride);
   assert.equal(f.resolve("junior", { override: { role: "junior", selection: f.backup } }).available, false);
   assert.equal(f.resolve("senior", { override: { role: "senior", selection: f.backup } }).available, false);
-  assert.equal(f.resolve("intern", { override: { role: "intern", selection: f.backup } }).available, true);
+  assert.equal(f.resolve("helper", { override: { role: "helper", selection: f.backup } }).available, false);
 });
 
 test("the pure resolver requires a trusted actor input; standalone null remains explicit", () => {
@@ -429,9 +429,9 @@ test("included Pickle remains usable for chat and Backup but cannot route or run
   assert.equal(recommended.junior.modelId, "big-pickle");
   assert.equal(recommended.sharedBackup.modelId, "big-pickle");
   assert.equal(recommended.router, null);
-  assert.equal(recommended.intern, null);
-  Object.assign(f.input.configuration.orchestrators.codex, { router: f.backup, intern: f.backup });
-  assert.equal(f.resolve("intern").available, true);
+  assert.equal(recommended.helper, null);
+  Object.assign(f.input.configuration.orchestrators.codex, { router: f.backup, helper: f.backup });
+  assert.equal(f.resolve("helper").available, true);
   for (const purpose of ["request_routing", "prompt_hint", "auto"]) {
     const result = f.resolve(purpose, { actor: { role: "owner" } });
     assert.equal(result.available, false);
@@ -439,12 +439,12 @@ test("included Pickle remains usable for chat and Backup but cannot route or run
   }
 });
 
-for (const purpose of ["senior", "junior", "intern", "review", "deslop", ...Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS)]) {
+for (const purpose of ["senior", "junior", "helper", "review", "deslop", ...Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS)]) {
   test(`${purpose} resolves a personal assignment through the same collaborator fallback`, () => {
     const f = routingFixture();
     const assignments = f.input.configuration.orchestrators.codex;
     Object.assign(assignments, { senior: f.roles.senior, junior: f.roles.senior,
-      intern: f.roles.senior, router: f.roles.senior, sharedBackup: f.roles.junior });
+      helper: f.roles.senior, router: f.roles.senior, sharedBackup: f.roles.junior });
     const before = structuredClone(f.input.configuration);
     const member = f.resolve(purpose);
     assert.equal(member.available, true, member.message);
@@ -461,12 +461,12 @@ for (const purpose of ["senior", "junior", "intern", "review", "deslop", ...Obje
   });
 }
 
-test("Auto resolves its pair and Router through fallback without depending on Intern", () => {
+test("Auto resolves its pair and Router through fallback without depending on Helper", () => {
   const f = routingFixture();
   const assignments = f.input.configuration.orchestrators.codex;
   assignments.router = f.roles.senior;
   assignments.sharedBackup = f.roles.junior;
-  delete assignments.intern;
+  delete assignments.helper;
   const result = f.resolve("auto", { reviewEnabled: true });
   assert.equal(result.available, true, result.message);
   assert.equal(result.router.modelProviderId, "deepseek");

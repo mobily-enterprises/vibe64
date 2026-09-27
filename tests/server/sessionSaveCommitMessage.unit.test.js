@@ -13,7 +13,7 @@ import {
 
 const catalogRevision = `sha256:${"a".repeat(64)}`;
 
-function resolvedEconomyProfile(workloadId = "commit_title") {
+function resolvedHelperProfile(workloadId = "commit_title") {
   return {
     limits: {
       maxInputCharacters: 20_000,
@@ -27,14 +27,14 @@ function resolvedEconomyProfile(workloadId = "commit_title") {
       repositoryWrite: false,
       tools: "none"
     },
-    profileId: "economy",
+    profileId: "helper",
     providerId: "codex",
     request: {
       allowProviderModelFallback: false,
       reasoning: true,
       summary: false
     },
-    revision: "codex-economy-v1",
+    revision: "codex-helper-v1",
     thinking: "low",
     workloadId
   };
@@ -70,7 +70,7 @@ async function namingFixture(t) {
     async readBackgroundTask(sessionId, taskId) { assert.equal(sessionId, "session-1"); assert.equal(taskId, "save-work"); return structuredClone(task); },
     async writeBackgroundTaskEvent(_sessionId, _taskId, { patch }) { Object.assign(task, structuredClone(patch)); }
   } } };
-  const profile = { ...resolvedEconomyProfile(), model: selection.modelId, providerId: selection.engineId };
+  const profile = { ...resolvedHelperProfile(), model: selection.modelId, providerId: selection.engineId };
   const agent = {
     async resolveAssistantPurpose(input, options) {
       calls.push("resolve");
@@ -80,7 +80,7 @@ async function namingFixture(t) {
     },
     async resolveEphemeralExecutionProfile(scope, input, options) {
       calls.push("profile");
-      assert.deepEqual(input, { profileId: "economy", workloadId: "commit_title" });
+      assert.deepEqual(input, { profileId: "helper", workloadId: "commit_title" });
       assert.deepEqual(options.assistantSelection, selection);
       assert.equal(options.expectedConnectionIdentity, "shared-key-generation-1");
       assert.equal(task.assistantHelper.scope.id, scope.id, "ownership precedes provider setup");
@@ -110,7 +110,7 @@ async function namingFixture(t) {
   return { agent, calls, context, profile, task, run: () => generateSessionSaveCommitMessage({ agent, agentContext: context, changes: {} }) };
 }
 
-test("Save naming resolves shared Economy for a member with personal main chat and cleans its own scope", async (t) => {
+test("Save naming resolves shared Helper for a member with personal main chat and cleans its own scope", async (t) => {
   const f = await namingFixture(t);
   const result = await f.run();
   assert.equal(result.subject, "Improve booking availability rules");
@@ -121,9 +121,9 @@ test("Save naming resolves shared Economy for a member with personal main chat a
   assert.equal(JSON.parse(f.context.session.metadata.assistant_selection).modelId, "gpt-6-astra");
 });
 
-test("Save naming refuses unavailable Economy without starting a provider", async (t) => {
+test("Save naming refuses unavailable Helper without starting a provider", async (t) => {
   const f = await namingFixture(t);
-  f.agent.resolveAssistantPurpose = async () => ({ available: false, reasonCode: "helper_review_required", message: "Review Economy first." });
+  f.agent.resolveAssistantPurpose = async () => ({ available: false, reasonCode: "helper_review_required", message: "Review Helper first." });
   await assert.rejects(f.run(), { code: "helper_review_required" });
   assert.deepEqual(f.calls, []);
   assert.equal(f.task.assistantHelper, undefined);

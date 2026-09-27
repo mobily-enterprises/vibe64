@@ -254,3 +254,29 @@ record, while its resolved model role stays Senior. Mixed Auto requests use the
 existing failed/unsent state with a `mixed_deslop_request` reason and fixed
 explanation. These are new request outcomes, not historical transformations;
 no old requests are reclassified or backfilled.
+
+## Helper assignment and execution profile
+
+`20260927-assistant-helper` advances routing configuration and request snapshots
+to schema 4. The former `intern` assignment becomes `helper`, retaining the exact
+model, thinking, scores and selection provenance. The retired direct-chat choice
+becomes Junior for future requests. Already accepted requests and goals retain
+their model, actor and receipt identity; historical transcript attribution becomes
+Helper without rewriting authored text or native history.
+
+The upgrade converts `economy` execution-profile identifiers, including the
+incorrect `intern` classifier identifier, to `helper` in owned snapshots. It
+visits active, closing and archived sessions and prepared renewal archives,
+including temporary chats, background tasks and prompt-hint cleanup artifacts.
+Codex ownership files move to `codex-helper-thread-ownership` with ownership
+fingerprints and cleanup references retained. Provider defaults become
+`defaultModelId`; those defaults do not select the workflow's Helper model.
+
+The existing verified publication engine backs up every changed file before
+publication under `upgrades/backups/20260927-assistant-helper/`. Read-only preflight
+reports affected projects; corrupt or conflicting settings and symlinks block
+apply. Interrupted publication resumes from the same checked replacements.
+Earlier upgrades retain frozen validation, so upgrading from older releases
+continues through the ordered ledger. Runtime readers accept only current names.
+
+Focused evidence: `assistantHelperUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
