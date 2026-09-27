@@ -92,6 +92,20 @@ async function main() {
     const { createServer: createViteServer } = await import("vite");
     vite = await createViteServer({
       root: appRoot,
+      plugins: [{
+        name: "vibe64-example-backend",
+        async closeServer({ reason }) {
+          if (reason === "restart") return;
+          // Vite exits after its own SIGTERM handler. Finish native cleanup first.
+          try {
+            await app.vibe64CapabilityRuntime.shutdown();
+            await app.close();
+          } catch (error) {
+            process.exitCode = 1;
+            throw error;
+          }
+        }
+      }],
       server: {
         host: values.host, port, strictPort: true,
         // The loopback listener is reached through the authenticated host proxy.

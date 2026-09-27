@@ -1113,6 +1113,7 @@ const {
   purposes: assistantPurposes,
   scopeKey: assistantAccessScopeKey,
   initialAccessLoading: assistantAccessLoading,
+  reload: reloadAssistantAccess,
   restrictionMessage: assistantRestrictionMessage
 } = useVibe64AssistantAccess({
   active: computed(() => props.active && !props.sessionSelectionArchived),
