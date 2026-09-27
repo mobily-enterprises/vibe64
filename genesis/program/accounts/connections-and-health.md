@@ -214,6 +214,11 @@ provider operations.
 Connection setup describes available models and directs role choices to Model
 routing. Connecting GLM or a Zen key does not promise to replace saved defaults;
 recommendations and their application belong to the shared routing flow.
+Every configured connection title starts with its orchestrator. Included Big
+Pickle and OpenCode GLM retain the OpenCode prefix; curated keys list Codex and
+Claude Code together only when `claudeReady` confirms both. The regular Z.AI
+recommendation is hidden for a connected regular API or Coding Plan key in
+OpenCode, or a connected Codex Coding Plan key.
 
 OpenCode connections retain the existing versioned file at
 `<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login

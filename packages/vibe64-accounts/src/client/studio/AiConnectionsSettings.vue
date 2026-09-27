@@ -180,13 +180,13 @@ const configuredAiRows = computed(() => [
   ...(codexConnected.value ? [{
     accessLabel: "Account-wide",
     billingLabel: codexAccount.value?.username || "Codex account",
-    engineLabel: "Codex - GPT",
+    engineLabel: "Codex",
     id: "codex",
     kind: "codex",
     keyHint: "Connected",
     managementUrl: "",
     modelLabel: "Available for Codex sessions",
-    providerLabel: ""
+    providerLabel: "GPT"
   }] : []),
   ...(claudeConnected.value ? [{
     accessLabel: "Personal use",
@@ -204,8 +204,8 @@ const configuredAiRows = computed(() => [
     return {
       ...connection,
       kind: "codex-provider",
-      engineLabel: `Codex - ${provider.label}`,
-      providerLabel: "",
+      engineLabel: connection.claudeReady ? "Codex / Claude Code" : "Codex",
+      providerLabel: provider.label,
       billingLabel: provider.description,
       accessLabel: provider.ownerOnly ? "Personal use" : "Workspace use",
       keyHint: connection.connected ? "Connected" : "Reconnect required",
@@ -223,12 +223,18 @@ const configuredAiRows = computed(() => [
         : connection.id === "opencode"
           ? "Zen key ready; choose model access below"
         : "Choose model roles in Model routing",
-    providerLabel: connection.productLabel || connection.label
+    providerLabel: connection.id === "opencode" && connection.builtIn
+      ? "Big Pickle"
+      : connection.productLabel || connection.label
   }))
 ]);
-const zaiConnection = computed(() => connections.value.find((connection) => (
-  connection.id === "zai" && connection.connected === true
-)) || null);
+const glmConnected = computed(() => (
+  connections.value.some((connection) => (
+    (connection.id === "zai" || connection.id === "zai-coding-plan") && connection.connected === true
+  )) || codexProviders.connections.value.some((connection) => (
+    connection.id === "zai-coding-plan" && connection.connected === true
+  ))
+));
 const aiStatusLoaded = computed(() => Boolean(
   nativeAccounts.status.value && Array.isArray(nativeAccounts.status.value.accounts)
 ));
@@ -835,7 +841,7 @@ defineExpose({ openProvider });
           />
 
           <v-sheet
-            v-if="!zaiConnection"
+            v-if="!glmConnected"
             border
             class="vibe64-ai-connections__recommendation"
             rounded="lg"
@@ -893,11 +899,7 @@ defineExpose({ openProvider });
                   </v-avatar>
                   <span>
                     <strong>
-                      <template v-if="account.kind === 'opencode' && (account.id === 'zai' || account.id === 'zai-coding-plan')">{{ account.providerLabel }}</template>
-                      <template v-else-if="account.id === 'opencode' && account.builtIn">Big Pickle</template>
-                      <template v-else>
-                        {{ account.engineLabel }}<template v-if="account.providerLabel"> · {{ account.providerLabel }}</template>
-                      </template>
+                      {{ account.engineLabel }}<template v-if="account.providerLabel"> - {{ account.providerLabel }}</template>
                     </strong>
                     <small v-if="account.id === 'zai'">{{ account.billingLabel }}</small>
                     <small v-else-if="account.id === 'opencode' && account.builtIn">OpenCode Zen · included with Vibe64</small>
@@ -1918,15 +1920,6 @@ defineExpose({ openProvider });
 .vibe64-ai-connections--compact .vibe64-ai-connections__row-actions,
 .vibe64-ai-connections--compact .vibe64-provider-editor__actions .v-btn {
   width: 100%;
-}
-
-.vibe64-ai-connections--compact .vibe64-ai-connections__page-actions {
-  display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr);
-}
-
-.vibe64-ai-connections--compact .vibe64-ai-connections__page-actions .v-btn {
-  min-width: 0;
 }
 
 .vibe64-ai-connections--compact .vibe64-ai-connections__recommendation-actions {

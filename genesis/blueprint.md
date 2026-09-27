@@ -665,7 +665,10 @@ message or stopping the main assistant.
 Standalone Vibe64 and hosted Vibe64 use the same AI Accounts screen and provider
 configuration. Account settings offers Codex with GPT, DeepSeek and GLM, Claude
 Code, and OpenCode's provider catalogue. OpenCode Big Pickle is included without
-sign-in. Provider credentials and shared model-routing assignments belong to the
+sign-in. Connection titles name their orchestrator first, including both Codex
+and Claude Code when an external key is verified for both. The Add GLM shortcut
+is hidden when GLM is already connected through either Codex or OpenCode.
+Provider credentials and shared model-routing assignments belong to the
 editor's account storage, outside the project. Native Codex and Claude credentials keep
 using the host's existing account context, including in a nested development
 preview. Hosts supply account storage and management permissions; they do not
