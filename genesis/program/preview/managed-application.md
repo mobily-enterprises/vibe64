@@ -220,6 +220,9 @@ Vibe64's output and workspace-setup contracts continue to validate actual launch
 Status inspection never starts work. Logs, retry, stop, open, fresh restart,
 result history, and authenticated downloads remain available through the
 session-owned output controller and studio controls.
+Preview diagnostics write only within the existing session directory. The session
+lifecycle owns its creation; late diagnostic writes cannot recreate it after
+removal and use the existing warning log if writing fails.
 An active assistant turn delays automatic startup, not status inspection or an
 explicit restart. Both restart controls send the forced-start command for
 running and exited targets. Session renewal still suspends source operations;

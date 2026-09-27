@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { appendFile, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
@@ -225,9 +225,6 @@ async function writePreviewDiagnostic(session = {}, record = {}, {
     ...(record.details && typeof record.details === "object" && !Array.isArray(record.details) ? { details: record.details } : {})
   };
   try {
-    await mkdir(sessionRoot, {
-      recursive: true
-    });
     await writeFile(previewLastPath(session), `${JSON.stringify(normalizedRecord, null, 2)}\n`, "utf8");
     if (append) {
       await appendFile(previewLogPath(session), `${JSON.stringify(normalizedRecord)}\n`, "utf8");

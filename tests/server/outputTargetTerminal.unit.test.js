@@ -258,6 +258,9 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
   await mkdir(sourceRoot, {
     recursive: true
   });
+  await mkdir(sessionRoot, {
+    recursive: true
+  });
 
   let controller;
   let releaseLaunchCleanupPublication = () => null;
@@ -612,6 +615,8 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
     const diagnostic = JSON.parse(await readFile(path.join(sessionRoot, "preview-last.json"), "utf8"));
     assert.equal(diagnostic.error.resourceAdmissionId, workflowRejection.admission.id);
     assert.equal(diagnostic.reason, "terminal_start_failed");
+    const diagnosticLog = await readFile(path.join(sessionRoot, "preview-log.jsonl"), "utf8");
+    assert.deepEqual(JSON.parse(diagnosticLog.trim().split("\n").at(-1)), diagnostic);
     const refusedStatus = await controller.launchStatus(sessionId);
     assert.equal(refusedStatus.resourceAdmissionId, workflowRejection.admission.id);
     assert.equal(refusedStatus.preview.state, "failed");
@@ -627,6 +632,14 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
     }
     await writeFile(path.join(sessionRoot, "preview-last.json"), "{broken");
     assert.equal((await controller.launchStatus(sessionId)).resourceAdmissionId, undefined);
+
+    await t.test("late diagnostics cannot recreate a removed session directory", async () => {
+      await rm(sessionRoot, { recursive: true });
+      const lateRefusal = await controller.startTerminal(sessionId, { outputTargetId: "app", forceRestart: true });
+      assert.equal(lateRefusal.ok, false);
+      assert.equal(lateRefusal.code, "vibe64_capacity_rejected");
+      assert.equal(existsSync(sessionRoot), false);
+    });
   } finally {
     releaseLaunchCleanupPublication?.();
     await controller?.close();
