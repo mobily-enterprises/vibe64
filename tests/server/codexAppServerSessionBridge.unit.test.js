@@ -1118,7 +1118,7 @@ test("codex app-server bridge starts a missing session thread and stores identit
 
   const result = await ensureCodexAppServerThreadForSession({
     observeThread() {},
-    developerInstructions: "Vibe64 briefing",
+    hostContext: { scope: "session", conversationKind: "main" },
     provider,
     runtime,
     session: {
@@ -1132,6 +1132,8 @@ test("codex app-server bridge starts a missing session thread and stores identit
   assert.equal(providerCalls.length, 1);
   assert.equal(providerCalls[0].method, "startThread");
   assert.equal(providerCalls[0].params.cwd, "/repo/worktree");
+  assert.equal(providerCalls[0].params.developerInstructions, "");
+  assert.deepEqual(providerCalls[0].params.hostContext, { scope: "session", conversationKind: "main" });
   assert.equal(Object.hasOwn(providerCalls[0].params, "dynamicTools"), false);
   assert.equal(metadataValue(runtime, "agent_identity_provider"), "codex");
   assert.equal(metadataValue(runtime, "agent_identity_conversation_id"), "thread-started");
@@ -1779,7 +1781,7 @@ test("session renewal resumes and reads only the exact persisted main thread wit
       model: "gpt-5.6-sol",
       thinking: "high"
     },
-    developerInstructions: "Ordinary Vibe64 Genesis work semantics.",
+    hostContext: { scope: "session", conversationKind: "main" },
     expectedThreadId: "old-main-thread",
     provider,
     session: {
@@ -1802,7 +1804,8 @@ test("session renewal resumes and reads only the exact persisted main thread wit
     "readThread"
   ]);
   assert.equal(calls[1][2].model, "gpt-5.6-sol");
-  assert.equal(calls[1][2].developerInstructions, "Ordinary Vibe64 Genesis work semantics.");
+  assert.equal(calls[1][2].developerInstructions, "");
+  assert.deepEqual(calls[1][2].hostContext, { scope: "session", conversationKind: "main" });
   assert.equal(Object.hasOwn(calls[1][2], "allowProviderModelFallback"), false);
 });
 
@@ -1884,7 +1887,7 @@ test("session renewal starts a genuinely fresh successor thread and persists its
       model: "gpt-5.6-sol",
       thinking: "xhigh"
     },
-    developerInstructions: "Ordinary Vibe64 Genesis work semantics.",
+    hostContext: { scope: "session", conversationKind: "main" },
     forbiddenThreadId: "old-main-thread",
     operationId: "renewal:one",
     provider,

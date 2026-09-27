@@ -63,9 +63,9 @@ import {
   GENESIS_BLUEPRINT_PATH,
   GENESIS_DERIVED_ARTIFACT_PATHS,
   inspectGenesisProjectFormat,
-  inspectGenesisOpenCodePlugin,
+  inspectGenesisAgentIntegrations,
   inspectGenesisSkills,
-  syncGenesisOpenCodePlugin,
+  syncGenesisAgentIntegrations,
   syncGenesisSkills
 } from "@local/vibe64-genesis/server";
 import {
@@ -725,14 +725,14 @@ function createService({
       }, "Project skill refresh requires workspace preparation.");
       return;
     }
-    const guidance = await inspectGenesisOpenCodePlugin({ projectRoot });
+    const guidance = await inspectGenesisAgentIntegrations({ projectRoot });
     const refreshSkills = ["missing", "outdated"].includes(inspection.status);
     if (!refreshSkills && guidance.status === "current") return;
     const result = await projectService.runProjectSourceExclusive(
       async () => {
-        const plugin = await syncGenesisOpenCodePlugin({ projectRoot });
         const skills = refreshSkills ? await syncGenesisSkills({ projectRoot }) : { changedFiles: [] };
-        return { changedFiles: [...plugin.changedFiles, ...skills.changedFiles] };
+        const integrations = await syncGenesisAgentIntegrations({ projectRoot });
+        return { changedFiles: [...integrations.changedFiles, ...skills.changedFiles] };
       },
       { operation: "sync-agent-skills" }
     );

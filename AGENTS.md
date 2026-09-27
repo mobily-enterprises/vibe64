@@ -17,7 +17,7 @@ Important boundaries:
   deploy workflow verifies both published checkouts and owns the public-editor
   gitlink update and its pointer-only commit; do not duplicate those steps by
   hand.
-- Genesis owns project intent, technology guidance, explanatory Program, agent skills, hooks, verification guidance, and Machine/Program Cities. Its portable files live below `genesis/`, `.genesis/`, `.agents/skills/`, and `.codex/hooks.json`.
+- Genesis owns project intent, technology guidance, explanatory Program, agent skills, hooks, verification guidance, and Machine/Program Cities. Its portable files live below `genesis/`, `.genesis/`, `.agents/skills/`, `.codex/hooks.json`, `.claude/settings.json`, and the generated `.opencode/plugins/genesis-project-guidance.js`.
 - `vibe64.project.json` and `vibe64.runtime-lock.json` are unsupported obsolete contracts. Do not recreate or read them.
 - `.vibe64/` is not product, prompt, Stack, Program, indexing, or City authority. Keep only narrowly declared application helpers such as a Vibe64 Launch preview-identity executable when required.
 - Runtime/session state is Vibe64-owned runtime-local state, not source-owned repository content.

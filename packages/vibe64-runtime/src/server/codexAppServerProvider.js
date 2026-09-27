@@ -3549,7 +3549,7 @@ class CodexAppServerAgentProvider {
     };
   }
 
-  async startThread(params = {}) {
+  async startThread({ hostContext, ...params } = {}) {
     params = await this.options.prepareThreadParams?.(params) || params;
     const client = await this.activeClient();
     params = await this.withHistoryAdapter(params, client);
@@ -3562,6 +3562,9 @@ class CodexAppServerAgentProvider {
       () => client.request("thread/start", requestParams),
       "codex-app-server-thread-start"
     );
+    if (hostContext) {
+      await this.options.bindThreadContext(response?.thread?.id, hostContext, params);
+    }
     // Native ephemeral helpers have no stored history and report "legacy".
     // Paginated history is required only for persistent conversations.
     if (params.ephemeral !== true && response?.thread?.historyMode === "legacy") {
@@ -3595,7 +3598,8 @@ class CodexAppServerAgentProvider {
     };
   }
 
-  async resumeThread(threadId = "", params = {}) {
+  async resumeThread(threadId = "", { hostContext, ...params } = {}) {
+    if (hostContext) await this.options.bindThreadContext(threadId, hostContext, params);
     params = await this.options.prepareThreadParams?.(params) || params;
     await this.options.beforeResumeThread?.(threadId);
     const client = await this.activeClient();
@@ -3730,7 +3734,7 @@ class CodexAppServerAgentProvider {
         }
       }
       const executionId = normalizeAgentText(this.runtime?.executionId);
-      // Reinstall startup instructions only for a cold thread in a replacement
+      // Refresh project hook trust only for a cold thread in a replacement
       // process. A new socket or a changed command environment is not evidence
       // that the provider process died.
       if (nativeStatus === "notLoaded" && executionId && bound?.executionId !== executionId) {

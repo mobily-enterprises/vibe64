@@ -1,3 +1,4 @@
+import { createVibe64HostContextRegistry } from "../../packages/vibe64-genesis/src/server/hostContextRegistry.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -10,7 +11,7 @@ import {
   GENESIS_DERIVED_ARTIFACT_PATHS,
   addGenesisStack,
   assertGenesisPromptTask,
-  composeVibe64SessionContext,
+  vibe64HostContextResolverPath,
   genesisCommandShimDirectory,
   genesisPackageBinDirectory,
   genesisPromptRequest,
@@ -140,12 +141,17 @@ test("the Genesis hook shim trusts only the registered provider session worktree
       ...process.env,
       GENESIS_HOST_CONTEXT_INPUT: JSON.stringify({ sessionId: "provider-session" }),
       PATH: `${bin}${path.delimiter}${process.env.PATH}`,
-      VIBE64_OPENCODE_SESSION_ENV_REGISTRY: registryPath
+      GENESIS_HOST_CONTEXT_RESOLVER_DATA: JSON.stringify({ registryPath })
     };
     const run = (target = projectRoot, options = {}) => execFileAsync(process.execPath, [
       shim, "hook", "turn", "--project-root", target
     ], { cwd: projectRoot, env, ...options });
     await run();
+    const nativeEnv = { ...env };
+    delete nativeEnv.GENESIS_HOST_CONTEXT_INPUT;
+    const native = run(projectRoot, { env: nativeEnv });
+    native.child.stdin.end(JSON.stringify({ session_id: "provider-session" }));
+    await native;
     const childEnv = { ...env, GENESIS_HOST_CONTEXT_INPUT: JSON.stringify({
       sessionId: "child-session", parentSessionIds: ["nested-child", "provider-session"]
     }) };
@@ -157,7 +163,7 @@ test("the Genesis hook shim trusts only the registered provider session worktree
     }), /GIT_REPOSITORY_UNTRUSTED/u);
     await assert.rejects(run(projectRoot, { cwd: otherRoot }), /GIT_REPOSITORY_UNTRUSTED/u);
     await assert.rejects(run(projectRoot, {
-      env: { ...env, VIBE64_OPENCODE_SESSION_ENV_REGISTRY: "" }
+      env: { ...env, GENESIS_HOST_CONTEXT_RESOLVER_DATA: "" }
     }), /GIT_REPOSITORY_UNTRUSTED/u);
   });
 });
@@ -275,6 +281,21 @@ test("Genesis initialization creates its complete technology-neutral project", a
   });
 });
 
+async function sessionHook({ projectRoot, conversationKind, session }) {
+  const registry = await createVibe64HostContextRegistry();
+  try {
+    await registry.register("test-session", { scope: "session", conversationKind, session }, projectRoot);
+    const { stdout } = await execFileAsync(process.execPath, [
+      path.join(genesisCommandShimDirectory(), "genesis"), "hook", "session"
+    ], { cwd: projectRoot, env: { ...process.env,
+      GENESIS_HOST_CONTEXT_RESOLVER: vibe64HostContextResolverPath(),
+      GENESIS_HOST_CONTEXT_RESOLVER_DATA: JSON.stringify({ registryPath: registry.registryPath }),
+      GENESIS_HOST_CONTEXT_INPUT: JSON.stringify({ session_id: "test-session" })
+    } });
+    return stdout;
+  } finally { await registry.close(); }
+}
+
 test("the Genesis boundary composes source-owned collaboration once with Vibe64 session context", async () => {
   await withTemporaryRoot(async (projectRoot) => {
     await initializeGit(projectRoot);
@@ -288,7 +309,7 @@ test("the Genesis boundary composes source-owned collaboration once with Vibe64 
       responseLength: "very_short",
       tone: "direct"
     });
-    const composed = await composeVibe64SessionContext({
+    const output = await sessionHook({
       conversationKind: "temporary",
       projectRoot,
       session: {
@@ -300,19 +321,18 @@ test("the Genesis boundary composes source-owned collaboration once with Vibe64 
     });
 
     assert.equal(initial.contract, "genesis.collaboration.v1");
-    assert.equal(composed.contract, "genesis.session-context.v1");
-    assert.match(composed.output, /Be direct, calm, and matter-of-fact\./u);
-    assert.match(composed.output, /Assume the user is an expert/u);
-    assert.match(composed.output, /Use very short sentences/u);
-    assert.match(composed.output, /including progress updates and final responses/u);
-    assert.match(composed.output, /Use Australian English\./u);
-    assert.match(composed.output, /temporary conversation in the selected session worktree/u);
-    assert.match(composed.output, /vibe64-helper env set/u);
-    assert.match(composed.output, /vibe64-helper database refresh/u);
-    assert.match(composed.output, /which earlier work is confirmed complete/u);
-    assert.match(composed.output, /commandSubmitted=false/u);
-    assert.match(composed.output, /Separate recorded facts from hypotheses/u);
-    assert.doesNotMatch(composed.output, /do not edit files or run state-changing commands|only for inspection/u);
+    assert.match(output, /Be direct, calm, and matter-of-fact\./u);
+    assert.match(output, /Assume the user is an expert/u);
+    assert.match(output, /Use very short sentences/u);
+    assert.match(output, /including progress updates and final responses/u);
+    assert.match(output, /Use Australian English\./u);
+    assert.match(output, /temporary conversation in the selected session worktree/u);
+    assert.match(output, /vibe64-helper env set/u);
+    assert.match(output, /vibe64-helper database refresh/u);
+    assert.match(output, /which earlier work is confirmed complete/u);
+    assert.match(output, /commandSubmitted=false/u);
+    assert.match(output, /Separate recorded facts from hypotheses/u);
+    assert.doesNotMatch(output, /do not edit files or run state-changing commands|only for inspection/u);
   });
 });
 
@@ -327,7 +347,7 @@ test("Vibe64 uses configured beginner detail for main and temporary task progres
       responseLength: "detailed"
     });
     for (const conversationKind of ["main", "temporary"]) {
-      const composed = await composeVibe64SessionContext({
+      const output = await sessionHook({
         conversationKind,
         projectRoot,
         session: {
@@ -337,11 +357,11 @@ test("Vibe64 uses configured beginner detail for main and temporary task progres
           managedPreview: false
         }
       });
-      assert.match(composed.output, /Assume the user is new to software development/u);
-      assert.match(composed.output, /Give thorough, structured explanations/u);
-      assert.match(composed.output, /teaching-oriented way/u);
-      assert.match(composed.output, /including progress updates and final responses/u);
-      assert.doesNotMatch(composed.output, /Keep interim progress updates brief/u);
+      assert.match(output, /Assume the user is new to software development/u);
+      assert.match(output, /Give thorough, structured explanations/u);
+      assert.match(output, /teaching-oriented way/u);
+      assert.match(output, /including progress updates and final responses/u);
+      assert.doesNotMatch(output, /Keep interim progress updates brief/u);
     }
   });
 });

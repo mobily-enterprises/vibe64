@@ -184,6 +184,8 @@ references consistent. A confirmed send clears only its accepted receipts.
 
 ## Sources
 
+- `packages/vibe64-genesis/src/server/hostContextRegistry.js`
+
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
 - `packages/vibe64-terminals/src/server/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
@@ -1270,49 +1272,46 @@ conversation into the new provider thread, and then delivers that message once.
 An active turn and unrelated invalid provider requests remain failures rather
 than being reinterpreted as missing history.
 
-Separately, Genesis composes one stable session context containing its project,
-Engineering, and Collaboration guidance plus Vibe64's main-conversation rules.
-Codex installs it as thread instructions, Claude appends it to the system prompt
-when launching its native process, and OpenCode keeps it in the system context
-through Genesis's ordinary project plugin. It creates no conversation
-message or additional agent turn. Collaboration changes become current only
-when that stable context is next established or refreshed; Codex cannot replace
-developer instructions inside an already-live thread.
-The provider may serialize its system or developer instructions again for a
-later stateless model request, but Vibe64 does not rerender them into the
-person's message or copy them into the turn-context lane.
+Genesis owns the ordinary project integrations for all three agents. Codex and
+Claude Code use their generated SessionStart hooks; OpenCode uses the generated
+system-context plugin. These are the same integrations as standalone CLI use.
+They compose project, Engineering, Collaboration and skill guidance with one
+optional host contribution. Vibe64 supplies only main/temporary identity and
+managed-operation capabilities through its existing Genesis resolver bridge.
+Senior/Junior routing, Auto planning, coding and review/deslop remain Vibe64's
+turn-level orchestration. The integration does not change those workflows.
 
-Codex restores missing startup instructions at the shared cold-resume boundary,
-before native resume can schedule a goal turn. A cold thread alone is insufficient:
-restoration also requires a newly started runtime or a changed managed execution
-identity. Session identity metadata records that execution id; older metadata can
-prove replacement when the current process started after the saved attachment.
-A replacement socket or stale command generation does not trigger this instruction
-resolver. Supplied instructions are retained, including renewal and temporary-chat
-context. The resolver fills omitted instructions from the existing session composer
-and includes the current thread settings and hook trust configuration.
-Claude uses the same complete session composer for JSON and native-terminal
-launches after the prior owned execution has been verified stopped. Reusing its
-live process returns before composing instructions. Neither provider replays the
-person's opening request or creates an extra conversation turn for this restoration.
+Codex and Claude bind native conversation IDs before work can begin. A new Codex
+thread is registered before its first turn; a saved thread is registered before
+resume, which can immediately schedule a goal. The runtime-local registry lives
+at a stable path outside source and survives controller reconnection. It contains
+host context and exact worktree paths, never credentials or authored messages.
+Codex's shared process receives the resolver environment; hooks do not inherit
+per-thread shell environment. Claude receives it on both JSON and native-terminal
+launches. Neither provider composes or caches a second system/developer guide.
 
-The Vibe64 Genesis hook executable grants Git trust only to the registered
-OpenCode provider session's exact working directory when invoked from that
-directory. Native children carry verified parent ids from the Genesis adapter
-so the same registered worktree remains trusted. Unregistered sessions and other worktrees keep Genesis's ordinary
-ownership checks. This uses the same scoped compiler trust operation as
-Vibe64's in-process inspections, without global Git configuration or ownership
-changes.
-The OpenCode runtime plugin imports only the prompt formatter from the Genesis
-boundary, so formatting host context does not load the compiler's native source
-parsers into OpenCode's Bun process. Genesis hooks still run through the separate
-Node executable. Hosted OpenCode explicitly disables the unused Genesis turn
-lane with `GENESIS_TURN_CONTEXT_ENABLED=0`. Idle session preparation refreshes
-the generated OpenCode adapter through Genesis's scoped synchronization API
-under source-write admission, independently of authored project migration.
-An already-loaded older adapter takes the same disabled-lane fast exit in the
-managed command shim before compiler loading or Git inspection. The refreshed
-adapter itself becomes active on the next provider instance load.
+SessionStart refreshes guidance on native startup, resume and compaction. The
+Codex hook has no additional-context truncation limit, so it preserves the entire
+bounded Genesis output. Native history may retain previous lifecycle hook output;
+Vibe64 does not rewrite that history or inject another copy beside the hook.
+An existing conversation's former direct instructions are cleared from future
+thread configuration on resume; its recorded history remains intact.
+
+The Vibe64 Genesis executable grants Git trust only to a registered native
+session's exact worktree when invoked there. Codex and Claude supply their native
+ID on stdin; OpenCode supplies it through the existing hook-input environment.
+OpenCode's verified parent IDs also retain trust for native child sessions.
+Unregistered sessions and other worktrees keep Genesis's ordinary ownership
+checks. This uses scoped compiler trust, with no global Git configuration or
+ownership changes.
+
+Vibe64 disables the unused Genesis turn lane with
+`GENESIS_TURN_CONTEXT_ENABLED=0`. Idle foreground preparation synchronizes all
+three generated integrations under the existing source-write admission, alongside
+skills. It does not migrate authored project contracts. Updated guidance takes
+effect at the next native context lifecycle; a loaded OpenCode plugin is replaced
+on the next provider instance load. Non-project helpers keep their bounded task
+instructions and do not load project hooks.
 
 Non-project, tool-free conversations have no Genesis project plugin. OpenCode's
 host plugin therefore installs their validated, host-supplied context directly
@@ -1698,8 +1697,9 @@ an unrelated failure cannot gain an account link merely because of its wording.
   Deslop request; later ordinary messages are sent without rebuilding the full
   Genesis prompt, and Codex steering continues through its existing direct
   steer path.
-- `composeVibe64SessionContext()` uses one provider-neutral, session-only
-  Vibe64 driver through Genesis for stable Vibe64 conversation rules.
+- `vibe64HostContextRegistry()` and `vibe64HostContextEnvironment()` bind native
+  conversations to the existing Genesis executable bridge. `vibe64Driver()`
+  owns the single provider-neutral managed-session contribution.
 - `sendCodexAppServerPromptForSession()` and `stablePromptBody()` preserve the
   authored user text without attaching Vibe64 turn context.
 - `writeMirroredCodexAppServerTerminalMessage()` copies the latest prior UI

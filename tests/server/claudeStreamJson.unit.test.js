@@ -12,6 +12,7 @@ import { claudeCapabilities, claudePlanUsage, createClaudeSessionAgentProvider, 
 import { sessionRenewalManualHandoverTemplate, sessionRenewalHandoverHash } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { readClaudeCodeAuthStatus } from "../../packages/studio-terminal-core/src/server/claudeRuntime.js";
 import { defineVibe64AssistantCapabilities } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
+import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 
 async function frames(chunks, options) {
   const result = [];
@@ -162,9 +163,10 @@ async function fixture(t) {
   const context = { sessionId: "test", session, runtime, assistantSelection: selection };
   const processes = [];
   const behavior = { account: { loggedIn: true, email: "owner@example.test", authMethod: "claude.ai" } };
-  const providerOptions = { systemRoot: path.join(root, "system"), env: { CLAUDE_CONFIG_DIR: path.join(root, "config") },
+  const providerOptions = { systemRoot: path.join(root, "system"), env: {
+    CLAUDE_CONFIG_DIR: path.join(root, "config"), VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-runtime")
+  },
     projectService: { readCurrentProject: async () => ({ sourceRoot: workdir }) },
-    composeSessionContext: async () => ({ output: "Prepared session instructions" }),
     accountStatus: async () => behavior.account,
     credentialHome: { home: root }, recordGitActor: async () => ({ ok: true }), connectionStatus: async () => true,
     createProcess: async (options) => {
@@ -190,6 +192,36 @@ async function fixture(t) {
   const provider = createClaudeSessionAgentProvider(providerOptions);
   return { provider, providerOptions, behavior, context, processes, written, root, checkpoints, git };
 }
+
+test("Claude main and temporary chats use the Genesis hook bridge without duplicated system guidance", async (t) => {
+  const f = await fixture(t);
+  t.after(() => f.provider.closeProject());
+  await f.provider.sendMessage(f.context, { message: "First", messageId: "main-guidance" });
+  const temporary = await f.provider.createConversation(f.context);
+  await f.provider.startConversationTurn(f.context, {
+    conversationId: temporary.conversationId, message: "Temporary", messageId: "temporary-guidance"
+  });
+  for (const [index, kind] of ["main", "temporary"].entries()) {
+    const options = f.processes[index].options;
+    assert.equal(options.systemPrompt, undefined);
+    assert.equal(options.appendSystemPrompt, undefined);
+    assert.ok(options.env.GENESIS_HOST_CONTEXT_RESOLVER.endsWith("vibe64-genesis-host-context"));
+    assert.equal(options.env.GENESIS_TURN_CONTEXT_ENABLED, "0");
+    const input = await vibe64DriverInputFromRegistry({
+      data: JSON.parse(options.env.GENESIS_HOST_CONTEXT_RESOLVER_DATA),
+      providerSessionId: options.sessionId, scope: "session"
+    });
+    assert.equal(input.conversationKind, kind);
+  }
+  assert.equal(f.processes[0].options.env.GENESIS_HOST_CONTEXT_RESOLVER_DATA,
+    f.processes[1].options.env.GENESIS_HOST_CONTEXT_RESOLVER_DATA);
+  await f.provider.closeProject();
+  const options = f.processes[0].options;
+  assert.equal((await vibe64DriverInputFromRegistry({
+    data: JSON.parse(options.env.GENESIS_HOST_CONTEXT_RESOLVER_DATA),
+    providerSessionId: options.sessionId, scope: "session"
+  })).conversationKind, "main", "stopping JSON transport must retain context for native terminal resume");
+});
 
 test("Claude provider admits prompts in order, steers, projects thinking and text, and deduplicates sends", async (t) => {
   const f = await fixture(t);

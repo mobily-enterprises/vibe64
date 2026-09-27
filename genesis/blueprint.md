@@ -520,13 +520,20 @@ or excessive size, explain why the handoff cannot proceed rather than silently
 dropping context. The saved conversation remains intact.
 The first project message carries the relevant Genesis task prompt; later
 messages and active-turn steering stay concise instead of rebuilding it. The
-project's shorter durable operating guide is loaded when a conversation is
-created and refreshed after compaction without becoming a visible message or
-extra agent turn. For a new project, the opening conversation first establishes
+project's durable operating guide is loaded through the same Genesis-owned
+hooks or plugin used by the standalone Codex, Claude Code and OpenCode tools.
+Vibe64 adds only its managed-session context through the Genesis bridge.
+Guidance refreshes on the agent's native startup, resume and compaction
+lifecycle without becoming a visible message or extra agent turn.
+Senior/Junior selection, Auto planning and coding, and automatic review/deslop
+remain Vibe64 turn orchestration; Genesis does not route those turns. For a new project, the opening conversation first establishes
 what the person wants to make, who it is for, and the first useful outcome, then
 asks before selecting any technology.
 Before starting foreground assistant work in an idle session, Vibe64 refreshes
-outdated unmodified Genesis skills through Genesis's own synchronization.
+outdated unmodified Genesis skills and missing or outdated agent integrations
+through Genesis's own synchronization. Generated Claude settings preserve
+user-owned settings and unrelated hooks. Codex receives the complete session
+guide without truncating its skills or managed-operation rules.
 Customized skills are preserved and changes remain visible in the source diff.
 Incomplete project setup declarations defer this automatic refresh so people can
 continue chatting with the assistant to repair them.

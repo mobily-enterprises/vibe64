@@ -23,13 +23,12 @@ function claudeFlagSettings({ toolFree = false, effort = "", providerEnv } = {})
 
 function claudeCodeArguments({
   sessionId, resume = false, model = "", effort = "", toolFree = false,
-  outputSchema, terminal = false, systemPrompt, appendSystemPrompt
+  outputSchema, terminal = false, systemPrompt
 } = {}) {
   const args = terminal ? [] : ["--print", "--input-format", "stream-json", "--output-format", "stream-json",
     "--verbose", "--include-partial-messages", "--replay-user-messages", "--thinking-display", "summarized"];
   if (sessionId) args.push(resume ? "--resume" : "--session-id", sessionId);
   if (systemPrompt) args.push("--system-prompt", systemPrompt);
-  if (appendSystemPrompt) args.push("--append-system-prompt", appendSystemPrompt);
   if (model) args.push("--model", model);
   if (effort) args.push("--effort", effort);
   if (toolFree) {

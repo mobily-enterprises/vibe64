@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 
 import * as genesisCompiler from "genesis-compiler";
+import { createVibe64HostContextRegistry } from "./hostContextRegistry.js";
 
 import {
   VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
@@ -43,12 +44,34 @@ import {
 } from "./integrationSetup.js";
 
 const require = createRequire(import.meta.url);
+const hostContextRegistries = new Map();
+
+async function vibe64HostContextRegistry(runtimeRoot) {
+  if (!path.isAbsolute(runtimeRoot || "")) throw new TypeError("Genesis host context requires an absolute runtime root.");
+  const directory = path.join(runtimeRoot, "genesis-context");
+  if (!hostContextRegistries.has(directory)) {
+    const pending = createVibe64HostContextRegistry(directory).catch((error) => {
+      hostContextRegistries.delete(directory);
+      throw error;
+    });
+    hostContextRegistries.set(directory, pending);
+  }
+  return hostContextRegistries.get(directory);
+}
+
+async function vibe64HostContextEnvironment(runtimeRoot) {
+  const registry = await vibe64HostContextRegistry(runtimeRoot);
+  return {
+    [HOST_CONTEXT_RESOLVER_ENV]: vibe64HostContextResolverPath(),
+    [HOST_CONTEXT_RESOLVER_DATA_ENV]: JSON.stringify({ registryPath: registry.registryPath }),
+    GENESIS_TURN_CONTEXT_ENABLED: "0"
+  };
+}
 
 const {
   GENESIS_CONTRACTS,
   HOST_CONTEXT_RESOLVER_DATA_ENV,
   HOST_CONTEXT_RESOLVER_ENV,
-  SESSION_CONTEXT_INSTALLED_ENV,
   addStack,
   applyTemplate,
   generatePrompt,
@@ -59,16 +82,15 @@ const {
   inspectEngineering,
   inspectEnvironment,
   inspectProject,
-  inspectOpenCodePlugin,
+  inspectAgentIntegrations,
   inspectSkills,
   inspectStackSection,
   inspectSubsystems,
-  projectSessionContext,
   listTemplates,
   parserEnvironment,
   setCollaboration,
   setEngineeringProfile,
-  syncOpenCodePlugin,
+  syncAgentIntegrations,
   syncSkills,
   withTrustedGitRepository
 } = genesisCompiler;
@@ -187,12 +209,12 @@ function syncGenesisSkills(options = {}) {
   return runGenesisOperation(syncSkills, options);
 }
 
-function syncGenesisOpenCodePlugin(options = {}) {
-  return runGenesisOperation(syncOpenCodePlugin, options);
+function syncGenesisAgentIntegrations(options = {}) {
+  return runGenesisOperation(syncAgentIntegrations, options);
 }
 
-function inspectGenesisOpenCodePlugin(options = {}) {
-  return runGenesisOperation(inspectOpenCodePlugin, options);
+function inspectGenesisAgentIntegrations(options = {}) {
+  return runGenesisOperation(inspectAgentIntegrations, options);
 }
 
 function inspectGenesisSubsystems(options = {}) {
@@ -317,26 +339,6 @@ function setGenesisCollaboration(options = {}) {
   return exactGenesisInspection(setCollaboration, GENESIS_CONTRACTS.collaboration, options);
 }
 
-function composeVibe64SessionContext({
-  conversationKind,
-  projectRoot,
-  session
-} = {}) {
-  return exactGenesisInspection(
-    (options) => projectSessionContext({
-      ...options,
-      hostDriver: vibe64Driver,
-      hostDriverInput: {
-        conversationKind,
-        scope: "session",
-        session
-      }
-    }),
-    GENESIS_CONTRACTS.sessionContext,
-    { projectRoot }
-  );
-}
-
 async function inspectVibe64Outputs(options = {}) {
   const [section, environment, resourceSection, workspaceSetupSection] = await Promise.all([
     inspectGenesisStackSection(VIBE64_OUTPUTS_SECTION, options),
@@ -457,7 +459,6 @@ export {
   GENESIS_PROGRAM_CITY_PATH,
   HOST_CONTEXT_RESOLVER_DATA_ENV,
   HOST_CONTEXT_RESOLVER_ENV,
-  SESSION_CONTEXT_INSTALLED_ENV,
   VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
   VIBE64_APPLICATION_DEPLOYMENT_SECTION,
   VIBE64_OUTPUTS_CONTRACT,
@@ -470,7 +471,6 @@ export {
   addGenesisStack,
   applyGenesisTemplate,
   assertGenesisPromptTask,
-  composeVibe64SessionContext,
   genesisPackageBinDirectory,
   genesisCommandShimDirectory,
   genesisPromptRequest,
@@ -481,7 +481,7 @@ export {
   inspectGenesisEngineering,
   inspectGenesisProjectFormat,
   inspectGenesisProject,
-  inspectGenesisOpenCodePlugin,
+  inspectGenesisAgentIntegrations,
   inspectGenesisSkills,
   listGenesisTemplates,
   inspectGenesisStackSection,
@@ -501,9 +501,11 @@ export {
   renderGenesisPrompt,
   setGenesisCollaboration,
   setGenesisEngineeringProfile,
-  syncGenesisOpenCodePlugin,
+  syncGenesisAgentIntegrations,
   syncGenesisSkills,
   vibe64Driver,
   vibe64HostContextResolverPath,
+  vibe64HostContextEnvironment,
+  vibe64HostContextRegistry,
   withGenesisCommandShim
 };

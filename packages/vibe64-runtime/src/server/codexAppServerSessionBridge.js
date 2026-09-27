@@ -688,7 +688,8 @@ function codexAppServerThreadSettings({
   agentSettings = {},
   config = null,
   cwd = "",
-  developerInstructions = "",
+  developerInstructions = null,
+  hostContext = null,
   model = ""
 } = {}) {
   const normalizedCwd = normalizeWorkdir(cwd);
@@ -708,7 +709,10 @@ function codexAppServerThreadSettings({
       ...(config && typeof config === "object" && !Array.isArray(config) ? config : {})
     },
     cwd: normalizedCwd,
-    developerInstructions: normalizeAgentText(developerInstructions) || null,
+    developerInstructions: hostContext ? "" : (
+      typeof developerInstructions === "string" ? normalizeAgentText(developerInstructions) : null
+    ),
+    ...(hostContext ? { hostContext } : {}),
     model: normalizeAgentText(model) || effectiveSettings.model,
     ...(effectiveSettings.modelProviderId ? { modelProvider: effectiveSettings.modelProviderId } : {}),
     sandbox: CODEX_SESSION_SANDBOX
@@ -1476,7 +1480,7 @@ function codexAppServerThreadResponseId(thread = null, fallback = "") {
 
 async function resumeExactCodexAppServerThreadForSession({
   agentSettings = {},
-  developerInstructions = "",
+  hostContext = null,
   expectedThreadId = "",
   provider,
   session = {},
@@ -1512,7 +1516,7 @@ async function resumeExactCodexAppServerThreadForSession({
     agentSettings,
     config,
     cwd: normalizedWorkdir,
-    developerInstructions
+    hostContext
   });
   let thread = null;
   let threadSnapshot = null;
@@ -1562,7 +1566,7 @@ async function resumeExactCodexAppServerThreadForSession({
 async function startFreshCodexAppServerThreadForSession({
   additionalMetadata = {},
   agentSettings = {},
-  developerInstructions = "",
+  hostContext = null,
   expectedThreadId = "",
   forbiddenThreadId = "",
   operationId = "",
@@ -1655,13 +1659,13 @@ async function startFreshCodexAppServerThreadForSession({
     agentSettings,
     config,
     cwd: normalizedWorkdir,
-    developerInstructions
+    hostContext
   });
   const ordinaryThreadStartSettings = codexAppServerThreadStartSettings({
     agentSettings,
     config,
     cwd: normalizedWorkdir,
-    developerInstructions
+    hostContext
   });
   const threadSettings = readOnly
     ? { ...ordinaryThreadSettings, sandbox: CODEX_SESSION_READ_ONLY_SANDBOX }
@@ -1885,7 +1889,7 @@ async function codexAppServerThreadHasReadableHistory(provider = null, threadId 
 
 async function ensureCodexAppServerThreadForSession({
   agentSettings = {},
-  developerInstructions = "",
+  hostContext = null,
   observeThread,
   provider,
   runtime,
@@ -1918,13 +1922,13 @@ async function ensureCodexAppServerThreadForSession({
     agentSettings,
     config,
     cwd: normalizedWorkdir,
-    developerInstructions
+    hostContext
   });
   const threadStartSettings = codexAppServerThreadStartSettings({
     agentSettings,
     config,
     cwd: normalizedWorkdir,
-    developerInstructions
+    hostContext
   });
   let thread = null;
   stageStartedAt = Date.now();

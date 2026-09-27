@@ -66,6 +66,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { installVibe64ManagedExecutionProvider, stableHash } from "@local/vibe64-execution/server";
 import { genesisCommandShimDirectory } from "../../packages/vibe64-genesis/src/server/index.js";
+import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 import { writeCodexAuthMarker } from "../../packages/vibe64-core/src/server/codexAuthState.js";
 import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
 import { sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
@@ -73,17 +74,6 @@ import { sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src
 const TEST_ACCOUNT_IDENTITY_SIGNATURE = `sha256:${"a".repeat(64)}`;
 const TEST_AUTH_STATE_SIGNATURE = `v1:${"b".repeat(24)}`;
 const TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE = `sha256:${"d".repeat(64)}`;
-
-const TEST_SESSION_CONTEXT_COMPOSITION = Object.freeze({
-  async composeSessionContext({ conversationKind }) {
-    return {
-      contract: "genesis.session-context.v1",
-      identity: `session-context:${conversationKind}`,
-      output: `Genesis and Vibe64 ${conversationKind} session context.`,
-      status: "ready"
-    };
-  }
-});
 
 function exactStoppedRuntimeMetadata(runtimeDir, {
   stopped = false
@@ -653,8 +643,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
     };
     const terminalService = createTerminalService({
       codexTerminalController: {
-        ...TEST_SESSION_CONTEXT_COMPOSITION,
-        codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
+            codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
         codexAppServerProviderFactory(providerOptions) {
           return createProvider(calls, subscribers, captures, providerOptions);
         },
@@ -809,8 +798,7 @@ for (const startFails of [false, true]) {
       const stopInputRead = createDeterministicHold();
       const terminalService = createTerminalService({
         codexTerminalController: {
-          ...TEST_SESSION_CONTEXT_COMPOSITION,
-          codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
+                codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
           codexAppServerProviderFactory(providerOptions) {
             const provider = createProvider(calls, subscribers, captures, providerOptions);
             return {
@@ -1730,7 +1718,6 @@ async function withConversationController(operation, {
     }
   };
   const controller = createCodexTerminalController({
-    ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerProviderFactory(providerOptions) {
       captures.onProviderFactory?.();
       return createProvider(calls, subscribers, captures, providerOptions);
@@ -1816,7 +1803,6 @@ function createRestartedController({
   const agentRuntimeRoot = projectService.agentRuntimeRoot ||
     path.join(projectRuntimeRoot, "agent-runtimes");
   return createCodexTerminalController({
-    ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerProviderFactory(providerOptions) {
       return createProvider(calls, subscribers, captures, providerOptions);
     },
@@ -1928,7 +1914,6 @@ async function withAgentMessageController(operation, {
     }
   };
   const controllerOptions = {
-    ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerActiveReconcileMs,
     codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
     codexAppServerDaemonWellbeingMs: 60_000,
@@ -4624,7 +4609,6 @@ test("a changed session environment retires the previous provider for the same r
   let environmentVersion = "one";
   const providers = [];
   const controller = createCodexTerminalController({
-    ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerProviderFactory(options) {
       const provider = {
         closed: 0,
@@ -4737,7 +4721,6 @@ test("Codex sessions retain one shared runtime and concurrent final closes stop 
   const providers = [];
   let stopRuntimeCalls = 0;
   const controller = createCodexTerminalController({
-    ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerProviderFactory(options) {
       const provider = {
         closed: 0,
@@ -4876,7 +4859,6 @@ test("an active chat keeps one composed session context while authored turns sta
     store
   };
   const controller = createCodexTerminalController({
-    ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerActiveReconcileMs: 60_000,
     codexAppServerDaemonWellbeingMs: 60_000,
     codexAppServerProviderFactory(options) {
@@ -5026,9 +5008,12 @@ test("an active chat keeps one composed session context while authored turns sta
     );
     assert.equal(
       providers[0].startedThreads[0].developerInstructions,
-      "Genesis and Vibe64 main session context."
+      ""
     );
-    assert.equal(providers[0].options.threadEnv.GENESIS_SESSION_CONTEXT_INSTALLED, "1");
+    assert.equal(providers[0].options.threadEnv.GENESIS_SESSION_CONTEXT_INSTALLED, undefined);
+    assert.equal(providers[0].startedThreads[0].hostContext.conversationKind, "main");
+    assert.ok(providers[0].options.terminalEnv.GENESIS_HOST_CONTEXT_RESOLVER);
+    assert.ok(providers[0].options.terminalEnv.GENESIS_HOST_CONTEXT_RESOLVER_DATA);
     assert.equal(Object.hasOwn(
       providers[0].options.threadEnv,
       "GENESIS_HOST_CONTEXT_RESOLVER"
@@ -5039,11 +5024,6 @@ test("an active chat keeps one composed session context while authored turns sta
     ), false);
     assert.deepEqual(providers[0].sentTurns[0].input, ["Start the work."]);
     assert.equal(Object.hasOwn(providers[0].sentTurns[0].settings, "additionalContext"), false);
-    const firstBriefingFingerprint = (
-      await store.readSession("session-1")
-    ).metadata.agent_briefing_fingerprint;
-    assert.ok(firstBriefingFingerprint);
-
     environmentVersion = "two";
     const ensured = await controller.ensureThread("session-1");
     assert.equal(ensured.ok, true, JSON.stringify(ensured));
@@ -5108,15 +5088,11 @@ test("an active chat keeps one composed session context while authored turns sta
     assert.equal(providers[1].options.threadEnv.PROVIDER_OWNERSHIP_VERSION, "two");
     assert.equal(
       providers[1].resumedThreads[0].settings.developerInstructions,
-      "Genesis and Vibe64 main session context."
+      ""
     );
     assert.deepEqual(providers[1].sentTurns[0].input, ["Start the next turn."]);
     assert.equal(Object.hasOwn(providers[1].sentTurns[0].settings, "additionalContext"), false);
-    const refreshedSession = await store.readSession("session-1");
-    assert.equal(
-      refreshedSession.metadata.agent_briefing_fingerprint,
-      firstBriefingFingerprint
-    );
+    assert.equal(providers[1].resumedThreads[0].settings.hostContext.conversationKind, "main");
     const restartedMessage = (await store.readConversationLog("session-1"))
       .find((turn) => turn.user?.text === "Start the next turn.");
     assert.partialDeepStrictEqual(restartedMessage?.metadata, {
@@ -5171,7 +5147,6 @@ test("closing a session without recorded Codex ownership leaves the shared runti
   );
   let currentSession = session;
   const controller = createCodexTerminalController({
-    ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerProviderOptions: {
       env: providerEnv
     },
@@ -5348,8 +5323,9 @@ test("temporary conversations receive task session context without turn enrichme
 
     assert.equal(
       captures.threads[0].developerInstructions,
-      "Genesis and Vibe64 temporary session context."
+      ""
     );
+    assert.equal(captures.threads[0].hostContext.conversationKind, "temporary");
     assert.deepEqual(captures.turns[0].input, ["Fix the focused issue."]);
     assert.equal(Object.hasOwn(captures.turns[0].settings, "additionalContext"), false);
     assert.deepEqual(promptHintReads, []);
@@ -5364,6 +5340,25 @@ test("temporary conversations receive task session context without turn enrichme
       actorId: "ada-owner"
     });
   }, { promptHints: false });
+});
+
+test("Codex cold recovery restores the temporary hook binding before native resume", async () => {
+  await withConversationController(async ({ captures, controller, session }) => {
+    const conversation = await controller.createConversation("session-1", { ephemeral: true });
+    assert.equal(conversation.ok, true, JSON.stringify(conversation));
+    const options = captures.providerOptions.at(-1);
+    const params = await options.prepareThreadResumeParams(conversation.conversationId, {}, {
+      runtime: { executionId: "replacement-process", reused: false }, processChanged: true
+    });
+    assert.equal(params.developerInstructions, "");
+    assert.equal(params.cwd, session.metadata.source_path);
+    const input = await vibe64DriverInputFromRegistry({
+      data: JSON.parse(options.terminalEnv.GENESIS_HOST_CONTEXT_RESOLVER_DATA),
+      providerSessionId: conversation.conversationId, scope: "session"
+    });
+    assert.equal(input.conversationKind, "temporary");
+    assert.deepEqual(captures.resumes, [], "the binding is ready before the native resume RPC");
+  });
 });
 
 test("non-project ephemeral conversations disable Codex tools and network on a supported app-server", async () => {
@@ -6934,7 +6929,6 @@ test("server shutdown serializes with an owned runtime before metadata is publis
   let runtimeDir = "";
   let stopRuntimeCalls = 0;
   const controller = createCodexTerminalController({
-    ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerProviderFactory(providerOptions) {
       runtimeDir = providerOptions.runtimeDir;
       return {
@@ -7091,7 +7085,6 @@ test("server shutdown proves exit of the exact owned detached runtime", async (t
   let child = null;
   let runtimeDir = "";
   const controller = createCodexTerminalController({
-    ...TEST_SESSION_CONTEXT_COMPOSITION,
     codexAppServerProviderFactory(providerOptions) {
       runtimeDir = providerOptions.runtimeDir;
       return {

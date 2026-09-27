@@ -1,3 +1,4 @@
+import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { checkpointSessionTurn } from "../../sessionTurnCheckpoint.js";
 import { requireCompletedNativeConversationReplacement } from "../../assistantChangeover.js";
@@ -11,7 +12,7 @@ import {
   VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileResolution,
   vibe64AgentExecutionProfileAuditSnapshot, vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
-import { composeVibe64SessionContext } from "@local/vibe64-genesis/server";
+import { vibe64HostContextEnvironment, vibe64HostContextRegistry, withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import { appCredentialContext, runVibe64Command, stopVibe64Execution } from "@local/vibe64-execution/server";
 import {
   closeTerminalSession, closeTerminalSessionsForNamespace, listTerminalSessions, readTerminalSession,
@@ -93,7 +94,6 @@ function createClaudeSessionAgentProvider({
   systemRoot = resolveVibe64SystemRoot({ env }),
   accountStatus = () => readClaudeCodeAuthStatus({ env, credentialHome, commandRunner }),
   prepareCommandEnvironment = prepareAgentSessionCommandEnvironment,
-  composeSessionContext = composeVibe64SessionContext,
   recordGitActor = recordSessionGitCommandActor,
   codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand
 } = {}) {
@@ -409,18 +409,20 @@ function createClaudeSessionAgentProvider({
     return readClaudeHistory({ configRoot, workdir: entry.nativeWorkdir, conversationId: entry.id });
   }
 
-  async function sessionInstructions(workdir, conversationKind) {
-    const { output } = await composeSessionContext({
-      projectRoot: workdir,
-      conversationKind,
+  async function sessionGuidanceEnvironment(entry) {
+    const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
+    const registry = await vibe64HostContextRegistry(runtimeRoot);
+    await registry.register(entry.id, {
+      scope: "session",
+      conversationKind: entry.main ? "main" : "temporary",
       session: {
         managedGit: Boolean(codexGitCommand),
         managedEnvironment: Boolean(agentEnvCommand),
         managedDatabaseRefresh: Boolean(agentDatabaseCommand),
         managedPreview: Boolean(agentPreviewCommand)
       }
-    });
-    return output;
+    }, entry.context.workdir);
+    return vibe64HostContextEnvironment(runtimeRoot);
   }
 
   async function prepareSessionEnvironment(context) {
@@ -530,14 +532,15 @@ function createClaudeSessionAgentProvider({
       entry.profile = profile;
       entry.identity = identity;
       entry.outputSchemaIdentity = JSON.stringify(input.outputSchema);
+      const guidanceEnvironment = !profile && !ctx.assistantScope ? await sessionGuidanceEnvironment(entry) : {};
       entry.process = await createProcess({ command, commandRunner, stopExecution, credentialHome,
-        env: { ...env, ...prepared.env }, shimDirs: prepared.shimDirs, workdir: entry.nativeWorkdir,
+        env: { ...env, ...prepared.env, ...guidanceEnvironment },
+        shimDirs: !profile && !ctx.assistantScope ? withGenesisCommandShim(prepared.shimDirs) : prepared.shimDirs,
+        workdir: entry.nativeWorkdir,
         sessionId: entry.id, resume: entry.sent, model: external ? "" : profile?.model || selection.modelId,
         effort: profile ? profile.thinking : selection.variantId,
         toolFree: Boolean(profile || ctx.assistantScope), outputSchema: input.outputSchema,
         systemPrompt: ctx.assistantScope?.stableContext,
-        appendSystemPrompt: !profile && !ctx.assistantScope
-          ? await sessionInstructions(ctx.workdir, entry.main ? "main" : "temporary") : undefined,
         execution: { ownerId: entry.id, sessionId: ctx.sessionId },
         onStarted: async (executionId) => {
           entry.executionId = executionId;
@@ -1103,13 +1106,13 @@ function createClaudeSessionAgentProvider({
       if (actor?.ok === false) throw error(actor.error, actor.code);
       const history = await readClaudeHistory({ configRoot, workdir: ctx.workdir, conversationId: entry.id });
       entry.sent ||= history.exists;
+      const guidanceEnvironment = await sessionGuidanceEnvironment(entry);
       return commandRunner({ actor: "app", command,
         args: claudeCodeArguments({ terminal: true, sessionId: entry.id, resume: entry.sent,
-          model: ctx.selection.modelId, effort: ctx.selection.variantId,
-          appendSystemPrompt: await sessionInstructions(ctx.workdir, "main") }),
-        baseEnv: { ...env, ...prepared.env, DISABLE_AUTOUPDATER: "1" }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,
+          model: ctx.selection.modelId, effort: ctx.selection.variantId }),
+        baseEnv: { ...env, ...prepared.env, ...guidanceEnvironment, DISABLE_AUTOUPDATER: "1" }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,
         allowedRoots: [ctx.workdir], envPolicy: "auth", purpose: "assistant", mode: "pty",
-        shimDirs: prepared.shimDirs, runtimes: ["operator-clis", "node26"], session: ctx.session,
+        shimDirs: withGenesisCommandShim(prepared.shimDirs), runtimes: ["operator-clis", "node26"], session: ctx.session,
         terminal: { namespace: claudeTerminalNamespace(ctx.sessionId), maxRunning: 1, reuseRunning: true,
           commandPreview: "claude", metadata: { engineId: ENGINE, sessionId: ctx.sessionId }, ...input.size } });
     },

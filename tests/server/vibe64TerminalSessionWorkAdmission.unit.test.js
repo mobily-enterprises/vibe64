@@ -382,6 +382,9 @@ for (const temporary of [false, true]) test(`${temporary ? "temporary" : "main"}
   const pluginPath = path.join(projectRoot, ".opencode/plugins/genesis-project-guidance.js");
   const expectedPlugin = await readFile(pluginPath, "utf8");
   await writeFile(pluginPath, "// Outdated generated adapter\n");
+  const claudePath = path.join(projectRoot, ".claude/settings.json");
+  const expectedClaude = await readFile(claudePath, "utf8");
+  await rm(claudePath);
   const customPath = path.join(projectRoot, ".agents/skills/genesis-program/SKILL.md");
   const custom = `${await readFile(customPath, "utf8")}\nKeep the project's custom rule.\n`;
   await writeFile(customPath, custom);
@@ -401,6 +404,7 @@ for (const temporary of [false, true]) test(`${temporary ? "temporary" : "main"}
   assert.equal(sourceWrites, 1);
   assert.equal(await readFile(skillPath, "utf8"), expected);
   assert.equal(await readFile(pluginPath, "utf8"), expectedPlugin);
+  assert.equal(await readFile(claudePath, "utf8"), expectedClaude);
   assert.equal(await readFile(customPath, "utf8"), custom);
   assert.equal(events.some((event) => event.reason === "agent-skills-updated"), true);
   await send().catch(() => null);

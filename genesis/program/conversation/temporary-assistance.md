@@ -68,6 +68,11 @@ Restore failures retain a readable retry action in a tonal error notice.
 
 ## Public contract
 
+Temporary Codex, Claude Code and OpenCode conversations load the same Genesis
+project hooks or plugin as main chat and standalone CLI use. The host bridge
+binds each native ID to temporary-conversation context before its first turn or
+resume. This does not enable Auto or review in temporary chats.
+
 Ordinary persistent temporary chats offer Senior and Junior through
 the same compact role icon as main chat. Auto, plan approval and automatic
 review are unavailable in temporary chats, including through direct API calls

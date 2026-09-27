@@ -38,8 +38,8 @@ import {
   codexRuntimeContext
 } from "@local/studio-terminal-core/server/codexRuntimeContext";
 import {
-  SESSION_CONTEXT_INSTALLED_ENV,
-  composeVibe64SessionContext,
+  vibe64HostContextEnvironment,
+  vibe64HostContextRegistry,
   withGenesisCommandShim
 } from "@local/vibe64-genesis/server";
 import {
@@ -53,6 +53,7 @@ import {
   codexAppServerEndpointForTarget,
   codexAppServerRequestIsInvalid,
   codexAppServerRuntimeDir,
+  codexAppServerRuntimeBaseDir,
   createCodexAppServerAgentProvider,
   readCodexSelectedAccountAccess,
   stopCodexAppServerRuntime
@@ -213,7 +214,6 @@ import {
 const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
-const CODEX_SESSION_BRIEFING_FINGERPRINT_METADATA = "agent_briefing_fingerprint";
 const CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER = "\u001f";
 const CODEX_APP_SERVER_RESULT_PROCESSED_EVENT = "codex-app-server-result-processed";
 const RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND =
@@ -1260,10 +1260,6 @@ function sessionBriefingIsDelivered(session = {}) {
   return normalizeText(session.metadata?.agent_briefing_delivered) === "yes";
 }
 
-function codexSessionBriefingFingerprint(developerInstructions = "") {
-  return stableHash(normalizeText(developerInstructions));
-}
-
 function codexContextRefreshPending(session = {}) {
   return normalizeText(session.metadata?.codex_context_refresh_pending) === "yes";
 }
@@ -1357,7 +1353,6 @@ function createCodexTerminalController({
   codexAppServerProviderFactory = createCodexAppServerAgentProvider,
   codexAppServerPromptDeliveryEnabled = CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED,
   codexHelperThreadLedgerFactory = createCodexHelperThreadLedger,
-  composeSessionContext = composeVibe64SessionContext,
   codexToolHomeRequired = false,
   codexToolHomeSource = "",
   env = process.env,
@@ -1400,7 +1395,6 @@ function createCodexTerminalController({
   const codexAppServerHelperTurnStarts = new Map();
   const codexAppServerHelperThreadRestores = new Map();
   const codexAppServerConversations = new Map();
-  const codexAppServerSessionContexts = new Map();
   const codexAppServerSessionClosures = new Map();
   const codexAppServerRenewalSessionClosures = new WeakSet();
   const codexAppServerMessageDeliveries = new Map();
@@ -1444,6 +1438,7 @@ function createCodexTerminalController({
 
   function vibe64SessionContextInput(conversationKind = "main") {
     return {
+      scope: "session",
       conversationKind,
       session: {
         managedDatabaseRefresh: Boolean(agentDatabaseCommand),
@@ -1452,43 +1447,6 @@ function createCodexTerminalController({
         managedPreview: Boolean(agentPreviewCommand)
       }
     };
-  }
-
-  function clearCodexAppServerSessionContexts(sessionId = "") {
-    const prefix = `${normalizeText(sessionId)}\0`;
-    for (const key of codexAppServerSessionContexts.keys()) {
-      if (key.startsWith(prefix)) codexAppServerSessionContexts.delete(key);
-    }
-  }
-
-  async function codexAppServerSessionInstructions(session = {}, {
-    conversationKind = "main",
-    workdir = ""
-  } = {}) {
-    const sessionId = normalizeText(session.sessionId || session.id);
-    const projectRoot = normalizeText(workdir) || terminalWorktreePath(session);
-    if (!sessionId || !projectRoot) {
-      throw new Error("Codex session context requires a session and source worktree.");
-    }
-    if (codexContextRefreshPending(session)) {
-      clearCodexAppServerSessionContexts(sessionId);
-    }
-    const key = [sessionId, conversationKind, projectRoot].join("\0");
-    let pending = codexAppServerSessionContexts.get(key);
-    if (!pending) {
-      const input = vibe64SessionContextInput(conversationKind);
-      pending = composeSessionContext({
-        ...input,
-        projectRoot
-      });
-      codexAppServerSessionContexts.set(key, pending);
-      pending.catch(() => {
-        if (codexAppServerSessionContexts.get(key) === pending) {
-          codexAppServerSessionContexts.delete(key);
-        }
-      });
-    }
-    return pending;
   }
 
   function codexAppServerTurnResultWasProcessed(session = {}, threadId = "", turnId = "") {
@@ -2055,11 +2013,17 @@ function createCodexTerminalController({
     }
     assertCodexAppServerControllerOpen();
     const projectContext = currentProjectRequestContext();
+    const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
     let observationStop = null;
     let unsubscribeControls = null;
     const provider = codexAppServerProviderFactory({
       ...options,
+      terminalEnv: { ...options.terminalEnv, ...await vibe64HostContextEnvironment(runtimeRoot) },
       logger,
+      bindThreadContext: async (threadId, hostContext, params) => {
+        const registry = await vibe64HostContextRegistry(runtimeRoot);
+        await registry.register(threadId, hostContext, params.cwd);
+      },
       prepareAuth: (requestedProvider) => runWithCodexAppServerProjectContext(projectContext, async () => {
         if (curatedCodexProvider(requestedProvider)) {
           await providerConnections.threadConfig(requestedProvider);
@@ -2095,23 +2059,21 @@ function createCodexTerminalController({
             throw new Error("The assistant session is closing.");
           }
           const workdir = normalizeText(params.cwd || options.workdir) || terminalWorktreePath(session);
-          const conversationKind = threadId === codexThreadIdForWorkdir(session, workdir) ? "main" : "temporary";
-          clearCodexAppServerSessionContexts(sessionId);
-          let developerInstructions = normalizeText(params.developerInstructions);
-          if (!developerInstructions) {
-            const context = await codexAppServerSessionInstructions(session, { conversationKind, workdir });
-            developerInstructions = context.output;
-          }
+          const registry = await vibe64HostContextRegistry(runtimeRoot);
+          await registry.register(
+            threadId,
+            vibe64SessionContextInput(threadId === codexThreadIdForWorkdir(session, workdir) ? "main" : "temporary"),
+            workdir
+          );
           const settings = codexAppServerThreadSettings({
             agentSettings: codexAgentSettingsFromSession(session),
             config: await codexAppServerProjectHookTrustConfig(provider, workdir),
             cwd: workdir,
-            developerInstructions
+            developerInstructions: ""
           });
           return {
             ...settings,
             ...params,
-            developerInstructions,
             config: { ...settings.config, ...params.config }
           };
         }),
@@ -2561,10 +2523,7 @@ function createCodexTerminalController({
       runtimeDir: normalizeText(runtimeDir) || reusableMetadataRuntimeDir || expectedRuntimeDir,
       session,
       executionRoot: effectiveExecutionRoot,
-      terminalEnv: {
-        ...effectiveTerminalEnv,
-        [SESSION_CONTEXT_INSTALLED_ENV]: "1"
-      },
+      terminalEnv: effectiveTerminalEnv,
       toolHomeSource,
       workdir: effectiveWorkdir
     }), routingModelProviderId: vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })?.modelProviderId };
@@ -5305,7 +5264,6 @@ function createCodexTerminalController({
     if (!normalizedSessionId || typeof store?.writeMetadataValue !== "function") {
       return null;
     }
-    clearCodexAppServerSessionContexts(normalizedSessionId);
     const at = new Date().toISOString();
     await store.mutateSession(normalizedSessionId, async () => {
       await Promise.all([
@@ -8568,15 +8526,11 @@ function createCodexTerminalController({
         providerOptions,
         codexThreadIdForWorkdir(session, workdir)
       );
-      const { currentSession: preparedSession, developerInstructions, thread } = await withCodexSessionStartupGate({
+      const { currentSession: preparedSession, thread } = await withCodexSessionStartupGate({
         operation: async (currentSession) => {
-          const developerInstructions = (await codexAppServerSessionInstructions(
-            currentSession,
-            { workdir }
-          )).output;
           const thread = await ensureCodexAppServerThreadForSession({
             agentSettings: { ...codexAgentSettingsFromSession(currentSession), ...agentSettings },
-            developerInstructions,
+            hostContext: vibe64SessionContextInput(),
             observeThread: (threadId) => subscribeCodexAppServerEvents(sessionId, provider, threadId, providerOptions),
             provider,
             runtime,
@@ -8585,7 +8539,6 @@ function createCodexTerminalController({
           });
           return {
             currentSession,
-            developerInstructions,
             thread
           };
         },
@@ -8614,12 +8567,7 @@ function createCodexTerminalController({
           await Promise.all([
             runtime.store.writeMetadataValue(sessionId, "agent_briefing_delivered", "yes"),
             runtime.store.writeMetadataValue(sessionId, "agent_briefing_delivered_at", deliveredAt),
-            runtime.store.writeMetadataValue(sessionId, "agent_briefing_transport", "codex_app_server"),
-            runtime.store.writeMetadataValue(
-              sessionId,
-              CODEX_SESSION_BRIEFING_FINGERPRINT_METADATA,
-              codexSessionBriefingFingerprint(developerInstructions)
-            )
+            runtime.store.writeMetadataValue(sessionId, "agent_briefing_transport", "codex_app_server")
           ]);
         });
       }
@@ -8776,14 +8724,10 @@ function createCodexTerminalController({
             sessionId,
             stage: "provider"
           });
-          const developerInstructions = (await codexAppServerSessionInstructions(
-            currentSession,
-            { workdir }
-          )).output;
           stageStartedAt = Date.now();
           const thread = await ensureCodexAppServerThreadForSession({
             agentSettings,
-            developerInstructions,
+            hostContext: vibe64SessionContextInput(),
             observeThread: (threadId) => subscribeCodexAppServerEvents(sessionId, provider, threadId, providerOptions),
             provider,
             runtime,
@@ -8798,7 +8742,6 @@ function createCodexTerminalController({
           });
           return {
             currentSession,
-            developerInstructions,
             provider,
             providerAlreadyAvailable,
             providerOptions,
@@ -8810,7 +8753,6 @@ function createCodexTerminalController({
         sessionId
       });
       const preparedSession = prepared.currentSession;
-      const developerInstructions = prepared.developerInstructions;
       const provider = prepared.provider;
       const providerAlreadyAvailable = prepared.providerAlreadyAvailable;
       const providerOptions = prepared.providerOptions;
@@ -8964,13 +8906,6 @@ function createCodexTerminalController({
             runtime.store.writeMetadataValue(sessionId, "agent_briefing_delivered", "yes"),
             runtime.store.writeMetadataValue(sessionId, "agent_briefing_delivered_at", deliveredAt),
             runtime.store.writeMetadataValue(sessionId, "agent_briefing_transport", "codex_app_server")
-          ] : []),
-          ...(briefingWasDelivered || providerContextRefreshPending ? [
-            runtime.store.writeMetadataValue(
-              sessionId,
-              CODEX_SESSION_BRIEFING_FINGERPRINT_METADATA,
-              codexSessionBriefingFingerprint(developerInstructions)
-            )
           ] : [])
         ]);
       });
@@ -10474,15 +10409,11 @@ function createCodexTerminalController({
         selectedCapabilityRoots: []
       };
     }
-    const sessionContext = await codexAppServerSessionInstructions(context.session, {
-      conversationKind: "temporary",
-      workdir: context.workdir
-    });
     return codexAppServerThreadSettings({
       agentSettings: context.agentSettings,
       config: await codexAppServerProjectHookTrustConfig(context.provider, context.workdir),
       cwd: context.workdir,
-      developerInstructions: sessionContext.output
+      hostContext: vibe64SessionContextInput("temporary")
     });
   }
 
@@ -10784,10 +10715,6 @@ function createCodexTerminalController({
       } = context;
       const agentSettings = codexAppServerRenewalAgentSettings(session);
       const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
-      const developerInstructions = (await codexAppServerSessionInstructions(
-        session,
-        { workdir }
-      )).output;
       const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
         runtime,
         executionRoot,
@@ -10796,7 +10723,7 @@ function createCodexTerminalController({
       });
       const resumed = await resumeExactCodexAppServerThreadForSession({
         agentSettings,
-        developerInstructions,
+        hostContext: vibe64SessionContextInput(),
         expectedThreadId: input.expectedThreadId || input.threadId,
         provider,
         session,
@@ -11057,16 +10984,12 @@ function createCodexTerminalController({
       } = context;
       const agentSettings = codexAppServerRenewalAgentSettings(session);
       const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
-      const developerInstructions = (await codexAppServerSessionInstructions(
-        session,
-        { workdir }
-      )).output;
       const started = await startFreshCodexAppServerThreadForSession({
         additionalMetadata: {
           agent_renewal_seed_handover_hash: approved.handoverHash
         },
         agentSettings,
-        developerInstructions,
+        hostContext: vibe64SessionContextInput(),
         expectedThreadId: input.expectedThreadId || input.threadId,
         forbiddenThreadId: oldThreadId,
         operationId,
@@ -11236,11 +11159,6 @@ function createCodexTerminalController({
           writeMetadataValue(sessionId, "agent_briefing_delivered", "yes"),
           writeMetadataValue(sessionId, "agent_briefing_delivered_at", acknowledgedAt),
           writeMetadataValue(sessionId, "agent_briefing_transport", "codex_app_server"),
-          writeMetadataValue(
-            sessionId,
-            CODEX_SESSION_BRIEFING_FINGERPRINT_METADATA,
-            codexSessionBriefingFingerprint(developerInstructions)
-          ),
           writeMetadataValue(sessionId, "agent_settings_model", effectiveSettings.model),
           writeMetadataValue(sessionId, "agent_settings_provider", effectiveSettings.providerId),
           writeMetadataValue(sessionId, "agent_settings_thinking", effectiveSettings.thinking),
@@ -13402,7 +13320,6 @@ function createCodexTerminalController({
           .flatMap(([, provider]) => [...(provider.threadEnvironmentTasks?.values() || [])])
           .map((task) => task.catch(() => null)));
         clearCodexAppServerSessionRecoveryTimers(normalizedSessionId);
-        clearCodexAppServerSessionContexts(normalizedSessionId);
         let runtime = null;
         let session = null;
         let providerOptions = null;
@@ -14389,7 +14306,6 @@ export {
   codexAppTerminalOwnerMetadata,
   codexGitCommandShimDirs,
   codexRemoteEndpointForWorkdir,
-  codexSessionBriefingFingerprint,
   codexTerminalArgs,
   createCodexTerminalController
 };

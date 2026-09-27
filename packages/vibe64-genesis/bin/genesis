@@ -2,8 +2,7 @@
 
 import { readFile, realpath } from "node:fs/promises";
 
-// Already-loaded older OpenCode adapters still spawn this command for every
-// message projection. A host-disabled lane needs no compiler or Git setup.
+// A host-disabled turn lane needs no compiler or Git setup.
 if (process.argv[2] === "hook" && process.argv[3] === "turn" &&
     process.env.GENESIS_TURN_CONTEXT_ENABLED === "0") {
   process.exit(0);
@@ -29,12 +28,25 @@ function withVibe64StackPackages(argv = []) {
 }
 
 const argv = withVibe64StackPackages(process.argv.slice(2));
-const registryPath = process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY;
+const registryPath = process.env.GENESIS_HOST_CONTEXT_RESOLVER_DATA
+  ? JSON.parse(process.env.GENESIS_HOST_CONTEXT_RESOLVER_DATA).registryPath
+  : "";
 let trustedWorktree = "";
 if (argv[0] === "hook" && registryPath) {
+  // Native Codex and Claude hooks supply stdin; OpenCode supplies the same
+  // input through the environment. Preserve it for Genesis after checking the
+  // exact managed worktree, without changing the user message.
+  if (process.env.GENESIS_HOST_CONTEXT_INPUT === undefined && !process.stdin.isTTY) {
+    let input = "";
+    for await (const chunk of process.stdin) {
+      input += chunk;
+      if (Buffer.byteLength(input) > 16 * 1024) throw new Error("The Genesis host hook input exceeds 16 KiB.");
+    }
+    process.env.GENESIS_HOST_CONTEXT_INPUT = input;
+  }
   const input = JSON.parse(process.env.GENESIS_HOST_CONTEXT_INPUT || "{}");
   const registry = JSON.parse(await readFile(registryPath, "utf8"));
-  const nativeSessionIds = [input.sessionId, ...(Array.isArray(input.parentSessionIds) ? input.parentSessionIds : [])];
+  const nativeSessionIds = [input.sessionId || input.session_id, ...(Array.isArray(input.parentSessionIds) ? input.parentSessionIds : [])];
   const session = registry.sessions?.find((entry) => (
     entry.upstreamSessionId && nativeSessionIds.includes(entry.upstreamSessionId)
   ));

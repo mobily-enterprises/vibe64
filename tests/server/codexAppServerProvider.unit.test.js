@@ -3046,6 +3046,36 @@ test("codex provider classifies invalid requests by JSON-RPC code and method", (
   }, "turn/steer"), false);
 });
 
+test("Codex binds host context before exposing a new thread or resuming native work", async () => {
+  const events = [];
+  const bindings = new Map();
+  const provider = new CodexAppServerAgentProvider({
+    async bindThreadContext(id, context) {
+      events.push("bind:" + id);
+      bindings.set(id, context);
+    }
+  });
+  provider.activeClient = async () => ({
+    async request(method, params) {
+      events.push(method);
+      assert.equal(Object.hasOwn(params, "hostContext"), false);
+      if (method === "thread/resume") assert.equal(bindings.get(params.threadId)?.conversationKind, "temporary");
+      return { thread: { id: "new-thread", historyMode: "paginated" } };
+    }
+  });
+  const main = { scope: "session", conversationKind: "main" };
+  await provider.startThread({ hostContext: main, developerInstructions: "" });
+  assert.deepEqual(events, ["thread/start", "bind:new-thread", "thread/name/set", "thread/read"]);
+  assert.equal(bindings.get("new-thread"), main);
+  events.length = 0;
+  await provider.resumeThread("saved-temporary", { hostContext: { ...main, conversationKind: "temporary" } });
+  assert.deepEqual(events, ["bind:saved-temporary", "thread/resume"]);
+  provider.options.bindThreadContext = async () => { throw new Error("registry unavailable"); };
+  events.length = 0;
+  await assert.rejects(provider.resumeThread("saved-temporary", { hostContext: main }), /registry unavailable/u);
+  assert.deepEqual(events, []);
+});
+
 test("codex provider persists an empty paginated thread before publishing it", async () => {
   const requests = [];
   const provider = new CodexAppServerAgentProvider({});
