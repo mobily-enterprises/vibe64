@@ -4268,6 +4268,28 @@ class CodexAppServerAgentProvider {
     );
   }
 
+  async trustProject(cwd = "") {
+    if (!path.isAbsolute(cwd)) throw new TypeError("Codex project trust requires an absolute worktree path.");
+    const projectRoot = path.resolve(cwd);
+    const client = await this.activeClient();
+    return this.runRequest(async () => {
+      const { config } = await client.request("config/read", { cwd: projectRoot, includeLayers: false });
+      if (config?.projects?.[projectRoot]?.trust_level === "trusted") return;
+      // Codex discovers project hooks before applying thread config overrides.
+      // Trust only this managed worktree through its native configuration API.
+      await client.request("config/batchWrite", {
+        edits: [{
+          keyPath: `projects.${JSON.stringify(projectRoot)}.trust_level`,
+          value: "trusted",
+          mergeStrategy: "upsert"
+        }],
+        expectedVersion: null,
+        filePath: null,
+        reloadUserConfig: true
+      });
+    }, "codex-app-server-project-trust");
+  }
+
   async listHooks(cwds = []) {
     const client = await this.activeClient();
     return this.runRequest(

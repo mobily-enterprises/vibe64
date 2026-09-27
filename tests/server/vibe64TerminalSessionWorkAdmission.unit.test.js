@@ -368,10 +368,14 @@ test("native storage discovers and retires an archived native-only chat through 
   assert.deepEqual([...ids], ["ses_original"]);
 });
 
-for (const temporary of [false, true]) test(`${temporary ? "temporary" : "main"} assistant work refreshes skills under both write locks and preserves source customization`, async (t) => {
+for (const kind of ["main", "temporary", "goal"]) test(`${kind} assistant work refreshes skills under both write locks and preserves source customization`, async (t) => {
   const lock = agentWriteLockHarness();
   const events = [];
   const { service, session, projectService } = await terminalServiceFixture(t, lock, {
+    ...(kind === "goal" ? { assistantSelection: {
+      engineId: "opencode", agentId: "build", modelProviderId: "opencode", modelId: "big-pickle",
+      variantId: "", catalogRevision: `sha256:${"a".repeat(64)}`
+    } } : {}),
     opencodeTerminalController: {
       createServerProcess() { throw new Error("The test does not start an AI provider."); }
     },
@@ -397,9 +401,11 @@ for (const temporary of [false, true]) test(`${temporary ? "temporary" : "main"}
   };
 
   // Provider delivery is unavailable in this fixture; preparation is deterministic.
-  const send = () => temporary
+  const send = () => kind === "temporary"
     ? service.startAgentConversationTurn(session.sessionId, { conversationId: "temporary", message: "Continue." }, { engineId: "opencode" })
-    : service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" });
+    : kind === "goal"
+      ? service.updateAgentGoal(session.sessionId, { action: "set", objective: "Check this fixture.", engineId: "opencode" })
+      : service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" });
   await send().catch(() => null);
   assert.equal(sourceWrites, 1);
   assert.equal(await readFile(skillPath, "utf8"), expected);

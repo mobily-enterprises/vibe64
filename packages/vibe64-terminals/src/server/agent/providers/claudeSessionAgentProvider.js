@@ -827,7 +827,13 @@ function createClaudeSessionAgentProvider({
     },
     async ensureSession(context) {
       const entry = await entryFor(context);
-      await ensureProcess(entry);
+      if (entry.process) await ensureProcess(entry);
+      else {
+        await bindAccount(entry);
+        if (entry.executionId) await stopEntry(entry, "Claude's previous process exit could not be confirmed.");
+        // First Send prepares project hooks under source-write admission.
+        // Starting here would load hooks before that preparation can run.
+      }
       return { ok: true, thread: { id: entry.id }, turn: snapshot(entry), workdir: entry.context.workdir };
     },
     async sessionState(context) {

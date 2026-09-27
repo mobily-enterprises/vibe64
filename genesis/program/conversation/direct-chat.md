@@ -1308,7 +1308,10 @@ ownership changes.
 Vibe64 disables the unused Genesis turn lane with
 `GENESIS_TURN_CONTEXT_ENABLED=0`. Idle foreground preparation synchronizes all
 three generated integrations under the existing source-write admission, alongside
-skills. It does not migrate authored project contracts. Updated guidance takes
+skills. Goal start/resume uses this same preparation. Claude inspection defers a
+new native process until work is submitted, so startup reads the prepared hooks;
+it still reconciles already-owned processes without synchronizing source.
+It does not migrate authored project contracts. Updated guidance takes
 effect at the next native context lifecycle; a loaded OpenCode plugin is replaced
 on the next provider instance load. Non-project helpers keep their bounded task
 instructions and do not load project hooks.

@@ -3881,6 +3881,47 @@ test("codex provider reads effective config for one project cwd", async () => {
   }]);
 });
 
+test("codex provider trusts only the selected worktree before native hook discovery", async () => {
+  const calls = [];
+  const cwd = '/runtime/project.with.dots/session "one"/source';
+  const config = { projects: { "/unrelated": { trust_level: "untrusted" } } };
+  const provider = new CodexAppServerAgentProvider({});
+  provider.activeClient = async () => ({
+    async request(method, params) {
+      calls.push({ method, params });
+      if (method === "config/read") return { config };
+      config.projects[cwd] = { trust_level: "trusted" };
+      return { status: "ok" };
+    }
+  });
+  await provider.trustProject(cwd);
+  assert.deepEqual(calls, [{
+    method: "config/read", params: { cwd, includeLayers: false }
+  }, {
+    method: "config/batchWrite",
+    params: {
+      edits: [{ keyPath: `projects.${JSON.stringify(cwd)}.trust_level`, value: "trusted", mergeStrategy: "upsert" }],
+      expectedVersion: null, filePath: null, reloadUserConfig: true
+    }
+  }]);
+  assert.equal(config.projects["/unrelated"].trust_level, "untrusted");
+  calls.length = 0;
+  await provider.trustProject(cwd);
+  assert.deepEqual(calls, [{ method: "config/read", params: { cwd, includeLayers: false } }]);
+  await assert.rejects(provider.trustProject("relative/worktree"), /absolute worktree/);
+});
+
+test("codex provider stops when native project trust cannot be saved", async () => {
+  const provider = new CodexAppServerAgentProvider({});
+  provider.activeClient = async () => ({
+    async request(method) {
+      if (method === "config/read") return { config: {} };
+      throw new Error("Native configuration is not writable.");
+    }
+  });
+  await assert.rejects(provider.trustProject("/repo/worktree"), /Native configuration is not writable/);
+});
+
 test("codex provider persists hook trust through the app-server config API", async () => {
   const calls = [];
   const provider = new CodexAppServerAgentProvider({});

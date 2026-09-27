@@ -1184,6 +1184,9 @@ test("codex app-server bridge activates exact project hooks for each new thread"
     async ensureRuntime() {
       return appServerRuntime();
     },
+    async trustProject(cwd) {
+      providerCalls.push({ method: "trustProject", cwd });
+    },
     async listHooks(cwds) {
       providerCalls.push({
         cwds,
@@ -1234,6 +1237,8 @@ test("codex app-server bridge activates exact project hooks for each new thread"
   });
 
   assert.deepEqual(providerCalls, [{
+    method: "trustProject", cwd: "/repo/worktree"
+  }, {
     cwds: ["/repo/worktree"],
     method: "listHooks"
   }, {
@@ -1369,6 +1374,7 @@ test("codex app-server bridge refreshes project hook trust when resuming a threa
     async ensureRuntime() {
       return appServerRuntime();
     },
+    async trustProject() {},
     async listHooks(cwds) {
       providerCalls.push({
         cwds,
@@ -1433,6 +1439,7 @@ test("codex app-server bridge refreshes project hook trust when resuming a threa
 test("visible Codex terminals persist trust for the project hooks they already run", async () => {
   const calls = [];
   const provider = {
+    async trustProject() {},
     async listHooks(cwds) {
       calls.push({ cwds, method: "listHooks" });
       return {

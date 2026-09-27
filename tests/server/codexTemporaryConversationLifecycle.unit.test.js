@@ -244,6 +244,7 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
       }
       return { status: "interrupted" };
     },
+    async trustProject() {},
     async listHooks(cwds) {
       calls.push(["hooks", cwds]);
       const inventoryIndex = captures.hookLists.length;

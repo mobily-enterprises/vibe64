@@ -2927,6 +2927,7 @@ function createService({
             return { ok: false, code: "vibe64_changeover_message_required",
               error: "Send a message to catch this AI up before starting or resuming its goal." };
           }
+          await prepareAgentSkillsInsideAgentWrite(sessionId, context);
           const prepared = await assistantRouting.prepareGoal(sessionId, input, context);
           const result = await sessionAgent.updateGoal(sessionId, prepared.input, prepared.context);
           if (result?.ok !== false && prepared.pinned) {

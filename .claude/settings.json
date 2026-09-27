@@ -6,7 +6,22 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if command -v genesis >/dev/null 2>&1; then genesis hook session; else node --input-type=module --eval \"const {runCli}=await import('genesis-compiler/cli');process.exitCode=await runCli(['hook','session'])\"; fi",
+            "command": "if command -v genesis >/dev/null 2>&1; then genesis hook session --claude-part 1; else node --input-type=module --eval \"const {runCli}=await import('genesis-compiler/cli');process.exitCode=await runCli(['hook','session','--claude-part','1'])\"; fi",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "if command -v genesis >/dev/null 2>&1; then genesis hook session --claude-part 2; else node --input-type=module --eval \"const {runCli}=await import('genesis-compiler/cli');process.exitCode=await runCli(['hook','session','--claude-part','2'])\"; fi",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "if command -v genesis >/dev/null 2>&1; then genesis hook session --claude-part 3; else node --input-type=module --eval \"const {runCli}=await import('genesis-compiler/cli');process.exitCode=await runCli(['hook','session','--claude-part','3'])\"; fi",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "if command -v genesis >/dev/null 2>&1; then genesis hook session --claude-part 4; else node --input-type=module --eval \"const {runCli}=await import('genesis-compiler/cli');process.exitCode=await runCli(['hook','session','--claude-part','4'])\"; fi",
             "timeout": 30
           }
         ]

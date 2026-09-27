@@ -69,6 +69,22 @@ initialize source, run setup, or build indexes. Existing assistant context is
 refreshed only through its native lifecycle; file synchronization alone does not
 claim that loaded instructions have changed.
 
+Before discovering Codex project hooks, Vibe64 trusts the exact managed worktree
+through Codex's native configuration API. Thread-only overrides arrive too late
+for native hook discovery. Already-trusted worktrees are read without rewriting
+configuration; a failed trust write stops startup. This does not grant trust to
+parent directories or replace Genesis's hook delivery.
+
+Genesis's Claude adapter divides session guidance into numbered native hook
+outputs to stay below Claude's per-output truncation limit. The composer and
+host bridge remain shared with the other agents. Genesis reports guidance above
+its 36,000-character Claude capacity explicitly instead of delivering a partial
+guide; Claude does not enforce startup-hook stop requests.
+Claude session inspection binds its account and reconciles already-owned
+processes, but defers a new native process until Send. This lets the existing
+source-write preparation refresh project hooks before native startup reads them.
+Opening a conversation does not synchronize files or load stale startup hooks.
+
 New projects begin with Genesis and existing repositories can be adopted without
 moving their source. Agent turns receive Genesis task guidance, while new and
 compacted conversations receive the shorter portable Genesis session context.

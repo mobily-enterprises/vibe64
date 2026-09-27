@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { Readable, Duplex } from "node:stream";
 import { test } from "node:test";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createClaudeJsonClient, readClaudeJsonFrames } from "../../packages/vibe64-runtime/src/server/claudeStreamJson.js";
@@ -321,6 +321,30 @@ test("Claude split native frames retain thinking and answers across streaming an
   assert.equal((await f.provider.readConversation(f.context)).messages.length, 2);
 });
 
+test("Claude inspection defers native hooks until the prepared first Send", async (t) => {
+  const f = await fixture(t);
+  const hookPath = path.join(f.context.session.metadata.source_path, ".claude", "settings.json");
+  await mkdir(path.dirname(hookPath), { recursive: true });
+  await writeFile(hookPath, "original hook configuration");
+  let loadedHooks;
+  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    createProcess: async (options) => {
+      loadedHooks = await readFile(hookPath, "utf8");
+      return f.providerOptions.createProcess(options);
+    }
+  });
+  t.after(() => provider.closeProject());
+  const first = await provider.ensureSession(f.context);
+  assert.equal((await provider.ensureSession(f.context)).thread.id, first.thread.id);
+  assert.equal(f.processes.length, 0);
+  // The service performs this authorized synchronization before dispatch.
+  await writeFile(hookPath, "refreshed Genesis hook configuration");
+  const sent = await provider.sendMessage(f.context, { message: "Hello", messageId: "prepared-first" });
+  assert.equal(sent.thread.id, first.thread.id);
+  assert.equal(f.processes.length, 1);
+  assert.equal(loadedHooks, "refreshed Genesis hook configuration");
+});
+
 test("Claude reuses its main conversation when callers hold older session snapshots", async (t) => {
   const f = await fixture(t);
   const staleSession = structuredClone(f.context.session);
@@ -539,7 +563,7 @@ test("Claude admission inspection uses the shared contract and native history pr
   assert.equal(inspected.admission, "accepted");
   assert.equal(inspected.turnId, nativeMessageId("accepted"));
   assert.equal((await f.provider.sendMessage(f.context, { message: "accepted", messageId: "accepted" })).duplicate, true);
-  assert.equal(f.processes[0].lastInput, undefined);
+  assert.equal(f.processes.length, 0, "An already accepted message does not start a process or send again");
 });
 
 test("Claude bounded helpers use the selected Haiku without tools or the project's command environment", async (t) => {
@@ -725,7 +749,8 @@ test("Claude plan usage retains real windows and never invents an allowance afte
 
 test("Claude changes model and effort through native controls without restarting the conversation", async (t) => {
   const f = await fixture(t);
-  const first = await f.provider.ensureSession(f.context);
+  const first = await f.provider.sendMessage(f.context, { message: "Hello", messageId: "initial" });
+  await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Ready." });
   const native = f.processes[0];
   const requests = [];
   native.client.request = async (request) => { requests.push(request); return {}; };
@@ -747,7 +772,8 @@ test("Claude changes model and effort through native controls without restarting
 
 test("Claude retires a process when its settings change is only partially accepted", async (t) => {
   const f = await fixture(t);
-  await f.provider.ensureSession(f.context);
+  await f.provider.sendMessage(f.context, { message: "Hello", messageId: "initial" });
+  await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Ready." });
   const native = f.processes[0];
   native.client.request = async (request) => {
     if (request.subtype === "apply_flag_settings") throw new Error("Settings rejected");
@@ -763,7 +789,8 @@ test("Claude retires a process when its settings change is only partially accept
 
 test("Claude reads account capabilities and allowance through an already owned process", async (t) => {
   const f = await fixture(t);
-  await f.provider.ensureSession(f.context);
+  await f.provider.sendMessage(f.context, { message: "Hello", messageId: "initial" });
+  await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Ready." });
   const native = f.processes[0];
   native.client.request = async (request) => {
     assert.equal(request.subtype, "get_usage");

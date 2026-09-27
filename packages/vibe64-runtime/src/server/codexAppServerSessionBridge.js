@@ -734,6 +734,7 @@ async function codexAppServerProjectHookTrustConfig(provider, cwd = "", {
   if (!normalizedCwd || typeof provider?.listHooks !== "function") {
     return null;
   }
+  await provider.trustProject(normalizedCwd);
   const result = await provider.listHooks([normalizedCwd]);
   const record = (Array.isArray(result?.data) ? result.data : [])
     .find((item) => normalizeWorkdir(item?.cwd) === normalizedCwd);
