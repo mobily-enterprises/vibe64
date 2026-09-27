@@ -45,7 +45,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
       calls.push({ method, args, projectSlug: context.slug, actor: context.vibe64User });
       return { ok: true, method };
     };
-    const sessions = Object.fromEntries(["listSessions", "renameSession", "archiveSession", "retryWorkspaceSetup", "broadcastSessionPreviewState", "sendAgentMessage", "interruptAgentTurn", "readSessionConversationLog"].map((name) => [name, record(name)]));
+    const sessions = Object.fromEntries(["listSessions", "renameSession", "archiveSession", "retryWorkspaceSetup", "broadcastSessionPreviewState", "sendAgentMessage", "interruptAgentTurn", "readSessionConversationLog", "rewindConversation"].map((name) => [name, record(name)]));
     const terminals = Object.fromEntries(["readSessionWorkPlan", "listTemporaryConversations", "createTemporaryConversation", "readTemporaryConversation", "startTemporaryConversationTurn", "stopTemporaryConversation", "deleteTemporaryConversation"].map((name) => [name, record(name)]));
     actions.register({ contributorId: "sessions", domain: "sessions", actions: createSessionActions({ sessions }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
     actions.register({ contributorId: "terminals", domain: "terminals", actions: createTerminalActions({ terminals }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
@@ -60,6 +60,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
     const cases = [
       ["GET", "/sessions", "vibe64.sessions.list", {}, "listSessions"],
       ["GET", "/sessions/:sessionId/conversation-log", "vibe64.sessions.conversation-log.read", {}, "readSessionConversationLog"],
+      ["POST", "/sessions/:sessionId/conversation-rewind", "vibe64.sessions.conversation.rewind", { turnId: "000002" }, "rewindConversation"],
       ["GET", "/sessions/:sessionId/work-plan", "vibe64.terminals.work-plan.read", {}, "readSessionWorkPlan"],
       ["POST", "/sessions/:sessionId/agent-message", "vibe64.sessions.agent-message.send", { message: "Consider this correction.", messageId: "main-steer", submissionKind: "steer" }, "sendAgentMessage"],
       ["POST", "/sessions/:sessionId/agent-turn/interrupt", "vibe64.sessions.agent-turn.interrupt", { reason: "Requested by user" }, "interruptAgentTurn"],

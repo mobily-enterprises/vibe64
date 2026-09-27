@@ -2836,6 +2836,7 @@ function createService({
     },
 
     async rewindConversation(sessionId, input = {}, options = {}) {
+      await sessionAgent.requireAssistantAccess(sessionId, await assistantSessionOptions(sessionId, options));
       await assistantRouting.cancel(sessionId, options);
       return runMainAgentWrite(sessionId, options, async (context) => {
         await sessionAgent.requireAssistantAccess(sessionId, context);

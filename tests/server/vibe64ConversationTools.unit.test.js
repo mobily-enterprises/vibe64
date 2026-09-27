@@ -26,6 +26,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
     async stopTemporaryConversation() { return { ok: false, code: "vibe64_busy", error: "The conversation is closing." }; }
   };
   const sessions = {
+    async rewindConversation(sessionId, input) { calls.push({ sessionId, input }); return { ok: true, text: `  ${"🙂".repeat(8000)}\n`, nativeCheckpoint: "private-checkpoint" }; },
     async updateAssistantSelection(sessionId, input) { calls.push({ sessionId, input }); return { ok: true, sessionId, assistantSelection: { engineId: "codex", modelId: "previous-model" }, metadata: {
       assistant_routing: JSON.stringify({ ...input.assistantRouting, workflowEngineId: "codex" }),
       assistant_routing_request: JSON.stringify({ status: "completed", resolvedMode: "senior" })
@@ -39,7 +40,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
     } }; },
     async sendAgentMessage(sessionId, input) { calls.push({ sessionId, input }); return { ok: true, sessionId, messageId: input.messageId, delivered: true, deliveryMode: "steer", turn: { id: "turn-1", state: "inProgress", active: true }, assistantRoutingRequest: { status: "sent", resolvedMode: "junior", input: { privateValue: "secret" } } }; },
     async interruptAgentTurn() { return { ok: true, interrupted: true, routingCancelled: true }; },
-    async readSessionConversationLog() { return { ok: true, conversationLog: Array.from({ length: 10 }, (_, i) => ({ turnId: `turn-${i}`, user: { text: `Question ${i}` }, assistant: { text: "a".repeat(6000) }, privateBinding: "secret" })), pagination: { hasMoreBefore: true } }; },
+    async readSessionConversationLog() { return { ok: true, rewind: { turnId: "000010", pending: false, text: "private-full-prompt" }, conversationLog: Array.from({ length: 10 }, (_, i) => ({ turnId: `turn-${i}`, user: { text: `Question ${i}` }, assistant: { text: "a".repeat(6000) }, privateBinding: "secret" })), pagination: { hasMoreBefore: true } }; },
     async inspectSession() { return { ok: true, sessionId: "session-1", status: "active", agentSession: { turn: { state: "inProgress", active: true, phase: "thinking", id: "turn-1" } }, metadata: { assistant_routing_request: JSON.stringify({ status: "planning", task: "planning", assignments: { secret: "private-model-binding" } }) } }; },
     async listSessions() { return { ok: true, sessions: [{ sessionId: "session-1", sessionName: "Planning", status: "active", sourcePath: "/private/repository", metadata: { token: "private-token" } }] }; },
     async createSession(input) { calls.push(input); return { ok: true, sessionId: "created-session", workspaceSetup: { status: "running" }, sourcePath: "/private/source" }; }
@@ -51,7 +52,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const catalog = createServiceToolCatalog(actions);
   const context = { surface: "app" };
   const toolSet = catalog.resolveToolSet(context);
-  assert.equal(toolSet.tools.length, 26);
+  assert.equal(toolSet.tools.length, 27);
   assert.equal(toolSet.tools.some((tool) => tool.actionId.includes("attachment") || tool.actionId.includes("repository")), false);
   async function execute(actionId, input) {
     const tool = toolSet.tools.find((entry) => entry.actionId === actionId);
@@ -80,6 +81,20 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(main.result.turns[0].assistant.length, 4000);
   assert.equal(main.result.turns[0].truncated, true);
   assert.equal(JSON.stringify(main).includes("secret"), false);
+  assert.equal(main.result.rewindTurnId, "000010");
+  assert.equal(main.result.rewindPending, false);
+  assert.equal(JSON.stringify(main).includes("private-full-prompt"), false);
+  const undone = await execute("vibe64.sessions.conversation.rewind", { sessionId: "session-1", turnId: "000010" });
+  assert.equal(undone.ok, true, JSON.stringify(undone));
+  assert.equal(undone.result.restoredText, `  ${"🙂".repeat(7998)}`);
+  assert.equal(undone.result.truncated, true);
+  assert.equal(JSON.stringify(undone).includes("private-checkpoint"), false);
+  assert.equal(calls.at(-1).input.vibe64User.username, "member");
+  const rewindCallCount = calls.length;
+  for (const input of [{}, { sessionId: "", turnId: "000010" }, { sessionId: "session-1", turnId: "latest" }]) {
+    assert.equal((await execute("vibe64.sessions.conversation.rewind", input)).ok, false);
+  }
+  assert.equal(calls.length, rewindCallCount);
   assert.equal(read.result.status, "inProgress");
   assert.equal(read.result.messages.length, 12);
   assert.equal(read.result.messages[0].id, "message-13");
@@ -100,12 +115,13 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(failed.ok, true);
   assert.equal(failed.result.ok, false);
   assert.equal(failed.result.code, "vibe64_busy");
+  const beforeInvalidRead = calls.length;
   const invalid = await execute("vibe64.terminals.temporary-conversation.read", { sessionId: "session-1", conversationId: "chat-1", messageLimit: 200 });
   assert.equal(invalid.ok, false);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, beforeInvalidRead);
   const created = await execute("vibe64.sessions.create", { workflowEngineId: "codex" });
   assert.deepEqual(created.result, { ok: true, sessionId: "created-session", workspaceSetupStatus: "running" });
-  assert.equal(calls[1].vibe64User.username, "member");
+  assert.equal(calls.at(-1).vibe64User.username, "member");
   const sent = await execute("vibe64.sessions.agent-message.send", { sessionId: "session-1", message: "Please consider this correction.", messageId: "steer-1", submissionKind: "steer" });
   assert.equal(sent.ok, true, JSON.stringify(sent));
   assert.equal(sent.result.delivered, true);

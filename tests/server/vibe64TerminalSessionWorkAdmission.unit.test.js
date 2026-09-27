@@ -269,6 +269,21 @@ async function outdatedSkillFixture(projectRoot) {
   return { skillPath, original, expected };
 }
 
+test("conversation rewind rejects denied AI access before cancelling routing", async (t) => {
+  const lock = agentWriteLockHarness();
+  const f = await terminalServiceFixture(t, lock, {
+    assistantSelection: { ...CODEX_SELECTION, engineId: "opencode", agentId: "build", modelProviderId: "personal" },
+    opencodeTerminalController: { createServerProcess() { assert.fail("Denied Undo must not start a provider."); } }
+  });
+  const routing = JSON.stringify({ status: "planning_pending", review: true, workPlan: { status: "ready" } });
+  await f.runtime.store.writeMetadataValue("session-1", "assistant_routing_request", routing);
+  f.service.configureAssistantRuntime({ readAssistantAccess: async () => ({ available: true, ownerOnly: true }) });
+  await assert.rejects(f.service.rewindConversation("session-1", { turnId: "000002" }, {
+    runtime: f.runtime, vibe64User: { username: "member", role: "member" }
+  }), { code: "vibe64_assistant_owner_required" });
+  assert.equal(await f.runtime.store.readMetadataValue("session-1", "assistant_routing_request"), routing);
+});
+
 test("native replacement uses the service's write lock and access gate without starting inference", async (t) => {
   const lock = agentWriteLockHarness();
   const selection = { engineId: "opencode", agentId: "build", modelProviderId: "deepseek", modelId: "deepseek-chat",

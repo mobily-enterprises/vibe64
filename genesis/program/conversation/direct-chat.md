@@ -124,14 +124,20 @@ This preserves recorded text, not the originating model's opaque internal state.
 
 Undo last turn is a main-conversation command, available while idle. Its saved
 target identifies the latest user prompt and every following reply/activity row.
-The preceding user turn must use the same current assistant application and,
-for Codex, the same model provider. The first turn after either switch cannot
-be removed. Changing a model within that provider does not create a boundary. The confirmation states
+The preceding user turn must use the same current assistant application.
+Codex models and providers share its native history; switching between them
+does not create an Undo boundary. The first turn after switching assistant
+applications cannot be removed. The confirmation states
 that project files and databases remain unchanged, and the removed prompt
 prefills only an empty composer.
 
-The existing main assistant write lock serializes Undo with Send. A saved
-`assistant_changeover.rewind` boundary precedes native mutation. Claude uses
+The existing main assistant write lock serializes Undo with Send.
+AI access is checked before cancelling routing, then rechecked inside that lock.
+Colleague reaches the same action using the exact current Undo turn ID returned
+by conversation-log reads. Its result reports the removed prompt with an explicit
+truncation flag; it does not refill the browser composer or resend it.
+
+A saved `assistant_changeover.rewind` boundary precedes native mutation. Claude uses
 `rewind_conversation`; history reads follow its durable `last-prompt` resume
 anchor. Codex App Server uses `thread/revert` with the exact excluded native turn;
 a turn containing steering cannot be represented as one visible prompt and is

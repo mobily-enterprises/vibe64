@@ -186,7 +186,7 @@ const conversationRewindFields = {
 const conversationRewindInputValidator = requiredInputSchema(conversationRewindFields);
 const conversationRewindActionInputValidator = requiredInputSchema({
   ...conversationRewindFields, ...optionalUser,
-  sessionId: { type: "string", noTrim: false, required: true }
+  sessionId: { type: "string", noTrim: false, minLength: 1, required: true }
 });
 
 const agentTurnInterruptInputValidator = patchSchema(agentTurnInterruptFields);

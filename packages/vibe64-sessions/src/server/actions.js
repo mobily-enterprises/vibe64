@@ -1,5 +1,5 @@
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool } from "./assistantContracts.js";
+import { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool } from "./assistantContracts.js";
 import {
   sessionRenameActionInputValidator,
   conversationRewindActionInputValidator,
@@ -377,6 +377,7 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_REWIND_CONVERSATION,
+      assistant: conversationRewindTool(),
       kind: "command",
       idempotency: "domain_native",
       input: conversationRewindActionInputValidator,
