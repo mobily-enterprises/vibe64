@@ -24,6 +24,7 @@ Restore failures retain a readable retry action in a tonal error notice.
 
 ## Sources
 
+- `src/lib/vibe64ThinkingPresentation.js`
 - `packages/vibe64-core/src/server/featureRoutes.js`
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
 - `packages/vibe64-runtime/src/server/assistantRoutingStateUpgrade.js`
@@ -67,6 +68,13 @@ Restore failures retain a readable retry action in a tonal error notice.
 - `src/composables/useVibe64AssistantCatalog.js`
 
 ## Public contract
+
+Temporary chats share Main's delivery-state presentation. An ordinary send stays
+pending. Lost confirmation shows Check delivery against the original message ID,
+without Edit/Cancel or another native submission. Saved history and accepted
+routing state clear stale delivery errors, including a late HTTP failure after
+an exact receipt. Pending entries are reconciled only against actual history;
+synthetic routing rows never acknowledge delivery.
 
 Temporary Codex, Claude Code and OpenCode conversations load the same Genesis
 project hooks or plugin as main chat and standalone CLI use. The host bridge
@@ -169,6 +177,10 @@ successful deletions. Scoped receipt checks recover uncertain native admission,
 including while the accepted turn is still active.
 
 Each temporary task has its own model settings, attachments and message stream.
+DeepSeek and GLM under Codex or Claude preview their latest short commentary as
+thinking. Expanding progress shows those short updates only; raw reasoning is
+omitted and final answers remain separate replies. This uses recorded selections
+and the same presentation mapping as Main chat without rewriting saved history.
 User-facing temporary chats have the same capabilities, tools and project access
 as main chat in Codex, Claude Code, and OpenCode. They use normal execution settings and
 the same session write coordination and skill preparation. There is no temporary

@@ -4738,6 +4738,7 @@ function createCodexTerminalController({
     const created = {
       createdAt: new Date().toISOString(),
       segments: [],
+      channels: new Map(),
       summaries: new Map()
     };
     codexAppServerReasoningTurns.set(key, created);
@@ -4753,7 +4754,7 @@ function createCodexTerminalController({
     const params = codexAppServerNotificationParams(notification);
     const item = codexAppServerNotificationItem(notification);
     const itemId = normalizeText(params.itemId || item?.id || "summary");
-    const summaryIndex = String(params.summaryIndex ?? params.index ?? 0).trim() || "0";
+    const summaryIndex = String(params.summaryIndex ?? params.contentIndex ?? params.index ?? 0).trim() || "0";
     return `${itemId}:${summaryIndex}`;
   }
 
@@ -4803,7 +4804,9 @@ function createCodexTerminalController({
     turnId = ""
   } = {}) {
     const method = normalizeText(notification.method);
-    if (method !== "item/reasoning/summaryPartAdded" && method !== "item/reasoning/summaryTextDelta") {
+    const item = codexAppServerNotificationItem(notification);
+    const completed = method === "item/completed" && item?.type === "reasoning";
+    if (!completed && !["item/reasoning/summaryPartAdded", "item/reasoning/summaryTextDelta", "item/reasoning/textDelta"].includes(method)) {
       return false;
     }
     const normalizedThreadId = normalizeText(threadId);
@@ -4812,6 +4815,22 @@ function createCodexTerminalController({
       return false;
     }
     const state = codexAppServerReasoningTurnState(normalizedThreadId, normalizedTurnId);
+    const params = codexAppServerNotificationParams(notification);
+    const itemId = normalizeText(params.itemId || item?.id || "summary");
+    if (completed) {
+      // Completed-only providers expose the same readable parts in the item.
+      // Streamed items have already been recorded; do not replay their text.
+      if (state.channels.has(itemId)) return false;
+      const summary = codexAppServerContentText(item.summary);
+      const text = normalizeText(summary) ? summary : codexAppServerContentText(item.content);
+      return recordCodexAppServerReasoningNotification(normalizedThreadId, {
+        method: normalizeText(summary) ? "item/reasoning/summaryTextDelta" : "item/reasoning/textDelta",
+        params: { itemId, delta: text }
+      }, { turnId: normalizedTurnId });
+    }
+    const channel = method === "item/reasoning/textDelta" ? "content" : "summary";
+    // Some providers expose both channels. Keep the first readable stream once.
+    if (state.channels.has(itemId) && state.channels.get(itemId) !== channel) return false;
     const summaryKey = codexAppServerReasoningSummaryKey(notification);
     const summary = state.summaries.get(summaryKey) || {
       currentSegment: null
@@ -4819,10 +4838,10 @@ function createCodexTerminalController({
     if (!summary.currentSegment) {
       createCodexAppServerReasoningSegment(state, summary, summaryKey);
     }
-    if (method === "item/reasoning/summaryTextDelta") {
-      const params = codexAppServerNotificationParams(notification);
+    if (method !== "item/reasoning/summaryPartAdded") {
       let delta = codexAppServerContentText(params.delta || params.text);
       if (delta) {
+        state.channels.set(itemId, channel);
         const startsNewSegment = /^\s*\n/u.test(delta) &&
           summary.currentSegment?.chunks?.length &&
           summary.currentSegment?.persistedText;
@@ -5062,8 +5081,8 @@ function createCodexTerminalController({
   }
 
   async function writeCodexAppServerLiveProgress(sessionId = "", threadId = "", notification = {}) {
-    // Explicit commentary is user-facing progress. Reasoning and ambiguous
-    // progress remain thinking; final answers are recorded separately.
+    // Phase-less providers also send short updates as agent messages.
+    // Reasoning items are recorded separately from these user-facing updates.
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(threadId);
     const candidate = codexAppServerLiveProgressCandidate(notification);
@@ -5109,7 +5128,7 @@ function createCodexTerminalController({
     codexAppServerLiveProgressFingerprints.add(fingerprintKey);
     let written = null;
     try {
-      const role = candidate.phase === "commentary" ? "commentary" : "thinking";
+      const role = !candidate.phase || candidate.phase === "commentary" ? "commentary" : "thinking";
       const writer = role === "commentary"
         ? store.writeConversationCommentaryMessage
         : store.writeConversationThinkingMessage;
@@ -7547,7 +7566,8 @@ function createCodexTerminalController({
         return;
       }
       if (
-        classification.kind === "reasoning_summary" &&
+        (method.startsWith("item/reasoning/") ||
+          method === "item/completed" && codexAppServerNotificationItem(notification)?.type === "reasoning") &&
         !codexAppServerAutomaticHookThreads.has(normalizedThreadId)
       ) {
         runCodexAppServerNotificationTask(notificationContext, () => {
@@ -11269,12 +11289,19 @@ function createCodexTerminalController({
     for (const turn of turns) {
       const turnId = codexAppServerRenewalTurnId(turn);
       const complete = !codexAppServerConversationTurnIsActive(codexAppServerRenewalTurnStatus(turn));
-      for (const item of codexAppServerRenewalTurnItems(turn)) {
+      const items = codexAppServerRenewalTurnItems(turn);
+      const finalIds = new Set(codexAppServerProviderThreadAssistantSegments({ turns: [turn] }, turnId).map(({ itemId }) => itemId));
+      for (const [index, item] of items.entries()) {
         let role;
         if (item.type === "reasoning") role = "thinking";
-        else if (item.type === "agentMessage") role = item.phase === "commentary" ? "commentary" : "assistant";
+        else if (item.type === "agentMessage") {
+          const progress = item.phase === "commentary" || (!item.phase && !finalIds.has(item.id) && (complete || index < items.length - 1));
+          role = progress ? "commentary" : "assistant";
+        }
         else continue;
-        const text = role === "thinking" ? codexAppServerContentText(item.summary) : codexAppServerAssistantItemText(item);
+        const text = role === "thinking"
+          ? normalizeText(codexAppServerContentText(item.summary)) || codexAppServerContentText(item.content)
+          : codexAppServerAssistantItemText(item);
         if (text) messages.push({
           id: codexAppServerConversationMessageId(conversationId, turnId, role, item.id || text),
           role,
@@ -11283,9 +11310,8 @@ function createCodexTerminalController({
         });
       }
     }
-    const latestText = latest ? codexAppServerRenewalTurnItems(latest)
-      .filter((item) => item.type === "agentMessage" && item.phase !== "commentary")
-      .map(codexAppServerAssistantItemText).filter(Boolean).join("\n\n") : "";
+    const latestText = latest ? codexAppServerProviderThreadAssistantSegments({ turns: [latest] }, runId)
+      .map(({ text }) => text).join("\n\n") : "";
     return {
       conversationId,
       ok: true,

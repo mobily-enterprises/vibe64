@@ -101,6 +101,16 @@ test("purpose resolution uses the current user role instead of its saved role", 
   assert.equal(f.calls.filter(({ type }) => type === "access").every(({ vibe64User }) => vibe64User.role === "member"), true);
 });
 
+test("curated Codex dispatch validates its models without discovering GPT models", async () => {
+  const f = routingManagerFixture();
+  f.configuration.orchestrators.codex.senior = f.junior;
+  const decision = await f.manager.resolveAssistantPurpose({ purpose: "junior", workflowEngineId: "codex" }, f.options);
+  assert.equal(decision.available, true);
+  assert.deepEqual(f.calls.filter(({ type }) => type === "catalog").map(({ input }) => input), [{
+    modelProviderId: "deepseek", configuredOnly: "true"
+  }]);
+});
+
 test("native AI admission refreshes the actor and revocation leaves Stop available", async () => {
   let current = { username: "member", role: "member", home: "/current-home" };
   const calls = [];

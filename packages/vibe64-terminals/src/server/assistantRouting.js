@@ -262,6 +262,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       });
       state.status = deliveredStatus;
       state.turnId = receipt.turnId || "";
+      delete state.error;
       await save(context, state);
       return { ok: true, delivered: true, messageId, threadId: state.threadId };
     }
@@ -311,7 +312,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       onPromptSending: async ({ threadId }) => {
         if (!followup) await context.onPromptSending?.({ threadId, assistantSelection: selection });
         state.threadId = threadId; state.attemptedMessageId = messageId;
-        state.status = followup ? continuationStatus(state, "uncertain") : "uncertain";
+        // Persist the attempt before dispatch, but keep a live send in progress.
+        // Only a lost response or restart makes its delivery uncertain.
         await save(context, state);
       },
       onPromptRejected: async () => {
@@ -682,6 +684,12 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (state.helper) {
         try { await cleanupHelper(context, state); state.helper = null; }
         catch (error) { state.error = error.message; await save(context, state); return; }
+        await save(context, state);
+      }
+      if (["sending", "uncertain"].includes(state.status) && state.attemptedMessageId &&
+          await context.runtime.store.conversationMessageIdExists(sessionId, state.attemptedMessageId)) {
+        state.status = "sent";
+        delete state.error;
         await save(context, state);
       }
       if (["routing", "sending", "review_sending", "planning_sending"].includes(state.status)) {

@@ -3,8 +3,12 @@
     <template #attachments="{ items }">
       <Vibe64ConversationAttachments :items="items" :session-id="sessionId" />
     </template>
-    <template v-if="$slots['message-text']" #system-message="{ message }">
-      <slot name="message-text" :message="message" />
+    <template #system-message="{ message }">
+      <Vibe64ConversationStatus :message="message" @check-delivery="emit('resend', $event)">
+        <template v-if="$slots['message-text']" #default>
+          <slot name="message-text" :message="message" />
+        </template>
+      </Vibe64ConversationStatus>
     </template>
     <template v-if="$slots.hints" #hints>
       <slot name="hints" />
@@ -19,8 +23,11 @@ import { computed } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
-import { assistantModeLabel, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { chatTurnsWithRouting } from "@/lib/vibe64ChatDelivery.js";
+import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
+import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
+import { thinkingMessagePresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
 const props = defineProps({
   delivery: { type: Object, default: null },
   routingRequest: { type: Object, default: null },
@@ -36,18 +43,17 @@ const emit = defineEmits(["resend", "cancel", "edit"]);
 const turns = computed(() => {
   const result = conversationTurnsFromMessages(props.messages.map((message) => {
     const selection = message.assistantSelection;
-    return selection ? { ...message, assistantLabel: `${message.assistantRouting?.resolvedMode ? `${assistantModeLabel(message.assistantRouting.resolvedMode)} · ` : ""}${vibe64AssistantSelectionLabel(selection)}` } : message;
-  }));
-  const request = props.routingRequest;
-  if (request && ["routing", "sending", "uncertain", "failed"].includes(request.status) && !result.some((turn) => turn.user?.messageId === request.messageId)) {
-    result.push({ turnId: `routing:${request.messageId}`, user: { messageId: request.messageId, role: "user", text: request.input.displayMessage || request.input.message }, messages: [],
-      system: { role: "system", text: assistantRoutingStatusLabel(request) },
-      optimistic: { id: request.messageId, status: ["failed", "uncertain"].includes(request.status) ? "failed" : "pending", error: request.error || "" } });
-  }
-  return result;
+    const displayed = thinkingMessagePresentation(message, selection);
+    if (!displayed) return null;
+    return selection ? { ...displayed, assistantLabel: `${message.assistantRouting?.resolvedMode ? `${assistantModeLabel(message.assistantRouting.resolvedMode)} · ` : ""}${vibe64AssistantSelectionLabel(selection)}` } : displayed;
+  }).filter(Boolean));
+  return chatTurnsWithRouting(
+    props.delivery ? props.delivery.turns(result) : result,
+    props.routingRequest,
+    props.delivery?.state.sending === true
+  );
 });
 const adapter = computed(() => ({
-  delivery: props.delivery,
   conversation: {
     working: props.working,
     turns: turns.value,
@@ -56,9 +62,9 @@ const adapter = computed(() => ({
     variant: "task",
     visible: true,
     userMessageFormat: "plain",
-    progressPreviewLimit: 0,
+    progressPreviewLimit: usesCommentaryForThinking(props.messages.at(-1)?.assistantSelection) ? 1 : 0,
     systemLabel: "System",
-    welcomeMessage: props.messages.length ? "" : props.emptyMessage
+    welcomeMessage: turns.value.length ? "" : props.emptyMessage
   },
   actions: {
     resend: (id) => emit("resend", id),

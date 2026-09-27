@@ -390,6 +390,11 @@ Deliberate Undo still removes its selected exchange through the saved history.
 Consecutive reasoning summaries form one collapsible progress group, regardless
 of storage rows or automatic goal turns. The latest group previews current
 reasoning while the assistant is working; ordinary messages separate groups.
+DeepSeek and GLM through Codex or Claude use their latest short commentary update
+as that preview. Expanding the group shows only those updates, never raw reasoning;
+commentary is not repeated as a separate reply. Final answers remain ordinary
+chat messages. This presentation uses each message's recorded model and does not
+ask another AI to summarize the reasoning.
 Reconnecting preserves the selected model and reasoning effort and requests
 short reasoning summaries for continuing goals as well as new messages.
 Assistant status recovers automatically after a failed connection check, without
@@ -753,6 +758,8 @@ Undo cannot cross a Codex provider switch.
 Helper work uses the actor's effective Helper model and its connection.
 The GPT models and thinking choices come from the connected Codex service,
 so newly available GPT models appear without an editor update.
+Custom model discovery and Apply use the same Codex catalogue revision, including
+when switching to DeepSeek or GLM. A provider filter alone does not make a choice stale.
 After Codex login or logout, an unfinished account transition automatically
 retries on the next ordinary account status check, including after a service
 restart. Recovery uses the saved credentials without asking the person to sign
@@ -1206,6 +1213,11 @@ Temporary-chat restoration waits for confirmed assistant readiness on startup
 and reconnect, then retries any remaining assistant-operation contention
 automatically. This expected wait shows no error and needs no Try again.
 Genuine load failures remain visible and retryable.
+Main and temporary chats keep an ordinary send pending until delivery is confirmed.
+An interrupted attempt shows “Delivery unconfirmed” with Check delivery, which
+checks the original receipt without sending another copy. Only confirmed failures
+offer Retry, Edit and Cancel. A late receipt clears stale delivery warnings.
+
 Sending a temporary message shows it immediately, including while its conversation
 is being created. Sending and assistant work have distinct status labels. Failed
 messages retain Resend, Edit and Cancel; retry preserves the original request

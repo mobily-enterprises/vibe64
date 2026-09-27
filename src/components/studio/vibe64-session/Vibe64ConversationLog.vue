@@ -1,5 +1,8 @@
 <template>
   <AssistantConversationElement :adapter="adapter">
+    <template #system-message="{ message }">
+      <Vibe64ConversationStatus :message="message" @check-delivery="emit('resend-turn', $event)" @link-click="adapter.actions.openLink" />
+    </template>
     <template #attachments="{ items }">
       <Vibe64ConversationAttachments :items="items" :session-id="sessionId" />
     </template>
@@ -83,8 +86,10 @@
 import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, watch } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
+import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
+import { thinkingMessagePresentation, usesCommentaryForThinking } from "@/lib/vibe64ThinkingPresentation.js";
 import { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 
 const props = defineProps({
@@ -214,6 +219,7 @@ const adapter = computed(() => ({
     variant: props.variant,
     visible: props.visible,
     welcomeMessage: props.welcomeMessage,
+    progressPreviewLimit: usesCommentaryForThinking(props.turns.at(-1)?.metadata?.assistantSelection) ? 1 : 2,
     turns: props.turns.map((turn) => {
       const selection = turn.metadata?.assistantSelection;
       return {
@@ -224,7 +230,9 @@ const adapter = computed(() => ({
           ? `${vibe64AssistantSelectionLabel(selection)}\nProvider: ${selection.modelProviderId}`
           : undefined,
         assistant: presentationMessage(turn.assistant),
-        messages: turn.messages?.map(presentationMessage)
+        thinking: turn.thinking?.map((message) => thinkingMessagePresentation(message, selection)).filter(Boolean),
+        commentary: turn.commentary?.map((message) => thinkingMessagePresentation(message, selection)).filter(Boolean),
+        messages: turn.messages?.map((message) => thinkingMessagePresentation(presentationMessage(message), selection)).filter(Boolean)
       };
     })
   },

@@ -427,6 +427,8 @@ const modeSession = computed(() => ({ sessionId: props.sessionId,
   agentSession: { goal: activeTask.value?.goal || null },
   metadata: activeTask.value?.routingMetadata || {} }));
 const activeTaskError = computed(() => {
+  if (["failed", "uncertain"].includes(routingRequest.value?.status) &&
+      routingRequest.value.error === activeTask.value?.error) return "";
   if (activeTask.value?.delivery.state.messages.some((message) => (
     message.status === "failed" && message.error === activeTask.value.error
   ))) return "";

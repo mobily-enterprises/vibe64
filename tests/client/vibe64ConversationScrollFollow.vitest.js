@@ -52,6 +52,11 @@ import * as SharedConversation from "@jskit-ai/assistant-core/client/conversatio
 import Vibe64ConversationLog from "../../src/components/studio/vibe64-session/Vibe64ConversationLog.vue";
 import Vibe64ConversationAttachments from "../../src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue";
 
+import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
+import { chatTurnsWithRouting } from "../../src/lib/vibe64ChatDelivery.js";
+import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session/Vibe64ConversationStatus.vue";
+import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
+
 function attachClientRender(component, sourcePath, id) {
   const componentPath = path.resolve(sourcePath);
   const componentSource = fs.readFileSync(componentPath, "utf8");
@@ -71,6 +76,7 @@ for (const name of [
   "AssistantConversationElement",
   "AssistantTranscript",
   "AssistantProgress",
+  "AssistantComposerSupport",
   "AssistantMessageAttachments",
   "LongTextInlineParts",
   "AssistantPromptInput",
@@ -89,6 +95,10 @@ attachClientRender(
   "src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue",
   "vibe64-conversation-attachments-test"
 );
+
+for (const component of [Vibe64ConversationStatus, Vibe64EphemeralConversationMessages]) {
+  attachClientRender(component, `src/components/studio/vibe64-session/${component.__name}.vue`, `${component.__name}-test`);
+}
 
 function passthroughComponent(element = "div") {
   return defineComponent({
@@ -341,6 +351,116 @@ describe("Vibe64 conversation scroll following", () => {
     vi.runAllTimers();
     await nextTick();
   }
+
+  it.each(["main", "temporary"])("shows only model updates, including when expanded, in %s chat", async (surface) => {
+    const selection = { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "max" };
+    const messages = ref([{ messageId: "detail-1", role: "thinking", text: "Raw reasoning before the update." }]);
+    const working = ref(true);
+    const app = testRenderer().createApp({ render: () => surface === "main"
+      ? h(Vibe64ConversationLog, {
+        visible: true,
+        working: working.value,
+        turns: [{ turnId: "turn-1", metadata: { assistantSelection: selection }, messages: messages.value }]
+      })
+      : h(Vibe64EphemeralConversationMessages, {
+        working: working.value,
+        messages: messages.value.map((message) => ({ ...message, assistantSelection: selection }))
+      })
+    });
+    for (const name of ["VAlert", "VIcon", "VSelect", "VCard", "VCardText", "VCardActions", "VSkeletonLoader"]) {
+      app.component(name, passthroughComponent());
+    }
+    app.component("VBtn", passthroughComponent("button"));
+    app.provide(ssrContextKey, { modules: new Set() });
+    const container = createHostElement("root");
+    app.mount(container);
+    try {
+      await flushScrollWork();
+      expect(nodeText(container)).not.toContain("Raw reasoning");
+      expect(nodeText(container)).not.toContain("progress update");
+      messages.value.push(
+        { messageId: "comment-1", role: "commentary", text: "Checking the sources." },
+        { messageId: "comment-2", role: "commentary", text: "Comparing the latest figures." },
+        { messageId: "detail-2", role: "thinking", text: "Raw reasoning after the update." }
+      );
+      await flushScrollWork();
+      expect(nodeText(container)).toContain("Comparing the latest figures.");
+      expect(nodeText(container)).not.toContain("Checking the sources.");
+      expect(nodeText(container)).not.toContain("Raw reasoning");
+      expect(findNode(container, (node) => node.props?.["data-message-role"] === "commentary")).toBeNull();
+      const toggle = () => findNode(container, (node) => nodeHasClass(node, "assistant-progress__toggle"));
+      toggle().props.onClick();
+      await flushScrollWork();
+      expect(nodeText(container)).toContain("Checking the sources.");
+      expect(nodeText(container)).not.toContain("Raw reasoning");
+      toggle().props.onClick();
+      messages.value.push({ messageId: "answer", role: "assistant", text: "The final answer." });
+      working.value = false;
+      await flushScrollWork();
+      expect(nodeText(container)).not.toContain("Raw reasoning");
+      expect(nodeText(container)).not.toContain("Checking the sources.");
+      const answerRow = findNode(container, (node) => node.props?.["data-message-role"] === "assistant");
+      expect(answerRow).not.toBeNull();
+      expect(JSON.stringify(findNode(answerRow, (node) => Array.isArray(node.props?.blocks))?.props.blocks)).toContain("The final answer.");
+      toggle().props.onClick();
+      await flushScrollWork();
+      expect(nodeText(container)).toContain("Checking the sources.");
+      expect(nodeText(container)).not.toContain("Raw reasoning");
+    } finally {
+      app.unmount();
+    }
+  });
+
+  it.each(["main", "temporary"])("renders sending and unconfirmed delivery accurately in %s chat", async (surface) => {
+    const delivery = createAssistantMessageDelivery();
+    const response = Promise.withResolvers();
+    const sending = delivery.send({ message: "Hello" }, { messageId: "message-1", deliver: () => response.promise });
+    const route = ref({ messageId: "message-1", status: "sending", attemptedMessageId: "message-1", input: { message: "Hello" }, assignments: {} });
+    const messages = ref([]);
+    const checks = [];
+    const app = testRenderer().createApp({ render: () => surface === "main"
+      ? h(Vibe64ConversationLog, {
+        visible: true, turns: chatTurnsWithRouting(delivery.turns(messages.value), route.value),
+        onResendTurn: (id) => checks.push(id)
+      })
+      : h(Vibe64EphemeralConversationMessages, {
+        delivery, routingRequest: route.value, messages: messages.value,
+        onResend: (id) => checks.push(id)
+      })
+    });
+    for (const name of ["VAlert", "VIcon", "VCard", "VCardText", "VCardActions", "VSkeletonLoader"]) {
+      app.component(name, passthroughComponent());
+    }
+    app.component("VBtn", passthroughComponent("button"));
+    app.provide(ssrContextKey, { modules: new Set() });
+    const container = createHostElement("root");
+    app.mount(container);
+    await flushScrollWork();
+    expect(nodeText(container)).not.toContain("Failed:");
+    expect(nodeText(container)).toContain("Pending");
+    expect(delivery.find("message-1")).not.toBeNull();
+    route.value = { ...route.value, status: "uncertain", error: "Lost confirmation." };
+    response.resolve(false);
+    await sending;
+    await flushScrollWork();
+    expect(nodeText(container)).toContain("Delivery unconfirmed");
+    expect(nodeText(container)).not.toContain("Failed:");
+    for (const label of ["Retry", "Edit", "Cancel"]) {
+      expect(findNode(container, (node) => node.type === "button" && nodeText(node).trim() === label)).toBeNull();
+    }
+    const check = findNode(container, (node) => node.type === "button" && nodeText(node).trim() === "Check delivery");
+    expect(check).not.toBeNull();
+    check.props.onClick();
+    expect(checks).toEqual(["message-1"]);
+    messages.value = surface === "main"
+      ? [{ turnId: "saved-1", user: { messageId: "message-1", text: "Hello" } }]
+      : [{ id: "message-1", role: "user", text: "Hello" }];
+    await flushScrollWork();
+    expect(nodeText(container)).not.toContain("Delivery unconfirmed");
+    expect(nodeText(container)).not.toContain("Check delivery");
+    expect(nodeText(container)).not.toContain("Failed:");
+    app.unmount();
+  });
 
   it("keeps recorded reply names when the next recipient changes, with agent for old replies", async () => {
     const mounted = mountConversation({ turns: [

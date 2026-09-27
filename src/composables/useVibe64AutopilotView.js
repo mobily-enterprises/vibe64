@@ -1,3 +1,4 @@
+import { chatTurnsWithRouting, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingStatusIsPending, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, nextTick, ref, unref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -1270,10 +1271,8 @@ function useVibe64AutopilotView(props, emit, {
 
   function optimisticMessageById(messageId = "") {
     const request = routingRequest.value;
-    return request?.messageId === messageId && ["routing", "sending", "uncertain", "failed"].includes(request.status)
-      ? { id: messageId, text: request.input.displayMessage || request.input.message, payload: request.input,
-        status: request.status === "failed" || request.status === "uncertain" ? "failed" : "pending" }
-      : messageDelivery.find(messageId);
+    const local = messageDelivery.find(messageId);
+    return (request?.messageId === messageId && routedChatMessage(request, local)) || local;
   }
 
   async function cancelOptimisticMessage(messageId = "") {
@@ -1314,7 +1313,7 @@ function useVibe64AutopilotView(props, emit, {
 
   async function resendOptimisticMessage(messageId = "") {
     const message = optimisticMessageById(messageId);
-    if (!message || message.status !== "failed") {
+    if (!message || !["failed", "uncertain"].includes(message.status)) {
       return false;
     }
     const retry = composerRetrySubmission.value?.messageId === messageId
@@ -1773,17 +1772,11 @@ function useVibe64AutopilotView(props, emit, {
   const chatTurns = computed(() => {
     // Hydrate history before appending a restored unsent request to its tail.
     if (props.conversationLog?.initializing) return [];
-    const turns = messageDelivery.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []);
-    const request = routingRequest.value;
-    if (!request || !["routing", "sending", "uncertain", "failed"].includes(request.status)) return turns;
-    if (!turns.some((turn) => turn.user?.messageId === request.messageId || turn.optimistic?.id === request.messageId)) {
-      turns.push({ turnId: `routing:${request.messageId}`, user: { role: "user", text: request.input.displayMessage || request.input.message, messageId: request.messageId }, messages: [],
-        optimistic: { id: request.messageId, status: ["failed", "uncertain"].includes(request.status) ? "failed" : "pending", error: request.error || "" } });
-    }
-    return turns.map((turn) => turn.user?.messageId === request.messageId || turn.optimistic?.id === request.messageId
-      ? { ...turn, ...(turn.optimistic ? { optimistic: { ...turn.optimistic,
-        status: ["failed", "uncertain"].includes(request.status) ? "failed" : "pending", error: request.error || ""
-      } } : {}), system: { role: "system", text: routingStatusLabel.value }, routingRequest: request } : turn);
+    return chatTurnsWithRouting(
+      messageDelivery.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []),
+      routingRequest.value,
+      composerSending.value
+    );
   });
   const emptyConversationWelcome = computed(() => (
     sessionId.value &&

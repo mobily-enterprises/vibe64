@@ -1,3 +1,4 @@
+import { routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, hasInjectionContext, inject, onBeforeUnmount, ref, watch } from "vue";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
@@ -670,11 +671,8 @@ function useVibe64TemporaryAi({
 
   function pendingMessage(task, messageId) {
     const local = task?.delivery.find(messageId);
-    if (local) return local;
     const route = JSON.parse(task?.routingMetadata?.assistant_routing_request || "null");
-    return route?.messageId === messageId && ["failed", "uncertain", "routing", "sending"].includes(route.status)
-      ? { id: messageId, status: ["failed", "uncertain"].includes(route.status) ? "failed" : "pending",
-        text: route.input.displayMessage || route.input.message, payload: route.input } : null;
+    return (route?.messageId === messageId && routedChatMessage(route, local)) || local;
   }
 
   async function send(taskId = "", { retryMessageId = "", generatedMessage = null } = {}) {
@@ -686,7 +684,7 @@ function useVibe64TemporaryAi({
     const route = JSON.parse(task.routingMetadata?.assistant_routing_request || "null");
     if (!retryMessageId && assistantRoutingStatusIsPending(route?.status)) return false;
     const retry = retryMessageId ? pendingMessage(task, retryMessageId) : null;
-    if (retryMessageId && retry?.status !== "failed") return false;
+    if (retryMessageId && !["failed", "uncertain"].includes(retry?.status)) return false;
     const draftPayload = generatedMessage || chatMessagePayload(task.draft, task.attachments);
     const payload = retry?.payload || (draftPayload && {
       ...draftPayload,
@@ -810,6 +808,17 @@ function useVibe64TemporaryAi({
         });
         scheduleSave(taskId);
         return false;
+      }
+      const current = tasks.value.find((candidate) => candidate.id === taskId);
+      if (conversationTurnsFromMessages(current.messages).some((turn) => turn.user?.messageId === messageId)) {
+        task.delivery.reconcile(conversationTurnsFromMessages(current.messages));
+        const acceptedAttachmentIds = new Set(payload.attachmentIds || []);
+        updateTask(taskId, {
+          attachments: current.attachments.filter((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId)),
+          pendingMessageId: "", error: "", errorCode: ""
+        });
+        scheduleSave(taskId);
+        return true;
       }
       const stillWorking = task.busy && error?.conversationExpired !== true;
       updateTask(taskId, {

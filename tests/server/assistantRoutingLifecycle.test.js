@@ -402,6 +402,32 @@ test("uncertain native admission is inspected on retry without resending", async
   assert.equal((await f.service.send("session-1", request, f.context)).delivered, true);
   assert.equal(f.sends.length, 1);
   assert.equal(f.helperCalls(), 1);
+  assert.equal(f.state().error, undefined);
+});
+
+test("successful direct and automatic sends never publish uncertain delivery", async (t) => {
+  for (const mode of ["senior", "junior", "auto"]) {
+    const f = await fixture(t, { mode, review: true });
+    await f.service.send("session-1", request, f.context);
+    if (mode === "auto") await f.service.afterTurn("session-1", completion(), f.context);
+    const states = f.events.map((event) => event.payload.assistantRoutingRequest);
+    assert.equal(states.some((state) => state.status.includes("uncertain")), false);
+    const sending = states.find((state) => state.status === "sending" && state.attemptedMessageId);
+    assert.equal(sending.attemptedMessageId, request.messageId);
+    assert.match(assistantRoutingStatusLabel(sending), /awaiting receipt/);
+    assert.equal(f.helperCalls(), mode === "auto" ? 1 : 0);
+  }
+});
+
+test("a late saved receipt clears interrupted delivery without dispatching again", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  f.failAdmission();
+  await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
+  await f.context.runtime.store.writeConversationUserMessage("session-1", { messageId: request.messageId });
+  await f.restart().reconcile("session-1", f.context);
+  assert.equal(f.state().status, "sent");
+  assert.equal(f.state().error, undefined);
+  assert.equal(f.sends.length, 1);
 });
 
 test("steering does not classify, and an unfinished goal rejects Auto", async (t) => {
@@ -693,6 +719,7 @@ test("restart during request preparation exposes recovery without automatically 
   const f = await fixture(t, { mode: "auto", review: true });
   await f.service.send("session-1", request, f.context);
   const accepted = f.state();
+  f.context.runtime.store.conversationMessageIdExists = async () => false;
   for (const [status, attemptedMessageId, expected] of [
     ["routing", null, "failed"], ["sending", null, "failed"],
     ["sending", request.messageId, "uncertain"], ["review_sending", null, "review_pending"],

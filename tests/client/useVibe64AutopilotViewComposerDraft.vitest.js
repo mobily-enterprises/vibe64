@@ -260,6 +260,50 @@ describe("useVibe64AutopilotView direct chat", () => {
     }
   );
 
+  it.each(["http-first", "receipt-first"])("keeps a routed send pending through %s confirmation", async (order) => {
+    const delivery = deferredResult();
+    const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn(() => delivery.promise) });
+    view.composerDraft.value = "Send directly to Senior.";
+    const sent = view.submitComposerMessage();
+    const input = props.sendAgentMessage.mock.calls[0][0];
+    const route = { messageId: input.messageId, input, status: "sending", attemptedMessageId: input.messageId, assignments: {} };
+    props.session.metadata.assistant_routing_request = JSON.stringify(route);
+    await nextTick();
+    expect(view.chatTurns.value[0].optimistic.status).toBe("pending");
+    expect(view.chatTurns.value[0].system.text).toContain("awaiting receipt");
+    if (order === "http-first") {
+      delivery.resolve(true);
+      expect(await sent).toBe(true);
+    }
+    props.conversationLog.turns = [{ turnId: "turn-1", user: { messageId: input.messageId, text: input.message } }];
+    await nextTick();
+    if (order === "receipt-first") {
+      expect(await sent).toBe(true);
+      delivery.reject(new Error("Late HTTP failure."));
+    }
+    await nextTick();
+    expect(view.chatTurns.value).toHaveLength(1);
+    expect(view.chatTurns.value[0].optimistic).toBeUndefined();
+  });
+
+  it("checks an unconfirmed request with its original ID and rejects Edit and Cancel", async () => {
+    const { view, props } = await createViewWithProps();
+    props.session.metadata.assistant_routing_request = JSON.stringify({
+      messageId: "interrupted-1", status: "uncertain", input: { message: "Keep this exact prompt." },
+      error: "Delivery was interrupted.", assignments: {}
+    });
+    view.composerDraft.value = "A newer draft.";
+    expect(view.chatTurns.value[0].optimistic.status).toBe("uncertain");
+    expect(await view.editOptimisticMessage("interrupted-1")).toBe(false);
+    expect(await view.cancelOptimisticMessage("interrupted-1")).toBe(false);
+    expect(props.interruptAgentTurn).not.toHaveBeenCalled();
+    expect(await view.resendOptimisticMessage("interrupted-1")).toBe(true);
+    expect(props.sendAgentMessage).toHaveBeenCalledWith(expect.objectContaining({
+      messageId: "interrupted-1", message: "Keep this exact prompt."
+    }));
+    expect(view.composerDraft.value).toBe("A newer draft.");
+  });
+
   it("lets explicit Cancel discard a failed routing bubble without restoring its draft", async () => {
     const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn().mockRejectedValue(new Error("Router failed")) });
     view.composerDraft.value = "Discard this.";

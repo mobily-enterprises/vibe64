@@ -495,7 +495,8 @@ function createCodexSessionAgentProvider({
     async capabilities(context = {}, input = {}) {
       const connected = (await connectionStatus(context)) !== false;
       const configuredOnly = normalizeText(input.configuredOnly).toLowerCase() === "true";
-      const catalog = connected && !configuredOnly && (!input.modelProviderId || input.modelProviderId === "openai")
+      // A provider filter must not change the catalogue revision used by Apply.
+      const catalog = connected && !configuredOnly
         ? await controller.modelCatalog({ signal: context.signal })
         : { data: connected ? [{
             model: VIBE64_CODEX_DEFAULT_MODEL,

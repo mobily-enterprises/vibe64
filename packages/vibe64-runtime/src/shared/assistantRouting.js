@@ -340,8 +340,8 @@ function assistantRoutingStatusLabel(request) {
   const taskLabel = request.mode === "custom" && request.task === "deslop" ? "Deslop" : assistantModeLabel(request.task || request.resolvedMode);
   return ({
     routing: `Routing with Router${request.assignments?.router ? ` · ${vibe64AssistantSelectionLabel(request.assignments.router)}` : ""}…`,
-    sending: `Preparing ${taskLabel} · ${recipient}…`,
-    uncertain: `Sending to ${recipient} · awaiting receipt`,
+    sending: request.attemptedMessageId ? `Sending to ${recipient} · awaiting receipt` : `Preparing ${taskLabel} · ${recipient}…`,
+    uncertain: `Delivery unconfirmed · ${recipient}`,
     sent: `${request.mode === "auto" ? "Auto → " : ""}${taskLabel} · ${recipient}`,
     review_pending: `Review pending · ${recipient}`,
     review_sending: `Preparing review · ${recipient}…`,

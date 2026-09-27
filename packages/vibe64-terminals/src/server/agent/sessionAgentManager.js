@@ -711,7 +711,10 @@ function createSessionAgentManager({
         if (engineId !== "opencode") {
           const providerIds = new Set(selectionsForEngine.map((selection) => selection.modelProviderId));
           catalogs.push(await readCatalog(provider, providerIds.size === 1
-            ? { modelProviderId: selectionsForEngine[0].modelProviderId } : {}));
+            ? { modelProviderId: selectionsForEngine[0].modelProviderId,
+                // Curated Codex routes have static models; dispatch does not need GPT discovery.
+                ...(engineId === "codex" && !providerIds.has("openai") ? { configuredOnly: "true" } : {}) }
+            : {}));
           continue;
         }
         // OpenCode's catalogue is paginated. Ask for each exact saved model,

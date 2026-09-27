@@ -10389,6 +10389,128 @@ test("Codex streams answer chunks before persistence, replaces the live answer a
   });
 });
 
+test("Codex exposes reasoning text live and after reload without duplicating summaries or completed items", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store, runtime }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "raw-reasoning" });
+    const { threadId, turnId } = captures.provider;
+    const params = { threadId, turnId, itemId: "raw-thought", contentIndex: 0 };
+    const thoughts = async () => (await store.readConversationLog(sessionId)).flatMap((row) => row.thinking || []).map(({ text }) => text);
+    emitCodexNotification(captures.subscribers, { method: "item/reasoning/summaryPartAdded", params: {
+      ...params, summaryIndex: 0
+    } });
+    emitCodexNotification(captures.subscribers, { method: "item/reasoning/textDelta", params: { ...params, delta: "First " } });
+    await waitForSessionValue(thoughts, (rows) => rows.includes("First"), "first raw reasoning fragment");
+    emitCodexNotification(captures.subscribers, { method: "item/reasoning/textDelta", params: { ...params, delta: "step." } });
+    await waitForSessionValue(thoughts, (rows) => rows.includes("First step."), "continued raw reasoning");
+    emitCodexNotification(captures.subscribers, { method: "item/reasoning/textDelta", params: {
+      ...params, contentIndex: 1, delta: "Second step."
+    } });
+    await waitForSessionValue(thoughts, (rows) => rows.length === 2, "second reasoning content part");
+    emitCodexNotification(captures.subscribers, reasoningSummaryDelta({
+      threadId, turnId, itemId: params.itemId, text: "Duplicate summary"
+    }));
+    emitCodexNotification(captures.subscribers, { method: "item/completed", params: {
+      threadId, turnId, item: { id: params.itemId, type: "reasoning", summary: [], content: ["First step.", "Second step."] }
+    } });
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      threadId, turnId, itemId: "progress", phase: "commentary", text: "Checking the sources."
+    }));
+    await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (rows) => rows.some((row) => row.commentary?.some(({ text }) => text === "Checking the sources.")), "separate commentary");
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      threadId, turnId, itemId: "glm-progress", phase: null, text: "Comparing the latest figures."
+    }));
+    await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (rows) => rows.some((row) => row.commentary?.some(({ text }) => text === "Comparing the latest figures.")), "GLM commentary without a phase");
+    emitCodexNotification(captures.subscribers, { method: "item/completed", params: {
+      threadId, turnId, item: { id: "completed-thought", type: "reasoning", summary: [], content: ["Final check."] }
+    } });
+    await waitForSessionValue(thoughts, (rows) => rows.length === 3, "completed-only reasoning");
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({
+      threadId, turnId, itemId: "answer", phase: "final_answer", text: "Done."
+    }));
+    await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (rows) => rows.some((row) => row.assistant?.text === "Done."), "final answer beside reasoning");
+    assert.deepEqual(await thoughts(), ["First step.", "Second step.", "Final check."]);
+    const reopened = createVibe64SessionStore({ projectContextRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot });
+    assert.deepEqual((await reopened.readConversationLog(sessionId)).flatMap((row) => row.thinking || []).map(({ text }) => text), await thoughts());
+  });
+});
+
+test("phase-less Codex updates stay progress when the saved turn supplies its final answer", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "phase-less-work" });
+    const { threadId, turnId } = captures.provider;
+    const progress = { type: "agentMessage", id: "progress", text: "Checking Japanese sources." };
+    emitCodexNotification(captures.subscribers, { method: "item/completed", params: { threadId, turnId, item: progress } });
+    await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (rows) => rows.some((row) => row.commentary?.some(({ text }) => text === progress.text)), "phase-less live update");
+    captures.threadSnapshotTurns = [{ id: turnId, status: "completed", items: [
+      progress,
+      { type: "commandExecution", id: "research" },
+      { type: "reasoning", id: "reasoning", content: ["Raw details."] },
+      { type: "agentMessage", id: "answer", text: "The researched answer." }
+    ] }];
+    captures.provider.status = "idle";
+    emitCodexNotification(captures.subscribers, turnCompleted({ threadId, turnId }));
+    const rows = await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (rows) => rows.some((row) => row.assistant?.text === "The researched answer."), "phase-less final answer");
+    assert.deepEqual(rows.flatMap((row) => row.commentary || []).map(({ text }) => text), [progress.text]);
+    assert.deepEqual(rows.filter((row) => row.assistant).map((row) => row.assistant.text), ["The researched answer."]);
+  });
+});
+
+test("Codex keeps reasoning summaries when both channels are exposed and ignores opaque reasoning", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "both-reasoning-channels" });
+    const { threadId, turnId } = captures.provider;
+    emitCodexNotification(captures.subscribers, reasoningSummaryDelta({ threadId, turnId, itemId: "thought", text: "Readable summary" }));
+    emitCodexNotification(captures.subscribers, { method: "item/reasoning/textDelta", params: {
+      threadId, turnId, itemId: "thought", contentIndex: 0, delta: "Duplicate raw text"
+    } });
+    for (const item of [
+      { id: "completed-summary", type: "reasoning", summary: ["Completed summary"], content: ["Duplicate completed content"] },
+      { id: "opaque", type: "reasoning", summary: [], content: [], encryptedContent: "opaque-provider-state" }
+    ]) emitCodexNotification(captures.subscribers, { method: "item/completed", params: { threadId, turnId, item } });
+    emitCodexNotification(captures.subscribers, assistantItemCompleted({ threadId, turnId, phase: "final_answer", text: "Done." }));
+    const rows = await waitForSessionValue(() => store.readConversationLog(sessionId),
+      (rows) => rows.some((row) => row.assistant?.text === "Done."), "reasoning completion");
+    assert.deepEqual(rows.flatMap((row) => row.thinking || []).map(({ text }) => text), ["Readable summary", "Completed summary"]);
+    assert.doesNotMatch(JSON.stringify(rows), /Duplicate|opaque-provider-state/);
+  });
+});
+
+test("durable Codex history reads exposed reasoning content and prefers available summaries", async () => {
+  await withConversationController(async ({ captures, controller, projectService }) => {
+    captures.persistentHistory = [{ id: "saved-turn", status: "completed", items: [
+      { id: "raw", type: "reasoning", summary: [], content: ["Exposed reasoning"] },
+      { id: "summary", type: "reasoning", summary: ["Readable summary"], content: ["Duplicate content"] },
+      { id: "opaque", type: "reasoning", summary: [], content: [], encryptedContent: "opaque-state" },
+      { id: "commentary", type: "agentMessage", phase: "commentary", text: "Working." },
+      { id: "glm-commentary", type: "agentMessage", text: "Checking sources." },
+      { id: "command", type: "commandExecution", command: "check" },
+      { id: "answer", type: "agentMessage", text: "Done." }
+    ] }];
+    const { conversationId } = await controller.createConversation("session-1", { persistent: true });
+    const result = await controller.readConversation("session-1", { conversationId, persistent: true });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.deepEqual(result.messages.map(({ role, text }) => ({ role, text })), [
+      { role: "thinking", text: "Exposed reasoning" },
+      { role: "thinking", text: "Readable summary" },
+      { role: "commentary", text: "Working." },
+      { role: "commentary", text: "Checking sources." },
+      { role: "assistant", text: "Done." }
+    ]);
+    assert.equal(result.message, "Done.", "progress cannot be repeated in the final reply");
+    await controller.closeAllForSession("session-1");
+    const restarted = createRestartedController({ captures, projectService });
+    try {
+      const restored = await restarted.readConversation("session-1", { conversationId, persistent: true });
+      assert.deepEqual(restored.messages, result.messages);
+    } finally { await restarted.closeAllForSession("session-1"); }
+  });
+});
+
 test("slow stream delivery combines waiting fragments without crossing reasoning or completion", async () => {
   await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
     await controller.sendMessage(sessionId, { message: "Work", messageId: "slow-stream" });

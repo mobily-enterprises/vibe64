@@ -96,6 +96,39 @@ describe("useVibe64TemporaryAi", () => {
     vi.useFakeTimers();
   });
 
+  it("checks a restored unconfirmed request without changing its ID or the newer draft", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    const route = { messageId: "interrupted-1", status: "uncertain", input: { message: "Original prompt.", displayMessage: "Original prompt." } };
+    Object.assign(temporary.activeTask.value, {
+      conversationId: "conversation-1", draft: "Newer draft.", routingMetadata: { assistant_routing_request: JSON.stringify(route) }
+    });
+    expect(await temporary.cancelMessage(task.id, route.messageId)).toBe(false);
+    expect(await temporary.editMessage(task.id, route.messageId)).toBe(false);
+    mocks.responses.push({ ok: true, status: "completed", messages: [
+      { id: route.messageId, role: "user", text: "Original prompt." }
+    ], assistantRoutingRequest: { ...route, status: "sent" } });
+    expect(await temporary.send(task.id, { retryMessageId: route.messageId })).toBe(true);
+    expect(mocks.requests.find(([, options]) => options.method === "POST")[1].body)
+      .toMatchObject({ messageId: route.messageId, message: "Original prompt." });
+    expect(temporary.activeTask.value.draft).toBe("Newer draft.");
+    expect(temporary.activeTask.value.delivery.state.messages).toHaveLength(0);
+  });
+
+  it("ignores a late HTTP failure after the exact temporary message receipt arrives", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    mocks.responses.push({ ok: true, conversationId: "conversation-1" }, async (_url, options) => {
+      Object.assign(temporary.activeTask.value, {
+        messages: [{ id: options.body.messageId, role: "user", text: options.body.message }],
+        status: "inProgress", busy: true
+      });
+      temporary.updateDraft(task.id, "Keep my new draft.");
+      throw new Error("Late HTTP failure.");
+    });
+    expect(await temporary.send(task.id)).toBe(true);
+    expect(temporary.activeTask.value).toMatchObject({ draft: "Keep my new draft.", error: "", pendingMessageId: "", status: "inProgress" });
+    expect(temporary.activeTask.value.delivery.state.messages).toHaveLength(0);
+  });
+
   it("flags unseen replies while working and clears them only when that conversation is viewed", async () => {
     const { task, temporary } = await runningTemporaryAi();
     temporary.closeWorkspace();

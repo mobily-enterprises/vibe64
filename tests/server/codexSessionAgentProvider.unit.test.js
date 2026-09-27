@@ -63,6 +63,36 @@ test("Codex discovery failures stay visible and disconnected accounts do not dis
   assert.equal(disconnected.modelProviders[0].connected, false);
 });
 
+test("Codex custom selections keep the picker revision across provider-specific validation", async () => {
+  let model = "gpt-6-astra";
+  let connected = true;
+  const provider = createCodexSessionAgentProvider({
+    controller: { modelCatalog: async () => ({ data: [catalogModel({ model })] }) },
+    listConnections: async () => ["deepseek", "zai-coding-plan"].map((id) => ({ id, connected }))
+  });
+  const catalog = await provider.capabilities({}, { connectedOnly: "true", limit: "200" });
+  for (const [modelProviderId, modelId] of [["deepseek", "deepseek-flash"], ["zai-coding-plan", "glm-5.3"]]) {
+    const selected = resolveVibe64AssistantSelection(catalog, {
+      modelProviderId, modelId, variantId: "max", catalogRevision: catalog.revision
+    });
+    const filtered = await provider.capabilities({}, { modelProviderId });
+    assert.equal(filtered.revision, catalog.revision);
+    assert.deepEqual(resolveVibe64AssistantSelection(await provider.capabilities({}, selected), selected), selected);
+
+    model = "new-gpt-model";
+    const changed = await provider.capabilities({}, selected);
+    assert.throws(() => resolveVibe64AssistantSelection(changed, selected), {
+      code: "vibe64_assistant_catalog_stale"
+    });
+    model = "gpt-6-astra";
+  }
+  connected = false;
+  const changed = await provider.capabilities({});
+  assert.throws(() => resolveVibe64AssistantSelection(changed, {
+    catalogRevision: catalog.revision, modelProviderId: "zai-coding-plan", modelId: "glm-5.3"
+  }), { code: "vibe64_assistant_catalog_stale" });
+});
+
 test("Codex adapter forwards trusted renewal operations without selecting a helper profile", async () => {
   const calls = [];
   const runtime = { stateRoot: "/runtime/project" };

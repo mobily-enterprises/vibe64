@@ -48,7 +48,8 @@ A fully cancelled request no longer displays its earlier error above the compose
 including after reload. Pending helper cleanup and unconfirmed delivery retain
 their notices. The saved request remains available as operational evidence.
 A provider abort after successful helper cleanup is reported as cancellation,
-while failed cleanup and uncertain native delivery keep their failure controls.
+while failed cleanup retains its recovery controls and uncertain native delivery
+offers Check delivery.
 Existing assistant status and message-delivery diagnostics include the requesting
 user's authenticated username when supplied by the host. Request context takes
 precedence over operation options; background work without an actor records
@@ -72,6 +73,16 @@ Vibe64 supplies the existing active execution state as `conversation.working`;
 the renderer previews only trailing progress while working. No provider-turn
 association or history rewrite is required for grouping, including goal
 continuation and loading older history.
+For DeepSeek and GLM under Codex or Claude, the presentation adapter maps recorded
+commentary to thinking and excludes raw thinking from the chat display entirely.
+Only the latest commentary is previewed while working; saved roles and final
+answers are unchanged. Unknown model attribution retains the ordinary presentation.
+Short Codex agent messages without a phase are saved as commentary too. In native
+history without phases, earlier updates separated by tools or reasoning are not
+final replies; only the trailing response is final after the turn stops working.
+Codex consumes both summary and exposed-content reasoning events, including
+completed-only items, and keeps one readable channel per native item. Temporary
+native-history reads use summaries when present, otherwise exposed content.
 
 Main chat shows “Compacting conversation context…” for native compaction in all
 three orchestrators: Codex's tracked compaction item, OpenCode's current unfinished
@@ -185,6 +196,10 @@ against the normal attachment limit; additions and removals keep numbered text
 references consistent. A confirmed send clears only its accepted receipts.
 
 ## Sources
+
+- `src/lib/vibe64ThinkingPresentation.js`
+- `src/lib/vibe64ChatDelivery.js`
+- `src/components/studio/vibe64-session/Vibe64ConversationStatus.vue`
 
 - `packages/vibe64-genesis/src/server/hostContextRegistry.js`
 
@@ -509,6 +524,16 @@ the same owner to its own transcript and retained native bindings. Old provider-
 bindings are not converted during routing. Failed native resumes retain their
 saved identity and expose recovery actions; they never start a replacement thread
 or send an automatic recovery prompt.
+
+Live dispatch remains `sending` (or its review/planning equivalent) while its
+attempted message ID and native thread are persisted before submission. An
+interrupted attempt becomes `uncertain`; ordinary pending delivery never renders
+as failure. The shared Main/temporary adapter presents unconfirmed delivery with
+Check delivery and hides Edit/Cancel until the outcome is known. Checking reuses
+the original message ID and the existing native receipt lookup, never a new send.
+A canonical user-message receipt or accepted routing state supersedes a stale
+local HTTP error. Recovery also settles saved receipts and clears routing errors
+so confirmed delivery cannot keep the composer blocked.
 
 One durable request record owns preparation, admission uncertainty and an optional
 review or return-to-planning continuation. Stop cancels preparation and suppresses its late result.
@@ -1500,6 +1525,9 @@ is running, discovery starts one temporarily and verifies its shutdown before
 returning. Configured-only new-session choices retain the configured default
 without model discovery. Selected model and reasoning ids survive persistence
 and turn mapping unchanged; selection validation uses the live catalogue.
+Provider-filtered discovery and validation retain the full catalogue identity.
+Curated-only dispatch explicitly uses the configured model view so it does not
+depend on GPT discovery. Genuine catalogue changes still reject stale selections.
 
 Managed OpenCode requests allow up to 128K output tokens only when the selected
 model advertises that capacity. A smaller advertised output limit remains
