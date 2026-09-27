@@ -1,5 +1,7 @@
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
+import { ASSISTANT_MODES } from "@local/vibe64-runtime/shared/assistantRouting";
+import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 
 import {
   SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS
@@ -148,7 +150,7 @@ const agentMessageFields = {
 };
 
 const agentMessageInputValidator = patchSchema(agentMessageFields);
-const agentMessageActionInputValidator = patchSchema({
+const agentMessageActionInputValidator = requiredInputSchema({
   ...agentMessageFields,
   ...optionalUser,
   sessionId: {
@@ -163,6 +165,7 @@ const assistantAccessActionInputValidator = patchSchema({
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
@@ -187,7 +190,7 @@ const conversationRewindActionInputValidator = requiredInputSchema({
 });
 
 const agentTurnInterruptInputValidator = patchSchema(agentTurnInterruptFields);
-const agentTurnInterruptActionInputValidator = patchSchema({
+const agentTurnInterruptActionInputValidator = requiredInputSchema({
   ...agentTurnInterruptFields,
   ...optionalUser,
   sessionId: {
@@ -350,28 +353,33 @@ const assistantModelAccessUpdateActionInputValidator = patchSchema({
   ...optionalUser
 });
 
+const assistantSelectionField = { type: "object", required: false, schema: createSchema({
+  engineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
+  ...Object.fromEntries(["schema", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision"]
+    .map((key) => [key, { type: "string", required: false }]))
+}) };
+const assistantRoutingField = { type: "object", required: false, schema: createSchema({
+  mode: { type: "string", enum: ASSISTANT_MODES.map(({ id }) => id), required: true },
+  review: { type: "boolean", required: false },
+  workflowEngineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
+  override: assistantSelectionField
+}) };
+
 const assistantSelectionUpdateInputValidator = patchSchema({
-  assistantRouting: { type: "object", additionalProperties: true, required: false },
-  assistantSelection: {
-    type: "object",
-    additionalProperties: true,
-    required: false
-  },
+  assistantRouting: assistantRoutingField,
+  assistantSelection: assistantSelectionField,
   ...optionalOrigin
 });
 
 const assistantSelectionUpdateActionInputValidator = patchSchema({
-  assistantRouting: { type: "object", additionalProperties: true, required: false },
-  assistantSelection: {
-    type: "object",
-    additionalProperties: true,
-    required: false
-  },
+  assistantRouting: assistantRoutingField,
+  assistantSelection: assistantSelectionField,
   ...optionalOrigin,
   ...optionalUser,
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
@@ -391,6 +399,7 @@ const sessionIdInputValidator = patchSchema({
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
@@ -438,6 +447,7 @@ const sessionRenewalInspectActionInputValidator = requiredInputSchema({
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
@@ -448,6 +458,7 @@ const sessionRenewalDraftRequestActionInputValidator = requiredInputSchema({
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
@@ -458,6 +469,7 @@ const sessionRenewalDraftUpdateActionInputValidator = requiredInputSchema({
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
@@ -468,6 +480,7 @@ const sessionRenewalDraftGuardActionInputValidator = requiredInputSchema({
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
@@ -480,6 +493,7 @@ const sessionRenewalConfirmationActionInputValidator = requiredInputSchema({
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
@@ -490,6 +504,7 @@ const sessionRenewalRetryActionInputValidator = requiredInputSchema({
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
@@ -532,7 +547,7 @@ const sessionChangeDiffInputValidator = patchSchema({
   }
 });
 
-const sessionConversationLogInputValidator = patchSchema({
+const sessionConversationLogInputValidator = requiredInputSchema({
   ...optionalUser,
   beforeTurnId: {
     type: "string",

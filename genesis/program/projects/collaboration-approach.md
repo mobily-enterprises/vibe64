@@ -43,7 +43,9 @@ uses the existing settings error and Retry view. Save failures use the shared
 action feedback, without also opening an unexpected-UI-error dialog.
 
 Only the project owner can change collaboration through hosted Project
-settings. Anyone independently authorized to edit the source can still change
+settings. The action boundary enforces this for HTTP and direct callers, using
+the authenticated actor rather than an input field. Prompt-suggestion changes
+use the same owner check. Anyone independently authorized to edit the source can still change
 the Genesis file directly. Genesis validates the complete declaration and
 expands it only in stable session context. The change affects conversations
 when they next establish or refresh that context; it does not alter past

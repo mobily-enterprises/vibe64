@@ -300,9 +300,9 @@ test("typing presence trusts the authenticated request user and never accepts a 
   assert.deepEqual(validated.errors, {});
   assert.equal(Object.hasOwn(validated.validatedObject, "draft"), false);
 
-  const unavailable = await action.execute(validated.validatedObject, {
+  const unavailable = await runWithProjectRequestContext({ slug: "beepollen" }, () => action.execute(validated.validatedObject, {
     requestMeta: { request: {} }
-  });
+  }));
   assert.deepEqual(unavailable, { ok: true, status: "unavailable" });
   assert.equal(updates.length, 0);
 
@@ -3411,7 +3411,7 @@ test("workspace preparation starts required or newly configured recipes and retr
 });
 
 
-test("conversation rewind forwards the authenticated actor without preparing the workspace", async () => {
+test("conversation rewind forwards the authenticated actor without preparing the workspace", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const session = { sessionId: "session-1" };
   const calls = [];
   const events = [];
@@ -3436,15 +3436,15 @@ test("conversation rewind forwards the authenticated actor without preparing the
   const result = await action.execute({
     sessionId: session.sessionId, turnId: "000002", originId: "browser-1",
     vibe64User: { username: "owner" }, checkpoint: { threadId: "untrusted" }
-  }, { requestMeta: { request: { vibe64User: actor } } });
+  }, { requestMeta: { request: { params: { slug: "unit_project" }, vibe64User: actor } } });
   assert.deepEqual(result, { ok: true, text: "Last prompt" });
   assert.deepEqual(calls, [[session.sessionId, {
     turnId: "000002", originId: "browser-1", vibe64User: actor
   }, { runtime, vibe64User: actor }]]);
   assert.deepEqual(events, [[session.sessionId, { originId: "browser-1", reason: "conversation-rewound", session }]]);
-});
+}));
 
-test("integration continuation action forwards only request identity and authenticated actor", async () => {
+test("integration continuation action forwards only request identity and authenticated actor", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const runtime = {};
   const calls = [];
   const events = [];
@@ -3461,7 +3461,7 @@ test("integration continuation action forwards only request identity and authent
   const result = await action.execute({
     sessionId: "session-1", turnId: "000001", requestId: "a".repeat(64),
     vibe64User: { username: "owner" }, message: "Untrusted text", threadId: "untrusted-thread"
-  }, { requestMeta: { request: { vibe64User: actor } } });
+  }, { requestMeta: { request: { params: { slug: "unit_project" }, vibe64User: actor } } });
   assert.equal(result.ok, true);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].slice(0, 2), ["session-1", { turnId: "000001", requestId: "a".repeat(64) }]);
@@ -3469,9 +3469,9 @@ test("integration continuation action forwards only request identity and authent
   assert.equal(calls[0][2].vibe64User, actor);
   assert.equal(typeof calls[0][2].readIntegrationConfiguration, "function");
   assert.deepEqual(events, [["session-1", { reason: "integration-setup-completed", session: null }]]);
-});
+}));
 
-test("integration setup skip needs no AI access and still validates the saved request", async () => {
+test("integration setup skip needs no AI access and still validates the saved request", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createVibe64SessionStore({ projectContextRoot: targetRoot, projectRuntimeRoot: projectRuntimeRoot(targetRoot) });
     await store.createSession({ runtimeKind: "genesis", sessionId: "skip-request" });
@@ -3489,7 +3489,7 @@ test("integration setup skip needs no AI access and still validates the saved re
     const action = createSessionActions({ sessions }).find((entry) => entry.id === ACTION_SKIP_INTEGRATION_SETUP);
     const input = { sessionId: "skip-request", turnId: turn.turnId, requestId: turn.integrationSetup.requestId,
       vibe64User: { username: "owner" } };
-    const context = { requestMeta: { request: { vibe64User: { username: "member", role: "member" } } } };
+    const context = { requestMeta: { request: { params: { slug: "unit_project" }, vibe64User: { username: "member", role: "member" } } } };
     const denied = await action.execute({ ...input, requestId: "f".repeat(64) }, context);
     assert.equal(denied.ok, false);
     assert.equal(denied.code, "vibe64_integration_setup_request_changed");
@@ -3502,7 +3502,7 @@ test("integration setup skip needs no AI access and still validates the saved re
     assert.equal(events[0][1].reason, "integration-setup-skipped");
     assert.equal((await store.readConversationLog("skip-request")).length, 1);
   });
-});
+}));
 
 test("PR session creation binds only the server-resolved source and exact head commit", async () => {
   await withTemporaryRoot(async (targetRoot) => {

@@ -993,6 +993,38 @@ test("Claude shared API access requires native verification and reports connecti
   assert.equal(f.processes.length, 0, "access facts and external catalogues do not start an inference process");
 });
 
+test("retained scoped Claude conversations survive restart without touching a development session", async (t) => {
+  const f = await fixture(t);
+  const original = structuredClone(f.context.session);
+  const context = { assistantSelection: f.context.assistantSelection, sessionId: "colleague_test",
+    assistantScope: { id: "colleague_test", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "colleague-runtime"),
+      stableContext: "Operate only the supplied product actions." } };
+  const { conversationId } = await f.provider.createConversation(context, { persistent: true });
+  const stopped = [];
+  const restored = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    stopExecution: async (id) => { stopped.push(id); return { scopeEmpty: true }; } });
+  assert.equal((await restored.readConversation(context, { conversationId })).status, "completed");
+  await restored.startConversationTurn(context, { conversationId, persistent: true, message: "Hello", messageId: "colleague-1" });
+  await writeHistory(f, conversationId, [
+    { type: "user", uuid: nativeMessageId("colleague-1"), message: { content: "Hello" } },
+    { type: "assistant", uuid: "reply", message: { content: [{ type: "text", text: "Welcome back" }] } }
+  ], f.root);
+  const restarted = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    stopExecution: async (id) => { stopped.push(id); return { scopeEmpty: true }; } });
+  const read = await restarted.readConversation(context, { conversationId, messageId: "colleague-1" });
+  assert.equal(read.text, "Welcome back");
+  assert.equal(read.admitted, true);
+  assert.deepEqual(stopped, ["test-0"]);
+  assert.equal(f.processes.length, 1, "Reading after restart does not resend the request");
+  await assert.rejects(restarted.readConversation({ ...context, sessionId: "other_user", assistantScope: {
+    ...context.assistantScope, id: "other_user"
+  } }, { conversationId }), /unavailable/);
+  await restarted.deleteConversation(context, { conversationId });
+  await assert.rejects(restarted.readConversation(context, { conversationId }), /unavailable/);
+  assert.deepEqual(f.context.session, original);
+  await restored.closeProject();
+});
+
 test("scoped Claude helpers use the resolved model and can stop while main chat continues", async (t) => {
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "Main task", messageId: "main-task" });

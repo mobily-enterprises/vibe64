@@ -1157,18 +1157,15 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
       }),
       TypeError
     );
-    await assert.rejects(
-      () => terminalService.closeRenewalSuccessorSessionTerminals(hiddenSuccessor, {
-        renewalId,
-        runtime
-      }),
-      { code: "vibe64_session_renewal_process_exit_unverified" }
-    );
+    await terminalService.closeRenewalSuccessorSessionTerminals(hiddenSuccessor, {
+      renewalId,
+      runtime
+    });
 
     assert.equal(generated, cancelled);
     assert.equal(merged.code, "vibe64_session_renewal_source_invalid");
     assert.equal(seeded, cancelled);
-    assert.equal(normalReads, 4, "session closure also discovers retained suggestion helpers");
+    assert.equal(normalReads, 3, "renewal closure retains its supplied hidden session context");
     assert.equal(renewalReads, 1);
     assert.equal(lockDepth, 0);
   });
@@ -1687,7 +1684,11 @@ async function withConversationController(operation, {
         projectContextRoot,
         store: {
           async readBackgroundTask() { return null; },
+          async readSessionForRenewal() { return { ...session, backgroundTasks: [] }; },
           async withReadableSessionPaths(sessionId, operation) {
+            return operation({ artifactsRoot: path.join(projectRuntimeRoot, "sessions", sessionId, "artifacts") });
+          },
+          async withReadableSessionPathsForRenewal(sessionId, operation) {
             return operation({ artifactsRoot: path.join(projectRuntimeRoot, "sessions", sessionId, "artifacts") });
           },
           async writeBackgroundTaskEvent(sessionId, taskId, entry) {
@@ -2654,6 +2655,54 @@ test("renewed-session seeding starts a fresh hidden turn and requires its exact 
     assert.equal(continued.metadata.agent_settings_model, assistantSelection.modelId);
     assert.equal(continued.metadata.agent_settings_provider, "codex");
     assert.equal(continued.metadata.agent_settings_thinking, assistantSelection.variantId);
+  });
+});
+
+test("renewal provider controls read only their exact hidden successor and retain observation barriers", async () => {
+  await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
+    const renewalId = "renewal-hidden-provider";
+    await store.writeMetadataValue(sessionId, "renewal_id", renewalId);
+    await store.writeMetadataValue(sessionId, "renewed_from", "predecessor");
+    const statusPath = store.paths(sessionId).statusPath;
+    await writeFile(statusPath, `${VIBE64_SESSION_STATUS.RENEWAL_PENDING}\n`);
+    runtime.getSessionForRenewal = (id) => store.readSessionForRenewal(id);
+    const handover = renewalHandoverText();
+    const handoverHash = sessionRenewalHandoverHash(handover);
+    const acknowledgement = JSON.stringify({ handoverHash, message: "Ready.",
+      schemaVersion: "vibe64.session-renewal-acknowledgement.v1", sourceCommit: RENEWAL_SOURCE.commit, status: "ready" });
+    captures.finalText = acknowledgement;
+    captures.onSendTurn = ({ provider, turnId }) => completeAgentMessageHarnessTurn(captures, provider, turnId, acknowledgement);
+    const input = { handover, handoverHash, operationKey: "renewal:hidden-controls", source: RENEWAL_SOURCE };
+    try {
+      await assert.rejects(runtime.getSession(sessionId), { code: "vibe64_session_renewal_private" });
+      const seeded = await controller.seedSessionRenewalHandover(sessionId, input, {
+        runtime, session: await store.readSessionForRenewal(sessionId)
+      });
+      assert.equal(seeded.ok, true, JSON.stringify(seeded));
+      const options = captures.providerOptions.at(-1);
+      assert.equal(options.renewalId, renewalId);
+      assert.equal(await options.prepareAuth("openai"), "native");
+      await options.beforeResumeThread(seeded.threadId);
+      const params = { cwd: (await store.readSessionForRenewal(sessionId)).metadata.source_path };
+      await options.prepareThreadResumeParams(seeded.threadId, params, { runtime: { reused: false }, processChanged: true });
+      const retried = await controller.seedSessionRenewalHandover(sessionId, input, {
+        runtime, session: await store.readSessionForRenewal(sessionId)
+      });
+      assert.equal(retried.ok, true, JSON.stringify(retried));
+      assert.equal(retried.reconciled, true);
+      assert.equal(captures.turns.length, 1);
+      const runPath = path.join(store.paths(sessionId).agentRunsRoot, "codex_app_server.json");
+      await writeFile(runPath, JSON.stringify({ id: "codex_app_server", providerThreadId: seeded.threadId,
+        providerStatus: "observation_lost", error: "A verified stop must be retained." }));
+      await assert.rejects(options.beforeResumeThread(seeded.threadId), { code: "vibe64_codex_observation_lost" });
+      await store.writeMetadataValueForRenewal(sessionId, "renewal_id", "different-renewal");
+      await assert.rejects(options.prepareAuth("openai"), { code: "vibe64_session_renewal_private" });
+      await assert.rejects(options.beforeResumeThread(seeded.threadId), { code: "vibe64_session_renewal_private" });
+      await assert.rejects(runtime.getSession(sessionId), { code: "vibe64_session_renewal_private" });
+    } finally {
+      await writeFile(statusPath, `${VIBE64_SESSION_STATUS.ACTIVE}\n`);
+      await rm(path.join(store.paths(sessionId).agentRunsRoot, "codex_app_server.json"), { force: true });
+    }
   });
 });
 
@@ -7858,6 +7907,23 @@ test("hidden renewal successor shutdown requires its exact explicit cleanup cont
   });
 });
 
+test("renewal cleanup accepts a session that never acquired a Codex runtime", async () => {
+  await withConversationController(async ({ captures, controller, projectService, session }) => {
+    const renewalId = "renewal-unused-session";
+    await controller.closeAllForSession(session.sessionId, {
+      renewalCleanup: {
+        kind: "predecessor",
+        renewalId,
+        sourceSessionId: session.sessionId
+      },
+      runtime: projectService.createRuntime(),
+      session: { ...session, status: VIBE64_SESSION_STATUS.ACTIVE }
+    });
+    assert.equal(captures.providerOptions.length, 0);
+    assert.equal(captures.stopRuntimes, 0);
+  });
+});
+
 test("renewal predecessor cleanup fails closed when a cached Codex process does not confirm exit", async () => {
   await withConversationController(async ({ captures, controller, projectService, session }) => {
     const catalog = await controller.executionProfileModelCatalog(session.sessionId);
@@ -7886,6 +7952,19 @@ test("renewal predecessor cleanup fails closed when a cached Codex process does 
     assert.deepEqual(captures.stopRuntimeOptions, [{
       preserveProcessExitProof: true
     }]);
+    await assert.rejects(
+      () => controller.closeAllForSession(session.sessionId, {
+        renewalCleanup: {
+          kind: "predecessor",
+          renewalId,
+          sourceSessionId: session.sessionId
+        },
+        runtime,
+        session: activeSession
+      }),
+      { code: "vibe64_session_renewal_process_exit_unverified" },
+      "losing the failed provider cache cannot turn an acquired runtime into an unused session"
+    );
   });
 });
 
@@ -7921,10 +8000,15 @@ test("renewal predecessor cleanup accepts exact preserved process-exit proof", a
   });
 });
 
-test("changeover retries after a restart require the old runtime owner's verified empty scope", async () => {
-  await withConversationController(async ({ controller, session, temporaryRoot }) => {
+for (const closingMode of ["changeover", "renewal"]) {
+test(`${closingMode} retries after a restart require the old runtime owner's verified empty scope`, async () => {
+  await withConversationController(async ({ controller, projectService, session, temporaryRoot }) => {
     const runtimeDir = path.join(temporaryRoot, "codex-app-server-old");
     session.metadata.agent_transport_runtime_dir = runtimeDir;
+    const options = closingMode === "changeover" ? { changeover: true } : {
+      renewalCleanup: { kind: "predecessor", renewalId: "renewal-owner-recovery", sourceSessionId: session.sessionId },
+      runtime: projectService.createRuntime(), session: { ...session, status: VIBE64_SESSION_STATUS.ACTIVE }
+    };
     const stops = [];
     let scopeEmpty = false;
     const release = installVibe64ManagedExecutionProvider({
@@ -7936,15 +8020,16 @@ test("changeover retries after a restart require the old runtime owner's verifie
       }
     });
     try {
-      await assert.rejects(controller.closeAllForSession(session.sessionId, { changeover: true }),
-        { code: "vibe64_changeover_process_exit_unverified" });
+      await assert.rejects(controller.closeAllForSession(session.sessionId, options),
+        { code: closingMode === "changeover" ? "vibe64_changeover_process_exit_unverified" : "vibe64_session_renewal_process_exit_unverified" });
       scopeEmpty = true;
-      await controller.closeAllForSession(session.sessionId, { changeover: true });
+      await controller.closeAllForSession(session.sessionId, options);
       assert.equal(stops.length, 2);
       assert.deepEqual(stops[1], { kind: "assistant", operationId: "codex-app-server", ownerId: stableHash(runtimeDir) });
     } finally { release(); }
   });
 });
+}
 
 test("renewal predecessor cleanup does not treat an already-missing runtime directory as exit proof", async () => {
   await withConversationController(async ({ captures, controller, projectService, session, temporaryRoot }) => {
@@ -7972,6 +8057,31 @@ test("renewal predecessor cleanup does not treat an already-missing runtime dire
       { code: "vibe64_session_renewal_process_exit_unverified" }
     );
     assert.equal(captures.providerOptions.length, 0);
+  });
+});
+
+test("renewal proof release preserves a runtime still retained by another session", async () => {
+  await withConversationController(async ({ captures, controller, projectService, session }) => {
+    await controller.executionProfileModelCatalog(session.sessionId);
+    const runtimeDir = captures.providerOptions.at(-1).runtimeDir;
+    await mkdir(runtimeDir, { recursive: true });
+    const runtimeFile = path.join(runtimeDir, "runtime.json");
+    const saved = `${JSON.stringify(exactStoppedRuntimeMetadata(runtimeDir, { stopped: true }))}\n`;
+    await writeFile(runtimeFile, saved);
+    const archivedSession = { ...session, sessionId: "archived-predecessor", archived: true,
+      status: VIBE64_SESSION_STATUS.ARCHIVED, metadata: { ...session.metadata,
+        agent_transport_runtime_dir: runtimeDir, renewal_id: "shared-renewal", renewed_to: "successor" } };
+    const options = { renewalId: "shared-renewal", runtime: projectService.createRuntime(), session: archivedSession };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const released = await controller.releaseRenewalPredecessorProcessExitProof(archivedSession.sessionId, options);
+      assert.equal(released.released, true);
+      assert.equal(released.sharedProcessRetained, true);
+      assert.equal(await readFile(runtimeFile, "utf8"), saved);
+      assert.equal(captures.stopRuntimes, 0);
+      assert.equal(captures.closes, 0);
+    }
+    const catalog = await controller.executionProfileModelCatalog(session.sessionId);
+    assert.equal(catalog.data[0].model, "gpt-5.6-luna");
   });
 });
 

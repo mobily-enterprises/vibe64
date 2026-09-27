@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./server/actionContext": "./src/server/actionContext.js",
     "./server/stateUpgrades": "./src/server/stateUpgrades.js",
     "./server": "./src/server/index.js",
     "./server/core": "./src/server/core.js",

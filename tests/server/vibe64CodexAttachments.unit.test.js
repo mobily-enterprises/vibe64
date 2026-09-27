@@ -18,6 +18,9 @@ import path from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import test from "node:test";
 import Fastify from "fastify";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import {
   registerMultipartSupport
 } from "@jskit-ai/uploads-runtime/server/multipart/registerMultipartSupport";
@@ -2108,6 +2111,17 @@ test("attachment download route streams bytes and restricts inline previews to r
     };
   };
   registerRoutes(app.http, { fastify: app.fastify, projectContext: explicitProjectContext(root), terminals: app.terminals, uploads: { readSingleMultipartFile() {} } });
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "terminals", domain: "terminals", actions: createTerminalActions({ terminals: app.terminals }).map((action) => ({
+    channels: ["api"], surfaces: ["app"], ...action
+  })) });
+  registerVibe64ActionContext(actions, { projectContext: explicitProjectContext(root),
+    resolveUser: async () => ({ username: "owner", role: "owner" }), authorizeProject: async () => {}
+  });
+  fastify.addHook("onRequest", async (request) => {
+    request.executeAction = ({ actionId, input }) => actions.execute({ actionId, input,
+      context: { channel: "api", surface: "app", requestMeta: { request } } });
+  });
   const route = app.registeredRoutes.find((candidate) => candidate.method === "GET" && candidate.path.endsWith("/agent-attachments/:attachmentId"));
   fastify.route({ method: "GET", url: route.path, handler: route.handler });
   try {

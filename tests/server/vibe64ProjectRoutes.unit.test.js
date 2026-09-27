@@ -12,7 +12,10 @@ import {
   ACTION_SAVE_PROJECT_PROMPT_HINTS,
   ACTION_SAVE_PREVIEW_APPLICATION_IDENTITIES
 } from "../../packages/vibe64-project/src/server/actions.js";
-import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { createProjectActions } from "../../packages/vibe64-project/src/server/actions.js";
+import { registerRoutes as registerProjectRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import {
   findRegisteredRoute,
   routeProjectParams,
@@ -21,6 +24,22 @@ import {
   withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
+
+function registerRoutes(http, options) {
+  if (!options.project) return registerProjectRoutes(http, options);
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "project", domain: "project", actions: createProjectActions(options).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+  registerVibe64ActionContext(actions, { projectContext: options.projectContext,
+    resolveUser: async ({ request }) => request.vibe64User,
+    authorizeProject: async () => {}
+  });
+  registerProjectRoutes({ router: { register(method, path, routeOptions, handler) {
+    http.router.register(method, path, routeOptions, (request, reply) => {
+      request.executeAction = ({ actionId, input }) => actions.execute({ actionId, input, context: { channel: "api", surface: "app", requestMeta: { request } } });
+      return handler(request, reply);
+    });
+  } } }, options);
+}
 
 function routeHttp(app) {
   return app.http;
@@ -51,7 +70,7 @@ test("issue routes preserve repeated label filters and browser origin with the a
       }, reply);
       assert.equal(reply.statusCode, 200);
       assert.deepEqual(received, {
-        body: "A comment", originId: "tab:writer", operation: "comment", number: "42", vibe64User: user
+        body: "A comment", originId: "tab:writer", operation: "comment", number: 42, vibe64User: user
       });
       const list = findRegisteredRoute(app, {
         method: "GET", path: `${apiRouteBase}/vibe64/issues`
@@ -61,7 +80,7 @@ test("issue routes preserve repeated label filters and browser origin with the a
         operation: "set-labels", vibe64User: { id: "forged" }
       };
       await list.handler({ query, input: { query }, params: routeProjectParams(), vibe64User: user }, testReply());
-      assert.deepEqual(received, { ...query, operation: "list", vibe64User: user });
+      assert.deepEqual(received, { labels: query.labels, state: query.state, cursor: query.cursor, search: query.search, operation: "list", vibe64User: user });
       const createLabel = findRegisteredRoute(app, {
         method: "POST", path: `${apiRouteBase}/vibe64/issue-labels`
       });
@@ -92,7 +111,7 @@ test("issue editing routes bind identifiers and credentials to the authorized re
         const reply = testReply();
         await route.handler({ body: payload, input: { body: payload }, params: routeProjectParams({ number: "42", commentId: "IC_actual" }), vibe64User: user }, reply);
         assert.equal(reply.statusCode, 200);
-        assert.deepEqual(received, { ...expected, number: "42", vibe64User: user });
+        assert.deepEqual(received, { ...expected, number: 42, vibe64User: user });
       }
     });
   });
@@ -322,8 +341,7 @@ test("collaboration and prompt-hint settings use separate routes and actions", a
       assert.deepEqual(executedAction, {
         actionId: ACTION_SAVE_COLLABORATION_SETTINGS,
         input: {
-          ...collaboration,
-          vibe64User
+          ...collaboration
         }
       });
       assert.equal(reply.statusCode, 200);
@@ -342,8 +360,7 @@ test("collaboration and prompt-hint settings use separate routes and actions", a
       assert.deepEqual(executedAction, {
         actionId: ACTION_SAVE_PROJECT_PROMPT_HINTS,
         input: {
-          promptHints: false,
-          vibe64User
+          promptHints: false
         }
       });
 
@@ -362,7 +379,7 @@ test("collaboration and prompt-hint settings use separate routes and actions", a
         async executeAction(action) {
           assert.deepEqual(action, {
             actionId: ACTION_SAVE_COLLABORATION_SETTINGS,
-            input: { ...forgedOwnerInput, vibe64User: member }
+            input: { ...collaboration, sessionId: "selected-session" }
           });
           return {
             code: "vibe64_owner_required",

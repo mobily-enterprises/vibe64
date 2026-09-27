@@ -1945,6 +1945,7 @@ function createCodexTerminalController({
       provider,
       providerKey: normalizeText(providerKey),
       providerOptions,
+      sessionKey: codexAppServerProviderOwners.get(providerKey)?.sessionKey || "",
       runtimeDir: normalizeText(providerOptions?.runtimeDir),
       runtimeKey
     };
@@ -2016,6 +2017,20 @@ function createCodexTerminalController({
     const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
     let observationStop = null;
     let unsubscribeControls = null;
+    async function readProviderSession(runtime) {
+      if (options.renewalId) {
+        const session = await runtime.getSessionForRenewal(sessionId, { inspectSource: false });
+        if ([VIBE64_SESSION_STATUS.RENEWAL_PENDING, VIBE64_SESSION_STATUS.RENEWAL_ACTIVATING].includes(session.status)) {
+          if (normalizeText(session.metadata?.renewal_id) !== options.renewalId) {
+            throw Object.assign(new Error("The assistant belongs to a different renewal reservation."), {
+              code: "vibe64_session_renewal_private"
+            });
+          }
+          return session;
+        }
+      }
+      return runtime.getSession(sessionId, { inspectSource: false });
+    }
     const provider = codexAppServerProviderFactory({
       ...options,
       terminalEnv: { ...options.terminalEnv, ...await vibe64HostContextEnvironment(runtimeRoot) },
@@ -2031,7 +2046,7 @@ function createCodexTerminalController({
         }
         if (options.assistantScope) return "native";
         const runtime = await createRuntimeForSession();
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        const session = await readProviderSession(runtime);
         const selection = vibe64AssistantSelectionFromMetadata(session.metadata, { required: false });
         if (session.metadata?.codex_routing_home_provider && curatedCodexProvider(selection?.modelProviderId)) {
           await providerConnections.runtimeOptions(selection.modelProviderId);
@@ -2049,7 +2064,7 @@ function createCodexTerminalController({
           assertCodexAppServerControllerOpen();
           if (options.assistantScope) return params;
           const runtime = await createRuntimeForSession();
-          const session = await runtime.getSession(sessionId, { inspectSource: false });
+          const session = await readProviderSession(runtime);
           const previousExecutionId = normalizeText(session.metadata?.agent_transport_execution_id);
           const savedProcessChanged = Boolean(previousExecutionId &&
             previousExecutionId !== normalizeText(providerRuntime?.executionId));
@@ -2087,7 +2102,7 @@ function createCodexTerminalController({
         if (options.assistantScope) return threadEnv;
         if (await agentSessionCommandEnvironmentIsHealthy(threadEnv)) return threadEnv;
         const runtime = await createRuntimeForSession();
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        const session = await readProviderSession(runtime);
         if (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
           throw new Error("The assistant session is closing.");
         }
@@ -2103,8 +2118,13 @@ function createCodexTerminalController({
             throw new Error("The assistant session is closing.");
           }
           if (options.assistantScope) return;
-          const store = await createStoreForSession(sessionId);
-          const run = await readCodexAppServerAgentRunForSession(store, sessionId);
+          // Renewal owns a hidden successor before its first handover turn.
+          // Keep the normal high-frequency read bounded; only that exact
+          // reservation uses its internal snapshot for the observation guard.
+          const session = options.renewalId ? await readProviderSession(await createRuntimeForSession()) : null;
+          const run = session
+            ? codexAppServerAgentRun(session)
+            : await readCodexAppServerAgentRunForSession(await createStoreForSession(sessionId), sessionId);
           if (run?.providerThreadId === threadId && run.providerStatus === "observation_lost") {
             throw Object.assign(new Error(run.error || "Codex is stopped. Use Resume or Send to continue."), {
               code: "vibe64_codex_observation_lost"
@@ -2526,7 +2546,9 @@ function createCodexTerminalController({
       terminalEnv: effectiveTerminalEnv,
       toolHomeSource,
       workdir: effectiveWorkdir
-    }), routingModelProviderId: vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })?.modelProviderId };
+    }), routingModelProviderId: vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })?.modelProviderId,
+      ...(session.status === VIBE64_SESSION_STATUS.RENEWAL_PENDING && normalizeText(metadata.renewal_id)
+        ? { renewalId: normalizeText(metadata.renewal_id) } : {}) };
   }
 
   async function codexAppServerHelperRuntimeOptionsForSession(session = {}, options = {}) {
@@ -3715,6 +3737,12 @@ function createCodexTerminalController({
         released: true,
         runtimeRecorded: false
       };
+    }
+    // Session closure already detached this participant. Its archived runtime
+    // path may now belong to the successor, Colleague, or another live session.
+    // Releasing the old proof must not stop or delete that shared process.
+    if (codexAppServerRuntimeIsShared("", runtimeOptions)) {
+      return { ok: true, released: true, runtimeRecorded: true, sharedProcessRetained: true };
     }
     const existed = await directoryExists(runtimeOptions.runtimeDir);
     if (!existed) {
@@ -13435,7 +13463,7 @@ function createCodexTerminalController({
                   providerOptions || {},
                   {
                     preserveProcessExitProof,
-                    verifyOwnerScope: options.changeover === true
+                    verifyOwnerScope: Boolean(renewalCleanup || options.changeover)
                   }
                 )
                 : {
@@ -13450,6 +13478,13 @@ function createCodexTerminalController({
             });
           }
           if (renewalCleanup || (options.changeover && sessionHasCodexAppServerRuntime(session))) {
+            // Fresh sessions can use a manual handover before starting Codex.
+            // A lost cache or missing recorded runtime is not this case: retain
+            // the exit requirement while any acquired owner or thread exists.
+            const noRuntimeAcquired = cachedProviders.providerCount === 0 &&
+              !sessionHasCodexAppServerRuntime(session) &&
+              !codexThreadIdForWorkdir(session, terminalWorktreePath(session)) &&
+              ![...codexAppServerOwnedRuntimes.values()].some((record) => record.sessionKey === sessionKey);
             const cachedRuntimeExitVerified = cachedProviders.providerCount > 0 &&
               cachedProviders.results.length === cachedProviders.providerCount &&
               cachedProviders.results.every((result) => (
@@ -13463,7 +13498,7 @@ function createCodexTerminalController({
               );
             if (
               cachedProviders.failed.length > 0 ||
-              (!cachedRuntimeExitVerified && !persistedRuntimeExitVerified)
+              (!noRuntimeAcquired && !cachedRuntimeExitVerified && !persistedRuntimeExitVerified)
             ) {
               const error = new Error(
                 options.changeover
@@ -13527,12 +13562,12 @@ function createCodexTerminalController({
 
     async releaseRenewalPredecessorProcessExitProof(sessionId, options = {}) {
       const context = renewalArchivedPredecessorContext(sessionId, options);
-      return releaseRenewalProcessExitProof(context.session);
+      return withCodexAppServerProviderLifecycle(() => releaseRenewalProcessExitProof(context.session));
     },
 
     async releaseRenewalSuccessorProcessExitProof(sessionId, options = {}) {
       const context = renewalSuccessorProcessExitProofReleaseContext(sessionId, options);
-      return releaseRenewalProcessExitProof(context.session);
+      return withCodexAppServerProviderLifecycle(() => releaseRenewalProcessExitProof(context.session));
     },
 
     async closeTerminal(sessionId, terminalSessionId) {

@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT } from "../../packages/vibe64-colleague/src/server/protocol.js";
+import { assertSessionRenewalDraftVersion, assertSessionRenewalOperation, createSessionRenewalDraft } from "../../packages/vibe64-sessions/src/server/sessionRenewalState.js";
 
 import {
   ACTION_CANCEL_SESSION_RENEWAL,
@@ -50,6 +56,74 @@ const ASSISTANT_SELECTION = Object.freeze({
   modelId: "glm-4.7-flash",
   modelProviderId: "zai",
   variantId: ""
+});
+
+test("native renewal tools retain complete reviewed text and guards without leaking private renewal state", async () => {
+  await withRouteProject(async ({ projectContext, slug }) => {
+    let allowed = true;
+    const user = { username: "member", uid: 42, role: "member" };
+    const state = { sessionId: "one", renewalId: "renewal-1", operationKey: "renewal:one:check", status: "review", stage: "draft_ready",
+      draft: createSessionRenewalDraft("😀".repeat(20000)), manualRequired: false,
+      successor: { sessionId: "successor-1", assistantSelection: { secret: "private-binding" } },
+      basis: { repositoryPath: "/private/source", provider: { secret: "private-token" } }, actor: { id: "private-actor" } };
+    const calls = [];
+    const methods = [
+      ["inspect", "inspectSessionRenewal"], ["draft.request", "requestSessionRenewalDraft"],
+      ["draft.update", "updateSessionRenewalDraft"], ["cancel", "cancelSessionRenewal"],
+      ["confirm", "confirmSessionRenewal"], ["retry", "retrySessionRenewal"]
+    ];
+    const sessions = Object.fromEntries(methods.map(([suffix, name]) => [name, async (sessionId, input) => {
+      calls.push({ suffix, sessionId, input });
+      if (suffix !== "inspect") assertSessionRenewalOperation(state, input.operationKey);
+      if (["draft.update", "cancel", "confirm"].includes(suffix)) assertSessionRenewalDraftVersion(state, input);
+      return { ok: true, available: true, renewal: state, viewerScope: "private-viewer" };
+    }]));
+    const actions = createActionCatalogue();
+    actions.register({ contributorId: "renewal", domain: "sessions", actions: createSessionActions({ sessions }).map(action => ({
+      channels: ["api", "automation"], surfaces: ["app"], ...action
+    })) });
+    registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user,
+      authorizeProject() { if (!allowed) throw Object.assign(new Error("Project access revoked."), { statusCode: 403 }); }
+    });
+    const catalog = createServiceToolCatalog(actions, { maxToolArgumentBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT, maxToolResultBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT });
+    const context = { surface: "app" };
+    const toolSet = catalog.resolveToolSet(context);
+    const execute = (suffix, fields = {}) => {
+      const tool = toolSet.tools.find(entry => entry.actionId === `vibe64.sessions.renewal.${suffix}`);
+      assert.ok(tool, suffix);
+      return catalog.executeToolCall({ toolName: tool.name, context, toolSet,
+        argumentsText: JSON.stringify({ projectSlug: slug, sessionId: "one", ...fields }) });
+    };
+    const guards = { operationKey: state.operationKey, expectedHash: state.draft.hash, expectedRevision: state.draft.revision };
+    for (const [suffix] of methods) {
+      const fields = suffix === "inspect" ? {} : ["draft.request", "retry"].includes(suffix) ? { operationKey: state.operationKey }
+        : { ...guards, ...(suffix === "draft.update" ? { draft: state.draft.text } : {}), ...(suffix === "confirm" ? { workflowEngineId: "codex" } : {}) };
+      const result = await execute(suffix, fields);
+      assert.equal(result.ok, true, JSON.stringify(result.error));
+      assert.equal(result.result.hasRenewal, true);
+      assert.equal(result.result.draftHash, guards.expectedHash);
+      assert.equal(result.result.draftRevision, guards.expectedRevision);
+      assert.equal(result.result.successorSessionId, "successor-1");
+      assert.equal(JSON.stringify(result).includes("private"), false);
+      if (suffix === "inspect") assert.equal(result.result.draftText, state.draft.text);
+      else { assert.equal(Object.hasOwn(result.result, "draftText"), false); assert.ok(JSON.stringify(result).length < 2000); }
+      assert.equal(calls.at(-1).sessionId, "one");
+      assert.deepEqual(calls.at(-1).input.vibe64User, user);
+      if (suffix === "draft.update") assert.equal(calls.at(-1).input.draft, state.draft.text);
+    }
+    const count = calls.length;
+    for (const fields of [{ operationKey: state.operationKey }, { ...guards, sessionId: " " }, { ...guards, vibe64User: { role: "owner" } }]) {
+      assert.equal((await execute("confirm", fields)).ok, false);
+    }
+    allowed = false;
+    assert.equal((await execute("confirm", guards)).ok, false);
+    assert.equal(calls.length, count, "missing guards, missing target, spoofed actor and revoked access never reach the renewal service");
+    allowed = true;
+    state.draft = createSessionRenewalDraft("New reviewed handover", { revision: 2 });
+    const stale = await execute("confirm", guards);
+    assert.equal(stale.ok, false);
+    assert.match(JSON.stringify(stale.error), /vibe64_session_renewal_draft_stale/);
+  });
 });
 
 function actionById(actions, id) {
@@ -151,7 +225,7 @@ test("renewal draft transport stays bounded without rejecting 20,000 astral code
   assert.equal(rejected.errors.draft.code, "MAX_LENGTH");
 });
 
-test("renewal actions use server action context identity and domain-native idempotency", async () => {
+test("renewal actions use server action context identity and domain-native idempotency", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const calls = [];
   const sessions = {
     async inspectSessionRenewal(...args) {
@@ -252,7 +326,7 @@ test("renewal actions use server action context identity and domain-native idemp
   for (const actionId of RENEWAL_ACTION_IDS.slice(1)) {
     assert.equal(actionById(actions, actionId).idempotency, "domain_native");
   }
-});
+}));
 
 test("renewal HTTP routes expose the six state transitions without accepting body actors", async () => {
   await withLocalRequestBypass(async () => {

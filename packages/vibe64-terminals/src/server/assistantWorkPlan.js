@@ -67,6 +67,31 @@ async function prepareWorkPlan(context, planning) {
   return file;
 }
 
+async function readWorkPlanPage(context, { offset = 0, limit = 16000, expectedRevision = "" } = {}) {
+  if (offset > 0 && !expectedRevision) {
+    throw Object.assign(new Error("Further plan pages require the revision from the first page."), {
+      code: "vibe64_work_plan_revision_required", statusCode: 400
+    });
+  }
+  const plan = await readWorkPlan(context);
+  if (!plan) return { available: false };
+  if (expectedRevision && expectedRevision !== plan.revision) {
+    throw Object.assign(new Error("The work plan changed. Read it again from the beginning before approval."), {
+      code: "vibe64_work_plan_changed", statusCode: 409
+    });
+  }
+  const characters = Array.from(plan.text);
+  if (offset > characters.length) {
+    throw Object.assign(new Error("The plan page begins after the end of the document."), {
+      code: "vibe64_work_plan_offset_invalid", statusCode: 400
+    });
+  }
+  const nextOffset = Math.min(offset + limit, characters.length);
+  return { available: true, status: plan.status, revision: plan.revision,
+    text: characters.slice(offset, nextOffset).join(""), offset, nextOffset,
+    totalCharacters: characters.length, hasMore: nextOffset < characters.length };
+}
+
 function workPlanInstructions(file, role) {
   const common = [
     `The conversation's working plan is ${JSON.stringify(file)}, outside the project repository.`,
@@ -108,4 +133,4 @@ function workPlanInstructions(file, role) {
   return `${common}\n${implementation}`;
 }
 
-export { readWorkPlan, prepareWorkPlan, workPlanPath, workPlanInstructions };
+export { readWorkPlan, readWorkPlanPage, prepareWorkPlan, workPlanPath, workPlanInstructions };

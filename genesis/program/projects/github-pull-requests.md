@@ -9,6 +9,8 @@ work as a new PR. GitHub remains the PR store.
 - `packages/vibe64-project/src/server/githubPullRequests.js`
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
+- `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-core/src/server/projectRepository.js`
 - `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-sessions/src/server/actions.js`
@@ -34,6 +36,13 @@ work as a new PR. GitHub remains the PR store.
 - `tests/server/githubPullRequests.unit.test.js`
 
 ## Public contract
+
+List, read, ready, update-branch and merge each have a named project action.
+HTTP and direct callers share current project authorization and the acting
+person's GitHub identity. The service still re-reads the exact PR and validates
+its reviewed destination and current GitHub permissions before a write. Action
+validation requires a review for those writes and a supported merge method for
+merge; it does not substitute for GitHub's fresh checks or authorize retries.
 
 All Issues and PR navigation and session actions are hidden without a GitHub
 repository. The backend independently rejects non-GitHub project operations.

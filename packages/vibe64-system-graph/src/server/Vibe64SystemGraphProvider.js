@@ -2,6 +2,7 @@ import { defineFeature } from "@jskit-ai/kernel/server/features";
 
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
+import { createSystemGraphActions } from "./actions.js";
 
 const Vibe64SystemGraphProvider = defineFeature({
   id: "vibe64.system-graph",
@@ -13,17 +14,18 @@ const Vibe64SystemGraphProvider = defineFeature({
   provides: {
     systemGraph: "vibe64.system-graph"
   },
+  actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
   setup({ http, project }) {
     const systemGraph = createService({
       projectService: project
     });
     registerRoutes(http, {
       routeRelativePath: "vibe64",
-      routeSurface: "app",
-      systemGraph
+      routeSurface: "app"
     });
     return { systemGraph };
-  }
+  },
+  actions: createSystemGraphActions
 });
 
 export {

@@ -1,4 +1,6 @@
+import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import {
+  aiConnectionInputValidators,
   modelRoutingInputValidator,
   codexProviderInputValidator,
   accountIdInputValidator,
@@ -212,10 +214,31 @@ function createActions({ accounts } = {}) {
         return accounts.cancelAuthSession(input);
       }
     }
-  ]);
+  ].map((definition) => withVibe64ActionContext({
+    ...definition, extensions: { assistant: { exclude: true } }
+  }, { projectScoped: false })));
+}
+
+function createAiConnectionActions({ aiConnectionService, requireAiManagement = () => null } = {}) {
+  if (!aiConnectionService || typeof requireAiManagement !== "function") {
+    throw new TypeError("AI connection actions require the connection service and host management policy.");
+  }
+  return Object.entries(aiConnectionInputValidators).map(([operation, input]) => withVibe64ActionContext({
+    id: `vibe64.accounts.ai-connections.${operation}`,
+    version: 1, kind: ["list", "catalog"].includes(operation) ? "query" : "command",
+    input, output: null, idempotency: "none",
+    audit: { actionName: `vibe64.accounts.ai-connections.${operation}` }, observability: {},
+    extensions: { assistant: { exclude: true } },
+    async execute(input) {
+      const denied = await requireAiManagement({ vibe64User: input.vibe64User });
+      if (denied) return { ...denied, statusCode: 403 };
+      return aiConnectionService[operation](input);
+    }
+  }, { projectScoped: false, ownerRequired: true }));
 }
 
 export {
+  createAiConnectionActions,
   ACTION_PREVIEW_MODEL_ROUTING,
   ACTION_READ_MODEL_ROUTING, ACTION_READ_MODEL_ROUTING_WORKFLOWS, ACTION_SAVE_MODEL_ROUTING,
   ACTION_READ_CODEX_PROVIDERS,

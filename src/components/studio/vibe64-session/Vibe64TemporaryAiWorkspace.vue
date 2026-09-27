@@ -310,7 +310,7 @@ import { AssistantComposerActions } from "@jskit-ai/assistant-core/client/conver
 import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import Vibe64SessionAssistantMenu from "./Vibe64SessionAssistantMenu.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
-import { computed, inject, nextTick, ref, useId, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, ref, useId, watch, watchEffect } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import {
   mdiCameraOutline,
@@ -330,7 +330,7 @@ import {
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTypingPresence.js";
 
-import { VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
 
 const emit = defineEmits(["select-main-chat", "task-finished", "check-update"]);
 const props = defineProps({
@@ -360,19 +360,24 @@ const props = defineProps({
 
 const hostConversation = inject(VIBE64_HOST_CONVERSATION_KEY, null);
 const hostComposer = ref(null);
+const selectionRevision = ref(0);
 function selectMainChat() {
+  selectionRevision.value += 1;
   hostConversation?.value?.close();
   emit("select-main-chat");
 }
 function selectTask(id) {
+  selectionRevision.value += 1;
   hostConversation?.value?.close();
   return temporary.selectTask(id);
 }
 function openTask(options) {
+  selectionRevision.value += 1;
   hostConversation?.value?.close();
   return temporary.openTask(options);
 }
 function closeWorkspace() {
+  selectionRevision.value += 1;
   hostConversation?.value?.close();
   temporary.closeWorkspace();
 }
@@ -553,6 +558,7 @@ function requestCloseTask(task) {
 }
 
 async function closeTask(taskId, { returnToMainChat = false } = {}) {
+  selectionRevision.value += 1;
   closingTask.value = true;
   delete actionErrors.value[taskId];
   try {
@@ -640,6 +646,7 @@ async function sendTask(taskId = "", options = {}) {
 }
 
 async function startTask(options = {}) {
+  selectionRevision.value += 1;
   hostConversation?.value?.close();
   const started = temporary.startTask(options);
   const taskId = temporary.activeTaskId.value;
@@ -663,6 +670,7 @@ function reportTaskRecovery(taskId = "", outcome = {}) {
 }
 
 function showWorkspace() {
+  selectionRevision.value += 1;
   hostConversation?.value?.close();
   const task = temporary.showWorkspace();
   void revealTaskTab(temporary.activeTaskId.value);
@@ -731,6 +739,51 @@ watch([recoveryMessageId, canReturnToMainChat, () => props.active], async () => 
   const target = returnToMainButton.value?.$el || completionMessage.value;
   target?.scrollIntoView?.({ block: "nearest" });
 }, { flush: "post" });
+
+const colleagueView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
+const selectedView = {
+  get projectSlug() { return props.projectSlug; },
+  get sessionId() { return props.sessionId; },
+  get ready() { return props.assistantReady; },
+  get selectionRevision() { return selectionRevision.value; },
+  get hostConversationSelected() { return Boolean(hostConversation?.value?.selected); },
+  get temporarySelected() { return temporary.open.value && !hostConversation?.value?.selected; },
+  get conversationId() { return this.temporarySelected ? activeTask.value?.conversationId || "" : ""; },
+  async openConversation(conversationId, isCurrent = () => true) {
+    if (!props.active || !props.assistantReady || !isCurrent()) throw new Error("This session is no longer available.");
+    if (!conversationId) {
+      hostConversation?.value?.close();
+      temporary.closeWorkspace();
+      emit("select-main-chat");
+      return;
+    }
+    const projectSlug = props.projectSlug;
+    const sessionId = props.sessionId;
+    const revision = selectionRevision.value;
+    const hostSelected = hostConversation?.value?.selected;
+    await temporary.restoreTasks();
+    if (!isCurrent() || !props.active || !props.assistantReady || props.projectSlug !== projectSlug ||
+      props.sessionId !== sessionId || selectionRevision.value !== revision || hostConversation?.value?.selected !== hostSelected) {
+      throw new Error("The selected conversation changed before it opened.");
+    }
+    const task = temporary.tasks.value.find((entry) => entry.conversationId === conversationId);
+    if (!task) throw new Error(temporary.restoreError.value || "The temporary conversation could not be opened.");
+    hostConversation?.value?.close();
+    temporary.selectTask(task.id);
+    await nextTick();
+    if (!isCurrent() || !props.active || props.sessionId !== sessionId || selectionRevision.value !== revision ||
+      temporary.activeTaskId.value !== task.id || !temporary.open.value) throw new Error("The selected conversation changed before it opened.");
+  }
+};
+watchEffect(() => {
+  if (!colleagueView) return;
+  if (props.active) colleagueView.value = selectedView;
+  else if (colleagueView.value === selectedView) colleagueView.value = null;
+});
+onBeforeUnmount(() => {
+  selectionRevision.value += 1;
+  if (colleagueView?.value === selectedView) colleagueView.value = null;
+});
 
 defineExpose({
   get visible() { return temporary.open.value || Boolean(hostConversation?.value?.selected); },

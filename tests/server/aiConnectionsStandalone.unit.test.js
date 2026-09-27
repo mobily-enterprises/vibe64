@@ -6,8 +6,28 @@ import test from "node:test";
 import { createAiConnectionRuntime, configureAiConnectionRuntime } from "../../packages/vibe64-accounts/src/server/aiConnectionRuntime.js";
 import { createAiConnectionService } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
 import { createConnections } from "../../packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js";
-import { registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
+import { registerRoutes as registerAccountRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
 import { testRouteApp, findRegisteredRoute, testReply } from "./vibe64RouteTestHelpers.js";
+
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/actions.js";
+
+function registerRoutes(http, options) {
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions(options).map((action) => ({
+    channels: ["api", "automation"], surfaces: ["app"], ...action
+  })) });
+  registerVibe64ActionContext(actions, { resolveUser: async ({ request }) => request?.vibe64User || { role: "owner", username: "local" },
+    authorizeProject() { throw new Error("Account operations do not require a project."); } });
+  registerAccountRoutes({ router: { register(method, path, routeOptions, handler) {
+    http.router.register(method, path, routeOptions, (request, reply) => {
+      request.executeAction = ({ actionId, input }) => actions.execute({ actionId, input,
+        context: { channel: "api", surface: "app", requestMeta: { request } } });
+      return handler(request, reply);
+    });
+  } } }, options);
+}
 
 const revision = `sha256:${"a".repeat(64)}`;
 const provider = {

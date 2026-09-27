@@ -83,7 +83,9 @@ GitHub remains the only issue store. Each server request resolves the project's
 repository and the acting person's existing GitHub credential context, then uses
 the managed execution gateway. Browser input cannot choose a different
 repository, account or executable. Hosted project membership uses the existing
-project route access gate. GitHub checks every operation, and Close/Reopen also
+project route gate and shared action authorization. The eleven named issue actions
+own the canonical input fields; HTTP derives its accepted fields from those
+contracts and binds issue/comment IDs from the URL. GitHub checks every operation, and Close/Reopen also
 check current viewer permissions before writing. A pull request number is not
 accepted as an issue. No source checkout or active session is required.
 

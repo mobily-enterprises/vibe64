@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import {
   ACTION_CANCEL_SESSION_PROMPT_HINTS,
@@ -46,7 +47,7 @@ function promptHintRouteApp(service = {}) {
   };
 }
 
-test("prompt-hint actions delegate generation and cancellation to their exact session operation", async () => {
+test("prompt-hint actions delegate generation and cancellation to their exact session operation", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const calls = [];
   const actions = createTerminalActions({
     terminals: {
@@ -92,8 +93,8 @@ test("prompt-hint actions delegate generation and cancellation to their exact se
     vibe64User
   };
 
-  await actionById(actions, ACTION_GENERATE_SESSION_PROMPT_HINTS).execute(input);
-  await actionById(actions, ACTION_CANCEL_SESSION_PROMPT_HINTS).execute(input);
+  await actionById(actions, ACTION_GENERATE_SESSION_PROMPT_HINTS).execute(input, { requestMeta: { request: { vibe64User } } });
+  await actionById(actions, ACTION_CANCEL_SESSION_PROMPT_HINTS).execute(input, { requestMeta: { request: { vibe64User } } });
 
   assert.deepEqual(calls, [
     ["generate", "session-1", {
@@ -108,7 +109,7 @@ test("prompt-hint actions delegate generation and cancellation to their exact se
       vibe64User
     }]
   ]);
-});
+}));
 
 test("prompt-hint action schema accepts a bounded draft and operation coordinates", () => {
   const action = actionById(
@@ -230,8 +231,7 @@ test("prompt-hint routes inject the authenticated actor and never trust client p
             draft: body.draft,
             operationId: "hint:tab-1:2",
             originId: "tab:1",
-            sessionId: "session-1",
-            vibe64User
+            sessionId: "session-1"
           }
         },
         {
@@ -240,8 +240,7 @@ test("prompt-hint routes inject the authenticated actor and never trust client p
             draft: body.draft,
             operationId: "hint:tab-1:2",
             originId: "tab:1",
-            sessionId: "session-1",
-            vibe64User
+            sessionId: "session-1"
           }
         }
       ]);

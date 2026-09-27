@@ -70,7 +70,7 @@ function registerRoutes(http, {
     actionId: ACTION_INSPECT_REPOSITORY_HISTORY,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withVibe64User(request, {
+      return withoutVibe64User({
         cursor: firstValue(query.cursor),
         limit: firstValue(query.limit),
         sessionId: firstValue(query.sessionId)
@@ -83,7 +83,7 @@ function registerRoutes(http, {
     actionId: ACTION_INSPECT_REPOSITORY_VERSION_FILES,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withVibe64User(request, {
+      return withoutVibe64User({
         commit: request.params.commit,
         historySnapshotCommit: firstValue(query.historySnapshotCommit),
         limit: firstValue(query.limit),
@@ -98,7 +98,7 @@ function registerRoutes(http, {
     actionId: ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withVibe64User(request, {
+      return withoutVibe64User({
         commit: request.params.commit,
         historySnapshotCommit: firstValue(query.historySnapshotCommit),
         lineLimit: firstValue(query.lineLimit),
@@ -111,13 +111,13 @@ function registerRoutes(http, {
 
   routes.actionRoute("GET", "/sessions", {
     actionId: ACTION_LIST_SESSIONS,
-    buildInput: (request) => withVibe64User(request),
+    buildInput: () => ({}),
     summary: "List open Vibe64 sessions."
   });
 
   routes.actionRoute("GET", "/sessions/archived", {
     actionId: ACTION_LIST_ARCHIVED_SESSIONS,
-    buildInput: (request) => withVibe64User(request),
+    buildInput: () => ({}),
     summary: "List archived Vibe64 sessions, newest first."
   });
 
@@ -125,7 +125,7 @@ function registerRoutes(http, {
     actionId: ACTION_LIST_ASSISTANT_CAPABILITIES,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withVibe64User(request, {
+      return withoutVibe64User({
         configuredOnly: firstValue(query.configuredOnly),
         connectedOnly: firstValue(query.connectedOnly),
         cursor: firstValue(query.cursor),
@@ -142,14 +142,14 @@ function registerRoutes(http, {
     actionId: ACTION_UPDATE_ASSISTANT_MODEL_ACCESS,
     body: assistantModelAccessUpdateInputValidator,
     bodyLimit: 8 * 1024,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Change the owner-controlled model access for an assistant provider."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/pull-request", {
     actionId: ACTION_CREATE_PULL_REQUEST,
     bodyLimit: 300_000,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request), sessionId: request.params.sessionId
     }),
     summary: "Publish session work on a new branch and create a GitHub pull request."
@@ -157,19 +157,19 @@ function registerRoutes(http, {
 
   routes.actionRoute("POST", "/sessions", {
     actionId: ACTION_CREATE_SESSION,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Create a Vibe64 chat session."
   });
 
   routes.actionRoute("PUT", "/sessions/current", {
     actionId: ACTION_UPDATE_CURRENT_SESSION,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Update the current Vibe64 session alias."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId", {
     actionId: ACTION_INSPECT_SESSION,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       sessionId: request.params.sessionId
     }),
     summary: "Inspect a Vibe64 chat session."
@@ -179,7 +179,7 @@ function registerRoutes(http, {
     actionId: ACTION_UPDATE_ASSISTANT_SELECTION,
     body: assistantSelectionUpdateInputValidator,
     bodyLimit: 32 * 1024,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request),
       sessionId: request.params.sessionId
     }),
@@ -259,7 +259,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("GET", "/sessions/:sessionId/work", {
     actionId: ACTION_INSPECT_SESSION_WORK,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       sessionId: request.params.sessionId
     }),
     summary: "Inspect whether a Vibe64 session has work to save."
@@ -269,7 +269,7 @@ function registerRoutes(http, {
     actionId: ACTION_INSPECT_SESSION_CHANGES,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withVibe64User(request, {
+      return withoutVibe64User({
         limit: firstValue(query.limit),
         offset: firstValue(query.offset),
         sessionId: request.params.sessionId
@@ -282,7 +282,7 @@ function registerRoutes(http, {
     actionId: ACTION_INSPECT_SESSION_CHANGE_DIFF,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withVibe64User(request, {
+      return withoutVibe64User({
         lineLimit: firstValue(query.lineLimit),
         path: firstValue(query.path),
         sessionId: request.params.sessionId
@@ -293,7 +293,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("POST", "/sessions/:sessionId/save", {
     actionId: ACTION_SAVE_SESSION_WORK,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request),
       sessionId: request.params.sessionId
     }),
@@ -302,7 +302,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("POST", "/sessions/:sessionId/updates/check", {
     actionId: ACTION_CHECK_SESSION_UPDATES,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request),
       sessionId: request.params.sessionId
     }),
@@ -311,7 +311,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("POST", "/sessions/:sessionId/updates/apply", {
     actionId: ACTION_UPDATE_SESSION_WORK,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request),
       sessionId: request.params.sessionId
     }),
@@ -342,7 +342,7 @@ function registerRoutes(http, {
     actionId: ACTION_READ_SESSION_CONVERSATION_LOG,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withVibe64User(request, {
+      return withoutVibe64User({
         beforeTurnId: firstValue(query.beforeTurnId || query.before),
         limit: firstValue(query.limit),
         sessionId: request.params.sessionId
@@ -354,7 +354,7 @@ function registerRoutes(http, {
   routes.actionRoute("POST", "/sessions/:sessionId/conversation-rewind", {
     actionId: ACTION_REWIND_CONVERSATION,
     body: conversationRewindInputValidator,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request), sessionId: request.params.sessionId
     }),
     summary: "Undo the latest conversation turn without changing project files."
@@ -363,7 +363,7 @@ function registerRoutes(http, {
   routes.actionRoute("POST", "/sessions/:sessionId/agent-message", {
     actionId: ACTION_SEND_AGENT_MESSAGE,
     body: agentMessageInputValidator,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request),
       sessionId: request.params.sessionId
     }),
@@ -372,7 +372,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("GET", "/sessions/:sessionId/assistant-access", {
     actionId: ACTION_INSPECT_ASSISTANT_ACCESS,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       sessionId: request.params.sessionId
     }),
     summary: "Inspect whether the current identity may use this session's selected assistant."
@@ -381,7 +381,7 @@ function registerRoutes(http, {
   routes.actionRoute("POST", "/sessions/:sessionId/agent-turn/interrupt", {
     actionId: ACTION_INTERRUPT_AGENT_TURN,
     body: agentTurnInterruptInputValidator,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request),
       sessionId: request.params.sessionId
     }),
@@ -410,7 +410,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("POST", "/sessions/:sessionId/archive", {
     actionId: ACTION_ARCHIVE_SESSION,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request),
       sessionId: request.params.sessionId
     }),
@@ -419,7 +419,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("POST", "/sessions/:sessionId/workspace-setup/retry", {
     actionId: ACTION_RETRY_WORKSPACE_SETUP,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request),
       sessionId: request.params.sessionId
     }),
@@ -438,16 +438,6 @@ function withoutVibe64User(input = {}) {
   } = input || {};
   void _ignored;
   return safeInput;
-}
-
-function withVibe64User(request, input = {}) {
-  const safeInput = withoutVibe64User(input);
-  return request.vibe64User
-    ? {
-        ...safeInput,
-        vibe64User: request.vibe64User
-      }
-    : safeInput;
 }
 
 export { registerRoutes };

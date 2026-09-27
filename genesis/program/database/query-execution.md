@@ -5,6 +5,12 @@ connection and share one query-ownership boundary.
 
 ## Sources
 
+- `packages/vibe64-core/src/server/actionContext.js`
+- `packages/vibe64-database-tools/src/server/actions.js`
+- `packages/vibe64-database-tools/src/server/inputSchemas.js`
+- `packages/vibe64-database-tools/src/server/registerRoutes.js`
+- `tests/server/vibe64DatabaseActionDispatch.unit.test.js`
+
 - `packages/vibe64-database-tools/src/server/service.js`
 - `packages/vibe64-database-tools/src/server/assistant.js`
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
@@ -16,6 +22,15 @@ connection and share one query-ownership boundary.
 - `packages/vibe64-database-tools/src/server/schemaInspector.js`
 
 ## Public contract
+
+All thirteen database HTTP operations invoke their named actions. Those actions
+own the input contract, including required session/query identities and explicit
+read-only/confirmation fields. The shared host context resolves project access
+and the acting person for HTTP and automation; request bodies cannot choose an
+actor or override the session in the URL. Services retain query ownership,
+confirmation, conflict and mutation checks. Conflict responses retain their
+existing HTTP status. These action contracts do not expose SQL, row editing or
+schema investigation as Colleague tools; Colleague delegates engineering work.
 
 Database copilot embeds the shared JSKIT conversation element. Its adapter maps
 SQL and table metadata into message actions, keeps configuration hidden and

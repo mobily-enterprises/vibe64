@@ -1,15 +1,9 @@
-import { createSchema } from "json-rest-schema";
+import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 
 const studioHealthQueryInputValidator = deepFreeze({
-  schema: createSchema({
-    vibe64User: {
-      type: "object",
-      additionalProperties: true,
-      required: false
-    }
-  }),
-  mode: "patch"
+  schema: createSchema({}),
+  mode: "create"
 });
 
 export { studioHealthQueryInputValidator };

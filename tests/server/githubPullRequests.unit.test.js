@@ -4,6 +4,9 @@ import { spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile, readFile, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { createProjectActions } from "../../packages/vibe64-project/src/server/actions.js";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "../../packages/vibe64-project/src/server/githubPullRequests.js";
 import { assertSessionRepositoryReview, sessionRepositoryDestination, sessionRepositoryProject, readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import { repositoryBranches } from "../../packages/vibe64-project/src/server/repositoryBranches.js";
@@ -337,16 +340,27 @@ test("PR mutation routes bind the action, project, number and identity to the au
   await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
     const app = testRouteApp();
     let received;
-    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app",
-      project: { async githubPullRequests(input) { received = input; return { ok: true }; } } });
+    const actions = createActionCatalogue();
+    actions.register({ contributorId: "project", domain: "project", actions: createProjectActions({ project: {
+      async githubPullRequests(input) { received = input; return { ok: true }; }
+    } }).map((action) => ({ channels: ["api"], surfaces: ["app"], ...action })) });
+    registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user, authorizeProject: async () => {} });
+    registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
     for (const operation of ["ready", "update-branch", "merge"]) {
       const route = findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/pull-requests/:number/${operation}` });
       const body = { review, mergeMethod: "merge", operation: "forged", number: 999,
         repository: "other/project", vibe64User: { username: "daemon" } };
       const reply = testReply();
-      await route.handler({ body, input: { body }, params: routeProjectParams({ number: "7" }), vibe64User: user }, reply);
+      const request = { body, input: { body }, params: routeProjectParams({ number: "7" }), vibe64User: user,
+        executeAction({ actionId, input }) {
+          assert.equal(actionId, `vibe64.project.pull-requests.${operation}`);
+          assert.equal(Object.hasOwn(input, "vibe64User"), false);
+          return actions.execute({ actionId, input, context: { channel: "api", surface: "app", requestMeta: { request } } });
+        }
+      };
+      await route.handler(request, reply);
       assert.equal(reply.statusCode, 200);
-      assert.deepEqual(received, { operation, number: "7", review, mergeMethod: "merge", vibe64User: user });
+      assert.deepEqual(received, { operation, number: 7, review, ...(operation === "merge" ? { mergeMethod: "merge" } : {}), vibe64User: user });
     }
   }));
   for (const operation of ["ready", "update-branch", "merge"]) {

@@ -7,6 +7,7 @@ import test from "node:test";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { createActionProvider } from "@jskit-ai/kernel/server/actions";
+import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import {
   createCapabilityRuntime,
   defineProvider
@@ -325,6 +326,28 @@ test("accounts feature reads roots only from its named runtime env capability", 
     assert.equal(status.targetRoot, targetRoot);
     assert.equal(feature.registeredRoutes.some((route) => route.path.endsWith("/vibe64/accounts")), true);
     await feature.runtime.shutdown();
+  });
+});
+
+test("standalone registers connection actions once and host-owned account runtimes supply their own wiring", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    configureStudioProjectContext({ systemRoot, projectsRoot: path.join(root, "projects"), runtimeProfile: { mode: "local", local: true } });
+    try {
+      for (const hostOwned of [false, true]) {
+        const feature = await startAccountsFeature({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
+          ...(hostOwned ? { accountRuntime: createAccountsRuntime({ systemRoot, requireExplicitRoots: true }) } : {}),
+          terminals: { configureAssistantRuntime() {}, async listAssistantCapabilities() { return { ok: true, engines: [] }; },
+            async invalidateAgentRuntimes() { return { ok: true }; } }
+        });
+        try {
+          const definitions = feature.actions.listDefinitions();
+          assert.equal(definitions.length, hostOwned ? 14 : 19);
+          assert.equal(definitions.filter(({ id }) => id.startsWith("vibe64.accounts.ai-connections.")).length, hostOwned ? 0 : 5);
+          for (const definition of definitions) assert.equal(definition.extensions.vibe64.projectScoped, false);
+        } finally { await feature.runtime.shutdown(); }
+      }
+    } finally { configureStudioProjectContext(); }
   });
 });
 

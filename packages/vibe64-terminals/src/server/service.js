@@ -1,5 +1,6 @@
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
+import { readWorkPlanPage } from "./assistantWorkPlan.js";
 import { assertSessionRepositoryReview, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createClaudeSessionAgentProvider } from "./agent/providers/claudeSessionAgentProvider.js";
@@ -75,7 +76,8 @@ import {
   outputTargetTerminalNamespace,
   terminalSessionSourceRoot,
   terminalWorktreePath,
-  terminalProjectScopeKey
+  terminalProjectScopeKey,
+  vibe64Result
 } from "./terminalShared.js";
 import {
   closeTerminalSessionsForCwdRoot,
@@ -1374,10 +1376,10 @@ function createService({
         label: "Naming helpers"
       },
       {
-        controller: { closeAllForSession: (id) => sessionPromptHints.cancelSessionPromptHintsForSession(id) },
+        controller: { closeAllForSession: (id, options) => sessionPromptHints.cancelSessionPromptHintsForSession(id, options) },
         label: "Prompt suggestions"
       },
-      { controller: { closeAllForSession: (id) => databaseToolsProvider?.closeAssistantsForSession(id) },
+      { controller: { closeAllForSession: (id, options) => databaseToolsProvider?.closeAssistantsForSession(id, options) },
         label: "Database copilot" },
       { controller: { closeAllForSession: (id) => sourceEditorProvider?.closeExplanationsForSession(id) },
         label: "Source explanations" },
@@ -2951,6 +2953,13 @@ function createService({
 
     async readAgentPlanUsage(sessionId, options = {}) {
       return sessionAgent.readPlanUsage(sessionId, await assistantSessionOptions(sessionId, options));
+    },
+
+    readSessionWorkPlan(sessionId, input = {}) {
+      return vibe64Result(async () => ({
+        ok: true, sessionId,
+        ...await readWorkPlanPage(await assistantSessionOptions(sessionId), input)
+      }));
     },
 
     async ensureAgentSession(sessionId, options = {}) {

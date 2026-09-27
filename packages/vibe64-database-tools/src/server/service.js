@@ -141,8 +141,10 @@ function createService({
     });
   }
 
-  async function cleanupAssistant(runtime, sessionId, artifact, vibe64User) {
-    const saved = await runtime.store.readArtifact(sessionId, artifact);
+  async function cleanupAssistant(runtime, sessionId, artifact, vibe64User, renewalCleanup = null) {
+    const saved = renewalCleanup
+      ? await runtime.store.readArtifactForRenewal(sessionId, artifact)
+      : await runtime.store.readArtifact(sessionId, artifact);
     const helper = saved ? JSON.parse(saved) : null;
     if (!helper) return;
     const root = path.join(runtime.stateRoot, "assistant-helpers", helper.scope.id);
@@ -154,24 +156,28 @@ function createService({
     }, { assistantSelection: helper.selection, vibe64User });
     if (result?.ok !== true) throw databaseError(result?.error || "The database helper could not be closed. Retry cleanup before asking again.",
       result?.code || "vibe64_database_assistant_cleanup_failed");
-    await runtime.store.mutateSession(sessionId, (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true }));
+    const retire = (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true });
+    if (renewalCleanup) await runtime.store.mutateSessionForRenewal(sessionId, retire);
+    else await runtime.store.mutateSession(sessionId, retire);
     await rm(root, { recursive: true, force: true });
   }
 
-  async function closeAssistantsForSession(sessionId) {
+  async function closeAssistantsForSession(sessionId, options = {}) {
     const scope = currentProjectScopeKey();
     const tasks = [...activeAssistants].filter((task) => task.sessionId === sessionId && task.projectScope === scope);
     for (const task of tasks) task.controller.abort();
     const queries = activeQueries.get(`${scope}\0${normalizeText(sessionId)}`);
     await Promise.allSettled([...(queries?.values() || [])].filter((query) => query.cancel).map((query) => query.cancel()));
     await Promise.allSettled(tasks.map((task) => task.promise));
-    const runtime = await projectService.createRuntime({ inspectSource: false });
-    const files = await runtime.store.withReadableSessionPaths(sessionId, async (paths) => {
+    const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
+    const readPaths = options.renewalCleanup
+      ? runtime.store.withReadableSessionPathsForRenewal : runtime.store.withReadableSessionPaths;
+    const files = await readPaths(sessionId, async (paths) => {
       try { return await readdir(path.join(paths.artifactsRoot, "database/assistant-tasks")); }
       catch (error) { if (error.code === "ENOENT") return []; throw error; }
     });
     for (const file of files) if (/^[a-f0-9]{20}\.json$/u.test(file)) {
-      await cleanupAssistant(runtime, sessionId, `database/assistant-tasks/${file}`, null);
+      await cleanupAssistant(runtime, sessionId, `database/assistant-tasks/${file}`, null, options.renewalCleanup);
     }
     return { ok: true };
   }

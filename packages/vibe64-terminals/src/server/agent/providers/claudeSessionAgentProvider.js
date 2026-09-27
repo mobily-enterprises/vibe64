@@ -5,7 +5,7 @@ import { requireCompletedNativeConversationReplacement } from "../../assistantCh
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
-import { rm } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { VIBE64_AGENT_RUN_STATE as RUN } from "@local/vibe64-runtime/server";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import {
@@ -148,12 +148,31 @@ function createClaudeSessionAgentProvider({
     return entry?.turn ? { ...entry.turn, threadId: entry.id,
       phase: entry.turn.active && !entry.observationError ? text(entry.turn.phase) : "" } : null;
   }
+  function scopedConversationPath(context, id) {
+    return path.join(context.assistantScope.runtimeRoot, "claude-conversations", context.sessionId, `${id}.json`);
+  }
   async function save(entry) {
-    await metadata(entry.context, { [`claude_conversation_${entry.id}`]: JSON.stringify({
+    const state = {
       executionId: entry.process?.executionId || entry.executionId || "",
       accountIdentity: entry.accountIdentity, accountIdentities: entry.accountIdentities, sent: entry.sent, state: entry.turn?.state || "ready", turnId: entry.turn?.id || "",
       lastMessageId: entry.lastMessageId || "", main: entry.main, persistent: entry.persistent === true, nativeWorkdir: entry.nativeWorkdir || entry.context.workdir
-    }) });
+    };
+    if (!entry.context.assistantScope) {
+      return metadata(entry.context, { [`claude_conversation_${entry.id}`]: JSON.stringify(state) });
+    }
+    if (!entry.persistent) return;
+    const file = scopedConversationPath(entry.context, entry.id);
+    const contents = JSON.stringify({ schemaVersion: 1, ...state });
+    const saving = (entry.saving || Promise.resolve()).then(async () => {
+      await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+      const temporary = `${file}.${randomUUID()}.tmp`;
+      try {
+        await writeFile(temporary, contents, { mode: 0o600 });
+        await rename(temporary, file);
+      } finally { await rm(temporary, { force: true }); }
+    });
+    entry.saving = saving.catch(() => {});
+    await saving;
   }
 
   async function publishRun(entry, state, message = "") {
@@ -388,7 +407,13 @@ function createClaudeSessionAgentProvider({
       entry.context = ctx;
       return entry;
     }
-    const saved = ctx.session?.metadata?.[`claude_conversation_${id}`];
+    let saved = ctx.session?.metadata?.[`claude_conversation_${id}`];
+    if (ctx.assistantScope) {
+      try {
+        saved = await readFile(scopedConversationPath(ctx, id), "utf8");
+        if (JSON.parse(saved).schemaVersion !== 1) throw error("This retained Claude conversation needs a compatible Vibe64 release.");
+      } catch (failure) { if (failure.code !== "ENOENT") throw failure; }
+    }
     const recoveringCleanup = ctx.assistantScope && cleanupExecutionId !== undefined;
     if (!main && !saved && !create && !recoveringCleanup) throw error("This Claude conversation is unavailable.");
     const state = saved ? JSON.parse(saved) : {};
@@ -964,6 +989,8 @@ function createClaudeSessionAgentProvider({
     async createConversation(context, input = {}) {
       const entry = await entryFor(context, randomUUID(), { create: true });
       if (context.assistantScope && input.executionProfile) entry.profile = vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile);
+      entry.persistent = input.persistent === true;
+      await save(entry);
       return { ok: true, conversationId: entry.id, ephemeral: input.ephemeral === true, status: "ready" };
     },
     readConversation, startConversationTurn, waitForConversationTurn, runDetachedChatTurn,
@@ -981,6 +1008,10 @@ function createClaudeSessionAgentProvider({
       const file = await claudeHistoryPath({ configRoot, workdir: entry.nativeWorkdir, conversationId: entry.id });
       if (file) await rm(file.path, { force: true });
       await metadata(entry.context, { [`claude_conversation_${entry.id}`]: null });
+      if (entry.context.assistantScope) {
+        await entry.saving;
+        await rm(scopedConversationPath(entry.context, entry.id), { force: true });
+      }
       entries.delete(entry.key);
       return { ok: true, deleted: true, conversationId: entry.id };
     },

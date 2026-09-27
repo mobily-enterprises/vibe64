@@ -2,6 +2,19 @@
 
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
+Goal read/update, plan allowance, session preparation/reconnection, attachment
+read/upload/delete and terminal status/control use named actions shared by HTTP
+and automation. Actions validate required identities and supply the current
+authenticated actor and project context; provider goal revision checks and
+session write admission remain in their existing services. Terminal text is
+preserved exactly and Git attribution is enabled by the action, never supplied
+by a caller. Quiet and snapshot HTTP controls share one snapshot action.
+Raw terminal controls are excluded from Colleague tools. Attachment multipart,
+binary download and terminal WebSocket framing remain transport adapters.
+The contracts and adapters are in
+`packages/vibe64-terminals/src/server/actions.js`, `inputSchemas.js` and
+`registerRoutes.js`; HTTP/direct authority and byte-stream evidence is in
+`tests/server/vibe64TerminalActionDispatch.unit.test.js`.
 Standalone local-editor sessions do not request the hosted member-message queue;
 AI access still uses its existing check. This avoids an irrelevant sign-in
 warning and queue requests in a local editor with no hosted identity.
@@ -201,6 +214,8 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `src/lib/vibe64ChatDelivery.js`
 - `src/components/studio/vibe64-session/Vibe64ConversationStatus.vue`
 
+- `packages/vibe64-core/src/server/actionContext.js`
+
 - `packages/vibe64-genesis/src/server/hostContextRegistry.js`
 
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
@@ -294,6 +309,14 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `vite.config.mjs`
 
 ## Public contract
+
+Session and temporary-conversation actions resolve their project and acting user
+through the shared action boundary. The acting user is trusted context, never
+an action argument. HTTP URL selection and explicit action selection must agree;
+automation enters the same project context as HTTP. Hosts recheck authentication
+and project access before each execution. Ordinary product handlers must invoke
+their owning action; custom transports may retain their transport adapter.
+
 
 Hosts may explicitly replace idle native context using an exact predecessor ID
 and a supplied briefing. A saved preparation journal prevents interrupted binding
@@ -457,6 +480,12 @@ only unambiguous approval of a currently ready plan can select Junior. The runti
 checks the ready file and approved revision again before changing model or sending.
 No file, an incomplete document, a new request, or a stale approval cannot start
 Auto coding. Planning completion never starts coding automatically.
+The `vibe64.terminals.work-plan.read` query exposes Main's working document through
+the same action for HTTP and Colleague. Pages preserve text, count Unicode
+characters and contain at most 16,000 characters. Later pages require the first
+page's content revision; a changed document requires restarting the read. This
+operation reads the canonical plan owner without starting AI or exposing a file
+path. Approval still uses ordinary Send and its exact-revision admission checks.
 Direct Senior and Junior answer questions or implement changes from the
 message and conversation, without reading, preparing, updating or requiring the
 temporary working plan. Senior has no planning-only restriction outside Auto.

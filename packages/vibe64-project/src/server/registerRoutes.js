@@ -18,6 +18,8 @@ import {
 } from "./actions.js";
 import {
   projectRemoteInputValidator,
+  projectIssueInputValidators,
+  projectPullRequestInputValidators,
   projectOnboardingInputValidator,
   projectTemplateInputValidator,
   projectCreateInputValidator,
@@ -37,7 +39,6 @@ import {
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 
 function registerRoutes(http, {
-  project = null,
   projectContext = null,
   routeSurface = "",
   routeRelativePath = ""
@@ -50,108 +51,52 @@ function registerRoutes(http, {
     tags: ["studio", "vibe64-project"]
   });
 
-  routes.serviceRoute("GET", "/repository/remote", {
+  routes.actionRoute("GET", "/repository/remote", {
+    actionId: "vibe64.project.repository.remote.read",
     summary: "Read local Git remote configuration and last observed freshness."
-  }, () => project.repositoryRemote());
-  routes.serviceRoute("GET", "/repository/branches", {
+  });
+  routes.actionRoute("GET", "/repository/branches", {
+    actionId: "vibe64.project.repository.branches.read",
     summary: "List repository branches for a new session."
-  }, (request) => project.repositoryBranches({ vibe64User: request.vibe64User || null }));
-  routes.serviceRoute("PUT", "/repository/workflow", {
+  });
+  routes.actionRoute("PUT", "/repository/workflow", {
+    actionId: "vibe64.project.repository.workflow.save",
+    buildInput: (request) => ({ requirePullRequest: routes.requestBody(request).requirePullRequest }),
     summary: "Choose whether native publication requires a pull request."
-  }, (request) => project.saveRepositoryWorkflow({
-    requirePullRequest: routes.requestBody(request).requirePullRequest, vibe64User: request.vibe64User || null
-  }));
+  });
 
-  routes.serviceRoute("GET", "/issues", {
-    summary: "List GitHub issues for this project."
-  }, (request) => project.githubIssues({
-    ...routes.requestQuery(request), operation: "list", vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("POST", "/issues", {
-    bodyLimit: 300_000,
-    summary: "Create a GitHub issue in this project."
-  }, (request) => project.githubIssues({
-    title: routes.requestBody(request).title,
-    body: routes.requestBody(request).body,
-    labels: routes.requestBody(request).labels,
-    operation: "create", vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("GET", "/issue-labels", {
-    summary: "Read this repository's GitHub labels and label permissions."
-  }, (request) => project.githubIssues({
-    operation: "labels", vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("POST", "/issue-labels", {
-    summary: "Create a GitHub repository label with a chosen colour."
-  }, (request) => project.githubIssues({
-    name: routes.requestBody(request).name,
-    color: routes.requestBody(request).color,
-    operation: "create-label", vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("GET", "/issue-mentions", {
-    summary: "Read repository collaborators and issue participants for mentions."
-  }, (request) => project.githubIssues({
-    operation: "mentions", number: routes.requestQuery(request).number, vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("PUT", "/issues/:number/labels", {
-    summary: "Set the labels on a GitHub issue."
-  }, (request) => project.githubIssues({
-    number: request.params.number, labels: routes.requestBody(request).labels, labelMode: routes.requestBody(request).labelMode,
-    operation: "set-labels", vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("GET", "/pull-requests", {
-    summary: "List GitHub pull requests for this project."
-  }, (request) => project.githubPullRequests({
-    ...routes.requestQuery(request), operation: "list", vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("GET", "/pull-requests/:number", {
-    summary: "Read a GitHub pull request."
-  }, (request) => project.githubPullRequests({
-    number: request.params.number, operation: "read", vibe64User: request.vibe64User || null
-  }));
-  for (const operation of ["ready", "update-branch", "merge"]) {
-    routes.serviceRoute("POST", `/pull-requests/:number/${operation}`, {
-      summary: `Apply the reviewed ${operation} action to a GitHub pull request.`
-    }, (request) => project.githubPullRequests({
-      number: request.params.number, operation,
-      review: routes.requestBody(request).review,
-      mergeMethod: routes.requestBody(request).mergeMethod,
-      vibe64User: request.vibe64User || null
-    }));
+  function githubRoute(method, path, family, operation, validator, summary, bodyLimit) {
+    routes.actionRoute(method, path, {
+      actionId: `vibe64.project.${family}.${operation}`, summary, bodyLimit,
+      buildInput(request) {
+        const data = { ...(method === "GET" ? routes.requestQuery(request) : routes.requestBody(request)), ...request.params };
+        // Derive HTTP fields from the action contract. URL identities take
+        // precedence; actor, repository and operation are never caller inputs.
+        const input = Object.fromEntries(Object.keys(validator.schema.getFieldDefinitions())
+          .filter((name) => data[name] !== undefined).map((name) => [name, data[name]]));
+        return input;
+      }
+    });
   }
-  routes.serviceRoute("GET", "/issues/:number", {
-    summary: "Read a GitHub issue and its comments."
-  }, (request) => project.githubIssues({
-    ...routes.requestQuery(request), number: request.params.number, operation: "read", vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("POST", "/issues/:number/comments", {
-    bodyLimit: 300_000,
-    summary: "Comment on this project's GitHub issue."
-  }, (request) => project.githubIssues({
-    body: routes.requestBody(request).body, number: request.params.number,
-    originId: routes.requestBody(request).originId,
-    operation: "comment", vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("PATCH", "/issues/:number", {
-    summary: "Close or reopen this project's GitHub issue."
-  }, (request) => project.githubIssues({
-    state: routes.requestBody(request).state, number: request.params.number,
-    operation: "state", vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("PUT", "/issues/:number", {
-    bodyLimit: 300_000,
-    summary: "Edit this project's GitHub issue title and description."
-  }, (request) => project.githubIssues({
-    title: routes.requestBody(request).title, body: routes.requestBody(request).body, number: request.params.number,
-    operation: "edit", vibe64User: request.vibe64User || null
-  }));
-  routes.serviceRoute("PATCH", "/issues/:number/comments/:commentId", {
-    bodyLimit: 300_000,
-    summary: "Edit a comment on this project's GitHub issue."
-  }, (request) => project.githubIssues({
-    body: routes.requestBody(request).body, number: request.params.number, commentId: request.params.commentId,
-    operation: "edit-comment", vibe64User: request.vibe64User || null
-  }));
+  for (const [method, path, operation, summary, bodyLimit] of [
+    ["GET", "/issues", "list", "List GitHub issues for this project."],
+    ["POST", "/issues", "create", "Create a GitHub issue in this project.", 300_000],
+    ["GET", "/issue-labels", "labels", "Read this repository's GitHub labels and label permissions."],
+    ["POST", "/issue-labels", "create-label", "Create a GitHub repository label with a chosen colour."],
+    ["GET", "/issue-mentions", "mentions", "Read repository collaborators and issue participants for mentions."],
+    ["PUT", "/issues/:number/labels", "set-labels", "Set the labels on a GitHub issue."],
+    ["GET", "/issues/:number", "read", "Read a GitHub issue and its comments."],
+    ["POST", "/issues/:number/comments", "comment", "Comment on this project's GitHub issue.", 300_000],
+    ["PATCH", "/issues/:number", "state", "Close or reopen this project's GitHub issue."],
+    ["PUT", "/issues/:number", "edit", "Edit this project's GitHub issue title and description.", 300_000],
+    ["PATCH", "/issues/:number/comments/:commentId", "edit-comment", "Edit a comment on this project's GitHub issue.", 300_000]
+  ]) githubRoute(method, path, "issues", operation, projectIssueInputValidators[operation], summary, bodyLimit);
+  for (const [method, path, operation, summary] of [
+    ["GET", "/pull-requests", "list", "List GitHub pull requests for this project."],
+    ["GET", "/pull-requests/:number", "read", "Read a GitHub pull request."],
+    ...["ready", "update-branch", "merge"].map((operation) => ["POST", `/pull-requests/:number/${operation}`, operation, `Apply the reviewed ${operation} action to a GitHub pull request.`])
+  ]) githubRoute(method, path, "pull-requests", operation, projectPullRequestInputValidators[operation], summary);
+
   routes.actionRoute("POST", "/repository/remote", {
     actionId: ACTION_REPOSITORY_REMOTE,
     body: projectRemoteInputValidator,
@@ -198,15 +143,11 @@ function registerRoutes(http, {
     statusCode: envSecretRevealStatusCode,
     summary: "Reveal one project development secret to the Vibe64 owner."
   }, async (request, reply) => {
-    if (!project || typeof project.revealEnvSecret !== "function") {
-      throw new TypeError("Project Env secret reveal requires vibe64.project.");
-    }
     reply
       .header("cache-control", "no-store")
       .header("pragma", "no-cache");
-    return project.revealEnvSecret({
-      ...routes.requestBody(request),
-      vibe64User: request.vibe64User || null
+    return request.executeAction({
+      actionId: "vibe64.project.env.secret.reveal", input: withoutUser(routes.requestBody(request))
     });
   });
   routes.actionRoute("PUT", "/env/user-values", {
@@ -217,21 +158,21 @@ function registerRoutes(http, {
   });
   routes.actionRoute("GET", "/settings", {
     actionId: ACTION_READ_PROJECT_SETTINGS,
-    buildInput: (request) => withUser(request, routes.requestQuery(request)),
+    buildInput: (request) => withoutUser(routes.requestQuery(request)),
     query: projectSettingsReadInputValidator,
     summary: "Read Vibe64 and source-owned project settings."
   });
   routes.actionRoute("PUT", "/settings/collaboration", {
     actionId: ACTION_SAVE_COLLABORATION_SETTINGS,
     body: projectCollaborationInputValidator,
-    buildInput: (request) => withUser(request, routes.requestBody(request)),
+    buildInput: (request) => withoutUser(routes.requestBody(request)),
     statusCode: projectSettingsMutationStatusCode,
     summary: "Save Genesis collaboration guidance in project source."
   });
   routes.actionRoute("PUT", "/settings/prompt-hints", {
     actionId: ACTION_SAVE_PROJECT_PROMPT_HINTS,
     body: projectPromptHintsInputValidator,
-    buildInput: (request) => withUser(request, routes.requestBody(request)),
+    buildInput: (request) => withoutUser(routes.requestBody(request)),
     statusCode: projectSettingsMutationStatusCode,
     summary: "Save the Vibe64 prompt-suggestion choice."
   });
@@ -290,15 +231,9 @@ function projectSettingsMutationStatusCode(response = {}) {
   return 400;
 }
 
-function withUser(request, input = {}) {
-  return request.vibe64User
-    ? {
-        ...input,
-        vibe64User: request.vibe64User
-      }
-    : {
-        ...input
-      };
+function withoutUser(input = {}) {
+  const { vibe64User: _ignoredUser, ...data } = input;
+  return data;
 }
 
 export { registerRoutes };

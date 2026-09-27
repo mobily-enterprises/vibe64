@@ -24,6 +24,8 @@ from saved project work, and inspect one exact file change at a time.
 - `tests/server/vibe64SourceSearchIndex.unit.test.js`
 - `packages/vibe64-source-editor/src/server/starredFiles.js`
 - `packages/vibe64-source-editor/src/server/registerRoutes.js`
+- `packages/vibe64-source-editor/src/server/actions.js`
+- `tests/server/vibe64SourceEditorRoutes.unit.test.js`
 - `src/composables/useVibe64StarredFiles.js`
 - `src/components/studio/vibe64-session/Vibe64StarredFilesMenu.vue`
 - `src/components/studio/vibe64-session/Vibe64StarredFilesList.vue`
@@ -47,6 +49,20 @@ from saved project work, and inspect one exact file change at a time.
 - `src/pages/app/project/[slug]/dashboard/repository/index.vue`
 
 ## Public contract
+
+The thirty named `vibe64.source-editor.*` actions own ordinary source, file-area,
+integration and explanation inputs. HTTP JSON handlers execute those actions;
+downloads and multipart uploads retain transport framing while dispatching the
+same domain operation. Every action resolves the current actor and project access
+before calling the existing service. File-change publication follows successful
+create/save/integration writes in the action, including non-HTTP callers.
+Unknown inputs fail canonical validation; integration setup cannot accept an
+executable, environment or source root supplied by a caller. Existing service
+revision, owner, path and session-admission checks still apply.
+
+Live file observation and streamed explanation/follow-up responses retain their
+transport-owned callbacks and lifetime. Colleague does not discover these source
+actions: repository investigation and editing belong to its coding conversations.
 
 Files presents Repo, Drop Zone and Session as icon-labelled areas, separate from
 folder navigation. Repo retains source editing, stars, explanations and selected

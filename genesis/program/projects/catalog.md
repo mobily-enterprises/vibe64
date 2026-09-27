@@ -7,6 +7,8 @@ workspace.
 
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/inputSchemas.js`
+- `tests/server/vibe64ProjectActionDispatch.unit.test.js`
 - `packages/vibe64-project/src/server/managedProject.js`
 - `packages/vibe64-genesis/src/server/index.js`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
@@ -24,6 +26,16 @@ workspace.
 - `packages/vibe64-core/src/server/projectRuntimeOpenState.js`
 
 ## Public contract
+
+All thirty-six project HTTP operations dispatch named `vibe64.project.*` actions.
+The canonical inputs enforce required fields and exclude caller-supplied actors;
+HTTP and direct callers resolve fresh identity and project access before entering
+the existing project service. GitHub credentials, repository/PR review checks,
+source mutation locks and resource admission remain with their existing owners.
+Secret reveal keeps its uncached HTTP response around the same owner-only action.
+Project refresh events identify the affected result project, including creation
+or selection from a different requesting project. Action registration alone does
+not expose these operations to Colleague; bounded assistant contracts are separate.
 
 The compact project shell shares its existing chat/project pane state with
 touch navigation. A deliberate single-finger horizontal swipe left reveals the

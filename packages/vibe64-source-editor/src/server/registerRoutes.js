@@ -92,144 +92,94 @@ async function sendFileDownload(reply, result) {
   }
 }
 
-function registerRoutes(
-  http,
-  {
-    publishFileChanged = async () => null,
-    projectContext = null,
-    routeSurface = "",
-    routeRelativePath = "",
-    sourceEditor
-  } = {}
-) {
+function sourceInput(request, input = {}) {
+  const { vibe64User: _ignoredUser, ...data } = input;
+  return { ...data, sessionId: request.params.sessionId };
+}
+
+function registerRoutes(http, {
+  projectContext = null, routeSurface = "", routeRelativePath = "", sourceEditor
+} = {}) {
   if (!sourceEditor || typeof sourceEditor.readTree !== "function") {
     throw new TypeError("registerRoutes requires the Vibe64 Source Editor API.");
   }
   const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 source editor routes only accept loopback Studio requests.",
-    projectContext,
-    routeRelativePath,
-    routeSurface,
-    tags: ["studio", "vibe64-source-editor"]
+    projectContext, routeRelativePath, routeSurface, tags: ["studio", "vibe64-source-editor"]
   });
-
-  routes.serviceRoute("GET", "/sessions/:sessionId/files", {
-    summary: "Read the file areas available to this caller for this session."
-  }, (request) => sourceEditor.fileArea({ sessionId: request.params.sessionId }, "areas"));
-
-  // One registration boundary for all areas: select only relative paths and
-  // operation data; identity/project/root are resolved by the trusted context.
+  const route = (method, suffix, operation, options = {}, buildInput = (request) => sourceInput(request)) => routes.actionRoute(
+    method, `/sessions/:sessionId${suffix}`, { ...options, actionId: `vibe64.source-editor.${operation}`, buildInput }
+  );
+  const body = (request) => sourceInput(request, routes.requestBody(request));
+  const query = (request) => sourceInput(request, routes.requestQuery(request));
+  const searched = (request) => {
+    const { q, ...rest } = routes.requestQuery(request);
+    return sourceInput(request, { ...rest, query: q });
+  };
+  const areaQuery = (request, operation) => {
+    const input = { ...routes.requestQuery(request) };
+    // The existing Files client includes its paging offset on every read URL.
+    // Only directory listing uses it in the domain contract.
+    if (operation !== "tree") delete input.offset;
+    return sourceInput(request, { ...input, area: request.params.area });
+  };
+  route("GET", "/files", "file-areas.read", { summary: "Read the session file areas available to this caller." });
   for (const [method, suffix, operation] of [
-    ["GET", "tree", "tree"],
-    ["GET", "file", "file"],
-    ["GET", "download", "download"],
-    ["GET", "archive", "archive"],
-    ["POST", "upload", "upload"],
-    ["PUT", "file", "save"],
-    ["POST", "rename", "rename"],
-    ["POST", "directory", "mkdir"],
-    ["DELETE", "file", "delete"]
-  ]) {
-    routes.serviceRoute(method, `/sessions/:sessionId/files/:area/${suffix}`, {
-      bodyLimit: operation === "upload" ? 101 * 1024 * 1024 : 2 * 1024 * 1024,
-      summary: "Access files within an authorized session area."
-    }, async (request, reply) => {
-      const data = method === "GET" || operation === "upload"
-        ? routes.requestQuery(request)
-        : routes.requestBody(request);
-      const result = await sourceEditor.fileArea({
-        area: request.params.area,
-        sessionId: request.params.sessionId,
-        path: data.path,
-        offset: data.offset,
-        destination: data.destination,
-        baseHash: data.baseHash,
-        text: data.text
-      }, operation, {
-        readUpload: () => request.parts({
-          throwFileSizeLimit: true,
-          limits: { files: 1, fields: 0, parts: 1, fileSize: 100 * 1024 * 1024 }
-        })
-      });
-      if (operation === "download" || operation === "archive") return sendFileDownload(reply, result);
-      return result;
-    });
-  }
+    ["GET", "tree", "tree"], ["GET", "file", "file"], ["PUT", "file", "save"],
+    ["POST", "rename", "rename"], ["POST", "directory", "mkdir"], ["DELETE", "file", "delete"]
+  ]) route(method, `/files/:area/${suffix}`, `file-area.${operation}`, {
+    bodyLimit: 2 * 1024 * 1024, summary: "Access files within an authorized session area."
+  }, (request) => method === "GET" ? areaQuery(request, operation)
+    : sourceInput(request, { ...routes.requestBody(request), area: request.params.area }));
 
-  routes.serviceRoute("GET", "/sessions/:sessionId/integrations", {
-    summary: "Read the session's portable integration configuration."
-  }, (request) => sourceEditor.readIntegrations({ sessionId: request.params.sessionId }));
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/integrations/n8n/discovery", {
-    bodyLimit: 4096,
-    summary: "Discover public OAuth metadata for an n8n instance."
-  }, (request) => sourceEditor.discoverN8nIntegration({
-    sessionId: request.params.sessionId, serverUrl: routes.requestBody(request).serverUrl
+  // Binary and multipart framing stays at HTTP; the domain operation is shared.
+  for (const operation of ["download", "archive"]) routes.serviceRoute("GET", `/sessions/:sessionId/files/:area/${operation}`, {
+    summary: "Download original bytes from an authorized session area."
+  }, async (request, reply) => sendFileDownload(reply, await request.executeAction({
+    actionId: `vibe64.source-editor.file-area.${operation}`,
+    input: areaQuery(request, operation)
+  })));
+  routes.serviceRoute("POST", "/sessions/:sessionId/files/:area/upload", {
+    bodyLimit: 101 * 1024 * 1024, summary: "Upload one file into the authorized Drop Zone."
+  }, (request) => request.executeAction({
+    actionId: "vibe64.source-editor.file-area.upload",
+    input: sourceInput(request, { ...routes.requestQuery(request), area: request.params.area }),
+    context: { sourceEditorUpload: { readUpload: () => request.parts({
+      throwFileSizeLimit: true, limits: { files: 1, fields: 0, parts: 1, fileSize: 100 * 1024 * 1024 }
+    }) } }
   }));
 
-  routes.serviceRoute("PUT", "/sessions/:sessionId/integrations", {
-    bodyLimit: 2 * 1024 * 1024,
-    summary: "Validate and save the session's portable integration configuration."
-  }, async (request) => {
-    const body = routes.requestBody(request);
-    const result = await sourceEditor.saveIntegrations({
-      sessionId: request.params.sessionId,
-      baseHash: body.baseHash,
-      configuration: body.configuration,
-      originId: body.originId,
-      projectSlug: request.params.slug
-    });
-    await publishFileChanged(result, { operation: body.baseHash === null ? "created" : "saved" });
-    return result;
-  });
+  route("GET", "/integrations", "integrations.read", { summary: "Read portable integration configuration." });
+  route("POST", "/integrations/n8n/discovery", "integrations.n8n.discover", { bodyLimit: 4096, summary: "Discover public n8n OAuth metadata." }, body);
+  route("PUT", "/integrations", "integrations.save", { bodyLimit: 2 * 1024 * 1024, summary: "Validate and save integration configuration." }, body);
+  route("POST", "/integrations/:integrationId/oauth-client", "integrations.oauth-client.register", {
+    bodyLimit: 2 * 1024 * 1024, summary: "Register a supported OAuth client and save its project configuration and private Env."
+  }, (request) => ({ ...body(request), integrationId: request.params.integrationId }));
+  route("POST", "/integrations/:integrationId/setup", "integrations.setup", {
+    bodyLimit: 32768, summary: "Run the application's declared development integration setup operation."
+  }, (request) => ({ ...body(request), integrationId: request.params.integrationId }));
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/integrations/:integrationId/oauth-client", {
-    bodyLimit: 2 * 1024 * 1024,
-    summary: "Register a supported OAuth client and save its project configuration and private Env."
-  }, async (request) => {
-    const body = routes.requestBody(request);
-    const result = await sourceEditor.registerOAuthIntegration(withVibe64User(request, {
-      sessionId: request.params.sessionId, integrationId: request.params.integrationId,
-      baseHash: body.baseHash, configuration: body.configuration, callbackUrl: body.callbackUrl,
-      originId: body.originId, projectSlug: request.params.slug
-    }));
-    await publishFileChanged(result, { operation: body.baseHash === null ? "created" : "saved" });
-    return result;
-  });
+  route("GET", "/source-editor/tree", "tree.read", { summary: "Read the editable source tree." }, query);
+  route("GET", "/source-editor/files", "files.find", { summary: "Find editable source files." }, searched);
+  route("GET", "/source-editor/search", "search", { summary: "Search editable source files." }, searched);
+  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/download", {
+    summary: "Download an original source file."
+  }, async (request, reply) => sendFileDownload(reply, await request.executeAction({ actionId: "vibe64.source-editor.file.download", input: query(request) })));
+  route("GET", "/source-editor/stars", "stars.read", { summary: "Read this account's starred files." });
+  route("POST", "/source-editor/stars", "star.set", { bodyLimit: 16 * 1024, summary: "Star or unstar a file." }, body);
+  route("POST", "/source-editor/resolve-path", "path.resolve", { bodyLimit: 32 * 1024, summary: "Resolve a source path reference." }, body);
+  route("POST", "/source-editor/explanations", "explanation.create", { bodyLimit: 256 * 1024, summary: "Explain a selected source range." }, body);
+  route("POST", "/source-editor/explanations/cleanup", "explanations.cleanup", { bodyLimit: 16 * 1024, summary: "Clean abandoned source explanation chats." }, body);
+  for (const [method, suffix, operation] of [
+    ["DELETE", "", "delete"], ["POST", "/stop", "stop"], ["POST", "/followups", "followup"]
+  ]) route(method, `/source-editor/explanations/:explanationId${suffix}`, `explanation.${operation}`, {
+    bodyLimit: 128 * 1024, summary: "Operate the selected temporary source explanation."
+  }, (request) => ({ ...body(request), explanationId: request.params.explanationId }));
+  route("GET", "/source-editor/file", "file.read", { summary: "Read an editable source file." }, query);
+  route("POST", "/source-editor/file", "file.create", { bodyLimit: 32 * 1024, summary: "Create an editable source file." }, body);
+  route("PUT", "/source-editor/file", "file.save", { bodyLimit: 2 * 1024 * 1024, summary: "Autosave an editable source file." }, body);
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/integrations/:integrationId/setup", {
-    bodyLimit: 32768,
-    summary: "Run the application's declared integration setup operation."
-  }, (request) => {
-    const body = routes.requestBody(request);
-    return sourceEditor.runIntegrationSetup(withVibe64User(request, {
-      sessionId: request.params.sessionId,
-      integrationId: request.params.integrationId,
-      environment: "development",
-      operation: body.operation,
-      attemptId: body.attemptId,
-      setupRequest: body.setupRequest,
-      verificationInput: body.verificationInput,
-      ads: body.ads,
-      paymentEnvironment: body.paymentEnvironment,
-      reviewId: body.reviewId,
-      providerId: body.providerId,
-      subjectId: body.subjectId, collection: body.collection, after: body.after
-    }));
-  });
-
-  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/tree", {
-    summary: "Read the editable source tree for a Vibe64 session."
-  }, (request) => {
-    const query = routes.requestQuery(request);
-    return sourceEditor.readTree({
-      limit: query.limit,
-      offset: query.offset,
-      path: query.path,
-      sessionId: request.params.sessionId
-    });
-  });
-
+  // Existing live subscriptions retain their transport-owned callbacks/lifetime.
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/changes/stream", {
     summary: "Stream changes to the source file currently open in a Vibe64 session."
   }, async (request, reply) => {
@@ -254,82 +204,6 @@ function registerRoutes(
     });
   });
 
-  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/files", {
-    summary: "Find editable source files in a Vibe64 session."
-  }, (request) => {
-    const query = routes.requestQuery(request);
-    return sourceEditor.listFiles({
-      limit: query.limit,
-      query: query.q,
-      sessionId: request.params.sessionId
-    });
-  });
-
-  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/download", {
-    summary: "Download a file from the selected session source."
-  }, async (request, reply) => {
-    const result = await sourceEditor.downloadFile({
-      sessionId: request.params.sessionId,
-      path: routes.requestQuery(request).path
-    });
-    return sendFileDownload(reply, result);
-  });
-
-  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/stars", {
-    summary: "Read this account's starred files for the current project."
-  }, (request) => sourceEditor.readStarredFiles(withVibe64User(request, { sessionId: request.params.sessionId })));
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/stars", {
-    bodyLimit: 16 * 1024,
-    summary: "Star or unstar one file for this account and project."
-  }, (request) => {
-    const body = routes.requestBody(request);
-    return sourceEditor.setStarredFile(withVibe64User(request, {
-      sessionId: request.params.sessionId,
-      path: body.path,
-      starred: body.starred
-    }));
-  });
-
-  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/search", {
-    summary: "Search editable source files in a Vibe64 session."
-  }, (request) => {
-    const query = routes.requestQuery(request);
-    return sourceEditor.search({
-      limit: query.limit,
-      query: query.q,
-      sessionId: request.params.sessionId
-    });
-  });
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/resolve-path", {
-    bodyLimit: 32 * 1024,
-    summary: "Resolve a source path reference relative to an editable session file."
-  }, (request) => {
-    const body = routes.requestBody(request);
-    return sourceEditor.resolvePath({
-      fromPath: body.fromPath,
-      sessionId: request.params.sessionId,
-      target: body.target
-    });
-  });
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations", {
-    bodyLimit: 256 * 1024,
-    summary: "Explain a selected source range in a Vibe64 session."
-  }, (request) => {
-    const body = routes.requestBody(request);
-    return sourceEditor.explainSelection(withVibe64User(request, {
-      endColumn: body.endColumn,
-      endLine: body.endLine,
-      force: body.force === true,
-      originId: body.originId,
-      path: body.path,
-      sessionId: request.params.sessionId,
-      startColumn: body.startColumn,
-      startLine: body.startLine
-    }));
-  });
 
   routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/stream", {
     bodyLimit: 256 * 1024,
@@ -357,47 +231,6 @@ function registerRoutes(
     });
   });
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/cleanup", {
-    bodyLimit: 16 * 1024,
-    summary: "Clean abandoned temporary source explanation chats in a Vibe64 session."
-  }, (request) => {
-    const body = routes.requestBody(request);
-    return sourceEditor.cleanupExplanations(withVibe64User(request, {
-      activeExplanationIds: body.activeExplanationIds,
-      originId: body.originId,
-      sessionId: request.params.sessionId
-    }));
-  });
-
-  routes.serviceRoute("DELETE", "/sessions/:sessionId/source-editor/explanations/:explanationId", {
-    summary: "Dispose a temporary source explanation chat in a Vibe64 session."
-  }, (request) => {
-    return sourceEditor.deleteExplanation(withVibe64User(request, {
-      explanationId: request.params.explanationId,
-      sessionId: request.params.sessionId
-    }));
-  });
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/:explanationId/stop", {
-    summary: "Stop a running temporary source explanation chat."
-  }, (request) => {
-    return sourceEditor.stopExplanation(withVibe64User(request, {
-      explanationId: request.params.explanationId,
-      sessionId: request.params.sessionId
-    }));
-  });
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/:explanationId/followups", {
-    bodyLimit: 128 * 1024,
-    summary: "Add a follow-up question to a temporary source explanation chat."
-  }, (request) => {
-    const body = routes.requestBody(request);
-    return sourceEditor.addExplanationFollowup(withVibe64User(request, {
-      explanationId: request.params.explanationId,
-      message: body.message,
-      sessionId: request.params.sessionId
-    }));
-  });
 
   routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/:explanationId/followups/stream", {
     bodyLimit: 128 * 1024,
@@ -418,49 +251,6 @@ function registerRoutes(
     });
   });
 
-  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/file", {
-    summary: "Read an editable source file from a Vibe64 session."
-  }, (request) => {
-    const query = routes.requestQuery(request);
-    return sourceEditor.readFile({
-      path: query.path,
-      sessionId: request.params.sessionId
-    });
-  });
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/file", {
-    bodyLimit: 32 * 1024,
-    summary: "Create a new editable source file in a Vibe64 session."
-  }, async (request) => {
-    const body = routes.requestBody(request);
-    const result = await sourceEditor.createFile({
-      originId: body.originId,
-      path: body.path,
-      projectSlug: body.projectSlug,
-      sessionId: request.params.sessionId
-    });
-    await publishFileChanged(result, {
-      operation: "created"
-    });
-    return result;
-  });
-
-  routes.serviceRoute("PUT", "/sessions/:sessionId/source-editor/file", {
-    bodyLimit: 2 * 1024 * 1024,
-    summary: "Autosave an editable source file in a Vibe64 session."
-  }, async (request) => {
-    const body = routes.requestBody(request);
-    const result = await sourceEditor.saveFile({
-      baseHash: body.baseHash,
-      originId: body.originId,
-      path: body.path,
-      projectSlug: body.projectSlug,
-      sessionId: request.params.sessionId,
-      text: body.text
-    });
-    await publishFileChanged(result);
-    return result;
-  });
 }
 
 export { registerRoutes };

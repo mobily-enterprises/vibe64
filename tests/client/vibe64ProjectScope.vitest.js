@@ -251,6 +251,12 @@ describe("Vibe64 project client scope", () => {
       .toBe("/api/vibe64/projects/alpha_1/repository/github");
     expect(scopedDevelopmentApiPathname("/api/vibe64/github/repositories/search", "alpha_1"))
       .toBe("/api/vibe64/github/repositories/search");
+    for (const project of ["alpha_1", "other-project"]) {
+      for (const suffix of ["?clientId=tab-1", "/messages", "/focus", "/navigation/ack", "/stop"]) {
+        const url = `/api/vibe64/colleague${suffix}`;
+        expect(scopedDevelopmentApiUrl(url, project)).toBe(url);
+      }
+    }
   });
 
   it("resolves direct browser transport URLs through the current project scope", () => {

@@ -4,6 +4,12 @@ People can open one or more clearly separate, short-lived AI tasks for focused
 help without adding those exchanges to the main project conversation or
 session history.
 
+Temporary creation and preference updates expose typed Senior/Junior routing
+inputs through their canonical actions; Auto remains Main-only. Colleague's
+bounded results report saved chat mode, workflow, review preference and whether
+a model override exists, omitting native bindings. A preference update alone
+does not send a message or change Main's preferences.
+
 A host-provided conversation appears in the tab strip only while selected.
 Its host owns the entry point; ordinary chat headers and temporary-chat tabs
 do not keep a permanent shortcut, including the header shown while archiving
@@ -11,6 +17,10 @@ and after the last session closes. Returning to Main chat or a temporary chat
 hides the host conversation without deleting its saved history.
 The workspace exposes its selected visibility to the parent so Main chat's
 optional companions cannot keep targeting Main while another chat is selected.
+Its selected-view interface reports readiness, Main/temporary/host selection and
+manual selection changes to the host. Opening a saved temporary chat checks that
+the project, session and requested selection still match after loading its list;
+a delayed response cannot override a newer choice or an unmounted workspace.
 
 Saved composer attachments use the same visible queue as new uploads. The composer
 combines saved receipts with its pending upload queue, retains completed uploads
@@ -25,6 +35,11 @@ Restore failures retain a readable retry action in a tonal error notice.
 ## Sources
 
 - `src/lib/vibe64ThinkingPresentation.js`
+
+- `packages/vibe64-terminals/src/server/assistantContracts.js`
+
+- `packages/vibe64-core/src/server/actionContext.js`
+
 - `packages/vibe64-core/src/server/featureRoutes.js`
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
 - `packages/vibe64-runtime/src/server/assistantRoutingStateUpgrade.js`
@@ -75,6 +90,14 @@ without Edit/Cancel or another native submission. Saved history and accepted
 routing state clear stale delivery errors, including a late HTTP failure after
 an exact receipt. Pending entries are reconciled only against actual history;
 synthetic routing rows never acknowledge delivery.
+
+Session and temporary-conversation actions resolve their project and acting user
+through the shared action boundary. The acting user is trusted context, never
+an action argument. HTTP URL selection and explicit action selection must agree;
+automation enters the same project context as HTTP. Hosts recheck authentication
+and project access before each execution. Ordinary product handlers must invoke
+their owning action; custom transports may retain their transport adapter.
+
 
 Temporary Codex, Claude Code and OpenCode conversations load the same Genesis
 project hooks or plugin as main chat and standalone CLI use. The host bridge
@@ -533,3 +556,11 @@ selection and stores it in this conversation's routing preferences. The next
 send uses the existing native changeover and conversation handoff, leaving Main
 untouched. Active goals and dedicated repair conversations retain their existing
 selection restrictions. Custom never silently substitutes a collaborator backup.
+
+Temporary conversation reads optionally accept a stable message cursor and a
+bounded count, return messages in chronological order, and report whether earlier
+messages exist. An unknown cursor reports a conflict instead of silently reading
+another page. Normal reads retain the complete UI transcript. The assistant tool
+projection returns bounded text and explicit truncation flags, never native
+provider bindings or attachment records. A read failure cannot establish that
+agent work stopped.

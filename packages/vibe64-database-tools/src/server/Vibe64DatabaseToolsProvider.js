@@ -39,7 +39,6 @@ const Vibe64DatabaseToolsProvider = defineFeature({
       terminalService: terminals
     });
     registerRoutes(http, {
-      databaseTools,
       routeRelativePath: "vibe64",
       routeSurface: "app"
     });

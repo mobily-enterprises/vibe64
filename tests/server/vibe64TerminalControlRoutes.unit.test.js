@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  registerRoutes
+  registerRoutes as registerTerminalRoutes
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import {
+  createTerminalActions,
   ACTION_CREATE_TEMPORARY_CONVERSATION,
   ACTION_START_TEMPORARY_CONVERSATION_TURN
 } from "../../packages/vibe64-terminals/src/server/actions.js";
@@ -15,6 +16,27 @@ import {
   withLocalRequestBypass,
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
+
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+
+function registerRoutes(http, options) {
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "terminals", domain: "terminals", actions: createTerminalActions(options).map((action) => ({
+    channels: ["api", "automation"], surfaces: ["app"], ...action
+  })) });
+  registerVibe64ActionContext(actions, { projectContext: options.projectContext,
+    resolveUser: async ({ request }) => request?.vibe64User || { username: "owner", role: "owner" },
+    authorizeProject: async () => {}
+  });
+  registerTerminalRoutes({ router: { register(method, path, routeOptions, handler) {
+    http.router.register(method, path, routeOptions, (request, reply) => {
+      request.executeAction ||= ({ actionId, input }) => actions.execute({ actionId, input,
+        context: { channel: "api", surface: "app", requestMeta: { request } } });
+      return handler(request, reply);
+    });
+  } } }, options);
+}
 
 function terminalControlRouteApp(service) {
   const registeredRoutes = [];
@@ -311,8 +333,7 @@ test("temporary AI creation and turns use the authenticated Vibe64 actor", async
         {
           actionId: ACTION_CREATE_TEMPORARY_CONVERSATION,
           input: {
-            sessionId: "session-1",
-            vibe64User
+            sessionId: "session-1"
           }
         },
         {
@@ -321,8 +342,7 @@ test("temporary AI creation and turns use the authenticated Vibe64 actor", async
             attachmentIds: ["22222222-2222-4222-8222-222222222222"],
             conversationId: "conversation-1",
             message: "Explain the failure.",
-            sessionId: "session-1",
-            vibe64User
+            sessionId: "session-1"
           }
         }
       ]);

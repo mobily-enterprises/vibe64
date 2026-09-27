@@ -2,9 +2,24 @@
 
 People can run and inspect a project's web, terminal, and finite build outputs
 without leaving the coding workspace.
+Output status, start/open/stop, output terminal read/close and immutable-result
+reads execute shared named terminal actions, with fresh project access and
+actor context for HTTP and automation. Existing output services retain resource
+admission, declared-target checks, launch serialization and lifecycle events.
+Result download HTTP adapters preserve digest, media, filename and cache
+headers, await byte delivery and close the opened handle. Project-runtime
+open/close also uses named actions; terminal WebSockets remain transport adapters.
 
 ## Sources
 
+- `packages/current-app/src/server/actions.js`
+- `packages/current-app/src/server/inputSchemas.js`
+- `packages/current-app/src/server/registerRoutes.js`
+- `packages/current-app/src/server/service.js`
+- `packages/vibe64-terminals/src/server/actions.js`
+- `packages/vibe64-terminals/src/server/inputSchemas.js`
+- `packages/vibe64-terminals/src/server/registerRoutes.js`
+- `tests/server/vibe64TerminalActionDispatch.unit.test.js`
 - `packages/vibe64-genesis/src/server/outputs.js`
 - `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
@@ -26,6 +41,10 @@ without leaving the coding workspace.
 - `src/composables/useVibe64OutputControlsSurface.js`
 
 ## Public contract
+
+The `vibe64.current-app.read` action inspects declared outputs in the currently
+authorized project or selected session. It resolves fresh actor/project context
+for both HTTP and direct calls; discovery never falls back to a different project.
 
 Vibe64 lists only targets in the strict Markdown `vibe64.outputs.v1` contract
 transported as an opaque Stack section by Genesis. Each target declares exact

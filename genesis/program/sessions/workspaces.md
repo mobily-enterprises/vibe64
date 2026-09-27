@@ -5,6 +5,11 @@ the canonical project and from other sessions.
 
 ## Sources
 
+- `packages/vibe64-sessions/src/server/actions.js`
+- `packages/vibe64-sessions/src/server/inputSchemas.js`
+- `packages/vibe64-sessions/src/server/assistantContracts.js`
+- `packages/vibe64-core/src/server/actionContext.js`
+
 - `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
 - `packages/vibe64-runtime/src/server/runtime.js`
@@ -35,6 +40,39 @@ the canonical project and from other sessions.
 - `src/composables/useVibe64SessionDialogs.js`
 
 ## Public contract
+
+Session and temporary-conversation actions resolve their project and acting user
+through the shared action boundary. The acting user is trusted context, never
+an action argument. HTTP URL selection and explicit action selection must agree;
+automation enters the same project context as HTTP. Hosts recheck authentication
+and project access before each execution. Ordinary product handlers must invoke
+their owning action; custom transports may retain their transport adapter.
+Session actions validate complete operation arguments in create mode after the
+HTTP adapter has combined route IDs with body/query fields. Patch transport
+validation cannot make a required action target or guard optional.
+The assistant capability catalogue is the exception to project scope: it uses
+current actor access and does not need a project or coding session. Both the
+existing session picker and the global Colleague picker call that same action.
+
+Session creation is available through that same action to the product operator.
+Its result reports the actual session identity and workspace preparation state;
+starting preparation does not claim that the session is ready. The ordinary
+source, resource, database-policy and assistant-access checks still apply.
+
+The session inspection tool reports actual native turn activity and phase,
+including its run identity and current routing status/mode. Main conversation
+reading exposes up to six canonical turns per tool result, with bounded text,
+explicit truncation and an older-page cursor. Neither result exposes private
+provider bindings or raw session metadata. HTTP retains its existing full result
+contract; these are action-owned assistant projections.
+
+Main Send/Steer and Stop are exposed through their existing named operations.
+Send keeps the supplied message identity for normal retry behavior and returns
+bounded admission/turn/routing facts; acceptance is not a completed response.
+Stop affects that coding conversation, independently of Colleague and speech.
+Required Main message and session identities are validated by the action's full
+input contract, including for HTTP requests, before the service is entered.
+
 
 Open-session and archive lists report unsupported runtime records and unexpectedly
 missing open checkouts separately from usable sessions. The existing summary
@@ -71,7 +109,11 @@ lease before archival can detach the session tree.
 
 
 People can create, select, inspect, and archive sessions. A new session receives
-its own Git source and stable identity. Creation starts in Plan with review off.
+its own Git source and stable identity. Creation starts in Senior with review off.
+Colleague can also rename, archive and retry preparation through those same
+session actions and their current access checks. Its result projection contains
+bounded session identity, lifecycle and preparation status rather than private
+paths, metadata or logs. An accepted preparation retry does not mean it finished.
 The workflow picker previews the submitting user's Senior and Junior destinations;
 it reads saved assignments and connection access without live model discovery.
 Uninitialized workflows use connected defaults to establish availability and say
@@ -80,7 +122,7 @@ The picker shares the runtime's access and paired-backup rules, while creation
 and dispatch still validate the destination against its current model catalogue.
 Owner configuration opens in the same overlay. Accounts initializes only missing
 roles as part of explicit creation. The central resolver chooses the user's
-accessible Plan destination before creating the workspace, and its credential
+accessible Senior destination before creating the workspace, and its credential
 identity is checked again. Native selection and the intended workflow are stored
 separately, including when a member starts on another orchestrator's Shared backup.
 The optional hosted branch choice is independent of that AI workflow and both
@@ -219,11 +261,11 @@ button still works.
 
 Renewal creates a fresh native assistant conversation. Its review step uses the
 same workflow picker as creation, initially selecting the previous workflow when
-available. Confirmation resolves its Plan destination for the confirming actor
+available. Confirmation resolves its Senior destination for the confirming actor
 before stopping the old session. It saves that native selection and the intended
-workflow with Plan/review-off preferences in the durable renewal record. Successor
+workflow with Senior/review-off preferences in the durable renewal record. Successor
 creation and replacement retries retain both values. Explicit API model choices
-become Plan overrides in their chosen workflow. If the predecessor's model is
+become Senior overrides in their chosen workflow. If the predecessor's model is
 inaccessible or fails while preparing the draft, renewal presents the canonical editable
 handover template so the person can still leave that provider. The fresh
 provider history is the handover boundary: after it accepts the exact handover
@@ -232,6 +274,30 @@ successor even when authentication, quota, transport, or model execution
 prevents an assistant reply. A failure before prompt admission, a reused
 conversation, a changed source, or an unusable workspace still leaves the
 predecessor available.
+
+A session that has never acquired a Codex runtime can renew through the manual
+handover without process-exit evidence for a nonexistent process. Closure still
+requires verified shutdown when a cached provider, retained runtime owner,
+recorded transport, or native thread exists; a failed stop cannot become an
+unused session merely because its provider cache was closed.
+After a restart removes runtime metadata, renewal can use the managed execution
+owner's verified empty scope, as changeover does. Missing files or an incomplete
+owner-drain result alone remain insufficient proof.
+
+The Codex provider acquired for a hidden successor retains its exact renewal
+reservation for internal authentication, control restoration and observation
+checks. Those callbacks use the existing renewal reader only for that reservation;
+normal requests still cannot read the hidden session. A different reservation or
+an observation-loss barrier still rejects resume. Once the successor is public,
+the callbacks return to ordinary session reads.
+Post-commit proof release shares provider lifecycle serialization and retains a
+runtime used by any remaining session, including the successor or Colleague.
+Releasing the archived participant's proof never stops that shared process.
+Hidden-successor cleanup reads and clears retained naming, prompt-suggestion and
+database helpers through existing internal renewal store access. That access is
+supplied only by validated renewal cleanup; ordinary session, background-task and
+artifact reads remain private. Failed native deletion retains the helper's record
+and working directory so Retry can finish cleanup without starting inference.
 
 Every failed renewal exposes explicit Retry, including persisted failures whose
 old error record says `retryable: false`. The renewal controller owns recovery
@@ -264,6 +330,13 @@ conversation changes before confirmation or after a failure, renewal retains
 the existing text, refreshes only its canonical source fields, and returns it
 for review without another AI generation. A stale review cannot create a
 successor until the person confirms the refreshed draft.
+
+Colleague uses these same six renewal actions. Its inspection projection returns
+the complete bounded handover and exact draft hash/revision; other operations
+return concise status and guard values. Approval targets the reviewed draft and
+workflow, and a return to review requires renewed approval. The projection excludes
+private renewal basis, provider bindings and actor metadata. Missing or empty
+session IDs and missing optimistic guards fail at the canonical action boundary.
 
 Repository status uses realtime changes as its primary signal and a bounded
 freshness check as fallback. The fallback does no work while the page is hidden

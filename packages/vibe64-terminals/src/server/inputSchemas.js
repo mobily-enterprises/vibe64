@@ -1,6 +1,6 @@
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
-import { VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS } from "@local/vibe64-runtime/shared";
+import { ASSISTANT_MODES, VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS } from "@local/vibe64-runtime/shared";
 
 const optionalText = {
   type: "string",
@@ -10,6 +10,7 @@ const optionalText = {
 
 const requiredText = {
   ...optionalText,
+  minLength: 1,
   required: true
 };
 
@@ -56,7 +57,7 @@ const outputTargetFields = {
 function validator(fields) {
   return deepFreeze({
     schema: createSchema(fields),
-    mode: "patch"
+    mode: "create"
   });
 }
 
@@ -70,15 +71,25 @@ const agentAttachmentDeleteActionInputValidator = validator({
 });
 const temporaryConversationListInputValidator = validator({ sessionId: sessionIdField });
 const temporaryConversationPresentationField = { type: "object", additionalProperties: true, required: false };
+const temporaryConversationRoutingField = { type: "object", required: false, schema: createSchema({
+  mode: { type: "string", enum: ASSISTANT_MODES.filter(({ id }) => id !== "auto").map(({ id }) => id), required: true },
+  review: { type: "boolean", required: false },
+  workflowEngineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
+  override: { type: "object", required: false, schema: createSchema({
+    engineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
+    ...Object.fromEntries(["schema", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision"]
+      .map((key) => [key, optionalText]))
+  }) }
+}) };
 const temporaryConversationUpdateInputValidator = validator({
   conversationId: requiredText, sessionId: sessionIdField,
-  assistantRouting: { type: "object", additionalProperties: true, required: false },
+  assistantRouting: temporaryConversationRoutingField,
   agentSettings: { type: "object", additionalProperties: true, required: false },
   presentation: temporaryConversationPresentationField,
   attachmentIds: attachmentIdsField
 });
 const temporaryConversationCreateActionInputValidator = validator({
-  assistantRouting: { type: "object", additionalProperties: true, required: false },
+  assistantRouting: temporaryConversationRoutingField,
   conversationId: optionalText,
   presentation: temporaryConversationPresentationField,
   agentSettings: {
@@ -92,6 +103,11 @@ const temporaryConversationCreateActionInputValidator = validator({
 const temporaryConversationInputValidator = validator({
   conversationId: requiredText,
   sessionId: sessionIdField
+});
+const temporaryConversationReadInputValidator = validator({
+  ...temporaryConversationInputValidator.schema.getFieldDefinitions(),
+  beforeMessageId: optionalText,
+  messageLimit: { type: "integer", min: 1, max: 12, required: false }
 });
 const temporaryConversationTurnActionInputValidator = validator({
   planRevision: optionalText,
@@ -189,7 +205,58 @@ const terminalControlKeyInputValidator = validator({
   originId: optionalText
 });
 
+const emptyInputValidator = validator({});
+const projectRuntimeInputValidator = validator({ reason: optionalText });
+const sessionInputValidator = validator({ sessionId: sessionIdField });
+const workPlanReadInputValidator = validator({
+  sessionId: sessionIdField,
+  offset: { type: "integer", min: 0, required: false },
+  limit: { type: "integer", min: 1, max: 16000, required: false },
+  expectedRevision: { ...optionalText, minLength: 64, maxLength: 64 }
+});
+const outputStatusInputValidator = validator({
+  sessionId: sessionIdField, publicHost: optionalText, publicProtocol: optionalText
+});
+const outputResultInputValidator = validator({ sessionId: sessionIdField, resultId: requiredText });
+const agentGoalInputValidator = validator({
+  sessionId: sessionIdField,
+  action: { type: "string", enum: ["set", "pause", "resume", "cancel"], required: true },
+  threadId: optionalText,
+  // Claude preserves fractional epoch seconds; the provider compares this
+  // revision exactly when pausing, resuming or cancelling a goal.
+  createdAt: { type: "number", min: 0, required: false },
+  objective: { ...optionalText, noTrim: true },
+  tokenBudget: { type: "integer", min: 1, max: Number.MAX_SAFE_INTEGER, required: false }
+});
+const agentTerminalStartInputValidator = validator({
+  sessionId: sessionIdField,
+  originId: optionalText,
+  size: { type: "object", required: false, schema: createSchema({
+    cols: { type: "integer", min: 1, required: false },
+    rows: { type: "integer", min: 1, required: false }
+  }) }
+});
+const terminalInputValidator = validator({ sessionId: sessionIdField, terminalSessionId: requiredText });
+const globalTerminalInputValidator = validator({ terminalSessionId: requiredText });
+function terminalControlActionInputValidator(global, control) {
+  return validator({
+    ...(global ? globalTerminalInputValidator : terminalInputValidator).schema.getFieldDefinitions(),
+    ...(control === "key" ? terminalControlKeyInputValidator : terminalControlTextInputValidator).schema.getFieldDefinitions()
+  });
+}
+
 export {
+  workPlanReadInputValidator,
+  emptyInputValidator,
+  projectRuntimeInputValidator,
+  sessionInputValidator,
+  outputStatusInputValidator,
+  outputResultInputValidator,
+  agentGoalInputValidator,
+  agentTerminalStartInputValidator,
+  terminalInputValidator,
+  globalTerminalInputValidator,
+  terminalControlActionInputValidator,
   agentAttachmentActionInputValidator,
   agentAttachmentDeleteActionInputValidator,
   openOutputTargetActionInputValidator,
@@ -204,6 +271,7 @@ export {
   temporaryConversationUpdateInputValidator,
   temporaryConversationCreateActionInputValidator,
   temporaryConversationInputValidator,
+  temporaryConversationReadInputValidator,
   temporaryConversationStopActionInputValidator,
   temporaryConversationTurnActionInputValidator
 };

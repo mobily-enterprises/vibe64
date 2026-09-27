@@ -3,7 +3,7 @@ import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 
 function validator(fields) {
   return deepFreeze({
-    mode: "patch",
+    mode: "create",
     schema: createSchema(fields)
   });
 }

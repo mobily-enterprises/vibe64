@@ -1,21 +1,22 @@
-import { createSchema } from "json-rest-schema";
+import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
-function patchSchema(fields) {
+const createProjectSchema = createSchema.createFactory();
+const maxItems = ({ value, parameterValue, throwParamError }) => {
+  if (Array.isArray(value) && value.length > parameterValue) {
+    throwParamError("MAX_ITEMS", `Choose up to ${parameterValue} repository labels.`);
+  }
+};
+maxItems.toJsonSchema = ({ parameterValue }) => ({ maxItems: parameterValue });
+createProjectSchema.addValidator("maxItems", maxItems);
+
+function inputSchema(fields) {
   return deepFreeze({
-    schema: createSchema(fields),
-    mode: "patch"
+    schema: createProjectSchema(Object.fromEntries(Object.entries(fields).map(([name, field]) => [name, { required: false, ...field }]))),
+    mode: "create"
   });
 }
 
-const optionalUser = {
-  vibe64User: {
-    type: "object",
-    additionalProperties: true,
-    required: false
-  }
-};
-
-const projectRemoteInputValidator = patchSchema({
+const projectRemoteInputValidator = inputSchema({
   action: { type: "string", enum: ["status", "fetch", "pull", "push", "configure", "switch", "create"] },
   branch: { type: "string", maxLength: 255 },
   background: { type: "boolean" },
@@ -23,36 +24,35 @@ const projectRemoteInputValidator = patchSchema({
   review: { type: "object", additionalProperties: true },
   settings: { type: "object", additionalProperties: true }
 });
-const projectsReadInputValidator = patchSchema({});
-const projectOnboardingInputValidator = patchSchema({
+const projectsReadInputValidator = inputSchema({});
+const projectOnboardingInputValidator = inputSchema({
   sessionId: { type: "string", noTrim: false, required: true }
 });
-const projectTemplateInputValidator = patchSchema({
+const projectTemplateInputValidator = inputSchema({
   sessionId: { type: "string", noTrim: false, required: true },
   templateId: { type: "string", noTrim: false, required: true }
 });
-const previewApplicationIdentitiesReadInputValidator = patchSchema({
+const previewApplicationIdentitiesReadInputValidator = inputSchema({
   sessionId: {
     type: "string",
     noTrim: false
   }
 });
-const projectSettingsReadInputValidator = patchSchema({
-  ...optionalUser,
-  sessionId: {
-    type: "string",
-    noTrim: false
-  }
-});
-
-const projectEngineeringSettingsReadInputValidator = patchSchema({
+const projectSettingsReadInputValidator = inputSchema({
   sessionId: {
     type: "string",
     noTrim: false
   }
 });
 
-const projectEngineeringProfileInputValidator = patchSchema({
+const projectEngineeringSettingsReadInputValidator = inputSchema({
+  sessionId: {
+    type: "string",
+    noTrim: false
+  }
+});
+
+const projectEngineeringProfileInputValidator = inputSchema({
   profile: {
     type: "string",
     noTrim: false,
@@ -64,8 +64,7 @@ const projectEngineeringProfileInputValidator = patchSchema({
   }
 });
 
-const projectCollaborationInputValidator = patchSchema({
-  ...optionalUser,
+const projectCollaborationInputValidator = inputSchema({
   requirements: {
     noTrim: false,
     required: true,
@@ -97,15 +96,14 @@ const projectCollaborationInputValidator = patchSchema({
   }
 });
 
-const projectPromptHintsInputValidator = patchSchema({
-  ...optionalUser,
+const projectPromptHintsInputValidator = inputSchema({
   promptHints: {
     required: true,
     type: "boolean"
   }
 });
 
-const projectCreateInputValidator = patchSchema({
+const projectCreateInputValidator = inputSchema({
   name: {
     type: "string",
     noTrim: false
@@ -120,7 +118,7 @@ const projectCreateInputValidator = patchSchema({
   }
 });
 
-const projectSelectInputValidator = patchSchema({
+const projectSelectInputValidator = inputSchema({
   slug: {
     type: "string",
     noTrim: false,
@@ -128,7 +126,7 @@ const projectSelectInputValidator = patchSchema({
   }
 });
 
-const projectEnvReadInputValidator = patchSchema({
+const projectEnvReadInputValidator = inputSchema({
   environment: {
     type: "string",
     noTrim: false
@@ -139,7 +137,7 @@ const projectEnvReadInputValidator = patchSchema({
   }
 });
 
-const projectEnvSecretRevealInputValidator = patchSchema({
+const projectEnvSecretRevealInputValidator = inputSchema({
   environment: {
     type: "string",
     noTrim: false
@@ -155,7 +153,7 @@ const projectEnvSecretRevealInputValidator = patchSchema({
   }
 });
 
-const projectEnvUserValuesInputValidator = patchSchema({
+const projectEnvUserValuesInputValidator = inputSchema({
   environment: {
     type: "string",
     noTrim: false
@@ -171,7 +169,7 @@ const projectEnvUserValuesInputValidator = patchSchema({
   }
 });
 
-const projectDevelopmentDatabaseScopeInputValidator = patchSchema({
+const projectDevelopmentDatabaseScopeInputValidator = inputSchema({
   scope: {
     type: "string",
     enum: ["project", "session"],
@@ -180,7 +178,7 @@ const projectDevelopmentDatabaseScopeInputValidator = patchSchema({
   }
 });
 
-const previewApplicationIdentitiesInputValidator = patchSchema({
+const previewApplicationIdentitiesInputValidator = inputSchema({
   identities: {
     type: "array",
     items: {
@@ -195,7 +193,42 @@ const previewApplicationIdentitiesInputValidator = patchSchema({
   }
 });
 
+const emptyProjectInputValidator = inputSchema({});
+const projectRepositoryWorkflowInputValidator = inputSchema({ requirePullRequest: { type: "boolean", required: true } });
+const issueNumber = { type: "id", required: true };
+const cursor = { type: "string", maxLength: 500, nullable: true };
+const search = { type: "string", maxLength: 200 };
+const labels = { type: "array", items: { type: "string", minLength: 1 }, required: false, maxItems: 100 };
+const issueTitle = { type: "string", minLength: 1, maxLength: 256, required: true };
+const issueBody = { type: "string", noTrim: true, maxLength: 65536, required: false };
+const commentBody = { ...issueBody, minLength: 1, required: true };
+const projectIssueInputValidators = {
+  list: inputSchema({ state: { type: "string", enum: ["open", "closed", "all"] }, search, cursor, labels }),
+  read: inputSchema({ number: issueNumber, cursor }),
+  create: inputSchema({ title: issueTitle, body: issueBody, labels }),
+  edit: inputSchema({ number: issueNumber, title: issueTitle, body: issueBody }),
+  comment: inputSchema({ number: issueNumber, body: commentBody, originId: { type: "string", maxLength: 200 } }),
+  "edit-comment": inputSchema({ number: issueNumber, commentId: { type: "string", minLength: 1, maxLength: 256, required: true }, body: commentBody }),
+  state: inputSchema({ number: issueNumber, state: { type: "string", enum: ["open", "closed"], required: true } }),
+  labels: emptyProjectInputValidator,
+  "create-label": inputSchema({ name: { type: "string", minLength: 1, maxLength: 50, required: true }, color: { type: "string", minLength: 6, maxLength: 6, required: true } }),
+  "set-labels": inputSchema({ number: issueNumber, labels: { ...labels, required: true }, labelMode: { type: "string", enum: ["replace", "add", "remove"] } }),
+  mentions: inputSchema({ number: { ...issueNumber, required: false } })
+};
+const pullRequestReview = { type: "object", additionalProperties: true, required: true };
+const projectPullRequestInputValidators = {
+  list: inputSchema({ state: { type: "string", enum: ["open", "closed", "merged", "all"] }, search, cursor }),
+  read: inputSchema({ number: issueNumber }),
+  ready: inputSchema({ number: issueNumber, review: pullRequestReview }),
+  "update-branch": inputSchema({ number: issueNumber, review: pullRequestReview }),
+  merge: inputSchema({ number: issueNumber, review: pullRequestReview, mergeMethod: { type: "string", enum: ["merge", "squash", "rebase"], required: true } })
+};
+
 export {
+  emptyProjectInputValidator,
+  projectRepositoryWorkflowInputValidator,
+  projectIssueInputValidators,
+  projectPullRequestInputValidators,
   projectRemoteInputValidator,
   projectOnboardingInputValidator,
   projectTemplateInputValidator,

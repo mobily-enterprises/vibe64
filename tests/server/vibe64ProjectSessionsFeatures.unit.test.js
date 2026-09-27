@@ -72,6 +72,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.project.engineering.profile.save",
     "vibe64.project.engineering.read",
     "vibe64.project.env.read",
+    "vibe64.project.env.secret.reveal",
     "vibe64.project.env.user-values.save",
     "vibe64.project.onboarding.read",
     "vibe64.project.preview-identities.read",
@@ -81,14 +82,19 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.project.projects.select",
     "vibe64.project.prompt-hints.save",
     "vibe64.project.repository.remote",
+    "vibe64.project.repository.remote.read",
+    "vibe64.project.repository.branches.read",
+    "vibe64.project.repository.workflow.save",
     "vibe64.project.settings.read",
-    "vibe64.project.templates.apply"
-  ]);
-  assert.equal(projectRoutes.length, projectActions[0].actions.length + 20);
+    "vibe64.project.templates.apply",
+    ...["list", "read", "create", "edit", "comment", "edit-comment", "state", "labels", "create-label", "set-labels", "mentions"].map((operation) => `vibe64.project.issues.${operation}`),
+    ...["list", "read", "ready", "update-branch", "merge"].map((operation) => `vibe64.project.pull-requests.${operation}`)
+  ].sort());
+  assert.equal(projectRoutes.length, projectActions[0].actions.length);
   assert.equal(
     projectRoutes.some(([method, path]) => method === "POST" && path.endsWith("/env/reveal")),
     true,
-    "the owner-only secret reveal service route is registered beside captured actions"
+    "the uncached owner-only secret reveal transport is registered with its action"
   );
   assert.equal(projectActions[0].actions.some((action) => Object.hasOwn(action, "dependencies")), false);
 
@@ -156,6 +162,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.presence.update",
     "vibe64.sessions.preview-state.broadcast",
     "vibe64.sessions.pull-request.create",
+    "vibe64.sessions.rename",
     "vibe64.sessions.renewal.cancel",
     "vibe64.sessions.renewal.confirm",
     "vibe64.sessions.renewal.draft.request",

@@ -1,4 +1,4 @@
-import { createSchema } from "json-rest-schema";
+import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 
 const currentAppQueryInputValidator = deepFreeze({
@@ -9,7 +9,7 @@ const currentAppQueryInputValidator = deepFreeze({
       required: false
     }
   }),
-  mode: "patch"
+  mode: "create"
 });
 
 export {

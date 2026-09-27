@@ -1,8 +1,14 @@
 import { createEntityChangedActionEvent } from "@jskit-ai/kernel/server/actions";
+import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import {
   projectRemoteInputValidator,
+  projectEnvSecretRevealInputValidator,
+  emptyProjectInputValidator,
+  projectRepositoryWorkflowInputValidator,
+  projectIssueInputValidators,
+  projectPullRequestInputValidators,
   projectOnboardingInputValidator,
   projectTemplateInputValidator,
   projectCollaborationInputValidator,
@@ -49,7 +55,10 @@ function projectChangedEvent({ operation = "updated" } = {}) {
     realtime: {
       audience: "all_clients",
       event: VIBE64_PROJECT_CHANGED_EVENT,
-      payload: ({ input, result }) => projectRealtimePayload({ ...input, ...result })
+      payload: ({ input, result }) => projectRealtimePayload({
+        ...input, ...result,
+        projectSlug: projectSlug(result) || projectSlug(input)
+      })
     }
   });
 }
@@ -139,8 +148,8 @@ function createVibe64ProjectChangedPublisher({ events = null } = {}) {
   };
 }
 
-function action({ events = [], execute, id, input, kind }) {
-  return Object.freeze({
+function action({ events = [], execute, id, input, kind, ownerRequired = false }) {
+  return withVibe64ActionContext({
     id,
     version: 1,
     kind,
@@ -153,7 +162,7 @@ function action({ events = [], execute, id, input, kind }) {
     observability: {},
     events,
     execute
-  });
+  }, { ownerRequired });
 }
 
 function createProjectActions({ project } = {}) {
@@ -162,6 +171,24 @@ function createProjectActions({ project } = {}) {
   }
 
   return Object.freeze([
+    action({ id: "vibe64.project.repository.remote.read", kind: "query", input: emptyProjectInputValidator,
+      execute: () => project.repositoryRemote() }),
+    action({ id: "vibe64.project.repository.branches.read", kind: "query", input: emptyProjectInputValidator,
+      execute: (input) => project.repositoryBranches(input) }),
+    action({ id: "vibe64.project.repository.workflow.save", kind: "command", input: projectRepositoryWorkflowInputValidator,
+      ownerRequired: true, execute: (input) => project.saveRepositoryWorkflow(input) }),
+    action({ id: "vibe64.project.env.secret.reveal", kind: "query", input: projectEnvSecretRevealInputValidator,
+      ownerRequired: true, execute: (input) => project.revealEnvSecret(input) }),
+    ...Object.entries(projectIssueInputValidators).map(([operation, input]) => action({
+      id: `vibe64.project.issues.${operation}`, input,
+      kind: ["list", "read", "labels", "mentions"].includes(operation) ? "query" : "command",
+      execute: (input) => project.githubIssues({ ...input, operation })
+    })),
+    ...Object.entries(projectPullRequestInputValidators).map(([operation, input]) => action({
+      id: `vibe64.project.pull-requests.${operation}`, input,
+      kind: ["list", "read"].includes(operation) ? "query" : "command",
+      execute: (input) => project.githubPullRequests({ ...input, operation })
+    })),
     action({
       id: ACTION_READ_ONBOARDING,
       kind: "query",
@@ -229,6 +256,7 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_SAVE_COLLABORATION_SETTINGS,
+      ownerRequired: true,
       kind: "command",
       input: projectCollaborationInputValidator,
       events: [projectChangedEvent()],
@@ -236,6 +264,7 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_SAVE_PROJECT_PROMPT_HINTS,
+      ownerRequired: true,
       kind: "command",
       input: projectPromptHintsInputValidator,
       events: [projectChangedEvent()],

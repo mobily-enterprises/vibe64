@@ -5,7 +5,7 @@
       <v-card-text class="d-flex flex-column ga-4">
         <v-alert v-if="saveError" type="error" variant="tonal" density="compact">{{ saveError }}</v-alert>
         <p v-if="savedProviderUnavailable" class="text-body-small" role="status">
-          This session's saved AI connection is unavailable. Choose an available model and Apply to reconnect.
+          This conversation's saved AI connection is unavailable. Choose an available model and Apply to reconnect.
         </p>
         <v-alert v-if="catalogError" type="error" variant="tonal" density="compact">
           {{ catalogError }} <v-btn variant="text" @click="reloadCatalog">Retry</v-btn>
@@ -151,6 +151,8 @@ import {
 } from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({
+  selection: { type: Object, default: null },
+  catalogPath: { type: String, default: "" },
   target: {
     default: null,
     type: Object
@@ -185,16 +187,17 @@ const modelProviderId = ref("");
 const modelId = ref("");
 const agentId = ref("");
 const variantId = ref("");
-const assistantSelection = computed(() => assistantRoutingFromMetadata(props.session?.metadata)?.override || props.session?.assistantSelection || null);
+const assistantSelection = computed(() => props.selection || assistantRoutingFromMetadata(props.session?.metadata)?.override || props.session?.assistantSelection || null);
 const engineId = ref("");
-const catalogActive = computed(() => Boolean(menuOpen.value && props.session?.sessionId));
-const connections = useVibe64AssistantCatalog({ active: catalogActive, configuredOnly: true });
+const catalogActive = computed(() => Boolean(menuOpen.value && (props.session?.sessionId || props.saveSelection)));
+const connections = useVibe64AssistantCatalog({ active: catalogActive, configuredOnly: true, path: computed(() => props.catalogPath) });
 const engineRows = computed(() => connections.engines.value.filter((engine) => engine.health?.status === "ready" &&
   engine.modelProviders?.some((provider) => provider.connected)));
 // Warm only connected engines while this dialog is open. Switching orchestrators
 // then reuses the same query; it does not start discovery after the click.
 const catalogs = Object.fromEntries(VIBE64_AGENT_PROVIDERS.map(({ id }) => [id, useVibe64AssistantCatalog({
   active: computed(() => catalogActive.value && engineRows.value.some((engine) => engine.engineId === id)),
+  path: computed(() => props.catalogPath),
   engineId: id, allConnectedModels: true, providerConnectedOnly: true
 })]));
 const catalog = computed(() => catalogs[engineId.value]);
@@ -385,7 +388,7 @@ function openConnectionSettings() {
 async function applySelection(selection, { closeMenu = true } = {}) {
   const sessionId = String(props.session?.sessionId || "").trim();
   const sessionsPath = String(readRefOrGetterValue(props.sessionsApiPath) || "").trim();
-  if (props.changesDisabled || !selection || !sessionId || !props.saveSelection && !sessionsPath || saving.value) {
+  if (props.changesDisabled || !selection || (!props.saveSelection && (!sessionId || !sessionsPath)) || saving.value) {
     return null;
   }
   saving.value = true;
@@ -477,7 +480,7 @@ async function updateModelAccess(unlocked) {
   }
 }
 
-watch(assistantSelection, hydrateSelection, { immediate: true });
+watch(() => JSON.stringify(assistantSelection.value), hydrateSelection, { immediate: true });
 
 watch(menuOpen, (open) => {
   if (open) {

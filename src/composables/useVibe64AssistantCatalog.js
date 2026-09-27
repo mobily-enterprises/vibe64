@@ -26,6 +26,7 @@ function responseEngines(resource) {
 
 function useVibe64AssistantCatalog({
   active,
+  path: catalogPath,
   configuredOnly = false,
   allConnectedModels = false,
   engineId,
@@ -36,8 +37,9 @@ function useVibe64AssistantCatalog({
   providerSearch
 } = {}) {
   const paths = usePaths();
-  const projectSlug = useVibe64ProjectSlug();
-  const apiPath = computed(() => paths.api(VIBE64_ASSISTANTS_API_SUFFIX, {
+  const selectedProjectSlug = useVibe64ProjectSlug();
+  const projectSlug = computed(() => normalizedText(catalogPath) || selectedProjectSlug.value);
+  const apiPath = computed(() => normalizedText(catalogPath) || paths.api(VIBE64_ASSISTANTS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
   const enabled = computed(() => Boolean(value(active)));

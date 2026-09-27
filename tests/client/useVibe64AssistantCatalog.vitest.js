@@ -18,6 +18,11 @@ it.each([
     input: { engineId: "opencode", allConnectedModels: true, providerConnectedOnly: true },
     expectedQueries: [{ allConnectedModels: "true", connectedOnly: "true", engineId: "opencode", limit: "25" }] },
   {
+    label: "global Colleague choices without a project",
+    input: { path: "/api/vibe64/colleague/models", configuredOnly: true },
+    expectedQueries: [{ configuredOnly: "true", limit: "100" }]
+  },
+  {
     label: "shared OpenCode overview/provider page",
     input: { engineId: "opencode", modelProviderId: "example-provider", providerConnectedOnly: true },
     expectedQueries: [
@@ -70,7 +75,7 @@ it.each([
   let catalog;
   configureHttpWebClient({
     request(url, options) {
-      expect(url).toBe("/api/vibe64/assistants/capabilities");
+      expect(url).toBe(input.path || "/api/vibe64/assistants/capabilities");
       expect(options.method).toBe("GET");
       requests.push(options.query);
       return refreshing ? heldRefresh.promise : Promise.resolve({ engines: [], revision: 1 });

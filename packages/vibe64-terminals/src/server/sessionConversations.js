@@ -419,7 +419,15 @@ function createSessionConversations({
 
     async readTemporaryConversation(sessionId, input = {}, options = {}) {
       await routing.reconcile(sessionId, { ...options, conversationId: input.conversationId });
-      return writeSnapshot(sessionId, options, async (ctx) => snapshot(ctx, await recordFor(ctx, input.conversationId), true));
+      const result = await writeSnapshot(sessionId, options, async (ctx) => snapshot(ctx, await recordFor(ctx, input.conversationId), true));
+      if (result.ok === false || (!input.beforeMessageId && input.messageLimit === undefined)) return result;
+      const messages = result.messages || [];
+      const end = input.beforeMessageId ? messages.findIndex((message) => message.id === input.beforeMessageId) : messages.length;
+      if (end < 0) throw Object.assign(new Error("This message cursor no longer exists. Read the latest messages again."), {
+        code: "vibe64_conversation_cursor_missing", statusCode: 409
+      });
+      const start = Math.max(0, end - (input.messageLimit || 12));
+      return { ...result, messages: messages.slice(start, end), earlierMessages: start > 0 };
     },
 
     async updateTemporaryConversation(sessionId, input = {}, options = {}) {

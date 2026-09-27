@@ -33,6 +33,10 @@ function createVibe64FeatureRoutes(
   });
   const surface = normalizeSurfaceId(routeSurface);
 
+  // Ordinary product operations belong to named actions: input, business access
+  // and execution must be shared by HTTP and automation. Keep serviceRoute for
+  // transport adapters (streams, multipart, sockets), not a second operation.
+  // Conversation dispatch parity is exercised in vibe64ConversationActionDispatch.
   function actionRoute(method, pathSuffix, options) {
     const {
       actionId,

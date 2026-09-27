@@ -95,8 +95,21 @@ test("remaining Vibe64 features use named capabilities and register direct route
 
   assert.deepEqual(actions.listDefinitions().map((action) => action.id).sort(), [
     "vibe64.current-app.read",
-    "vibe64.studio-health.read"
-  ]);
+    "vibe64.studio-health.read",
+    ...[
+      "file-areas.read", "file-area.tree", "file-area.file", "file-area.download", "file-area.archive",
+      "file-area.upload", "file-area.save", "file-area.rename", "file-area.mkdir", "file-area.delete",
+      "integrations.read", "integrations.n8n.discover", "integrations.save", "integrations.oauth-client.register", "integrations.setup",
+      "tree.read", "files.find", "file.download", "stars.read", "star.set", "search", "path.resolve",
+      "explanation.create", "explanations.cleanup", "explanation.delete", "explanation.stop", "explanation.followup",
+      "file.read", "file.create", "file.save"
+    ].map((name) => `vibe64.source-editor.${name}`),
+    ...["subsystems.read", "status.read", "machine.read", "program.read", "refresh"].map((name) => `vibe64.system-graph.${name}`)
+  ].sort());
+  for (const action of actions.listDefinitions().filter(({ id }) => id.startsWith("vibe64.source-editor."))) {
+    assert.equal(action.input.mode, "create");
+    assert.equal(action.extensions.assistant.exclude, true, "Source tools belong to coding sessions.");
+  }
   assert.equal(routes.length, 40);
   for (const [method, suffix] of [
     ["GET", "/source-editor/download"],

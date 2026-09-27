@@ -15,10 +15,12 @@ import {
   createProjectActions
 } from "../../packages/vibe64-project/src/server/actions.js";
 
+const localUser = { username: "local", role: "owner" };
+
 function featureAction(project, actionId = "") {
   const action = createProjectActions({ project }).find((candidate) => candidate.id === actionId);
   assert.ok(action, `Expected feature action ${actionId} to be registered.`);
-  return action;
+  return { ...action, execute: (input, context = {}) => action.execute(input, { ...context, projectSlug: "catalogue", vibe64Action: { user: localUser, project: { slug: "catalogue" } } }) };
 }
 
 test("Env read action forwards its input", async () => {
@@ -38,7 +40,7 @@ test("Env read action forwards its input", async () => {
 
   await action.execute(input, {});
 
-  assert.deepEqual(calls, [[input]]);
+  assert.deepEqual(calls, [[{ ...input, vibe64User: localUser }]]);
 });
 
 test("project settings read action uses the Vibe64 project settings boundary", async () => {
@@ -105,8 +107,8 @@ test("engineering settings actions preserve the selected source context", async 
   assert.equal(readResult.engineering.profile.id, "focused.v1");
   assert.equal(saveResult.engineering.profile.id, "durable.v1");
   assert.deepEqual(calls, [
-    ["read", { sessionId: "session-a" }],
-    ["save", input]
+    ["read", { sessionId: "session-a", vibe64User: localUser }],
+    ["save", { ...input, vibe64User: localUser }]
   ]);
   assert.equal(event.realtime.event, "vibe64.project.changed");
   assert.deepEqual(event.realtime.payload, { projectSlug: "catalogue" });
@@ -201,7 +203,7 @@ test("Env save action forwards user-owned values and publishes a project refresh
   const result = await action.execute(input, {});
   const event = await action.events[0]({ context: {}, input, result });
 
-  assert.deepEqual(calls, [[input]]);
+  assert.deepEqual(calls, [[{ ...input, vibe64User: localUser }]]);
   assert.equal(event.realtime.event, "vibe64.project.changed");
   assert.equal(event.entityId, "projects");
 });
@@ -253,7 +255,7 @@ test("issue comment notifications retain project scope and omit comment contents
 test("remote actions preserve review inputs and only invalidate projects after mutations", async () => {
   const input = { action: "pull", review: { branch: "trunk", head: "head", configId: "configuration", upstreamCommit: "remote" }, merge: true };
   const action = featureAction({ repositoryRemote: async (received) => {
-    assert.deepEqual(received, input);
+    assert.deepEqual(received, { ...input, vibe64User: localUser });
     return { ok: true, projectSlug: "local", remoteChanged: true };
   } }, ACTION_REPOSITORY_REMOTE);
   const parsed = action.input.schema.patch(input);

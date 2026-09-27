@@ -31,7 +31,6 @@ const Vibe64ProjectProvider = defineFeature({
       projectContext: getStudioProjectContext()
     });
     registerRoutes(http, {
-      project,
       routeRelativePath: "vibe64",
       routeSurface: "app"
     });

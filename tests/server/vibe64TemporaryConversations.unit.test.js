@@ -10,6 +10,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { createSessionConversations } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
 import { createCodexTerminalController } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
+import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
@@ -29,7 +30,7 @@ function actionById(actions, id) {
   return action;
 }
 
-test("temporary conversation actions use durable conversation ownership", async () => {
+test("temporary conversation actions use durable conversation ownership", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const calls = [];
   const terminals = {
     async createTemporaryConversation(...args) {
@@ -88,9 +89,9 @@ test("temporary conversation actions use durable conversation ownership", async 
   for (const call of calls.slice(1)) {
     assert.equal(call[2].ephemeral, undefined);
   }
-});
+}));
 
-test("one attachment cleanup action targets only its exact attachment", async () => {
+test("one attachment cleanup action targets only its exact attachment", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const calls = [];
   const actions = createTerminalActions({
     terminals: {
@@ -109,7 +110,7 @@ test("one attachment cleanup action targets only its exact attachment", async ()
     attachmentId: "attachment-1",
     sessionId: "session-1"
   }]]);
-});
+}));
 
 async function conversationFixture(root, engineId = "codex") {
   const selection = { engineId, modelProviderId: engineId === "opencode" ? "deepseek" : "openai",
@@ -245,6 +246,27 @@ test("temporary direct Junior ignores an unusable working plan and persists no p
     assert.equal(request.workPlan, null);
     assert.equal(request.error, undefined);
     assert.equal(f.native.starts, 1);
+    assert.equal((await f.store.readConversationLog("one")).length, 0);
+  });
+});
+
+test("temporary conversation reads page backwards by stable message identity without touching Main", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    const scope = { sessionId: "one", conversationId: "chat" };
+    for (let index = 0; index < 8; index += 1) {
+      await f.store.writeConversationUserMessage(scope, { messageId: `question-${index}`, text: `Question ${index}` });
+      await f.store.writeConversationAssistantMessage(scope, { messageId: `answer-${index}`, text: `Answer ${index}` });
+    }
+    const latest = await f.service.readTemporaryConversation("one", { conversationId: "chat", messageLimit: 4 });
+    assert.deepEqual(latest.messages.map((message) => message.id), ["question-6", "answer-6", "question-7", "answer-7"]);
+    assert.equal(latest.earlierMessages, true);
+    const earlier = await f.service.readTemporaryConversation("one", { conversationId: "chat", beforeMessageId: "question-6", messageLimit: 12 });
+    assert.equal(earlier.messages.length, 12);
+    assert.equal(earlier.messages.at(-1).id, "answer-5");
+    assert.equal(earlier.earlierMessages, false);
+    await assert.rejects(f.service.readTemporaryConversation("one", { conversationId: "chat", beforeMessageId: "absent" }), { code: "vibe64_conversation_cursor_missing" });
     assert.equal((await f.store.readConversationLog("one")).length, 0);
   });
 });

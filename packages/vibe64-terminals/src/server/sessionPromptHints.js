@@ -539,7 +539,10 @@ function createSessionPromptHintsService({
 
   async function cleanupHelper(context, artifact, vibe64User) {
     const sessionId = context.session.sessionId || context.session.id;
-    const saved = await context.runtime.store.readArtifact(sessionId, artifact);
+    const store = context.runtime.store;
+    const saved = context.renewalCleanup
+      ? await store.readArtifactForRenewal(sessionId, artifact)
+      : await store.readArtifact(sessionId, artifact);
     const helper = saved ? JSON.parse(saved) : null;
     if (!helper) return;
     const root = path.join(context.runtime.stateRoot, "assistant-helpers", helper.scope.id);
@@ -556,7 +559,9 @@ function createSessionPromptHintsService({
     });
     // Retire ownership after native cleanup, before removing the workdir needed
     // for a cleanup retry. No draft or prompt is ever stored in this record.
-    await context.runtime.store.mutateSession(sessionId, (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true }));
+    const retire = (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true });
+    if (context.renewalCleanup) await store.mutateSessionForRenewal(sessionId, retire);
+    else await store.mutateSession(sessionId, retire);
     await rm(root, { recursive: true, force: true });
   }
 
@@ -1024,7 +1029,7 @@ function createSessionPromptHintsService({
     return promptHintResponse("cancelled", { basis: request.snapshot?.basis || null });
   }
 
-  async function cancelSessionPromptHintsForSession(sessionId = "") {
+  async function cancelSessionPromptHintsForSession(sessionId = "", options = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     const projectScope = terminalProjectScopeKey();
     const sessionKey = promptHintSessionKey({
@@ -1036,15 +1041,17 @@ function createSessionPromptHintsService({
       cancelRequest(request);
     }
     await Promise.all(requests.map((request) => request.promise.catch(() => null)));
-    const runtime = await projectService.createRuntime({ inspectSource: false });
-    const session = await runtime.getSession(normalizedSessionId, { inspectSource: false });
-    const artifacts = await runtime.store.withReadableSessionPaths(normalizedSessionId, async (paths) => {
+    const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
+    const session = options.session || await runtime.getSession(normalizedSessionId, { inspectSource: false });
+    const readPaths = options.renewalCleanup
+      ? runtime.store.withReadableSessionPathsForRenewal : runtime.store.withReadableSessionPaths;
+    const artifacts = await readPaths(normalizedSessionId, async (paths) => {
       try { return await readdir(path.join(paths.artifactsRoot, PROMPT_HINT_TASK_DIRECTORY)); }
       catch (error) { if (isMissingPathError(error)) return []; throw error; }
     });
     for (const filename of artifacts) {
       if (/^[a-f0-9]{64}\.json$/u.test(filename)) {
-        await cleanupHelper({ runtime, session }, `${PROMPT_HINT_TASK_DIRECTORY}/${filename}`, null);
+        await cleanupHelper({ runtime, session, renewalCleanup: options.renewalCleanup }, `${PROMPT_HINT_TASK_DIRECTORY}/${filename}`, null);
       }
     }
     return {

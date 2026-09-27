@@ -22,7 +22,10 @@ function executionProfileSnapshot(value) {
 async function cleanupSessionNamingHelper({ agent, agentContext = {}, taskId, namingError } = {}) {
   const { runtime, session, vibe64User } = agentContext;
   const sessionId = session.sessionId || session.id;
-  const helper = (await runtime.store.readBackgroundTask(sessionId, taskId))?.assistantHelper;
+  const task = agentContext.renewalCleanup
+    ? (await runtime.store.readSessionForRenewal(sessionId)).backgroundTasks.find(({ id }) => id === taskId)
+    : await runtime.store.readBackgroundTask(sessionId, taskId);
+  const helper = task?.assistantHelper;
   if (!helper) return;
   const root = path.join(runtime.stateRoot, "assistant-helpers", helper.scope.id);
   if (
@@ -43,10 +46,12 @@ async function cleanupSessionNamingHelper({ agent, agentContext = {}, taskId, na
       deleted?.code, "cleanup_failed"
     );
   }
-  await runtime.store.writeBackgroundTaskEvent(sessionId, taskId, {
+  const clear = () => runtime.store.writeBackgroundTaskEvent(sessionId, taskId, {
     event: { kind: "naming-helper-closed" },
     patch: { assistantHelper: null }
   });
+  if (agentContext.renewalCleanup) await runtime.store.mutateSessionForRenewal(sessionId, clear);
+  else await clear();
   await rm(root, { recursive: true, force: true });
 }
 

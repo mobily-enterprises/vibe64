@@ -16,12 +16,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("GET", "", {
     actionId: ACTION_READ_STUDIO_HEALTH,
-    buildInput(request) {
-      return {
-        ...routes.requestQuery(request),
-        ...(request.vibe64User ? { vibe64User: request.vibe64User } : {})
-      };
-    },
+    buildInput: routes.requestQuery,
     query: studioHealthQueryInputValidator,
     summary: "Inspect Vibe64 host platform health."
   });

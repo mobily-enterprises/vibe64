@@ -2,9 +2,27 @@
 
 People can connect the external accounts needed for agent and repository work
 and see whether the Studio host is ready to support them.
+Account status, native login/logout, model routing, Git identity, personal
+profile and curated provider operations use actor-authorized named actions.
+These are workspace account operations and do not require a project or coding
+session. Canonical inputs reject caller-supplied users and enforce required
+fields; existing account services retain credential ownership, revision checks
+and native lifecycle rules.
+The five `vibe64.accounts.ai-connections.*` actions own provider list/catalogue,
+save/remove and model access. Standalone and hosted HTTP adapters dispatch the
+same contracts. Owner authorization and any host management policy apply on
+direct execution too. The existing store owns validation, credential writes,
+runtime invalidation and change publication. HTTP field selection derives from
+the action schema; a URL provider takes precedence over body input. Login
+WebSockets retain their transport adapter and the four retired Helper endpoints
+remain 410 notices with no operation to expose. Account actions have no direct
+Colleague tool exposure until their bounded presentation is defined.
 
 ## Sources
 
+- `packages/vibe64-accounts/src/server/actions.js`
+- `packages/vibe64-accounts/src/server/inputSchemas.js`
+- `tests/server/vibe64AccountActionDispatch.unit.test.js`
 - `packages/vibe64-core/src/server/codexAuthState.js`
 
 - `packages/vibe64-core/src/server/assistantRoutingStore.js`
@@ -56,6 +74,9 @@ and see whether the Studio host is ready to support them.
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
 - `packages/studio-health/src/server/service.js`
+- `packages/studio-health/src/server/actions.js`
+- `packages/studio-health/src/server/inputSchemas.js`
+- `packages/studio-health/src/server/registerRoutes.js`
 - `src/components/studio/StudioHealthScreen.vue`
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 
@@ -340,6 +361,10 @@ authentication does not fail readiness. Studio Health consumes this aggregate
 AI status and the project's required repository connections rather than forcing
 a Codex/GitHub pair for every project. With no connected AI, the
 session picker directs the user to account setup before creating a session.
+The global `vibe64.studio-health.read` action resolves the current actor without
+requiring project access. HTTP and automation share that context; input cannot
+supply a user or project. The health service receives the trusted actor for
+account-readiness policy.
 Studio health performs read-only checks
 of workspace access, account readiness, command-line tools, Genesis, and the
 managed browser runtime. Failures identify the concrete host capability that is

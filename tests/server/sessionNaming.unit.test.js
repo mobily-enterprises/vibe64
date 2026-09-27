@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, rm, readdir } from "node:fs/promises";
+import { mkdtemp, rm, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
@@ -139,6 +139,30 @@ test("failed helper cleanup stays owned for retry on close", async (t) => {
   await f.create().closeSession(f.context);
   assert.equal((await f.store.readBackgroundTask("original-id", "session-name")).assistantHelper, null);
 });
+
+for (const retainedHelper of [false, true]) {
+  test(`renewal cleanup reads hidden naming ownership and preserves public privacy (retained helper: ${retainedHelper})`, async (t) => {
+    const f = await fixture(t);
+    if (retainedHelper) {
+      const cleanup = f.agent.deleteEphemeralConversation;
+      f.agent.deleteEphemeralConversation = async () => ({ ok: false, error: "Try cleanup again" });
+      await f.store.writeConversationUserMessage("original-id", { messageId: "first", text: "Bookings" });
+      f.naming.start(f.context, "first");
+      await f.naming.close();
+      f.agent.deleteEphemeralConversation = cleanup;
+    }
+    await f.store.writeMetadataValue("original-id", "renewal_id", "renewal-naming");
+    await f.store.writeMetadataValue("original-id", "renewed_from", "predecessor");
+    await writeFile(f.store.paths("original-id").statusPath, "renewal_pending\n");
+    const context = { ...f.context, session: await f.store.readSessionForRenewal("original-id"),
+      renewalCleanup: { kind: "successor", renewalId: "renewal-naming", sourceSessionId: "predecessor" } };
+    await assert.rejects(f.store.readBackgroundTask("original-id", "session-name"), { code: "vibe64_session_renewal_private" });
+    await f.create().closeSession(context);
+    const saved = await f.store.readSessionForRenewal("original-id");
+    assert.equal(saved.backgroundTasks.find(({ id }) => id === "session-name")?.assistantHelper || null, null);
+    await assert.rejects(f.store.readSession("original-id"), { code: "vibe64_session_renewal_private" });
+  });
+}
 
 test("names validate before storage and automatic names must be one word", async (t) => {
   const f = await fixture(t);

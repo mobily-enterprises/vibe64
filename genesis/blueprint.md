@@ -3,6 +3,17 @@
 Vibe64 is the visual, managed shell around Genesis for people building software
 with an AI coding agent.
 
+Colleague is a separate conversation for discussing ideas and operating Vibe64
+across projects. It knows the selected project and session, can open their views
+and ask coding agents for help through the same operations the UI uses. It has
+no repository tools or engineering role. Its continuing conversation remains
+available before a session exists or when a session cannot open. Each signed-in
+person keeps their own Colleague history and model choice. The current text
+conversation supports an Online host's global voice controls. People can ask it
+to watch Main or temporary conversations for completed answers, finished work or
+explicit problems. Code observes the conversations; only relevant changes wake
+Colleague. Complete product-operation coverage remains in progress.
+
 Maintainers can develop Vibe64 inside another editor's preview. The development
 preview runs a complete editor with its own runtime state and an independent
 copy of a bundled, dependency-free Node example. The example has complete

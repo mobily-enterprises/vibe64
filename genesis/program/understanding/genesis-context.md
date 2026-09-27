@@ -13,6 +13,9 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - `packages/vibe64-system-graph/src/server/service.js`
+- `packages/vibe64-system-graph/src/server/actions.js`
+- `packages/vibe64-system-graph/src/server/registerRoutes.js`
+- `tests/server/vibe64SystemGraphRoutes.unit.test.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64SystemWorldView.vue`
 - `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemsView.vue`
 - `packages/vibe64-system-graph/src/client/subsystemsModel.js`
@@ -21,6 +24,13 @@ Genesis without creating another interpretation of the application.
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 
 ## Public contract
+
+The five System Graph operations (subsystems, status, Machine City, Program City
+and refresh) run through named `vibe64.system-graph.*` actions. HTTP and direct
+callers share required session inputs and fresh actor/project authorization.
+The existing service remains responsible for resolving the selected source and
+validating Genesis results. These engineering views are not direct Colleague
+tools; investigation belongs to a coding conversation.
 
 `inspectGenesisStackComponents` validates the current project format and requires
 an explicitly saved Stack before returning normalized components and its hash.

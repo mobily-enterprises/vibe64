@@ -92,6 +92,7 @@ test("workspace account terminal accepts authorization input without a selected 
   const request = {
     headers: { host: "studio.example.test", origin: "https://studio.example.test" },
     ip: "10.0.0.8",
+    protocol: "https",
     params: { terminalSessionId: input.sessionId },
     vibe64User
   };
@@ -327,7 +328,7 @@ test("curated Codex routes use trusted request identity and accept only curated 
         input: { body: { modelProviderId: "deepseek", apiKey: "fixture", vibe64User: { role: "owner" } } },
         async executeAction(value) { action = value; return { ok: true, providers: [] }; }
       }, testReply());
-      assert.deepEqual(action.input.vibe64User, member);
+      assert.equal(Object.hasOwn(action.input, "vibe64User"), false);
       assert.ok(action.actionId);
     }
   });
@@ -341,7 +342,7 @@ test("routing draft preview uses trusted request identity and carries explicit h
     const route = findRegisteredRoute(runtime, { method: "POST", path: "/api/vibe64/accounts/model-routing/preview" });
     assert.ok(route);
     const body = { revision: 4, orchestrators: {}, reviewedHelperWorkflows: ["codex"], vibe64User: { role: "owner" } };
-    assert.deepEqual(route.options.body.schema.patch(body).errors, {});
+    assert.equal(route.options.body.schema.patch(body).errors.vibe64User.code, "FIELD_NOT_ALLOWED");
     for (const vibe64User of [{ role: "member", username: "member" }, undefined]) {
       let action;
       await route.handler({ vibe64User, input: { body },
@@ -349,7 +350,7 @@ test("routing draft preview uses trusted request identity and carries explicit h
       }, testReply());
       assert.equal(action.actionId, ACTION_PREVIEW_MODEL_ROUTING);
       assert.deepEqual(action.input.reviewedHelperWorkflows, ["codex"]);
-      assert.deepEqual(action.input.vibe64User, vibe64User);
+      assert.equal(Object.hasOwn(action.input, "vibe64User"), false);
     }
   });
 });
@@ -367,6 +368,6 @@ test("workflow choices use the lightweight action and trusted request identity",
       async executeAction(value) { action = value; return { ok: true, workflows: [] }; }
     }, testReply());
     assert.equal(action.actionId, ACTION_READ_MODEL_ROUTING_WORKFLOWS);
-    assert.deepEqual(action.input.vibe64User, member);
+    assert.equal(Object.hasOwn(action.input, "vibe64User"), false);
   });
 });

@@ -3,7 +3,7 @@ import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { readWorkPlan, workPlanPath } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { readWorkPlan, readWorkPlanPage, workPlanPath } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
@@ -28,6 +28,34 @@ Status: ${status}
 ${body}
 `).join("\n");
 }
+
+test("working plan pages preserve full Unicode text and reject mixing revisions", async (t) => {
+  const f = await fixture(t, undefined, { readyPlan: false });
+  assert.deepEqual(await readWorkPlanPage(f.context), { available: false });
+  const text = `${planDocument()}\n${"🙂 quoted \"text\" ".repeat(2300)}\n  `;
+  await mkdir(path.dirname(workPlanPath(f.context)), { recursive: true });
+  await writeFile(workPlanPath(f.context), text);
+  let page = await readWorkPlanPage(f.context);
+  assert.equal(page.status, "ready");
+  const revision = page.revision;
+  const parts = [];
+  while (true) {
+    assert.equal(page.revision, revision);
+    assert.ok(Array.from(page.text).length <= 16000);
+    parts.push(page.text);
+    if (!page.hasMore) break;
+    page = await readWorkPlanPage(f.context, { offset: page.nextOffset, expectedRevision: revision });
+  }
+  assert.equal(parts.join(""), text);
+  assert.equal(page.nextOffset, Array.from(text).length);
+  await assert.rejects(readWorkPlanPage(f.context, { offset: 1 }), { code: "vibe64_work_plan_revision_required" });
+  await assert.rejects(readWorkPlanPage(f.context, { offset: page.totalCharacters + 1, expectedRevision: revision }),
+    { code: "vibe64_work_plan_offset_invalid" });
+  await writeFile(workPlanPath(f.context), `${text}\nchanged`);
+  await assert.rejects(readWorkPlanPage(f.context, { offset: 16000, expectedRevision: revision }), { code: "vibe64_work_plan_changed" });
+  assert.notEqual((await readWorkPlanPage(f.context)).revision, revision);
+  assert.equal(f.sends.length, 0);
+});
 
 async function fixture(t, preferences = { mode: "auto", review: true }, { resolveAssistantUser, beforeExclusive, readyPlan = true } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-lifecycle-"));

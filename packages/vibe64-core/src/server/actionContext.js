@@ -1,0 +1,113 @@
+import { createSchema } from "@jskit-ai/kernel/shared/validators";
+import {
+  currentProjectRequestContext,
+  resolveProjectRequestContext,
+  runWithProjectRequestContext
+} from "./projectRequestContext.js";
+import { normalizeProjectSlug } from "./studioProjectContext.js";
+
+function actionContextError(code, message, statusCode = 403) {
+  return Object.assign(new Error(message), { code, statusCode });
+}
+
+function actionProjectSlug(input, context) {
+  const routeSlug = context.requestMeta?.request?.params?.slug;
+  const requestedSlug = input.projectSlug;
+  if (routeSlug && requestedSlug && routeSlug !== requestedSlug) {
+    throw actionContextError("vibe64_action_project_mismatch", "The operation must target the project in its URL.");
+  }
+  return normalizeProjectSlug(routeSlug || requestedSlug || context.projectSlug || currentProjectRequestContext()?.slug);
+}
+
+function authenticatedVibe64User(context = {}) {
+  if (context.vibe64Action) return context.vibe64Action.user;
+  return context.requestMeta?.request?.vibe64User || currentProjectRequestContext()?.vibe64User || null;
+}
+
+function actionInput(input, projectScoped) {
+  const fields = { ...input.schema.getFieldDefinitions() };
+  delete fields.vibe64User;
+  if (projectScoped) {
+    fields.projectSlug = { type: "string", noTrim: false, minLength: 1, required: false };
+  }
+  return Object.freeze({
+    ...input,
+    schema: createSchema.createFactory([input.schema])(fields)
+  });
+}
+
+// HTTP and automation use the same operation. Transport input never supplies
+// the acting user; project selection is resolved before entering the service.
+function withVibe64ActionContext(definition, { projectScoped = true, ownerRequired = false, allowDeleting = false } = {}) {
+  const { execute } = definition;
+  const forwardsProjectSlug = Object.hasOwn(definition.input.schema.getFieldDefinitions(), "projectSlug");
+  return Object.freeze({
+    ...definition,
+    input: actionInput(definition.input, projectScoped),
+    extensions: {
+      ...definition.extensions,
+      vibe64: { projectScoped, ownerRequired, allowDeleting }
+    },
+    async execute(input = {}, context = {}, deps) {
+      const user = authenticatedVibe64User(context);
+      if (ownerRequired && user?.role !== "owner") {
+        throw actionContextError("vibe64_owner_required", "Only the workspace owner can perform this operation.");
+      }
+      const operationInput = { ...input };
+      delete operationInput.projectSlug;
+      delete operationInput.vibe64User;
+      const trustedInput = user ? { ...operationInput, vibe64User: user } : operationInput;
+      if (!projectScoped) return execute(trustedInput, context, deps);
+
+      const slug = actionProjectSlug(input, context);
+      if (forwardsProjectSlug) trustedInput.projectSlug = slug;
+      const resolved = context.vibe64Action?.project;
+      if (resolved && resolved.slug !== slug) {
+        throw actionContextError("vibe64_action_project_mismatch", "The authorized project does not match this operation.");
+      }
+      const current = currentProjectRequestContext();
+      const project = resolved || (current?.slug === slug ? current : await resolveProjectRequestContext({
+        request: { params: { slug }, vibe64User: user, allowDeleting }
+      }));
+      return runWithProjectRequestContext({ ...project, vibe64User: user }, () => execute(trustedInput, context, deps));
+    }
+  });
+}
+
+// Hosts supply authentication and project access through JSKIT's existing
+// context contributor. Both callers are re-authorized for every execution.
+function registerVibe64ActionContext(actions, { projectContext, resolveUser, authorizeProject } = {}) {
+  if (typeof resolveUser !== "function" || typeof authorizeProject !== "function") {
+    throw new TypeError("Vibe64 action context requires resolveUser() and authorizeProject().");
+  }
+  return actions.registerContextContributor({
+    id: "vibe64.operation-context",
+    async contribute({ definition, input, context }) {
+      const scope = definition.extensions?.vibe64;
+      if (!scope) return {};
+      if (Object.hasOwn(context, "vibe64Action")) {
+        throw actionContextError("vibe64_action_context_reserved", "Operation authority is resolved by the host.");
+      }
+      const user = await resolveUser({ request: context.requestMeta?.request || null, context });
+      if (!user) throw actionContextError("vibe64_auth_required", "Log in to Vibe64.", 401);
+      if (scope.ownerRequired && user.role !== "owner") {
+        throw actionContextError("vibe64_owner_required", "Only the workspace owner can perform this operation.");
+      }
+      let project = null;
+      if (scope.projectScoped) {
+        const slug = actionProjectSlug(input, context);
+        await authorizeProject({ slug, user, definition, input, context });
+        project = await resolveProjectRequestContext({
+          projectContext,
+          request: { params: { slug }, vibe64User: user, allowDeleting: scope.allowDeleting === true }
+        });
+      }
+      return {
+        actor: { id: String(user.uid ?? user.username) },
+        vibe64Action: Object.freeze({ user, project })
+      };
+    }
+  });
+}
+
+export { authenticatedVibe64User, registerVibe64ActionContext, withVibe64ActionContext };

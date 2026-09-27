@@ -1,6 +1,6 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 
-import { createActions } from "./actions.js";
+import { createActions, createAiConnectionActions } from "./actions.js";
 import {
   createVibe64AccountAuthSessionChangedPublisher,
   createVibe64AccountsChangedPublisher,
@@ -128,7 +128,7 @@ const Vibe64AccountsFeature = defineFeature({
     channels: ["api", "automation", "internal"],
     surfaces: ["app"]
   },
-  setup({ accountRuntime, env, events, fastify, http, project, terminals }) {
+  setup({ accountRuntime, env, events, fastify, http, project, terminals }, { actionCatalogue }) {
     const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");
     const targetRoot = String(env[VIBE64_TARGET_ROOT_ENV] || "");
     const projectContext = getStudioProjectContext();
@@ -172,7 +172,9 @@ const Vibe64AccountsFeature = defineFeature({
       });
     }
 
-    const aiConnections = localRuntime && terminals && systemRoot
+    // A host-supplied account runtime also owns connection wiring, including
+    // Online's local mode. Do not register a second copy of its actions/store.
+    const aiConnections = !accountRuntime && localRuntime && terminals && systemRoot
       ? createAiConnectionRuntime({
           systemRoot: resolvedAccountRuntime.systemRoot,
           terminals,
@@ -190,6 +192,14 @@ const Vibe64AccountsFeature = defineFeature({
       configureAiConnectionRuntime({
         accountService: accounts, aiConnections, terminals,
         requireManagement: (input) => resolvedAccountRuntime.requireCodexManagement(input)
+      });
+    }
+    if (aiConnectionService) {
+      actionCatalogue.register({
+        contributorId: "vibe64.accounts.ai-connections", domain: "vibe64-accounts",
+        actions: createAiConnectionActions({ aiConnectionService,
+          requireAiManagement: (input) => resolvedAccountRuntime.requireCodexManagement(input)
+        }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action }))
       });
     }
 

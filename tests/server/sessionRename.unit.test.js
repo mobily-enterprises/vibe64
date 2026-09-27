@@ -7,6 +7,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
+import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
 import { ACTION_RENAME_SESSION, createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { sessionRenameInputValidator } from "../../packages/vibe64-sessions/src/server/inputSchemas.js";
@@ -32,7 +33,7 @@ test("rename API persists the display name and publishes a list refresh without 
   const f = await fixture(t);
   const service = createService({ project: { createRuntime: async () => ({ store: f.store }) }, terminals: {}, publishSessionChanged: f.publishSessionChanged });
   const action = createSessionActions({ sessions: service }).find(({ id }) => id === ACTION_RENAME_SESSION);
-  assert.deepEqual(await action.execute({ sessionId: "one", name: "  My work  ", originId: "tab1" }), { ok: true, sessionId: "one", sessionName: "My work" });
+  assert.deepEqual(await runWithProjectRequestContext({ slug: "unit_project" }, () => action.execute({ sessionId: "one", name: "  My work  ", originId: "tab1" })), { ok: true, sessionId: "one", sessionName: "My work" });
   assert.equal(await f.store.readMetadataValue("one", "label"), "My work");
   assert.equal(f.events[0][1].payload.clientRefresh.includeList, true);
   assert.equal(f.events[0][1].originId, "tab1");

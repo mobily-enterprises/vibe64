@@ -29,11 +29,6 @@ import {
 } from "@jskit-ai/uploads-runtime/server/policy/uploadPolicy";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/terminalWebSocketRoutes";
-import {
-  terminalKeyInput,
-  terminalSessionContainsText,
-  terminalSessionControlSnapshot
-} from "@local/vibe64-execution/server/terminalSessions";
 
 const VIBE64_TERMINALS_UNAVAILABLE = "Vibe64 terminal service is unavailable.";
 
@@ -212,50 +207,43 @@ function registerRoutes(
     routeSurface,
     tags: ["studio", "vibe64-terminals"]
   });
-  const terminalService = () => terminals;
-
-  routes.serviceRoute("GET", "/codex-terminal", {
+  routes.actionRoute("GET", "/codex-terminal", {
+    actionId: "vibe64.terminals.global-terminal.status",
     summary: "Read global Vibe64 Codex terminal status."
-  }, () => {
-    return terminalService().globalCodexTerminalState();
   });
 
-  routes.serviceRoute("POST", "/codex-terminal", {
+  routes.actionRoute("POST", "/codex-terminal", {
+    actionId: "vibe64.terminals.global-terminal.start",
     summary: "Start a global Vibe64 Codex terminal."
-  }, (request) => {
-    return terminalService().startGlobalCodexTerminal(withVibe64User(request));
   });
 
-  routes.serviceRoute("POST", "/agent-sessions/reconcile", {
+  routes.actionRoute("POST", "/agent-sessions/reconcile", {
+    actionId: "vibe64.terminals.agent-sessions.reconcile",
     summary: "Reconnect assistant sessions for the current project."
-  }, () => {
-    return terminalService().reconcileOpenAgentSessions();
   });
 
-  routes.serviceRoute("POST", "/project-runtime/open", {
+  routes.actionRoute("POST", "/project-runtime/open", {
+    actionId: "vibe64.terminals.project-runtime.open",
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Mark the current Vibe64 project runtime open."
-  }, (request) => {
-    return terminalService().openProjectRuntime(routes.requestBody(request));
   });
 
-  routes.serviceRoute("POST", "/project-runtime/close", {
+  routes.actionRoute("POST", "/project-runtime/close", {
+    actionId: "vibe64.terminals.project-runtime.close",
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Close all Vibe64 runtime processes for the current project."
-  }, (request) => {
-    return terminalService().closeProjectRuntime(routes.requestBody(request));
   });
 
-  routes.serviceRoute("GET", "/sessions/:sessionId/outputs", {
+  routes.actionRoute("GET", "/sessions/:sessionId/outputs", {
+    actionId: "vibe64.terminals.outputs.read",
+    buildInput: (request) => ({ ...sessionInput(request), ...requestPublicRouting(request) }),
     summary: "Read Vibe64 output target and run status."
-  }, (request) => {
-    return terminalService().outputTargetStatus(request.params.sessionId, {
-      ...requestPublicRouting(request)
-    });
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/output-runs", {
     actionId: ACTION_START_OUTPUT_TARGET,
     body: outputTargetInputValidator,
-    buildInput: (request) => withVibe64User(request, bodyWithSessionId(routes)(request)),
+    buildInput: (request) => withoutVibe64User(bodyWithSessionId(routes)(request)),
     summary: "Start a Vibe64 output target."
   });
 
@@ -268,15 +256,15 @@ function registerRoutes(
   routes.serviceRoute("GET", "/sessions/:sessionId/output-results/:resultId", {
     summary: "Download one immutable Vibe64 output result."
   }, async (request, reply) => {
-    const opened = await terminalService().readOutputResult(
-      request.params.sessionId,
-      request.params.resultId
-    );
+    const opened = await request.executeAction({
+      actionId: "vibe64.terminals.output-result.read",
+      input: { ...sessionInput(request), resultId: request.params.resultId }
+    });
     const { fileHandle, result } = opened;
     try {
       const digest = Buffer.from(result.sha256, "hex").toString("base64");
       const stream = fileHandle.createReadStream({ autoClose: true });
-      return reply
+      await reply
         .header("Cache-Control", "private, no-store")
         .header("Content-Disposition", outputResultContentDisposition(result.name))
         .header("Content-Length", String(result.size))
@@ -306,41 +294,37 @@ function registerRoutes(
     summary: "Select the application identity for this preview browser."
   });
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/agent-terminal", {
+  routes.actionRoute("POST", "/sessions/:sessionId/agent-terminal", {
+    actionId: "vibe64.terminals.agent-terminal.start",
+    buildInput: (request) => withoutVibe64User(bodyWithSessionId(routes)(request)),
     summary: "Start a Vibe64 AI terminal."
-  }, (request) => {
-    return terminalService().startAgentTerminal(
-      request.params.sessionId,
-      withVibe64User(request, routes.requestBody(request))
-    );
   });
 
-  routes.serviceRoute("GET", "/sessions/:sessionId/agent-goal", {
+  routes.actionRoute("GET", "/sessions/:sessionId/agent-goal", {
+    actionId: "vibe64.terminals.agent-goal.read", buildInput: sessionInput,
     summary: "Read the selected assistant conversation goal."
-  }, (request) => terminalService().readAgentGoal(
-    request.params.sessionId, withVibe64User(request, {})
-  ));
+  });
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/agent-goal", {
+  routes.actionRoute("POST", "/sessions/:sessionId/agent-goal", {
+    actionId: "vibe64.terminals.agent-goal.update",
+    buildInput: (request) => withoutVibe64User(bodyWithSessionId(routes)(request)),
     summary: "Set, pause, resume, or cancel the selected assistant conversation goal."
-  }, (request) => terminalService().updateAgentGoal(
-    request.params.sessionId, withVibe64User(request, routes.requestBody(request))
-  ));
+  });
 
-  routes.serviceRoute("GET", "/sessions/:sessionId/agent-plan-usage", {
+  routes.actionRoute("GET", "/sessions/:sessionId/agent-plan-usage", {
+    actionId: "vibe64.terminals.agent-plan-usage.read", buildInput: sessionInput,
     summary: "Read the selected assistant account's remaining plan allowance."
-  }, (request) => terminalService().readAgentPlanUsage(
-    request.params.sessionId,
-    withVibe64User(request, {})
-  ));
+  });
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/agent-session", {
+  routes.actionRoute("GET", "/sessions/:sessionId/work-plan", {
+    actionId: "vibe64.terminals.work-plan.read",
+    buildInput: (request) => ({ ...request.query, ...sessionInput(request) }),
+    summary: "Read one exact-revision page of Main's Auto work plan."
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/agent-session", {
+    actionId: "vibe64.terminals.agent-session.prepare", buildInput: sessionInput,
     summary: "Prepare the Vibe64 assistant session."
-  }, (request) => {
-    return terminalService().ensureAgentSession(
-      request.params.sessionId,
-      withVibe64User(request, routes.requestBody(request))
-    );
   });
 
   routes.serviceRoute("POST", "/sessions/:sessionId/agent-attachments", {
@@ -387,9 +371,10 @@ function registerRoutes(
   routes.serviceRoute("GET", "/sessions/:sessionId/agent-attachments/:attachmentId", {
     summary: "Read an attachment belonging to this conversation."
   }, async (request, reply) => {
-    const { attachment, fileHandle } = await terminalService().readAgentAttachment(
-      request.params.sessionId, request.params.attachmentId
-    );
+    const { attachment, fileHandle } = await request.executeAction({
+      actionId: "vibe64.terminals.agent-attachment.read",
+      input: { ...sessionInput(request), attachmentId: request.params.attachmentId }
+    });
     try {
       const inline = request.query?.inline === "1" && attachment.contentType.startsWith("image/");
       await reply
@@ -418,19 +403,19 @@ function registerRoutes(
 
   routes.actionRoute("POST", "/sessions/:sessionId/temporary-conversations", {
     actionId: ACTION_CREATE_TEMPORARY_CONVERSATION,
-    buildInput: (request) => withVibe64User(request, bodyWithSessionId(routes)(request)),
+    buildInput: (request) => withoutVibe64User(bodyWithSessionId(routes)(request)),
     summary: "Create a Vibe64 temporary conversation."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/temporary-conversations/:conversationId", {
     actionId: ACTION_READ_TEMPORARY_CONVERSATION,
-    buildInput: temporaryConversationInput,
+    buildInput: (request) => ({ ...routes.requestQuery(request), ...temporaryConversationInput(request) }),
     summary: "Read a Vibe64 temporary conversation."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/temporary-conversations/:conversationId/turns", {
     actionId: ACTION_START_TEMPORARY_CONVERSATION_TURN,
-    buildInput: (request) => withVibe64User(request, {
+    buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request),
       ...temporaryConversationInput(request)
     }),
@@ -465,40 +450,32 @@ function registerRoutes(
   });
 
   registerTerminalSnapshotRoutes(routes, {
-    close: (sessionId, terminalSessionId) => terminalService().closeOutputTargetTerminal(sessionId, terminalSessionId),
+    prefix: "output-terminal",
     path: "/sessions/:sessionId/output-runs/:terminalSessionId/terminal",
-    read: (sessionId, terminalSessionId) => terminalService().readOutputTargetTerminal(sessionId, terminalSessionId),
     readSummary: "Read a Vibe64 output terminal snapshot.",
-    closeSummary: "Close a Vibe64 output terminal.",
-    write: (sessionId, terminalSessionId, data) => terminalService().writeOutputTargetTerminal(sessionId, terminalSessionId, data)
+    closeSummary: "Close a Vibe64 output terminal."
   });
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/output-runs/:terminalSessionId/stop", {
+  routes.actionRoute("POST", "/sessions/:sessionId/output-runs/:terminalSessionId/stop", {
+    actionId: "vibe64.terminals.output-target.stop", buildInput: terminalRouteInput,
     statusCode: 200,
     summary: "Stop a Vibe64 output target without deleting its log."
-  }, (request) => {
-    const input = terminalRouteInput(request);
-    return terminalService().stopOutputTargetTerminal(input.sessionId, input.terminalSessionId);
   });
 
   registerTerminalSnapshotRoutes(routes, {
-    close: (sessionId, terminalSessionId) => terminalService().closeAgentTerminal(sessionId, terminalSessionId),
+    prefix: "agent-terminal",
     control: true,
     path: "/sessions/:sessionId/agent-terminal/:terminalSessionId",
-    read: (sessionId, terminalSessionId) => terminalService().readAgentTerminal(sessionId, terminalSessionId),
     readSummary: "Read a Vibe64 AI terminal snapshot.",
-    closeSummary: "Close a Vibe64 AI terminal.",
-    write: (sessionId, terminalSessionId, data, input) => terminalService().writeAgentTerminal(sessionId, terminalSessionId, data, input)
+    closeSummary: "Close a Vibe64 AI terminal."
   });
 
-  registerGlobalTerminalSnapshotRoutes(routes, {
-    close: (terminalSessionId) => terminalService().closeGlobalCodexTerminal(terminalSessionId),
+  registerTerminalSnapshotRoutes(routes, {
+    prefix: "global-terminal", global: true,
     control: true,
     path: "/codex-terminal/:terminalSessionId",
-    read: (terminalSessionId) => terminalService().readGlobalCodexTerminal(terminalSessionId),
     readSummary: "Read a global Vibe64 Codex terminal snapshot.",
-    closeSummary: "Close a global Vibe64 Codex terminal.",
-    write: (terminalSessionId, data, input) => terminalService().writeGlobalCodexTerminal(terminalSessionId, data, input)
+    closeSummary: "Close a global Vibe64 Codex terminal."
   });
 
   registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, {
@@ -517,7 +494,7 @@ function bodyWithSessionId(routes) {
 
 function promptHintRouteInput(routes, request) {
   const body = routes.requestBody(request);
-  return withVibe64User(request, {
+  return withoutVibe64User({
     ...(Object.hasOwn(body, "draft") ? { draft: body.draft } : {}),
     operationId: body.operationId,
     ...(Object.hasOwn(body, "originId") ? { originId: body.originId } : {}),
@@ -538,20 +515,15 @@ function temporaryConversationInput(request) {
   };
 }
 
+function withoutVibe64User(input = {}) {
+  const { vibe64User: _ignored, ...safeInput } = input || {};
+  void _ignored;
+  return safeInput;
+}
+
 function withVibe64User(request, input = {}) {
-  const vibe64User = request.vibe64User || null;
-  const {
-    vibe64User: _ignoredVibe64User,
-    ...safeInput
-  } = input || {};
-  void _ignoredVibe64User;
-  if (!vibe64User) {
-    return safeInput;
-  }
-  return {
-    ...safeInput,
-    vibe64User
-  };
+  const safeInput = withoutVibe64User(input);
+  return request.vibe64User ? { ...safeInput, vibe64User: request.vibe64User } : safeInput;
 }
 
 function firstForwardedHeader(value = "") {
@@ -575,173 +547,43 @@ function requestQueryValue(request, key) {
   return firstRequestValue(request?.query?.[key] ?? request?.input?.query?.[key] ?? "");
 }
 
-function terminalControlInputFields(body = {}) {
-  const originId = firstRequestValue(body?.originId);
-  return {
-    ...(Array.isArray(body?.attachmentIds) ? { attachmentIds: body.attachmentIds } : {}),
-    ...(originId ? { originId } : {}),
-    trackGitActor: true
-  };
-}
-
-function terminalRouteInput(request, input = {}) {
-  return withVibe64User(request, {
-    ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
-    sessionId: request.params.sessionId,
-    terminalSessionId: request.params.terminalSessionId
-  });
-}
-
-function globalTerminalRouteInput(request, input = {}) {
-  return withVibe64User(request, {
-    ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
-    terminalSessionId: request.params.terminalSessionId
-  });
+function terminalRouteInput(request) {
+  return { ...sessionInput(request), terminalSessionId: request.params.terminalSessionId };
 }
 
 function registerTerminalSnapshotRoutes(routes, {
-  close,
-  closeSummary,
-  control = false,
-  path,
-  read,
-  readSummary,
-  write = null
+  prefix, global = false, closeSummary, control = false, path, readSummary
 }) {
-  routes.serviceRoute("GET", path, {
-    failureStatus: 404,
-    successStatus: 200,
-    summary: readSummary
-  }, (request) => {
-    const input = terminalRouteInput(request);
-    return read(input.sessionId, input.terminalSessionId, input);
+  const inputForRequest = global
+    ? (request) => ({ terminalSessionId: request.params.terminalSessionId })
+    : terminalRouteInput;
+  const actionId = (operation) => `vibe64.terminals.${prefix}.${operation}`;
+  routes.actionRoute("GET", path, {
+    actionId: actionId("read"), buildInput: inputForRequest,
+    failureStatus: 404, successStatus: 200, summary: readSummary
   });
-
-  routes.serviceRoute("DELETE", path, {
-    statusCode: 200,
-    summary: closeSummary
-  }, (request) => {
-    const input = terminalRouteInput(request);
-    return close(input.sessionId, input.terminalSessionId, input);
+  routes.actionRoute("DELETE", path, {
+    actionId: actionId("close"), buildInput: inputForRequest,
+    statusCode: 200, summary: closeSummary
   });
-
-  if (control) {
-    registerTerminalControlRoutes(routes, {
-      inputForRequest: terminalRouteInput,
-      path,
-      read: (input) => read(input.sessionId, input.terminalSessionId, input),
-      write: write
-        ? (input, data) => write(input.sessionId, input.terminalSessionId, data, input)
-        : null
+  if (!control) return;
+  for (const suffix of ["snapshot", "quiet"]) {
+    routes.actionRoute("GET", `${path}/control/${suffix}`, {
+      actionId: actionId("control.snapshot"), buildInput: inputForRequest,
+      failureStatus: 404, successStatus: 200, summary: "Read a terminal control snapshot and quiet state."
     });
   }
-}
-
-function registerGlobalTerminalSnapshotRoutes(routes, {
-  close,
-  closeSummary,
-  control = false,
-  path,
-  read,
-  readSummary,
-  write = null
-}) {
-  routes.serviceRoute("GET", path, {
-    failureStatus: 404,
-    successStatus: 200,
-    summary: readSummary
-  }, (request) => {
-    const input = globalTerminalRouteInput(request);
-    return read(input.terminalSessionId);
-  });
-
-  routes.serviceRoute("DELETE", path, {
-    statusCode: 200,
-    summary: closeSummary
-  }, (request) => {
-    const input = globalTerminalRouteInput(request);
-    return close(input.terminalSessionId);
-  });
-
-  if (control) {
-    registerTerminalControlRoutes(routes, {
-      inputForRequest: globalTerminalRouteInput,
-      path,
-      read: (input) => read(input.terminalSessionId),
-      write: write
-        ? (input, data) => write(input.terminalSessionId, data, input)
-        : null
+  for (const [operation, body, summary] of [
+    ["check-text", terminalControlTextInputValidator, "Check whether a terminal snapshot contains literal text."],
+    ["text", terminalControlTextInputValidator, "Send exact text to a terminal."],
+    ["key", terminalControlKeyInputValidator, "Send a narrow supported key to a terminal."]
+  ]) {
+    routes.actionRoute("POST", `${path}/control/${operation}`, {
+      actionId: actionId(`control.${operation}`), body,
+      buildInput: (request) => ({ ...withoutVibe64User(routes.requestBody(request)), ...inputForRequest(request) }),
+      failureStatus: 404, successStatus: 200, summary
     });
   }
-}
-
-function registerTerminalControlRoutes(routes, {
-  inputForRequest,
-  path,
-  read,
-  write
-}) {
-  routes.serviceRoute("GET", `${path}/control/snapshot`, {
-    failureStatus: 404,
-    successStatus: 200,
-    summary: "Read a terminal control snapshot."
-  }, async (request) => {
-    return terminalSessionControlSnapshot(await read(inputForRequest(request)));
-  });
-
-  routes.serviceRoute("GET", `${path}/control/quiet`, {
-    failureStatus: 404,
-    successStatus: 200,
-    summary: "Read whether a terminal has been quiet recently."
-  }, async (request) => {
-    return terminalSessionControlSnapshot(await read(inputForRequest(request)));
-  });
-
-  routes.serviceRoute("POST", `${path}/control/check-text`, {
-    body: terminalControlTextInputValidator,
-    failureStatus: 404,
-    successStatus: 200,
-    summary: "Check whether a terminal snapshot contains literal text."
-  }, async (request) => {
-    return terminalSessionContainsText(
-      await read(inputForRequest(request)),
-      routes.requestBody(request).text
-    );
-  });
-
-  if (!write) {
-    return;
-  }
-
-  routes.serviceRoute("POST", `${path}/control/text`, {
-    body: terminalControlTextInputValidator,
-    failureStatus: 404,
-    successStatus: 200,
-    summary: "Send exact text to a terminal."
-  }, async (request) => {
-    const body = routes.requestBody(request);
-    return terminalSessionControlSnapshot(
-      await write(inputForRequest(request, terminalControlInputFields(body)), body.text)
-    );
-  });
-
-  routes.serviceRoute("POST", `${path}/control/key`, {
-    body: terminalControlKeyInputValidator,
-    failureStatus: 404,
-    successStatus: 200,
-    summary: "Send a narrow supported key to a terminal."
-  }, async (request) => {
-    const body = routes.requestBody(request);
-    const key = body.key;
-    const input = terminalKeyInput(key);
-    if (!input) {
-      return {
-        ok: false,
-        error: `Unsupported terminal key: ${String(key || "")}`
-      };
-    }
-    return terminalSessionControlSnapshot(await write(inputForRequest(request, terminalControlInputFields(body)), input));
-  });
 }
 
 function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, {

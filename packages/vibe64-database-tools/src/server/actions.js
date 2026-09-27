@@ -1,3 +1,4 @@
+import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import {
   databaseOverviewInputValidator,
   databaseAssistantInputValidator,
@@ -29,7 +30,7 @@ const ACTION_DATABASE_SNIPPET_DELETE = "vibe64.database.snippet.delete";
 const ACTION_DATABASE_ASSISTANT_ASK = "vibe64.database.assistant.ask";
 
 function action({ execute, id, input, kind = "command" }) {
-  return Object.freeze({
+  return withVibe64ActionContext({
     audit: {
       actionName: id
     },

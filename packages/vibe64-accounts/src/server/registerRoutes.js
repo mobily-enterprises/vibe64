@@ -10,6 +10,7 @@ import {
   ACTION_START_ACCOUNT_AUTH
 } from "./actions.js";
 import {
+  aiConnectionInputValidators,
   modelRoutingInputValidator,
   codexProviderInputValidator,
   accountIdInputValidator,
@@ -64,7 +65,7 @@ function registerRoutes(
   });
 
   if (aiConnectionService) {
-    registerAiConnectionRoutes(aiConnectionService, (method, suffix, handler) => {
+    registerAiConnectionRoutes((method, suffix, handler) => {
       routes.serviceRoute(method, `/ai-connections${suffix}`, {
         summary: "Manage AI provider connections."
       }, async (request) => {
@@ -75,7 +76,8 @@ function registerRoutes(
           return await handler({
             body: routes.requestBody(request),
             query: routes.requestQuery(request),
-            params: request.params
+            params: request.params,
+            executeAction: request.executeAction
           }, vibe64User);
         } catch (error) {
           return {
@@ -90,38 +92,38 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/codex-providers", {
     actionId: ACTION_READ_CODEX_PROVIDERS,
-    buildInput: (request) => withVibe64User(request),
+    buildInput: (request) => withoutVibe64User(),
     summary: "Read curated Codex provider connections."
   });
   routes.actionRoute("PATCH", "/codex-providers", {
     actionId: ACTION_SAVE_CODEX_PROVIDER, body: codexProviderInputValidator,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Check and connect a curated Codex provider."
   });
   routes.actionRoute("POST", "/codex-providers/remove", {
     actionId: ACTION_REMOVE_CODEX_PROVIDER, body: codexProviderInputValidator,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Disconnect a curated Codex provider."
   });
 
   routes.actionRoute("GET", "/model-routing/workflows", {
     actionId: ACTION_READ_MODEL_ROUTING_WORKFLOWS,
-    buildInput: (request) => withVibe64User(request),
+    buildInput: (request) => withoutVibe64User(),
     summary: "Read saved workflows and connection access without model discovery."
   });
   routes.actionRoute("GET", "/model-routing", {
     actionId: ACTION_READ_MODEL_ROUTING,
-    buildInput: (request) => withVibe64User(request),
+    buildInput: (request) => withoutVibe64User(),
     summary: "Read model roles, availability, and recommendations."
   });
   routes.actionRoute("PATCH", "/model-routing", {
     actionId: ACTION_SAVE_MODEL_ROUTING, body: modelRoutingInputValidator,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Save the workspace's model routing assignments."
   });
   routes.actionRoute("POST", "/model-routing/preview", {
     actionId: ACTION_PREVIEW_MODEL_ROUTING, body: modelRoutingInputValidator,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Preview owner and collaborator routing without saving or running AI."
   });
   for (const method of ["GET", "PATCH"]) {
@@ -132,28 +134,28 @@ function registerRoutes(
   routes.actionRoute("POST", "/auth", {
     actionId: ACTION_START_ACCOUNT_AUTH,
     body: accountAuthStartInputValidator,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Start an Vibe64 account login flow."
   });
 
   routes.actionRoute("POST", "/logout", {
     actionId: ACTION_LOGOUT_ACCOUNT,
     body: accountIdInputValidator,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Log out an Vibe64 account."
   });
 
   routes.actionRoute("POST", "/git-identity", {
     actionId: ACTION_SAVE_GIT_IDENTITY,
     body: gitIdentityInputValidator,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Save the Git identity used for Vibe64 GitHub operations."
   });
 
   routes.actionRoute("PATCH", "/personal-ai-profile", {
     actionId: ACTION_SAVE_PERSONAL_AI_PROFILE,
     body: personalAiProfileInputValidator,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Save the standalone Vibe64 personal AI profile."
   });
 
@@ -197,7 +199,7 @@ function registerRoutes(
   });
 }
 
-function registerAiConnectionRoutes(service, register) {
+function registerAiConnectionRoutes(register) {
   for (const method of ["GET", "PATCH"]) {
     register(method, "/:providerId/helper-model", () => {
       throw Object.assign(new Error(retiredHelperModelResponse.error), {
@@ -212,27 +214,38 @@ function registerAiConnectionRoutes(service, register) {
     ["POST", "/:providerId/remove", "remove"],
     ["PATCH", "/:providerId/model-access", "modelAccess"]
   ]) {
-    register(method, suffix, (request, vibe64User) => service[operation]({
-      ...(method === "GET" ? (operation === "catalog" ? request.query : {}) : request.body),
-      ...(request.params?.providerId ? { modelProviderId: request.params.providerId } : {}),
-      vibe64User
-    }));
+    const fields = Object.keys(aiConnectionInputValidators[operation].schema.getFieldDefinitions());
+    register(method, suffix, (request) => {
+      const source = method === "GET" ? request.query || {} : request.body || {};
+      return request.executeAction({
+        actionId: `vibe64.accounts.ai-connections.${operation}`,
+        input: {
+          ...Object.fromEntries(fields.filter((field) => Object.hasOwn(source, field)).map((field) => [field, source[field]])),
+          ...(request.params?.providerId ? { modelProviderId: request.params.providerId } : {})
+        }
+      });
+    });
   }
 }
 
 function queryInput(routes, request) {
-  return withVibe64User(request, routes.requestQuery(request));
+  return withoutVibe64User(routes.requestQuery(request));
 }
 
 function sessionInput(request) {
-  return withVibe64User(request, {
+  return withoutVibe64User({
     sessionId: request.params.sessionId
   });
 }
 
+function withoutVibe64User(input = {}) {
+  const { vibe64User: _ignored, ...safeInput } = input || {};
+  void _ignored;
+  return safeInput;
+}
+
 function withVibe64User(request, input = {}) {
-  const safeInput = { ...input };
-  delete safeInput.vibe64User;
+  const safeInput = withoutVibe64User(input);
   if (!request.vibe64User) {
     return safeInput;
   }

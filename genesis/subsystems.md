@@ -4,6 +4,10 @@
 
 Owns project discovery, the portable collaboration, engineering and deployment
 settings, and the project-wide GitHub issue and pull request workflows.
+Its ordinary HTTP operations dispatch canonical project actions with fresh actor
+and project authority. Existing services retain source/repository review checks,
+GitHub credentials and locks; secret reveal and owner settings enforce the same
+permissions for direct callers.
 
 ### Program
 
@@ -53,6 +57,10 @@ Deslop uses that workflow's Senior model for direct behavior-preserving cleanup.
 Foreign Helper and Backup chat turns reuse ordinary changeover.
 Temporary conversation discovery and explicit-close cleanup belong here too;
 these chats survive view removal and stay separate from main History.
+Goal, plan allowance, session connection, attachment and terminal control
+operations share named action contracts across HTTP and automation. Their
+transport adapters retain multipart, streaming and socket framing. Colleague
+does not receive raw terminal tools.
 
 ### Program
 
@@ -71,8 +79,12 @@ these chats survive view removal and stay separate from main History.
 
 Owns AI account setup, provider-key storage and validation, connection selection,
 per-orchestrator model routing and recommendations,
-and connection health. Standalone and hosted editors
+and connection health. Workspace Studio health also resolves current actor access
+independently of any selected project. Standalone and hosted editors
 share these operations; hosts supply credential context and access policy.
+Workspace account actions resolve the actor independently of project selection.
+Shared provider-connection actions enforce owner and host management policy;
+HTTP and machine callers retain the same credential/revision service checks.
 
 ### Program
 
@@ -107,6 +119,10 @@ Owns workspace preparation, execution resource estimates and workflow accounting
 ## `preview` Application preview
 
 Owns running project applications and their preview identities.
+Output lifecycle, status, logs and result access share canonical terminal
+actions with current actor/project authority and existing service admission.
+Current-app output discovery uses the same fresh project authority before
+inspecting the selected project or session declaration.
 
 ### Program
 
@@ -141,6 +157,9 @@ Owns project values supplied to managed application work.
 
 Owns editing, reviewing and saving project source changes, including derived
 filename and content indexes for each working session.
+Its ordinary source-editor operations share named action contracts and current
+actor/project authorization across HTTP and automation. Source tools remain with
+coding conversations; Colleague delegates source investigation.
 
 ### Program
 
@@ -161,6 +180,8 @@ Owns inspection, diagram exploration, agent-assisted layout changes and query ex
 Its transient copilot consumes the shared JSKIT conversation UI and central Helper
 resolution. It owns its bounded database loop and durable helper-cleanup references;
 the shared runtime owns scoped native conversations and their execution.
+Its thirteen ordinary HTTP operations share their named action contracts and
+trusted actor/project context; the database services own query and mutation safety.
 
 ### Program
 
@@ -178,6 +199,8 @@ the shared runtime owns scoped native conversations and their execution.
 ## `understanding` Project understanding
 
 Owns presenting Genesis explanations, authored subsystems and source Cities.
+System Graph reads and refresh share named actions and actor/project authority
+across HTTP and direct callers; coding conversations own engineering investigation.
 
 ### Program
 
@@ -202,6 +225,30 @@ and coordinate stopped-service upgrades before activation.
 ### Program
 
 - `genesis/program/operations/runtime-release.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
+
+## `colleague` Product conversation
+
+Owns each person's independent conversation for discussing ideas and operating
+Vibe64 across projects, including tool exchange, focused targets, retained
+operation outcomes, conversation watches and bounded Helper summaries. It also
+owns acknowledged project/session and global Management navigation commands. Code subscribes to session events
+and reconciles watched conversations through their existing authorized actions.
+It consumes existing native conversation and JSKIT transcript
+and action catalogues. Coding work and ordinary product operations retain their
+existing subsystem owners. State is private application filesystem data.
+
+### Program
+
+- `genesis/program/colleague/product-conversation.md`
 
 ### Data owned
 

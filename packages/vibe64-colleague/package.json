@@ -1,0 +1,52 @@
+{
+  "name": "@local/vibe64-colleague",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The user's independent conversation for operating Vibe64.",
+  "exports": {
+    "./client": "./src/client/index.js",
+    "./server": "./src/server/Vibe64ColleagueProvider.js",
+    "./server/service": "./src/server/service.js"
+  },
+  "jskit": {
+    "kind": "runtime",
+    "capabilities": {
+      "provides": [
+        "vibe64.colleague"
+      ],
+      "requires": [
+        "runtime.actions",
+        "runtime.http",
+        "runtime.events",
+        "vibe64.accounts",
+        "vibe64.terminals"
+      ]
+    },
+    "runtime": {
+      "server": {
+        "providers": [
+          {
+            "entrypoint": "src/server/Vibe64ColleagueProvider.js",
+            "export": "Vibe64ColleagueProvider"
+          }
+        ],
+        "capabilities": [
+          "vibe64.colleague"
+        ]
+      },
+      "client": {
+        "providers": []
+      }
+    }
+  },
+  "dependencies": {
+    "@jskit-ai/assistant-core": "0.1.197",
+    "@jskit-ai/kernel": "0.1.219",
+    "@local/vibe64-core": "0.1.0",
+    "@local/vibe64-accounts": "0.1.0",
+    "@local/vibe64-terminals": "0.1.0",
+    "@local/vibe64-runtime": "0.1.0",
+    "vue": "^3.5.13"
+  }
+}
