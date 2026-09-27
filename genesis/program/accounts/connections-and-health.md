@@ -41,6 +41,8 @@ and see whether the Studio host is ready to support them.
 - `packages/vibe64-accounts/src/server/service.js`
 - `packages/vibe64-accounts/src/server/registerRoutes.js`
 - `packages/vibe64-core/src/server/terminalWebSocketRoutes.js`
+- `packages/vibe64-core/src/server/localStudioRequest.js`
+- `server/lib/browserLifecycle.js`
 - `packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js`
 - `packages/vibe64-accounts/src/client/composables/useAccountAuthSessions.js`
 - `packages/vibe64-execution/src/server/engines/helperClient.js`
@@ -58,6 +60,13 @@ and see whether the Studio host is ready to support them.
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 
 ## Public contract
+
+Native terminal and browser-lifecycle WebSockets require a browser Origin that
+matches the request host, port and HTTP(S) scheme, including the host's forwarded
+protocol. Authenticated hosted sockets cannot omit Origin; local command-line
+clients retain the loopback-only exception. Authentication does not bypass this
+check. Native incoming WebSocket messages are limited to 1 MiB; file attachments
+use their separate upload API.
 
 Model routing is a shared Accounts surface. Each workflow keeps Senior and Junior
 in one orchestrator, with independent Helper and Router choices and a shared

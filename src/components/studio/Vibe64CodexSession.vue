@@ -169,7 +169,7 @@ import {
   vibe64GlobalCodexTerminalWebSocketUrl
 } from "@/lib/vibe64SessionApi.js";
 import { useVibe64CodexCommands } from "@/composables/useVibe64CodexCommands.js";
-import { useCodexTerminalAttachments } from "@/composables/useCodexTerminalAttachments.js";
+import { useAgentTerminalAttachments } from "@/composables/useAgentTerminalAttachments.js";
 import { useCodexTerminalOutput } from "@/composables/useCodexTerminalOutput.js";
 import { createWebSocketTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import {
@@ -416,13 +416,14 @@ const {
   retryAttachment,
   resetAttachmentDragState,
   uploadAttachmentFiles
-} = useCodexTerminalAttachments({
+} = useAgentTerminalAttachments({
   canUpload: terminalAttachmentsEnabled,
   deleteAttachment: codexCommands.deleteAttachment,
   ensureTerminalReady,
   focusTerminal,
   sendAttachmentPath: sendAttachmentPathForScope,
   sessionId: terminalScopeId,
+  terminalSessionId,
   uploadAttachment: uploadAttachmentForScope
 });
 const terminalAttachmentActionLabel = computed(() => (
@@ -760,13 +761,13 @@ async function uploadAttachmentForScope(currentScopeId, file, options = {}) {
   return codexCommands.uploadAttachment(currentScopeId, file, options);
 }
 
-async function sendAttachmentPathForScope(text, attachmentIds = []) {
+async function sendAttachmentPathForScope(text, attachmentIds = [], target = {}) {
   if (globalScope.value || !sessionId.value || !terminalSessionId.value) {
     throw new Error("Codex terminal is not ready for attachments.");
   }
   const response = await codexCommands.sendAgentTerminalText(
-    sessionId.value,
-    terminalSessionId.value,
+    target.sessionId,
+    target.terminalSessionId,
     text,
     { attachmentIds }
   );

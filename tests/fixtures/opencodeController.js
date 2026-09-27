@@ -43,6 +43,7 @@ const providerRevision = openCodeAssistantCapabilities({
   providers: providerResult
 }).modelProviders[0].definitionRevision;
 async function controllerHarness({
+  allowConversationAttachments = async () => {},
   assistantParts = [],
   assistantResponses = [],
   assistantError = null,
@@ -394,6 +395,7 @@ async function controllerHarness({
         throw startError;
       }
       const started = {
+        allowConversationAttachments,
         listConversationChildren,
         readConversationStoragePage,
         readConversationStorage: readConversationStorage || (async (id, options) => {

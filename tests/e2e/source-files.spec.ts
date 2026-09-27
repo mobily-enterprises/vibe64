@@ -78,7 +78,7 @@ async function mockFiles(page, { initialStars = ["src/app.js", "deleted.md"], ad
   return { messages };
 }
 
-for (const width of [390, 1280]) {
+for (const width of [390, 900, 1280, 2400]) {
   test(`Current changes uses the full project pane at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     await mockFiles(page);
@@ -104,6 +104,44 @@ for (const width of [390, 1280]) {
     const project = await page.locator(".studio-autopilot__project-panel:visible").boundingBox();
     const review = await changes.boundingBox();
     expect(review!.width).toBeGreaterThan(project!.width - 32);
+    const browser = changes.locator(".vibe64-repository-file-browser");
+    const list = browser.locator(".vibe64-repository-file-browser__list");
+    const detail = browser.locator(".vibe64-repository-file-browser__detail");
+    const divider = changes.getByRole("separator", { name: "Changed files width" });
+    if (width === 390) {
+      await expect(divider).not.toBeVisible();
+      const filesBox = await list.boundingBox();
+      const detailBox = await detail.boundingBox();
+      expect(detailBox!.y).toBeGreaterThanOrEqual(filesBox!.y + filesBox!.height - 1);
+      expect(Math.abs(detailBox!.x - filesBox!.x)).toBeLessThan(1);
+    } else {
+      await expect(divider).toBeVisible();
+      await divider.focus();
+      await page.keyboard.press("Home");
+      await expect(divider).toHaveAttribute("aria-valuenow", "160");
+      const handle = (await divider.boundingBox())!;
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + 20);
+      await page.mouse.down();
+      await page.mouse.move(handle.x + handle.width / 2 + 80, handle.y + 20, { steps: 8 });
+      await page.mouse.up();
+      await expect(divider).toHaveAttribute("aria-valuenow", "240");
+      expect(Math.abs((await list.boundingBox())!.width - 240)).toBeLessThan(1);
+      await divider.focus();
+      await page.keyboard.press("End");
+      const max = Number(await divider.getAttribute("aria-valuemax"));
+      await expect(divider).toHaveAttribute("aria-valuenow", String(max));
+      expect((await detail.boundingBox())!.width).toBeGreaterThanOrEqual(279);
+      await page.keyboard.press("ArrowRight");
+      await expect(divider).toHaveAttribute("aria-valuenow", String(max));
+      await page.keyboard.press("Home");
+      await page.keyboard.press("ArrowRight");
+      await expect(divider).toHaveAttribute("aria-valuenow", "176");
+      await expect(list.getByRole("button")).toHaveAttribute("aria-current", "true");
+      await page.reload();
+      await expect(divider).toHaveAttribute("aria-valuenow", "176");
+      await expect(changes.locator(".d2h-wrapper")).toBeVisible();
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`current-changes-${width}.png`), animations: "disabled" });
     await page.getByRole("button", { name: "Back to dashboard", exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard\/env$/u);

@@ -1500,6 +1500,12 @@ function createOpenCodeTerminalController({
     if (admissionFailure) {
       return admissionFailure;
     }
+    if (input.attachments?.length) {
+      const target = [...processes.values()].find((candidate) =>
+        candidate.sessionId === sessionId && candidate.terminalSessionId === terminalSessionId);
+      if (!target) throw new Error("Reopen the OpenCode terminal before attaching files.");
+      await target.server.allowConversationAttachments(target.upstreamSessionId, input.attachments);
+    }
     if (input?.trackGitActor) {
       const context = await contextFor(sessionId, options);
       const target = processes.get(context.key);

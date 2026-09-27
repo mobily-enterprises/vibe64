@@ -1,9 +1,15 @@
 <template>
   <div
+    ref="browser"
     class="vibe64-repository-file-browser"
-    :class="{ 'vibe64-repository-file-browser--embedded': embedded }"
+    :class="{
+      'vibe64-repository-file-browser--embedded': embedded,
+      'vibe64-repository-file-browser--stacked': stacked,
+      'vibe64-repository-file-browser--resizing': resizing
+    }"
+    :style="{ '--repository-file-list-width': `${listWidth}px` }"
   >
-    <aside :aria-label="ariaLabel" class="vibe64-repository-file-browser__list">
+    <aside :id="listId" :aria-label="ariaLabel" class="vibe64-repository-file-browser__list">
       <header v-if="listTitle">
         <strong>{{ listTitle }}</strong>
         <span v-if="listDescription">{{ listDescription }}</span>
@@ -34,6 +40,25 @@
         Load more files
       </v-btn>
     </aside>
+    <div
+      :aria-controls="listId"
+      aria-label="Changed files width"
+      aria-orientation="vertical"
+      :aria-valuemax="maxWidth"
+      :aria-valuemin="MIN_WIDTH"
+      :aria-valuenow="listWidth"
+      :aria-valuetext="`${listWidth} pixels`"
+      class="vibe64-repository-file-browser__separator"
+      role="separator"
+      tabindex="0"
+      title="Drag to resize, or use Left and Right arrow keys"
+      @keydown="resizeWithKeyboard"
+      @pointerdown="startResize"
+      @pointermove="moveResize"
+      @pointerup="stopResize"
+      @pointercancel="stopResize"
+      @lostpointercapture="stopResize"
+    />
     <main class="vibe64-repository-file-browser__detail">
       <h2>{{ selectedPath || emptyTitle }}</h2>
       <Vibe64RepositoryDiff
@@ -46,7 +71,9 @@
 </template>
 
 <script setup>
+import { computed, onBeforeUnmount, onMounted, ref, useId } from "vue";
 import Vibe64RepositoryDiff from "@/components/studio/repository/Vibe64RepositoryDiff.vue";
+import { readLocalStorageJson, writeLocalStorageJson } from "@/lib/browserLocalStorage.js";
 
 defineEmits(["load-more", "select"]);
 
@@ -63,6 +90,82 @@ defineProps({
   payload: { default: null, type: Object },
   selectedPath: { default: "", type: String },
   truncated: { default: false, type: Boolean }
+});
+
+const WIDTH_STORAGE_KEY = "vibe64:repository-file-list-width";
+const MIN_WIDTH = 160;
+const MAX_WIDTH = 480;
+const DEFAULT_WIDTH = 336;
+const SEPARATOR_WIDTH = 12;
+const DETAIL_MIN_WIDTH = 280;
+const listId = useId();
+const browser = ref(null);
+const containerWidth = ref(0);
+const resizing = ref(false);
+const savedWidth = readLocalStorageJson(WIDTH_STORAGE_KEY, null);
+const preferredWidth = ref(Number.isFinite(savedWidth) ? savedWidth : DEFAULT_WIDTH);
+const stacked = computed(() => containerWidth.value > 0 && containerWidth.value < 480);
+const maxWidth = computed(() => containerWidth.value > 0
+  ? Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, containerWidth.value - DETAIL_MIN_WIDTH - SEPARATOR_WIDTH))
+  : MAX_WIDTH);
+const listWidth = computed(() => Math.round(Math.min(maxWidth.value, Math.max(MIN_WIDTH, preferredWidth.value))));
+let observer;
+let drag;
+
+function syncBounds() {
+  containerWidth.value = browser.value?.clientWidth || 0;
+}
+
+function startResize(event) {
+  if (event.button !== 0 || drag) return;
+  event.preventDefault();
+  syncBounds();
+  drag = { pointerId: event.pointerId, startX: event.clientX, startWidth: listWidth.value, target: event.currentTarget };
+  resizing.value = true;
+  event.currentTarget.focus();
+  event.currentTarget.setPointerCapture(event.pointerId);
+}
+
+function moveResize(event) {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  preferredWidth.value = Math.min(maxWidth.value, Math.max(MIN_WIDTH, drag.startWidth + event.clientX - drag.startX));
+}
+
+function stopResize(event) {
+  if (!drag || (event && event.pointerId !== drag.pointerId)) return;
+  const { target, pointerId } = drag;
+  drag = null;
+  resizing.value = false;
+  if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+  writeLocalStorageJson(WIDTH_STORAGE_KEY, listWidth.value);
+}
+
+function resizeWithKeyboard(event) {
+  syncBounds();
+  let nextWidth;
+  switch (event.key) {
+    case "Home": nextWidth = MIN_WIDTH; break;
+    case "End": nextWidth = maxWidth.value; break;
+    case "ArrowLeft": nextWidth = listWidth.value - 16; break;
+    case "ArrowRight": nextWidth = listWidth.value + 16; break;
+    default: return;
+  }
+  event.preventDefault();
+  preferredWidth.value = Math.min(maxWidth.value, Math.max(MIN_WIDTH, nextWidth));
+  writeLocalStorageJson(WIDTH_STORAGE_KEY, listWidth.value);
+}
+
+onMounted(() => {
+  syncBounds();
+  if (typeof ResizeObserver !== "undefined") {
+    observer = new ResizeObserver(syncBounds);
+    observer.observe(browser.value);
+  }
+});
+
+onBeforeUnmount(() => {
+  stopResize();
+  observer?.disconnect();
 });
 
 function fileStatusLabel(value = "") {
@@ -84,7 +187,7 @@ function fileStatusLabel(value = "") {
   border: 1px solid rgba(var(--v-theme-outline), 0.18);
   border-radius: 0.75rem;
   display: grid;
-  grid-template-columns: minmax(16rem, 21rem) minmax(0, 1fr);
+  grid-template-columns: var(--repository-file-list-width, 21rem) 12px minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -98,10 +201,35 @@ function fileStatusLabel(value = "") {
 }
 
 .vibe64-repository-file-browser__list {
-  border-inline-end: 1px solid rgba(var(--v-theme-outline), 0.16);
   max-height: 44rem;
   min-width: 0;
   overflow: auto;
+}
+
+.vibe64-repository-file-browser__separator {
+  align-self: stretch;
+  cursor: col-resize;
+  outline: none;
+  position: relative;
+  touch-action: none;
+}
+
+.vibe64-repository-file-browser__separator::before {
+  background: rgba(var(--v-theme-outline), 0.18);
+  content: "";
+  inset: 0 5px;
+  position: absolute;
+}
+
+.vibe64-repository-file-browser__separator:hover::before,
+.vibe64-repository-file-browser__separator:focus-visible::before,
+.vibe64-repository-file-browser--resizing .vibe64-repository-file-browser__separator::before {
+  background: rgb(var(--v-theme-primary));
+}
+
+.vibe64-repository-file-browser--resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .vibe64-repository-file-browser--embedded .vibe64-repository-file-browser__list {
@@ -216,5 +344,27 @@ function fileStatusLabel(value = "") {
     border-inline-end: 0;
     max-height: 16rem;
   }
+
+  .vibe64-repository-file-browser__separator {
+    display: none;
+  }
+}
+
+.vibe64-repository-file-browser--stacked {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.vibe64-repository-file-browser--stacked.vibe64-repository-file-browser--embedded {
+  grid-template-rows: min(16rem, 50%) minmax(0, 1fr);
+}
+
+.vibe64-repository-file-browser--stacked > .vibe64-repository-file-browser__list {
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.16);
+  max-height: 16rem;
+}
+
+.vibe64-repository-file-browser--stacked > .vibe64-repository-file-browser__separator {
+  display: none;
 }
 </style>

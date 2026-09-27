@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -23,8 +24,12 @@ function assertCwdAllowed(cwd = "", {
   if (roots.length === 0) {
     return resolvedCwd;
   }
-  if (roots.some((root) => pathIsInsideOrEqual(root, resolvedCwd))) {
-    return resolvedCwd;
+  const matchingRoots = roots.filter((root) => pathIsInsideOrEqual(root, resolvedCwd));
+  if (matchingRoots.length > 0) {
+    const canonicalCwd = realpathSync(resolvedCwd);
+    if (matchingRoots.some((root) => pathIsInsideOrEqual(realpathSync(root), canonicalCwd))) {
+      return canonicalCwd;
+    }
   }
   const error = new Error("Vibe64 command cwd is outside the allowed roots.");
   error.code = "vibe64_command_cwd_outside_allowed_roots";

@@ -3,8 +3,8 @@ import { ref } from "vue";
 
 import {
   attachmentPathForTerminal,
-  useCodexTerminalAttachments
-} from "../../src/composables/useCodexTerminalAttachments.js";
+  useAgentTerminalAttachments
+} from "../../src/composables/useAgentTerminalAttachments.js";
 import {
   AGENT_ATTACHMENT_MAX_BYTES,
   AGENT_ATTACHMENT_MAX_ITEMS,
@@ -950,7 +950,7 @@ describe("useAgentAttachments", () => {
         size: uploadedFile.size
       };
     });
-    const terminal = useCodexTerminalAttachments({
+    const terminal = useAgentTerminalAttachments({
       deleteAttachment: vi.fn(),
       ensureTerminalReady: vi.fn().mockResolvedValue(true),
       focusTerminal: vi.fn(),
@@ -970,7 +970,8 @@ describe("useAgentAttachments", () => {
     expect(sendAttachmentPath).toHaveBeenNthCalledWith(
       1,
       "[/tmp/vibe64-attachments/session/terminal.txt] ",
-      ["123e4567-e89b-42d3-a456-426614174000"]
+      ["123e4567-e89b-42d3-a456-426614174000"],
+      { sessionId: "session-1", terminalSessionId: undefined }
     );
     expect(terminal.attachmentQueueItems.value[0]).toMatchObject({
       failureStage: "handoff",
@@ -983,4 +984,92 @@ describe("useAgentAttachments", () => {
     expect(sendAttachmentPath).toHaveBeenCalledTimes(2);
     expect(terminal.attachmentQueueItems.value).toEqual([]);
   });
+
+  it("keeps the selected file while starting the initial Codex terminal", async () => {
+    const terminalSessionId = ref("");
+    const sendAttachmentPath = vi.fn().mockResolvedValue(true);
+    const uploadAttachment = vi.fn(async (session, file) => uploadedAttachment(session, file));
+    const terminal = useAgentTerminalAttachments({
+      ensureTerminalReady: async () => { terminalSessionId.value = "terminal-1"; return true; },
+      focusTerminal: vi.fn(), sendAttachmentPath, sessionId: ref("session-1"),
+      terminalSessionId, uploadAttachment
+    });
+    await terminal.uploadAttachmentFiles([testFile("first.txt")]);
+    expect(uploadAttachment).toHaveBeenCalledTimes(1);
+    expect(sendAttachmentPath).toHaveBeenCalledTimes(1);
+    expect(terminal.attachmentQueueItems.value).toEqual([]);
+  });
+
+  for (const changed of ["session", "terminal", "closed"]) {
+    it(`abandons pending terminal uploads when ${changed} changes without injecting into the next terminal`, async () => {
+      const pending = deferred();
+      const sessionId = ref("session-1");
+      const terminalSessionId = ref("terminal-1");
+      const sendAttachmentPath = vi.fn();
+      const deleteAttachment = vi.fn().mockResolvedValue({ ok: true });
+      const focusTerminal = vi.fn();
+      const file = testFile("pending.png");
+      const terminal = useAgentTerminalAttachments({
+        assistantLabel: "OpenCode", deleteAttachment, focusTerminal,
+        ensureTerminalReady: () => true,
+        sendAttachmentPath, sessionId, terminalSessionId,
+        uploadAttachment: () => pending.promise
+      });
+      const upload = terminal.uploadAttachmentFiles([file]);
+      await flushPromises();
+      if (changed === "session") sessionId.value = "session-2";
+      else terminalSessionId.value = changed === "closed" ? "" : "terminal-2";
+      pending.resolve(uploadedAttachment("session-1", file));
+      await upload;
+      await flushPromises();
+      expect(sendAttachmentPath).not.toHaveBeenCalled();
+      expect(focusTerminal).not.toHaveBeenCalled();
+      expect(deleteAttachment).toHaveBeenCalledWith("session-1", file.name);
+      expect(terminal.attachmentQueueItems.value).toEqual([]);
+      expect(terminal.attachmentStatus.value).toBe("");
+    });
+  }
+
+  it("rejects a pending upload after terminal access is lost and preserves its retryable receipt", async () => {
+    const pending = deferred();
+    const canUpload = ref(true);
+    const sendAttachmentPath = vi.fn();
+    const deleteAttachment = vi.fn();
+    const terminal = useAgentTerminalAttachments({
+      assistantLabel: "OpenCode", canUpload, deleteAttachment,
+      ensureTerminalReady: () => true, focusTerminal: vi.fn(),
+      sendAttachmentPath, sessionId: ref("session-1"), terminalSessionId: ref("terminal-1"),
+      uploadAttachment: () => pending.promise
+    });
+    const file = testFile("pending.png");
+    const upload = terminal.uploadAttachmentFiles([file]);
+    await flushPromises();
+    canUpload.value = false;
+    pending.resolve(uploadedAttachment("session-1", file));
+    await upload;
+    expect(sendAttachmentPath).not.toHaveBeenCalled();
+    expect(deleteAttachment).not.toHaveBeenCalled();
+    expect(terminal.attachmentQueueItems.value[0]).toMatchObject({ phase: "failed", failureStage: "handoff" });
+  });
+
+  it("inserts OpenCode attachment paths without submitting and keeps failed delivery retryable", async () => {
+    const sendAttachmentPath = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const uploadAttachment = vi.fn(async (session, file) => uploadedAttachment(session, file));
+    const terminal = useAgentTerminalAttachments({
+      assistantLabel: "OpenCode", deleteAttachment: vi.fn(),
+      ensureTerminalReady: () => true, focusTerminal: vi.fn(),
+      sendAttachmentPath, sessionId: ref("session-1"), terminalSessionId: ref("terminal-1"), uploadAttachment
+    });
+    await terminal.uploadAttachmentFiles([testFile("screen.png")]);
+    expect(terminal.attachmentQueueItems.value[0]).toMatchObject({ phase: "failed", failureStage: "handoff" });
+    await terminal.retryAttachment(terminal.attachmentQueueItems.value[0]);
+    expect(uploadAttachment).toHaveBeenCalledTimes(1);
+    expect(sendAttachmentPath).toHaveBeenLastCalledWith(
+      "[/tmp/vibe64-attachments/session-1/screen.png] ", ["screen.png"],
+      { sessionId: "session-1", terminalSessionId: "terminal-1" }
+    );
+    expect(terminal.attachmentStatus.value).toBe("screen.png attached. Press Enter in OpenCode when ready.");
+    expect(terminal.attachmentQueueItems.value).toEqual([]);
+  });
+
 });

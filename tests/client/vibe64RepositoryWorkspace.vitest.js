@@ -670,7 +670,7 @@ describe("Vibe64 Repository workspace", () => {
     expect(repositoryWorkspace).toContain("Someone saved new project work after this session started");
     expect(repositoryWorkspace).toContain("Saved versions this session needs");
     expect(repositoryWorkspace).toContain("repositoryIncomingVersions");
-    expect(repositoryWorkspace.match(/Update this session \(rebase\)/gu)).toHaveLength(7);
+    expect(repositoryWorkspace).toContain('return branch ? `Update session from ${branch}` : "Update session"');
     expect(repositoryWorkspace).toContain("replay its unsaved work on the latest saved version");
     expect(repositoryWorkspace).toContain("will move it to the latest saved version");
     expect(repositoryWorkspace).toContain('changes.payload?.unsaved === true');
@@ -715,9 +715,6 @@ describe("Vibe64 Repository workspace", () => {
     ]);
 
     expect(repositoryWorkspace.match(/<Vibe64RepositoryFileBrowser/gu)).toHaveLength(2);
-    expect(fileBrowser).toMatch(
-      /\.vibe64-repository-file-browser \{[\s\S]*?grid-template-columns: minmax\(16rem, 21rem\) minmax\(0, 1fr\);/u
-    );
     expect(fileBrowser).toContain("vibe64-repository-file-browser--embedded");
     expect(repositoryWorkspace).toContain("width: 100vw;");
     expect(repositoryWorkspace).toContain("height: 100dvh;");

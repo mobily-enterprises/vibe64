@@ -1,5 +1,5 @@
 import {
-  isLocalStudioRequest
+  isTrustedStudioWebSocketRequest
 } from "./localStudioRequest.js";
 import {
   resolveProjectRequestContext,
@@ -67,8 +67,8 @@ function registerTerminalWebSocketRoute(
         socket.close(closeCode, error);
       };
 
-      if (!isLocalStudioRequest(request)) {
-        closeWithError(1008, "Open Studio on localhost or 127.0.0.1.");
+      if (!isTrustedStudioWebSocketRequest(request)) {
+        closeWithError(1008, "Open this terminal from its Vibe64 page.");
         return;
       }
 

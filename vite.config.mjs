@@ -4,9 +4,6 @@ import vue from "@vitejs/plugin-vue";
 import vuetify from "vite-plugin-vuetify";
 import VueRouter from "vue-router/vite";
 import { createJskitClientBootstrapPlugin } from "@jskit-ai/kernel/client/vite";
-import {
-  isLocalhostCheckBypassEnabled
-} from "@local/vibe64-core/server/localhostCheckBypass";
 
 function toPositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -15,12 +12,6 @@ function toPositiveInt(value, fallback) {
 
 const devPort = toPositiveInt(process.env.VITE_DEV_PORT, 5173);
 const apiProxyTarget = String(process.env.VITE_API_PROXY_TARGET || "").trim() || "http://localhost:3000";
-const bypassLocalhostCheck = isLocalhostCheckBypassEnabled();
-const apiProxyHeaders = bypassLocalhostCheck
-  ? {
-      origin: apiProxyTarget
-    }
-  : undefined;
 const clientEntry = (() => {
   const normalized = String(process.env.VITE_CLIENT_ENTRY || "").trim();
   if (!normalized) {
@@ -101,14 +92,16 @@ export default defineConfig({
     proxy: {
       "^/app/?(?:\\?.*)?$": {
         target: apiProxyTarget,
-        changeOrigin: true,
-        headers: apiProxyHeaders
+        changeOrigin: false
       },
       "/api": {
         target: apiProxyTarget,
-        changeOrigin: true,
-        headers: apiProxyHeaders,
-        rewriteWsOrigin: bypassLocalhostCheck,
+        changeOrigin: false,
+        ws: true
+      },
+      "/socket.io": {
+        target: apiProxyTarget,
+        changeOrigin: false,
         ws: true
       }
     }

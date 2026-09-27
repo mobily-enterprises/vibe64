@@ -11,6 +11,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/engines/capture.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessions.js`
 - `packages/vibe64-execution/src/host/execHelper.js`
+- `packages/vibe64-execution/src/server/policy/cwdPolicy.js`
 - `packages/vibe64-execution/src/server/runtime/runtimePacks.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
@@ -24,6 +25,14 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 
 ## Public contract
+
+The privileged command helper requires exact numeric target UID/GID values and
+uses a fixed executable path and trusted environment search path while dropping
+privilege. The requested command PATH takes effect only for the target user;
+provider credentials and the private OpenCode home remain in their existing
+environment. Loader and shell startup injection variables are excluded.
+Allowed working directories and host service paths are checked after resolving
+symlinks. A link inside an allowed directory cannot grant access outside that root.
 
 `startVibe64Workflow()`, `setVibe64WorkflowPhase()` and
 `finishVibe64Workflow()` delegate trusted server lifecycle requests to the same

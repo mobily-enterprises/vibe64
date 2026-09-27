@@ -466,26 +466,31 @@ async function createOpenCodeServerProcess({
     return stopPromise;
   }
 
-  async function readStorageResponse(route, { signal, maxBytes = 4 * 1024 * 1024 } = {}) {
+  async function requestStorageResponse(route, { signal, maxBytes = 4 * 1024 * 1024, body } = {}) {
     // The first storage request can initialize the saved directory after the
     // global health endpoint is ready. Allow the normal startup deadline.
     const deadline = AbortSignal.timeout(OPENCODE_READY_TIMEOUT_MS);
     const boundedSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
     boundedSignal.throwIfAborted();
     const response = await fetchImpl(`http://${OPENCODE_HOST}:${selectedPort}${route}`, {
-      method: "GET", signal: boundedSignal,
-      headers: { accept: "application/json", authorization: `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}` }
+      method: body === undefined ? "GET" : "PATCH", signal: boundedSignal,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      headers: {
+        accept: "application/json",
+        authorization: `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`,
+        ...(body === undefined ? {} : { "content-type": "application/json" })
+      }
     });
     try {
       if (!response.ok) throw Object.assign(new Error(`OpenCode storage request returned HTTP ${response.status}.`), { statusCode: response.status });
-      const result = JSON.parse(await readBoundedResponse(response, maxBytes));
+      const result = response.status === 204 ? null : JSON.parse(await readBoundedResponse(response, maxBytes));
       boundedSignal.throwIfAborted();
       return { data: result, headers: response.headers };
     } finally { await response.body?.cancel().catch(() => {}); }
   }
 
   async function storageInventory(route, options) {
-    const { data: rows } = await readStorageResponse(route, options);
+    const { data: rows } = await requestStorageResponse(route, options);
     if (!Array.isArray(rows) || rows.length > 1000 || rows.some((row) => !/^ses_[a-zA-Z0-9]+$/u.test(row?.id))) {
       throw new Error("OpenCode returned an incomplete or invalid storage inventory.");
     }
@@ -617,6 +622,21 @@ async function createOpenCodeServerProcess({
       pid: processHandle.pid,
       port: selectedPort,
       privateRoot: normalizedPrivateRoot,
+      async allowConversationAttachments(conversationId, attachments) {
+        const route = storageConversationPath(conversationId);
+        const { data: session } = await requestStorageResponse(route);
+        if (session?.id !== conversationId) throw new Error("OpenCode returned another conversation.");
+        const permission = [...(session.permission || [])];
+        const previousLength = permission.length;
+        for (const attachment of attachments) {
+          const pattern = path.join(path.dirname(attachment.path), "*").replaceAll("\\", "/");
+          const rule = permission.findLast((item) => item.permission === "external_directory" && item.pattern === pattern);
+          if (rule?.action !== "allow") permission.push({ permission: "external_directory", pattern, action: "allow" });
+        }
+        if (permission.length !== previousLength) {
+          await requestStorageResponse(route, { body: { permission } });
+        }
+      },
       async listConversationChildren(conversationId, { signal } = {}) {
         const children = await storageInventory(`${storageConversationPath(conversationId)}/children`, { signal });
         if (children.some((child) => child.parentID !== conversationId)) {
@@ -635,7 +655,7 @@ async function createOpenCodeServerProcess({
       },
       async readConversationStorage(conversationId, { signal } = {}) {
         // The native storage record does not resolve a live source workspace.
-        const { data } = await readStorageResponse(storageConversationPath(conversationId), { signal });
+        const { data } = await requestStorageResponse(storageConversationPath(conversationId), { signal });
         if (data?.id !== conversationId || !path.isAbsolute(data.directory || "")) {
           throw new Error("OpenCode returned an invalid native conversation record.");
         }
@@ -645,7 +665,7 @@ async function createOpenCodeServerProcess({
         const route = `${storageConversationPath(conversationId)}/message`;
         if (typeof before !== "string" || before.length > 8192) throw new TypeError("Invalid OpenCode storage cursor.");
         const query = new URLSearchParams({ limit: "1", ...(before ? { before } : {}) });
-        const { data, headers } = await readStorageResponse(`${route}?${query}`, {
+        const { data, headers } = await requestStorageResponse(`${route}?${query}`, {
           signal, maxBytes: 64 * 1024 * 1024
         });
         const nextCursor = headers.get("x-next-cursor");

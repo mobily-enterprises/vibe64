@@ -235,7 +235,7 @@ test("execution helper admits hosted project state only for the daemon's own gen
 
   assert.match(source, /operation === "vibe64-command" &&\s+targetUser\.username === ownerUsername/u);
   assert.match(source, /const ownerProjectStateRoot = path\.join\(\s+targetUser\.home,\s+"\.local",\s+"state",\s+"vibe64",\s+"projects"/u);
-  assert.match(source, /resolved === ownerProjectStateRoot \|\|\s+resolved\.startsWith\(`\$\{ownerProjectStateRoot\}\$\{path\.sep\}`\)/u);
+  assert.match(source, /const stateRoot = canonicalPath\(ownerProjectStateRoot\)/u);
 });
 
 test("execution helper runs platform health checks from the workspace temp root", async () => {
@@ -278,7 +278,7 @@ test("execution helper limits release service paths to deployment release state"
 test("execution helper uses runuser instead of direct initgroups setuid flow", async () => {
   const source = await helperSource();
 
-  assert.match(source, /spawnSync\("runuser"/u);
+  assert.match(source, /spawnSync\("\/usr\/sbin\/runuser"/u);
   assert.doesNotMatch(source, /process\.initgroups/u);
   assert.doesNotMatch(source, /process\.setuid/u);
   assert.doesNotMatch(source, /process\.setgid/u);

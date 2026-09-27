@@ -667,6 +667,11 @@ Desktop Current Changes also scrolls its file list and selected difference
 independently. In short windows, status notices and the review pane can scroll
 below the fixed heading without collapsing the pane. Dashboard navigation owns
 its own scrolling, so reaching a lower section does not shift the page content.
+The shared file browser in Current Changes and History has a draggable divider.
+Left/Right resize it; Home/End select its bounds. The browser remembers the
+preferred file-list width and clamps it to leave room for the difference without
+discarding that preference when the pane narrows. Narrow panes stack the list
+above the difference. Resizing preserves the selected file and mounted diff.
 
 ## Implementation map
 

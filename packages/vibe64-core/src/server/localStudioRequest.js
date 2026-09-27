@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import {
   isLocalhostCheckBypassEnabled
 } from "./localhostCheckBypass.js";
@@ -20,8 +21,8 @@ function isLoopbackAddress(value = "") {
     normalized === "localhost" ||
     normalized === "::1" ||
     normalized === "0:0:0:0:0:0:0:1" ||
-    normalized.startsWith("127.") ||
-    normalized.startsWith("::ffff:127.");
+    (isIP(normalized) === 4 && normalized.startsWith("127.")) ||
+    (isIP(normalized) === 6 && normalized.startsWith("::ffff:127."));
 }
 
 function hostFromOrigin(value = "") {
@@ -43,6 +44,35 @@ function hasAuthenticatedVibe64User(request = {}) {
     typeof user === "object" &&
     (String(user.username || "").trim() || String(user.email || "").trim())
   );
+}
+
+function originMatchesRequest(request = {}) {
+  const origin = request.headers?.origin;
+  const host = request.headers?.host;
+  if (typeof origin !== "string" || typeof host !== "string" || !origin || !host) {
+    return false;
+  }
+  try {
+    const originUrl = new URL(origin);
+    const forwardedProtocol = String(request.headers?.["x-forwarded-proto"] || "").split(",")[0].trim();
+    const protocol = forwardedProtocol || request.protocol ||
+      (request.socket?.encrypted || request.raw?.socket?.encrypted ? "https" : "http");
+    const requestUrl = new URL(`${protocol}://${host}`);
+    return ["http:", "https:"].includes(originUrl.protocol) &&
+      originUrl.origin === origin &&
+      !requestUrl.username && !requestUrl.password && requestUrl.pathname === "/" &&
+      !requestUrl.search && !requestUrl.hash && originUrl.origin === requestUrl.origin;
+  } catch {
+    return false;
+  }
+}
+
+function isTrustedStudioWebSocketRequest(request = {}) {
+  if (request.headers?.origin !== undefined) {
+    return originMatchesRequest(request) && isLocalStudioRequest(request);
+  }
+  // Local command-line clients may omit Origin; hosted cookie sessions may not.
+  return !hasAuthenticatedVibe64User(request) && isLocalStudioRequest(request);
 }
 
 function isLocalStudioRequest(request) {
@@ -81,6 +111,8 @@ export {
   hasAuthenticatedVibe64User,
   isLocalStudioRequest,
   isLoopbackAddress,
+  isTrustedStudioWebSocketRequest,
   normalizeHostName,
+  originMatchesRequest,
   requireLocalStudioRequest
 };

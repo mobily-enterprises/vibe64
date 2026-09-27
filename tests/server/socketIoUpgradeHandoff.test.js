@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { WebSocket } from "ws";
@@ -61,4 +62,22 @@ test("socket.io websocket upgrades are not handled by fastify websocket fallback
     }
     await app.close();
   }
+});
+
+test("native browser sockets reject foreign origins and oversized input frames", async (t) => {
+  const app = await createServer({ browserLifecycleShutdownDelayMs: 0 });
+  t.after(() => app.close());
+  await app.listen({ host: "127.0.0.1", port: 0 });
+  const origin = `http://127.0.0.1:${app.server.address().port}`;
+  const endpoint = `${origin.replace("http:", "ws:")}/api/studio/browser-lifecycle/ws`;
+  const foreign = new WebSocket(endpoint, { origin: "https://foreign.example" });
+  t.after(() => foreign.terminate());
+  assert.equal((await once(foreign, "close"))[0], 1008);
+  const local = new WebSocket(endpoint, { origin });
+  t.after(() => local.terminate());
+  const state = await once(local, "message");
+  assert.equal(JSON.parse(String(state[0])).type, "browser-lifecycle-state");
+  const closed = once(local, "close");
+  local.send("x".repeat(1024 * 1024 + 1));
+  assert.equal((await closed)[0], 1009);
 });

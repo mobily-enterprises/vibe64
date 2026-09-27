@@ -256,6 +256,7 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `src/composables/useVibe64MountedSessionData.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
 - `src/composables/useVibe64PromptHints.js`
+- `src/composables/useAgentTerminalAttachments.js`
 - `src/components/studio/Vibe64CodexSession.vue`
 - `src/components/studio/Vibe64InteractiveTerminal.vue`
 - `src/components/studio/Vibe64NativeAgentSession.vue`
@@ -1483,6 +1484,13 @@ started with; input rechecks the current viewer's access and connection identity
 without loading full chat history. A changed connection requires closing and
 reopening the terminal. Shared Backup never receives raw terminal input. Reading,
 resizing and closing remain available after AI access is lost.
+The running OpenCode terminal accepts picker, dropped and pasted files through
+the shared attachment queue. Its server handoff resolves upload IDs into retained
+session files, grants that native conversation access to their directories, and
+inserts references without an Enter keystroke. Ordinary text paste stays with
+the terminal. Upload completion remains bound to the session and terminal that
+accepted the files; switching or closing cannot insert them into another terminal.
+Failed handoffs remain retryable, and read-only terminals cannot attach files.
 Goal reads and pause/cancel controls likewise target the saved goal's connection
 independently of the last visible chat selection; starting or resuming still
 checks the effective destination's access. In Auto, the goal menu explains the

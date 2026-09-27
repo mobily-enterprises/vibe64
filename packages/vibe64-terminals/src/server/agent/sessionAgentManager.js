@@ -557,6 +557,16 @@ function createSessionAgentManager({
       if (attachments && !options.attachmentsPrepared && ["sendMessage", "startConversationTurn"].includes(method)) {
         providerInput = await attachments.prepareMessage(context, providerInput, { durable: method === "sendMessage" });
       }
+      if (method === "writeTerminal" && provider.id === "opencode") {
+        providerInput = { ...providerInput, input: { ...input.input, attachments: [] } };
+        if (input.input?.attachmentIds?.length) {
+          const prepared = await attachments.prepareMessage(context, { attachmentIds: input.input.attachmentIds });
+          // The browser supplies IDs only. Paths come from retained session files,
+          // and terminal input deliberately has no newline or Enter keystroke.
+          providerInput.data = prepared.attachments.map(({ path }) => `[${path}] `).join("");
+          providerInput.input.attachments = prepared.attachments;
+        }
+      }
       const result = await operation(context, providerInput);
       if (method === "startTerminal" && result?.ok !== false && normalizeText(result?.id)) {
         // A reused PTY keeps its original connection until explicitly closed.

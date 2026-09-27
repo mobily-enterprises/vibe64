@@ -1,5 +1,5 @@
 import {
-  isLocalStudioRequest
+  isTrustedStudioWebSocketRequest
 } from "@local/vibe64-core/server/localStudioRequest";
 
 const BROWSER_LIFECYCLE_WEBSOCKET_PATH = "/api/studio/browser-lifecycle/ws";
@@ -124,8 +124,8 @@ function registerBrowserLifecycleWebSocketRoute(app, monitor) {
     BROWSER_LIFECYCLE_WEBSOCKET_PATH,
     { websocket: true },
     (socket, request) => {
-      if (!isLocalStudioRequest(request)) {
-        socket.close(1008, "Open Studio on localhost or 127.0.0.1.");
+      if (!isTrustedStudioWebSocketRequest(request)) {
+        socket.close(1008, "Open this connection from its Vibe64 page.");
         return;
       }
       monitor.registerClient(socket);

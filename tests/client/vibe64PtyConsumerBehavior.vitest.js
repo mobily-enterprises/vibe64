@@ -69,7 +69,8 @@ const terminalMocks = vi.hoisted(() => {
     FakeTerminal,
     loadXtermModules: vi.fn(),
     mountedApps: [],
-    uploadAttachmentFiles: vi.fn()
+    uploadAttachmentFiles: vi.fn(),
+    handleAttachmentDrop: vi.fn()
   };
 });
 
@@ -114,10 +115,22 @@ vi.mock("@/composables/useVibe64CodexCommands.js", () => ({
   })
 }));
 
-vi.mock("@/composables/useCodexTerminalAttachments.js", () => ({
-  useCodexTerminalAttachments: () => ({
+vi.mock("@/composables/useVibe64TerminalCommands.js", () => ({
+  useVibe64TerminalCommands: () => ({
+    closeAgentTerminal: vi.fn().mockResolvedValue({ ok: true }),
+    sendAgentTerminalText: vi.fn().mockResolvedValue({ ok: true }),
+    startAgentTerminal: vi.fn()
+  })
+}));
+
+vi.mock("@/composables/useVibe64AttachmentCommands.js", () => ({
+  useVibe64AttachmentCommands: () => ({ deleteAttachment: vi.fn(), uploadAttachment: vi.fn() })
+}));
+
+vi.mock("@/composables/useAgentTerminalAttachments.js", () => ({
+  useAgentTerminalAttachments: (options) => ({
     abandonAttachments: vi.fn().mockResolvedValue([]),
-    attachmentCanAddFiles: terminalMocks.attachmentCanAddFiles || ref(true),
+    attachmentCanAddFiles: computed(() => options.canUpload.value && terminalMocks.attachmentCanAddFiles.value),
     attachmentDragActive: ref(false),
     attachmentQueueItems: ref([]),
     attachmentStatus: ref(""),
@@ -126,7 +139,7 @@ vi.mock("@/composables/useCodexTerminalAttachments.js", () => ({
     handleAttachmentDragEnter: vi.fn(),
     handleAttachmentDragLeave: vi.fn(),
     handleAttachmentDragOver: vi.fn(),
-    handleAttachmentDrop: vi.fn(),
+    handleAttachmentDrop: terminalMocks.handleAttachmentDrop,
     removeAttachment: vi.fn(),
     retryAttachment: vi.fn(),
     resetAttachmentDragState: vi.fn(),
@@ -185,6 +198,7 @@ vi.mock("@/components/studio/StudioErrorNotice.vue", () => ({
   default: defineComponent({ render: () => null })
 }));
 
+import Vibe64NativeAgentSession from "../../src/components/studio/Vibe64NativeAgentSession.vue";
 import Vibe64CodexSession from "../../src/components/studio/Vibe64CodexSession.vue";
 import Vibe64InteractiveTerminal from "../../src/components/studio/Vibe64InteractiveTerminal.vue";
 import Vibe64Terminal from "../../src/components/studio/Vibe64Terminal.vue";
@@ -193,6 +207,11 @@ import {
   useProviderAccountsSetup
 } from "../../packages/vibe64-accounts/src/client/composables/useProviderAccountsSetup.js";
 
+attachClientRender(
+  Vibe64NativeAgentSession,
+  path.resolve("src/components/studio/Vibe64NativeAgentSession.vue"),
+  "vibe64-native-agent-session-behavior-test"
+);
 attachClientRender(
   Vibe64CodexSession,
   path.resolve("src/components/studio/Vibe64CodexSession.vue"),
@@ -300,6 +319,7 @@ describe("visible PTY consumer behavior", () => {
       Terminal: terminalMocks.FakeTerminal
     });
     terminalMocks.uploadAttachmentFiles.mockReset();
+    terminalMocks.handleAttachmentDrop.mockReset();
     globalThis.WebSocket = FakeWebSocket;
     globalThis.document = {
       activeElement: null
@@ -440,6 +460,59 @@ describe("visible PTY consumer behavior", () => {
       ))).toBeNull();
       app.unmount();
     }
+  });
+
+  it("offers picker, file drop and file paste on the running OpenCode terminal without submitting", async () => {
+    const container = terminalHostNode("root");
+    const session = reactive({
+      assistantSelection: { engineId: "opencode" },
+      agentSession: { terminal: { id: "opencode-terminal-1", status: "running" } },
+      sessionId: "session-1"
+    });
+    const props = reactive({ readOnly: false, session, visible: true });
+    const app = testRenderer.createApp({ render: () => h(Vibe64NativeAgentSession, props) });
+    registerTestComponents(app);
+    app.provide(ssrContextKey, { modules: new Set() });
+    app.mount(container);
+    terminalMocks.mountedApps.push(app);
+    await flushAsyncWork();
+
+    const button = findNode(container, (node) => node.props?.["aria-label"] === "Attach files to OpenCode terminal");
+    expect(button).toBeTruthy();
+    expect(button.props.disabled).toBe(false);
+    const input = findNode(container, (node) => node.type === "input" && node.props.type === "file");
+    const file = { name: "screen.png", size: 8 };
+    const picker = { files: [file], value: "C:\\fakepath\\screen.png" };
+    input.props.onChange({ currentTarget: picker });
+    expect(picker.value).toBe("");
+    expect(terminalMocks.uploadAttachmentFiles).toHaveBeenCalledWith([file]);
+    const root = findNode(container, hasClass("vibe64-native-agent-session"));
+    const drop = { preventDefault: vi.fn(), dataTransfer: { files: [file] } };
+    root.props.onDrop(drop);
+    expect(drop.preventDefault).toHaveBeenCalled();
+    expect(terminalMocks.handleAttachmentDrop).toHaveBeenCalledWith(drop);
+
+    const paste = {
+      clipboardData: { files: [file], getData: () => "do this now\n" },
+      preventDefault: vi.fn(), stopPropagation: vi.fn()
+    };
+    root.props.onPasteCapture(paste);
+    expect(paste.preventDefault).toHaveBeenCalled();
+    expect(paste.stopPropagation).toHaveBeenCalled();
+    expect(terminalMocks.uploadAttachmentFiles).toHaveBeenCalledTimes(2);
+    const textPaste = { clipboardData: { files: [], getData: () => "ordinary text" }, preventDefault: vi.fn(), stopPropagation: vi.fn() };
+    root.props.onPasteCapture(textPaste);
+    expect(textPaste.preventDefault).not.toHaveBeenCalled();
+    expect(textPaste.stopPropagation).not.toHaveBeenCalled();
+    expect(terminalMocks.uploadAttachmentFiles).toHaveBeenCalledTimes(2);
+
+    props.readOnly = true;
+    await nextTick();
+    expect(findNode(container, (node) => node.props?.["aria-label"] === "Attach files to OpenCode terminal")).toBeNull();
+    props.readOnly = false;
+    session.assistantSelection.engineId = "claude";
+    await nextTick();
+    expect(findNode(container, (node) => node.props?.["aria-label"] === "Attach files to OpenCode terminal")).toBeNull();
   });
 
   it("keeps one provider login PTY while switching active auth sessions", async () => {

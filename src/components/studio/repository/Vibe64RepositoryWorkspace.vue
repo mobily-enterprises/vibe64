@@ -713,6 +713,10 @@ function closeVersion() {
   width: 100%;
 }
 
+.vibe64-repository-workspace--changes {
+  max-width: none;
+}
+
 .vibe64-repository-workspace__changes-area {
   display: grid;
   gap: 0.8rem;

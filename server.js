@@ -478,7 +478,9 @@ async function createServer(options = {}) {
       "Invalid Vibe64 log level; using the default log level."
     );
   }
-  await app.register(fastifyWebsocket);
+  await app.register(fastifyWebsocket, {
+    options: { maxPayload: 1024 * 1024 }
+  });
   registerSocketIoUpgradeHandoff(app);
 
   const requestedProjectsRoot = runtimeProfile.projectCatalogEnabled === false

@@ -1976,7 +1976,8 @@ test("OpenCode helper turns use the hidden deny-all agent and bounded structured
   assert.equal(helperSession.agent, OPENCODE_HELPER_AGENT_ID);
   assert.deepEqual(helperSession.model, {
     id: "deepseek-chat",
-    providerID: "deepseek"
+    providerID: "deepseek",
+    variant: "high"
   });
   const helperWorkdir = harness.processStarts[0].options.workdir;
   assert.equal(helperSession.location.directory, helperWorkdir);
@@ -2000,7 +2001,8 @@ test("OpenCode helper turns use the hidden deny-all agent and bounded structured
   assert.equal(helperPrompt.agent, OPENCODE_HELPER_AGENT_ID);
   assert.deepEqual(helperPrompt.model, {
     id: "deepseek-chat",
-    providerID: "deepseek"
+    providerID: "deepseek",
+    variant: "high"
   });
   assert.match(helperPrompt.prompt.text, /Return only one JSON value matching this JSON Schema/u);
   assert.match(helperPrompt.prompt.text, /"required":\["subject"\]/u);
@@ -2476,6 +2478,36 @@ test("OpenCode reuses its terminal without creating prompt actor state", async (
     vibe64User: { preferredName: "Ada", username: "ada" }
   });
   assert.equal(Object.hasOwn(harness.promptCalls.at(-1).input.prompt, "turnContext"), false);
+});
+
+test("OpenCode grants retained file access to the attached conversation before writing and never prompts", async (t) => {
+  const permissions = [];
+  let permissionError = false;
+  const harness = await controllerHarness({
+    realAttachedTerminal: true,
+    async allowConversationAttachments(id, attachments) {
+      if (permissionError) throw new Error("Permission update failed");
+      permissions.push({ id, attachments });
+    }
+  });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const options = { runtime: harness.runtime, session: harness.session };
+  const terminal = await harness.controller.startTerminal("session-1", {}, options);
+  const attachments = [{ path: "/retained/attachment/file" }];
+  const result = await harness.controller.writeTerminal("session-1", terminal.id,
+    "[/retained/attachment/file] ", { attachments }, options);
+  assert.equal(result.ok, true);
+  assert.deepEqual(permissions, [{ id: harness.session.metadata.opencode_conversation_id, attachments }]);
+  assert.equal(harness.promptCalls.length, 0);
+  permissionError = true;
+  await assert.rejects(harness.controller.writeTerminal("session-1", terminal.id,
+    "ignored", { attachments }, options), /Permission update failed/);
+  await harness.controller.closeTerminal("session-1", terminal.id);
+  await assert.rejects(harness.controller.writeTerminal("session-1", terminal.id,
+    "ignored", { attachments }, options), /Reopen the OpenCode terminal/);
 });
 
 for (const fallback of [false, true]) {

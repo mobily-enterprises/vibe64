@@ -3,7 +3,21 @@
     class="vibe64-native-agent-session"
     :class="{ 'vibe64-native-agent-session--headless': displayMode === 'headless' }"
     :aria-hidden="displayMode === 'headless' ? 'true' : undefined"
+    @dragenter.prevent="handleAttachmentDragEnter"
+    @dragover.prevent="handleAttachmentDragOver"
+    @dragleave.prevent="handleAttachmentDragLeave"
+    @drop.prevent="handleAttachmentDrop"
+    @paste.capture="handleTerminalPaste"
   >
+    <input
+      v-if="showAttachmentAction"
+      ref="attachmentFileInput"
+      :disabled="!attachmentCanAddFiles"
+      hidden
+      multiple
+      type="file"
+      @change="handleAttachmentSelection"
+    >
     <Vibe64InteractiveTerminal
       :command-preview="terminalCommandPreview"
       :error="terminalError"
@@ -21,7 +35,36 @@
       @clean-exit="closeTerminal"
       @close="closeTerminal"
     >
+      <template #actions-before>
+        <v-btn
+          v-if="showAttachmentAction"
+          aria-label="Attach files to OpenCode terminal"
+          :disabled="!attachmentCanAddFiles"
+          :icon="mdiPaperclip"
+          size="small"
+          title="Attach files to OpenCode terminal"
+          type="button"
+          variant="text"
+          @click="attachmentFileInput?.click()"
+        />
+      </template>
+      <template #before-terminal>
+        <Vibe64AttachmentQueue
+          :items="attachmentQueueItems"
+          :joined="false"
+          :session-id="sessionId"
+          @cancel="cancelAttachment"
+          @remove="removeAttachment"
+          @retry="retryAttachment"
+        />
+      </template>
       <template #overlay>
+        <div v-if="attachmentDragActive" class="vibe64-native-agent-session__drop-overlay" role="status">
+          <v-sheet class="vibe64-native-agent-session__drop-card" elevation="4" rounded="lg">
+            <v-icon :icon="mdiPaperclip" size="28" />
+            <span>Drop files for OpenCode</span>
+          </v-sheet>
+        </div>
         <div v-if="showStartPanel" class="vibe64-native-agent-session__start-panel">
           <v-sheet
             class="vibe64-native-agent-session__start-card"
@@ -56,6 +99,9 @@
         <span class="vibe64-native-agent-session__command">
           {{ commandPreview || `${assistantLabel} is not running.` }}
         </span>
+        <span v-if="attachmentStatus" class="text-caption text-medium-emphasis" role="status">
+          {{ attachmentStatus }}
+        </span>
         <v-chip v-if="status" size="x-small" variant="tonal">
           {{ status }}
         </v-chip>
@@ -65,8 +111,12 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, watch } from "vue";
-import { mdiPlayCircleOutline, mdiRestart } from "@mdi/js";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { mdiPaperclip, mdiPlayCircleOutline, mdiRestart } from "@mdi/js";
+import Vibe64AttachmentQueue from "@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue";
+import { useAgentTerminalAttachments } from "@/composables/useAgentTerminalAttachments.js";
+import { useVibe64AttachmentCommands } from "@/composables/useVibe64AttachmentCommands.js";
+import { codexAttachmentFilesFromPasteEvent } from "@/composables/useAgentAttachments.js";
 import Vibe64InteractiveTerminal from "@/components/studio/Vibe64InteractiveTerminal.vue";
 import { useVibe64Terminal } from "@/composables/useVibe64Terminal.js";
 import { useVibe64TerminalCommands } from "@/composables/useVibe64TerminalCommands.js";
@@ -104,6 +154,8 @@ const props = defineProps({
 
 const emit = defineEmits(["session-update"]);
 const terminalCommands = useVibe64TerminalCommands();
+const attachmentCommands = useVibe64AttachmentCommands();
+const attachmentFileInput = ref(null);
 const assistantLabel = computed(() => props.session?.assistantSelection?.engineId === "claude" ? "Claude Code" : "OpenCode");
 const sessionId = computed(() => String(props.session?.sessionId || ""));
 const sessionSource = computed(() => vibe64SessionSourcePath(props.session || {}));
@@ -143,6 +195,7 @@ const {
   closeTerminalSocket,
   connectTerminalSocket,
   disposeTerminalUi,
+  focusTerminal,
   resetTerminalDisplay,
   resetTerminalSessionState,
   terminalCommandPreview,
@@ -152,6 +205,71 @@ const {
   terminalStarting,
   terminalStatus
 } = terminalController;
+
+const showAttachmentAction = computed(() => Boolean(
+  props.session?.assistantSelection?.engineId === "opencode" && !props.readOnly && displayActive.value
+));
+const attachmentsEnabled = computed(() => Boolean(
+  showAttachmentAction.value && sessionId.value && terminalSessionId.value && terminalStatus.value === "running"
+));
+const {
+  abandonAttachments,
+  attachmentCanAddFiles,
+  attachmentDragActive,
+  attachmentQueueItems,
+  attachmentStatus,
+  cancelAttachment,
+  clearAttachmentStatus,
+  handleAttachmentDragEnter,
+  handleAttachmentDragLeave,
+  handleAttachmentDragOver,
+  handleAttachmentDrop,
+  removeAttachment,
+  retryAttachment,
+  uploadAttachmentFiles
+} = useAgentTerminalAttachments({
+  assistantLabel,
+  canUpload: attachmentsEnabled,
+  deleteAttachment: attachmentCommands.deleteAttachment,
+  ensureTerminalReady: () => attachmentsEnabled.value,
+  focusTerminal,
+  async sendAttachmentPath(text, attachmentIds, target) {
+    const result = await terminalCommands.sendAgentTerminalText(
+      target.sessionId, target.terminalSessionId, text, { attachmentIds }
+    );
+    if (result?.ok === false) {
+      throw new Error(vibe64TerminalErrorMessage(result, "The attachment could not be sent to OpenCode."));
+    }
+    return true;
+  },
+  sessionId,
+  terminalSessionId,
+  uploadAttachment: attachmentCommands.uploadAttachment
+});
+
+function handleAttachmentSelection(event) {
+  const input = event.currentTarget;
+  const files = Array.from(input.files || []);
+  input.value = "";
+  void uploadAttachmentFiles(files);
+}
+
+function handleTerminalPaste(event) {
+  if (props.session?.assistantSelection?.engineId !== "opencode") return;
+  const files = codexAttachmentFilesFromPasteEvent(event);
+  if (!files.length) return;
+  // Keep file pastes out of xterm, including accompanying clipboard text that
+  // could otherwise submit a prompt before its files finish uploading.
+  event.preventDefault();
+  event.stopPropagation();
+  void uploadAttachmentFiles(files);
+}
+
+watch(attachmentsEnabled, (enabled) => {
+  if (enabled) return;
+  void abandonAttachments();
+  clearAttachmentStatus();
+}, { flush: "sync" });
 
 const sourcePending = computed(() => Boolean(
   displayActive.value && sessionId.value && !sessionSource.value && !terminalSessionId.value
@@ -240,6 +358,7 @@ async function startTerminal() {
 }
 
 async function closeTerminal() {
+  await abandonAttachments();
   if (!terminalSessionId.value) {
     detachTerminal();
     return true;
@@ -310,6 +429,24 @@ onBeforeUnmount(() => {
   inline-size: 0;
   overflow: hidden;
   position: absolute;
+}
+
+.vibe64-native-agent-session__drop-overlay {
+  align-items: center;
+  background: rgba(var(--v-theme-surface), 0.8);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+  z-index: 3;
+}
+
+.vibe64-native-agent-session__drop-card {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem;
 }
 
 .vibe64-native-agent-session__start-panel {

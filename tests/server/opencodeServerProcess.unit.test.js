@@ -424,6 +424,9 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   const requests = [];
   const stops = [];
   const pageRequests = [];
+  const permissionUpdates = [];
+  const existingPermission = { permission: "bash", pattern: "*", action: "ask" };
+  let conversationPermission = [existingPermission];
   let messageResponse = () => new Response("[]");
   let inventoryRows = [{ id: "ses_child", parentID: "ses_parent", directory: "/archived/source" }];
   const executionId = "11111111-1111-4111-8111-111111111111";
@@ -471,7 +474,14 @@ test("OpenCode servers run and drain through one managed execution id", async (t
         assert.deepEqual(Object.fromEntries(new URL(url).searchParams), { directory: "/archived/source", limit: "1001" });
       }
       if (new URL(url).pathname === "/session/ses_parent") {
-        return new Response(JSON.stringify({ id: "ses_parent", directory: "/archived/source" }), { status: 200 });
+        assert.equal(options.headers.authorization, `Basic ${Buffer.from(`opencode:${requests[0].baseEnv.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`);
+        if (options.method === "PATCH") {
+          assert.equal(options.headers["content-type"], "application/json");
+          conversationPermission = JSON.parse(options.body).permission;
+          permissionUpdates.push(conversationPermission);
+          return new Response(null, { status: 204 });
+        }
+        return new Response(JSON.stringify({ id: "ses_parent", directory: "/archived/source", permission: conversationPermission }), { status: 200 });
       }
       if (new URL(url).pathname.startsWith("/session") || new URL(url).pathname === "/experimental/session") {
         assert.equal(options.headers.authorization, `Basic ${Buffer.from(`opencode:${requests[0].baseEnv.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`);
@@ -521,7 +531,15 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   assert.equal(request.baseEnv.npm_config_cache, path.join(privateRoot, "cache", "npm"));
   assert.equal(request.credentialHome.home, path.join(privateRoot, "home"));
   assert.equal(server.executionId, executionId);
-  assert.deepEqual(await server.readConversationStorage("ses_parent"), { id: "ses_parent", directory: "/archived/source" });
+  assert.deepEqual(await server.readConversationStorage("ses_parent"), { id: "ses_parent", directory: "/archived/source", permission: [existingPermission] });
+  const terminalAttachment = { path: "/session-artifacts/attachments/file-1/file" };
+  await server.allowConversationAttachments("ses_parent", [terminalAttachment]);
+  assert.deepEqual(permissionUpdates, [[existingPermission, {
+    permission: "external_directory", pattern: "/session-artifacts/attachments/file-1/*", action: "allow"
+  }]]);
+  await server.allowConversationAttachments("ses_parent", [terminalAttachment]);
+  assert.equal(permissionUpdates.length, 1);
+  await assert.rejects(server.allowConversationAttachments("../credentials", [terminalAttachment]), /Invalid/);
   await assert.rejects(server.readConversationStorage("../credentials"), /Invalid/);
   assert.deepEqual(await server.listConversationChildren("ses_parent"), inventoryRows);
   assert.deepEqual(await server.listConversationsForDirectory("/archived/source"), inventoryRows);

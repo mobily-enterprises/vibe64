@@ -3239,8 +3239,14 @@ function createService({
       // the assistant-operation lock for every WebSocket input chunk—often
       // every keystroke. Long-lived sessions therefore became progressively
       // slower and terminal restarts contended with ordinary typing.
-      return sessionTerminalAdmissionFailure(sessionId, "agent") ||
-        sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, options);
+      const admissionFailure = sessionTerminalAdmissionFailure(sessionId, "agent");
+      if (admissionFailure) return admissionFailure;
+      if (input.attachmentIds?.length) {
+        return runMainAgentWrite(sessionId, options, (context) =>
+          sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, context),
+        { operation: "attach-agent-terminal-files", waitMs: AGENT_WRITE_WAIT_MS });
+      }
+      return sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, options);
     },
 
     async writeGlobalCodexTerminal(terminalSessionId, data, options = {}) {

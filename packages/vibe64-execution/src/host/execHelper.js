@@ -51,10 +51,22 @@ const SAFE_ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const BLOCKED_ENV_NAMES = new Set([
   "BASH_ENV",
   "ENV",
+  "GCONV_PATH",
+  "GETCONF_DIR",
+  "GLIBC_TUNABLES",
+  "HOSTALIASES",
+  "LOCALDOMAIN",
   "LD_AUDIT",
   "LD_LIBRARY_PATH",
   "LD_PRELOAD",
-  "NODE_OPTIONS"
+  "LOCPATH",
+  "MALLOC_TRACE",
+  "NIS_PATH",
+  "NLSPATH",
+  "NODE_OPTIONS",
+  "RESOLV_HOST_CONF",
+  "RES_OPTIONS",
+  "TZDIR"
 ]);
 const DEFAULT_PATH = [
   "/opt/vibe64/runtime-packs/policy-bin",
@@ -169,13 +181,7 @@ async function main() {
     : undefined;
 
   process.umask(0o007);
-  const child = spawnSync("runuser", [
-    "-u",
-    targetUser.username,
-    "--",
-    command,
-    ...args
-  ], {
+  const child = runUserCommand(targetUser, command, args, {
     cwd,
     env,
     ...(input === undefined
@@ -191,6 +197,17 @@ async function main() {
     throw child.error;
   }
   process.exit(typeof child.status === "number" ? child.status : 1);
+}
+
+function runUserCommand(targetUser, command, args, options) {
+  // The caller's command PATH must only take effect after runuser drops root.
+  return spawnSync("/usr/sbin/runuser", [
+    "-u", targetUser.username, "--", "/usr/bin/env", "--",
+    `PATH=${options.env.PATH}`, command, ...args
+  ], {
+    ...options,
+    env: { ...options.env, PATH: DEFAULT_PATH }
+  });
 }
 
 function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") {
@@ -1881,8 +1898,8 @@ function resolveAllowedManagedServicePath(candidatePath = "", owner = {}) {
   if (!normalized) {
     throw new Error("Vibe64 exec helper rejected an empty managed service path.");
   }
-  const resolved = path.resolve(normalized);
-  if (relativePathParts(managedServiceRoot(owner), resolved).length > 0) {
+  const resolved = canonicalPath(normalized, { allowMissingLeaf: true });
+  if (relativePathParts(canonicalPath(managedServiceRoot(owner)), resolved).length > 0) {
     return resolved;
   }
   throw new Error("Vibe64 exec helper rejected a managed service path outside the workspace service root.");
@@ -1893,8 +1910,8 @@ function resolveAllowedDeploymentServicePath(candidatePath = "", owner = {}) {
   if (!normalized) {
     throw new Error("Vibe64 exec helper rejected an empty deployment service path.");
   }
-  const resolved = path.resolve(normalized);
-  const releaseStateRoot = path.join(String(owner.home || "").trim(), ".local", "state", "vibe64", "projects");
+  const resolved = canonicalPath(normalized);
+  const releaseStateRoot = canonicalPath(path.join(String(owner.home || "").trim(), ".local", "state", "vibe64", "projects"));
   if (pathIsDeploymentReleasePath(releaseStateRoot, resolved)) {
     return resolved;
   }
@@ -1920,6 +1937,19 @@ function relativePathParts(parentPath = "", childPath = "") {
     return [];
   }
   return relative.split(path.sep).filter(Boolean);
+}
+
+function canonicalPath(candidatePath, { allowMissingLeaf = false } = {}) {
+  const resolved = path.resolve(candidatePath);
+  if (allowMissingLeaf) {
+    try {
+      lstatSync(resolved);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      return path.join(realpathSync(path.dirname(resolved)), path.basename(resolved));
+    }
+  }
+  return realpathSync(resolved);
 }
 
 function assertValidDeploymentUnitName(unitName = "") {
@@ -2070,8 +2100,7 @@ function systemdUnitSafeValue(value = "") {
 }
 
 function assertExpectedId(name = "uid", expected = null, actual = null) {
-  const normalizedExpected = Number(expected);
-  if (Number.isSafeInteger(normalizedExpected) && normalizedExpected !== actual) {
+  if (!Number.isSafeInteger(expected) || expected < 0 || expected !== actual) {
     throw new Error(`Vibe64 exec helper ${name} mismatch.`);
   }
 }
@@ -2106,7 +2135,7 @@ function resolveAllowedCwd(cwd = "", ownerUsername = "", {
     operation === "vibe64-command" &&
     targetUser.username === ownerUsername
   ) {
-    const resolved = path.resolve(normalized);
+    const resolved = canonicalPath(normalized);
     const ownerProjectStateRoot = path.join(
       targetUser.home,
       ".local",
@@ -2114,22 +2143,24 @@ function resolveAllowedCwd(cwd = "", ownerUsername = "", {
       "vibe64",
       "projects"
     );
-    if (
-      resolved === ownerProjectStateRoot ||
-      resolved.startsWith(`${ownerProjectStateRoot}${path.sep}`)
-    ) {
-      return resolved;
+    if (existsSync(ownerProjectStateRoot)) {
+      const stateRoot = canonicalPath(ownerProjectStateRoot);
+      if (resolved === stateRoot || resolved.startsWith(`${stateRoot}${path.sep}`)) {
+        return resolved;
+      }
     }
   }
   if (operation === "codex-app-server" || operation === "opencode-app-server") {
-    const resolved = path.resolve(normalized);
+    const resolved = canonicalPath(normalized);
     const targetUid = Number(targetUser.uid);
     const runtimeBases = [managedExecutionRuntimeBase({ username: ownerUsername })];
     if (Number.isSafeInteger(targetUid) && targetUid >= 0) {
       runtimeBases.push(path.join("/run/user", String(targetUid)));
     }
     for (const runtimeBase of runtimeBases) {
-      const runtimeRoot = path.join(runtimeBase, "vibe64", "agent-providers");
+      const runtimeRootPath = path.join(runtimeBase, "vibe64", "agent-providers");
+      if (!existsSync(runtimeRootPath)) continue;
+      const runtimeRoot = canonicalPath(runtimeRootPath);
       const parts = relativePathParts(runtimeRoot, resolved);
       const providerRoot = parts[0];
       const allowedProviderRoot = operation === "opencode-app-server"
@@ -2151,8 +2182,8 @@ function resolveAllowedProjectPath(candidatePath = "", ownerUsername = "") {
   if (!normalized) {
     throw new Error("Vibe64 exec helper rejected an empty managed project path.");
   }
-  const resolved = path.resolve(normalized);
-  const allowedProjectsRoot = path.join("/var/lib/vibe64", workspaceFromDaemonUsername(ownerUsername), "projects");
+  const resolved = canonicalPath(normalized);
+  const allowedProjectsRoot = canonicalPath(path.join("/var/lib/vibe64", workspaceFromDaemonUsername(ownerUsername), "projects"));
   if (resolved.startsWith(`${allowedProjectsRoot}${path.sep}`)) {
     return resolved;
   }
@@ -2165,8 +2196,8 @@ function resolveAllowedUserHomePath(candidatePath = "", targetUser = {}) {
   if (!normalized || !home) {
     throw new Error("Vibe64 exec helper rejected an empty user command path.");
   }
-  const resolved = path.resolve(normalized);
-  const allowedHome = path.resolve(home);
+  const resolved = canonicalPath(normalized);
+  const allowedHome = canonicalPath(home);
   if (resolved === allowedHome || resolved.startsWith(`${allowedHome}${path.sep}`)) {
     return resolved;
   }
@@ -2231,4 +2262,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 }
 
 export { managedWorkflowCounters, managedWorkflowIdentity, managedExecutionOomBoundary,
-  managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal };
+  managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
+  assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,
+  resolveAllowedDeploymentServicePath,
+  resolveAllowedUserHomePath, runUserCommand };

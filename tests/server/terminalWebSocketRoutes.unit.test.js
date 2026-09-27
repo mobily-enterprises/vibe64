@@ -135,7 +135,7 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
 
       const socket = testSocket();
       fastify.registered.handler(socket, {
-        headers: {},
+        headers: { host: "example.com", origin: "http://example.com" },
         ip: "10.0.0.8",
         params: {
           sessionId: "session-1",
@@ -186,7 +186,7 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
       };
       const missing = testSocket();
       fastify.registered.handler(missing, {
-        headers: {},
+        headers: { host: "example.com", origin: "http://example.com" },
         ip: "10.0.0.8",
         params: {
           sessionId: "session-1",
@@ -216,7 +216,7 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
   }
 });
 
-test("terminal websocket guard accepts authenticated non-loopback requests", async () => {
+test("terminal websocket guard requires authenticated same-origin requests for hosted terminals", async () => {
   const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
   delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
   try {
@@ -268,6 +268,7 @@ test("terminal websocket guard accepts authenticated non-loopback requests", asy
 
       const accepted = testSocket();
       fastify.registered.handler(accepted, {
+        protocol: "https",
         headers: {
           host: "example.com",
           origin: "https://example.com"
@@ -293,6 +294,17 @@ test("terminal websocket guard accepts authenticated non-loopback requests", asy
           type: "snapshot"
         }
       ]);
+      for (const origin of [undefined, "null", "https://attacker.example", "https://example.com:444"]) {
+        const foreign = testSocket();
+        fastify.registered.handler(foreign, {
+          protocol: "https",
+          headers: { host: "example.com", ...(origin === undefined ? {} : { origin }) },
+          ip: "10.0.0.8", vibe64User: { email: "owner@example.com" }
+        });
+        assert.equal(foreign.closed.code, 1008, String(origin));
+        assert.equal(foreign.handlers.message, undefined, "rejected sockets cannot write terminal input");
+        assert.equal(foreign.sent.length, 1);
+      }
     });
   } finally {
     if (previousBypass == null) {

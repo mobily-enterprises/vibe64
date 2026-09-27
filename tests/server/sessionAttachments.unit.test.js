@@ -92,6 +92,54 @@ for (const engine of ["codex", "opencode"]) {
   });
 }
 
+test("OpenCode terminal attachments use authorized retained files without submitting input", async () => {
+  await withTemporaryRoot(async (root) => {
+    const { attachments, env, runtime, store } = await fixture(root);
+    const writes = [];
+    let ownerOnly = false;
+    const manager = createSessionAgentManager({
+      attachments, defaultProviderId: "opencode",
+      readAssistantAccess: async () => ({ available: true, ownerOnly, connectionIdentity: "shared-1" }),
+      providers: [{ id: "opencode", transportId: "opencode_test",
+        async startTerminal({ sessionId }) { return { ok: true, id: `terminal-${sessionId}` }; },
+        async writeTerminal(context, input) { writes.push({ context, input }); return { ok: true }; }
+      }]
+    });
+    const owner = { role: "owner", username: "owner" };
+    const member = { role: "user", username: "member" };
+    await manager.startTerminal("one", {}, { runtime, vibe64User: owner });
+    await manager.startTerminal("two", {}, { runtime, vibe64User: owner });
+    const uploaded = await upload(attachments);
+    await manager.writeTerminal("one", "terminal-one", "/etc/passwd\r", {
+      attachmentIds: [uploaded.attachmentId], attachments: [{ path: "/etc/passwd" }]
+    }, { runtime, vibe64User: member });
+    assert.equal(writes.length, 1);
+    const [{ path: retainedPath }] = writes[0].input.input.attachments;
+    assert.ok(retainedPath.startsWith(store.paths("one").artifactsRoot));
+    assert.equal(writes[0].input.data, `[${retainedPath}] `);
+    assert.doesNotMatch(writes[0].input.data, /[\r\n]/u);
+    assert.equal(writes[0].context.vibe64User.username, "member");
+    await utimes(uploaded.path, new Date(0), new Date(0));
+    await prepareCodexAttachmentStorage({ env });
+    assert.equal(await readFile(retainedPath, "utf8"), "attachment bytes");
+
+    await assert.rejects(manager.writeTerminal("two", "terminal-two", "ignored", {
+      attachmentIds: [uploaded.attachmentId]
+    }, { runtime, vibe64User: member }));
+    assert.equal(writes.length, 1);
+    ownerOnly = true;
+    await assert.rejects(manager.writeTerminal("one", "terminal-one", "ignored", {
+      attachmentIds: [uploaded.attachmentId]
+    }, { runtime, vibe64User: member }), { code: "vibe64_assistant_owner_required" });
+    assert.equal(writes.length, 1);
+    await manager.writeTerminal("one", "terminal-one", "ordinary input", {
+      attachments: [{ path: "/etc/passwd" }]
+    }, { runtime, vibe64User: owner });
+    assert.deepEqual(writes[1].input.input.attachments, []);
+    assert.equal(writes[1].input.data, "ordinary input");
+  });
+});
+
 test("attachment reads and sends reject other sessions, invalid IDs and expired uploads", async () => {
   await withTemporaryRoot(async (root) => {
     const { attachments, env } = await fixture(root);

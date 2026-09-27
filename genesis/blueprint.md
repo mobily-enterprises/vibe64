@@ -124,6 +124,9 @@ Merging publishes the commits already on GitHub. Session work remains separate,
 and people archive their sessions using the existing unsaved-work checks.
 Current changes uses the full project pane, with the dashboard menu hidden and
 a Back to dashboard action, so file differences have room to read.
+People can drag the divider between changed files and their difference, or resize
+it with the keyboard. This browser remembers the width; narrow panes stack the
+files above their difference.
 Resizing chat keeps its contents, divider and project pane aligned through the
 smallest supported width.
 Archiving immediately makes a session inactive and selects the previous available
@@ -866,7 +869,10 @@ files shows the whole queue immediately and uploads them in order without manual
 retries for ordinary contention. Brief assistant preparation keeps uploads pending;
 typing and cancelling queued files remain available. Removing a
 queued upload removes its unchanged reference; editing the message alone does
-not remove a file. It shows clear status and failures and lets people retry or ask the
+not remove a file. The running OpenCode terminal accepts files from a picker,
+drag-and-drop or the clipboard. It inserts retained file references and leaves
+sending the prompt to the person using the terminal.
+It shows clear status and failures and lets people retry or ask the
 agent for help. When a provider reports exhausted quota or another account
 failure, completed project work remains available and the conversation gives a
 direct route to the relevant account recovery. Non-urgent background checks
