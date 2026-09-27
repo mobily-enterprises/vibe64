@@ -4,7 +4,7 @@ People can open one or more clearly separate, short-lived AI tasks for focused
 help without adding those exchanges to the main project conversation or
 session history.
 
-Temporary creation and preference updates expose typed Senior/Junior routing
+Temporary creation and preference updates expose typed Custom/Senior/Junior routing
 inputs through their canonical actions; Auto remains Main-only. Colleague's
 bounded results report saved chat mode, workflow, review preference and whether
 a model override exists, omitting native bindings. A preference update alone

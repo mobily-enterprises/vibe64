@@ -1,6 +1,7 @@
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
-import { ASSISTANT_MODES, VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS } from "@local/vibe64-runtime/shared";
+import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS } from "@local/vibe64-runtime/shared";
+import { ASSISTANT_MODES } from "@local/vibe64-runtime/shared/assistantRouting";
 
 const optionalText = {
   type: "string",
