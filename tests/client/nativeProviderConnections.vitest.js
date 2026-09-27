@@ -1,4 +1,6 @@
-import { createRenderer, nextTick, ref, ssrContextKey } from "vue";
+import { createRenderer, createSSRApp, nextTick, ref, ssrContextKey } from "vue";
+import { renderToString } from "@vue/server-renderer";
+import { createVuetify } from "vuetify";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ connections: null, change: vi.fn(), busy: null }));
@@ -27,10 +29,48 @@ afterEach(() => app?.unmount());
 it("shows each orchestrator's actual verification with warm connection data", () => {
   const state = mount({ engineId: "claude", modelValue: "deepseek" });
   expect(state.choices.map(choice => choice.label)).toEqual([
-    "Claude Code - Claude · Claude subscription", "Claude Code - DeepSeek · Connected", "Claude Code - GLM · Coding Plan"
+    "Claude Code - Claude · Claude subscription", "Claude Code - DeepSeek · Connected", "Claude Code - GLM · Coding Plan", "Claude Code - GLM · Pay-as-you-go API"
   ]);
   expect(state.connected).toBe(true);
   expect(state.connectedEngines).toEqual(["claude"]);
+});
+
+it("adds the missing orchestrator using its existing shared key without replacing it", async () => {
+  const state = mount({ engineId: "codex", modelValue: "deepseek", adding: true, selectProvider: false });
+  expect(state.useExistingKey).toBe(true);
+  expect(state.connected).toBe(false);
+  await state.save();
+  expect(mocks.change).toHaveBeenCalledExactlyOnceWith({ modelProviderId: "deepseek", engineId: "codex", apiKey: "", remove: false, useSavedKey: true });
+});
+
+it("keeps pay-as-you-go setup separate from a saved Coding Plan key", async () => {
+  mocks.connections.value.push({ id: "zai-coding-plan", status: "connected", connected: true, claudeReady: true });
+  const state = mount({ engineId: "claude", modelValue: "zai", adding: true, selectProvider: false });
+  expect(state.useExistingKey).toBe(false);
+  expect(state.provider.ownerOnly).toBe(false);
+  expect(state.provider.setupNote).toContain("without a Coding Plan");
+  state.apiKey = "regular-fixture";
+  await state.save();
+  expect(mocks.change).toHaveBeenCalledExactlyOnceWith({ modelProviderId: "zai", engineId: "claude", apiKey: "regular-fixture", remove: false, useSavedKey: false });
+});
+
+it("renders Manage without a provider selector, and Add without replacement or disconnect actions", async () => {
+  async function render(props) {
+    const view = createSSRApp(NativeProviderConnections, props);
+    view.use(createVuetify({ ssr: true }));
+    return renderToString(view);
+  }
+  const manage = await render({ engineId: "claude", modelValue: "deepseek", selectProvider: false });
+  expect(manage).toContain("Claude Code - DeepSeek");
+  expect(manage).not.toContain("Use Claude Code with");
+  expect(manage).toContain("Check and replace key");
+  expect(manage).toContain("Disconnect");
+  const add = await render({ engineId: "codex", modelValue: "deepseek", selectProvider: false, adding: true });
+  expect(add).not.toContain("Use Codex with");
+  expect(add).not.toContain("<input");
+  expect(add).not.toContain("Check and replace key");
+  expect(add).not.toContain("Disconnect");
+  expect(add).toContain("Check and connect");
 });
 
 it("does not advertise a Claude-only key as connected to Codex", () => {

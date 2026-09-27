@@ -10,7 +10,8 @@ const UPSTREAMS = Object.freeze({
   chatgpt: "https://chatgpt.com/backend-api/codex",
   apiKey: "https://api.openai.com/v1",
   deepseek: curatedCodexProvider("deepseek").baseUrl.replace(/\/$/u, ""),
-  "zai-coding-plan": curatedCodexProvider("zai-coding-plan").baseUrl
+  "zai-coding-plan": curatedCodexProvider("zai-coding-plan").baseUrl,
+  zai: curatedCodexProvider("zai").baseUrl
 });
 const HOP_HEADERS = ["connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
   "te", "trailer", "transfer-encoding", "upgrade"];
@@ -21,7 +22,7 @@ const HOP_HEADERS = ["connection", "keep-alive", "proxy-authenticate", "proxy-au
 // (including the opaque state needed when returning to DeepSeek) stays intact.
 function translateCodexHistory(body, destination = "openai") {
   if (!Array.isArray(body?.input)) return body;
-  if (destination === "zai-coding-plan") return body;
+  if (destination === "zai-coding-plan" || destination === "zai") return body;
   // DeepSeek cannot call Codex's raw-JavaScript exec tool. Leaving earlier
   // Astra exec calls in tool history makes it imitate that unavailable tool.
   // Keep the calls and results as context; retain native tool history on disk.
@@ -80,7 +81,7 @@ function compactionHistoryError(reason, statusCode = 422) {
 async function restoreCompactedHistory(body, { destination, historyPath, codexHome, signal, maxRequestBytes }) {
   if (!curatedCodexProvider(destination) || !Array.isArray(body?.input) ||
       !body.input.some((item) => item?.type === "compaction")) return body;
-  const model = curatedCodexModel(body.model);
+  const model = curatedCodexModel(body.model, destination);
   if (model?.modelProviderId !== destination || !model.codexHistoryRouting) {
     throw compactionHistoryError("this model has not been qualified for history recovery.");
   }

@@ -260,6 +260,7 @@ function useAiConnections({
     registryIsFetching: registryResource.isFetching,
     registryIsInitialLoading: registryResource.isInitialLoading,
     registryLoadError,
+    registryLoaded: computed(() => Boolean(openCodeEngine(registryResource.data.value))),
     registryProviders,
     saveConnection,
     savingProviderId,

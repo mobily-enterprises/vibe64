@@ -99,6 +99,14 @@ test("adapter forwards bounded compressed requests only to fixed provider routes
   assert.deepEqual(deepseekHistory[0], foreign);
   assert.equal(deepseekHistory[1].type, "message");
   assert.equal(deepseekHistory[2].content[1].text, "42");
+  for (const providerId of ["zai", "zai-coding-plan"]) {
+    const result = await fetch(`${adapter.baseUrl}/${providerId}/responses`, { method: "POST",
+      headers: { authorization: `Bearer ${providerId}-key` }, body: JSON.stringify({ model: "glm-5.3", input: [foreign] }) });
+    assert.equal(await result.text(), "data: one\n\ndata: two\n\n");
+    assert.equal(calls.at(-1).url, "https://api.z.ai/api/v1/responses");
+    assert.equal(calls.at(-1).headers.get("authorization"), `Bearer ${providerId}-key`);
+    assert.deepEqual(JSON.parse(calls.at(-1).body).input, [foreign]);
+  }
   const count = calls.length;
   for (const url of ["/chatgpt/arbitrary", "/https://example.com/responses", "/chatgpt/responses?redirect=https://example.com"]) {
     const result = await fetch(`${adapter.baseUrl}${url}`);

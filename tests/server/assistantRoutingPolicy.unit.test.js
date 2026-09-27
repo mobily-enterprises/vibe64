@@ -15,7 +15,7 @@ import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRou
 
 const revision = `sha256:${"a".repeat(64)}`;
 function catalog(providerIds = ["openai", "deepseek", "zai-coding-plan"]) {
-  const models = { openai: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"], deepseek: ["deepseek-flash", "deepseek-v4-pro"], "zai-coding-plan": ["glm-5.3"] };
+  const models = { openai: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"], deepseek: ["deepseek-flash", "deepseek-v4-pro"], "zai-coding-plan": ["glm-5.3"], zai: ["glm-5.3"] };
   return { engineId: "codex", label: "Codex", revision, transportId: "codex_app_server",
     defaults: { agentId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high" },
     agents: [{ id: "codex", mode: "primary" }],
@@ -47,6 +47,17 @@ test("a saved assignment is revalidated without replacing it with a recommendati
   assert.throws(() => routingAssignmentSelection(engine, { ...saved, modelId: "glm-unverified" }), /available/);
   engine.modelProviders.find(({ id }) => id === "zai-coding-plan").connected = false;
   assert.throws(() => routingAssignmentSelection(engine, saved), /Connect/);
+});
+
+test("GLM API and Coding Plan remain distinct eligible routing choices despite sharing a model name", () => {
+  const engine = catalog(["zai", "zai-coding-plan"]);
+  const choices = routingModelChoices(engine);
+  assert.equal(choices.length, 2);
+  for (const choice of choices) {
+    assert.equal(choice.compatibilityError, "");
+    assert.equal(routingAssignmentSelection(engine, choice).modelProviderId, choice.modelProviderId);
+    assert.equal(routingModelScore(choice, "junior"), 7);
+  }
 });
 
 test("short follow-ups receive their latest exchange and bounded older context", () => {

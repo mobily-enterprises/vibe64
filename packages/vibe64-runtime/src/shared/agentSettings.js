@@ -245,7 +245,7 @@ function agentOptionRequestValue(option = {}, name = "", fallback = true) {
 }
 
 function effectiveVibe64AgentExecutionSettings(value = {}) {
-  const curated = (value.providerId || value.provider || "codex") === "codex" ? curatedCodexModel(value.model) : null;
+  const curated = (value.providerId || value.provider || "codex") === "codex" ? curatedCodexModel(value.model, value.modelProviderId) : null;
   if (curated) {
     return {
       model: curated.id,

@@ -1,17 +1,20 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiCheckCircleOutline, mdiClose, mdiEyeOutline, mdiEyeOffOutline, mdiOpenInNew } from "@mdi/js";
+import { mdiArrowLeft, mdiCheckCircleOutline, mdiClose, mdiEyeOutline, mdiEyeOffOutline, mdiOpenInNew } from "@mdi/js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
 
 const props = defineProps({
   actionsEnabled: { type: Boolean, default: true },
+  adding: Boolean,
   engineId: { type: String, default: "codex" },
+  selectProvider: { type: Boolean, default: true },
+  showBack: Boolean,
   showClose: Boolean
 });
 const providerId = defineModel({ type: String, default: "openai" });
-const emit = defineEmits(["changed", "close", "busy"]);
+const emit = defineEmits(["changed", "close", "back", "busy"]);
 const { connections, resource, busy, change, loadError } = useCodexProviderConnections({
   enabled: computed(() => props.actionsEnabled)
 });
@@ -20,6 +23,7 @@ const provider = computed(() => curatedCodexProvider(providerId.value));
 const connection = computed(() => connections.value.find(({ id }) => id === providerId.value));
 const engineLabel = computed(() => props.engineId === "claude" ? "Claude Code" : "Codex");
 const connected = computed(() => props.engineId === "claude" ? connection.value?.claudeReady : connection.value?.connected);
+const useExistingKey = computed(() => props.adding && connection.value?.status === "connected");
 const connectedEngines = computed(() => [
   ...(connection.value?.connected ? ["codex"] : []), ...(connection.value?.claudeReady ? ["claude"] : [])
 ]);
@@ -47,7 +51,7 @@ watch([providerId, () => props.engineId], () => {
 async function save({ remove = false, useSavedKey = false } = {}) {
   try {
     const result = await change({ modelProviderId: providerId.value, engineId: props.engineId,
-      apiKey: apiKey.value, remove, useSavedKey });
+      apiKey: apiKey.value, remove, useSavedKey: useSavedKey || useExistingKey.value });
     if (result?.ok !== true) return;
     apiKey.value = "";
     visible.value = false;
@@ -71,28 +75,25 @@ async function save({ remove = false, useSavedKey = false } = {}) {
       @saved="routingProposal = false; emit('changed'); emit('close')"
     />
     <template v-else>
-      <div class="d-flex align-center ga-2 mb-3">
+      <div v-if="selectProvider" class="d-flex align-center ga-2 mb-3">
         <v-select
           v-model="providerId" :items="choices" item-title="label" item-value="id"
           :label="`Use ${engineLabel} with`" variant="outlined" hide-details :disabled="busy"
-        />
-        <v-btn
-          v-if="showClose && provider" :icon="mdiClose" :aria-label="`Close ${engineLabel} setup`" variant="text"
-          :disabled="busy" @click="emit('close')"
         />
       </div>
       <template v-if="provider">
         <div class="d-flex align-center flex-wrap ga-2 mb-2">
           <h2 class="text-title-large">{{ engineLabel }} - {{ provider.label }}</h2>
           <v-chip v-if="connected" color="success" size="small" :prepend-icon="mdiCheckCircleOutline">Connected</v-chip>
+          <v-spacer />
+          <v-btn v-if="showBack" :icon="mdiArrowLeft" aria-label="Back to providers" variant="text" :disabled="busy" @click="emit('back')" />
+          <v-btn v-if="showClose" :icon="mdiClose" :aria-label="`Close ${engineLabel} setup`" variant="text" :disabled="busy" @click="emit('close')" />
         </div>
         <p class="text-body-medium mb-3">{{ provider.description }}.</p>
+        <p v-if="provider.setupNote" class="text-body-small mb-3">{{ provider.setupNote }}</p>
         <p v-if="connection?.status === 'connected'" class="text-body-small mb-3">
           Ready for {{ connectedEngines.map(id => id === 'claude' ? 'Claude Code' : 'Codex').join(' and ') }}.
-          <template v-if="!connected">Check the saved key to enable {{ engineLabel }}.</template>
-        </p>
-        <p v-if="provider.id === 'zai-coding-plan'" class="text-body-small mb-3">
-          For a regular Z.AI API account, choose GLM through OpenCode in Add AI.
+          <template v-if="!connected">Connect {{ engineLabel }} using the saved key.</template>
         </p>
         <div class="d-flex flex-wrap ga-1 mb-4" aria-label="Available models">
           <v-chip v-for="model in provider.models" :key="model.id" size="small" variant="tonal">{{ model.label }}</v-chip>
@@ -103,6 +104,7 @@ async function save({ remove = false, useSavedKey = false } = {}) {
         <v-skeleton-loader v-if="resource.isInitialLoading.value" type="article, actions" />
         <v-form v-else :disabled="!actionsEnabled || busy" @submit.prevent="save()">
           <v-text-field
+            v-if="!useExistingKey"
             v-model="apiKey" :label="connection?.status === 'connected' ? 'Replace API key' : 'API key'" :type="visible ? 'text' : 'password'"
             :append-inner-icon="visible ? mdiEyeOffOutline : mdiEyeOutline" autocomplete="off" spellcheck="false"
             variant="outlined" hint="Stored privately outside your projects. Existing keys are never shown." persistent-hint
@@ -112,14 +114,14 @@ async function save({ remove = false, useSavedKey = false } = {}) {
           <div class="d-flex flex-wrap ga-2 align-center">
             <v-btn
               type="submit" color="primary" variant="flat"
-              :disabled="!actionsEnabled || !apiKey.trim() || busy"
+              :disabled="!actionsEnabled || (!useExistingKey && !apiKey.trim()) || busy"
             >
-              {{ busy ? 'Checking…' : connection?.status === 'connected' ? 'Check and replace key' : 'Check and connect' }}
+              {{ busy ? 'Checking…' : useExistingKey || connection?.status !== 'connected' ? 'Check and connect' : 'Check and replace key' }}
             </v-btn>
-            <v-btn v-if="connection?.status === 'connected'" variant="outlined" :disabled="busy || !actionsEnabled" @click="save({ useSavedKey: true })">Check saved key</v-btn>
+            <v-btn v-if="!adding && connection?.status === 'connected'" variant="outlined" :disabled="busy || !actionsEnabled" @click="save({ useSavedKey: true })">Check saved key</v-btn>
             <v-btn :href="provider.keyUrl" target="_blank" rel="noopener noreferrer" variant="text" :append-icon="mdiOpenInNew">Get API key</v-btn>
             <v-btn
-              v-if="connection?.status && connection.status !== 'not_connected'" variant="text"
+              v-if="!adding && connection?.status && connection.status !== 'not_connected'" variant="text"
               :disabled="!actionsEnabled || busy" @click="confirmRemove = true"
             >
               Disconnect

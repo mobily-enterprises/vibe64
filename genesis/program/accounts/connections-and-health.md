@@ -199,6 +199,9 @@ keys must be checked again before they become Claude-ready. Only readiness and
 redacted connection metadata reach the client. Provider URLs remain curated.
 Claude's access reader applies the connection's scope: DeepSeek API access is
 shared, while the GLM Coding Plan and native Claude subscription are personal.
+The separate `zai` API connection declares workspace access; its setup requires
+a pay-as-you-go account without a Coding Plan. Billing is not inferred from
+successful protocol access.
 The native GPT badge uses the runtime's authentication access policy: ChatGPT
 login is Personal use; an OpenAI API key is Workspace use. Unreadable access
 metadata leaves the badge absent instead of guessing from account storage scope.
@@ -213,7 +216,7 @@ Standalone and hosted editors compose the same AI Accounts screen, catalogue
 validation, provider policy, connection store and runtime wiring. The local
 Account settings dialog has You, AI Accounts and GitHub tabs. AI Accounts offers
 Codex, Claude Code and OpenCode, including GPT, DeepSeek and GLM through Codex,
-and Claude, DeepSeek and GLM Coding Plan through Claude Code,
+and Claude, DeepSeek and GLM through Claude Code,
 and the current OpenCode provider catalogue. An AI connection request opens the
 requested provider's setup. Hosts choose the API endpoint, credential context
 and account-management authorization; they do not duplicate these forms or
@@ -227,8 +230,14 @@ orchestrators has a separate row in each group. Manage opens that exact
 orchestrator/provider pair. Configured engine membership remains visible during
 a failed credential transition so reconnection opens the correct form. A
 Claude-only key remains absent from Codex's group and usable catalogue. Included
-Big Pickle retains its Default badge under OpenCode. Add AI starts with the
-orchestrator, then its providers. Shared keys remain one credential: removal
+Big Pickle retains its Default badge under OpenCode. Add connection lists only
+orchestrators with missing provider connections, then their unconfigured
+providers. Manage has no provider selector. Native expired/reconnecting
+accounts and configured external pairs remain in Manage. OpenCode availability
+comes from its refreshed catalogue; loading or failure is not treated as
+exhaustion. When no supported connections remain, Add connection is disabled.
+Adding an orchestrator for an existing shared key checks that saved key without
+exposing replacement or disconnect actions. Shared keys remain one credential: removal
 explicitly identifies its effect on both Codex and Claude Code. The regular Z.AI
 recommendation is hidden for a connected regular API or Coding Plan key in
 OpenCode, or a Coding Plan key verified for Codex or Claude Code.
@@ -258,8 +267,16 @@ connection state; request bodies cannot supply the acting user.
 Codex provider setup offers GPT, DeepSeek and GLM. GPT keeps its existing
 ChatGPT device login and OpenAI API-key flow. The curated catalogue owns the
 DeepSeek API route and Z.AI's dedicated Coding Plan Responses route
-(`https://api.z.ai/api/v1`). Regular Z.AI API keys remain an OpenCode option;
-the regular `/api/paas/v4/responses` route returned 404 in the compatibility check.
+(`https://api.z.ai/api/v1`). The distinct `zai` pay-as-you-go option attempts
+that same Responses endpoint and `https://api.z.ai/api/anthropic/v1/messages`
+with its own key. Z.AI documents these compatibility endpoints for Coding Plan;
+ordinary API account access and billing remain unverified pending a suitable
+live key. Setup states that limitation. The regular `/api/paas/v4/responses`
+route previously returned 404 and is not used as an inferred compatibility
+endpoint. API and Coding Plan credentials, connection identities and routing
+selections remain separate even though both use the `glm-5.3` model ID.
+The existing GLM history handling applies to both routes. OpenCode keeps its
+regular Chat Completions integration.
 The browser submits only a provider id and key. Connections use the provider's
 name automatically, and the browser cannot set an endpoint. The existing host Codex-management policy authorizes reads and
 mutations, and lists never return keys.

@@ -68,7 +68,7 @@ function routingModelChoices(engine, { purpose = "senior" } = {}) {
       const agent = engine.agents.find((item) => ["primary", "all"].includes(item.mode) &&
         (!item.modelProviderId || item.modelProviderId === provider.id) && (!item.modelId || item.modelId === model.id));
       if (!agent) return [];
-      const curated = curatedCodexModel(model.id);
+      const curated = curatedCodexModel(model.id, provider.id);
       const isolated = Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).includes(purpose);
       let compatibilityError = engine.engineId === "codex" && provider.id !== "openai" &&
         !(curated?.modelProviderId === provider.id && (isolated || curated.codexHistoryRouting === true))

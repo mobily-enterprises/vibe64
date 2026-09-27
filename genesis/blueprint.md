@@ -671,10 +671,13 @@ message or stopping the main assistant.
 
 Standalone Vibe64 and hosted Vibe64 use the same AI Accounts screen and provider
 configuration. Account settings offers Codex with GPT, DeepSeek and GLM, Claude
-Code with Claude, DeepSeek and GLM Coding Plan, and OpenCode's provider catalogue. OpenCode Big Pickle is included without
+Code with Claude, DeepSeek and GLM, and OpenCode's provider catalogue. OpenCode Big Pickle is included without
 sign-in. Connections are grouped by orchestrator, with each configured provider
-listed under every orchestrator it supports. Manage opens that exact pair;
-Add AI chooses an orchestrator before a provider. Shared-key removal explains
+listed under every orchestrator it supports. Manage opens that exact pair with
+no provider selector. Add connection offers only orchestrators with missing
+connection options, then only their unconfigured providers. Expired or failed
+configured connections remain under Manage for reconnection. When every
+available connection is configured, Add connection is disabled. Shared-key removal explains
 that it affects both Codex and Claude Code. The Add GLM shortcut
 is hidden when GLM is already connected through Codex, Claude Code or OpenCode.
 Provider credentials and shared model-routing assignments belong to the
@@ -742,8 +745,12 @@ AI's declared response capacity rather than assuming every model can produce
 the same size answer.
 Codex offers GPT, DeepSeek and GLM as named provider choices. GPT retains
 ChatGPT device sign-in and OpenAI API-key setup; DeepSeek uses its own API key,
-and GLM uses a Z.AI Coding Plan key. Regular Z.AI API connections use OpenCode;
-they are not presented as verified Codex connections. Provider URLs and supported models are
+and GLM offers separate Coding Plan and Pay-as-you-go API connections.
+The pay-as-you-go option for Codex and Claude Code still needs live access and
+billing verification with a Z.AI account without a Coding Plan. It checks the
+selected orchestrator's protocol before saving a key and never copies a saved
+Coding Plan key into the API connection. Regular API access through OpenCode
+remains available. Provider URLs and supported models are
 curated by Vibe64, with no custom URL field. Each connection has a private key
 and uses its provider's name automatically. Connecting or removing one preserves the others.
 Routed Codex conversations switch models and providers within the same native

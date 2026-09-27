@@ -1,4 +1,4 @@
-import { createRenderer, ref, ssrContextKey } from "vue";
+import { createRenderer, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ accounts: null, providers: null, connections: null }));
@@ -34,7 +34,7 @@ beforeEach(() => {
     isLoading: ref(false), loadError: ref("")
   };
   mocks.providers = {
-    connections: ref(["deepseek", "zai-coding-plan"].map(id => ({
+    connections: ref(["deepseek", "zai-coding-plan", "zai"].map(id => ({
       id, status: "connected", connected: true, claudeReady: true, configuredEngines: ["codex", "claude"]
     }))),
     busy: ref(false), loadError: ref(""), change: vi.fn().mockResolvedValue({ ok: true }),
@@ -45,6 +45,7 @@ beforeEach(() => {
     catalogEngine: ref(null), catalogProvider: ref(null), catalogLoadError: ref(""),
     isInitialLoading: ref(false), loadError: ref(""), registryProviders: ref([]),
     registryIsInitialLoading: ref(false), registryIsFetching: ref(false), registryLoadError: ref(""),
+    registryLoaded: ref(true), reloadRegistry: vi.fn().mockResolvedValue({}),
     removingProviderId: ref(""), savingProviderId: ref(""), updatingModelAccessProviderId: ref("")
   };
 });
@@ -56,12 +57,13 @@ afterEach(() => {
 it("groups configured pairs by orchestrator and retains the included default", () => {
   const state = mount();
   expect(state.configuredAiGroups.map(group => [group.label, group.accounts.map(account => account.id)])).toEqual([
-    ["Codex", ["codex", "deepseek", "zai-coding-plan"]],
-    ["Claude Code", ["claude", "deepseek", "zai-coding-plan"]],
+    ["Codex", ["codex", "deepseek", "zai-coding-plan", "zai"]],
+    ["Claude Code", ["claude", "deepseek", "zai-coding-plan", "zai"]],
     ["OpenCode", ["opencode"]]
   ]);
   expect(state.configuredAiGroups[2].accounts[0]).toMatchObject({ builtIn: true, preferred: true, removable: false });
-  expect(state.nativeChoices.map(choice => choice.id)).toEqual(["codex", "claude"]);
+  expect(state.nativeChoices).toEqual([]);
+  expect(state.canAddConnection).toBe(false);
 });
 
 it("opens settings for the exact orchestrator and provider without checking or changing a key", () => {
@@ -73,9 +75,78 @@ it("opens settings for the exact orchestrator and provider without checking or c
       expect(state.nativeSetupProviderId).toBe(engine);
       expect(state.nativeModelProviderId).toBe(account.kind === "codex-provider" ? account.id : engine === "claude" ? "anthropic" : "openai");
       expect(state.nativeSetupOpen).toBe(true);
+      expect(state.nativeSetupOrigin).toBe("manage");
+      expect(state.nativeProviderPickerOpen).toBe(false);
     }
   }
   expect(mocks.providers.change).not.toHaveBeenCalled();
+});
+
+it("offers only missing pairs, then opens a fixed Add form and returns to its provider list", () => {
+  mocks.providers.connections.value.find(({ id }) => id === "deepseek").configuredEngines = ["codex"];
+  const state = mount();
+  expect(state.nativeChoices.map(({ id, providers }) => [id, providers.map(({ id }) => id)])).toEqual([
+    ["claude", ["deepseek"]]
+  ]);
+  state.chooseAiType("codex");
+  expect(state.nativeProviderPickerOpen).toBe(false);
+  state.chooseAiType("claude");
+  expect(state.nativeProviderPickerOpen).toBe(true);
+  expect(state.nativeSetupOpen).toBe(false);
+  state.chooseNativeProvider("zai-coding-plan");
+  expect(state.nativeSetupOpen).toBe(false);
+  state.chooseNativeProvider("deepseek");
+  expect(state.nativeSetupOrigin).toBe("add");
+  expect(state.nativeSetupProviderId).toBe("claude");
+  expect(state.nativeModelProviderId).toBe("deepseek");
+  expect(state.nativeSetupOpen).toBe(true);
+  state.backFromNativeSetup();
+  expect(state.nativeSetupOpen).toBe(false);
+  expect(state.nativeProviderPickerOpen).toBe(true);
+  expect(mocks.providers.change).not.toHaveBeenCalled();
+});
+
+it("keeps native login reconnection under Manage instead of offering it as new", () => {
+  mocks.accounts.status.value.accounts[0] = { id: "codex", connected: false, status: "reconnect_required" };
+  const state = mount();
+  expect(state.nativeChoices).toEqual([]);
+  const account = state.configuredAiGroups[0].accounts[0];
+  expect(account).toMatchObject({ id: "codex", keyHint: "Reconnect required", connected: false });
+  state.manageConfiguredAi(account);
+  expect(state.nativeSetupOrigin).toBe("manage");
+  expect(state.nativeModelProviderId).toBe("openai");
+});
+
+it("updates Add availability with warm connection data and refreshed OpenCode providers", async () => {
+  const state = mount();
+  state.addAiOpen = true;
+  await nextTick();
+  expect(mocks.connections.reloadRegistry).toHaveBeenCalledOnce();
+  mocks.connections.registryProviders.value = [{ id: "opencode", defaultModelId: "big-pickle" }];
+  expect(state.openCodeAddAvailable).toBe(false);
+  mocks.connections.registryProviders.value.push({ id: "zai", defaultModelId: "glm-4.7-flash" });
+  expect(state.canAddConnection).toBe(true);
+  mocks.connections.connections.value.push({ id: "zai", connected: true });
+  expect(state.canAddConnection).toBe(false);
+  mocks.providers.connections.value = mocks.providers.connections.value.filter(({ id }) => id !== "zai");
+  expect(state.nativeChoices.map(({ providers }) => providers.map(({ id }) => id))).toEqual([["zai"], ["zai"]]);
+  expect(state.canAddConnection).toBe(true);
+});
+
+it("does not mistake an unloaded or failed OpenCode catalogue for exhaustion", () => {
+  mocks.connections.registryLoaded.value = false;
+  const state = mount();
+  expect(state.canAddConnection).toBe(true);
+  mocks.connections.registryLoaded.value = true;
+  mocks.connections.registryLoadError.value = "Try again";
+  expect(state.canAddConnection).toBe(true);
+});
+
+it("does not turn a stale Add choice into replacement of an existing OpenCode connection", async () => {
+  const state = mount();
+  await state.chooseProvider({ id: "opencode" }, { origin: "provider-picker" });
+  expect(state.editorOpen).toBe(false);
+  expect(state.preparingProviderId).toBe("");
 });
 
 it("shows GPT's actual access scope and does not guess when it is unavailable", () => {

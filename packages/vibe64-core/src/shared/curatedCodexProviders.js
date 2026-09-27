@@ -28,6 +28,18 @@ const CURATED_CODEX_PROVIDERS = Object.freeze([
     models: Object.freeze([
       model("glm-5.3", "GLM 5.3", 1048576, ["low", "high", "max"], { defaultThinking: "max", freeformPatch: true, codexHistoryRouting: true })
     ])
+  }),
+  Object.freeze({
+    id: "zai", label: "GLM · Pay-as-you-go API", baseUrl: "https://api.z.ai/api/v1", claudeBaseUrl: "https://api.z.ai/api/anthropic",
+    description: "Z.AI API key · pay-as-you-go account",
+    keyUrl: "https://z.ai/manage-apikey/apikey-list",
+    guideUrl: "https://docs.z.ai/guides/overview/quick-start",
+    setupNote: "Use a key from a Z.AI account without a Coding Plan. Pay-as-you-go access through Codex and Claude Code still needs live verification; a successful check confirms model access, not billing.",
+    claudeAutoCompactWindow: 1000000,
+    ownerOnly: false, webSearch: false,
+    models: Object.freeze([
+      model("glm-5.3", "GLM 5.3", 1048576, ["low", "high", "max"], { defaultThinking: "max", freeformPatch: true, codexHistoryRouting: true })
+    ])
   })
 ]);
 
@@ -35,8 +47,9 @@ function curatedCodexProvider(id) {
   return CURATED_CODEX_PROVIDERS.find((provider) => provider.id === id) || null;
 }
 
-function curatedCodexModel(id) {
+function curatedCodexModel(id, providerId = "") {
   for (const provider of CURATED_CODEX_PROVIDERS) {
+    if (providerId && provider.id !== providerId) continue;
     const model = provider.models.find((candidate) => candidate.id === id);
     if (model) return { ...model, modelProviderId: provider.id };
   }

@@ -28,7 +28,7 @@ import {
   mdiStopCircleOutline
 } from "@mdi/js";
 
-import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useAiConnections } from "../composables/useAiConnections.js";
 import FreeAiSelector from "./FreeAiSelector.vue";
 import { REGULAR_ZAI_STARTER } from "./freeAiStarters.js";
@@ -54,6 +54,8 @@ const router = useRouter();
 const { smAndDown } = useDisplay();
 const addAiOpen = ref(false);
 const nativeSetupOpen = ref(false);
+const nativeProviderPickerOpen = ref(false);
+const nativeSetupOrigin = ref("manage");
 const nativeSetupProviderId = ref("codex");
 const nativeSetupActivator = ref(null);
 const editorActivator = ref(null);
@@ -113,6 +115,7 @@ const {
   registryIsFetching,
   registryIsInitialLoading,
   registryLoadError,
+  registryLoaded,
   registryProviders,
   saveConnection,
   savingProviderId,
@@ -149,6 +152,10 @@ const codexAccount = computed(() => {
 const codexConnected = computed(() => codexAccount.value?.connected === true);
 const claudeAccount = computed(() => nativeAccounts.status.value?.accounts?.find((account) => account.id === "claude") || null);
 const claudeConnected = computed(() => claudeAccount.value?.connected === true);
+function nativeAccountConfigured(account) {
+  return account?.connected === true || account?.previouslyLinked === true ||
+    ["reconnect_required", "reconnecting"].includes(account?.status);
+}
 const nativeSetupAccount = computed(() => nativeSetupProviderId.value === "claude" ? claudeAccount.value : codexAccount.value);
 const nativeSetupConnected = computed(() => nativeSetupAccount.value?.connected === true);
 const nativeSetupDetails = computed(() => nativeSetupProviderId.value === "claude" ? {
@@ -165,9 +172,18 @@ const nativeSetupDetails = computed(() => nativeSetupProviderId.value === "claud
   message: "Choose ChatGPT login or an OpenAI API key."
 });
 const nativeChoices = computed(() => [
-  { id: "codex", label: "Codex", connected: codexConnected.value, description: "GPT, DeepSeek or GLM. Connect your account or API key." },
-  { id: "claude", label: "Claude Code", connected: claudeConnected.value, description: "Claude, DeepSeek or GLM. Connect your account or API key." }
-]);
+  { id: "codex", label: "Codex", account: codexAccount.value, provider: { id: "openai", label: "GPT", description: "ChatGPT login or OpenAI API key" } },
+  { id: "claude", label: "Claude Code", account: claudeAccount.value, provider: { id: "anthropic", label: "Claude", description: "Claude subscription" } }
+].map(({ account, provider, ...engine }) => ({
+  ...engine,
+  providers: [
+    ...(!nativeAccountConfigured(account) ? [provider] : []),
+    ...CURATED_CODEX_PROVIDERS.filter(({ id }) => !codexProviders.connections.value.some(
+      (connection) => connection.id === id && connection.configuredEngines?.includes(engine.id)
+    ))
+  ]
+})).filter((engine) => engine.providers.length));
+const nativeAvailableProviders = computed(() => nativeChoices.value.find((engine) => engine.id === nativeSetupProviderId.value)?.providers || []);
 const nativeSetupRows = computed(() => [{
   ...(nativeSetupAccount.value || { connected: false, id: nativeSetupProviderId.value, status: "missing" }),
   ...nativeSetupDetails.value,
@@ -176,24 +192,26 @@ const nativeSetupRows = computed(() => [{
   message: nativeSetupConnected.value ? "Connected" : nativeSetupDetails.value.message
 }]);
 const configuredAiRows = computed(() => [
-  ...(codexConnected.value ? [{
+  ...(nativeAccountConfigured(codexAccount.value) ? [{
     accessLabel: codexAccount.value?.ownerOnly === true ? "Personal use" : codexAccount.value?.ownerOnly === false ? "Workspace use" : "",
     billingLabel: codexAccount.value?.username || "Codex account",
     engineId: "codex",
     id: "codex",
     kind: "codex",
-    keyHint: "Connected",
+    connected: codexConnected.value,
+    keyHint: codexConnected.value ? "Connected" : "Reconnect required",
     managementUrl: "",
     modelLabel: "Available for Codex sessions",
     providerLabel: "GPT"
   }] : []),
-  ...(claudeConnected.value ? [{
+  ...(nativeAccountConfigured(claudeAccount.value) ? [{
     accessLabel: "Personal use",
     billingLabel: claudeAccount.value?.username || "Claude account",
     engineId: "claude",
     id: "claude",
     kind: "claude",
-    keyHint: "Connected",
+    connected: claudeConnected.value,
+    keyHint: claudeConnected.value ? "Connected" : "Reconnect required",
     managementUrl: "https://claude.ai/settings/billing",
     modelLabel: "Choose model roles in Model routing",
     providerLabel: "Anthropic"
@@ -208,7 +226,7 @@ const configuredAiRows = computed(() => [
       providerLabel: provider.label,
       billingLabel: provider.description,
       accessLabel: provider.ownerOnly ? "Personal use" : "Workspace use",
-      keyHint: connection.connected || connection.claudeReady ? "Connected" : "Reconnect required",
+      keyHint: (engineId === "claude" ? connection.claudeReady : connection.connected) ? "Connected" : "Reconnect required",
       modelLabel: provider.models.map(({ label }) => label).join(" · ")
     }));
   }),
@@ -238,7 +256,7 @@ const glmConnected = computed(() => (
   connections.value.some((connection) => (
     (connection.id === "zai" || connection.id === "zai-coding-plan") && connection.connected === true
   )) || codexProviders.connections.value.some((connection) => (
-    connection.id === "zai-coding-plan" && (connection.connected || connection.claudeReady)
+    ["zai", "zai-coding-plan"].includes(connection.id) && (connection.connected || connection.claudeReady)
   ))
 ));
 const aiStatusLoaded = computed(() => Boolean(
@@ -254,6 +272,9 @@ const configuredProviderIds = computed(() => new Set(connections.value.map((conn
 const availableProviders = computed(() => registryProviders.value.filter((provider) => (
   !configuredProviderIds.value.has(String(provider?.id || ""))
 )));
+const openCodeAddAvailable = computed(() => !registryLoaded.value || Boolean(registryLoadError.value) ||
+  availableProviders.value.some((provider) => !providerUnavailableReason(provider)));
+const canAddConnection = computed(() => nativeChoices.value.length > 0 || openCodeAddAvailable.value);
 const filteredProviders = computed(() => {
   const search = providerSearch.value.trim().toLocaleLowerCase();
   if (!search) return availableProviders.value;
@@ -328,10 +349,10 @@ const editorBackLabel = computed(() => (
   ["add", "provider-picker", "starter"].includes(editorOrigin.value) ? "Back" : "Cancel"
 ));
 const editorEyebrow = computed(() => {
-  if (existingEditorConnection.value) return "Manage AI";
+  if (existingEditorConnection.value) return "Manage connection";
   if (editorProviderId.value === "zai" && editorStarter.value) return "Regular Z.AI API";
   if (editorStarter.value) return "Free AI setup";
-  return "Add AI";
+  return "Add connection";
 });
 const editorTitle = computed(() => {
   if (existingEditorConnection.value?.builtIn) return "Add a Zen API key";
@@ -431,15 +452,12 @@ async function openProviderPicker() {
 }
 
 function chooseAiType(type = "") {
-  if (type === "claude") nativeModelProviderId.value = "anthropic";
-  if (type === "codex" || type === "codex-glm") {
-    nativeModelProviderId.value = type === "codex-glm" ? "zai-coding-plan" : "openai";
-  }
-  if (["codex", "codex-glm", "claude"].includes(type)) {
-    nativeSetupProviderId.value = type === "codex-glm" ? "codex" : type;
+  if (["codex", "claude"].includes(type)) {
+    if (!nativeChoices.value.some((choice) => choice.id === type)) return;
+    nativeSetupProviderId.value = type;
     nativeSetupActivator.value = document.activeElement;
     addAiOpen.value = false;
-    nativeSetupOpen.value = true;
+    nativeProviderPickerOpen.value = true;
     return;
   }
   if (type === "opencode") {
@@ -447,10 +465,27 @@ function chooseAiType(type = "") {
   }
 }
 
+function chooseNativeProvider(providerId) {
+  if (!nativeAvailableProviders.value.some((provider) => provider.id === providerId)) return;
+  nativeModelProviderId.value = providerId;
+  nativeSetupOrigin.value = "add";
+  nativeProviderPickerOpen.value = false;
+  nativeSetupOpen.value = true;
+}
+
 function backFromNativeSetup() {
   nativeSetupOpen.value = false;
-  if (!nativeSetupConnected.value) addAiOpen.value = true;
+  nativeProviderPickerOpen.value = true;
 }
+
+watch(addAiOpen, async (open) => {
+  if (!open) return;
+  try {
+    await reloadRegistry();
+  } catch {
+    // The provider picker retains the registry error and retry action.
+  }
+});
 
 async function refreshAllAccounts() {
   if (refreshingAll.value) return;
@@ -481,6 +516,7 @@ async function chooseProvider(choice = {}, {
 } = {}) {
   const id = String(choice.id || "");
   if (!id || preparingProviderId.value) return;
+  if (origin === "provider-picker" && configuredProviderIds.value.has(id)) return;
   if (!preserveInput) editorActivator.value = document.activeElement;
   preparedChoice.value = choice;
   const preparationId = ++providerPreparationId;
@@ -715,6 +751,7 @@ async function confirmRemove() {
 function manageConfiguredAi(account = {}) {
   nativeModelProviderId.value = account.kind === "codex-provider" ? account.id : account.kind === "claude" ? "anthropic" : "openai";
   if (["codex", "claude", "codex-provider"].includes(account.kind)) {
+    nativeSetupOrigin.value = "manage";
     nativeSetupProviderId.value = account.kind === "codex-provider" ? account.engineId || "codex" : account.kind;
     nativeSetupActivator.value = document.activeElement;
     nativeSetupOpen.value = true;
@@ -756,7 +793,7 @@ onBeforeUnmount(() => {
 function openProvider(providerId, { providerLabel = "", providerRevision = "" } = {}) {
   if (PROVIDER_ID_PATTERN.test(providerId) && PROVIDER_REVISION_PATTERN.test(providerRevision)) {
     void chooseProvider({ id: providerId, label: providerLabel || providerId, providerRevision });
-  } else if (["codex", "claude"].includes(providerId)) chooseAiType(providerId);
+  } else if (["codex", "claude"].includes(providerId)) manageConfiguredAi({ kind: providerId });
   else if (curatedCodexProvider(providerId)) manageConfiguredAi({ kind: "codex-provider", id: providerId });
   else if (providerId === "opencode") void openProviderPicker();
   else addAiOpen.value = true;
@@ -805,13 +842,13 @@ defineExpose({ openProvider });
         />
         <v-btn
           color="primary"
-          :disabled="accountsInitialLoading || Boolean(loadError)"
+          :disabled="accountsInitialLoading || Boolean(loadError) || Boolean(nativeLoadError) || !canAddConnection"
           :prepend-icon="mdiPlus"
           type="button"
           variant="flat"
           @click="addAiOpen = true"
         >
-          Add AI
+          Add connection
         </v-btn>
       </div>
 
@@ -874,7 +911,7 @@ defineExpose({ openProvider });
                     class="vibe64-ai-connections__recommendation-plan-action"
                     type="button"
                     variant="text"
-                    @click="chooseAiType('codex-glm')"
+                    @click="chooseAiType('codex'); chooseNativeProvider('zai-coding-plan')"
                   >
                     Connect Coding Plan with Codex
                   </v-btn>
@@ -1108,10 +1145,10 @@ defineExpose({ openProvider });
       <v-card :rounded="smAndDown ? 0 : 'xl'">
         <v-card-title class="vibe64-dialog-title">
           <span>
-            <small class="vibe64-dialog-eyebrow">Add AI</small>
+            <small class="vibe64-dialog-eyebrow">Add connection</small>
             <strong>Choose an orchestrator</strong>
           </span>
-          <v-btn :icon="mdiClose" aria-label="Close Add AI" type="button" variant="text" @click="addAiOpen = false" />
+          <v-btn :icon="mdiClose" aria-label="Close Add connection" type="button" variant="text" @click="addAiOpen = false" />
         </v-card-title>
         <v-card-text class="vibe64-add-ai__body">
           <v-row align="stretch">
@@ -1127,7 +1164,7 @@ defineExpose({ openProvider });
                   <v-card-subtitle>Choose a provider</v-card-subtitle>
                 </v-card-item>
                 <v-card-text class="vibe64-add-ai__choice-copy text-body-medium">
-                  {{ choice.description }}
+                  {{ choice.providers.map(provider => provider.label).join(', ') }}
                 </v-card-text>
                 <v-card-actions class="vibe64-add-ai__choice-actions">
                   <v-btn class="vibe64-add-ai__choice-action" block color="primary" type="button" variant="tonal" @click="chooseAiType(choice.id)">
@@ -1136,11 +1173,12 @@ defineExpose({ openProvider });
                 </v-card-actions>
               </v-card>
             </v-col>
-            <v-col cols="12" :sm="nativeChoices.length ? 6 : 12">
-              <v-card class="vibe64-add-ai__choice fill-height" color="primary" rounded="xl" variant="tonal">
+            <v-col v-if="openCodeAddAvailable" cols="12" :sm="nativeChoices.length ? 6 : 12">
+              <v-skeleton-loader v-if="!registryLoaded && !registryLoadError" type="card" aria-label="Loading OpenCode connections" />
+              <v-card v-else class="vibe64-add-ai__choice fill-height" rounded="xl" variant="outlined">
                 <v-card-item>
                   <template #prepend>
-                    <v-avatar color="primary" rounded="lg" size="52" variant="flat">
+                    <v-avatar color="secondary" rounded="lg" size="52" variant="tonal">
                       <v-icon :icon="mdiRobotOutline" size="28" />
                     </v-avatar>
                   </template>
@@ -1151,13 +1189,37 @@ defineExpose({ openProvider });
                   Choose from OpenCode’s provider catalog. Add as many providers as you need; each key stays an independent connection.
                 </v-card-text>
                 <v-card-actions class="vibe64-add-ai__choice-actions">
-                  <v-btn class="vibe64-add-ai__choice-action" block color="primary" type="button" variant="flat" @click="chooseAiType('opencode')">
+                  <v-btn class="vibe64-add-ai__choice-action" block color="primary" type="button" variant="tonal" @click="chooseAiType('opencode')">
                     Choose provider
                   </v-btn>
                 </v-card-actions>
               </v-card>
             </v-col>
           </v-row>
+          <p v-if="!canAddConnection" class="text-body-medium">All available connections are configured. Use Manage to update them.</p>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="nativeProviderPickerOpen" :fullscreen="smAndDown" max-width="42rem" scrollable>
+      <v-card :rounded="smAndDown ? 0 : 'xl'">
+        <v-card-title class="vibe64-dialog-title">
+          <span>
+            <small class="vibe64-dialog-eyebrow">Add {{ nativeSetupDetails.label }} connection</small>
+            <strong>Choose a provider</strong>
+          </span>
+          <v-btn :icon="mdiArrowLeft" aria-label="Back to orchestrators" variant="text" @click="nativeProviderPickerOpen = false; addAiOpen = true" />
+        </v-card-title>
+        <v-card-text>
+          <v-list v-if="nativeAvailableProviders.length" lines="two">
+            <v-list-item
+              v-for="provider in nativeAvailableProviders" :key="provider.id"
+              :title="provider.label" :subtitle="provider.description" @click="chooseNativeProvider(provider.id)"
+            >
+              <template #append><span class="text-label-large text-primary">Connect</span></template>
+            </v-list-item>
+          </v-list>
+          <p v-else class="text-body-medium">All available {{ nativeSetupDetails.label }} connections are configured.</p>
         </v-card-text>
       </v-card>
     </v-dialog>
@@ -1166,7 +1228,7 @@ defineExpose({ openProvider });
       <v-card :rounded="smAndDown ? 0 : 'xl'">
         <v-card-title class="vibe64-dialog-title">
           <span>
-            <small class="vibe64-dialog-eyebrow">Add OpenCode AI</small>
+            <small class="vibe64-dialog-eyebrow">Add OpenCode connection</small>
             <strong>Choose a provider</strong>
           </span>
           <v-btn
@@ -1275,10 +1337,14 @@ defineExpose({ openProvider });
             v-else
             v-model="nativeModelProviderId"
             :engine-id="nativeSetupProviderId"
+            :select-provider="false"
+            :adding="nativeSetupOrigin === 'add'"
+            :show-back="nativeSetupOrigin === 'add'"
             :actions-enabled="isOwner"
             show-close
             @busy="codexProviderSaving = $event"
             @close="nativeSetupOpen = false"
+            @back="backFromNativeSetup"
             @changed="codexProviders.resource.reload(); emit('changed')"
           />
           <ProviderAccountsSetup
@@ -1287,7 +1353,7 @@ defineExpose({ openProvider });
             :actions-enabled="isOwner"
             actions-disabled-message="Only the Vibe64 owner can manage this connection."
             :account-rows="nativeSetupRows"
-            :back-label="nativeSetupConnected ? '' : 'Back'"
+            :back-label="nativeSetupOrigin === 'add' ? 'Back' : ''"
             needed-label="Not connected"
             ready-label="Connected"
             :show-continue="false"

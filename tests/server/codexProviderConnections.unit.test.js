@@ -26,7 +26,7 @@ async function fixture(t) {
 
 test("only the curated DeepSeek and GLM routes can receive a saved key", async (t) => {
   const f = await fixture(t);
-  assert.deepEqual(CURATED_CODEX_PROVIDERS.map(({ label }) => label), ["DeepSeek", "GLM · Coding Plan"]);
+  assert.deepEqual(CURATED_CODEX_PROVIDERS.map(({ label }) => label), ["DeepSeek", "GLM · Coding Plan", "GLM · Pay-as-you-go API"]);
   const rows = await f.store.change("deepseek", { apiKey: "fixture-secret", label: "My key", baseUrl: "https://attacker.invalid" });
   assert.equal(f.requests[0].url, "https://api.deepseek.com/responses");
   assert.equal(f.requests[0].input.redirect, "error");
@@ -65,6 +65,42 @@ test("Z.AI Coding Plan keys use the verified Responses route and an isolated GLM
   assert.equal(catalog.models[0].apply_patch_tool_type, "freeform");
   assert.equal((await f.store.runtimeOptions("zai-coding-plan")).runtimeInstanceId, "provider:zai-coding-plan");
   assert.equal((await f.store.list()).find((row) => row.id === "deepseek").connected, false);
+});
+
+test("pay-as-you-go keeps its key and exact route separate from Coding Plan for both orchestrators", async (t) => {
+  const f = await fixture(t);
+  await f.store.change("zai-coding-plan", { apiKey: "plan-fixture" });
+  await f.store.change("zai", { engineId: "claude", apiKey: "api-fixture" });
+  assert.equal(f.requests[2].url, "https://api.z.ai/api/anthropic/v1/messages");
+  assert.equal(f.requests[3].url, "https://api.z.ai/api/v1/responses");
+  assert.equal(f.requests[2].input.headers.Authorization, "Bearer api-fixture");
+  const rows = await f.store.list();
+  assert.deepEqual(rows.find(({ id }) => id === "zai").configuredEngines, ["codex", "claude"]);
+  assert.doesNotMatch(JSON.stringify(rows), /api-fixture|plan-fixture/);
+  assert.equal((await f.store.threadConfig("zai"))["model_providers.zai"].experimental_bearer_token, "api-fixture");
+  assert.equal((await f.store.claudeProviderSettings("zai-coding-plan")).apiKey, "plan-fixture");
+  assert.equal((await f.store.claudeProviderSettings("zai")).apiKey, "api-fixture");
+  for (const modelProviderId of ["zai", "zai-coding-plan"]) {
+    const settings = codexAppServerThreadSettings({ cwd: "/workspace", agentSettings: { providerId: "codex", modelProviderId, model: "glm-5.3" } });
+    assert.equal(settings.modelProvider, modelProviderId);
+  }
+  await f.store.change("zai", { remove: true });
+  assert.equal((await f.store.claudeProviderSettings("zai-coding-plan")).apiKey, "plan-fixture");
+});
+
+test("an incompatible pay-as-you-go endpoint cannot create a connection or disturb Coding Plan", async (t) => {
+  const f = await fixture(t);
+  await f.store.change("zai-coding-plan", { apiKey: "plan-fixture" });
+  const store = createCodexProviderConnectionStore({ systemRoot: f.root,
+    fetchImpl: async () => new Response("private upstream details", { status: 404 }),
+    invalidateRuntimes: async () => { assert.fail("Rejected credentials must not stop runtimes"); }
+  });
+  for (const engineId of ["codex", "claude"]) {
+    await assert.rejects(store.change("zai", { engineId, apiKey: "api-fixture" }), (error) =>
+      /HTTP 404/.test(error.message) && !error.message.includes("private upstream"));
+  }
+  assert.deepEqual((await store.list()).find(({ id }) => id === "zai").configuredEngines, []);
+  assert.equal((await store.claudeProviderSettings("zai-coding-plan")).apiKey, "plan-fixture");
 });
 
 test("bad keys leave the previous connection intact; unverified process exit blocks replacement", async (t) => {
