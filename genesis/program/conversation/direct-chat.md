@@ -60,6 +60,9 @@ classification through its existing Stop owner, and await helper cleanup and the
 saved cancellation. A cleanup failure remains an explicit shutdown failure.
 Already admitted native turns keep their existing interruption/reconnect handling;
 shutdown does not start a review.
+The development example also awaits backend shutdown inside Vite's native
+`closeServer` hook, so Vite cannot exit before Claude execution cleanup is saved.
+A Vite configuration restart keeps the backend running.
 
 The shared transcript groups adjacent reasoning summaries across storage rows.
 Main chat receives its actual visibility, including temporary and host chat
