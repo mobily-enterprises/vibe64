@@ -392,7 +392,7 @@ test.describe("direct chat", () => {
     }));
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
     const input = page.getByLabel("Message AI assistant");
-    const settings = page.getByRole("button", { name: /^Chat settings for Codex.*: attention required$/ });
+    const settings = page.getByRole("button", { name: /^Chat mode/ });
     const notice = page.getByRole("status").filter({ hasText: "The assistant stopped because its progress could not be tracked." });
     for (const width of [390, 768, 1280]) {
       await page.setViewportSize({ width, height: 844 });
@@ -420,7 +420,7 @@ test.describe("direct chat", () => {
     await settings.click();
     await expect(notice).toBeVisible();
     await expect(page.getByRole("button", { name: "Choose AI", exact: true })).not.toBeVisible();
-    await expect(page.getByLabel("AI session selector", { exact: true })).toBeVisible();
+    await expect(page.getByText("Chat mode", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(settings).toBeFocused();
     const starredRow = page.getByRole("button", { name: "Starred files (0)", exact: true });
@@ -2149,7 +2149,7 @@ for (const width of [390, 820, 1280]) {
     await expect(view).toBeFocused();
     await expect(composer).toHaveValue("Keep my next question as a draft");
     await view.click();
-    await dialog.getByRole("button", { name: "Implement with Junior · deepseek-flash" }).click();
+    await dialog.getByRole("button", { name: "Implement with Junior · Codex (deepseek-flash high)" }).click();
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0].planRevision).toBe(revision);
     expect(sent[0].message).toBe("Implement the plan I have approved.");
@@ -2192,12 +2192,12 @@ hintTest("@deslop-routing a mixed request remains editable with one polite expla
   expect(submissions).toBe(1);
 });
 
-for (const width of [390, 1280]) {
+for (const width of [390, 820, 1280]) {
   hintTest(`@assistant-roles direct roles and Auto show distinct controls at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 900 });
-    const selection = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra" };
-    const junior = { ...selection, modelProviderId: "deepseek", modelId: "deepseek-flash" };
-    const assignments = { senior: selection, junior, helper: junior, router: junior, sharedBackup: junior };
+    const selection = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra", variantId: "xhigh" };
+    const junior = { ...selection, variantId: "low" };
+    const assignments = { senior: selection, junior, helper: { ...selection, variantId: "" }, router: { ...junior, modelId: "gpt-6-luna", variantId: "medium" }, sharedBackup: junior };
     await mockDirectChat(page, { conversationLog: Object.entries(assignments).slice(0, 3).map(([role, model], index) => ({
       turnId: String(index + 1), user: { role: "user", text: `Question ${index + 1}` },
       assistant: { role: "assistant", text: `Answer ${index + 1}` },
@@ -2217,24 +2217,38 @@ for (const width of [390, 1280]) {
       engineLabel: "Codex", providerLabel: model.modelProviderId, available: true, variants: [] }));
     const decision = (effectiveSelection) => ({ available: true, effectiveSelection });
     const preview = { ...Object.fromEntries(Object.entries(assignments).map(([role, model]) => [role, decision(model)])),
-      review: decision(selection), auto: { available: true }, request_routing: decision(junior), prompt_hint: decision(junior) };
+      review: decision(selection), auto: { available: true }, request_routing: decision(assignments.router), prompt_hint: decision(junior) };
     let canConfigure = true;
-    await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => fulfillJson(route, {
-      ok: true, revision: 1, canConfigure, engines: [{ engineId: "codex", label: "Codex",
-        roles: Object.fromEntries(Object.entries(assignments).map(([role, assignment]) => [role, { assignment, recommendation: assignment, choices }])),
-        preview: { viewer: preview, owner: preview, collaborator: preview }
-      }]
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/assistant-access`, route => fulfillJson(route, {
+      ok: true, available: true, canUse: true, purposes: preview,
+      currentMode: JSON.parse(session.metadata.assistant_routing).mode
     }));
+    await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", route => fulfillJson(route, {
+      ok: true, canConfigure, workflows: []
+    }));
+    let configurationReads = 0;
+    let releaseCatalogue: () => void = () => {};
+    const catalogueReady = new Promise<void>(resolve => { releaseCatalogue = resolve; });
+    await routeApiEndpoint(page, "/vibe64/accounts/model-routing", async route => {
+      configurationReads++;
+      await catalogueReady;
+      return fulfillJson(route, {
+        ok: true, revision: 1, canConfigure, engines: [{ engineId: "codex", label: "Codex",
+          roles: Object.fromEntries(Object.entries(assignments).map(([role, assignment]) => [role, { assignment, recommendation: assignment, choices }])),
+          preview: { viewer: preview, owner: preview, collaborator: preview }
+        }]
+      });
+    });
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
     await expect(page.getByLabel("Message AI assistant")).toBeVisible();
-    for (const label of ["Senior", "Junior", "Helper"]) {
-      await expect(page.locator(".assistant-transcript__assistant-header").getByText(new RegExp(`^${label} · Codex · `)).first()).toBeVisible();
+    for (const [role, thinking] of [["Senior", "xhigh"], ["Junior", "low"], ["Helper", "default"]]) {
+      await expect(page.locator(".assistant-transcript__assistant-header").getByText(`${role} · Codex (gpt-6-astra ${thinking})`, { exact: true }).first()).toBeVisible();
     }
     const trigger = page.getByRole("button", { name: /^Chat mode:/ });
     await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Junior\./);
     const toolbar = page.locator(".studio-autopilot__composer-actions");
     await expect(toolbar.getByRole("button").first()).toHaveAttribute("aria-label", /^Chat mode:/);
-    await expect(toolbar.locator(":scope > button:visible").last()).toHaveAttribute("aria-label", /^Chat settings for /);
+    await expect(toolbar.getByRole("button", { name: /^Chat settings for / })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "View plan", exact: true })).toHaveCount(0);
     await trigger.focus();
     await page.keyboard.press("Tab");
@@ -2244,6 +2258,10 @@ for (const width of [390, 1280]) {
     await page.keyboard.press("Enter");
     const modes = page.getByRole("list", { name: "Choose chat mode" });
     for (const label of ["Senior", "Junior", "Auto"]) await expect(modes.getByRole("button", { name: new RegExp(`^${label}`) })).toBeVisible();
+    await expect(modes.getByRole("button", { name: /^Senior/ })).toContainText("Codex (gpt-6-astra xhigh)");
+    await expect(modes.getByRole("button", { name: /^Junior/ })).toContainText("Codex (gpt-6-astra low)");
+    await expect(modes.getByRole("button", { name: /^Auto/ })).toContainText("Router: Codex (gpt-6-luna medium)");
+    expect(configurationReads).toBe(0);
     await expect(page.getByRole("checkbox", { name: "Automatic deslop by Senior" })).toHaveCount(0);
     await page.screenshot({ path: info.outputPath(`roles-${width}.png`), animations: "disabled" });
     await modes.getByRole("button", { name: /^Auto/ }).click();
@@ -2255,6 +2273,9 @@ for (const width of [390, 1280]) {
     await page.getByRole("button", { name: "Configure model routing", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Model routing", exact: true });
     await expect(dialog).toBeVisible();
+    await expect.poll(() => configurationReads).toBe(1);
+    await expect(dialog.locator('.v-skeleton-loader').first()).toBeVisible();
+    releaseCatalogue();
     for (const label of ["Senior", "Junior", "Helper", "Router"]) await expect(dialog.getByRole("combobox", { name: label, exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath(`routing-roles-${width}.png`), animations: "disabled" });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -2395,6 +2416,9 @@ for (const width of [390, 820, 1280]) {
         session.metadata.assistant_routing = JSON.stringify({ workflowEngineId: "codex", ...route.request().postDataJSON().assistantRouting });
         await fulfillJson(route, { ok: true, ...session });
       });
+      await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", route => fulfillJson(route, {
+        ok: true, canConfigure, workflows: []
+      }));
       await routeApiEndpoint(page, "/vibe64/accounts/model-routing", async route => {
         if (route.request().method() === "PATCH") {
           expect(canConfigure).toBe(true);
@@ -2442,6 +2466,7 @@ for (const width of [390, 820, 1280]) {
       await trigger.click();
       const modes = page.getByRole("list", { name: "Choose chat mode" });
       await expect(modes.getByRole("button", { name: /^Auto/ })).toHaveCount(0);
+      await expect(modes.getByRole("button", { name: /^Junior/ })).toContainText("Codex (deepseek-flash high)");
       await expect(page.getByRole("button", { name: "Use workspace default", exact: true })).toHaveCount(0);
       await expect(modes.getByRole("button", { name: /^Helper/ })).toHaveCount(0);
       await modes.getByRole("button", { name: /^Senior/ }).click();
@@ -2469,7 +2494,7 @@ for (const width of [390, 820, 1280]) {
       const recommendations = dialog.getByRole("button", { name: "Review recommendations", exact: true });
       await recommendations.click();
       const review = page.getByRole("dialog", { name: "Recommended model changes", exact: true });
-      await expect(review.locator("li")).toHaveText(["Router → deepseek-flash · high thinking", "Senior → gpt-6-astra"]);
+      await expect(review.locator("li")).toHaveText(["Router → Codex (deepseek-flash high)", "Senior → Codex (gpt-6-astra high)"]);
       await expect(review.getByText(/Current:|Recommended:/)).toHaveCount(0);
       expect(assignments.router).toBeNull();
       await page.screenshot({ path: info.outputPath(`recommendations-${width}.png`), animations: "disabled" });
@@ -2499,12 +2524,18 @@ for (const width of [390, 820, 1280]) {
       await trigger.click();
       await page.screenshot({ path: info.outputPath(`temporary-inherited-${width}.png`), animations: "disabled" });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      [...chats.values()][0].messages = [
+        { role: "user", messageId: "prior-question", text: "An earlier question" },
+        { role: "assistant", messageId: "prior-answer", text: "An earlier answer", assistantSelection: { ...junior, variantId: "max" },
+          assistantRouting: { resolvedMode: "junior" } }
+      ];
       canConfigure = false;
       await page.reload();
       await expect(workspace).toBeHidden();
       await openTemporaryAiWorkspace(page);
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
       await expect(workspace.getByRole("textbox", { name: "Message temporary AI", exact: true })).toHaveValue("Keep this independent draft");
+      await expect(workspace.locator(".assistant-transcript__assistant-header")).toContainText("Junior · Codex (deepseek-flash max)");
       await trigger.click();
       await expect(page.getByRole("button", { name: "Configure model routing", exact: true })).toHaveCount(0);
       expect(errors).toEqual([]);
@@ -2561,8 +2592,8 @@ for (const width of [390, 820, 1280]) {
       await page.getByRole("button", { name: "Login with ChatGPT", exact: true }).click();
       const form = page.getByRole("region", { name: "Model routing", exact: true });
       await expect(form.getByText("Codex login connected", { exact: true })).toBeVisible();
-      await expect(form.getByText(/Current: deepseek-flash/)).toBeVisible();
-      await expect(form.getByText(/Suggested: gpt-6-astra/)).toBeVisible();
+      await expect(form.getByText(/Current: Codex \(deepseek-flash/)).toBeVisible();
+      await expect(form.getByText(/Suggested: Codex \(gpt-6-astra/)).toBeVisible();
       await expect(form.getByRole("combobox")).toHaveCount(0);
       await expect(form.getByText("What people will use", { exact: false })).toHaveCount(0);
       await expect(form.getByRole("button", { name: "Apply 1 change", exact: true })).toBeEnabled();
@@ -2571,7 +2602,7 @@ for (const width of [390, 820, 1280]) {
       if (width === 1280) {
         await form.getByRole("button", { name: "Customize routing", exact: true }).click();
         await expect(form.locator('input[role="combobox"]').first()).toHaveAccessibleName("Workflow orchestrator");
-        await expect(form.getByText("Collaborators: deepseek-flash · Codex / deepseek · high thinking (shared backup)", { exact: true })).toBeVisible();
+        await expect(form.getByText("Collaborators: Codex (deepseek-flash high) (shared backup)", { exact: true })).toBeVisible();
         await form.getByRole("button", { name: "Cancel", exact: true }).click();
       } else if (width === 820) {
         await form.getByRole("button", { name: "Apply 1 change", exact: true }).click();
@@ -2639,3 +2670,70 @@ test("@helper-hydration delayed history opens at the failed request and reports 
     await server.close();
   }
 });
+
+for (const width of [390, 820, 1280]) {
+  hintTest(`@custom-ai select orchestrator, model and thinking; recover and close at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockDirectChat(page);
+    const catalog = structuredClone(ASSISTANT_CATALOG);
+    catalog.engines.push({ ...structuredClone(catalog.engines[0]), engineId: "opencode", label: "OpenCode", transportId: "opencode_server",
+      agents: [{ id: "build", label: "Build", mode: "primary" }],
+      defaults: { agentId: "build", modelProviderId: "zai", modelId: "glm-5.3-flash", variantId: "high" },
+      modelProviders: [{ id: "zai", label: "Z.AI", connected: true, connectionStatus: "connected", models: [
+        { id: "glm-5.3-flash", label: "GLM-5.3 Flash", status: "available", variants: [{ id: "high", label: "High" }] }
+      ] }]
+    });
+    const saved = { ...catalog.engines[0].defaults, engineId: "codex", catalogRevision: catalog.engines[0].revision };
+    const session = { ...directSession(), assistantSelection: saved, metadata: {
+      assistant_routing: JSON.stringify({ mode: "auto", workflowEngineId: "codex", review: false })
+    } };
+    const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+    let patches = 0;
+    const catalogReads: string[] = [];
+    await routeApiEndpoint(page, "/vibe64/assistants/capabilities", route => {
+      const engineId = new URL(route.request().url()).searchParams.get("engineId");
+      if (engineId) catalogReads.push(engineId);
+      return fulfillJson(route, { ok: true, engines: catalog.engines.filter(engine => !engineId || engine.engineId === engineId) });
+    });
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/assistant-access`, route => fulfillJson(route, {
+      ok: true, available: true, canUse: true, currentMode: JSON.parse(session.metadata.assistant_routing).mode,
+      purposes: { auto: { available: false, message: "Auto needs a Router model." }, custom: { available: true, effectiveSelection: session.assistantSelection } }
+    }));
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/assistant-selection`, async route => {
+      patches++;
+      if (patches === 1) return fulfillJson(route, { ok: false, error: "Connection changed. Please retry." });
+      session.assistantSelection = route.request().postDataJSON().assistantSelection;
+      session.metadata.assistant_routing = JSON.stringify({ mode: "custom", workflowEngineId: session.assistantSelection.engineId,
+        review: false, override: session.assistantSelection });
+      return fulfillJson(route, { ok: true, ...session });
+    });
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    const mode = page.getByRole("button", { name: /^Chat mode/ });
+    await mode.click(); await page.getByRole("button", { name: /^Custom/ }).click();
+    const dialog = page.getByRole("dialog", { name: "Custom AI", exact: true });
+    await expect(dialog.getByRole("combobox", { name: "Orchestrator", exact: true })).toBeVisible();
+    await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
+    await page.getByRole("option", { name: /GPT-5.5/ }).click();
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(dialog).not.toBeVisible(); expect(patches).toBe(0);
+    await mode.click(); await page.getByRole("button", { name: /^Custom/ }).click();
+    await dialog.getByRole("combobox", { name: "Orchestrator", exact: true }).press("ArrowDown");
+    await page.getByRole("option", { name: "OpenCode", exact: true }).click();
+    await dialog.getByRole("combobox", { name: "Model", exact: true }).click();
+    await page.getByRole("option", { name: /GLM-5.3 Flash/ }).click();
+    await dialog.getByRole("combobox", { name: "Thinking", exact: true }).press("ArrowDown");
+    await page.getByRole("option", { name: "High", exact: true }).click();
+    await expect(dialog.getByRole("combobox", { name: "Thinking", exact: true })).toHaveValue("High");
+    await page.screenshot({ path: info.outputPath(`custom-${width}.png`), animations: "disabled" });
+    const box = await dialog.boundingBox(); expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+    await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect(dialog.getByText("Connection changed. Please retry.", { exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(mode).toHaveAttribute("aria-label", /Custom.*OpenCode \(glm-5.3-flash high\)/);
+    expect(session.assistantSelection).toMatchObject({ engineId: "opencode", modelProviderId: "zai", modelId: "glm-5.3-flash", variantId: "high" });
+    expect(catalogReads.sort()).toEqual(["codex", "opencode"]);
+    expect(errors).toEqual([]);
+  });
+}

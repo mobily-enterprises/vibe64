@@ -14,6 +14,9 @@ vi.mock("@jskit-ai/shell-web/client/navigation/usePaths", () => ({
 import { useVibe64AssistantCatalog } from "../../src/composables/useVibe64AssistantCatalog.js";
 
 it.each([
+  { label: "all connected models in one orchestrator",
+    input: { engineId: "opencode", allConnectedModels: true, providerConnectedOnly: true },
+    expectedQueries: [{ allConnectedModels: "true", connectedOnly: "true", engineId: "opencode", limit: "25" }] },
   {
     label: "shared OpenCode overview/provider page",
     input: { engineId: "opencode", modelProviderId: "example-provider", providerConnectedOnly: true },
@@ -115,10 +118,10 @@ it.each([
   heldRefresh.resolve({ engines: [], revision: 2 });
   await reload;
   expect(catalog.overview.data.value.revision).toBe(2);
-  if (input.engineId === "opencode" && !input.configuredOnly) {
+  if (input.engineId === "opencode" && !input.configuredOnly && !input.allConnectedModels) {
     expect(catalog.providerPage.data.value.revision).toBe(2);
   }
-  if (input.modelProviderId && !input.configuredOnly) {
+  if (input.modelProviderId && !input.configuredOnly && !input.allConnectedModels) {
     expect(catalog.modelPage.data.value.revision).toBe(2);
   }
 });

@@ -150,7 +150,7 @@ async function mockShellStatusEndpoints(page) {
   await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", async (route) => {
     await fulfillJson(route, { ok: true, canConfigure: true, workflows: [{
       engineId: "codex", label: "Codex", available: true,
-      seniorLabel: "Codex · gpt-6-astra", juniorLabel: "Codex · deepseek-flash", backupUsed: false, error: ""
+      seniorLabel: "Codex (gpt-6-astra default)", juniorLabel: "Codex (deepseek-flash default)", backupUsed: false, error: ""
     }] });
   });
   await mockEmptySessions(page);

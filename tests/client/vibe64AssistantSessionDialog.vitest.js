@@ -43,8 +43,8 @@ beforeEach(() => {
   };
   mocks.scopeKey = ref("owner:workspace");
   mocks.resource = { data: ref({ canConfigure: true, workflows: [
-    { engineId: "codex", label: "Codex", available: true, seniorLabel: "Codex · gpt-6-astra", juniorLabel: "Codex · deepseek-flash" },
-    { engineId: "opencode", label: "OpenCode", available: true, seniorLabel: "OpenCode · big-pickle", juniorLabel: "OpenCode · big-pickle" }
+    { engineId: "codex", label: "Codex", available: true, seniorLabel: "Codex (gpt-6-astra default)", juniorLabel: "Codex (deepseek-flash default)" },
+    { engineId: "opencode", label: "OpenCode", available: true, seniorLabel: "OpenCode (big-pickle default)", juniorLabel: "OpenCode (big-pickle default)" }
   ] }),
     isInitialLoading: ref(false), reload: vi.fn() };
 });
@@ -54,7 +54,7 @@ it("previews initial roles without writing and submits the workflow rather than 
   const f = mount();
   expect(mocks.routingOptions.workflowsOnly).toBe(true);
   expect(f.state.choices).toHaveLength(2);
-  expect(f.state.selectedChoice).toMatchObject({ engineId: "codex", available: true, seniorLabel: "Codex · gpt-6-astra", juniorLabel: "Codex · deepseek-flash" });
+  expect(f.state.selectedChoice).toMatchObject({ engineId: "codex", available: true, seniorLabel: "Codex (gpt-6-astra default)", juniorLabel: "Codex (deepseek-flash default)" });
   expect(f.createSession).not.toHaveBeenCalled();
   expect(f.workflow).toHaveBeenLastCalledWith("codex");
   expect(f.ready).toHaveBeenLastCalledWith(true);
@@ -63,11 +63,11 @@ it("previews initial roles without writing and submits the workflow rather than 
 it("shows a collaborator's backup pair and hides configuration", async () => {
   mocks.resource.data.value.canConfigure = false;
   Object.assign(mocks.resource.data.value.workflows[0], { backupUsed: true,
-    seniorLabel: "OpenCode · big-pickle", juniorLabel: "OpenCode · big-pickle" });
+    seniorLabel: "OpenCode (big-pickle default)", juniorLabel: "OpenCode (big-pickle default)" });
   const f = mount();
   expect(f.state.canConfigure).toBe(false);
   expect(f.state.selectedChoice).toMatchObject({ engineId: "codex", available: true, backupUsed: true,
-    seniorLabel: "OpenCode · big-pickle", juniorLabel: "OpenCode · big-pickle" });
+    seniorLabel: "OpenCode (big-pickle default)", juniorLabel: "OpenCode (big-pickle default)" });
   expect(f.workflow).toHaveBeenLastCalledWith("codex");
   expect(f.ready).toHaveBeenLastCalledWith(true);
 });
@@ -130,8 +130,7 @@ it("creation keeps the workflow choice when publishing a reviewed branch selecti
   expect(mocks.branchOptions.enabled.value).toBe(false);
   f.state.workflowEngineId = "opencode";
   f.state.workflowReady = true;
-  f.state.chooseBranch = true;
-  f.state.createBranch = true;
+  f.state.branchMode = "new";
   f.state.newBranchName = "feature/review";
   await f.state.submit();
   expect(f.createSession).toHaveBeenCalledWith({}, {

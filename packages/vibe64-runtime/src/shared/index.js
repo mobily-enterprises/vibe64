@@ -2,6 +2,7 @@ export * from "./agentExecutionProfiles.js";
 export * from "./agentSettings.js";
 export * from "./agentTasks.js";
 export * from "./assistantAccess.js";
+export * from "./assistantLabels.js";
 export * from "./assistantSelection.js";
 export * from "./conversationAttachments.js";
 export * from "./promptHints.js";

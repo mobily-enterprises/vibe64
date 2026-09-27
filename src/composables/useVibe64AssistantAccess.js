@@ -1,4 +1,5 @@
 import { computed, hasInjectionContext, inject, unref } from "vue";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
@@ -104,7 +105,7 @@ function useVibe64AssistantAccess({
   const accessLabel = computed(() => {
     const selection = currentPurpose.value?.effectiveSelection;
     return currentPurpose.value?.backupUsed ? "Shared backup" : selection
-      ? `${selection.engineId} · ${selection.modelId}` : assistantAccessText(access.value?.accessLabel) || "Unavailable";
+      ? vibe64AssistantSelectionLabel(selection) : assistantAccessText(access.value?.accessLabel) || "Unavailable";
   });
   const canUseChat = computed(() => access.value?.canUse === true);
   const canRouteChat = computed(() => !access.value?.steering && currentPurpose.value?.available === true);

@@ -476,8 +476,27 @@
                   <Vibe64ChatModeControls
                     v-if="!props.sessionSelectionArchived" :session="props.session" :sessions-api-path="props.sessionsApiPath"
                     :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantCanConfigureRouting"
+                    :loading="assistantAccessLoading" :load-error="assistantAccessError" @reload="reloadAssistantAccess"
                     @saved="reloadAssistantAccess"
-                  />
+                    @custom="composerSettingsButton = $event; composerSettingsOpen = true"
+                  >
+                    <template #default>
+                      <div
+                        v-if="composerAccessHint"
+                        class="studio-autopilot__settings-access"
+                      >
+                        <div class="text-body-small" role="status">
+                          {{ composerAccessHint }}
+                          <v-btn
+                            v-if="agentObservationLost && !agentActive" size="small" variant="text"
+                            :disabled="composerDisabled || composerSending" @click="continueConversation"
+                          >
+                            Continue
+                          </v-btn>
+                        </div>
+                      </div>
+                    </template>
+                  </Vibe64ChatModeControls>
                   <v-menu eager location="top start" :close-on-content-click="false">
                     <template #activator="{ props: menuProps }">
                       <v-btn
@@ -539,48 +558,15 @@
                     :session="props.session"
                     :sessions-api-path="props.sessionsApiPath"
                   />
-                  <v-btn
-                    ref="composerSettingsButton"
-                    :aria-label="`Chat settings for ${conversationAssistantLabel}${composerAccessHint ? ': attention required' : ''}`"
-                    aria-haspopup="menu" :aria-expanded="composerSettingsOpen"
-                    icon size="small" variant="text"
-                    class="studio-autopilot__composer-action overflow-visible"
-                    @click="composerSettingsOpen = !composerSettingsOpen"
-                  >
-                    <span class="studio-autopilot__assistant-button">
-                      <v-badge :model-value="Boolean(composerAccessHint)" color="warning" dot floating>
-                        <v-icon :icon="mdiCogOutline" size="20" />
-                      </v-badge>
-                      <span class="studio-autopilot__assistant-button-label">{{ conversationAssistantLabel }}</span>
-                    </span>
-                  </v-btn>
                   <Vibe64SessionAssistantMenu
                     v-model="composerSettingsOpen"
-                    :target="composerSettingsButton?.$el"
-                    :access-label="assistantAccessLabel"
-                    :access-loading="assistantAccessLoading"
+                    :target="composerSettingsButton"
                     :can-configure="assistantCanConfigureRouting"
                     :changes-disabled="composerSending || agentActive"
                     :session="props.session"
                     :sessions-api-path="props.sessionsApiPath"
-                  >
-                    <template #access>
-                      <div
-                        v-if="composerAccessHint"
-                        class="studio-autopilot__settings-access"
-                      >
-                        <div class="text-body-small" role="status">
-                          {{ composerAccessHint }}
-                          <v-btn
-                            v-if="agentObservationLost && !agentActive" size="small" variant="text"
-                            :disabled="composerDisabled || composerSending" @click="continueConversation"
-                          >
-                            Continue
-                          </v-btn>
-                        </div>
-                      </div>
-                    </template>
-                  </Vibe64SessionAssistantMenu>
+                    @saved="props.refreshSessionData?.(); reloadAssistantAccess()"
+                  />
                   <div class="studio-autopilot__composer-delivery">
                     <v-btn
                       v-if="agentStopVisible" aria-label="Stop" title="Stop assistant"
@@ -904,6 +890,7 @@
 
 <script setup>
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
@@ -922,7 +909,6 @@ import {
   mdiArrowTopRight,
   mdiAutorenew,
   mdiBroom,
-  mdiCogOutline,
   mdiConsoleNetworkOutline,
   mdiContentSaveOutline,
   mdiSourceCommit,
@@ -1101,11 +1087,12 @@ watch([
   openCodeProgressLabel.value = "";
 }, { immediate: true });
 const { resource: modelRoutingResource } = useModelRouting({
+  workflowsOnly: true,
   enabled: computed(() => props.active && !props.sessionSelectionArchived && Boolean(selectedAssistantSessionId.value))
 });
 const assistantCanConfigureRouting = computed(() => modelRoutingResource.data.value?.canConfigure === true);
 const {
-  accessLabel: assistantAccessLabel,
+  accessError: assistantAccessError,
   canUseChat: assistantCanUseAiState,
   canRouteChat: assistantCanRouteChat,
   canUseNative: assistantCanUseNative,
@@ -1321,10 +1308,8 @@ async function implementWorkingPlan(planRevision) {
       message: "Implement the plan I have approved." });
   } finally { routingReviewRetrying.value = false; }
 }
-const conversationAssistantLabel = computed(() => (
-  `${props.session?.assistantSelection?.engineId === "opencode" ? "OpenCode" :
-    props.session?.assistantSelection?.engineId === "claude" ? "Claude" : "Codex"} · ${props.session?.assistantSelection?.modelId || ""}`
-));
+const conversationAssistantLabel = computed(() => props.session?.assistantSelection
+  ? vibe64AssistantSelectionLabel(props.session.assistantSelection) : "Assistant");
 const rewindTarget = ref(null);
 const rewindCommand = useCommand({
   access: "never", ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID,

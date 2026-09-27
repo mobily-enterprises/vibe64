@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { nextTick, ref, watch } from "vue";
 
 import {
   VIBE64_ASSISTANT_SELECTION_ERROR_CODES,
@@ -10,10 +8,20 @@ import {
   defineVibe64AssistantCapabilities,
   resolveVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
+  vibe64AssistantSelectionLabel,
   vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
 
 const revision = `sha256:${"a".repeat(64)}`;
+
+test("assistant names share orchestrator, model and saved effort formatting", () => {
+  for (const [engineId, modelId, variantId, expected] of [
+    ["opencode", "glm-5.3-flash", "high", "OpenCode (glm-5.3-flash high)"],
+    ["codex", "gpt-6-astra", "xhigh", "Codex (gpt-6-astra xhigh)"],
+    ["claude", "opus", "", "Claude Code (opus default)"],
+    ["codex", "gpt-6-astra", undefined, "Codex (gpt-6-astra not recorded)"]
+  ]) assert.equal(vibe64AssistantSelectionLabel({ engineId, modelId, variantId }), expected);
+});
 
 function capabilities(overrides = {}) {
   return {
@@ -192,72 +200,4 @@ test("assistant capability documents reject duplicate upstream ids", () => {
     })),
     /Duplicate assistant agent/u
   );
-});
-
-test("the session model selector shows only available models and normalizes stale choices", async () => {
-  const source = await readFile(new URL(
-    "../../src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue",
-    import.meta.url
-  ), "utf8");
-
-  assert.match(source, /import \{ AssistantModelControl \} from "@jskit-ai\/assistant-core\/client\/conversation"/u);
-  assert.match(source, /<AssistantModelControl[\s\S]*:model-rows="modelRows"/u);
-  assert.match(source, /filter\(\(model\) => model\.status === "available"\)/u);
-  assert.match(source, /watch\(\[menuOpen, modelProvider, modelRows\]/u);
-  assert.match(source, /model\.id === provider\.defaultModelId/u);
-  assert.doesNotMatch(source, /appendIcon: mdiLockOutline/u);
-  assert.doesNotMatch(source, /vibe64-session-assistant-menu__option--locked/u);
-  assert.match(source, /!modelAccess\.managementOnly/u);
-});
-
-test("the session picker recovers a missing provider in its draft without changing the saved session", async () => {
-  const source = await readFile(new URL(
-    "../../src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue", import.meta.url
-  ), "utf8");
-  const start = source.indexOf("watch([menuOpen, providerRows,");
-  const end = source.indexOf("watch([menuOpen, modelProvider,", start);
-  assert.ok(start > 0 && end > start);
-  const menuOpen = ref(true);
-  const providerRows = ref([{ id: "opencode", preferred: true }]);
-  const overviewLoading = ref(true);
-  const providerLoading = ref(false);
-  const modelProviderId = ref("zai");
-  const selectedOverviewEngine = ref({ defaults: { modelProviderId: "zai" } });
-  const selections = [];
-  let changesDisabled = false;
-  const stop = new Function(
-    "watch", "menuOpen", "providerRows", "overviewLoading", "providerLoading",
-    "modelProviderId", "selectedOverviewEngine", "selectProvider",
-    `return ${source.slice(start, end).trim()}`
-  )(watch, menuOpen, providerRows, overviewLoading, providerLoading,
-    modelProviderId, selectedOverviewEngine, (id) => {
-      if (changesDisabled) return;
-      modelProviderId.value = id;
-      selections.push(id);
-    });
-  try {
-    assert.equal(modelProviderId.value, "zai", "wait for the connected-provider catalog");
-    overviewLoading.value = false;
-    await nextTick();
-    assert.equal(modelProviderId.value, "opencode", "recover even when only one provider is connected");
-    assert.deepEqual(selections, ["opencode"]);
-    providerRows.value = [{ id: "opencode" }, { id: "another", preferred: true }];
-    await nextTick();
-    assert.equal(modelProviderId.value, "opencode", "preserve a still-available draft choice");
-    menuOpen.value = false;
-    modelProviderId.value = "zai";
-    await nextTick();
-    assert.equal(modelProviderId.value, "zai");
-    menuOpen.value = true;
-    await nextTick();
-    assert.equal(modelProviderId.value, "another", "recover on reopening with a warm catalog");
-    changesDisabled = true;
-    providerRows.value = [{ id: "opencode" }];
-    await nextTick();
-    assert.equal(modelProviderId.value, "another", "respect view-only choices during a turn");
-    assert.doesNotMatch(source.slice(start, end), /applySelection|updateCommand|\.run\(/u);
-    assert.match(source, /Choose an available model and Apply to reconnect/u);
-  } finally {
-    stop();
-  }
 });

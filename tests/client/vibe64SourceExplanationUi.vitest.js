@@ -82,10 +82,10 @@ const cachedExplanation = {
 describe("source explanation Material interaction", () => {
   it("attributes answers to the effective helper model", async () => {
     const html = await renderExplanationPanel({ explanation: { ...cachedExplanation,
-      executionProfile: { providerId: "opencode", model: "deepseek-chat" }
+      executionProfile: { providerId: "opencode", model: "deepseek-chat", thinking: "low" }
     } });
-    expect(html).toContain("OpenCode · deepseek-chat");
-    expect(html).not.toContain("Codex ·");
+    expect(html).toContain("OpenCode (deepseek-chat low)");
+    expect(html).not.toContain("Codex (");
   });
 
   it.each([

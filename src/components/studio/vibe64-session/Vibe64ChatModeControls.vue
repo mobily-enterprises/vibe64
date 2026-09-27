@@ -3,14 +3,15 @@ import { computed, ref, watch } from "vue";
 import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiTuneVariant } from "@mdi/js";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { ModelRoutingForm, useModelRouting } from "@local/vibe64-accounts/client";
+import { ModelRoutingForm } from "@local/vibe64-accounts/client";
 import { ASSISTANT_MODES, assistantModeLabel, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 
-const props = defineProps({ session: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, temporary: Boolean, disabled: Boolean, active: Boolean, canConfigure: Boolean });
-const emit = defineEmits(["saved"]);
+const props = defineProps({ session: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, temporary: Boolean, disabled: Boolean, active: Boolean, canConfigure: Boolean, loading: Boolean, loadError: { type: String, default: "" } });
+const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
 const review = ref(false);
@@ -21,13 +22,11 @@ const modeMenu = ref(null);
 const routingOpen = ref(false);
 const routingFocusRole = ref("");
 const routingSaving = ref(false);
-const modeIcons = { senior: mdiAccountStarOutline, junior: mdiAccountOutline, auto: mdiAutoFix };
+const modeIcons = { custom: mdiTuneVariant, senior: mdiAccountStarOutline, junior: mdiAccountOutline, auto: mdiAutoFix };
 const modes = computed(() => ASSISTANT_MODES.filter(({ id }) => !props.temporary || id !== "auto"));
 const modeLabel = computed(() => assistantModeLabel(mode.value));
-const { engines, loadError, resource } = useModelRouting({ enabled: computed(() => Boolean(props.session?.sessionId)) });
 const workflowEngineId = computed(() => preferences.value?.workflowEngineId || props.session?.assistantSelection?.engineId);
-const engine = computed(() => engines.value.find(({ engineId }) => engineId === workflowEngineId.value));
-const decisions = computed(() => props.purposes || engine.value?.preview?.viewer || {});
+const decisions = computed(() => props.purposes || {});
 const goal = computed(() => props.session?.agentSession?.goal || props.session?.agentGoal?.goal ||
   JSON.parse(props.session?.metadata?.assistant_routing_goal || "null"));
 const hasGoal = computed(() => Boolean(goal.value && !["completed", "complete"].includes(goal.value.status)) ||
@@ -36,26 +35,25 @@ const reviewAvailable = computed(() => !props.temporary && !hasGoal.value && mod
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
   ...(mode.value === preferences.value?.mode && preferences.value.override ? { override: preferences.value.override } : {}) }));
 watch(preferences, (value) => { mode.value = value?.mode || ""; review.value = value?.review === true; }, { immediate: true });
-function selectionLabel(selection) {
-  return `${engines.value.find(({ engineId }) => engineId === selection.engineId)?.label || selection.engineId} · ${selection.modelId}`;
-}
 function roleLabel(role) {
+  if (role === "custom" && preferences.value?.mode !== "custom") return "Choose an orchestrator, model and thinking level.";
   const decision = decisions.value[role === "router" ? "request_routing" : role];
   if (decision && !decision.available) return decision.message || "Unavailable";
-  const selection = decision?.effectiveSelection || engine.value?.roles[role === "review" ? "senior" : role]?.assignment;
+  const selection = decision?.effectiveSelection;
   if (!selection) return canConfigureMessage();
-  return `${selectionLabel(selection)}${decision?.backupUsed ? ' · Shared backup' : ''}`;
+  return `${vibe64AssistantSelectionLabel(selection)}${decision?.backupUsed ? ' · Shared backup' : ''}`;
 }
 function canConfigureMessage() {
   return props.canConfigure ? "Choose a model in Configure model routing." : "Ask the owner to configure this mode.";
 }
 
+const autoDescription = computed(() => decisions.value.auto?.available === false
+  ? decisions.value.auto.message : `Senior plans; Junior implements · Router: ${roleLabel("router")}`);
 const description = computed(() => {
-  if (!mode.value) return `Current model · ${props.session?.assistantSelection?.modelId || "Choose an assistant"}`;
-  if (mode.value === "auto") return decisions.value.auto?.available === false
-    ? decisions.value.auto.message : `Senior plans; Junior implements · Router: ${roleLabel("router")}`;
+  if (!mode.value) return props.session?.assistantSelection ? `Current model · ${vibe64AssistantSelectionLabel(props.session.assistantSelection)}` : "Choose an assistant";
+  if (mode.value === "auto") return autoDescription.value;
   const selectedOverride = preferences.value?.mode === mode.value && preferences.value.override;
-  return selectedOverride && !decisions.value[mode.value] ? `${selectionLabel(selectedOverride)} · custom` : roleLabel(mode.value);
+  return selectedOverride && !decisions.value[mode.value] ? `${vibe64AssistantSelectionLabel(selectedOverride)} · custom` : roleLabel(mode.value);
 });
 const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Automatic deslop by Senior on' : ''}`);
 const reviewDescription = computed(() => {
@@ -72,6 +70,10 @@ const command = useCommand({
   fallbackRunError: "Chat mode could not be saved.", suppressSuccessMessage: true,
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
 });
+function openCustom() {
+  detailsOpen.value = false;
+  emit("custom", modeMenu.value?.activatorEl);
+}
 async function save(nextMode = mode.value, nextReview = review.value) {
   if (saving.value || props.disabled || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && (hasGoal.value || props.temporary)) return;
   const previous = { mode: mode.value, review: review.value };
@@ -110,20 +112,30 @@ function configure() {
       <div class="chat-modes__details-body">
         <p v-if="active || saving || !mode" class="text-body-small px-4 pb-2" role="status">{{ saving ? 'Saving mode…' : active ? 'For your next request' : description }}</p>
         <v-alert v-if="saveError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ saveError }}</v-alert>
-        <v-alert v-if="loadError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ loadError }} <v-btn variant="text" @click="resource.reload()">Retry</v-btn></v-alert>
-        <v-skeleton-loader v-else-if="resource.isInitialLoading.value" type="list-item-two-line@4" />
+        <v-list :lines="false" class="py-0">
+          <v-list-item
+            title="Custom" :prepend-icon="modeIcons.custom" :active="mode === 'custom'" role="button"
+            :aria-pressed="mode === 'custom'" :disabled="disabled || saving || hasGoal || active" color="primary" min-height="60"
+            @click="openCustom"
+          >
+            <template #subtitle><span class="chat-modes__model">{{ mode === 'custom' ? description : roleLabel('custom') }}</span></template>
+            <template #append><v-icon v-if="mode === 'custom'" :icon="mdiCheck" size="18" aria-label="Selected" /></template>
+          </v-list-item>
+        </v-list>
+        <v-alert v-if="loadError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ loadError }} <v-btn variant="text" @click="emit('reload')">Retry</v-btn></v-alert>
+        <v-skeleton-loader v-else-if="loading" :type="`list-item-two-line@${modes.length - 1}`" />
         <template v-else>
           <v-list aria-label="Choose chat mode" :lines="false" class="py-0">
             <v-list-item
-              v-for="choice in modes" :key="choice.id"
+              v-for="choice in modes.filter(({ id }) => id !== 'custom')" :key="choice.id"
               :title="choice.label" :prepend-icon="modeIcons[choice.id]"
               :active="mode === choice.id" :aria-pressed="mode === choice.id" role="button"
-              :disabled="disabled || saving || hasGoal || decisions[choice.id]?.available === false" color="primary" min-height="60"
-              :aria-disabled="disabled || saving || hasGoal || decisions[choice.id]?.available === false ? 'true' : undefined"
+              :disabled="disabled || saving || hasGoal || decisions[choice.id]?.available !== true" color="primary" min-height="60"
+              :aria-disabled="disabled || saving || hasGoal || decisions[choice.id]?.available !== true ? 'true' : undefined"
               @click="save(choice.id)"
             >
               <template #subtitle>
-                <span class="chat-modes__model">{{ mode === choice.id ? description : choice.id === 'auto' ? decisions.auto?.message || choice.description : roleLabel(choice.id) }}</span>
+                <span class="chat-modes__model">{{ mode === choice.id ? description : choice.id === 'auto' ? autoDescription : roleLabel(choice.id) }}</span>
               </template>
               <template #append>
                 <v-icon v-if="mode === choice.id" :icon="mdiCheck" size="18" aria-label="Selected" />
@@ -139,6 +151,7 @@ function configure() {
             <v-btn v-if="canConfigure" variant="text" min-height="48" size="small" class="mt-2" @click="configure">Configure model routing</v-btn>
           </div>
         </template>
+        <div class="px-4 pb-3"><slot /></div>
       </div>
     </v-card>
   </v-menu>

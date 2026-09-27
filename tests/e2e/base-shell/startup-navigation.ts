@@ -85,14 +85,14 @@ test.describe("studio startup navigation", () => {
         workflowRequests += 1;
         await fulfillJson(route, { ok: true, canConfigure: true, workflows: [{
           engineId: "codex", label: "Codex", available: true,
-          seniorLabel: "Codex · gpt-6-astra", juniorLabel: "Codex · deepseek-flash", backupUsed: false, error: ""
+          seniorLabel: "Codex (gpt-6-astra default)", juniorLabel: "Codex (deepseek-flash default)", backupUsed: false, error: ""
         }] });
       });
       await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
       await page.getByRole("button", { name: "New session", exact: true }).click();
       const dialog = page.getByRole("dialog");
-      await expect(dialog.getByText("Plan · Codex · gpt-6-astra", { exact: true })).toBeVisible();
-      await expect(dialog.getByText("Code · Codex · deepseek-flash", { exact: true })).toBeVisible();
+      await expect(dialog.getByText("Plan · Codex (gpt-6-astra default)", { exact: true })).toBeVisible();
+      await expect(dialog.getByText("Code · Codex (deepseek-flash default)", { exact: true })).toBeVisible();
       await expect(dialog.getByRole("button", { name: "Create session", exact: true })).toBeEnabled();
       await expect(dialog.getByRole("button", { name: "Configure model routing", exact: true })).toBeVisible();
       expect(workflowRequests).toBe(1);

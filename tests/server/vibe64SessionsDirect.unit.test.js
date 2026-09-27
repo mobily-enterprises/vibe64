@@ -2826,7 +2826,7 @@ test("assistant selection can recover from an unavailable current choice before 
 test("assistant selection checks destination access and requires shutdown only when changing engines", async () => {
   for (const target of ["opencode", "deepseek", "zai-coding-plan"]) {
     const changesEngine = target === "opencode";
-    for (const failure of changesEngine ? ["active", "shutdown", ""] : ["active", ""]) {
+    for (const failure of changesEngine ? ["active", "goal", "shutdown", ""] : ["active", "goal", ""]) {
       const lock = agentWriteLockHarness();
       const operations = [];
       const events = [];
@@ -2845,7 +2845,7 @@ test("assistant selection checks destination access and requires shutdown only w
         async resolveAssistantSelection() { return next; },
         async requireAssistantAccess() { throw new Error("Do not authorize the disconnected old account"); },
         async requireAssistantSelectionAccess(value) { assert.equal(value.modelProviderId, next.modelProviderId); operations.push("access"); },
-        async agentSessionState() { operations.push("state"); return { turn: { active: failure === "active" } }; },
+        async agentSessionState() { operations.push("state"); return { turn: { active: failure === "active" }, goal: failure === "goal" ? { status: "paused" } : null }; },
         async prepareAssistantChangeover(id, context) {
           assert.equal(id, session.sessionId);
           assert.equal(context.session, session);
@@ -2865,7 +2865,8 @@ test("assistant selection checks destination access and requires shutdown only w
       } else {
         assert.notEqual(result.ok, false, JSON.stringify(result));
         assert.equal(JSON.parse(session.metadata.assistant_selection).modelProviderId, next.modelProviderId);
-        assert.deepEqual(operations, ["access", "state", ...(changesEngine ? ["shutdown"] : []), "write"]);
+        assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "custom", review: false, workflowEngineId: next.engineId, override: next });
+        assert.deepEqual(operations, ["access", "state", ...(changesEngine ? ["shutdown"] : []), "write", "write"]);
         assert.equal(events.length, 1);
         assert.equal(events[0].realtime.audience, "all_clients");
         assert.equal(events[0].realtime.event, "vibe64.session.changed");

@@ -280,3 +280,11 @@ Earlier upgrades retain frozen validation, so upgrading from older releases
 continues through the ordered ledger. Runtime readers accept only current names.
 
 Focused evidence: `assistantHelperUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
+
+## Custom chat selection
+
+`custom` is a new chat mode using the existing exact `override` selection in
+`assistant_routing`. It is written only after an explicit Apply. Existing
+Senior, Junior and Auto records and pending requests are unchanged, so this
+addition requires no historical transformation or numbered upgrade. Custom
+requests use the current request schema and the existing native context handoff.

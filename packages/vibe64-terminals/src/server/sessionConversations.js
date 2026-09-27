@@ -436,10 +436,14 @@ function createSessionConversations({
         }
         if (input.assistantRouting) {
           if (record.recoveryOperation) throw new Error("Repair conversations keep their dedicated instructions and model settings.");
-          const requested = input.assistantRouting;
+          const requested = assistantRoutingPreferences(input.assistantRouting);
           if (requested.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
-          const preferences = assistantRoutingPreferences({ ...requested, review: false,
-            workflowEngineId: JSON.parse(record.routingMetadata?.assistant_routing || "null")?.workflowEngineId || record.assistantSelection.engineId });
+          const override = requested.mode === "custom"
+            ? await sessionAgent.resolveSelection(requested.override, ctx) : requested.override;
+          if (requested.mode === "custom") await sessionAgent.requireAssistantAccessForSelection(override, ctx);
+          const preferences = assistantRoutingPreferences({ ...requested, override, review: false,
+            workflowEngineId: requested.mode === "custom" ? override.engineId
+              : JSON.parse(record.routingMetadata?.assistant_routing || "null")?.workflowEngineId || record.assistantSelection.engineId });
           fields.routingMetadata = { ...record.routingMetadata, assistant_routing: JSON.stringify(preferences) };
         }
         if (settingsChanged && !input.assistantRouting) {

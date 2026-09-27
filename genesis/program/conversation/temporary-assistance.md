@@ -73,12 +73,11 @@ project hooks or plugin as main chat and standalone CLI use. The host bridge
 binds each native ID to temporary-conversation context before its first turn or
 resume. This does not enable Auto or review in temporary chats.
 
-Ordinary persistent temporary chats offer Senior and Junior through
+Ordinary persistent temporary chats offer Custom, Senior and Junior through
 the same compact role icon as main chat. Auto, plan approval and automatic
 review are unavailable in temporary chats, including through direct API calls
 and pending handoff retries. Owners can open the shared Model routing overlay directly
-from its menu. The role selector comes first; any separate Settings control comes
-last before Send and Stop. Each keeps its own selection, routing
+from its menu. The role selector comes first; Custom opens the shared model dialog. Each keeps its own selection, routing
 preferences, pending request and retained native conversations. Creating an ordinary
 draft copies Main's current role, workflow and custom model override. Auto maps
 to Senior, with review off. A Main chat without routing preferences passes its
@@ -129,7 +128,7 @@ Dedicated repair requests keep their own instructions and do not expose modes.
 
 Each ordinary temporary chat reads availability from the same central resolver as
 Send, using its own workflow, mode and custom override. Its menu labels the user's
-effective destination and Shared backup, rather than using the main chat's last
+effective destination, thinking choice and Shared backup, rather than using the main chat's last
 model or an account-wide preview. Mode changes return refreshed decisions without
 inference. Selecting another role clears a custom override. Explicit model/thinking edits update that mode's
 saved override; their availability is validated against the current catalogue. A foreign backup cannot turn a
@@ -515,3 +514,10 @@ environment, Genesis prompt or driver. Routing changes affect new tasks.
 Bounded operations use the `helper` execution profile and the configured Helper
 model and thinking; Auto classification uses Router's separate assignment. The
 profile constrains tools, environment access, output and time, not model selection.
+
+Custom is the first mode in ordinary temporary chats and opens the same
+Orchestrator → Model → Thinking dialog as Main. Apply validates the exact
+selection and stores it in this conversation's routing preferences. The next
+send uses the existing native changeover and conversation handoff, leaving Main
+untouched. Active goals and dedicated repair conversations retain their existing
+selection restrictions. Custom never silently substitutes a collaborator backup.

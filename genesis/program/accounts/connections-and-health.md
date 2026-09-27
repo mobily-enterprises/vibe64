@@ -149,9 +149,9 @@ preferences or select an implicit model. Only the stopped-service upgrade reads
 old helper choices and removes them after backup. Connection mutations reject
 unupgraded helper settings rather than erasing that evidence.
 Router appears first, below the outlined Review recommendations button. Its
-review lists only model or thinking changes against the current draft for the
-selected workflow, in one compact line per role with only the new values.
-Unchanged details are omitted and the button is disabled when there are no
+review lists changed selections against the current draft for the selected
+workflow, as `Orchestrator (model thinking)` in one compact line per role.
+Unchanged roles are omitted and the button is disabled when there are no
 changes. Apply to form uses the reviewed recommendations without
 saving; Cancel preserves the draft. Save routing remains the persistence action.
 A routing reload or workflow/viewer change discards an open recommendation review;
@@ -454,3 +454,11 @@ The restricted execution profile is `helper` across all three providers.
 verified publication engine and session inventory, including archived metadata,
 helper ownership and pending cleanup references. New chat preferences use Junior;
 already accepted work keeps its recorded destination and receipts.
+
+The configuration view loads independent orchestrator catalogues concurrently,
+then checks model-specific access in bounded batches. Catalogue assembly still
+verifies pagination progress and a single revision. The client reuses the same
+actor/project's configuration for 30 seconds when reopening the dialog;
+connection changes invalidate it and saves reload it. Dispatch always resolves
+current access and catalogue compatibility independently. Senior and Junior
+continue sharing the workflow orchestrator selected above the role fields.

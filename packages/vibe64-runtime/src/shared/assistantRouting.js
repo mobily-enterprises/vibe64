@@ -3,8 +3,10 @@ import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProvide
 import routingScores from "./assistantRoutingScores.json" with { type: "json" };
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "./agentExecutionProfiles.js";
 import { canUseVibe64Assistant, VIBE64_ASSISTANT_ACCESS_ERROR_CODES } from "./assistantAccess.js";
+import { vibe64AssistantSelectionLabel } from "./assistantLabels.js";
 
 const ASSISTANT_MODES = Object.freeze([
+  { id: "custom", label: "Custom", description: "Choose an orchestrator, model and thinking level for this chat." },
   { id: "senior", label: "Senior", description: "Talk directly to your most capable model. Ask questions or request changes." },
   { id: "junior", label: "Junior", description: "Talk directly to your everyday model. Ask questions or request changes." },
   { id: "auto", label: "Auto", description: "Senior plans; you approve; Junior implements. Optional Senior review and Deslop." }
@@ -13,7 +15,7 @@ const ASSISTANT_ROUTING_METADATA = "assistant_routing";
 const ASSISTANT_ROUTING_ROLES = Object.freeze(["senior", "junior", "helper", "router"]);
 const ASSISTANT_ROUTING_ASSIGNMENTS = Object.freeze([...ASSISTANT_ROUTING_ROLES, "sharedBackup"]);
 const ASSISTANT_ROUTING_ROLE_DEFINITIONS = Object.freeze([
-  ...ASSISTANT_MODES.filter(({ id }) => id !== "auto"),
+  ...ASSISTANT_MODES.filter(({ id }) => ["senior", "junior"].includes(id)),
   { id: "helper", label: "Helper", description: "Used for suggestions, naming, summaries and explanations." },
   { id: "router", label: "Router", description: "Recognizes planning, plan approval and Deslop in Auto." }
 ]);
@@ -23,6 +25,7 @@ const ROUTING_REASONS = Object.freeze([
 ]);
 const AUTO_MIXED_DESLOP_MESSAGE = "In Auto, please request feature work and Deslop separately. Send the feature request first, then ask for Deslop after implementation.";
 const ASSISTANT_PURPOSE_ROLES = Object.freeze({
+  custom: "custom",
   senior: "senior", junior: "junior", helper: "helper", review: "senior", deslop: "senior",
   ...Object.fromEntries(Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).map((purpose) => [purpose, purpose === "request_routing" ? "router" : "helper"]))
 });
@@ -38,12 +41,13 @@ function routingError(message, code = "vibe64_assistant_routing_invalid") {
 
 function assistantRoutingPreferences(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) || !ASSISTANT_MODES.some(({ id }) => id === value.mode)) {
-    throw routingError("Choose Senior, Junior, or Auto.");
+    throw routingError("Choose Custom, Senior, Junior, or Auto.");
   }
   if (value.workflowEngineId !== undefined && !Object.values(VIBE64_ASSISTANT_ENGINE_IDS).includes(value.workflowEngineId)) {
     throw routingError("Choose a supported workflow orchestrator.");
   }
-  return { mode: value.mode, review: value.review === true,
+  if (value.mode === "custom" && !value.override) throw routingError("Choose a custom model first.");
+  return { mode: value.mode, review: value.mode !== "custom" && value.review === true,
     ...(value.workflowEngineId ? { workflowEngineId: value.workflowEngineId } : {}),
     ...(value.override && value.mode !== "auto" ? { override: defineVibe64AssistantSelection(value.override) } : {}) };
 }
@@ -139,7 +143,7 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
     connectionIdentity: "", backupUsed: false, instructionPurpose: purpose, executionProfileRequest: null };
   try {
     if (actor === undefined) throw routingError("The requesting user is required to resolve model routing.");
-    const assignments = configuration?.orchestrators?.[workflowEngineId];
+    const assignments = configuration?.orchestrators?.[workflowEngineId] || (purpose === "custom" ? {} : null);
     if (!assignments) throw routingError("Configure model routing for this workflow first.");
     if (purpose === "auto") {
       const missingRoles = ["senior", "junior", "router"].filter((name) => !assignments[name]);
@@ -165,12 +169,12 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
       throw routingError("Review the migrated helper choices in Model routing before using background assistance.",
         "vibe64_assistant_helper_review_required");
     }
-    if (override && (!["senior", "junior"].includes(override.role) || !override.selection)) {
+    if (override && (!["custom", "senior", "junior"].includes(override.role) || !override.selection)) {
       throw routingError("A conversation override must identify its role and selection.");
     }
     const configured = { ...assignments, ...(override ? { [override.role]: override.selection } : {}) };
     const identity = (value, roleName) => {
-      if (!value) throw routingError(`Choose a ${assistantModeLabel(roleName) || "Shared backup"} model in Model routing.`);
+      if (!value) throw routingError(roleName === "custom" ? "Choose a custom model from Chat mode." : `Choose a ${assistantModeLabel(roleName) || "Shared backup"} model in Model routing.`);
       const selection = defineVibe64AssistantSelection(value);
       const access = routingConnectionAccess(selection, connectionAccess);
       if (!access || typeof access.ownerOnly !== "boolean" || typeof access.available !== "boolean" ||
@@ -188,7 +192,7 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
     };
     const validate = (destination, instructionPurpose, requiredCapabilities = []) => {
       if (destination.access.available === false) throw routingError("The selected AI connection is unavailable.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE);
-      // Read-only workflow choices need connection/access decisions, without
+      // Read-only mode and workflow choices need connection/access decisions, without
       // launching model discovery. Dispatch always validates the model catalogue.
       if (!validateModels) return destination;
       const engine = catalogs.find((entry) => entry.engineId === destination.selection.engineId);
@@ -230,6 +234,7 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
     } else {
       const original = identity(configured[role], role);
       const needsBackup = restricted(original);
+      if (role === "custom" && needsBackup) throw routingError("This custom model uses a personal connection. Choose a model you can access.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED);
       const effective = validate(needsBackup ? backup() : original, purpose, requirements.capabilities);
       Object.assign(result, snapshot(original, effective, needsBackup ? "personal_connection" : ""));
     }
@@ -291,6 +296,7 @@ function assistantRoutingPrompt({ message, exchanges = [], attachments = [], pla
 function assistantModePrompt(mode, message, { planInstructions = "" } = {}) {
   const direct = "Work directly from the user's request and conversation, answering questions or implementing changes as requested. You may edit application files when requested. Make ordinary local choices using established project patterns, ask about unresolved scope or design decisions, preserve unrelated work, and verify changes with relevant checks.";
   const instructions = {
+    custom: direct,
     senior: planInstructions
       ? "You are Senior in Auto's planning stage. Discuss, investigate, explain, and plan. Do not change application files or delegate implementation. Only the designated working plan file may be written. Do not run operations intended to change project state. Leave implementation for Junior after the user approves the plan."
       : direct,
@@ -320,7 +326,7 @@ function assistantModePrompt(mode, message, { planInstructions = "" } = {}) {
     ].join(" ")
   };
   if (!instructions[mode]) throw routingError("Unknown assistant mode.");
-  if (!planInstructions && ["senior", "junior", "review", "deslop"].includes(mode)) {
+  if (!planInstructions && ["custom", "senior", "junior", "review", "deslop"].includes(mode)) {
     planInstructions = "Do not read or update Vibe64's temporary working plan, even if earlier turns referenced one. This request is independent of that document.";
   }
   return `[Vibe64 role: ${assistantModeLabel(mode)}. Applies only to this request; earlier per-turn mode instructions no longer apply.]\n${instructions[mode]}${planInstructions ? `\n${planInstructions}` : ""}\n\n${message}`;
@@ -330,10 +336,10 @@ function assistantRoutingStatusLabel(request) {
   if (!request) return "";
   const role = (request.status?.startsWith("review") || request.status?.startsWith("planning")) ? "senior" : request.resolvedMode;
   const selection = request.assignments?.[role];
-  const recipient = selection ? `${selection.engineId} · ${selection.modelId}` : "";
-  const taskLabel = assistantModeLabel(request.task || request.resolvedMode);
+  const recipient = selection ? vibe64AssistantSelectionLabel(selection) : "";
+  const taskLabel = request.mode === "custom" && request.task === "deslop" ? "Deslop" : assistantModeLabel(request.task || request.resolvedMode);
   return ({
-    routing: `Routing with Router${request.assignments?.router ? ` · ${request.assignments.router.engineId} · ${request.assignments.router.modelId}` : ""}…`,
+    routing: `Routing with Router${request.assignments?.router ? ` · ${vibe64AssistantSelectionLabel(request.assignments.router)}` : ""}…`,
     sending: `Preparing ${taskLabel} · ${recipient}…`,
     uncertain: `Sending to ${recipient} · awaiting receipt`,
     sent: `${request.mode === "auto" ? "Auto → " : ""}${taskLabel} · ${recipient}`,

@@ -2199,12 +2199,12 @@ test("workflow reads use saved routing and scoped access without discovering mod
     const member = await f.service.readModelRoutingWorkflows({ vibe64User: f.member });
     assert.equal(member.ok, true, member.error);
     assert.equal(member.canConfigure, false);
-    assert.equal(member.workflows[0].seniorLabel, "OpenCode · big-pickle");
-    assert.equal(member.workflows[0].juniorLabel, "OpenCode · big-pickle");
+    assert.equal(member.workflows[0].seniorLabel, "OpenCode (big-pickle default)");
+    assert.equal(member.workflows[0].juniorLabel, "OpenCode (big-pickle default)");
     assert.equal(member.workflows[0].backupUsed, true);
     const owner = await f.service.readModelRoutingWorkflows({ vibe64User: f.owner });
     assert.equal(owner.canConfigure, true);
-    assert.equal(owner.workflows[0].seniorLabel, "Codex · gpt-6-astra");
+    assert.equal(owner.workflows[0].seniorLabel, "Codex (gpt-6-astra default)");
     assert.equal((await f.store.read()).revision, revision);
     assert.deepEqual(f.events, []);
     assert.doesNotMatch(JSON.stringify(member), /private-identity|connectionIdentity/);

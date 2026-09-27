@@ -51,6 +51,7 @@ import { computed, ref, watch } from "vue";
 import { mdiClose, mdiFileDocumentOutline } from "@mdi/js";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 
 import GithubMarkdown from "../GithubMarkdown.vue";
 
@@ -60,7 +61,8 @@ const planOpen = ref(false);
 const planActivator = ref(null);
 const planVisible = computed(() => props.mode === "auto" && props.request?.mode === "auto" && Boolean(props.request.workPlan?.text));
 const planReady = computed(() => planVisible.value && props.request?.status === "done" && !props.request.error && props.request.workPlan?.status === "ready");
-const implementLabel = computed(() => `Implement with Junior${props.request?.assignments?.junior?.modelId ? ` · ${props.request.assignments.junior.modelId}` : ""}`);
+const implementLabel = computed(() => `Implement with Junior${props.request?.assignments?.junior
+  ? ` · ${vibe64AssistantSelectionLabel(props.request.assignments.junior)}` : ""}`);
 const planStage = computed(() => {
   const request = props.request;
   if (request?.task === "deslop") return request.status === "sent" ? "Deslopping" : "Plan needs updating";

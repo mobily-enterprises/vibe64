@@ -220,6 +220,8 @@
                   :active="task.busy" :disabled="props.repositoryBusy || task.status === 'closing'"
                   :can-configure="props.canConfigureRouting"
                   :purposes="task.purposes"
+                  :loading="!task.purposes"
+                  @custom="customTarget = $event; customOpen = true"
                 />
                 <v-btn
                   aria-label="Attach files"
@@ -266,6 +268,9 @@
         </template>
       </Vibe64EphemeralConversationMessages>
     </template>
+    <Vibe64SessionAssistantMenu v-model="customOpen" :target="customTarget" :session="modeSession"
+      :can-configure="props.canConfigureRouting" :changes-disabled="props.repositoryBusy || activeTask?.busy"
+      :save-selection="(selection) => temporary.updateRouting(activeTask.id, { mode: 'custom', review: false, override: selection })" />
     <v-dialog
       v-if="taskToClose"
       :model-value="true"
@@ -303,6 +308,7 @@
 <script setup>
 import { AssistantComposerActions } from "@jskit-ai/assistant-core/client/conversation";
 import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import Vibe64SessionAssistantMenu from "./Vibe64SessionAssistantMenu.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import { computed, inject, nextTick, ref, useId, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
@@ -410,7 +416,10 @@ const temporary = useVibe64TemporaryAi({
   sessionId: computed(() => props.sessionId),
   sessionsApiPath: resolvedSessionsApiPath
 });
+const customOpen = ref(false);
+const customTarget = ref(null);
 const activeTask = temporary.activeTask;
+watch(() => activeTask.value?.id, () => { customOpen.value = false; });
 const routingRequest = computed(() => JSON.parse(activeTask.value?.routingMetadata?.assistant_routing_request || "null"));
 const routingPending = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status));
 const modeSession = computed(() => ({ sessionId: props.sessionId,

@@ -287,6 +287,7 @@ const sessionCreateInputValidator = patchSchema({
 });
 
 const assistantCapabilitiesInputValidator = patchSchema({
+  allConnectedModels: { type: "string", required: false },
   ...optionalUser,
   configuredOnly: {
     type: "string",

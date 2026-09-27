@@ -221,7 +221,7 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import {
   mdiChevronRight,
   mdiClose,
@@ -294,8 +294,7 @@ const followingLatest = ref(true);
 const assistantLabel = computed(() => {
   const profile = props.explanation?.executionProfile;
   if (!profile?.providerId || !profile?.model) return "Assistant";
-  const engine = VIBE64_AGENT_PROVIDERS.find(({ id }) => id === profile.providerId)?.label || profile.providerId;
-  return `${engine} · ${profile.model}`;
+  return vibe64AssistantSelectionLabel({ engineId: profile.providerId, modelId: profile.model, variantId: profile.thinking });
 });
 
 const chatMessages = computed(() => (

@@ -18,6 +18,7 @@ import {
   resolveVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
   vibe64AssistantSelectionFromMetadata,
+  vibe64AssistantSelectionLabel,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 import {
@@ -662,7 +663,7 @@ function createSessionAgentManager({
     return catalog;
   }
 
-  async function resolvePurpose(input = {}, options = {}, facts = new Map()) {
+  async function resolvePurpose(input = {}, options = {}, { facts = new Map(), validateModels = true } = {}) {
     // One availability response shares connection/catalogue reads across its
     // purposes. The cache ends with that response; dispatch resolves afresh.
     const readFact = (key, operation) => {
@@ -694,7 +695,7 @@ function createSessionAgentManager({
       const fact = await readSelectionAccess(selection);
       if (canUseVibe64Assistant(fact, actor)) accessible.push(selection);
     }
-    const needsBackup = connectionAccess.some((access) => !canUseVibe64Assistant({ ...access, available: true }, actor));
+    const needsBackup = role !== "custom" && connectionAccess.some((access) => !canUseVibe64Assistant({ ...access, available: true }, actor));
     if (needsBackup && assignments.sharedBackup) {
       const fact = await readSelectionAccess(assignments.sharedBackup);
       if (canUseVibe64Assistant(fact, actor)) accessible.push(assignments.sharedBackup);
@@ -702,7 +703,8 @@ function createSessionAgentManager({
     const catalogs = [];
     const readCatalog = (provider, input) => readFact(`catalog:${provider.id}:${JSON.stringify(input)}`,
       () => providerCapabilities(provider, input, { vibe64User: actor }));
-    for (const engineId of new Set(accessible.map((selection) => selection.engineId))) {
+    const catalogEngines = validateModels ? new Set(accessible.map((selection) => selection.engineId)) : [];
+    for (const engineId of catalogEngines) {
       const selectionsForEngine = accessible.filter((selection) => selection.engineId === engineId);
       const provider = providerFor({ engineId });
       try {
@@ -728,7 +730,7 @@ function createSessionAgentManager({
       }
     }
     return resolveAssistantPurpose({ purpose, workflowEngineId, actor, configuration, catalogs,
-      connectionAccess, override, requirements, reviewEnabled });
+      connectionAccess, override, requirements, reviewEnabled, validateModels });
   }
 
   async function inspectAssistantPurposes(input = {}, options = {}) {
@@ -740,7 +742,7 @@ function createSessionAgentManager({
         reviewEnabled: input.review === true && purpose === "auto",
         ...(input.override && purpose === input.mode
           ? { override: { role: input.mode, selection: input.override } } : {})
-      }, { ...options, configuration }, facts)
+      }, { ...options, configuration }, { facts, validateModels: false })
     ])));
   }
 
@@ -783,7 +785,7 @@ function createSessionAgentManager({
       const modelLabel = (role) => {
         const selection = decision.seniorJuniorPair?.[role]?.effectiveSelection || saved[role];
         if (!Object.hasOwn(saved, role)) return "Recommended on creation";
-        return selection ? `${engineLabel(selection.engineId)} · ${selection.modelId}` : "Not configured";
+        return selection ? vibe64AssistantSelectionLabel(selection) : "Not configured";
       };
       return { engineId: provider.id, label: engineLabel(provider.id),
         seniorLabel: modelLabel("senior"), juniorLabel: modelLabel("junior"),
@@ -793,34 +795,40 @@ function createSessionAgentManager({
     return { workflows: workflows.filter(Boolean) };
   }
 
+  async function connectedProviderCatalog(provider, options) {
+    let catalog;
+    async function pages(input = {}) {
+      let cursor = "";
+      const seen = new Set();
+      do {
+        if (seen.has(cursor)) throw new Error("The model catalogue did not advance. Reload AI choices.");
+        seen.add(cursor);
+        const page = await providerCapabilities(provider, { connectedOnly: "true", limit: "200", ...input, cursor }, options);
+        catalog = mergeRoutingCatalogPage(catalog, page, "The model catalogue changed. Reload AI choices.");
+        cursor = page.page.hasMore ? page.page.nextCursor : "";
+        if (page.page.hasMore && !cursor) throw new Error("The model catalogue page is incomplete. Reload AI choices.");
+      } while (cursor);
+    }
+    await pages();
+    if (provider.id === "opencode") {
+      for (const row of catalog.modelProviders.filter(({ connected }) => connected)) await pages({ modelProviderId: row.id });
+    }
+    return { ...catalog, page: { kind: "providers", hasMore: false, nextCursor: "", total: catalog.modelProviders.length } };
+  }
+
   async function inspectRoutingConfiguration(configuration, options = {}) {
     if (options.workflowsOnly === true) return inspectWorkflowChoices(configuration, options);
     const catalogs = [];
     const catalogErrors = new Map();
     const connectedEngineIds = new Set();
-    for (const provider of providerById.values()) {
+    await Promise.all([...providerById.values()].map(async (provider) => {
       try {
-        let catalog;
-        async function pages(input = {}) {
-          let cursor = "";
-          const seen = new Set();
-          do {
-            if (seen.has(cursor)) throw new Error("The model catalogue did not advance. Reload routing.");
-            seen.add(cursor);
-            const page = await providerCapabilities(provider, { connectedOnly: "true", limit: "200", ...input, cursor }, options);
-            if (page.modelProviders.some(({ connected }) => connected)) connectedEngineIds.add(provider.id);
-            catalog = mergeRoutingCatalogPage(catalog, page, "The model catalogue changed. Reload routing.");
-            cursor = page.page.hasMore ? page.page.nextCursor : "";
-            if (page.page.hasMore && !cursor) throw new Error("The model catalogue page is incomplete. Reload routing.");
-          } while (cursor);
-        }
-        await pages();
-        if (provider.id === "opencode") {
-          for (const row of catalog.modelProviders.filter(({ connected }) => connected)) await pages({ modelProviderId: row.id });
-        }
+        const catalog = await connectedProviderCatalog(provider, options);
+        if (catalog.modelProviders.some(({ connected }) => connected)) connectedEngineIds.add(provider.id);
         catalogs.push(catalog);
       } catch (error) { catalogErrors.set(provider.id, error.message); }
-    }
+    }));
+    catalogs.sort((left, right) => left.engineId.localeCompare(right.engineId));
     const routeKey = (selection) => JSON.stringify([selection.engineId, selection.modelProviderId, selection.modelId]);
     const selections = new Map(catalogs.flatMap((engine) => routingModelChoices(engine, { purpose: "request_routing" }))
       .map((selection) => [routeKey(selection), selection]));
@@ -830,7 +838,12 @@ function createSessionAgentManager({
       }
     }
     const access = new Map();
-    for (const [key, selection] of selections) access.set(key, await routingSelectionAccess(selection, options));
+    const entries = [...selections];
+    for (let offset = 0; offset < entries.length; offset += 8) {
+      await Promise.all(entries.slice(offset, offset + 8).map(async ([key, selection]) => {
+        access.set(key, await routingSelectionAccess(selection, options));
+      }));
+    }
     const connectionAccess = [...access.values()];
     // Illustrative actors affect only these read-only decisions. They never enter
     // a provider execution context. Preview uses the same policy as admission.
@@ -841,10 +854,10 @@ function createSessionAgentManager({
           ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value))];
       })
     );
-    const engineIds = new Set([...connectedEngineIds, ...Object.keys(configuration.orchestrators).filter((engineId) => {
+    const engineIds = new Set([...providerById.keys()].filter((id) => connectedEngineIds.has(id) || catalogErrors.has(id)).concat(Object.keys(configuration.orchestrators).filter((engineId) => {
       const saved = configuration.orchestrators[engineId];
       return ASSISTANT_ROUTING_ASSIGNMENTS.some((role) => saved[role]) || saved.helperRoutingReview;
-    })]);
+    })));
     return { engines: [...engineIds].map((engineId) => {
       const engine = catalogs.find((entry) => entry.engineId === engineId);
       const assignments = configuration.orchestrators[engineId] || {};
@@ -1224,7 +1237,8 @@ function createSessionAgentManager({
         : [...providerById.values()];
       return Object.freeze({
         engines: Object.freeze(await Promise.all(providersToInspect.map((provider) => (
-          providerCapabilities(provider, input, options)
+          input.allConnectedModels === "true" ? connectedProviderCatalog(provider, options)
+            : providerCapabilities(provider, input, options)
         )))),
         ok: true
       });

@@ -212,8 +212,8 @@ test("Auto choosing Senior does not report that coding stopped or a review was s
   assert.equal(f.state().resolvedMode, "senior");
   assert.equal(f.state().reviewStatus, undefined);
   assert.equal(f.sends.length, 1);
-  assert.equal(assistantRoutingStatusLabel(f.state()), "Senior · codex · gpt-6-astra");
-  assert.equal(assistantRoutingStatusLabel({ ...f.state(), reviewStatus: "skipped_incomplete" }), "Senior · codex · gpt-6-astra");
+  assert.equal(assistantRoutingStatusLabel(f.state()), "Senior · Codex (gpt-6-astra high)");
+  assert.equal(assistantRoutingStatusLabel({ ...f.state(), reviewStatus: "skipped_incomplete" }), "Senior · Codex (gpt-6-astra high)");
 });
 
 test("generated Junior preserves chat preferences and reports its destination before inference without routing or review", async (t) => {
@@ -1084,7 +1084,7 @@ test("Stop during native helper startup stops the late turn before delivery", as
 
 test("Helper cannot be selected for direct chat or sent as a chat mode", async (t) => {
   const f = await fixture(t, { mode: "helper", review: false });
-  await assert.rejects(f.service.send("session-1", request, f.context), /Choose Senior, Junior, or Auto/);
+  await assert.rejects(f.service.send("session-1", request, f.context), /Choose Custom, Senior, Junior, or Auto/);
   assert.equal(f.sends.length, 0);
   assert.equal(f.helperCalls(), 0);
 });
@@ -1394,7 +1394,7 @@ for (const mode of ["auto", "senior", "junior"]) {
     assert.equal(f.metadata.assistant_routing, preferences);
     await f.service.afterTurn("session-1", completion(), f.context);
     assert.equal(f.sends.length, 1);
-    assert.equal(assistantRoutingStatusLabel(f.state()), "Senior Deslop · codex · gpt-6-astra");
+    assert.equal(assistantRoutingStatusLabel(f.state()), "Senior Deslop · Codex (gpt-6-astra high)");
   });
 }
 
@@ -1494,4 +1494,30 @@ test("a member cannot steer an active personal turn even when a shared fallback 
   await f.service.send("session-1", { ...request, submissionKind: "steer" }, f.context);
   assert.equal(f.sends.length, 1);
   assert.equal(f.helperCalls(), 0);
+});
+
+for (const message of ["Explain the current design.", "deslop"]) {
+  test(`Custom keeps the exact selection without configured roles: ${message}`, async (t) => {
+    const f = await fixture(t, null);
+    const selection = { ...f.assignments.senior, modelId: "gpt-6-sol", variantId: "low" };
+    f.metadata.assistant_routing = JSON.stringify({ mode: "custom", workflowEngineId: "codex", override: selection });
+    await f.configuration.write({ codex: { senior: null, junior: null, router: null, helper: null, sharedBackup: null } }, 1);
+    const result = await f.service.send("session-1", { ...request, message }, f.context);
+    assert.equal(result.delivered, true, JSON.stringify(result));
+    assert.equal(f.helperCalls(), 0);
+    assert.equal(f.sends[0].selection.modelId, "gpt-6-sol");
+    assert.equal(f.sends[0].selection.variantId, "low");
+    assert.equal(f.sends[0].input.turnMetadata.assistantRouting.resolvedMode, "custom");
+    assert.equal(f.state().review, false);
+    await f.service.afterTurn("session-1", completion(), f.context);
+    assert.equal(f.sends.length, 1);
+  });
+}
+
+test("Custom refuses a personal connection instead of substituting the shared backup", async (t) => {
+  const f = await fixture(t, null);
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", workflowEngineId: "codex", override: f.assignments.senior });
+  await assert.rejects(f.service.send("session-1", request, { ...f.context, vibe64User: { role: "member", username: "member" } }),
+    { code: "vibe64_assistant_owner_required" });
+  assert.equal(f.sends.length, 0);
 });

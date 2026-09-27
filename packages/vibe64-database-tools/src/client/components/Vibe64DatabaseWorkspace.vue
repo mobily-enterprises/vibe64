@@ -527,7 +527,7 @@
 </template>
 
 <script setup>
-import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import {
@@ -715,8 +715,7 @@ const assistantCanRun = computed(() => assistantConfigured.value);
 const assistantStatusLabel = computed(() => {
   const assistant = state.value?.assistant;
   if (!assistantConfigured.value) return "Unavailable";
-  const engine = VIBE64_AGENT_PROVIDERS.find(({ id }) => id === assistant.engineId)?.label || assistant.engineId;
-  return `${engine} · ${assistant.model}${assistant.backupUsed ? ' · Shared backup' : ''}`;
+  return `${vibe64AssistantSelectionLabel({ engineId: assistant.engineId, modelId: assistant.model, variantId: assistant.variantId })}${assistant.backupUsed ? ' · Shared backup' : ''}`;
 });
 const assistantUnavailableCopy = computed(() => {
   return state.value?.assistant?.message || "Ask the owner to configure Helper in Model routing. Database browsing and editing work without AI.";

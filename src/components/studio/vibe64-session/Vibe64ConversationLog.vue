@@ -85,7 +85,7 @@ import { computed, watch } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
-import { parseIntegrationSetupRequest } from "@local/vibe64-runtime/shared";
+import { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 
 const props = defineProps({
   working: { type: Boolean, default: undefined },
@@ -216,13 +216,12 @@ const adapter = computed(() => ({
     welcomeMessage: props.welcomeMessage,
     turns: props.turns.map((turn) => {
       const selection = turn.metadata?.assistantSelection;
-      const engineName = selection?.engineId === "claude" ? "Claude Code" : selection?.engineId === "opencode" ? "OpenCode" : "Codex";
       return {
         ...turn,
-        assistantLabel: !selection ? "agent" : `${turn.metadata?.assistantRouting?.resolvedMode ? `${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ` : ""}${engineName} · ${selection.modelId}`,
-        ...(!turn.system && turn.metadata?.assistantRouting && selection ? { system: { role: "system", text: `${turn.metadata.assistantRouting.requestedMode === "auto" ? "Auto → " : ""}${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ${engineName} · ${selection.modelId}` } } : {}),
+        assistantLabel: !selection ? "agent" : `${turn.metadata?.assistantRouting?.resolvedMode ? `${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ` : ""}${vibe64AssistantSelectionLabel(selection)}`,
+        ...(!turn.system && turn.metadata?.assistantRouting && selection ? { system: { role: "system", text: `${turn.metadata.assistantRouting.requestedMode === "auto" ? "Auto → " : ""}${assistantModeLabel(turn.metadata.assistantRouting.resolvedMode)} · ${vibe64AssistantSelectionLabel(selection)}` } } : {}),
         assistantDetails: selection
-          ? `${engineName}\nModel: ${selection.modelId}\nProvider: ${selection.modelProviderId}\nThinking: ${selection.variantId || "Automatic"}`
+          ? `${vibe64AssistantSelectionLabel(selection)}\nProvider: ${selection.modelProviderId}`
           : undefined,
         assistant: presentationMessage(turn.assistant),
         messages: turn.messages?.map(presentationMessage)

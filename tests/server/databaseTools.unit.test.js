@@ -830,9 +830,9 @@ test("database assistant uses one selected-provider secondary conversation and a
 
 test("database assistant availability describes the resolved Helper destination", () => {
   assert.deepEqual(databaseAssistantAvailability({ available: true, effectiveSelection: sharedDatabaseSelection,
-    backupUsed: true }), { available: true, engineId: "opencode", model: "deepseek-chat", backupUsed: true, message: "" });
+    backupUsed: true }), { available: true, engineId: "opencode", model: "deepseek-chat", variantId: "", backupUsed: true, message: "" });
   assert.deepEqual(databaseAssistantAvailability({ available: false, message: "Helper is unavailable" }), {
-    available: false, engineId: "", model: "", backupUsed: false, message: "Helper is unavailable"
+    available: false, engineId: "", model: "", variantId: "", backupUsed: false, message: "Helper is unavailable"
   });
 });
 

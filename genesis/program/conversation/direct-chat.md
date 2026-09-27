@@ -12,12 +12,11 @@ same model as Junior, including a collaborator's shared backup pair.
 Unavailable modes retain their explanation and expose their disabled state to
 assistive technology, including when Auto requires a personal connection.
 Model labels and restriction reasons wrap fully within the scrollable mode menu.
-The Settings cog stays on the same horizontal centerline as the neighboring icons.
-The role selector comes first in the composer toolbar; Settings comes last before
-the Send and Stop controls. Visual and keyboard order match.
-It labels the next recipient underneath in a compact, bordered rectangle with
-theme-aware contrast. The label extends beyond the button circle without
-shifting the icon, increasing the button height or adding a tooltip. The session store
+The mode selector comes first in the composer toolbar. Custom is its first
+option and opens the shared Main/temporary picker. The picker presents
+Orchestrator, Model and Thinking in order; provider names distinguish models in
+the Model list. No second model picker remains on the composer. Visual and
+keyboard order match. The session store
 snapshots the assistant selection on a new turn. History preserves that snapshot
 through normalization, and the adapter supplies per-turn labels and hover details
 to the shared transcript. Reply labels show the role first, followed by the
@@ -346,9 +345,21 @@ users remains supported. Access responses omit the user record. Reads,
 Stop and cleanup remain separate from admission of new inference. Source
 explanations and Database Copilot use their own resolved Helper destination too.
 
-Main chat can save Senior, Junior or Auto plus an optional Auto review preference
+Main chat can save Custom, Senior, Junior or Auto plus an optional Auto review preference
 in the existing conversation metadata. A role resolves to a live, available
 selection using its saved workflow, independently of the last native engine.
+The mode menu consumes the session's access decisions, including their loading,
+failure and retry state. It does not fetch the full routing configuration;
+the configuration form loads that catalogue only when opened. The parent reads
+the lightweight workflow response for configuration permission. Picker labels
+use `Orchestrator (model thinking)`, including Auto's Router.
+The access inspection resolves saved assignments and current actor/connection
+permissions without provider catalogue discovery. Dispatch still validates models
+and capabilities against the live catalogue; a removed model can appear in the
+menu but Send reports its unavailability.
+`packages/vibe64-runtime/src/shared/assistantLabels.js` formats the same visible identity for Main and
+temporary replies from their saved selections. Empty thinking displays "default";
+absent thinking displays "not recorded". Current settings never relabel history.
 Senior and Junior resolve as a pair even when review is off. A member's foreign
 shared Backup replaces both roles; same-engine Backup replaces restricted roles.
 Auto resolves Router, Senior and Junior through the same actor-aware fallback
@@ -357,19 +368,32 @@ the captured submitter remains the actor for routing, delivery and review.
 Goals cannot start or resume in Auto, and an unfinished goal blocks switching
 to Auto. When native goal observation is unavailable, that switch still respects
 the saved goal; a confirmed completion or removal releases the restriction.
-Chat modes are `senior`, `junior` and `auto`. Model assignments additionally
+Chat modes are `custom`, `senior`, `junior` and `auto`. Model assignments additionally
 include `helper` and `router`; neither is selectable as a direct chat mode.
 Configuration and request snapshots use schema 4. The numbered stopped-service
 role upgrade renames owned routing fields in settings, sessions, temporary chats,
 renewal records and transcript attribution, including archived histories. It
 preserves model choices, native histories and message text; the live runtime has
 no old-role aliases. Actual Auto plan artifacts retain their `workPlan` and
-`planRevision` names. These model roles do not restrict work by task type. Exact model overrides
-apply only to direct roles. Selecting the current role keeps its custom
-model/thinking choice; selecting another role
-clears that override. Mode changes preserve the workflow; a deliberate
-assistant-selection change adopts its selected workflow.
-One icon beside Settings opens the mode choices, assigned models and review
+`planRevision` names. These model roles do not restrict work by task type.
+
+Custom records an exact selection in the existing conversation override and
+uses its selected orchestrator. It needs no configured Senior, Junior or Router,
+and never substitutes a shared backup. Actor access and model compatibility are
+still validated at dispatch. Its messages and goals use the same routing,
+receipts and context handoff as the existing modes. Selecting a named role clears
+the custom override and returns to that workflow's role assignments. Old records
+remain valid without rewriting or classifying past requests.
+
+The Custom dialog starts model catalogue reads for connected engines together
+when opened, through the existing capabilities endpoint. It reuses those
+queries for 30 seconds; account/connection events invalidate them. The
+orchestrator selector stays usable while models load. It shows the three
+fields directly, without repeating their values or explaining native handoff.
+The manager shares paginated catalogue assembly with Model routing and rejects mixed revisions. Apply saves the choice;
+Cancel changes nothing. Save failures remain visible with the draft for retry.
+
+One icon opens the mode choices, assigned models and review
 switch in Auto; these controls occupy no separate row above the composer. Its icon and
 accessible label reflect the selected mode. Owners open the shared Model routing
 form directly in an overlay, initially selecting this chat's orchestrator.
@@ -442,15 +466,17 @@ restart require Continue planning rather than running automatically. Delivery
 uncertainty checks the retained receipt before any retry. Both follow-up purposes
 reuse the existing routing owner and native delivery, not another agent runtime.
 
-Deslop is a task using the configured Senior model with permission to clean up code,
-not a separate selectable chat mode. A standalone `deslop` command or the saved
+Deslop is a task with permission to clean up code, not a separate selectable
+chat mode. It uses the configured Senior model in named modes and the exact
+selected model in Custom. A standalone `deslop` command or the saved
 commit Deslop action bypasses classification, including from explicit modes.
 Other cleanup-only wording in Auto uses the Router's Deslop decision. Deslop
 applies the project's cleanup guidance directly, preserves behavior and staging,
 does not create an implementation proposal, and never schedules another review.
 The conversation's mode preference remains unchanged. Dispatch validates the
-captured Senior connection and tool capability; a Junior override cannot redirect
-cleanup. Existing actor access and shared-backup policy still apply.
+captured connection and tool capability; a Junior override cannot redirect
+cleanup. Custom retains its exact choice and never uses a shared backup. Named
+modes retain their existing actor access and shared-backup policy.
 Cleanup invalidates a previous ready implementation proposal before editing.
 The reply and status name Deslop and the answering model. A direct Deslop command
 cannot steer an active coder or change an unfinished goal; the user must first
@@ -673,16 +699,14 @@ JSKIT owns the suggestion and working-status presentation, debounced suggestion
 lifecycle, model-choice controls, goal controls, upload queue, and upload lifecycle.
 Vibe64 supplies native state and actions, project-aware suggestion requests,
 connected-provider policies, upload storage, attachment opening, and favourite files.
-The main composer groups Add, Settings, Goal, weekly
+The main composer groups Chat mode, Add, Goal, weekly
 allowance, and icon-only Send, with Stop alongside Send while needed. Goal and
 available allowance stay visible outside the menus. Its empty textbox uses one
 compact row and still grows with entered text. Add contains left-aligned file,
-preview, and diagnostics attachment actions. The Settings cog opens the
-model/access selector directly, with an always-available Close action in its
-footer, including during active work. It includes recovery guidance and pending message
-requests even while its catalogue is unavailable. The host tools target sits
-immediately after Settings in the composer row, followed by the icon-only
-starred-files menu, and remains mounted independently of Settings. The public
+preview, and diagnostics attachment actions. Chat mode opens the role and Custom choices, plus recovery guidance and pending
+message requests even when the role or model catalogue is unavailable. Custom
+opens the model dialog, with Cancel available unless a save is in progress. The
+host tools target and starred-files menu remain mounted independently of it. The public
 companion layer is offered only while Main chat is selected in the active session.
 Opening a temporary or host-provided conversation withdraws that layer immediately;
 its retained submission action also rejects writing or sending to hidden Main.
@@ -1117,13 +1141,13 @@ assistant message. An unresponsive abort fails after five seconds and permits
 another Stop attempt; it does not claim unconfirmed work has stopped or kill
 other conversations sharing the provider process.
 
-The selected session's model catalogue loads in the background. Opening its
-menu refreshes choices while retaining already loaded controls; only a first
-load shows placeholders. Identical overview and provider-list queries share
-one cached request, including their connected-provider filter. Explicit refresh
-reloads that shared query once; a provider search or later page remains a
-separate request. Applying a selection still uses the provider's current
-catalogue validation.
+Opening Custom loads model catalogues for connected orchestrators concurrently.
+Recent results are reused when switching orchestrators or reopening the dialog;
+only a first load shows model placeholders. The orchestrator selector stays
+available during discovery. Applying a selection still uses the provider's
+current catalogue validation. Other paginated catalogue consumers share
+identical overview and provider-list queries, including their connected-provider
+filter; a provider search or later page remains a separate request.
 Codex chat model discovery reuses a successful catalogue for up to thirty
 seconds while the account, authentication generation, and runtime context stay
 the same. Account transitions discard it. A temporary probe must finish verified
@@ -1449,16 +1473,12 @@ orders a host-designated preferred provider first, so that choice is selected
 when the dialog opens. It does not start OpenCode or read OpenCode's provider
 and model catalogue when
 the chooser opens or when the session is created; creation validates the
-selection against the same saved connection view. A session keeps the
-assistant engine that owns its native history: Codex cannot be changed to
-OpenCode or vice versa. The explicitly opened chat selector may load a complete,
-compatible model choice within that fixed engine. It remains available for
-inspection during an active turn, but can apply a choice only between turns.
-Creating a session does not load that catalogue. The mounted session selector
-preloads it separately from provider/thread preparation. Distinct
-OpenCode provider ids remain
-distinct choices, so separate routes or plans from one provider can coexist and
-be selected independently without becoming Codex. People can choose among
+selection against the same saved connection view. Between turns, Custom can
+change orchestrator through the existing context handoff. An active turn or
+unfinished goal prevents changing the selection. Creating a session does not
+load model catalogues; opening Custom starts those reads separately from
+provider/thread preparation. Distinct OpenCode provider ids remain distinct
+model choices, so separate routes or plans from one provider can coexist. People can choose among
 already connected AIs even when they cannot manage account connections; only
 people who can manage connections see the shortcut to configure more. Loading,
 retryable failures, and the absence of a connected AI remain visible in the

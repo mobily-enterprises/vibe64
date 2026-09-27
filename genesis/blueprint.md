@@ -238,23 +238,28 @@ requests show a short description instead of internal agent instructions.
 Generated repair instructions stay with the request, separate from the editable
 draft. Recovery checkpoint warnings stay compact, with technical details
 collapsed and scrollable when opened.
-The main chat composer keeps Add, Settings, Goal, plan allowance, and icon-only
+The main chat composer keeps Chat mode, Add, Goal, plan allowance, and icon-only
 Send together, with Stop beside Send while needed. Goal and available allowance
 stay visible when menus are closed. Add holds left-aligned attachment actions.
-The Settings cog stays aligned with the neighboring icons, with its assistant
-and model named in a small shaded rectangle underneath, readable in light and
-dark themes. The label can extend beyond the circle without moving the icon or
-increasing the button height, and the button has no tooltip. New replies retain their
-answering AI when the selection changes: Codex, Claude Code or OpenCode with its model.
+New replies retain their answering orchestrator, model and thinking level when
+the selection changes, formatted as `Orchestrator (model thinking)`.
 Temporary replies keep that identity across tool progress and the final answer,
 independently of the AI selected in Main chat.
 Hovering a reply's name shows its saved model, provider and thinking choice.
-Reply labels put the role first, followed by the orchestrator and model.
+Reply labels put the role first, followed by the orchestrator, model and saved
+thinking level alone. An explicitly empty choice says "default"; missing
+thinking information stays unknown rather than using the current settings.
 Older replies without a saved AI identity simply say "agent".
-Main chat offers Senior, Junior and Auto; ordinary temporary chats offer
-Senior and Junior only. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
-role and comes first; Settings comes last before Send and Stop. Its menu shows
-model assignments and the selected role. Auto alone offers
+Main chat offers Custom, Senior, Junior and Auto; ordinary temporary chats offer
+Custom, Senior and Junior. Custom appears first and opens three fields:
+Orchestrator, Model, Thinking. Apply saves the exact choice; Cancel keeps the
+previous mode. Custom does not require configured role assignments or a Router.
+Switching orchestrators uses the existing conversation handoff. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
+mode and comes first. Its menu shows
+effective model and thinking assignments and the selected role, including Router
+in Auto. It uses the conversation's saved assignments and current account access
+without loading provider model catalogues. Configuration and Send still validate
+the selected models against their catalogues. Auto alone offers
 automatic Senior review and Deslop. Direct Senior and Junior conversations
 answer questions or implement requested changes without a temporary plan,
 automatic handoff or review. These names describe the model roles, not limits
@@ -332,12 +337,9 @@ mode must be selected before offering Start or Resume. Background helpers use
 the independent Helper role.
 When the service shuts down, pending routing is cancelled and its helper cleanup
 finishes before the assistant processes close. Restart does not send that request.
-AI controls includes a Close button that remains available while the assistant
-is working, so dismissing the panel does not require tapping outside it.
-The Settings cog opens AI model and access controls directly, with recovery
-guidance and pending message requests in the same panel. The chat-mode icon sits
-to the right of Settings, followed by optional companion controls and the
-starred-files icon. These controls remain accessible
+Custom AI controls open from Chat mode. Failed saves remain visible in that
+dialog and can be retried. Model changes wait for the active turn or goal to
+finish. The starred-files, attachments and goal controls remain accessible
 while the menu is closed. Icons sit close together in narrow chat panes, with
 spacing increasing gently as the pane widens. Gaps close in narrow panes so
 Send and Stop stay alongside the icons, goal and allowance in one row on mobile.

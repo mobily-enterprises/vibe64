@@ -4,7 +4,7 @@ import { useDisplay } from "vuetify";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { defineVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
+import { defineVibe64AssistantSelection, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { ASSISTANT_ROUTING_ASSIGNMENTS, ASSISTANT_ROUTING_ROLE_DEFINITIONS } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useModelRouting } from "../composables/useModelRouting.js";
 import { ACCOUNTS_ENDPOINT } from "../lib/accountsGateApi.js";
@@ -59,14 +59,10 @@ const recommendedChanges = computed(() => !engine.value ? [] : roles.flatMap(({ 
   const previous = draft.value[selectedEngine.value]?.[id];
   if (!proposed || sameChoice(previous, proposed)) return [];
   const choice = choiceFor(proposed, id);
-  const changes = [];
-  if (choiceId(previous) !== choiceId(proposed)) {
-    changes.push(choice?.label || proposed.modelId);
-    if (proposed.engineId !== (previous?.engineId || selectedEngine.value)) changes.push(choice?.engineLabel || proposed.engineId);
-    if (previous?.modelId === proposed.modelId && previous?.modelProviderId !== proposed.modelProviderId) changes.push(choice?.providerLabel || proposed.modelProviderId);
-  } else if ((previous?.agentId || "") !== (proposed.agentId || "")) changes.push(`${proposed.agentId || "default"} agent`);
-  if ((previous?.variantId || "") !== (proposed.variantId || "")) changes.push(`${proposed.variantId || "default"} thinking`);
-  return changes.length ? [{ role: id, label, proposed, description: changes.join(" · ") }] : [];
+  const changes = [selectionLabel(proposed)];
+  if (previous?.modelId === proposed.modelId && previous?.modelProviderId !== proposed.modelProviderId) changes.push(choice?.providerLabel || proposed.modelProviderId);
+  if (previous && previous.agentId !== proposed.agentId) changes.push(`${proposed.agentId} agent`);
+  return [{ role: id, label, proposed, description: changes.join(" · ") }];
 }));
 const suggestedChanges = computed(() => engines.value
   .filter((item) => item.roles.senior.recommendation && item.roles.junior.recommendation)
@@ -151,16 +147,15 @@ function choiceFor(selection, role = "senior") {
 }
 function selectionLabel(selection) {
   if (!selection) return "No model selected";
-  const choice = choiceFor(selection, "router");
-  return `${choice?.label || selection.modelId} · ${choice?.engineLabel || selection.engineId} / ${choice?.providerLabel || selection.modelProviderId}${selection.variantId ? ` · ${selection.variantId} thinking` : ""}`;
+  return vibe64AssistantSelectionLabel(selection);
 }
 function items(role) {
+  const current = draft.value[selectedEngine.value]?.[role];
   const choices = (engine.value?.roles[role]?.choices || []).map((choice) => ({
-    id: choiceId(choice), label: `${choice.label} · ${choice.engineLabel} / ${choice.providerLabel}`,
+    id: choiceId(choice), label: selectionLabel(choiceId(choice) === choiceId(current) ? current : choice),
     props: { subtitle: `${choice.providerLabel} · ${choice.accessLabel}${choice.compatibilityError ? " · Compatibility pending" : ""}`,
       disabled: !choice.available || Boolean(choice.compatibilityError) || ["junior", "sharedBackup"].includes(role) && choice.capabilities?.toolcall === false }
   }));
-  const current = draft.value[selectedEngine.value]?.[role];
   if (current && !choices.some(({ id }) => id === choiceId(current))) choices.unshift({ id: choiceId(current), label: selectionLabel(current), props: { subtitle: "Unavailable saved choice", disabled: true } });
   return [{ id: "", label: role === "sharedBackup" ? "No shared backup" : "Choose a model" }, ...choices];
 }

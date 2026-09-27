@@ -3,6 +3,7 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 
+import { VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import {
   VIBE64_ASSISTANTS_API_SUFFIX,
@@ -26,6 +27,7 @@ function responseEngines(resource) {
 function useVibe64AssistantCatalog({
   active,
   configuredOnly = false,
+  allConnectedModels = false,
   engineId,
   modelProviderId,
   modelSearch,
@@ -51,27 +53,31 @@ function useVibe64AssistantCatalog({
       [
         "overview",
         value(configuredOnly) ? "configured" : normalizedText(engineId) || "all",
-        value(providerConnectedOnly) ? "connected" : "all"
+        value(providerConnectedOnly) ? "connected" : "all",
+        ...(value(allConnectedModels) ? ["all-models"] : [])
       ].join(":")
     )),
     queryOptions: {
-      refetchOnMount: "always",
+      refetchOnMount: true,
+      staleTime: value(allConnectedModels) ? 30_000 : 0,
       refetchOnWindowFocus: false
     },
     readQuery: computed(() => ({
       ...(value(configuredOnly) ? { configuredOnly: "true" } : {}),
+      ...(value(allConnectedModels) ? { allConnectedModels: "true" } : {}),
       ...(value(providerConnectedOnly) ? { connectedOnly: "true" } : {}),
       ...(!value(configuredOnly) && normalizedText(engineId)
         ? { engineId: normalizedText(engineId) }
         : {}),
       limit: value(configuredOnly) ? "100" : "25"
     })),
+    realtime: { events: [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT] },
     requestRecoveryLabel: "AI choices"
   });
 
   const providerPage = useEndpointResource({
     enabled: computed(() => (
-      enabled.value && !value(configuredOnly) && normalizedText(engineId) === "opencode"
+      enabled.value && !value(configuredOnly) && !value(allConnectedModels) && normalizedText(engineId) === "opencode"
     )),
     fallbackLoadError: "OpenCode providers could not be loaded.",
     path: apiPath,
@@ -105,7 +111,7 @@ function useVibe64AssistantCatalog({
   const modelPage = useEndpointResource({
     enabled: computed(() => Boolean(
       enabled.value &&
-      !value(configuredOnly) &&
+      !value(configuredOnly) && !value(allConnectedModels) &&
       normalizedText(engineId) &&
       normalizedText(modelProviderId)
     )),
@@ -158,7 +164,7 @@ function useVibe64AssistantCatalog({
 
   async function reload() {
     const requests = [overview.reload()];
-    if (!value(configuredOnly)) {
+    if (!value(configuredOnly) && !value(allConnectedModels)) {
       // Without a search or cursor, the provider page shares the overview query.
       if (
         normalizedText(engineId) === "opencode" &&

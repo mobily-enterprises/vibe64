@@ -66,6 +66,7 @@ function databaseAssistantAvailability(decision = {}) {
     available: decision.available === true,
     engineId: text(selection?.engineId),
     model: text(selection?.modelId),
+    variantId: text(selection?.variantId),
     backupUsed: decision.backupUsed === true,
     message: text(decision.message)
   };

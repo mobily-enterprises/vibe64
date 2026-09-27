@@ -196,10 +196,10 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   }
 
   async function resolve(context, state, followup = false) {
-    const purpose = followup ? continuationRole(state) : state.task || state.mode;
+    const purpose = followup ? continuationRole(state) : state.mode === "custom" ? "custom" : state.task || state.mode;
     const decision = await agent.resolveAssistantPurpose({ purpose, workflowEngineId: state.workflowEngineId,
       reviewEnabled: state.review,
-      override: state.task === "deslop" ? undefined : state.override }, { ...context,
+      override: state.task === "deslop" && state.mode !== "custom" ? undefined : state.override }, { ...context,
       vibe64User: state.submittedBy, configuration: state.configuration });
     if (!decision.available) throw failure(decision.message, decision.reasonCode);
     return decision;
@@ -210,7 +210,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     return decision.seniorJuniorPair
       ? { ...decision.seniorJuniorPair, ...(decision.router ? { router: {
         effectiveSelection: decision.router, connectionIdentity: decision.routerConnectionIdentity } } : {}) }
-      : { helper: decision };
+      : { [decision.role || "helper"]: decision };
   }
   async function validateDecision(context, state, followup = false) {
     if (!state.decision || state.admissionRequired) throw failure("This request needs fresh admission. Retry it before continuing.");
@@ -332,7 +332,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   function attribution(state, followup) {
     const modelRole = followup ? "senior" : state.resolvedMode;
     const destination = destinations(state.decision || {})[modelRole];
-    return { requestedMode: state.mode, resolvedMode: followup ? continuationRole(state) : state.task || state.resolvedMode,
+    return { requestedMode: state.mode, resolvedMode: followup ? continuationRole(state) : state.mode === "custom" ? "custom" : state.task || state.resolvedMode,
       workflowEngineId: state.workflowEngineId, destination: state.assignments[modelRole],
       configuredSelection: destination?.configuredSelection, backupUsed: destination?.backupUsed === true,
       backupReason: destination?.backupReason || "",
@@ -430,7 +430,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           throw failure("This plan is no longer ready to implement. Ask the planner to update it and review the new version.");
         }
         let resolvedMode = mode;
-        if (explicitDeslop) resolvedMode = "senior";
+        if (explicitDeslop) resolvedMode = mode === "custom" ? "custom" : "senior";
         else if (approving) resolvedMode = "junior";
         else if (mode === "auto") resolvedMode = "";
         const review = mode === "auto" && !explicitDeslop && !options.purpose && preferences.review && !activeGoal(goal);

@@ -1645,7 +1645,7 @@ function createService({
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
           const session = await runtime.getSession(sessionId, { inspectSource: false });
           const current = vibe64AssistantSelectionFromMetadata(session.metadata);
-          if (input.assistantRouting) {
+          if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
             const previous = assistantRoutingFromMetadata(session.metadata);
             const preferences = assistantRoutingPreferences({ ...input.assistantRouting,
               workflowEngineId: previous?.workflowEngineId || current.engineId });
@@ -1660,10 +1660,12 @@ function createService({
             await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
             return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
           }
-          if (!input.assistantSelection) throw new Error("Choose an assistant or a chat mode.");
+          const requestedSelection = input.assistantRouting?.mode === "custom"
+            ? input.assistantRouting.override : input.assistantSelection;
+          if (!requestedSelection) throw new Error("Choose an assistant or a chat mode.");
           const requested = {
-            ...record(input.assistantSelection),
-            engineId: text(input.assistantSelection?.engineId) || current.engineId
+            ...record(requestedSelection),
+            engineId: text(requestedSelection.engineId) || current.engineId
           };
           const resolved = await resolveAssistantSelection(
             requested,
@@ -1678,9 +1680,13 @@ function createService({
           const next = assertVibe64AssistantSelectionUpdate(current, resolved, {
             turnActive: agentSession?.turn?.active === true
           });
-          const routing = assistantRoutingFromMetadata(session.metadata);
-          const changingWorkflow = routing && (routing.workflowEngineId || current.engineId) !== next.engineId;
-          if (routing && !changingWorkflow && routing.mode === "auto") throw new Error("Choose Senior or Junior before selecting a custom model.");
+          const observedGoal = typeof terminals.readAgentGoal === "function"
+            ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
+          const goal = observedGoal?.status === "available" ? observedGoal.goal
+            : observedGoal?.goal || agentSession?.goal || JSON.parse(session.metadata.assistant_routing_goal || "null");
+          if (goal && !["complete", "completed"].includes(goal.status)) {
+            throw new Error("Finish this goal before changing chat modes or models.");
+          }
           const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
           if (assistantRoutingStatusIsPending(routingRequest?.status) ||
               routingRequest?.status === "sent" && routingRequest.review && routingRequest.resolvedMode === "junior") {
@@ -1692,10 +1698,8 @@ function createService({
             });
             if (changeover?.ok === false) return changeover;
           }
-          if (routing) await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify({
-            mode: routing.mode, review: routing.review,
-            workflowEngineId: next.engineId,
-            ...(!changingWorkflow ? { override: next } : {})
+          await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify({
+            mode: "custom", review: false, workflowEngineId: next.engineId, override: next
           }));
           await runtime.store.writeMetadataValue(
             sessionId,

@@ -109,7 +109,7 @@ it("only offers implementation for a ready plan after completion; paused and rev
 it("shows recovery controls for a stopped planning handoff", () => {
   const f = mount({ status: "planning_pending", continuation: "planning", resolvedMode: "junior", assignments: { senior: { engineId: "codex", modelId: "gpt-6-astra" } } });
   expect(f.state().actionable).toBe(true);
-  expect(f.state().label).toBe("Back to planning · codex · gpt-6-astra");
+  expect(f.state().label).toBe("Back to planning · Codex (gpt-6-astra not recorded)");
 });
 
 it("leaves a mixed-request explanation on the unsent bubble instead of adding another banner", () => {

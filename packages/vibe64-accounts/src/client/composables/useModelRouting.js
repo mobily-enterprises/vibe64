@@ -12,7 +12,7 @@ function useModelRouting({ enabled = true, workflowsOnly = false } = {}) {
     enabled: computed(() => Boolean(unref(enabled) && unref(viewer)?.actorKey)),
     path: `${ACCOUNTS_ENDPOINT}/model-routing${workflowsOnly ? "/workflows" : ""}`,
     queryKey, realtime: { events: [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT] },
-    queryOptions: { refetchOnMount: "always", retry: false },
+    queryOptions: { refetchOnMount: true, staleTime: 30_000, retry: false },
     fallbackLoadError: "Model routing could not be loaded.", requestRecoveryLabel: "Model routing"
   });
   return { resource, scopeKey: computed(() => JSON.stringify(queryKey.value)), engines: computed(() => resource.data.value?.engines || []),

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { AssistantModelControl } from "@jskit-ai/assistant-core/client/conversation";
-import { normalizeVibe64AgentSettings } from "@local/vibe64-runtime/shared";
+import { normalizeVibe64AgentSettings, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { useVibe64AssistantCatalog } from "@/composables/useVibe64AssistantCatalog.js";
 
 const props = defineProps({
@@ -45,12 +45,8 @@ const catalogLoading = computed(() => catalog.modelPage.isInitialLoading.value);
 const catalogError = computed(() => catalog.modelPage.loadError.value || "");
 const summary = computed(() => {
   const modelId = currentSettings.value.model || props.assistantSelection.modelId;
-  const model = models.value.find(row => row.id === modelId);
-  const variant = model?.variants.find(row => row.id === currentSettings.value.thinking);
-  return [
-    model?.label || modelId || "Use main chat model",
-    variant?.label || currentSettings.value.thinking || "Automatic"
-  ].join(" / ");
+  return modelId ? vibe64AssistantSelectionLabel({ engineId: engineId.value,
+    modelId, variantId: currentSettings.value.thinking }) : "Use main chat model";
 });
 const canSave = computed(() => !props.disabled && !catalogLoading.value && !catalogError.value &&
   Boolean(selectedModel.value) && variantRows.value.some(row => row.id === draft.value.thinking) &&

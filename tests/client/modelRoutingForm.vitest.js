@@ -69,9 +69,9 @@ it("reviews only changes to the current draft before applying recommendations to
   expect(JSON.stringify(state.draft)).toBe(before);
   expect(state.recommendationReview.changes.map(({ role }) => role)).toEqual(["router", "senior", "helper"]);
   expect(state.recommendationReview.changes[1]).toMatchObject({
-    description: "default thinking", proposed: { modelId: "gpt-6-astra", variantId: "" }
+    description: "Codex (gpt-6-astra default)", proposed: { modelId: "gpt-6-astra", variantId: "" }
   });
-  expect(state.recommendationReview.changes[0].description).toBe("deepseek-flash · codex");
+  expect(state.recommendationReview.changes[0].description).toBe("Codex (deepseek-flash default) · codex agent");
   state.recommendationReview = null;
   expect(JSON.stringify(state.draft)).toBe(before);
   state.reviewRecommendations();
@@ -220,8 +220,8 @@ it("shows collaborators the effective assignment and preserves access restrictio
     junior: { available: true, effectiveSelection: deepseek },
     request_routing: { available: false, message: "Router uses a personal connection." }
   } } }] };
-  expect(state.roleHint({ id: "senior" })).toBe("Collaborators: big-pickle · opencode / opencode (shared backup)");
-  expect(state.roleHint({ id: "junior" })).toBe("Collaborators: deepseek-flash · codex / deepseek");
+  expect(state.roleHint({ id: "senior" })).toBe("Collaborators: OpenCode (big-pickle default) (shared backup)");
+  expect(state.roleHint({ id: "junior" })).toBe("Collaborators: Codex (deepseek-flash default)");
   expect(state.roleHint({ id: "router" })).toBe("Collaborators: Router uses a personal connection.");
   expect(state.roleHint({ id: "sharedBackup" })).toBe("");
   state.previewPending = true;
@@ -243,7 +243,7 @@ it("refreshes collaborator labels when a changed backup produces a new effective
   await vi.advanceTimersByTimeAsync(250);
   expect(mocks.request).toHaveBeenCalledOnce();
   expect(mocks.request.mock.calls[0][1].body.orchestrators.codex.sharedBackup.modelId).toBe("deepseek-flash");
-  expect(state.roleHint({ id: "senior" })).toBe("Collaborators: deepseek-flash · codex / deepseek (shared backup)");
+  expect(state.roleHint({ id: "senior" })).toBe("Collaborators: Codex (deepseek-flash default) (shared backup)");
 });
 
 it("does not expose or submit the retired temporary chat default from cached data", () => {

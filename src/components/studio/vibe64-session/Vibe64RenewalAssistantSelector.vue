@@ -106,6 +106,7 @@
 </template>
 
 <script setup>
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, ref, useId, watch } from "vue";
 
 import { useVibe64AssistantCatalog } from "@/composables/useVibe64AssistantCatalog.js";
@@ -282,16 +283,7 @@ const error = computed(() => String(
   (engineId.value && modelProviderId.value ? details.modelPage.loadError.value : "") ||
   ""
 ));
-const selectionSummary = computed(() => {
-  if (!selection.value) return "";
-  const engine = engineRows.value.find((row) => row.engineId === engineId.value);
-  return [
-    engine?.label || engineId.value,
-    selectedProvider.value?.label,
-    selectedModel.value?.label || modelId.value,
-    variantItems.value.find((variant) => variant.value === variantId.value)?.title
-  ].filter(Boolean).join(" · ");
-});
+const selectionSummary = computed(() => selection.value ? vibe64AssistantSelectionLabel(selection.value) : "");
 
 function hydrateSelection(value = null) {
   const current = value && typeof value === "object" ? value : {};

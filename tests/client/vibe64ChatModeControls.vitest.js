@@ -45,7 +45,7 @@ for (const temporary of [false, true]) {
     await state.save("auto", true);
     expect(state.reviewAvailable).toBe(!temporary);
     expect(mocks.save).toHaveBeenLastCalledWith(temporary ? { mode: "senior", review: false } : { mode: "auto", review: true });
-    expect(state.modes.map(({ id }) => id)).toEqual(temporary ? ["senior", "junior"] : ["senior", "junior", "auto"]);
+    expect(state.modes.map(({ id }) => id)).toEqual(temporary ? ["custom", "senior", "junior"] : ["custom", "senior", "junior", "auto"]);
   });
 }
 

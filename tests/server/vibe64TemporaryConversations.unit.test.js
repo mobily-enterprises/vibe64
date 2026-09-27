@@ -1015,8 +1015,8 @@ test("inherited temporary choices stay independent across Main changes and resta
     assert.equal(JSON.parse(second.routingMetadata.assistant_routing).mode, "senior");
     const changed = await service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "senior", review: true } });
     assert.deepEqual(JSON.parse(changed.routingMetadata.assistant_routing), { mode: "senior", review: false, workflowEngineId: "codex" });
-    await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { useWorkspaceDefault: true } }), /Choose Senior, Junior, or Auto/);
-    await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "helper" } }), /Choose Senior, Junior, or Auto/);
+    await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { useWorkspaceDefault: true } }), /Choose Custom, Senior, Junior, or Auto/);
+    await assert.rejects(service.updateTemporaryConversation("one", { conversationId: "first", assistantRouting: { mode: "helper" } }), /Choose Custom, Senior, Junior, or Auto/);
     const explicit = await service.createTemporaryConversation("one", { conversationId: "generated", assistantRouting: { mode: "junior" } });
     assert.equal(JSON.parse(explicit.routingMetadata.assistant_routing).mode, "junior");
     const repair = await service.createTemporaryConversation("one", { conversationId: "repair", presentation: { recoveryOperation: "update" } });
@@ -1033,5 +1033,24 @@ test("a Main chat without routing preferences passes its exact AI into a new tem
     assert.equal(preferences.override.modelId, f.selection.modelId);
     assert.equal(preferences.override.variantId, f.selection.variantId);
     assert.equal(preferences.workflowEngineId, f.selection.engineId);
+  });
+});
+
+
+test("temporary Custom changes orchestrator with conversation context and leaves Main unchanged", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root, { role: "owner", username: "owner" });
+    const main = (await f.store.readSession("one")).metadata;
+    await f.send("senior", "first", "Remember the bicycle is blue.");
+    await f.finish("The bicycle is blue.");
+    const changed = await f.service.updateTemporaryConversation("one", { conversationId: "chat",
+      assistantRouting: { mode: "custom", override: f.helper } }, f.options);
+    assert.equal(JSON.parse(changed.routingMetadata.assistant_routing).workflowEngineId, "opencode");
+    assert.equal(changed.purposes.custom.available, true);
+    const result = await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "custom", message: "What colour is it?" }, f.options);
+    assert.notEqual(result.ok, false, JSON.stringify(result));
+    assert.equal(f.calls.starts[1].selection.engineId, "opencode");
+    assert.match(f.calls.starts[1].input.message, /bicycle is blue/);
+    assert.deepEqual((await f.store.readSession("one")).metadata, main);
   });
 });
