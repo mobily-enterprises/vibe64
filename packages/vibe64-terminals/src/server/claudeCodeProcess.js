@@ -8,7 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { runVibe64Command, shellQuote, stopVibe64Execution } from "@local/vibe64-execution/server";
 import { createClaudeJsonClient } from "@local/vibe64-runtime/server/claudeStreamJson";
 
-const CLAUDE_CODE_VERSION = "2.1.278";
+const CLAUDE_CODE_VERSION = "2.1.283";
 const bridgePath = fileURLToPath(new URL("./claudeStdioBridge.js", import.meta.url));
 
 function claudeFlagSettings({ toolFree = false, effort = "", providerEnv } = {}) {
