@@ -166,6 +166,11 @@ confirms it, while the file-change details continue loading in the background.
 The chat header gives three session tabs room to show their labels, hides the
 new-session plus when all three slots are occupied, and groups Save beside the
 session actions.
+After the first accepted chat message, the workflow's Helper gives an unnamed
+session a short, one-word display name in the background. People can rename it
+from the session details or ask the chat to do so. Their chosen name takes
+precedence over an automatic suggestion. Names never change session IDs,
+directory names, branches, or URLs. Naming failures do not interrupt chat.
 Hovering or keyboard-focusing a session tab for one second shows its basic
 details. Touch users can tap its info button to read the same details without
 switching sessions.

@@ -46,6 +46,7 @@ import {
   cleanupSessionSaveCommitMessage,
   generateSessionSaveCommitMessage
 } from "./sessionSaveCommitMessage.js";
+import { createSessionNaming } from "./sessionNaming.js";
 import {
   inspectRepositoryHistory as inspectManagedRepositoryHistory,
   repositoryVersionFileDiff as inspectManagedRepositoryVersionFileDiff,
@@ -516,6 +517,7 @@ function createService({
   });
   const agentSessionCommand = createAgentSessionCommandService({
     logger,
+    publishSessionChanged: publishAgentSessionChanged,
     projectService
   });
   const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
@@ -643,6 +645,7 @@ function createService({
     if (selection.engineId === "codex") await codex.prepareModelRouting(sessionId, selection, context);
   }
 
+  const sessionNaming = createSessionNaming({ agent: sessionAgent, publishSessionChanged: publishAgentSessionChanged, logger });
   assistantRouting = createAssistantRouting({
     systemRoot: codexProviderOptions.systemRoot, agent: sessionAgent,
     exclusive: async (sessionId, options, operation) => {
@@ -1363,10 +1366,12 @@ function createService({
     return closeAgentSessionCommandEnvironment(sessionId, () => closeTerminalControllersForSession(sessionId, [
       {
         controller: { closeAllForSession: async (id, options) => {
-          await cleanupSessionSaveCommitMessage({ agent: sessionAgent, agentContext: await assistantSessionOptions(id, options) });
+          const agentContext = await assistantSessionOptions(id, options);
+          await sessionNaming.closeSession(agentContext);
+          await cleanupSessionSaveCommitMessage({ agent: sessionAgent, agentContext });
           return { ok: true };
         } },
-        label: "Save naming helper"
+        label: "Naming helpers"
       },
       {
         controller: { closeAllForSession: (id) => sessionPromptHints.cancelSessionPromptHintsForSession(id) },
@@ -2848,6 +2853,13 @@ function createService({
       });
       try {
         const result = await assistantRouting.send(sessionId, input, options);
+        if (result?.ok === true && !result.duplicate && !options.purpose && !input.reviewAction && !closing) {
+          try {
+            sessionNaming.start(await assistantSessionOptions(sessionId, options), input.messageId);
+          } catch (error) {
+            logger?.warn({ error: error.message, sessionId }, "Session naming could not start.");
+          }
+        }
         if (result?.ok === false) {
           logOperationalEvent(logger, "warn", {
             code: result.code,
@@ -3013,7 +3025,7 @@ function createService({
     async invalidateAgentRuntimes(input = {}) {
       if (input.reason === "server-shutdown") {
         closing = true;
-        const routing = await Promise.allSettled([assistantRouting.close(), sessionConversations.close()]);
+        const routing = await Promise.allSettled([assistantRouting.close(), sessionConversations.close(), sessionNaming.close()]);
         await Promise.allSettled(turnCompletions);
         const [native] = await Promise.allSettled([sessionAgent.invalidateRuntimes(input, {
           providerId: normalizeAgentProviderId(input.provider)

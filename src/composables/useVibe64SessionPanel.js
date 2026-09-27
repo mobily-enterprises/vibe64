@@ -130,6 +130,8 @@ function useVibe64SessionPanel(props, emit) {
     sessions: sessionData.sessions.value || []
   }));
   const toolbar = proxyRefs({
+    sessionsApiPath: sessionData.sessionsApiPath,
+    refreshSessionData: sessionData.refreshSessionData,
     refreshRepositoryState: repositoryStatusRegistry.refresh,
     canCreateSession: sessionData.canCreateSession,
     createSession: sessionData.createSession,

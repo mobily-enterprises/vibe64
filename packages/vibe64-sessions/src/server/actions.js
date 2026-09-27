@@ -1,4 +1,5 @@
 import {
+  sessionRenameActionInputValidator,
   conversationRewindActionInputValidator,
   integrationSetupRequestActionInputValidator,
   agentMessageActionInputValidator,
@@ -39,6 +40,7 @@ const ACTION_LIST_ASSISTANT_CAPABILITIES = "vibe64.assistants.capabilities.list"
 const ACTION_UPDATE_ASSISTANT_MODEL_ACCESS = "vibe64.assistants.model-access.update";
 const ACTION_CREATE_PULL_REQUEST = "vibe64.sessions.pull-request.create";
 const ACTION_CREATE_SESSION = "vibe64.sessions.create";
+const ACTION_RENAME_SESSION = "vibe64.sessions.rename";
 const ACTION_UPDATE_ASSISTANT_SELECTION = "vibe64.sessions.assistant-selection.update";
 const ACTION_UPDATE_CURRENT_SESSION = "vibe64.sessions.current.update";
 const ACTION_INSPECT_SESSION_WORK = "vibe64.sessions.work.inspect";
@@ -110,6 +112,12 @@ function createSessionActions({ sessions } = {}) {
   }
 
   return Object.freeze([
+    action({
+      id: ACTION_RENAME_SESSION,
+      kind: "command",
+      input: sessionRenameActionInputValidator,
+      execute: (input) => sessions.renameSession(input.sessionId, withoutSessionId(input))
+    }),
     action({
       id: ACTION_RESUME_INTEGRATION_SETUP,
       kind: "command",
@@ -401,6 +409,7 @@ function createSessionActions({ sessions } = {}) {
 }
 
 export {
+  ACTION_RENAME_SESSION,
   ACTION_REWIND_CONVERSATION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,

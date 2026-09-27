@@ -645,7 +645,7 @@ local to those controls and do not report an app-wide network outage.
 
 The shared command environment installs `vibe64-helper` beside the existing
 session executables for Codex and OpenCode. Its fixed groups are `preview`,
-`playwright`, `env`, `database` and `github`; `--help` lists them, and group help
+`playwright`, `env`, `database`, `github` and `session`; `--help` lists them, and group help
 comes from the existing command owner. The dispatcher replaces itself with
 the matching sibling executable, preserving stdin, argv, environment, cwd,
 exit status and signal handling. Missing groups fail without searching PATH
@@ -654,6 +654,9 @@ authorization. The individual executables stay installed for existing
 conversations and scripts; new session guidance uses the common entry point.
 The ordinary `vibe64` launcher, managed `git`/`gh`, and internal process helpers
 retain their existing roles.
+The `session rename "Name"` command changes only the current session's display
+label. It shares the store mutation used by the Rename dialog; neither changes
+IDs, directories, Git branches or URLs.
 
 The chat column, empty-session column and divider use the same resize width.
 The resize controller owns the 320-pixel desktop minimum and 512-pixel default.

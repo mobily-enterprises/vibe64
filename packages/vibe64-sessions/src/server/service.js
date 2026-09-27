@@ -769,6 +769,17 @@ function createService({
     },
 
     archiveSession,
+    async renameSession(sessionId, input = {}) {
+      return sessionResult(async () => {
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const sessionName = await runtime.store.writeSessionLabel(sessionId, input.name);
+        await publishSessionChanged(sessionId, {
+          originId: text(input.originId), reason: "session-renamed",
+          payload: { clientRefresh: { includeList: true } }
+        });
+        return { ok: true, sessionId, sessionName };
+      }, "The session could not be renamed.");
+    },
     async resumeSessionArchives({ signal = null } = {}) {
       const runtime = await project.createRuntime({ inspectSource: false });
       for (const sessionId of await runtime.store.recoverSessionArchives()) {

@@ -9,7 +9,7 @@ import test from "node:test";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 import { createAgentDatabaseCommandService, prepareAgentDatabaseCommand } from "../../packages/vibe64-terminals/src/server/agentDatabaseCommand.js";
 
-const HELPER_GROUPS = ["preview", "playwright", "env", "database", "github"];
+const HELPER_GROUPS = ["preview", "playwright", "env", "database", "github", "session"];
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64 helper's "));

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ACTION_RENAME_SESSION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_CANCEL_SESSION_RENEWAL,
@@ -227,6 +228,7 @@ function sessionCreationPolicyHarness({
 
 test("sessions expose only direct chat and source actions", () => {
   assert.deepEqual(createSessionActions({ sessions: {} }).map((action) => action.id), [
+    ACTION_RENAME_SESSION,
     ACTION_RESUME_INTEGRATION_SETUP,
     ACTION_SKIP_INTEGRATION_SETUP,
     ACTION_INSPECT_REPOSITORY_HISTORY,

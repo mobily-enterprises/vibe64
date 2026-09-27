@@ -18,12 +18,13 @@ Groups:
   env          Project environment settings
   database     Database refresh, overview and diagram operations
   github       GitHub view refresh
+  session      Rename the current session
 
 Use vibe64-helper <group> --help for that group.
 Commands use the current managed session and its access checks.'
     exit 0
     ;;
-  preview|playwright|env|database|github)
+  preview|playwright|env|database|github|session)
     command_group=$1
     shift
     ;;

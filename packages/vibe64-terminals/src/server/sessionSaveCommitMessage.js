@@ -1,14 +1,10 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
-import path from "node:path";
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
-  defineVibe64AgentExecutionProfileRequest,
-  vibe64AgentExecutionProfileAuditSnapshot,
-  vibe64AssistantSelectionFromMetadata
+  defineVibe64AgentExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
+
+import { cleanupSessionNamingHelper, runSessionNamingHelper } from "./sessionNamingHelper.js";
 
 const MAX_COMMIT_SUBJECT_LENGTH = 72;
 const MAX_PROMPT_FILES = 40;
@@ -35,9 +31,9 @@ function text(value = "") {
   return String(value || "").trim();
 }
 
-function commitMessageError(message, code = "vibe64_session_save_message_failed") {
+function commitMessageError(message, code, suffix = "failed") {
   const error = new Error(message);
-  error.code = code;
+  error.code = code || `vibe64_session_save_message_${suffix}`;
   return error;
 }
 
@@ -100,14 +96,6 @@ function parseSessionSaveCommitMessage(value = "") {
   return normalizeSessionSaveCommitMessage(envelope.subject);
 }
 
-function sessionSaveExecutionProfileSnapshot(value = null) {
-  try {
-    return vibe64AgentExecutionProfileAuditSnapshot(value);
-  } catch {
-    return null;
-  }
-}
-
 function normalizeSessionSaveCommitMessage(value = "") {
   const subject = text(value);
   const hasControlCharacters = [...subject].some((character) => {
@@ -136,86 +124,19 @@ function normalizeSessionSaveCommitMessage(value = "") {
   return subject;
 }
 
-async function cleanupSessionSaveCommitMessage({ agent, agentContext = {} } = {}) {
-  const { runtime, session, vibe64User } = agentContext;
-  const sessionId = session.sessionId || session.id;
-  const helper = (await runtime.store.readBackgroundTask(sessionId, "save-work"))?.assistantHelper;
-  if (!helper) return;
-  const root = path.join(runtime.stateRoot, "assistant-helpers", helper.scope.id);
-  if (!/^naming_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(root, "workdir") ||
-      helper.scope.runtimeRoot !== path.join(root, "runtime")) {
-    throw commitMessageError("The saved naming task has invalid cleanup paths.");
-  }
-  const deleted = await agent.deleteEphemeralConversation(helper.scope, {
-    conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
-    ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
-  }, { assistantSelection: helper.selection, vibe64User });
-  if (deleted?.ok !== true) throw commitMessageError(
-    deleted?.error || "The naming helper could not be closed. Cleanup will be retried on the next Save or session close.",
-    deleted?.code || "vibe64_session_save_message_cleanup_failed"
-  );
-  await runtime.store.writeBackgroundTaskEvent(sessionId, "save-work", {
-    event: { kind: "naming-helper-closed" }, patch: { assistantHelper: null }
-  });
-  await rm(root, { recursive: true, force: true });
+function cleanupSessionSaveCommitMessage({ agent, agentContext = {} } = {}) {
+  return cleanupSessionNamingHelper({ agent, agentContext, taskId: "save-work", namingError: commitMessageError });
 }
 
 async function generateSessionSaveCommitMessage({ agent, agentContext = {}, changes = {} } = {}) {
-  const { runtime, session, vibe64User } = agentContext;
-  const sessionId = session.sessionId || session.id;
-  let helper;
-  async function retain() {
-    await runtime.store.writeBackgroundTaskEvent(sessionId, "save-work", {
-      event: { kind: "naming-helper" }, patch: { assistantHelper: helper }
-    });
-  }
-  const cleanup = () => cleanupSessionSaveCommitMessage({ agent, agentContext });
-  // The Save task owns failed cleanup across restarts. Do not lose that record
-  // or start another helper until its exact native conversation is closed.
-  await cleanup();
-  const workflowEngineId = assistantRoutingFromMetadata(session.metadata)?.workflowEngineId ||
-    vibe64AssistantSelectionFromMetadata(session.metadata).engineId;
-  const decision = await agent.resolveAssistantPurpose({ purpose: "commit_title", workflowEngineId }, agentContext);
-  if (!decision.available) throw commitMessageError(decision.message, decision.reasonCode);
-  const id = `naming_${randomUUID()}`;
-  const root = path.join(runtime.stateRoot, "assistant-helpers", id);
-  helper = { scope: { id, environment: {}, runtimeRoot: path.join(root, "runtime"), workdir: path.join(root, "workdir"),
-    stableContext: "Write only a commit subject from supplied changes. You have no tools or project access." },
-    selection: decision.effectiveSelection, connectionIdentity: decision.connectionIdentity,
-    conversationId: "", runId: "", executionId: "" };
-  await retain();
-  const options = { assistantSelection: helper.selection, vibe64User, expectedConnectionIdentity: helper.connectionIdentity,
-    async onEvent(event) {
-      if (event.type === "thread") helper.conversationId = text(event.threadId);
-      else if (event.type === "turn") helper.runId = text(event.turnId);
-      else if (event.type === "helper-execution") helper.executionId = text(event.executionId);
-      else return;
-      await retain();
-    } };
-  let result;
-  let failure;
-  try {
-    await mkdir(helper.scope.workdir, { recursive: true });
-    await mkdir(helper.scope.runtimeRoot, { recursive: true });
-    const executionProfile = await agent.resolveEphemeralExecutionProfile(helper.scope, SESSION_SAVE_COMMIT_EXECUTION_PROFILE, options);
-    helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
-    await retain();
-    result = await agent.runEphemeralChatTurn(helper.scope, {
-      executionProfile, outputSchema: SESSION_SAVE_COMMIT_OUTPUT_SCHEMA,
-      prompt: sessionSaveCommitMessagePrompt(changes), promptLabel: "Name saved work"
-    }, options);
-    if (result?.ok !== true) throw commitMessageError(result?.error || "The assistant could not name this work.", result?.code);
-  } catch (error) { failure = error; }
-  try { await cleanup(); }
-  catch (error) { if (failure && error !== failure) error.cause = failure; failure = error; }
-  if (failure) throw failure;
-  const executionProfile = sessionSaveExecutionProfileSnapshot(result?.executionProfile);
-  if (!executionProfile || executionProfile.profileId !== SESSION_SAVE_COMMIT_EXECUTION_PROFILE.profileId ||
-      executionProfile.workloadId !== SESSION_SAVE_COMMIT_EXECUTION_PROFILE.workloadId) {
-    throw commitMessageError("The naming helper did not provide a verified execution profile.",
-      "vibe64_session_save_message_execution_profile_missing");
-  }
-  return { executionProfile, subject: parseSessionSaveCommitMessage(result.text) };
+  const result = await runSessionNamingHelper({
+    agent, agentContext, taskId: "save-work",
+    profile: SESSION_SAVE_COMMIT_EXECUTION_PROFILE, outputSchema: SESSION_SAVE_COMMIT_OUTPUT_SCHEMA,
+    prompt: sessionSaveCommitMessagePrompt(changes), promptLabel: "Name saved work",
+    stableContext: "Write only a commit subject from supplied changes. You have no tools or project access.",
+    namingError: commitMessageError
+  });
+  return { executionProfile: result.executionProfile, subject: parseSessionSaveCommitMessage(result.text) };
 }
 
 export {

@@ -15,6 +15,7 @@ Git commands.
 - `packages/vibe64-runtime/src/server/agentWriteLock.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/sessionSaveCommitMessage.js`
+- `packages/vibe64-terminals/src/server/sessionNamingHelper.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
 - `packages/vibe64-terminals/src/server/sessionWorkSave.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`

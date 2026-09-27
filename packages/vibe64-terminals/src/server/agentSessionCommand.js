@@ -66,6 +66,10 @@ const VIBE64_WRAPPER_ENV = "VIBE64_WRAPPER";
 const VIBE64_AGENT_SESSION_RUN_COMMAND_ENV = "VIBE64_AGENT_SESSION_RUN_COMMAND_BASE64";
 const VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV = "VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH";
 const VIBE64_AGENT_SESSION_RUN_RESULT_ENV = "VIBE64_AGENT_SESSION_RUN_RESULT_PATH";
+// This capability only permits renaming the bound session. It deliberately does
+// not expose the shell-execution token stripped from managed child commands.
+const SESSION_RENAME_CONTROL_ENV = "VIBE64_SESSION_RENAME_CONTROL";
+
 const AGENT_SESSION_CONTROL_ENV_NAMES = new Set([
   VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV,
@@ -188,6 +192,49 @@ if (payload.stdout) process.stdout.write(String(payload.stdout));
 if (payload.stderr) process.stderr.write(String(payload.stderr));
 else if (payload.ok === false && payload.error) process.stderr.write(String(payload.error) + "\\n");
 process.exit(Number.isInteger(payload.exitCode) ? payload.exitCode : (payload.ok === false ? 1 : 0));
+`;
+}
+
+function sessionRenameCommandSource() {
+  return `#!/usr/bin/env node
+import http from "node:http";
+
+const args = process.argv.slice(2);
+if (!args.length || args[0] === "--help" || args[0] === "-h") {
+  console.log('Usage: vibe64-helper session rename "Name"');
+  process.exit(0);
+}
+if (args[0] !== "rename" || args.length !== 2 || !args[1].trim()) {
+  console.error('Usage: vibe64-helper session rename "Name"');
+  process.exit(2);
+}
+try {
+  const control = JSON.parse(process.env.${SESSION_RENAME_CONTROL_ENV} || "null");
+  if (!control?.socketPath || !control.token || !control.sessionId || !control.generationId) {
+    throw new Error("Session rename is unavailable. Reconnect the assistant.");
+  }
+  const body = JSON.stringify({ name: args[1], token: control.token, sessionId: control.sessionId, generationId: control.generationId });
+  const result = await new Promise((resolve, reject) => {
+    const request = http.request({
+      socketPath: control.socketPath, method: "POST", path: "/agent-session-command/rename", timeout: 15000,
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
+    }, (response) => {
+      let text = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => { text += chunk; });
+      response.on("error", reject);
+      response.on("end", () => { try { resolve(JSON.parse(text)); } catch (error) { reject(error); } });
+    });
+    request.on("error", reject);
+    request.on("timeout", () => request.destroy(new Error("Session rename timed out.")));
+    request.end(body);
+  });
+  if (result.ok !== true) throw new Error(result.error || "The session could not be renamed.");
+  console.log(JSON.stringify({ sessionName: result.sessionName }));
+} catch (error) {
+  console.error(error.message);
+  process.exitCode = 1;
+}
 `;
 }
 
@@ -363,6 +410,7 @@ async function ensureAgentSessionCommandServer({
     });
     const generationId = randomUUID();
     const token = randomUUID();
+    const renameToken = randomUUID();
     const server = http.createServer(async (request, response) => {
       try {
         if (request.method !== "POST") {
@@ -380,7 +428,8 @@ async function ensureAgentSessionCommandServer({
             message: "Vibe64 session command input is too large."
           }
         });
-        const authorized = normalizeText(input.token) === token &&
+        const isRename = request.url === "/agent-session-command/rename";
+        const authorized = normalizeText(input.token) === (isRename ? renameToken : token) &&
           normalizeText(input.generationId) === generationId &&
           normalizeText(input.sessionId) === normalizeText(sessionId);
         if (!authorized) {
@@ -388,6 +437,11 @@ async function ensureAgentSessionCommandServer({
             reportUnixCommandControlChange({ commandService, sessionId, socketPath, generationId }, "rejected", normalizeText(input.generationId));
           }
           sendJsonCommandResponse(response, 403, responseError("Vibe64 session command identity is invalid.", "vibe64_agent_session_command_identity_invalid"));
+          return;
+        }
+        if (isRename) {
+          const result = await commandService.renameSession(sessionId, input.name);
+          sendJsonCommandResponse(response, vibe64StatusCode(result), result);
           return;
         }
         if (request.url === "/agent-session-command/health") {
@@ -435,7 +489,8 @@ async function ensureAgentSessionCommandServer({
       server,
       sessionId: normalizeText(sessionId),
       socketPath,
-      token
+      token,
+      renameToken
     };
     commandServers.set(socketPath, stored);
     if (!await unixJsonCommandServerIsHealthy(stored, {
@@ -461,6 +516,7 @@ async function ensureAgentSessionCommandServer({
 function createAgentSessionCommandService({
   logger = null,
   projectService,
+  publishSessionChanged = () => {},
   runCommand = runVibe64Command,
   stopExecution = stopVibe64Execution,
   stopOwnedExecutions = stopVibe64OwnedExecutions
@@ -549,10 +605,19 @@ function createAgentSessionCommandService({
       }
       return operation({
         binding,
+        store,
         descriptor,
         project,
         sourceRoot: path.resolve(sourceRoot)
       });
+    });
+  }
+
+  async function renameSession(sessionId, name) {
+    return runInSessionProject(sessionId, async ({ store }) => {
+      const sessionName = await store.writeSessionLabel(sessionId, name);
+      await publishSessionChanged(sessionId, { reason: "session-renamed", payload: { clientRefresh: { includeList: true } } });
+      return { ok: true, sessionId, sessionName };
     });
   }
 
@@ -756,6 +821,7 @@ function createAgentSessionCommandService({
     logger,
     bindSession,
     closeAllForSession,
+    renameSession,
     run
   });
 }
@@ -777,6 +843,7 @@ async function prepareAgentSessionCommand({
     wrapperHostDir: normalizedWrapperHostDir
   });
   await Promise.all([
+    writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-session"), sessionRenameCommandSource()),
     writeExecutableFileIfChanged(
       wrapperHostPath(normalizedWrapperHostDir),
       commandWrapperSource()
@@ -794,6 +861,8 @@ async function prepareAgentSessionCommand({
   return {
     controlGenerationId: server.generationId,
     env: {
+      [SESSION_RENAME_CONTROL_ENV]: JSON.stringify({ socketPath: server.socketPath, sessionId: normalizedSessionId,
+        generationId: server.generationId, token: server.renameToken }),
       [VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV]: AGENT_SESSION_COMMAND_CONTRACT_VERSION,
       [VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV]: server.generationId,
       [VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV]: normalizedSessionId,

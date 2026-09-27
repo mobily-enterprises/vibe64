@@ -93,6 +93,7 @@ test("agent shell commands run as session-owned managed executions and drain on 
         DBUS_STARTER_ADDRESS: "unix:path=/run/user/1000/bus",
         DBUS_STARTER_BUS_TYPE: "session",
         SAFE_ENV: "kept",
+        VIBE64_SESSION_RENAME_CONTROL: "rename-only-capability",
         GENESIS_PARSER_ROOT: "/untrusted/parser-cache",
         GENESIS_PARSER_AUTO_INSTALL: "1",
         VIBE64_AGENT_SESSION_COMMAND_TOKEN: "must-not-leak"
@@ -117,6 +118,7 @@ test("agent shell commands run as session-owned managed executions and drain on 
       genesisCommandShimDirectory()
     ]);
     assert.equal(request.baseEnv.SAFE_ENV, "kept");
+    assert.equal(request.baseEnv.VIBE64_SESSION_RENAME_CONTROL, "rename-only-capability");
     assert.equal(request.baseEnv.GENESIS_PARSER_ROOT, "/release/genesis-parsers");
     assert.equal(request.baseEnv.GENESIS_PARSER_AUTO_INSTALL, "0");
     assert.equal(Object.hasOwn(request.baseEnv, "DBUS_SESSION_BUS_ADDRESS"), false);

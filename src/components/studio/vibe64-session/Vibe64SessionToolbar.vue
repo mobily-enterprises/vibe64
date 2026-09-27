@@ -87,6 +87,12 @@
                 <dd>{{ fact.value }}</dd>
               </template>
             </dl>
+            <v-btn
+              v-if="toolbar.sessionsApiPath" variant="text" height="48" :prepend-icon="mdiPencilOutline"
+              :disabled="sessionItem.archiving || selectionArchived" @click.stop="renameSession(sessionItem)"
+            >
+              Rename session
+            </v-btn>
           </div>
         </v-tooltip>
       </v-chip>
@@ -121,6 +127,10 @@
         </div>
       </div>
     </div>
+    <Vibe64RenameSessionDialog
+      v-if="renamingSession" :session="renamingSession" :sessions-api-path="toolbar.sessionsApiPath"
+      @close="renamingSession = null" @renamed="toolbar.refreshSessionData?.({ includeList: true, reason: 'session-renamed' })"
+    />
   </div>
 </template>
 
@@ -133,9 +143,11 @@ import {
   mdiCloudDownloadOutline,
   mdiContentSaveAlertOutline,
   mdiDotsHorizontalCircleOutline,
+  mdiPencilOutline,
   mdiInformationOutline
 } from "@mdi/js";
 import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
+import Vibe64RenameSessionDialog from "./Vibe64RenameSessionDialog.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import { vibe64SessionInfoFacts } from "@/lib/vibe64SessionInfo.js";
 import { vibe64SessionStatusLabel } from "@/lib/vibe64SessionViewModel.js";
@@ -189,6 +201,7 @@ const props = defineProps({
 
 const emit = defineEmits(["select-session"]);
 const infoSessionId = ref("");
+const renamingSession = ref(null);
 const sessionTooltip = inject(VIBE64_SESSION_TOOLTIP_KEY);
 const infoId = useId();
 const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
@@ -196,12 +209,22 @@ const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
   timeStyle: "short"
 });
 
+function renameSession(session) {
+  infoSessionId.value = "";
+  sessionTooltip.suppressedSessionId.value = session.sessionId;
+  renamingSession.value = { ...session };
+}
+
 function setSessionInfo(sessionId, visible) {
   if (visible && !props.active) return;
   if (visible || infoSessionId.value === sessionId) {
     infoSessionId.value = visible ? sessionId : "";
   }
 }
+
+watch(() => props.toolbar.sessionsApiPath, () => {
+  renamingSession.value = null;
+});
 
 watch(() => props.active, (active) => {
   if (!active) infoSessionId.value = "";

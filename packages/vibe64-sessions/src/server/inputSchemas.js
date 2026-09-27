@@ -88,6 +88,16 @@ function requiredInputSchema(fields) {
   });
 }
 
+const sessionRenameFields = {
+  name: { type: "string", noTrim: false, minLength: 1, maxLength: 120, required: true },
+  ...optionalOrigin
+};
+const sessionRenameInputValidator = requiredInputSchema(sessionRenameFields);
+const sessionRenameActionInputValidator = requiredInputSchema({
+  ...sessionRenameFields,
+  sessionId: { type: "string", noTrim: false, minLength: 1, required: true }
+});
+
 const agentMessageFields = {
   planRevision: { type: "string", maxLength: 64, required: false },
   reviewAction: { type: "string", enum: ["retry"], required: false },
@@ -576,6 +586,8 @@ const integrationSetupRequestActionInputValidator = requiredInputSchema({
 });
 
 export {
+  sessionRenameInputValidator,
+  sessionRenameActionInputValidator,
   conversationRewindInputValidator,
   conversationRewindActionInputValidator,
   integrationSetupRequestInputValidator,

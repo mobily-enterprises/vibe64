@@ -355,6 +355,8 @@ function useVibe64SessionRuntimeHost(props, emit) {
     statusLabel: vibe64SessionStatusLabel
   });
   const autopilotSessionToolbar = proxyRefs({
+    sessionsApiPath: props.sessionData.sessionsApiPath,
+    refreshSessionData,
     projectContext: computed(() => props.projectContext || {}),
     refreshRepositoryState: props.refreshRepositoryState,
     canCreateSession: props.sessionData.canCreateSession,

@@ -2070,16 +2070,18 @@ function createVibe64SessionStore({
     });
   }
 
-  async function writeSessionLabel(sessionId, sessionLabel) {
+  async function writeSessionLabel(sessionId, sessionLabel, { onlyIfUnnamed = false } = {}) {
     return mutateSession(sessionId, async (sessionPaths) => {
-      const sessionName = normalizeSessionLabel(sessionLabel);
-      if (!sessionName) {
-        await rm(metadataFilePath(sessionPaths, SESSION_LABEL_METADATA), {
-          force: true
-        });
-        return "";
+      const sessionName = typeof sessionLabel === "string" ? sessionLabel.trim() : "";
+      if (!sessionName || sessionName.length > SESSION_LABEL_MAX_LENGTH || /[\p{Cc}\p{Zl}\p{Zp}]/u.test(sessionName)) {
+        throw vibe64Error("Use a session name between 1 and 120 characters on one line.", "vibe64_session_name_invalid");
       }
-      await writeTextFile(metadataFilePath(sessionPaths, SESSION_LABEL_METADATA), `${sessionName}\n`);
+      const labelPath = metadataFilePath(sessionPaths, SESSION_LABEL_METADATA);
+      if (onlyIfUnnamed) {
+        const current = normalizeText(await readTextIfExists(labelPath));
+        if (current) return current;
+      }
+      await writeTextFile(labelPath, `${sessionName}\n`);
       return sessionName;
     });
   }
@@ -2675,6 +2677,17 @@ function createVibe64SessionStore({
         if (turn.user && ++users === 2) break;
       }
       return turns;
+    });
+  }
+
+  async function readFirstUserMessage(sessionId) {
+    return withReadableSessionPaths(sessionId, async (paths) => {
+      for (const turnId of await conversationTurnIds(paths, true)) {
+        const files = sortedFileNames(await readDirectoryEntries(conversationTurnRoot(paths, turnId)),
+          (name) => CONVERSATION_MESSAGE_FILE_PATTERN.exec(name)?.[1] === "user");
+        if (files.length) return readConversationMessage(paths, turnId, files[0]);
+      }
+      return null;
     });
   }
 
@@ -5161,6 +5174,7 @@ function createVibe64SessionStore({
     readBackgroundTasks,
     readConversationLog,
     readConversationStream,
+    readFirstUserMessage,
     updateConversationStream,
     completeConversationStreamMessage,
     clearConversationStream,

@@ -1,4 +1,5 @@
 import {
+  ACTION_RENAME_SESSION,
   ACTION_REWIND_CONVERSATION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
@@ -36,6 +37,7 @@ import {
   ACTION_UPDATE_SESSION_WORK,
 } from "./actions.js";
 import {
+  sessionRenameInputValidator,
   conversationRewindInputValidator,
   integrationSetupRequestInputValidator,
   agentMessageInputValidator,
@@ -182,6 +184,14 @@ function registerRoutes(http, {
       sessionId: request.params.sessionId
     }),
     summary: "Change provider, model, primary agent, or variant between turns."
+  });
+
+  routes.actionRoute("PATCH", "/sessions/:sessionId/name", {
+    actionId: ACTION_RENAME_SESSION,
+    body: sessionRenameInputValidator,
+    bodyLimit: 4096,
+    buildInput: (request) => ({ ...routes.requestBody(request), sessionId: request.params.sessionId }),
+    summary: "Change this session's display name."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/renewal", {

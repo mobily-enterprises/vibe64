@@ -11,6 +11,13 @@ the canonical project and from other sessions.
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `tests/server/assistantRoutingStateInventory.unit.test.js`
 - `tests/server/vibe64SessionStorageLifecycle.unit.test.js`
+- `packages/vibe64-terminals/src/server/sessionNaming.js`
+- `packages/vibe64-terminals/src/server/sessionNamingHelper.js`
+- `packages/vibe64-terminals/src/server/agentSessionCommand.js`
+- `tests/server/sessionNaming.unit.test.js`
+- `tests/server/sessionRename.unit.test.js`
+- `tests/e2e/session-naming.spec.ts`
+- `src/components/studio/vibe64-session/Vibe64RenameSessionDialog.vue`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
 - `packages/vibe64-terminals/src/server/projectStackInspection.js`
 - `src/components/studio/vibe64-session/Vibe64WorkflowSelector.vue`
@@ -166,6 +173,26 @@ supplies it. Hosted shells keep their existing placement. The relocation retains
 creation permissions, pending feedback, the assistant dialog and the three-session
 limit; compact Git controls leave space for the button on small screens.
 Save sits directly beside the session actions so the tabs retain that space.
+Session display names use the existing `label` metadata. After accepted delivery,
+`createSessionNaming` checks the durable first user message, including rewound
+turns, and claims the `session-name` background task once. The workflow's Helper
+receives only bounded first-message text through the tool-free `session_title`
+profile. Its owned conversation and scratch directory are cleaned through the
+same naming lifecycle used by Save. Failed cleanup stays recorded for session
+close; closing waits for an in-flight naming task. Subsequent messages and
+restarts do not regenerate a name or backfill old chats. Unavailable Helper or
+invalid output leaves the existing display name and ordinary chat usable.
+
+Session details offer Rename on desktop and touch. `PATCH /sessions/:sessionId/name`
+and `vibe64-helper session rename "Name"` use the store's label mutation and
+publish a session-list refresh. The chat command uses the existing managed
+session command listener with a separate, rename-only capability, checked against
+its bound project, session, and listener generation. It cannot authorize shell
+execution. Manual names may contain spaces and have a 120-character limit;
+automatic names contain one word of up to 40 characters. The store checks for
+an existing label under its mutation lock before applying an automatic name,
+so a manual rename wins. IDs, directories, source branches and URLs never move.
+
 Each tab shows a basic-info tooltip after one second of hover or keyboard focus,
 including its full name, status, assistant and model when available, save state, identifier,
 branch, and creation time. A touch-visible info button opens the same tooltip
