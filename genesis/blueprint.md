@@ -18,7 +18,10 @@ retains the original request, follows up within a turn allowance, arranges revie
 in the same session and brings back evidence when the work is ready for their
 testing. Explicitly linked assignments can exchange relevant questions and
 answers across projects and sessions, while keeping their separate worktrees,
-targets and allowances. Questions requiring a product decision return to the person. Complete
+targets and allowances. Questions requiring a product decision return to the person.
+Colleague also manages the named existing app accounts used by Preview through
+Managed app access, preserving the selected source and its normal Save workflow.
+Configuring a name does not create an account or sign the browser in. Complete
 product-operation coverage remains in progress.
 
 On phones and narrow layouts, Colleague has one compact avatar button in the

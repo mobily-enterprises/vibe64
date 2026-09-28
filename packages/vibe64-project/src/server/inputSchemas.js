@@ -1,9 +1,10 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
+import { PREVIEW_APPLICATION_IDENTITY_LIMIT, PREVIEW_IDENTITY_SELECTOR_TYPES } from "@local/vibe64-core/server/previewAuth";
 const createProjectSchema = createSchema.createFactory();
 const maxItems = ({ value, parameterValue, throwParamError }) => {
   if (Array.isArray(value) && value.length > parameterValue) {
-    throwParamError("MAX_ITEMS", `Choose up to ${parameterValue} repository labels.`);
+    throwParamError("MAX_ITEMS", `Choose up to ${parameterValue} entries.`);
   }
 };
 maxItems.toJsonSchema = ({ parameterValue }) => ({ maxItems: parameterValue });
@@ -186,13 +187,16 @@ const projectDevelopmentDatabaseScopeInputValidator = inputSchema({
   }
 });
 
+const previewApplicationIdentitySchema = createSchema({
+  name: { type: "string", minLength: 1, maxLength: 64, noTrim: false, required: true },
+  type: { type: "string", enum: PREVIEW_IDENTITY_SELECTOR_TYPES, noTrim: false, required: true },
+  value: { type: "string", minLength: 1, maxLength: 320, noTrim: false, required: true }
+});
 const previewApplicationIdentitiesInputValidator = inputSchema({
   identities: {
     type: "array",
-    items: {
-      type: "object",
-      additionalProperties: true
-    },
+    items: previewApplicationIdentitySchema,
+    maxItems: PREVIEW_APPLICATION_IDENTITY_LIMIT,
     required: true
   },
   sessionId: {
@@ -262,6 +266,7 @@ export {
   projectPromptHintsInputValidator,
   projectSelectInputValidator,
   projectSettingsReadInputValidator,
+  previewApplicationIdentitySchema,
   previewApplicationIdentitiesInputValidator,
   previewApplicationIdentitiesReadInputValidator
 };

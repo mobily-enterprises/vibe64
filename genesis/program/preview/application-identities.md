@@ -6,6 +6,10 @@ users without turning that convenience into a production sign-in mechanism.
 ## Sources
 
 - `packages/vibe64-project/src/server/previewApplicationIdentities.js`
+- `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/inputSchemas.js`
+- `packages/vibe64-project/src/server/settingsAssistantContracts.js`
+- `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-terminals/src/server/previewIdentityCommand.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
 - `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
@@ -16,7 +20,18 @@ users without turning that convenience into a production sign-in mechanism.
 
 ## Public contract
 
-The project workspace stores named selectors outside source control. When a
+Managed app access stores named selectors in `.vibe64/preview-identities.json`
+inside the exact selected source, so session changes follow ordinary Save.
+Colleague reads and replaces the same complete ordered list through the canonical
+Project actions. The first entry is the default. It preserves unrequested entries,
+uses the user's actual identifiers and retains the ordinary project permissions
+and source-work locks. Inputs describe name, selector type and value explicitly;
+the existing owner validates unique names, supported selectors and the 32-entry
+limit. Responses contain selectors without filesystem paths or authentication
+secrets. Configuring this list does not prove account existence, application
+support or an authenticated browser session.
+
+When a
 web-presented Vibe64 Outputs target declares
 `vibe64.preview-identity.command.v1`, Vibe64 offers those names and guest mode,
 maps the command's declared runtimes, invokes the safe committed

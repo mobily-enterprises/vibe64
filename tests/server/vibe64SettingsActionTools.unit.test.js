@@ -8,12 +8,13 @@ import { createProjectActions } from "../../packages/vibe64-project/src/server/a
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 const preferences = { experience: "comfortable", explanationStyle: "concise", responseLength: "concise", tone: "encouraging" };
-const sourceOperations = ["settings.read", "engineering.read", "collaboration.save", "engineering.profile.save"];
+const sourceOperations = ["settings.read", "engineering.read", "collaboration.save", "engineering.profile.save", "preview-identities.read", "preview-identities.save"];
 const operations = [...sourceOperations, "prompt-hints.save", "repository.workflow.save", "development-database.scope.save"];
 
 async function withSettingsTools(run) {
   await withRouteProject(async ({ projectContext, slug }) => {
     const state = { actor: { username: "owner", role: "owner" }, allowed: true };
+    state.identities = [{ name: "admin", type: "email", value: "admin@example.test" }, { name: "member", type: "login", value: "member" }];
     state.developmentDatabase = { scope: "project", canChange: false, managed: true, disabledReason: "Close the open session first.",
       openSessionCount: 1, password: "private-password" };
     const source = { rootKind: "session-source", sessionId: "session-a", sourceRoot: "/private/source" };
@@ -59,6 +60,16 @@ async function withSettingsTools(run) {
         if (!state.developmentDatabase.canChange) return { ok: false, errors: [{ code: "vibe64_development_database_scope_busy", message: state.developmentDatabase.disabledReason }] };
         state.developmentDatabase.scope = input.scope;
         return { ok: true, ...state.developmentDatabase };
+      },
+      async readPreviewApplicationIdentities(input) {
+        record("preview-identities.read", input);
+        return { ok: true, identities: state.identities, filePath: "/private/source/.vibe64/preview-identities.json" };
+      },
+      async savePreviewApplicationIdentities(input) {
+        record("preview-identities.save", input);
+        if (state.failure) return state.failure;
+        state.identities = input.identities;
+        return { ok: true, identities: state.identities, filePath: "/private/source/.vibe64/preview-identities.json" };
       }
     } }).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => state.actor,
@@ -73,7 +84,7 @@ async function withSettingsTools(run) {
       return catalog.executeToolCall({ toolName: tool.name, toolSet, context: callerContext,
         argumentsText: JSON.stringify({ projectSlug: slug, ...(sourceOperations.includes(operation) ? { sessionId: "session-a" } : {}), ...input }) });
     };
-    await run({ actions, calls, events, execute, slug, state });
+    await run({ actions, calls, catalog, events, execute, slug, state, toolSet });
   });
 }
 
@@ -144,7 +155,8 @@ test("settings tools recheck owner and project authority and reject malformed in
       "settings.read": {}, "engineering.read": {},
       "collaboration.save": { ...preferences, requirements: "" },
       "engineering.profile.save": { profile: "durable.v1" }, "prompt-hints.save": { promptHints: false },
-      "repository.workflow.save": { requirePullRequest: true }, "development-database.scope.save": { scope: "session" }
+      "repository.workflow.save": { requirePullRequest: true }, "development-database.scope.save": { scope: "session" },
+      "preview-identities.read": {}, "preview-identities.save": { identities: state.identities }
     };
     for (const operation of operations) {
       assert.equal((await execute(operation, { ...valid[operation], vibe64User: state.actor })).ok, false);
@@ -170,6 +182,59 @@ test("settings tools recheck owner and project authority and reject malformed in
     assert.equal(failed.result.code, "source_busy");
     assert.equal(failed.result.error, "Another conversation is editing this source.");
     assert.equal(JSON.stringify(failed).includes("private"), false);
+  });
+});
+
+test("preview identity tools preserve the full ordered list and share API source authority and failure results", async () => {
+  await withSettingsTools(async ({ actions, calls, events, execute, slug, state }) => {
+    const read = await execute("preview-identities.read");
+    assert.equal(read.ok, true, JSON.stringify(read));
+    assert.deepEqual(read.result, { ok: true, identities: state.identities });
+    const reordered = [...read.result.identities].reverse();
+    state.actor = { username: "member", role: "member" };
+    const saved = await execute("preview-identities.save", { identities: reordered });
+    assert.equal(saved.ok, true, JSON.stringify(saved));
+    assert.deepEqual(saved.result, { ok: true, identities: reordered });
+    assert.equal(calls.at(-1).input.sessionId, "session-a");
+    assert.equal(calls.at(-1).context.vibe64User, state.actor);
+    assert.equal(events.at(-1).realtime.payload.projectSlug, slug);
+    assert.deepEqual((await execute("preview-identities.read")).result.identities, reordered);
+    const api = await actions.execute({ actionId: "vibe64.project.preview-identities.save",
+      input: { projectSlug: slug, sessionId: "session-b", identities: [] }, context: { channel: "api", surface: "app" } });
+    assert.deepEqual(api.identities, []);
+    assert.equal(calls.at(-1).input.sessionId, "session-b");
+    assert.equal(calls.at(-1).context.vibe64User, state.actor);
+    state.identities = Array.from({ length: 32 }, (_, i) => ({ name: `user-${i}`, type: "user-id", value: String(i) }));
+    assert.deepEqual((await execute("preview-identities.read")).result.identities, state.identities, "a replacement read never silently truncates the list");
+    state.failure = { ok: false, errors: [{ code: "source_busy", message: "Another conversation is editing this source.", details: "private-details" }] };
+    const failed = await execute("preview-identities.save", { identities: [] });
+    assert.deepEqual(failed.result, { ok: false, code: "source_busy", error: "Another conversation is editing this source." });
+    assert.equal(state.identities.length, 32);
+  });
+});
+
+test("preview identity schemas describe selectors and reject malformed replacements before either caller reaches the service", async () => {
+  await withSettingsTools(async ({ actions, calls, catalog, execute, slug, state, toolSet }) => {
+    const tool = toolSet.tools.find(({ actionId }) => actionId === "vibe64.project.preview-identities.save");
+    const parameters = catalog.toOpenAiToolSchema(tool).function.parameters;
+    const field = parameters.properties.identities;
+    const item = parameters.definitions[field.items.allOf[0].$ref.split("/").at(-1)];
+    assert.equal(field.maxItems, 32);
+    assert.deepEqual(item.required, ["name", "type", "value"]);
+    assert.deepEqual(item.properties.type.enum, ["email", "login", "user-id"]);
+    const identity = state.identities[0];
+    for (const identities of [
+      [{ name: "admin", type: "email" }], [{ ...identity, type: "password" }],
+      [{ ...identity, password: "must-not-reach-service" }], [{ ...identity, value: "" }],
+      [{ ...identity, name: "n".repeat(65) }], [{ ...identity, value: "v".repeat(321) }],
+      Array.from({ length: 33 }, (_, i) => ({ ...identity, name: `user-${i}` }))
+    ]) {
+      assert.equal((await execute("preview-identities.save", { identities })).ok, false);
+      await assert.rejects(actions.execute({ actionId: tool.actionId,
+        input: { projectSlug: slug, sessionId: "session-a", identities }, context: { channel: "api", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" });
+    }
+    assert.equal(calls.length, 0);
+    assert.equal(state.identities.length, 2);
   });
 });
 

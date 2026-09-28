@@ -324,12 +324,14 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_READ_PREVIEW_APPLICATION_IDENTITIES,
+      assistant: settingsTool("preview-identities.read"),
       kind: "query",
       input: previewApplicationIdentitiesReadInputValidator,
       execute: (input) => project.readPreviewApplicationIdentities(input)
     }),
     action({
       id: ACTION_SAVE_PREVIEW_APPLICATION_IDENTITIES,
+      assistant: settingsTool("preview-identities.save"),
       kind: "command",
       input: previewApplicationIdentitiesInputValidator,
       events: [projectChangedEvent()],
