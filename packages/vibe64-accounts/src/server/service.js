@@ -2228,8 +2228,23 @@ function createService({
 
   async function readModelRouting(input = {}) {
     return accountsResult(async () => {
+      if ((input.choiceSearch !== undefined || input.choiceOffset !== undefined || input.choiceRole) &&
+          (!input.engineId || !ASSISTANT_ROUTING_ASSIGNMENTS.includes(input.choiceRole))) {
+        return { ok: false, code: "vibe64_routing_choice_scope", error: "Choose the workflow and role before searching model choices." };
+      }
       const saved = await routingStore().read();
-      return routingView(saved, input);
+      const view = await routingView(saved, input);
+      if (!input.choiceRole) return view;
+      const engine = view.engines.find(engine => engine.engineId === input.engineId);
+      if (!engine || engine.error) return { ok: false, code: "vibe64_routing_choices_unavailable", error: "Model choices are unavailable for this workflow. Open AI Accounts for details." };
+      const search = String(input.choiceSearch || "").toLowerCase();
+      const choices = engine.roles[input.choiceRole].choices.filter(choice =>
+        [choice.engineId, choice.agentId, choice.modelProviderId, choice.modelId, choice.label, choice.providerLabel]
+          .some(value => String(value || "").toLowerCase().includes(search)));
+      const offset = input.choiceOffset || 0;
+      return { ok: true, revision: saved.revision, canConfigure: view.canConfigure,
+        engineId: engine.engineId, choiceRole: input.choiceRole, choiceCount: choices.length,
+        choices: choices.slice(offset, offset + 20), nextOffset: offset + 20 < choices.length ? offset + 20 : null };
     });
   }
 

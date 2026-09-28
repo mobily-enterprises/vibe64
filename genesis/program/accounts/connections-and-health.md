@@ -15,13 +15,14 @@ direct execution too. The existing store owns validation, credential writes,
 runtime invalidation and change publication. HTTP field selection derives from
 the action schema; a URL provider takes precedence over body input. Login
 WebSockets retain their transport adapter and the four retired Helper endpoints
-remain 410 notices with no operation to expose. Account actions have no direct
-Colleague tool exposure until their bounded presentation is defined.
+remain 410 notices with no operation to expose. Model routing read/preview/save
+have bounded Colleague presentations; other account actions remain excluded.
 
 ## Sources
 
 - `packages/vibe64-accounts/src/server/actions.js`
 - `packages/vibe64-accounts/src/server/inputSchemas.js`
+- `packages/vibe64-accounts/src/server/routingAssistantContracts.js`
 - `tests/server/vibe64AccountActionDispatch.unit.test.js`
 - `packages/vibe64-core/src/server/codexAuthState.js`
 
@@ -89,12 +90,32 @@ clients retain the loopback-only exception. Authentication does not bypass this
 check. Native incoming WebSocket messages are limited to 1 MiB; file attachments
 use their separate upload API.
 
+Colleague exposes the canonical Model routing read, preview and save actions
+without project selection. Their assistant results contain assignments,
+recommendations, effective viewer/collaborator routes and access/availability
+metadata, not account identities, credentials, provider error details or private
+runtime context. The ordinary HTTP read retains its full UI result. Supplying
+`engineId` and `choiceRole` requests the same role's choices as a 20-item page,
+optionally filtered by `choiceSearch` and advanced through `choiceOffset` and
+`nextOffset`. `includeOtherModels` includes the UI's other connected choices.
+Choice variants are limited to 100 with their full count; identifiers are exact
+and selecting a choice still requires native validation.
+
+Preview and Save take the same structured workflow/role selection contract.
+A null assignment explicitly disables the role; omitted assignments are preserved.
+They keep the service's owner policy, revision guard, route/access validation,
+atomic persistence and realtime events. A preview does not write. A stale save
+must be reread and reviewed, not silently repeated. A successful save changes
+future workflow decisions; it does not retarget active agents, session chat modes
+or Colleague's own model. Historical Helper review remains explicit; Colleague
+reports that review is required without clearing it on the person's behalf.
+
 Model routing is a shared Accounts surface. Each workflow keeps Senior and Junior
 in one orchestrator, with independent Helper and Router choices and a shared
 Backup across connected orchestrators. Thinking choices and Personal/Workspace
 scope appear with each exact route. Saves are atomic and revision-checked in private installation state at
 `ai-connections/routing.json`; unreadable settings are preserved for recovery.
-The store's version-3 format keeps independent Router and shared Backup fields
+The store's version-4 format keeps independent Router and shared Backup fields
 and helper-conflict evidence alongside those choices. Senior/Junior assignments
 must belong to their workflow engine. Old-format files require the explicit
 stopped-service upgrade; ordinary reads do not change them.

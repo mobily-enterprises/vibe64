@@ -1468,35 +1468,35 @@
       "title": "accountRealtimeEvents.js"
     },
     {
-      "bytes": 8938,
+      "bytes": 9210,
       "districtId": "directory:packages/vibe64-accounts/src/server",
       "extractors": [
         "javascript"
       ],
       "functionIds": [
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions:function:35:1",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:44:16",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:49:16",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:54:16",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:60:16",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:71:16",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:83:16",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:95:16",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:108:7",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:127:7",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:146:7",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:164:7",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:184:7",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:199:7",
-        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:214:7",
-        "function:packages/vibe64-accounts/src/server/actions.js:createAiConnectionActions:function:223:1",
-        "function:packages/vibe64-accounts/src/server/actions.js:execute:method:233:5"
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions:function:36:1",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:45:16",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:51:16",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:57:16",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:64:16",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:75:16",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:87:16",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:99:16",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:112:7",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:131:7",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:150:7",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:168:7",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:188:7",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:203:7",
+        "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:218:7",
+        "function:packages/vibe64-accounts/src/server/actions.js:createAiConnectionActions:function:227:1",
+        "function:packages/vibe64-accounts/src/server/actions.js:execute:method:237:5"
       ],
-      "hash": "sha256:99283cc13a6cafc9a7761a2d27bfbc5abc346d30821dcf19d34ad7c49678014f",
+      "hash": "sha256:08e2b2b52da9c055e7c8c115b1b19822609b28e432e9d462c132dbf0920585f0",
       "id": "file:packages/vibe64-accounts/src/server/actions.js",
       "internalFunctionCount": 15,
       "language": "javascript",
-      "lines": 256,
+      "lines": 260,
       "mode": 33188,
       "path": "packages/vibe64-accounts/src/server/actions.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-accounts",
@@ -1851,17 +1851,17 @@
       "title": "hostCommandArgs.js"
     },
     {
-      "bytes": 4633,
+      "bytes": 5943,
       "districtId": "directory:packages/vibe64-accounts/src/server",
       "extractors": [
         "javascript"
       ],
       "functionIds": [],
-      "hash": "sha256:c1f71d02c622b724d7ae2a204e4ac541b6df07d16ff00ae72aa2a1323088b06b",
+      "hash": "sha256:9f5d6546397a0f880f3fb2be37dc4d4e9c28bd0f9715bb9ca6819b5ce189ebd0",
       "id": "file:packages/vibe64-accounts/src/server/inputSchemas.js",
       "internalFunctionCount": 0,
       "language": "javascript",
-      "lines": 170,
+      "lines": 190,
       "mode": 33188,
       "path": "packages/vibe64-accounts/src/server/inputSchemas.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-accounts",
@@ -1913,7 +1913,31 @@
       "title": "registerRoutes.js"
     },
     {
-      "bytes": 90452,
+      "bytes": 7826,
+      "districtId": "directory:packages/vibe64-accounts/src/server",
+      "extractors": [
+        "javascript"
+      ],
+      "functionIds": [
+        "function:packages/vibe64-accounts/src/server/routingAssistantContracts.js:routingSelection:function:24:1",
+        "function:packages/vibe64-accounts/src/server/routingAssistantContracts.js:modelRoutingTool:function:28:8",
+        "function:packages/vibe64-accounts/src/server/routingAssistantContracts.js:modelRoutingTool.transformResult:method:52:5"
+      ],
+      "hash": "sha256:1eabc4a13848ade2902951e862c63328833598de1f148b689daf65b9c9f72536",
+      "id": "file:packages/vibe64-accounts/src/server/routingAssistantContracts.js",
+      "internalFunctionCount": 2,
+      "language": "javascript",
+      "lines": 85,
+      "mode": 33188,
+      "path": "packages/vibe64-accounts/src/server/routingAssistantContracts.js",
+      "presentationCampusId": "presentation-campus:packages:packages/vibe64-accounts",
+      "presentationRegionId": "packages",
+      "publicFunctionCount": 1,
+      "role": "source",
+      "title": "routingAssistantContracts.js"
+    },
+    {
+      "bytes": 91810,
       "districtId": "directory:packages/vibe64-accounts/src/server",
       "extractors": [
         "javascript"
@@ -2037,35 +2061,35 @@
         "function:packages/vibe64-accounts/src/server/service.js:startAuthTerminal.onClose:function:2168:20",
         "function:packages/vibe64-accounts/src/server/service.js:startAuthTerminal.onOutput:function:2177:21",
         "function:packages/vibe64-accounts/src/server/service.js:createService.readModelRouting:function:2229:3",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.routingView:function:2236:3",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.sameRoutingSelection:function:2247:32",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.initializeModelRouting:function:2252:3",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.routingDraft:function:2284:3",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.readModelRoutingWorkflows:method:2317:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.previewModelRouting:method:2320:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.saveModelRouting:method:2328:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.getStatus:method:2355:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.getClaudeStatus:method:2361:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.getCodexStatus:method:2365:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.recordGithubAuthInvalid:method:2374:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.startAuth:method:2387:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.saveGitIdentity:method:2454:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.readCodexProviders:method:2494:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.saveCodexProvider:method:2501:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.removeCodexProvider:method:2513:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.savePersonalAiProfile:method:2523:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.readAuthSession:method:2544:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.logout:method:2548:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.cancelAuthSession:method:2620:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.subscribeAuthTerminal:method:2643:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.writeAuthTerminal:method:2653:5",
-        "function:packages/vibe64-accounts/src/server/service.js:createService.resizeAuthTerminal:method:2663:5"
+        "function:packages/vibe64-accounts/src/server/service.js:createService.routingView:function:2251:3",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.sameRoutingSelection:function:2262:32",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.initializeModelRouting:function:2267:3",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.routingDraft:function:2299:3",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.readModelRoutingWorkflows:method:2332:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.previewModelRouting:method:2335:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.saveModelRouting:method:2343:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.getStatus:method:2370:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.getClaudeStatus:method:2376:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.getCodexStatus:method:2380:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.recordGithubAuthInvalid:method:2389:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.startAuth:method:2402:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.saveGitIdentity:method:2469:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.readCodexProviders:method:2509:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.saveCodexProvider:method:2516:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.removeCodexProvider:method:2528:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.savePersonalAiProfile:method:2538:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.readAuthSession:method:2559:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.logout:method:2563:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.cancelAuthSession:method:2635:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.subscribeAuthTerminal:method:2658:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.writeAuthTerminal:method:2668:5",
+        "function:packages/vibe64-accounts/src/server/service.js:createService.resizeAuthTerminal:method:2678:5"
       ],
-      "hash": "sha256:dc14e17069eda386aff7766092719f7c494854c090ac4248498a5053c8794207",
+      "hash": "sha256:500851fcea5b2caa381b73761fcf3dd85364f90ef4f516342e8b19013df17c75",
       "id": "file:packages/vibe64-accounts/src/server/service.js",
       "internalFunctionCount": 131,
       "language": "javascript",
-      "lines": 2700,
+      "lines": 2715,
       "mode": 33188,
       "path": "packages/vibe64-accounts/src/server/service.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-accounts",
@@ -21387,7 +21411,7 @@
       "title": "vite.config.mjs"
     }
   ],
-  "codeHash": "sha256:e1962da8a87a164e4efdc2f6eb4e678dc9f4da96d4e749cb39c9343a3846c4aa",
+  "codeHash": "sha256:845a6656f50b27b08985146ad940448bc6a3f85f369c5d60c3da025f9a398840",
   "diagnostics": [],
   "districts": [
     {
@@ -29650,10 +29674,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions:function:35:1",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions:function:36:1",
       "kind": "function",
       "language": "javascript",
-      "line": 35,
+      "line": 36,
       "name": "createActions",
       "parameters": [
         "{ accounts } = {}"
@@ -29671,10 +29695,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:44:16",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:45:16",
       "kind": "function",
       "language": "javascript",
-      "line": 44,
+      "line": 45,
       "name": "execute",
       "parameters": [
         "input"
@@ -29692,10 +29716,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:49:16",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:51:16",
       "kind": "function",
       "language": "javascript",
-      "line": 49,
+      "line": 51,
       "name": "execute",
       "parameters": [
         "input"
@@ -29713,10 +29737,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:54:16",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:57:16",
       "kind": "function",
       "language": "javascript",
-      "line": 54,
+      "line": 57,
       "name": "execute",
       "parameters": [
         "input"
@@ -29734,10 +29758,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:60:16",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:64:16",
       "kind": "function",
       "language": "javascript",
-      "line": 60,
+      "line": 64,
       "name": "execute",
       "parameters": [
         "input"
@@ -29755,10 +29779,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:71:16",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:75:16",
       "kind": "function",
       "language": "javascript",
-      "line": 71,
+      "line": 75,
       "name": "execute",
       "parameters": [
         "input"
@@ -29776,10 +29800,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:83:16",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:87:16",
       "kind": "function",
       "language": "javascript",
-      "line": 83,
+      "line": 87,
       "name": "execute",
       "parameters": [
         "input"
@@ -29797,10 +29821,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:95:16",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:function:99:16",
       "kind": "function",
       "language": "javascript",
-      "line": 95,
+      "line": 99,
       "name": "execute",
       "parameters": [
         "input"
@@ -29818,10 +29842,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:108:7",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:112:7",
       "kind": "method",
       "language": "javascript",
-      "line": 108,
+      "line": 112,
       "name": "execute",
       "parameters": [
         "input"
@@ -29839,10 +29863,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:127:7",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:131:7",
       "kind": "method",
       "language": "javascript",
-      "line": 127,
+      "line": 131,
       "name": "execute",
       "parameters": [
         "input"
@@ -29860,10 +29884,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:146:7",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:150:7",
       "kind": "method",
       "language": "javascript",
-      "line": 146,
+      "line": 150,
       "name": "execute",
       "parameters": [
         "input"
@@ -29881,10 +29905,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:164:7",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:168:7",
       "kind": "method",
       "language": "javascript",
-      "line": 164,
+      "line": 168,
       "name": "execute",
       "parameters": [
         "input"
@@ -29902,10 +29926,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:184:7",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:188:7",
       "kind": "method",
       "language": "javascript",
-      "line": 184,
+      "line": 188,
       "name": "execute",
       "parameters": [
         "input"
@@ -29923,10 +29947,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:199:7",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:203:7",
       "kind": "method",
       "language": "javascript",
-      "line": 199,
+      "line": 203,
       "name": "execute",
       "parameters": [
         "input"
@@ -29944,10 +29968,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:214:7",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createActions.execute:method:218:7",
       "kind": "method",
       "language": "javascript",
-      "line": 214,
+      "line": 218,
       "name": "execute",
       "parameters": [
         "input"
@@ -29965,10 +29989,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:createAiConnectionActions:function:223:1",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:createAiConnectionActions:function:227:1",
       "kind": "function",
       "language": "javascript",
-      "line": 223,
+      "line": 227,
       "name": "createAiConnectionActions",
       "parameters": [
         "{ aiConnectionService, requireAiManagement = () => null } = {}"
@@ -29986,10 +30010,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/actions.js:execute:method:233:5",
+      "id": "function:packages/vibe64-accounts/src/server/actions.js:execute:method:237:5",
       "kind": "method",
       "language": "javascript",
-      "line": 233,
+      "line": 237,
       "name": "execute",
       "parameters": [
         "input"
@@ -32853,6 +32877,69 @@
       "column": 1,
       "container": null,
       "extractor": "javascript",
+      "fileId": "file:packages/vibe64-accounts/src/server/routingAssistantContracts.js",
+      "generator": false,
+      "id": "function:packages/vibe64-accounts/src/server/routingAssistantContracts.js:routingSelection:function:24:1",
+      "kind": "function",
+      "language": "javascript",
+      "line": 24,
+      "name": "routingSelection",
+      "parameters": [
+        "value"
+      ],
+      "path": "packages/vibe64-accounts/src/server/routingAssistantContracts.js",
+      "qualifiedName": "routingSelection",
+      "role": "source",
+      "static": false,
+      "visibility": "internal"
+    },
+    {
+      "async": false,
+      "column": 8,
+      "container": null,
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-accounts/src/server/routingAssistantContracts.js",
+      "generator": false,
+      "id": "function:packages/vibe64-accounts/src/server/routingAssistantContracts.js:modelRoutingTool:function:28:8",
+      "kind": "function",
+      "language": "javascript",
+      "line": 28,
+      "name": "modelRoutingTool",
+      "parameters": [
+        "operation"
+      ],
+      "path": "packages/vibe64-accounts/src/server/routingAssistantContracts.js",
+      "qualifiedName": "modelRoutingTool",
+      "role": "source",
+      "static": false,
+      "visibility": "public"
+    },
+    {
+      "async": false,
+      "column": 5,
+      "container": "modelRoutingTool",
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-accounts/src/server/routingAssistantContracts.js",
+      "generator": false,
+      "id": "function:packages/vibe64-accounts/src/server/routingAssistantContracts.js:modelRoutingTool.transformResult:method:52:5",
+      "kind": "method",
+      "language": "javascript",
+      "line": 52,
+      "name": "transformResult",
+      "parameters": [
+        "result"
+      ],
+      "path": "packages/vibe64-accounts/src/server/routingAssistantContracts.js",
+      "qualifiedName": "modelRoutingTool.transformResult",
+      "role": "source",
+      "static": false,
+      "visibility": "internal"
+    },
+    {
+      "async": false,
+      "column": 1,
+      "container": null,
+      "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
       "id": "function:packages/vibe64-accounts/src/server/service.js:resolveVibe64AccountsRoot:function:126:1",
@@ -35364,10 +35451,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.routingView:function:2236:3",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.routingView:function:2251:3",
       "kind": "function",
       "language": "javascript",
-      "line": 2236,
+      "line": 2251,
       "name": "routingView",
       "parameters": [
         "configuration",
@@ -35387,10 +35474,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.sameRoutingSelection:function:2247:32",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.sameRoutingSelection:function:2262:32",
       "kind": "function",
       "language": "javascript",
-      "line": 2247,
+      "line": 2262,
       "name": "sameRoutingSelection",
       "parameters": [
         "left",
@@ -35409,10 +35496,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.initializeModelRouting:function:2252:3",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.initializeModelRouting:function:2267:3",
       "kind": "function",
       "language": "javascript",
-      "line": 2252,
+      "line": 2267,
       "name": "initializeModelRouting",
       "parameters": [
         "input = {}"
@@ -35430,10 +35517,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.routingDraft:function:2284:3",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.routingDraft:function:2299:3",
       "kind": "function",
       "language": "javascript",
-      "line": 2284,
+      "line": 2299,
       "name": "routingDraft",
       "parameters": [
         "input"
@@ -35451,10 +35538,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.readModelRoutingWorkflows:method:2317:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.readModelRoutingWorkflows:method:2332:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2317,
+      "line": 2332,
       "name": "readModelRoutingWorkflows",
       "parameters": [
         "input = {}"
@@ -35472,10 +35559,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.previewModelRouting:method:2320:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.previewModelRouting:method:2335:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2320,
+      "line": 2335,
       "name": "previewModelRouting",
       "parameters": [
         "input = {}"
@@ -35493,10 +35580,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.saveModelRouting:method:2328:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.saveModelRouting:method:2343:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2328,
+      "line": 2343,
       "name": "saveModelRouting",
       "parameters": [
         "input = {}"
@@ -35514,10 +35601,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.getStatus:method:2355:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.getStatus:method:2370:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2355,
+      "line": 2370,
       "name": "getStatus",
       "parameters": [
         "input = {}"
@@ -35535,10 +35622,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.getClaudeStatus:method:2361:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.getClaudeStatus:method:2376:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2361,
+      "line": 2376,
       "name": "getClaudeStatus",
       "parameters": [],
       "path": "packages/vibe64-accounts/src/server/service.js",
@@ -35554,10 +35641,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.getCodexStatus:method:2365:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.getCodexStatus:method:2380:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2365,
+      "line": 2380,
       "name": "getCodexStatus",
       "parameters": [],
       "path": "packages/vibe64-accounts/src/server/service.js",
@@ -35573,10 +35660,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.recordGithubAuthInvalid:method:2374:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.recordGithubAuthInvalid:method:2389:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2374,
+      "line": 2389,
       "name": "recordGithubAuthInvalid",
       "parameters": [
         "input = {}"
@@ -35594,10 +35681,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.startAuth:method:2387:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.startAuth:method:2402:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2387,
+      "line": 2402,
       "name": "startAuth",
       "parameters": [
         "input = {}"
@@ -35615,10 +35702,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.saveGitIdentity:method:2454:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.saveGitIdentity:method:2469:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2454,
+      "line": 2469,
       "name": "saveGitIdentity",
       "parameters": [
         "input = {}"
@@ -35636,10 +35723,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.readCodexProviders:method:2494:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.readCodexProviders:method:2509:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2494,
+      "line": 2509,
       "name": "readCodexProviders",
       "parameters": [
         "input = {}"
@@ -35657,10 +35744,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.saveCodexProvider:method:2501:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.saveCodexProvider:method:2516:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2501,
+      "line": 2516,
       "name": "saveCodexProvider",
       "parameters": [
         "input = {}"
@@ -35678,10 +35765,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.removeCodexProvider:method:2513:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.removeCodexProvider:method:2528:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2513,
+      "line": 2528,
       "name": "removeCodexProvider",
       "parameters": [
         "input = {}"
@@ -35699,10 +35786,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.savePersonalAiProfile:method:2523:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.savePersonalAiProfile:method:2538:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2523,
+      "line": 2538,
       "name": "savePersonalAiProfile",
       "parameters": [
         "input = {}"
@@ -35720,10 +35807,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.readAuthSession:method:2544:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.readAuthSession:method:2559:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2544,
+      "line": 2559,
       "name": "readAuthSession",
       "parameters": [
         "input = {}"
@@ -35741,10 +35828,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.logout:method:2548:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.logout:method:2563:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2548,
+      "line": 2563,
       "name": "logout",
       "parameters": [
         "input = {}"
@@ -35762,10 +35849,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.cancelAuthSession:method:2620:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.cancelAuthSession:method:2635:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2620,
+      "line": 2635,
       "name": "cancelAuthSession",
       "parameters": [
         "input = {}"
@@ -35783,10 +35870,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.subscribeAuthTerminal:method:2643:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.subscribeAuthTerminal:method:2658:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2643,
+      "line": 2658,
       "name": "subscribeAuthTerminal",
       "parameters": [
         "input = {}",
@@ -35805,10 +35892,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.writeAuthTerminal:method:2653:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.writeAuthTerminal:method:2668:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2653,
+      "line": 2668,
       "name": "writeAuthTerminal",
       "parameters": [
         "input = {}",
@@ -35827,10 +35914,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-accounts/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.resizeAuthTerminal:method:2663:5",
+      "id": "function:packages/vibe64-accounts/src/server/service.js:createService.resizeAuthTerminal:method:2678:5",
       "kind": "method",
       "language": "javascript",
-      "line": 2663,
+      "line": 2678,
       "name": "resizeAuthTerminal",
       "parameters": [
         "input = {}",
@@ -200694,7 +200781,7 @@
       "title": "studio-terminal-core"
     },
     {
-      "buildingCount": 35,
+      "buildingCount": 36,
       "districtId": "directory:packages/vibe64-accounts",
       "id": "presentation-campus:packages:packages/vibe64-accounts",
       "path": "packages/vibe64-accounts",
@@ -200840,7 +200927,7 @@
   ],
   "presentationRegions": [
     {
-      "buildingCount": 374,
+      "buildingCount": 375,
       "component": "jskit",
       "fallback": false,
       "id": "packages",

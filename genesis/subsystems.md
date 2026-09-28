@@ -88,6 +88,8 @@ share these operations; hosts supply credential context and access policy.
 Workspace account actions resolve the actor independently of project selection.
 Shared provider-connection actions enforce owner and host management policy;
 HTTP and machine callers retain the same credential/revision service checks.
+The same routing owner supplies bounded Colleague read/preview/save presentations
+and paged role choices; there is no second routing store or permission policy.
 
 ### Program
 

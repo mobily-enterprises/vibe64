@@ -6,6 +6,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createActionProvider } from "@jskit-ai/kernel/server/actions";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import {
@@ -2403,5 +2406,121 @@ test("routing reads leave the retired temporary default inert and new saves omit
     assert.equal(updated.ok, true, updated.error);
     assert.equal((await f.store.read()).temporaryChatRole, undefined);
     assert.equal((await f.service.saveModelRouting(draft)).code, "vibe64_assistant_routing_stale");
+  });
+});
+
+
+test("Colleague routing tools inspect, search, preview and save through native owner and revision rules", async () => {
+  await withTempDir(async root => {
+    const f = await routingAccountsFixture(root);
+    await f.store.write({ codex: f.assignments, opencode: { senior: f.pickle, junior: f.pickle } }, 0);
+    let actor = f.owner;
+    const actions = createActionCatalogue({ events: { async publish() {} } });
+    actions.register({ contributorId: "accounts", domain: "accounts", actions: createActions({ accounts: f.service })
+      .map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+    registerVibe64ActionContext(actions, { resolveUser: async () => actor,
+      authorizeProject() { assert.fail("Routing must work without a project."); } });
+    const catalog = createServiceToolCatalog(actions);
+    const context = { channel: "automation", surface: "app" };
+    const toolSet = catalog.resolveToolSet(context);
+    assert.deepEqual(toolSet.tools.map(tool => tool.actionId).sort(), ["preview", "read", "save"].map(operation => `vibe64.accounts.model-routing.${operation}`));
+    const execute = (operation, input = {}) => {
+      const tool = toolSet.tools.find(tool => tool.actionId === `vibe64.accounts.model-routing.${operation}`);
+      assert.doesNotThrow(() => catalog.toOpenAiToolSchema(tool));
+      return catalog.executeToolCall({ toolName: tool.name, toolSet, context, argumentsText: JSON.stringify(input) });
+    };
+    const before = await f.store.read();
+    const initial = await execute("read", { engineId: "codex" });
+    assert.equal(initial.ok, true, JSON.stringify(initial));
+    assert.equal(initial.result.revision, before.revision);
+    assert.equal(initial.result.canConfigure, true);
+    assert.equal(initial.result.engines.length, 1);
+    assert.equal(initial.result.engines[0].roles.find(role => role.role === "helper").assignment.modelId, f.junior.modelId);
+    assert.doesNotMatch(JSON.stringify(initial), /private-identity|connectionIdentity|capabilities|setupAssignments/);
+    const choices = await execute("read", { engineId: "codex", choiceRole: "helper", choiceSearch: "deepseek", includeOtherModels: true });
+    assert.equal(choices.ok, true, JSON.stringify(choices));
+    assert.equal(choices.result.choiceCount, 1);
+    assert.equal(choices.result.nextOffset, null);
+    assert.equal(choices.result.choices[0].selection.modelId, f.junior.modelId);
+    assert.equal(choices.result.choices[0].available, true);
+    assert.equal(choices.result.choices[0].ownerOnly, false);
+    assert.equal((await execute("read", { choiceRole: "helper" })).result.ok, false);
+    assert.equal((await execute("read", { engineId: "codex", choiceOffset: 20 })).result.ok, false);
+    const pageEnd = await execute("read", { engineId: "codex", choiceRole: "helper", choiceOffset: 20 });
+    assert.deepEqual(pageEnd.result.choices, []);
+    const draft = { engineId: "codex", revision: before.revision, orchestrators: { codex: { helper: f.pickle } } };
+    const preview = await execute("preview", draft);
+    assert.equal(preview.ok, true, JSON.stringify(preview));
+    assert.equal(preview.result.engines[0].roles.find(role => role.role === "helper").assignment.modelId, f.pickle.modelId);
+    assert.deepEqual(await f.store.read(), before, "preview must not persist");
+    actor = f.member;
+    const member = await execute("read", { engineId: "codex" });
+    assert.equal(member.result.canConfigure, false);
+    assert.ok(member.result.engines[0].preview.every(item => item.audience === "viewer"));
+    for (const operation of ["preview", "save"]) {
+      const denied = await execute(operation, draft);
+      assert.ok(denied.result, `${operation}: ${JSON.stringify(denied)}`);
+      assert.equal(denied.result.ok, false);
+    }
+    assert.deepEqual(await f.store.read(), before);
+    actor = f.owner;
+    for (const invalid of [
+      { orchestrators: { codex: { unknownRole: f.senior } } },
+      { orchestrators: { foreign: {} } },
+      { orchestrators: { codex: { helper: { ...f.senior, apiKey: "must-not-pass" } } } },
+      { orchestrators: { codex: { helper: { ...f.senior, catalogRevision: "old" } } } },
+      { orchestrators: { codex: { helper: { modelId: "incomplete" } } } },
+      { vibe64User: f.owner }, { projectSlug: "unnecessary" }
+    ]) assert.equal((await execute("save", { ...draft, ...invalid })).ok, false, JSON.stringify(invalid));
+    assert.deepEqual(await f.store.read(), before);
+    const saved = await execute("save", draft);
+    assert.equal(saved.ok, true, JSON.stringify(saved));
+    assert.equal(saved.result.revision, before.revision + 1);
+    const after = await f.store.read();
+    assert.equal(after.orchestrators.codex.helper.modelId, f.pickle.modelId);
+    assert.deepEqual(after.orchestrators.codex.senior, before.orchestrators.codex.senior);
+    assert.deepEqual(after.orchestrators.opencode, before.orchestrators.opencode);
+    assert.equal((await execute("save", draft)).result.code, "vibe64_assistant_routing_stale");
+    const unavailable = await execute("save", { ...draft, revision: after.revision, orchestrators: { codex: { sharedBackup: f.senior } } });
+    assert.equal(unavailable.result.ok, false);
+    assert.deepEqual(unavailable.result.invalidRoles, ["codex.sharedBackup"]);
+    assert.deepEqual(await f.store.read(), after);
+    const disabled = await execute("save", { ...draft, revision: after.revision, orchestrators: { codex: { helper: null } } });
+    assert.equal(disabled.result.ok, true, JSON.stringify(disabled));
+    assert.equal((await f.store.read()).orchestrators.codex.helper, null);
+    actor = null;
+    assert.equal((await execute("read")).ok, false);
+  });
+});
+
+test("routing choice pages preserve the ordinary full view and bound filtered model discovery", async () => {
+  await withTempDir(async root => {
+    const choices = Array.from({ length: 43 }, (_, index) => ({ engineId: "codex", agentId: "codex",
+      modelProviderId: "openai", modelId: `model-${index}`, label: `Choice ${index}`, providerLabel: "GPT" }));
+    const view = { engines: [{ engineId: "codex", roles: { helper: { choices } }, error: "" }] };
+    const calls = [];
+    const service = createService({ accountRuntime: createAccountsRuntime({ systemRoot: root }),
+      inspectRoutingConfiguration: async (_saved, input) => { calls.push(input); return view; } });
+    assert.equal((await service.readModelRouting({ engineId: "codex" })).engines, view.engines);
+    const scope = { engineId: "codex", choiceRole: "helper", includeOtherModels: true };
+    const first = await service.readModelRouting(scope);
+    assert.equal(first.choiceCount, 43);
+    assert.equal(first.choices.length, 20);
+    assert.equal(first.nextOffset, 20);
+    assert.equal(calls.at(-1).includeOtherModels, true);
+    const second = await service.readModelRouting({ ...scope, choiceOffset: first.nextOffset });
+    assert.equal(second.choices[0].modelId, "model-20");
+    assert.equal(second.nextOffset, 40);
+    const last = await service.readModelRouting({ ...scope, choiceOffset: second.nextOffset });
+    assert.equal(last.choices.length, 3);
+    assert.equal(last.nextOffset, null);
+    const filtered = await service.readModelRouting({ ...scope, choiceSearch: "CHOICE 42" });
+    assert.deepEqual(filtered.choices, [choices[42]]);
+    assert.equal(filtered.choiceCount, 1);
+    view.engines[0].error = "private provider detail";
+    const failed = await service.readModelRouting(scope);
+    assert.equal(failed.ok, false);
+    assert.doesNotMatch(JSON.stringify(failed), /private provider/);
+    await assert.rejects(readFile(path.join(root, "ai-connections/routing.json")), { code: "ENOENT" });
   });
 });

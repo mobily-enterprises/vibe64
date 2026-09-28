@@ -1,3 +1,4 @@
+import { modelRoutingTool } from "./routingAssistantContracts.js";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import {
   aiConnectionInputValidators,
@@ -44,16 +45,19 @@ function createActions({ accounts } = {}) {
       execute: (input) => accounts.readModelRoutingWorkflows(input)
     },
     {
+      extensions: { assistant: modelRoutingTool("read") },
       id: ACTION_READ_MODEL_ROUTING, version: 1, kind: "query", input: modelRoutingReadInputValidator,
       output: null, idempotency: "none", audit: { actionName: ACTION_READ_MODEL_ROUTING }, observability: {},
       execute: (input) => accounts.readModelRouting(input)
     },
     {
+      extensions: { assistant: modelRoutingTool("preview") },
       id: ACTION_PREVIEW_MODEL_ROUTING, version: 1, kind: "query", input: modelRoutingInputValidator,
       output: null, idempotency: "none", audit: { actionName: ACTION_PREVIEW_MODEL_ROUTING }, observability: {},
       execute: (input) => accounts.previewModelRouting(input)
     },
     {
+      extensions: { assistant: modelRoutingTool("save") },
       id: ACTION_SAVE_MODEL_ROUTING, version: 1, kind: "command", input: modelRoutingInputValidator,
       output: null, idempotency: "optional", audit: { actionName: ACTION_SAVE_MODEL_ROUTING }, observability: {},
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
@@ -216,7 +220,7 @@ function createActions({ accounts } = {}) {
       }
     }
   ].map((definition) => withVibe64ActionContext({
-    ...definition, extensions: { assistant: { exclude: true } }
+    ...definition, extensions: definition.extensions || { assistant: { exclude: true } }
   }, { projectScoped: false })));
 }
 

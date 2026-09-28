@@ -292,6 +292,14 @@ table. Unknown identities and SQL/schema investigation go to coding agents.
 These fields contain no SQL, table contents or credentials, and do not prove
 connection health. Opening Data retains the UI's normal automatic table reads.
 
+Shared Model routing is available through its existing global Accounts actions.
+Colleague can read assignments and effective routes, search the choices offered
+for an exact workflow/role in 20-item pages, preview proposed changes, and save
+only user-requested patches with the current revision. Native owner, access,
+role compatibility and concurrent-change rules apply. It receives no credentials
+or connection identities. Saved routing affects future work across conversations;
+Colleague's own model and the current session's mode remain separate operations.
+
 Database status, schema refresh and exact-query cancellation are available through
 their existing authorized actions. Results contain bounded identity, schema counts,
 refresh time and active query IDs, never SQL, rows, credentials or full schema.

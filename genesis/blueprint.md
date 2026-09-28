@@ -55,8 +55,14 @@ View selection survives navigation and
 reload through the URL. Switching between its three views preserves the mounted
 SQL draft; leaving or reloading the workspace does not preserve an unsaved draft. It receives no SQL, rows or credentials. A cancellation receipt
 is not proof that execution has stopped or changes were undone; engineering work
-still goes to coding conversations. Complete product-operation coverage remains
-in progress.
+still goes to coding conversations.
+
+Colleague can inspect shared Model routing without an open project, search role
+choices, preview their effect for the owner and collaborators, and save explicitly
+requested changes through the normal owner and revision checks. It distinguishes
+these future workflow choices from running agents, session chat modes and its own
+model. Account connection and credential entry remain in AI Accounts. Complete
+product-operation coverage remains in progress.
 
 On phones and narrow layouts, Colleague has one compact avatar button in the
 header. It opens a full-screen conversation with voice controls inside, leaving

@@ -1,3 +1,4 @@
+import { ASSISTANT_ROUTING_ASSIGNMENTS } from "@local/vibe64-runtime/shared/assistantRouting";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
@@ -65,19 +66,37 @@ const gitIdentityInputValidator = deepFreeze({
   mode: "create"
 });
 
+const routingEngine = { type: "string", enum: ["codex", "claude", "opencode"], required: false };
+const routingIdentifier = { type: "string", noTrim: true, minLength: 1, maxLength: 512, required: true };
+const modelRoutingSelectionSchema = createSchema({
+  schema: { type: "string", enum: ["vibe64.assistant-selection.v1"], required: true },
+  engineId: { ...routingEngine, required: true },
+  agentId: routingIdentifier, modelProviderId: routingIdentifier, modelId: routingIdentifier,
+  variantId: { ...routingIdentifier, minLength: 0 },
+  catalogRevision: { type: "string", pattern: /^sha256:[a-f0-9]{64}$/u, required: true },
+  selectionSource: { type: "string", enum: ["recommended", "explicit"], required: true }
+});
+const routingAssignments = createSchema(Object.fromEntries(ASSISTANT_ROUTING_ASSIGNMENTS.map(role =>
+  [role, { type: "object", schema: modelRoutingSelectionSchema, nullable: true, required: false }])));
+
 const modelRoutingReadInputValidator = deepFreeze({
   schema: createSchema({
-    engineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
-    includeOtherModels: { type: "boolean", required: false }
+    engineId: routingEngine,
+    includeOtherModels: { type: "boolean", required: false },
+    choiceRole: { type: "string", enum: ASSISTANT_ROUTING_ASSIGNMENTS, required: false },
+    choiceSearch: { type: "string", noTrim: false, maxLength: 200, required: false },
+    choiceOffset: { type: "integer", min: 0, required: false }
   }), mode: "create"
 });
 
 const modelRoutingInputValidator = deepFreeze({
   schema: createSchema({
-    engineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
+    engineId: routingEngine,
     revision: { type: "integer", min: 0, required: true },
     reviewedHelperWorkflows: { type: "array", items: { type: "string", enum: ["codex", "claude", "opencode"] }, required: false },
-    orchestrators: { type: "object", additionalProperties: true, required: true }
+    orchestrators: { type: "object", required: true, schema: createSchema(Object.fromEntries(
+      routingEngine.enum.map(engineId => [engineId, { type: "object", schema: routingAssignments, required: false }])
+    )) }
   }), mode: "create"
 });
 
@@ -158,6 +177,7 @@ const aiConnectionInputValidators = deepFreeze(Object.fromEntries(Object.entries
 export {
   aiConnectionInputValidators,
   modelRoutingInputValidator,
+  modelRoutingSelectionSchema,
   modelRoutingReadInputValidator,
   codexProviderInputValidator,
   accountIdInputValidator,
