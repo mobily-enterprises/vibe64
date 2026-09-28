@@ -13,6 +13,8 @@ const operations = ["settings.read", "engineering.read", "collaboration.save", "
 async function withSettingsTools(run) {
   await withRouteProject(async ({ projectContext, slug }) => {
     const state = { actor: { username: "owner", role: "owner" }, allowed: true };
+    state.developmentDatabase = { scope: "project", canChange: false, managed: true, disabledReason: "Close the open session first.",
+      openSessionCount: 1, password: "private-password" };
     const source = { rootKind: "session-source", sessionId: "session-a", sourceRoot: "/private/source" };
     state.collaboration = { available: true, canEdit: true, source, status: "configured", unavailableReason: "",
       ...preferences, requirements: "Preserve this project requirement.\nAnd its second line.",
@@ -29,8 +31,7 @@ async function withSettingsTools(run) {
         record("settings.read", input);
         return { ok: true, collaboration: state.collaboration, promptHints: { canEdit: true, enabled: true },
           repositoryWorkflow: { available: false, canEdit: true, requirePullRequest: false, credential: "private-credential" },
-          developmentDatabase: { scope: "project", canChange: false, managed: true, disabledReason: "Close the open session first.",
-            openSessionCount: 1, password: "private-password" } };
+          developmentDatabase: state.developmentDatabase };
       },
       async readEngineeringSettings(input) { record("engineering.read", input); return { ok: true, engineering: state.engineering }; },
       async saveCollaborationSettings(input) {
@@ -119,6 +120,10 @@ test("settings tools bound long content, mark incomplete replacements and repres
     assert.equal(unavailable.result.engineering.available, false);
     assert.equal(unavailable.result.engineering.profile, null);
     assert.equal(unavailable.result.engineering.unavailableReason, "Create a session.");
+    state.developmentDatabase = { managed: false, scope: "external" };
+    const local = await execute("settings.read");
+    assert.equal(local.ok, true, JSON.stringify(local));
+    assert.deepEqual(local.result.developmentDatabase, { managed: false, scope: "external", disabledReason: "" });
   });
 });
 
@@ -146,9 +151,11 @@ test("settings tools recheck owner and project authority and reject malformed in
     for (const operation of operations) assert.equal((await execute(operation, valid[operation])).ok, false);
     assert.equal(calls.length, 1);
     state.allowed = true;
-    state.failure = { ok: false, code: "source_busy", error: "Another conversation is editing this source." };
+    state.failure = { ok: false, errors: [{ code: "source_busy", message: "Another conversation is editing this source.", details: "private-failure-detail" }] };
     const failed = await execute("engineering.profile.save", valid["engineering.profile.save"]);
     assert.equal(failed.result.ok, false);
     assert.equal(failed.result.code, "source_busy");
+    assert.equal(failed.result.error, "Another conversation is editing this source.");
+    assert.equal(JSON.stringify(failed).includes("private"), false);
   });
 });

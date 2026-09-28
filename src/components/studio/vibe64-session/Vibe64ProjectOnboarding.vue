@@ -143,9 +143,9 @@ const resource = useEndpointResource({
   realtime: {
     events: ["vibe64.project.changed", "vibe64.session.changed"],
     matches: ({ event, payload = {} } = {}) => {
-      if (payload.projectSlug && payload.projectSlug !== projectSlug.value) return false;
-      return event === "vibe64.project.changed" ||
-        (payload.sessionId === props.sessionId && payload.reason === "temporary-agent-turn-idle");
+      if (event === "vibe64.project.changed") return !payload.projectSlug || payload.projectSlug === projectSlug.value;
+      return payload.projectSlug === projectSlug.value && payload.sessionId === props.sessionId &&
+        payload.reason === "temporary-agent-turn-idle";
     }
   },
   refreshOnPull: true,

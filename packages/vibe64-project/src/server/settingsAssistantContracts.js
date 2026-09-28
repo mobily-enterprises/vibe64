@@ -53,7 +53,9 @@ export function settingsTool(operation) {
     }) },
     transformResult(result) {
       const output = { ok: result.ok === true };
-      for (const key of ["error", "code", "projectSlug"]) if (typeof result[key] === "string") output[key] = result[key].slice(0, 512);
+      const failure = { error: result.error || result.errors?.[0]?.message, code: result.code || result.errors?.[0]?.code };
+      for (const key of ["error", "code"]) if (typeof failure[key] === "string") output[key] = failure[key].slice(0, 512);
+      if (typeof result.projectSlug === "string") output.projectSlug = result.projectSlug.slice(0, 512);
       if (result.collaboration) {
         const value = result.collaboration;
         const requirements = String(value.requirements || "");
@@ -88,8 +90,10 @@ export function settingsTool(operation) {
       };
       if (result.developmentDatabase) {
         const value = result.developmentDatabase;
-        output.developmentDatabase = { scope: value.scope, canChange: value.canChange, managed: value.managed,
-          disabledReason: String(value.disabledReason || "").slice(0, 512), openSessionCount: value.openSessionCount };
+        output.developmentDatabase = { scope: value.scope, managed: value.managed,
+          disabledReason: String(value.disabledReason || "").slice(0, 512),
+          ...(typeof value.canChange === "boolean" ? { canChange: value.canChange } : {}),
+          ...(Number.isInteger(value.openSessionCount) ? { openSessionCount: value.openSessionCount } : {}) };
       }
       return output;
     }

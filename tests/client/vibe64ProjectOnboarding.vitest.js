@@ -263,6 +263,7 @@ describe("Preview project onboarding", () => {
       await fixture.settleRead(0, opening("new"));
       for (const payload of [
         { ...finished, projectSlug: "project-b" },
+        { ...finished, projectSlug: undefined },
         { ...finished, sessionId: "session-b" },
         { ...finished, reason: "assistant-stream" }
       ]) await fixture.sessionChanged(payload);
