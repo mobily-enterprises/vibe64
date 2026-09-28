@@ -762,19 +762,20 @@ function createSessionAgentManager({
     const needsSetup = (engineId) => !["senior", "junior"].every((role) =>
       Object.hasOwn(configuration.orchestrators[engineId] || {}, role));
     const errors = new Map();
-    const catalogs = [...providerById.keys()].some(needsSetup) ? (await Promise.all([...providerById.values()].map(async (provider) => {
+    const catalogs = (await Promise.all([...providerById.values()].map(async (provider) => {
       try { return await providerCapabilities(provider, { configuredOnly: "true" }, options); }
       catch (cause) { errors.set(provider.id, cause.message); return null; }
-    }))).filter(Boolean) : [];
+    }))).filter(Boolean);
     const defaultAccess = await Promise.all(catalogs.flatMap((catalog) => routingModelChoices(catalog)).map(readAccess));
     const workflows = await Promise.all([...providerById.values()].map(async (provider) => {
       const saved = configuration.orchestrators[provider.id] || {};
       const assignments = { ...saved };
+      const catalog = catalogs.find(({ engineId }) => engineId === provider.id);
+      const connected = catalog?.modelProviders.some((entry) => entry.connected && entry.models.length > 0) === true;
       const error = needsSetup(provider.id) ? errors.get(provider.id) || "" : "";
       // First use still offers connected assistants (including included OpenCode).
       // Only configured defaults are read; creation discovers and saves full recommendations.
       if (needsSetup(provider.id) && !error) {
-        const catalog = catalogs.find(({ engineId }) => engineId === provider.id);
         const recommended = recommendedRoutingAssignments(catalog, { catalogs, assignments, connectionAccess: defaultAccess });
         for (const role of ["senior", "junior", "sharedBackup"]) {
           if (!Object.hasOwn(saved, role) && recommended[role]) assignments[role] = recommended[role];
@@ -790,7 +791,7 @@ function createSessionAgentManager({
         if (!Object.hasOwn(saved, role)) return "Recommended on creation";
         return selection ? vibe64AssistantSelectionLabel(selection) : "Not configured";
       };
-      return { engineId: provider.id, label: engineLabel(provider.id),
+      return { engineId: provider.id, label: engineLabel(provider.id), connected,
         seniorLabel: modelLabel("senior"), juniorLabel: modelLabel("junior"),
         backupUsed: Object.values(decision.seniorJuniorPair || {}).some((role) => role.backupUsed),
         available: !error && decision.available, error: error || decision.message };

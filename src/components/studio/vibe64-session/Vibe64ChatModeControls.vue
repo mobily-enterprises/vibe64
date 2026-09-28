@@ -32,7 +32,7 @@ watch(savedWorkflowEngineId, (value) => { workflowEngineId.value = value; }, { i
 const { resource: workflows, loadError: workflowError } = useModelRouting({
   enabled: computed(() => detailsOpen.value && !props.temporary && mode.value !== "custom"), workflowsOnly: true
 });
-const workflowChoices = computed(() => (workflows.data.value?.workflows || []).map((choice) => ({
+const workflowChoices = computed(() => (workflows.data.value?.workflows || []).filter((choice) => choice.connected).map((choice) => ({
   ...choice, props: { disabled: !choice.available, "aria-disabled": !choice.available ? "true" : undefined, subtitle: choice.error || undefined }
 })));
 const decisions = computed(() => props.purposes || {});
@@ -136,6 +136,7 @@ function configure() {
           <v-select
             :model-value="workflowEngineId" :items="workflowChoices" item-title="label" item-value="engineId"
             label="Orchestrator" variant="outlined" density="compact" hide-details
+            no-data-text="No orchestrators have connected models."
             :loading="connecting || workflows.isInitialLoading.value" :disabled="disabled || saving || connecting || active || hasGoal || !mode"
             @update:model-value="save(mode, review, $event)"
           />

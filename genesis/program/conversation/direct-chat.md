@@ -398,7 +398,11 @@ the configuration form loads that catalogue only when opened. The parent reads
 the lightweight workflow response for configuration permission. Picker labels
 use `Orchestrator (model thinking)`, including Auto's Router.
 Main's named modes expose an independent Orchestrator selector using the same
-lightweight workflow response. Choosing a workflow preserves Senior, Junior or
+lightweight workflow response. It omits orchestrators without any connected models,
+using the response's `connected` flag from configured model catalogues. This is
+independent of role assignments; each visible choice retains its existing role
+availability and explanation. These local catalogues do not start live model
+discovery. Choosing a workflow preserves Senior, Junior or
 Auto and its review preference, drops the previous workflow's model override,
 and resolves the destination's saved assignments through the actor-aware purpose
 resolver. Auto validates Router and the pair, then selects Senior for the idle

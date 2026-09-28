@@ -8,9 +8,9 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
 vi.mock("@local/vibe64-accounts/client", () => ({
   ModelRoutingForm: { render: () => null },
   useModelRouting: () => ({ engines: ref([]), loadError: ref(""), resource: { isInitialLoading: ref(false), data: ref({ workflows: [
-    { engineId: "codex", label: "Codex", available: true },
-    { engineId: "claude", label: "Claude Code", available: true },
-    { engineId: "opencode", label: "OpenCode", available: false, error: "Connect an account first." }
+    { engineId: "codex", label: "Codex", connected: true, available: true },
+    { engineId: "claude", label: "Claude Code", connected: true, available: true },
+    { engineId: "opencode", label: "OpenCode", connected: false, available: false, error: "Connect an account first." }
   ] }) } })
 }));
 
@@ -101,9 +101,15 @@ it("does not switch an active or unavailable workflow, or silently change Custom
   await state.save("custom", false, "claude");
   state.mode = "custom";
   expect(mocks.save).not.toHaveBeenCalled();
-  expect(state.workflowChoices.find(choice => choice.engineId === "opencode").props).toEqual({
-    disabled: true, "aria-disabled": "true", subtitle: "Connect an account first."
+  expect(state.workflowChoices.map(choice => choice.engineId)).toEqual(["codex", "claude"]);
+  const claude = state.workflows.data.value.workflows.find(choice => choice.engineId === "claude");
+  claude.available = false;
+  claude.error = "Choose a Senior model in Model routing.";
+  expect(state.workflowChoices.find(choice => choice.engineId === "claude").props).toEqual({
+    disabled: true, "aria-disabled": "true", subtitle: claude.error
   });
+  await state.save("junior", false, "claude");
+  expect(mocks.save).not.toHaveBeenCalled();
   app.unmount();
   const active = mount(undefined, false, { active: true });
   await active.save("junior", false, "claude");

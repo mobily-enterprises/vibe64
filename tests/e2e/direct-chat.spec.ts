@@ -2693,9 +2693,9 @@ hintTest("@workflow-switch change orchestrator independently of named chat modes
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
     await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", route => fulfillJson(route, {
       ok: true, canConfigure: false, workflows: [
-        { engineId: "codex", label: "Codex", available: true },
-        { engineId: "claude", label: "Claude Code", available: true },
-        { engineId: "opencode", label: "OpenCode", available: false, error: "Connect an account first." }
+        { engineId: "codex", label: "Codex", connected: true, available: true },
+        { engineId: "claude", label: "Claude Code", connected: true, available: true },
+        { engineId: "opencode", label: "OpenCode", connected: false, available: false, error: "Connect an account first." }
       ]
     }));
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/assistant-access`, route => {
@@ -2737,7 +2737,9 @@ hintTest("@workflow-switch change orchestrator independently of named chat modes
     await trigger.click();
     await expect(orchestrator).toHaveValue("Codex");
     await orchestrator.press("ArrowDown");
-    await expect(page.getByRole("option", { name: /^OpenCode/ })).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByRole("option", { name: "Claude Code", exact: true })).toBeVisible();
+    await expect(page.getByRole("option")).toHaveCount(2);
+    await expect(page.getByRole("option", { name: /^OpenCode/ })).toHaveCount(0);
     await page.getByRole("option", { name: "Claude Code", exact: true }).click();
     await expect(page.locator(".chat-modes__details").getByText("Previous assistant could not stop.", { exact: true })).toBeVisible();
     await expect(orchestrator).toHaveValue("Codex");

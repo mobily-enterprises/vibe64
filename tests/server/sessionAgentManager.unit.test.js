@@ -29,7 +29,7 @@ test("native replacement blocks terminal and goal bypass while permitting ordina
   assert.deepEqual(calls, ["send"]);
 });
 
-function routingManagerFixture({ resolveAssistantUser, disconnected = [] } = {}) {
+function routingManagerFixture({ resolveAssistantUser, disconnected = [], withoutModels = [] } = {}) {
   const selection = (engineId, modelProviderId, modelId) => ({ schema: "vibe64.assistant-selection.v1",
     engineId, agentId: engineId, modelProviderId, modelId, variantId: "", catalogRevision });
   const senior = selection("codex", "openai", "gpt-6-astra");
@@ -59,7 +59,7 @@ function routingManagerFixture({ resolveAssistantUser, disconnected = [] } = {})
         return { engineId: id, transportId: `${id}_server`, revision: catalogRevision,
           agents: [{ id, mode: "primary" }],
           modelProviders: [...new Set(choices.map((value) => value.modelProviderId))].map((providerId) => ({
-            id: providerId, connected: !disconnected.includes(id), models: choices.filter((value) => value.modelProviderId === providerId)
+            id: providerId, connected: !disconnected.includes(id), models: choices.filter((value) => value.modelProviderId === providerId && !withoutModels.includes(id))
               .map((value) => ({ id: value.modelId, status: "available", variants: [], capabilities: { toolcall: true } }))
           })) };
       }
@@ -175,12 +175,13 @@ test("workflow choices read saved pairs without model discovery and preserve col
     const result = await f.manager.inspectRoutingConfiguration(f.configuration, { vibe64User: actor, workflowsOnly: true });
     const choice = result.workflows.find(({ engineId }) => engineId === "codex");
     assert.equal(choice.available, true, choice.error);
+    assert.equal(choice.connected, true);
     assert.equal(choice.seniorLabel, model);
     assert.equal(choice.backupUsed, backupUsed);
     if (backupUsed) assert.equal(choice.juniorLabel, model);
     assert.doesNotMatch(JSON.stringify(result), /connectionIdentity|connection:/);
   }
-  assert.equal(f.calls.some(({ type }) => type === "catalog"), false);
+  assert.ok(f.calls.filter(({ type }) => type === "catalog").every(({ input }) => input.configuredOnly === "true"));
   assert.equal(f.calls.some(({ assistantSelection }) => assistantSelection?.modelId === f.helper.modelId), true);
   assert.equal(f.manager.binding("main"), "");
   f.facts.get(f.backup.modelId).available = false;
@@ -191,7 +192,18 @@ test("workflow choices read saved pairs without model discovery and preserve col
   const disabled = await f.manager.inspectRoutingConfiguration(f.configuration, { ...f.options, workflowsOnly: true });
   assert.equal(disabled.workflows[0].available, false);
   assert.equal(disabled.workflows[0].seniorLabel, "Not configured");
-  assert.equal(f.calls.some(({ type }) => type === "catalog"), false, "explicitly disabled roles do not initiate discovery");
+  assert.equal(disabled.workflows[0].connected, true, "model connections do not depend on role assignments");
+  assert.ok(f.calls.filter(({ type }) => type === "catalog").every(({ input }) => input.configuredOnly === "true"));
+});
+
+test("workflow choices distinguish connected models from retained routing assignments", async () => {
+  for (const options of [{ disconnected: ["codex"] }, { withoutModels: ["codex"] }]) {
+    const f = routingManagerFixture(options);
+    const result = await f.manager.inspectRoutingConfiguration(f.configuration, { ...f.options, workflowsOnly: true });
+    assert.equal(result.workflows.find(({ engineId }) => engineId === "codex").connected, false);
+    assert.equal(result.workflows.find(({ engineId }) => engineId === "opencode").connected, true,
+      "connected models count even before any role assignments have been saved");
+  }
 });
 
 test("workflow choices offer first-use connections without live discovery or saved changes", async () => {
@@ -203,6 +215,7 @@ test("workflow choices offer first-use connections without live discovery or sav
   assert.equal(result.workflows.length, 2);
   for (const choice of result.workflows) {
     assert.equal(choice.available, true, choice.error);
+    assert.equal(choice.connected, true);
     assert.equal(choice.seniorLabel, "Recommended on creation");
     assert.equal(choice.juniorLabel, "Recommended on creation");
   }
@@ -221,7 +234,7 @@ test("lightweight workflow and mode previews cannot bypass model validation at d
   const purposes = await f.manager.inspectAssistantPurposes({ workflowEngineId: "codex", mode: "junior" }, options);
   assert.equal(purposes.junior.available, true);
   assert.equal(purposes.junior.effectiveSelection.modelId, "removed-model");
-  assert.equal(f.calls.some(({ type }) => type === "catalog"), false);
+  assert.ok(f.calls.filter(({ type }) => type === "catalog").every(({ input }) => input.configuredOnly === "true"));
   const admitted = await f.manager.resolveAssistantPurpose({ purpose: "junior", workflowEngineId: "codex", validateModels: false }, options);
   assert.equal(admitted.available, false, "request input and preview options cannot disable dispatch validation");
   assert.match(admitted.message, /available/);
