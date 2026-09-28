@@ -283,6 +283,12 @@ selections instead of claiming success. Captured focus reports `databaseScreen`
 for loading, unavailable or workspace, with `databaseView` only for a loaded
 workspace. It follows the active panel, not stale query parameters, and omits that
 state for foreign project/session owners or hidden compact project content.
+For Data, `databaseTable` captures the actual selected table identity. Navigation
+can supply that fully qualified name with `databaseView=data` to use the native
+table opener. Missing tables and busy queries fail; acknowledgement verifies
+selection rather than successful query execution. Table drafts/results survive
+switches within the mounted workspace, while reload restores the ordinary initial
+table. Unknown identities and SQL/schema investigation go to coding agents.
 These fields contain no SQL, table contents or credentials, and do not prove
 connection health. Opening Data retains the UI's normal automatic table reads.
 

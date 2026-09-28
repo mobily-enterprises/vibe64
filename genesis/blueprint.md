@@ -47,7 +47,11 @@ confirmation requirements; development source may still address a real provider
 account. Colleague can report a session's database identity, schema counts and
 current query activity, refresh its schema snapshot, and request cancellation of
 one exact query. It can open Overview, ERD or Data, and distinguishes a loading or
-unavailable database from a loaded view. View selection survives navigation and
+unavailable database from a loaded view. It can open an exact, fully qualified
+table in Data and report the actual selected table. First visits use the normal
+read; returning to a table preserves its mounted draft and results. Missing tables
+and running queries prevent selection. This does not prove a query succeeded.
+View selection survives navigation and
 reload through the URL. Switching between its three views preserves the mounted
 SQL draft; leaving or reloading the workspace does not preserve an unsaved draft. It receives no SQL, rows or credentials. A cancellation receipt
 is not proof that execution has stopped or changes were undone; engineering work

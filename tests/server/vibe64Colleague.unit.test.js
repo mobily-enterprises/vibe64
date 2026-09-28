@@ -1297,3 +1297,35 @@ test("database view navigation requires its session and pane and retains the ack
   f.observations.projectAllowed = false;
   await assert.rejects(execute(input), { statusCode: 403 });
 });
+
+
+test("exact Database table navigation validates Data scope and preserves its acknowledged table identity", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const execute = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
+  const input = { projectSlug: "alpha", sessionId: "session-1", pane: "database", databaseView: "data", databaseTable: "public.orders" };
+  for (const invalid of [{ sessionId: "" }, { pane: "env" }, { databaseView: "erd" }, { databaseView: undefined }]) {
+    const selection = { ...input, ...invalid };
+    if (selection.databaseView === undefined) delete selection.databaseView;
+    assert.equal((await execute(selection)).ok, false);
+    assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
+  }
+  for (const databaseTable of ["", "x".repeat(257), {}]) {
+    await assert.rejects(execute({ ...input, databaseTable }), { code: "ACTION_VALIDATION_FAILED" });
+  }
+  const pending = execute(input);
+  let state;
+  for (let index = 0; index < 20; index += 1) {
+    state = await f.service.read({ clientId: "tab-a" }, f.context);
+    if (state.navigation?.status === "pending") break;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(state.navigation.databaseTable, "public.orders");
+  const focus = { ...input, databaseScreen: "workspace" };
+  await f.actions.execute({ actionId: "vibe64.colleague.navigation.acknowledge", context: f.context,
+    input: { clientId: "tab-a", commandId: state.navigation.id, ok: true, focus } });
+  assert.deepEqual(await pending, { ok: true, focus });
+  f.observations.projectAllowed = false;
+  await assert.rejects(execute(input), { statusCode: 403 });
+});

@@ -40,13 +40,24 @@ through the same owner and updates the URL; its old request cannot override late
 view navigation. Hidden workspaces defer route selection until active.
 
 The active workspace publishes only its project/session identity, selected view
-and loading/unavailable/workspace state for Colleague. Publication ends on hiding
-or disposal, and never includes SQL, schema contents, rows or driver errors.
+and loading/unavailable/workspace state, plus the selected table identity in Data,
+for Colleague. Publication ends on hiding
+or disposal, and never includes SQL, column details, rows or driver errors.
 Colleague can request one of those views through its existing navigation action;
 the browser acknowledges the matching loaded workspace, not merely its URL.
 A failed database load cannot be acknowledged as a selected workspace. Data keeps
 its ordinary initial table-read behavior and existing draft-preservation rules;
 view selection is not a request to run authored SQL.
+
+Colleague can also request an exact fully qualified table through the workspace's
+existing table-opening operation. The host opens Overview first, avoiding an
+unrelated first-table query, then selects the requested table in the matching
+loaded workspace. Missing tables, inactive/disposed workspaces and running queries
+fail selection. A first visit uses the ordinary read-only table query; returning
+to a visited table restores its mounted draft and results without executing that
+draft. The acknowledgement reports the actual Data/table selection, not query
+success. The table identity stays local to the mounted workspace; it is not a
+new persisted selection or part of the URL. Reload uses the normal initial table.
 
 Automatic database reads follow the visible Database pane. A retained hidden
 workspace defers automatic table opening until it is active again, including

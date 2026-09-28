@@ -866,6 +866,16 @@ const displayedDatabase = {
   get projectSlug() { return props.projectSlug; },
   get sessionId() { return props.sessionId; },
   get view() { return activeView.value; },
+  get table() { return activeView.value === "data" ? selectedTable.value?.qualifiedName || "" : ""; },
+  selectTable(qualifiedName) {
+    if (disposed || !props.active || !state.value) throw new Error("Database is not available in this session.");
+    const table = schema.value.tables.find(candidate => candidate.qualifiedName === qualifiedName);
+    if (!table) throw new Error("The requested table is not in this session’s database snapshot.");
+    if (running.value) throw new Error("A query is running. Wait for it to finish or cancel that query before selecting a table.");
+    navigatorTab.value = "tables";
+    tableSearch.value = "";
+    void openTable(table);
+  },
   get screen() {
     if (state.value) return "workspace";
     if (loading.value || !error.value) return "loading";

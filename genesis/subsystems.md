@@ -196,7 +196,8 @@ Its thirteen ordinary HTTP operations share their named action contracts and
 trusted actor/project context; the database services own query and mutation safety.
 Colleague uses bounded presentations of the existing status, schema refresh and
 exact-query cancellation actions. The Database workspace owns URL-backed view
-selection and publishes its visible semantic state to the Colleague host.
+selection, exact table opening through its native controls, and publishes its
+visible semantic state and selected Data table identity to the Colleague host.
 Runtime activity comes from the executor's
 existing project/session query reservations, without a separate persisted tracker.
 

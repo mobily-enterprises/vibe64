@@ -437,7 +437,7 @@ describe("Database view navigation and Colleague awareness", () => {
     try {
       await flushWorkspace(fixture.runQuery);
       expect(fixture.workspace.activeView).toBe("erd");
-      expect({ ...fixture.colleagueDatabase.value }).toEqual({ projectSlug: "alpha", sessionId: "database-session", view: "erd", screen: "loading" });
+      expect({ ...fixture.colleagueDatabase.value }).toEqual({ projectSlug: "alpha", sessionId: "database-session", view: "erd", table: "", selectTable: expect.any(Function), screen: "loading" });
       mocks.database.error.value = "Private driver detail";
       expect(fixture.colleagueDatabase.value.screen).toBe("unavailable");
       mocks.database.loading.value = true;
@@ -506,5 +506,60 @@ describe("Database view navigation and Colleague awareness", () => {
       expect(fixture.workspace.activeView).toBe("overview");
       expect(fixture.runQuery).not.toHaveBeenCalled();
     } finally { await fixture.close(); }
+  });
+});
+
+
+describe("Colleague exact Database table selection", () => {
+  it("uses the native table read and restores per-table drafts without executing authored SQL", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: { ...firstState,
+      schema: { ...firstState.schema, tables: [firstTable, secondTable] } }, view: "overview" });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      const panel = fixture.colleagueDatabase.value;
+      expect(fixture.runQuery).not.toHaveBeenCalled();
+      panel.selectTable(secondTable.qualifiedName);
+      await flushWorkspace(fixture.runQuery);
+      expect(panel.table).toBe(secondTable.qualifiedName);
+      expect(panel.view).toBe("data");
+      expect(fixture.runQuery).toHaveBeenCalledTimes(1);
+      expect(fixture.runQuery).toHaveBeenLastCalledWith(expect.objectContaining({
+        automatic: true, readOnly: true, sql: 'SELECT *\nFROM "public"."orders";'
+      }));
+      fixture.workspace.updateSqlText("DELETE FROM public.orders;");
+      panel.selectTable(firstTable.qualifiedName);
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.runQuery).toHaveBeenCalledTimes(2);
+      panel.selectTable(secondTable.qualifiedName);
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.editor().props.value).toBe("DELETE FROM public.orders;");
+      expect(fixture.runQuery).toHaveBeenCalledTimes(2);
+      panel.selectTable(secondTable.qualifiedName);
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.runQuery).toHaveBeenCalledTimes(2);
+      fixture.workspace.activeView = "erd";
+      expect(panel.table).toBe("");
+    } finally { await fixture.close(); }
+  });
+
+  it("rejects unavailable, missing, busy, hidden and disposed selections without executing a query", async () => {
+    const fixture = mountDatabaseWorkspace({ view: "overview" });
+    const panel = fixture.colleagueDatabase.value;
+    try {
+      expect(() => panel.selectTable(firstTable.qualifiedName)).toThrow(/not available/);
+      fixture.state.value = firstState;
+      await flushWorkspace(fixture.runQuery);
+      expect(() => panel.selectTable("items")).toThrow(/not in this session/);
+      expect(() => panel.selectTable(secondTable.qualifiedName)).toThrow(/not in this session/);
+      mocks.database.running.value = true;
+      expect(() => panel.selectTable(firstTable.qualifiedName)).toThrow(/query is running/);
+      mocks.database.running.value = false;
+      fixture.props.active = false;
+      await Vue.nextTick();
+      expect(() => panel.selectTable(firstTable.qualifiedName)).toThrow(/not available/);
+      expect(fixture.runQuery).not.toHaveBeenCalled();
+    } finally { await fixture.close(); }
+    expect(() => panel.selectTable(firstTable.qualifiedName)).toThrow(/not available/);
+    expect(fixture.runQuery).not.toHaveBeenCalled();
   });
 });
