@@ -37,7 +37,22 @@ on this project action describes project-stored configuration, not the hosted
 deployment's production environment. Colleague opens the ordinary Env view for
 secret entry or stored-value inspection. This metadata read neither prepares
 resources nor materializes files, and an empty or complete list does not prove
-application readiness. Env writes and secret reveal are not Colleague tools yet.
+application readiness.
+
+Colleague applies explicitly requested user Env changes through the existing
+save action. Its input describes a patch keyed by variable name, with literal
+`value`, optional `secret` classification and explicit `remove`. Unrequested
+entries and omitted secret classifications are preserved; whitespace and empty
+strings remain exact. A removal request supplies the same intent as Env's
+confirmation and removes only the user override, possibly exposing a default.
+The shared service rejects host-owned or non-editable records before any values
+in that request are stored. Session source-work admission, reserved-key checks,
+normal file projection and project refresh events remain in their existing owners.
+Both read and save return metadata only to Colleague. Stored-secret reveal stays
+in the existing owner-only UI flow. Saving does not restart an app, commit source
+or establish readiness. A failure after persistence may leave values saved even
+if projection failed; Colleague directs inspection in Env before retrying because
+presence alone cannot establish exact value equality.
 When Genesis declares an environment-file projection, Vibe64 writes it outside
 ordinary Git tracking with restrictive permissions and preserves a pre-existing
 user file before taking ownership.

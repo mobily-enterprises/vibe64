@@ -20,6 +20,7 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  RUNTIME_CONFIG_OWNERS,
   RUNTIME_CONFIG_PHASES,
   RUNTIME_CONFIG_SCOPES,
   normalizeRuntimeConfigKey,
@@ -647,10 +648,18 @@ function createService({
     const values = input.values && typeof input.values === "object" && !Array.isArray(input.values)
       ? input.values
       : {};
-    const { records } = await stackEnvRecords(input, await userEnvRecords());
-    const stackKeys = new Set(records.map((record) => record.key));
+    const { config, stack } = await envConfig(input);
+    const stackKeys = new Set(stack.records.map((record) => record.key));
+    const currentRecords = new Map(config.view.records.map((record) => [record.key, record]));
     for (const key of Object.keys(values)) {
       const normalizedKey = normalizeRuntimeConfigKey(key);
+      const record = currentRecords.get(normalizedKey);
+      if (record && (record.owner !== RUNTIME_CONFIG_OWNERS.USER || record.editable !== true)) {
+        throw vibe64Error(
+          `${normalizedKey} is not editable as a user Env value.`,
+          "vibe64_env_value_not_editable"
+        );
+      }
       if (runtimeConfigKeyIsVibe64Reserved(normalizedKey) && !stackKeys.has(normalizedKey)) {
         const error = new Error(`${normalizedKey} is reserved for Vibe64 and is not declared by the Genesis Stack.`);
         error.code = "vibe64_env_reserved_key";

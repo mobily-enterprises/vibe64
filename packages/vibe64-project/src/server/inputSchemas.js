@@ -167,6 +167,7 @@ const projectEnvSecretRevealInputValidator = inputSchema({
 const projectEnvUserValuesInputValidator = inputSchema({
   environment: {
     type: "string",
+    enum: Object.values(RUNTIME_CONFIG_SCOPES),
     noTrim: false
   },
   sessionId: {
@@ -175,7 +176,11 @@ const projectEnvUserValuesInputValidator = inputSchema({
   },
   values: {
     type: "object",
-    additionalProperties: true,
+    values: createSchema({
+      value: { type: "string", noTrim: true, required: false },
+      secret: { type: "boolean", required: false },
+      remove: { type: "boolean", required: false }
+    }),
     required: true
   }
 });

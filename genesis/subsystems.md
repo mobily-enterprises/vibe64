@@ -146,8 +146,9 @@ inspecting the selected project or session declaration.
 ## `environment` Project environment
 
 Owns project values supplied to managed application work.
-Colleague uses the canonical Project Env read action through a bounded metadata
-presentation; stored values and secret reveal stay in the existing Env UI.
+Colleague uses the canonical Project Env read/save actions through a bounded
+metadata presentation and explicit user-value patches. Shared service guards
+protect host-owned values; stored-value inspection and secret reveal stay in Env.
 
 ### Program
 

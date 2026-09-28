@@ -23,9 +23,11 @@ Colleague also manages the named existing app accounts used by Preview through
 Managed app access, preserving the selected source and its normal Save workflow.
 Configuring a name does not create an account or sign the browser in. Colleague
 can also explain development Env setup from variable names, presence and ownership
-without receiving stored values, and open Env for entry or inspection. A setup
-read does not prove the application runs. Complete product-operation coverage
-remains in progress.
+without receiving stored values, apply values supplied by the person, and remove
+explicitly requested user overrides. It preserves other entries and opens Env
+for secret entry or stored-value inspection. Host-owned values remain protected.
+An Env change does not restart the app or prove it runs. Complete product-operation
+coverage remains in progress.
 
 On phones and narrow layouts, Colleague has one compact avatar button in the
 header. It opens a full-screen conversation with voice controls inside, leaving

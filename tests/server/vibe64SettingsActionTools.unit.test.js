@@ -8,7 +8,7 @@ import { createProjectActions } from "../../packages/vibe64-project/src/server/a
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 const preferences = { experience: "comfortable", explanationStyle: "concise", responseLength: "concise", tone: "encouraging" };
-const sourceOperations = ["settings.read", "engineering.read", "collaboration.save", "engineering.profile.save", "preview-identities.read", "preview-identities.save", "env.read"];
+const sourceOperations = ["settings.read", "engineering.read", "collaboration.save", "engineering.profile.save", "preview-identities.read", "preview-identities.save", "env.read", "env.user-values.save"];
 const operations = [...sourceOperations, "prompt-hints.save", "repository.workflow.save", "development-database.scope.save"];
 
 async function withSettingsTools(run) {
@@ -38,6 +38,7 @@ async function withSettingsTools(run) {
     const actions = createActionCatalogue({ events: { async publish(event) { events.push(event); } } });
     actions.register({ contributorId: "settings", domain: "project", actions: createProjectActions({ project: {
       async readEnv(input) { record("env.read", input); return state.failure || { ok: true, env: state.env }; },
+      async saveEnvUserValues(input) { record("env.user-values.save", input); return state.failure || { ok: true, env: state.env }; },
       async readSettings(input) {
         record("settings.read", input);
         return { ok: true, collaboration: state.collaboration, promptHints: { canEdit: true, enabled: true },
@@ -165,7 +166,8 @@ test("settings tools recheck owner and project authority and reject malformed in
       "collaboration.save": { ...preferences, requirements: "" },
       "engineering.profile.save": { profile: "durable.v1" }, "prompt-hints.save": { promptHints: false },
       "repository.workflow.save": { requirePullRequest: true }, "development-database.scope.save": { scope: "session" },
-      "preview-identities.read": {}, "preview-identities.save": { identities: state.identities }, "env.read": {}
+      "preview-identities.read": {}, "preview-identities.save": { identities: state.identities }, "env.read": {},
+      "env.user-values.save": { environment: "dev", values: { APP_NAME: { value: "Supplied name" } } }
     };
     for (const operation of operations) {
       assert.equal((await execute(operation, { ...valid[operation], vibe64User: state.actor })).ok, false);
@@ -209,7 +211,7 @@ test("Env tools share source authority while returning metadata without stored v
     assert.equal(calls.at(-1).input.sessionId, "session-a");
     assert.equal(calls.at(-1).context.vibe64User, state.actor);
     assert.equal(events.length, 0);
-    assert.equal(toolSet.tools.some(({ actionId }) => ["vibe64.project.env.secret.reveal", "vibe64.project.env.user-values.save"].includes(actionId)), false);
+    assert.equal(toolSet.tools.some(({ actionId }) => actionId === "vibe64.project.env.secret.reveal"), false);
     const api = await actions.execute({ actionId: "vibe64.project.env.read",
       input: { projectSlug: slug, sessionId: "session-b", environment: "dev" }, context: { channel: "api", surface: "app" } });
     assert.equal(api.env.records[0].value, "private-plain-value", "the ordinary UI keeps its authorized value presentation");
@@ -220,6 +222,45 @@ test("Env tools share source authority while returning metadata without stored v
     await assert.rejects(actions.execute({ actionId: "vibe64.project.env.read",
       input: { projectSlug: slug, environment: "unsupported" }, context: { channel: "api", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" });
     assert.equal(calls.length, count);
+  });
+});
+
+test("Env change tools preserve exact patch bytes and API authority without exposing stored values", async () => {
+  await withSettingsTools(async ({ actions, calls, catalog, events, execute, slug, state, toolSet }) => {
+    state.actor = { username: "member", role: "member" };
+    const values = { APP_NAME: { value: "  literal\nvalue  ", secret: false }, OPTIONAL_NAME: { remove: true },
+      EMPTY: { value: "" }, SUPPLIED_SECRET: { value: "private-supplied-secret", secret: true } };
+    const saved = await execute("env.user-values.save", { environment: "dev", values });
+    assert.equal(saved.ok, true, JSON.stringify(saved));
+    assert.deepEqual(calls.at(-1).input.values, values);
+    assert.equal(calls.at(-1).input.sessionId, "session-a");
+    assert.equal(calls.at(-1).context.vibe64User, state.actor);
+    assert.doesNotMatch(JSON.stringify(saved), /private-|\/private/u);
+    assert.equal(events.at(-1).realtime.payload.projectSlug, slug);
+    assert.doesNotMatch(JSON.stringify(events), /literal|private|SUPPLIED_SECRET/u);
+    await actions.execute({ actionId: "vibe64.project.env.user-values.save",
+      input: { projectSlug: slug, sessionId: "session-b", environment: "dev", values }, context: { channel: "api", surface: "app" } });
+    assert.deepEqual(calls.at(-1).input.values, values);
+    assert.equal(calls.at(-1).input.sessionId, "session-b");
+    assert.equal(calls.at(-1).context.vibe64User, state.actor);
+    const tool = toolSet.tools.find(({ actionId }) => actionId === "vibe64.project.env.user-values.save");
+    const parameters = catalog.toOpenAiToolSchema(tool).function.parameters;
+    const item = parameters.definitions[parameters.properties.values.additionalProperties.allOf[0].$ref.split("/").at(-1)];
+    assert.deepEqual(Object.keys(item.properties).sort(), ["remove", "secret", "value"]);
+    assert.equal(item.additionalProperties, false);
+    const count = calls.length;
+    for (const invalid of [{ APP_NAME: { unexpected: "ignored-value" } }, { APP_NAME: { value: {} } }, { APP_NAME: "unstructured" }]) {
+      assert.equal((await execute("env.user-values.save", { environment: "dev", values: invalid })).ok, false);
+      await assert.rejects(actions.execute({ actionId: tool.actionId,
+        input: { projectSlug: slug, environment: "dev", values: invalid }, context: { channel: "api", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" });
+    }
+    assert.equal((await execute("env.user-values.save", { environment: "unsupported", values })).ok, false);
+    assert.equal(calls.length, count);
+    state.failure = { ok: false, errors: [{ code: "source_busy", message: "A coding conversation is writing this source.", details: "private-detail" }] };
+    const eventCount = events.length;
+    assert.deepEqual((await execute("env.user-values.save", { values })).result,
+      { ok: false, code: "source_busy", error: "A coding conversation is writing this source." });
+    assert.equal(events.length, eventCount);
   });
 });
 

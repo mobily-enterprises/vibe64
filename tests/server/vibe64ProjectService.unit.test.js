@@ -1879,6 +1879,20 @@ test("a host maps semantic database values onto exact Laravel-style Stack bindin
     assert.deepEqual(providerCalls[0].resources.map(({ resource }) => resource.kind), ["mysql"]);
     assert.equal(Object.hasOwn(providerCalls[0], "environment"), false);
 
+    const valuesFile = path.join(service.currentProjectRuntimeRoot(), "env", "user-values.json");
+    await assert.rejects(stat(valuesFile), { code: "ENOENT" });
+    for (const change of [{ value: "not-the-host-database" }, { remove: true }]) {
+      const blocked = await service.saveEnvUserValues({ environment: "dev", sessionId, values: {
+        UNRELATED_USER_VALUE: { value: "must-not-be-partially-written" },
+        DB_DATABASE: change
+      } });
+      assert.equal(blocked.ok, false);
+      assert.equal(blocked.code, "vibe64_env_value_not_editable");
+      await assert.rejects(stat(valuesFile), { code: "ENOENT" });
+      assert.equal(await readFile(path.join(sessionSource, ".env"), "utf8"), materialized);
+    }
+    assert.equal(providerCalls.length, 1, "rejected changes never provision resources");
+
     assert.deepEqual(await service.releaseSessionResources({ sessionId }), { ok: true });
     assert.equal(released.length, 1);
     assert.equal(released[0].sessionId, sessionId);

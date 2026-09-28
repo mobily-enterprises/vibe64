@@ -270,6 +270,7 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_SAVE_ENV_USER_VALUES,
+      assistant: settingsTool("env.user-values.save"),
       kind: "command",
       input: projectEnvUserValuesInputValidator,
       events: [projectChangedEvent()],
