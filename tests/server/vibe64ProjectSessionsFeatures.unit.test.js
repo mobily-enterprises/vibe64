@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 
 import {
   Vibe64ProjectProvider
@@ -11,6 +15,53 @@ import {
 import {
   createService as createSessionsService
 } from "../../packages/vibe64-sessions/src/server/service.js";
+
+test("session discovery pages every archived/open identity through canonical tools while native lists stay complete", async () => {
+  const sessions = Array.from({ length: 127 }, (_, i) => ({ sessionId: `session-${i}`, sessionName: `History ${i}`,
+    status: "archived", archivedAt: "2026-09-29T00:00:00Z", private: "secret-session" }));
+  const result = { ok: true, sessions, unavailableSessions: [{ sessionId: "unavailable", path: "secret-path" }] };
+  let calls = 0, allowed = true;
+  const actions = createActionCatalogue();
+  registerVibe64ActionContext(actions, {
+    projectContext: { projectsRoot: "/fixture", readWorkspaceProject: async () => ({ project: { path: "/fixture/project" } }) },
+    resolveUser: async () => ({ uid: 42, role: "member" }),
+    authorizeProject() { if (!allowed) throw Object.assign(new Error("Denied"), { statusCode: 403 }); }
+  });
+  actions.register({ contributorId: "session-pages", domain: "vibe64", actions: createSessionActions({ sessions: {
+    async listArchivedSessions() { calls++; return result; }, async listSessions() { calls++; return result; }
+  } }).filter(action => ["vibe64.sessions.archived.list", "vibe64.sessions.list"].includes(action.id))
+    .map(action => ({ ...action, channels: ["api", "automation"], surfaces: ["app"] })) });
+  const catalog = createServiceToolCatalog(actions), context = { channel: "automation", surface: "app" };
+  const toolSet = catalog.resolveToolSet(context);
+  for (const tool of toolSet.tools) {
+    assert.doesNotThrow(() => catalog.toOpenAiToolSchema(tool));
+    const seen = [];
+    const execute = input => catalog.executeToolCall({ toolName: tool.name, toolSet, context,
+      argumentsText: JSON.stringify({ projectSlug: "project", ...input }) });
+    for (const sessionOffset of [0, "60", 120]) {
+      const page = await execute({ sessionOffset });
+      assert.equal(page.ok, true, JSON.stringify(page));
+      assert.equal(page.result.sessionCount, 127);
+      assert.equal(page.result.nextSessionOffset, Number(sessionOffset) < 120 ? Number(sessionOffset) + 60 : null);
+      assert.equal(page.result.unavailableSessionCount, 1);
+      assert.equal(page.result.sessionsTruncated, true);
+      assert.equal(page.result.sessions[0].archivedAt, sessions[0].archivedAt);
+      assert.doesNotMatch(JSON.stringify(page.result), /secret-/);
+      seen.push(...page.result.sessions.map(session => session.sessionId));
+    }
+    assert.deepEqual(seen, sessions.map(session => session.sessionId));
+    assert.equal((await execute({ sessionOffset: 999 })).result.sessions.length, 0);
+    const native = await actions.execute({ actionId: tool.actionId,
+      input: { projectSlug: "project", sessionOffset: 60 }, context: { ...context, channel: "api" } });
+    assert.equal(native.sessions.length, 127);
+    const before = calls;
+    for (const sessionOffset of [-1, 0.5]) assert.equal((await execute({ sessionOffset })).ok, false);
+    allowed = false;
+    assert.equal((await execute({})).ok, false);
+    assert.equal(calls, before);
+    allowed = true;
+  }
+});
 
 test("project and sessions expose only named Feature capabilities", () => {
   assert.equal(Vibe64ProjectProvider.id, "vibe64.project");

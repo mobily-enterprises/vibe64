@@ -32,6 +32,9 @@ through bounded settings results.
 ## `sessions` Session workspaces
 
 Owns isolated working sessions, their lifecycle and recoverable workspace history.
+Its open/archive list actions also own bounded Colleague discovery pages and
+archival timestamps; native lists and unavailable-record diagnosis retain their
+existing owner and format.
 
 ### Program
 

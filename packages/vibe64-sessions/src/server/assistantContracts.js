@@ -6,7 +6,7 @@ import { SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS } from "./sessionRenewalState.j
 const shortText = { type: "string", maxLength: 256, required: false };
 const sessionFields = {
   ...Object.fromEntries([
-    "sessionId", "sessionName", "status", "updatedAt", "workspaceSetupStatus", "agentStatus", "agentPhase", "runId",
+    "sessionId", "sessionName", "status", "updatedAt", "archivedAt", "workspaceSetupStatus", "agentStatus", "agentPhase", "runId",
     "routingStatus", "routingMode", "agentError", "engineId", "chatMode", "workflowEngineId", "catalogRevision"
   ].map((key) => [key, shortText])),
   ...Object.fromEntries(["modelId", "modelProviderId", "variantId", "agentId"].map((key) => [key, { ...shortText, maxLength: 512 }])),
@@ -24,6 +24,8 @@ const sessionOutput = {
     code: shortText,
     sessions: { type: "array", items: createSchema(sessionFields), required: false },
     sessionsTruncated: { type: "boolean", required: false },
+    sessionCount: { type: "integer", min: 0, required: false },
+    nextSessionOffset: { type: "integer", min: 0, nullable: true, required: false },
     unavailableSessionCount: { type: "integer", required: false }
   })
 };
@@ -39,6 +41,7 @@ function sessionSummary(session) {
     sessionName: session.sessionName,
     status: session.status,
     updatedAt: session.updatedAt,
+    archivedAt: session.archivedAt,
     workspaceSetupStatus: session.workspaceSetup?.status,
     agentStatus: turn?.state || session.agentSession?.status,
     agentPhase: turn?.phase,
@@ -99,14 +102,17 @@ function sessionTool(description) {
   return {
     description,
     output: sessionOutput,
-    transformResult(result) {
+    transformResult(result, { input = {} } = {}) {
+      const offset = Number(input.sessionOffset || 0);
       return {
         ...sessionSummary(result),
         ok: result.ok === true,
         ...Object.fromEntries(["error", "code"].flatMap((key) => typeof result[key] === "string" ? [[key, result[key].slice(0, 256)]] : [])),
         ...(Array.isArray(result.sessions) ? {
-          sessions: result.sessions.slice(0, 60).map(sessionSummary),
-          sessionsTruncated: result.sessions.length > 60,
+          sessions: result.sessions.slice(offset, offset + 60).map(sessionSummary),
+          sessionsTruncated: offset > 0 || result.sessions.length > 60,
+          sessionCount: result.sessions.length,
+          nextSessionOffset: offset + 60 < result.sessions.length ? offset + 60 : null,
           unavailableSessionCount: result.unavailableSessions?.length || 0
         } : {})
       };

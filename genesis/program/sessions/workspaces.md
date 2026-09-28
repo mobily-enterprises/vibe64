@@ -65,6 +65,12 @@ reading exposes up to six canonical turns per tool result, with bounded text,
 explicit truncation and an older-page cursor. Neither result exposes private
 provider bindings or raw session metadata. HTTP retains its existing full result
 contract; these are action-owned assistant projections.
+Open and archived session discovery expose sixty-item assistant pages using
+`sessionOffset` and `nextSessionOffset`, with the complete session count and a
+separate unavailable count. Native list order is preserved; new work or archives
+can change pages between reads. Archived summaries include their archival time.
+Ordinary action/HTTP results retain the full native lists. These are read-only
+projections, with current project authority checked on every page.
 
 Main Send/Steer and Stop are exposed through their existing named operations.
 Send keeps the supplied message identity for normal retry behavior and returns

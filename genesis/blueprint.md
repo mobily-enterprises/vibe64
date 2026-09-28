@@ -10,6 +10,8 @@ no repository tools or engineering role. Its continuing conversation remains
 available before a session exists or when a session cannot open. Each signed-in
 person keeps their own Colleague history and model choice. The current text
 conversation supports an Online host's global voice controls and configured display name.
+Colleague can browse open and archived sessions beyond the first page, while
+reporting unavailable records separately and keeping historical sessions inactive.
 Changing that name keeps the conversation and model choice. People can ask it
 to watch Main or temporary conversations for completed answers, finished work or
 explicit problems. Code observes the conversations; only relevant changes wake

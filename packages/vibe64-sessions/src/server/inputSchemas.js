@@ -264,7 +264,8 @@ const sessionPresenceActionInputValidator = requiredInputSchema({
 });
 
 const sessionListInputValidator = patchSchema({
-  ...optionalUser
+  ...optionalUser,
+  sessionOffset: { type: "integer", min: 0, required: false }
 });
 
 const sessionRepositoryReviewSchema = createSchema({

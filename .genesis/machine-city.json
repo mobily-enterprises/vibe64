@@ -9058,7 +9058,7 @@
       "title": "sessionPresence.js"
     },
     {
-      "bytes": 27130,
+      "bytes": 27541,
       "districtId": "directory:packages/vibe64-sessions/src/server",
       "extractors": [
         "javascript"
@@ -9104,7 +9104,7 @@
         "function:packages/vibe64-sessions/src/server/actions.js:createSessionActions.execute:function:419:16",
         "function:packages/vibe64-sessions/src/server/actions.js:createSessionActions.execute:function:431:16"
       ],
-      "hash": "sha256:496c4b0959f14ea25dc5a2e829695c5809bb4154ffcc0a768dc60e06a36df8a1",
+      "hash": "sha256:ef3cf1e31c0610fa6c81da65655a943c808bb36784785635c04827abf89a5445",
       "id": "file:packages/vibe64-sessions/src/server/actions.js",
       "internalFunctionCount": 38,
       "language": "javascript",
@@ -9118,35 +9118,35 @@
       "title": "actions.js"
     },
     {
-      "bytes": 19428,
+      "bytes": 19867,
       "districtId": "directory:packages/vibe64-sessions/src/server",
       "extractors": [
         "javascript"
       ],
       "functionIds": [
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionSummary:function:31:1",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:assistantAccessTool:function:68:1",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:assistantAccessTool.transformResult:method:83:5",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionTool:function:98:1",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionTool.transformResult:method:102:5",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionWorkTool:function:117:1",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionWorkTool.transformResult:method:140:5",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionPullRequestTool:function:170:1",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionPullRequestTool.transformResult:method:182:5",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationLogTool:function:197:1",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationLogTool.transformResult:method:211:5",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationRewindTool:function:226:1",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationRewindTool.transformResult:method:234:5",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationOperationTool:function:243:1",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationOperationTool.transformResult:method:253:5",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:renewalTool:function:263:1",
-        "function:packages/vibe64-sessions/src/server/assistantContracts.js:renewalTool.transformResult:method:276:5"
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionSummary:function:33:1",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:assistantAccessTool:function:71:1",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:assistantAccessTool.transformResult:method:86:5",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionTool:function:101:1",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionTool.transformResult:method:105:5",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionWorkTool:function:123:1",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionWorkTool.transformResult:method:146:5",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionPullRequestTool:function:176:1",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionPullRequestTool.transformResult:method:188:5",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationLogTool:function:203:1",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationLogTool.transformResult:method:217:5",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationRewindTool:function:232:1",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationRewindTool.transformResult:method:240:5",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationOperationTool:function:249:1",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationOperationTool.transformResult:method:259:5",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:renewalTool:function:269:1",
+        "function:packages/vibe64-sessions/src/server/assistantContracts.js:renewalTool.transformResult:method:282:5"
       ],
-      "hash": "sha256:f8fce7f59cf193e4f623009343bc14fea799011b39d766d214d387a0f2cdf2ea",
+      "hash": "sha256:af5b55a57ad07237dd06b97f3b53790f18a35575709aebcdde25dd1ebeee6acf",
       "id": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "internalFunctionCount": 9,
       "language": "javascript",
-      "lines": 295,
+      "lines": 301,
       "mode": 33188,
       "path": "packages/vibe64-sessions/src/server/assistantContracts.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-sessions",
@@ -9156,7 +9156,7 @@
       "title": "assistantContracts.js"
     },
     {
-      "bytes": 17537,
+      "bytes": 17600,
       "districtId": "directory:packages/vibe64-sessions/src/server",
       "extractors": [
         "javascript"
@@ -9165,11 +9165,11 @@
         "function:packages/vibe64-sessions/src/server/inputSchemas.js:patchSchema:function:79:1",
         "function:packages/vibe64-sessions/src/server/inputSchemas.js:requiredInputSchema:function:86:1"
       ],
-      "hash": "sha256:c3b2384b22f0d42a0eddf5c6aa8939346af6f6642526ef8f68b5f5debb028c2c",
+      "hash": "sha256:c459b7371c3525901b928bb429fbcdcb53ff6cca0daefad17aeaf8102fb520a8",
       "id": "file:packages/vibe64-sessions/src/server/inputSchemas.js",
       "internalFunctionCount": 2,
       "language": "javascript",
-      "lines": 671,
+      "lines": 672,
       "mode": 33188,
       "path": "packages/vibe64-sessions/src/server/inputSchemas.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-sessions",
@@ -21411,7 +21411,7 @@
       "title": "vite.config.mjs"
     }
   ],
-  "codeHash": "sha256:845a6656f50b27b08985146ad940448bc6a3f85f369c5d60c3da025f9a398840",
+  "codeHash": "sha256:6b69bc4bab64c7729a938ef38c0e80735a2fa340fff63ddb1d5e642b8f663d65",
   "diagnostics": [],
   "districts": [
     {
@@ -90887,10 +90887,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionSummary:function:31:1",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionSummary:function:33:1",
       "kind": "function",
       "language": "javascript",
-      "line": 31,
+      "line": 33,
       "name": "sessionSummary",
       "parameters": [
         "session"
@@ -90908,10 +90908,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:assistantAccessTool:function:68:1",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:assistantAccessTool:function:71:1",
       "kind": "function",
       "language": "javascript",
-      "line": 68,
+      "line": 71,
       "name": "assistantAccessTool",
       "parameters": [],
       "path": "packages/vibe64-sessions/src/server/assistantContracts.js",
@@ -90927,10 +90927,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:assistantAccessTool.transformResult:method:83:5",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:assistantAccessTool.transformResult:method:86:5",
       "kind": "method",
       "language": "javascript",
-      "line": 83,
+      "line": 86,
       "name": "transformResult",
       "parameters": [
         "result"
@@ -90948,10 +90948,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionTool:function:98:1",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionTool:function:101:1",
       "kind": "function",
       "language": "javascript",
-      "line": 98,
+      "line": 101,
       "name": "sessionTool",
       "parameters": [
         "description"
@@ -90969,13 +90969,14 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionTool.transformResult:method:102:5",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionTool.transformResult:method:105:5",
       "kind": "method",
       "language": "javascript",
-      "line": 102,
+      "line": 105,
       "name": "transformResult",
       "parameters": [
-        "result"
+        "result",
+        "{ input = {} } = {}"
       ],
       "path": "packages/vibe64-sessions/src/server/assistantContracts.js",
       "qualifiedName": "sessionTool.transformResult",
@@ -90990,10 +90991,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionWorkTool:function:117:1",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionWorkTool:function:123:1",
       "kind": "function",
       "language": "javascript",
-      "line": 117,
+      "line": 123,
       "name": "sessionWorkTool",
       "parameters": [
         "description"
@@ -91011,10 +91012,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionWorkTool.transformResult:method:140:5",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionWorkTool.transformResult:method:146:5",
       "kind": "method",
       "language": "javascript",
-      "line": 140,
+      "line": 146,
       "name": "transformResult",
       "parameters": [
         "result"
@@ -91032,10 +91033,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionPullRequestTool:function:170:1",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionPullRequestTool:function:176:1",
       "kind": "function",
       "language": "javascript",
-      "line": 170,
+      "line": 176,
       "name": "sessionPullRequestTool",
       "parameters": [],
       "path": "packages/vibe64-sessions/src/server/assistantContracts.js",
@@ -91051,10 +91052,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionPullRequestTool.transformResult:method:182:5",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:sessionPullRequestTool.transformResult:method:188:5",
       "kind": "method",
       "language": "javascript",
-      "line": 182,
+      "line": 188,
       "name": "transformResult",
       "parameters": [
         "result"
@@ -91072,10 +91073,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationLogTool:function:197:1",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationLogTool:function:203:1",
       "kind": "function",
       "language": "javascript",
-      "line": 197,
+      "line": 203,
       "name": "conversationLogTool",
       "parameters": [],
       "path": "packages/vibe64-sessions/src/server/assistantContracts.js",
@@ -91091,10 +91092,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationLogTool.transformResult:method:211:5",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationLogTool.transformResult:method:217:5",
       "kind": "method",
       "language": "javascript",
-      "line": 211,
+      "line": 217,
       "name": "transformResult",
       "parameters": [
         "result"
@@ -91112,10 +91113,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationRewindTool:function:226:1",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationRewindTool:function:232:1",
       "kind": "function",
       "language": "javascript",
-      "line": 226,
+      "line": 232,
       "name": "conversationRewindTool",
       "parameters": [],
       "path": "packages/vibe64-sessions/src/server/assistantContracts.js",
@@ -91131,10 +91132,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationRewindTool.transformResult:method:234:5",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationRewindTool.transformResult:method:240:5",
       "kind": "method",
       "language": "javascript",
-      "line": 234,
+      "line": 240,
       "name": "transformResult",
       "parameters": [
         "result"
@@ -91152,10 +91153,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationOperationTool:function:243:1",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationOperationTool:function:249:1",
       "kind": "function",
       "language": "javascript",
-      "line": 243,
+      "line": 249,
       "name": "conversationOperationTool",
       "parameters": [
         "description"
@@ -91173,10 +91174,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationOperationTool.transformResult:method:253:5",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:conversationOperationTool.transformResult:method:259:5",
       "kind": "method",
       "language": "javascript",
-      "line": 253,
+      "line": 259,
       "name": "transformResult",
       "parameters": [
         "result"
@@ -91194,10 +91195,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:renewalTool:function:263:1",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:renewalTool:function:269:1",
       "kind": "function",
       "language": "javascript",
-      "line": 263,
+      "line": 269,
       "name": "renewalTool",
       "parameters": [
         "description",
@@ -91216,10 +91217,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-sessions/src/server/assistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:renewalTool.transformResult:method:276:5",
+      "id": "function:packages/vibe64-sessions/src/server/assistantContracts.js:renewalTool.transformResult:method:282:5",
       "kind": "method",
       "language": "javascript",
-      "line": 276,
+      "line": 282,
       "name": "transformResult",
       "parameters": [
         "result"

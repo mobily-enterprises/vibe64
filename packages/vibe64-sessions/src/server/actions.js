@@ -161,14 +161,14 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_LIST_SESSIONS,
-      assistant: sessionTool("List open sessions in the specified project. Status describes session lifecycle, not necessarily whether its agent is coding. Inspect the selected session for current agent status."),
+      assistant: sessionTool("List open sessions in the specified project. Follow nextSessionOffset with sessionOffset for sixty-item pages; live lists can change between reads. Status describes session lifecycle, not necessarily whether its agent is coding. Inspect the selected session for current agent status."),
       kind: "query",
       input: sessionListInputValidator,
       execute: (input) => sessions.listSessions(input || {})
     }),
     action({
       id: ACTION_LIST_ARCHIVED_SESSIONS,
-      assistant: sessionTool("List archived sessions in the specified project. Archived sessions are not active coding conversations."),
+      assistant: sessionTool("List archived sessions in the specified project, newest archival first. Follow nextSessionOffset with sessionOffset for sixty-item pages; new archives can change the list. Archived sessions are not active coding conversations. Their canonical saved chat remains in History; hosted Resources may additionally expose preserved native text. Unavailable sessions are counted separately, not silently claimed absent."),
       kind: "query",
       input: sessionListInputValidator,
       execute: () => sessions.listArchivedSessions()
