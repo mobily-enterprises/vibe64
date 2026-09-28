@@ -30,7 +30,7 @@ const watchFields = {
   condition: { type: "string", enum: ["reply", "finished", "attention"], required: true },
   question: { ...text, maxLength: 1000, required: true }, once: { type: "boolean", required: false }
 };
-const watchSchema = createSchema({ ...watchFields, status: { ...text, required: true }, error: { ...text, maxLength: 512 } });
+const watchSchema = createSchema({ ...watchFields, source: text, status: { ...text, required: true }, error: { ...text, maxLength: 512 } });
 const watchOutput = { mode: "replace", schema: createSchema({ ok: { type: "boolean", required: true },
   watch: { type: "object", schema: watchSchema, required: false },
   watches: { type: "array", items: watchSchema, required: false } }) };
@@ -154,9 +154,9 @@ function createColleagueActions(colleague) {
       output: navigationOutput
     }, true),
     definition("navigation.open-management", {
-      managementView: { type: "string", enum: ["launcher", "projects", "studio-health", "accounts", "assistant", "users", "vps-access"], required: true }
+      managementView: { type: "string", enum: ["launcher", "projects", "studio-health", "accounts", "assistant", "users", "vps-access", "system-repair"], required: true }
     }, (input, context) => colleague.navigate(input, context), {
-      description: "Open a global Vibe64 Management page, without requiring a project or session. projects opens the project chooser; launcher shows project work; accounts opens AI Accounts; assistant opens Speech and Colleague settings; users opens user management; vps-access opens owner SSH access; studio-health runs the existing read-only platform checks. This only opens a page, it does not change its settings. Wait for the browser acknowledgement.",
+      description: "Open a global Vibe64 Management page, without requiring a project or session. projects opens the project chooser; launcher shows project work; accounts opens AI Accounts; assistant opens Speech and Colleague settings; users opens user management; vps-access opens owner SSH access; studio-health runs the existing read-only platform checks. On a hosted workspace, system-repair opens the owner's existing repair conversation and its proposal/confirmation controls; this does not send a message, confirm a repair or clear history. This only opens a page, it does not change its settings. Wait for the browser acknowledgement.",
       output: navigationOutput
     }),
     definition("context.read", {}, (input, context) => colleague.context(input, context), {

@@ -15,8 +15,11 @@ reporting unavailable records separately and keeping historical sessions inactiv
 Changing that name keeps the conversation and model choice. People can ask it
 to watch Main or temporary conversations for completed answers, finished work or
 explicit problems. Code observes the conversations; only relevant changes wake
-Colleague. People can also delegate bounded implementation assignments: Colleague
-retains the original request, follows up within a turn allowance, arranges review
+Colleague. It can also watch a host's workspace conversation without a project, using that
+host's current permissions and the same code-driven notifications. Watching does
+not prevent the person from continuing their conversation with Colleague.
+People can also delegate bounded implementation assignments: Colleague retains
+the original request, follows up within a turn allowance, arranges review
 in the same session and brings back evidence when the work is ready for their
 testing. Explicitly linked assignments can exchange relevant questions and
 answers across projects and sessions, while keeping their separate worktrees,

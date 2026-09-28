@@ -260,6 +260,10 @@ and coordinate stopped-service upgrades before activation.
 
 ## `colleague` Product conversation
 
+Host-owned workspace conversations can register an authorized observation source
+with the existing watch scheduler. Colleague owns the subscription and delivery;
+the host retains its conversation, permissions, diagnosis and repair operations.
+
 Owns each person's independent conversation for discussing ideas and operating
 Vibe64 across projects, including tool exchange, focused targets, retained
 operation outcomes, conversation watches, bounded implementation assignments

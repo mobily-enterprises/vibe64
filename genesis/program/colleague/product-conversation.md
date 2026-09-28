@@ -132,6 +132,13 @@ finished turns and explicit attention states; failures are reported for every
 condition. An existing completed answer is reported immediately. Quiet output
 does not imply that an agent is blocked. One-shot watches retire after delivery;
 ongoing watches compare run, message and status cursors to suppress duplicates.
+Hosts can register an authorized reader for a named workspace conversation source.
+Those watches use the same scheduler, cursors, budget, cancellation and notification
+flow without a project/session. Only the owning host action supplies that source;
+ordinary watch input cannot choose it. New records retain the optional source name;
+existing records without it remain coding-conversation watches without rewriting.
+Unknown sources pause rather than falling back to a coding session. Reusing a
+watch ID for a different target, source, condition or question is refused.
 
 The existing session event bus schedules coalesced reads outside the publisher's
 write lock. A 30-second code-only reconciliation catches missing events while a
@@ -139,7 +146,9 @@ watch is active. No watches, unrelated events, unchanged state and partial token
 start no model calls. Watches and pending observations persist, but credentials
 do not. Reads resume after authentication, recheck target access, and pause visibly
 on a read failure. Resume reconciles from the retained cursor. Notifications also
-recheck project access before sending their bounded observation to the model.
+recheck target access before sending their bounded observation to the model,
+including the current host authority for a workspace conversation. Waiting for
+these changes does not occupy Colleague's model turn; the user can keep talking.
 
 Updates wait for a decision boundary when Colleague is busy. Ordinary autonomous reports
 use the same JSKIT catalogue filtered to query actions, so they cannot assign
@@ -224,6 +233,8 @@ must acknowledge the exact pending command before Colleague reports it opened.
 The host maps these page identities to its real routes; arbitrary URLs are not
 accepted. Project/session navigation retains its separate project-authorized
 action. Opening a settings page does not authorize changing its settings.
+The System repair destination opens an available host's existing confirmation UI;
+navigation never confirms a repair. Public Colleague does not own host repair.
 
 Project navigation accepts an enumerated project/dashboard pane. Session views
 and temporary conversations require an exact session ID. When a session is

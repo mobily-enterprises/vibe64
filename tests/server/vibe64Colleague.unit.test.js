@@ -724,6 +724,101 @@ test("watches consume no model turns for idle, unrelated, duplicate or partial u
   assert.equal(f.observations.starts.length, 1);
 });
 
+function registerWorkspaceConversation(f) {
+  f.context.requestMeta.request.vibe64User.role = "owner";
+  f.actions.register({ contributorId: "workspace-observer", domain: "workspace", actions: [{
+    channels: ["api", "automation"], surfaces: ["app"],
+    ...withVibe64ActionContext({ id: "vibe64.test.workspace-conversation.read", kind: "query", idempotency: "none",
+      input: { schema: createSchema({ conversationId: { type: "string", required: true } }), mode: "create" }, output: null,
+      async execute() { f.observations.reads += 1; return structuredClone(f.observations.target); }
+    }, { projectScoped: false, ownerRequired: true })
+  }] });
+  f.service.registerConversationSource("workspace-repair", (watch, context) => f.actions.execute({
+    actionId: "vibe64.test.workspace-conversation.read", input: { conversationId: watch.conversationId }, context
+  }));
+}
+const workspaceWatch = { ...watchInput, source: "workspace-repair", projectSlug: "", sessionId: "", conversationId: "repair-1" };
+
+test("a registered workspace conversation reuses code polling while the user keeps talking without any project", async (t) => {
+  const f = await fixture(t, [reply("We can keep discussing your idea."), reply("A repair proposal needs your confirmation.")], { watching: true, watchPollMs: 15 });
+  registerWorkspaceConversation(f);
+  await f.service.watch(workspaceWatch, f.context);
+  await until(() => f.observations.reads >= 2);
+  assert.equal(f.observations.starts.length, 0, "Idle observations use no model turns.");
+  await f.send("Can we discuss another idea while that runs?");
+  assert.equal((await f.service.wait(f.context)).messages.at(-1).text, "We can keep discussing your idea.");
+  assert.equal(f.observations.starts.length, 1);
+  f.observations.target = { ok: true, status: "completed", runId: "repair-run", needsUser: true,
+    messages: [{ id: "repair-answer", role: "assistant", text: "A repair is proposed. It has not executed." }] };
+  await until(() => f.observations.starts.length === 2);
+  const result = await f.service.wait(f.context);
+  assert.equal(result.watches[0].status, "delivered");
+  const prompt = JSON.parse(f.observations.starts[1].input.message);
+  assert.equal(prompt.readOnly, true);
+  assert.equal(prompt.observations[0].source, "workspace-repair");
+  assert.equal(prompt.observations[0].answerId, "repair-answer");
+  assert.equal(prompt.observations[0].needsUser, true);
+  assert.deepEqual(f.observations.projectChecks, []);
+  assert.equal((await watchAction(f, "watches.read", {})).watches[0].source, "workspace-repair");
+  await assert.rejects(f.service.watch({ ...workspaceWatch, conversationId: "another-repair" }, f.context), /different request/);
+  await assert.rejects(f.service.watch({ ...workspaceWatch, source: "another-source" }, f.context), /different request/);
+  await assert.rejects(watchAction(f, "watch.create", { ...workspaceWatch, projectSlug: "alpha", sessionId: "session-1" }),
+    { code: "ACTION_VALIDATION_FAILED" }, "Only the owning host action supplies a source.");
+});
+
+test("workspace conversation watches recheck owner access and reject unavailable sources without falling back to coding sessions", async (t) => {
+  const f = await fixture(t, [], { watchPollMs: 15 });
+  registerWorkspaceConversation(f);
+  await f.service.watch(workspaceWatch, f.context);
+  f.context.requestMeta.request.vibe64User.role = "member";
+  await until(async () => (await f.service.read({}, f.context)).watches[0].status === "paused");
+  assert.equal(f.observations.starts.length, 0);
+  await assert.rejects(watchAction(f, "watch.resume", { watchId: "watch-1" }), /owner/);
+  assert.deepEqual(f.observations.projectChecks, []);
+  await f.service.close();
+  const restored = await fixture(t, [], { systemRoot: f.root, watchPollMs: 15 });
+  await assert.rejects(restored.service.resumeWatch({ watchId: "watch-1" }, restored.context), /source is unavailable/);
+  assert.equal(restored.observations.starts.length, 0);
+  assert.deepEqual(restored.observations.projectChecks, []);
+});
+
+test("workspace conversation watch identity survives restart and waits for current authentication before observing", async (t) => {
+  const f = await fixture(t, []);
+  registerWorkspaceConversation(f);
+  await f.service.watch(workspaceWatch, f.context);
+  await f.service.close();
+  const restored = await fixture(t, [reply("The saved repair investigation answered.")], { systemRoot: f.root, watchPollMs: 15 });
+  registerWorkspaceConversation(restored);
+  restored.observations.target.status = "completed";
+  restored.observations.target.messages.push({ id: "answer", role: "assistant", text: "Ready for review." });
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(restored.observations.reads, 0);
+  await restored.service.read({}, restored.context);
+  await until(() => restored.observations.starts.length === 1);
+  assert.equal((await restored.service.wait(restored.context)).watches[0].status, "delivered");
+  const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  assert.equal(saved.watches[0].source, "workspace-repair");
+  assert.equal(saved.watches[0].conversationId, "repair-1");
+  assert.equal(JSON.stringify(saved).includes("requestMeta"), false);
+});
+
+test("a retained workspace observation is reauthorized before its late notification reaches the model", async (t) => {
+  const gate = Promise.withResolvers();
+  const f = await fixture(t, [() => gate.promise], { watchPollMs: 15 });
+  registerWorkspaceConversation(f);
+  await f.send("Keep discussing this with me.");
+  await until(() => f.observations.starts.length === 1);
+  await f.service.watch(workspaceWatch, f.context);
+  f.observations.target.status = "completed";
+  f.observations.target.messages.push({ id: "private-answer", role: "assistant", text: "Owner-only repair evidence." });
+  await until(async () => (await f.service.read({}, f.context)).watches[0].status === "pending");
+  f.context.requestMeta.request.vibe64User.role = "member";
+  gate.resolve(reply("We can continue our discussion."));
+  await until(async () => (await f.service.read({}, f.context)).watches[0].status === "paused");
+  assert.equal(f.observations.starts.length, 1, "The private observation cannot enter another model turn after revocation.");
+  assert.doesNotMatch(JSON.stringify((await f.service.read({}, f.context)).messages), /Owner-only repair evidence/);
+});
+
 test("autonomous watch notifications cannot execute a mutating tool", async (t) => {
   const f = await fixture(t, [call("forbidden"), reply("The agent finished; I have made no further changes.")], { watching: true });
   f.observations.target.status = "completed";
@@ -1216,18 +1311,20 @@ test("global Management navigation works without project access and cannot accep
   const context = { ...f.context, colleague: { clientId: "tab-a" } };
   const execute = (input) => f.actions.execute({ actionId: "vibe64.colleague.navigation.open-management", input, context });
   f.observations.projectAllowed = false;
-  const pending = execute({ managementView: "accounts" });
-  let state;
-  for (let index = 0; index < 20; index += 1) {
-    state = await f.service.read({ clientId: "tab-a" }, f.context);
-    if (state.navigation) break;
-    await new Promise((resolve) => setImmediate(resolve));
+  for (const managementView of ["accounts", "system-repair"]) {
+    const pending = execute({ managementView });
+    let state;
+    for (let index = 0; index < 20; index += 1) {
+      state = await f.service.read({ clientId: "tab-a" }, f.context);
+      if (state.navigation?.managementView === managementView && state.navigation.status === "pending") break;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(state.navigation.managementView, managementView);
+    assert.equal(state.navigation.projectSlug, undefined);
+    const focus = { projectSlug: "", sessionId: "", route: `/app/manage/${managementView}` };
+    await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id, ok: true, focus }, f.context);
+    assert.deepEqual(await pending, { ok: true, focus });
   }
-  assert.equal(state.navigation.managementView, "accounts");
-  assert.equal(state.navigation.projectSlug, undefined);
-  await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id, ok: true,
-    focus: { projectSlug: "", sessionId: "", route: "/app/manage/accounts" } }, f.context);
-  assert.deepEqual(await pending, { ok: true, focus: { projectSlug: "", sessionId: "", route: "/app/manage/accounts" } });
   for (const input of [{ managementView: "https://external.example" }, { managementView: "accounts", projectSlug: "alpha" }, {}]) {
     await assert.rejects(execute(input), { code: "ACTION_VALIDATION_FAILED" });
   }

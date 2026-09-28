@@ -33,6 +33,10 @@ async function readWatchedConversation(actions, watch, context) {
     const log = await execute("vibe64.sessions.conversation-log.read", { sessionId: watch.sessionId, limit: "3" });
     messages = (log.conversationLog || []).flatMap((item) => item.messages || []);
   }
+  return conversationObservation({ status, runId, messages, error, needsUser });
+}
+
+function conversationObservation({ status = "unknown", runId = "", messages = [], error = "", needsUser = false }) {
   const answer = messages.findLast((message) => message.role === "assistant" && message.complete !== false && !working.has(message.status));
   const latest = messages.findLast((message) => ["user", "assistant"].includes(message.role) && message.complete !== false && !working.has(message.status));
   const answerId = answer ? String(answer.id || answer.messageId || createHash("sha256").update(`${answer.at || ""}:${answer.text || ""}`).digest("hex")) : "";
@@ -60,4 +64,4 @@ function watchUpdate(watch, observation) {
   return { cursor, reason: "" };
 }
 
-export { readWatchedConversation, watchUpdate };
+export { conversationObservation, readWatchedConversation, watchUpdate };

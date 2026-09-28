@@ -5,7 +5,7 @@ import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createConversationTranscript, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, outputSchema, readEnvelope } from "./protocol.js";
-import { readWatchedConversation, watchUpdate } from "./attention.js";
+import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
 
@@ -37,6 +37,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const summaries = createConversationSummary({ actions, terminals, persist,
     workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
   const users = new Map();
+  const conversationSources = new Map();
   let closed = false;
   let resolveName = async () => "Colleague";
 
@@ -204,7 +205,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       for (const observation of state.record.observations.slice()) {
         // Persisted notifications may outlive their original project access.
         try {
-          requireResult(await actions.execute({ actionId: "vibe64.sessions.inspect", input: { sessionId: observation.focus.sessionId },
+          const watch = state.record.watches.find(item => item.watchId === observation.watchId);
+          if (watch?.source) await readWatch(watch, context);
+          else requireResult(await actions.execute({ actionId: "vibe64.sessions.inspect", input: { sessionId: observation.focus.sessionId },
             context: { ...context, projectSlug: observation.focus.projectSlug } }));
           observations.push(observation);
         } catch (error) {
@@ -376,8 +379,15 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     state.watchTimer.unref?.();
   }
 
+  async function readWatch(watch, context) {
+    if (!watch.source) return readWatchedConversation(actions, watch, context);
+    const read = conversationSources.get(watch.source);
+    if (!read) throw failure("This watched conversation source is unavailable in this runtime.");
+    return conversationObservation(requireResult(await read(watch, context)));
+  }
+
   async function observeWatch(state, watch) {
-    const observation = await readWatchedConversation(actions, watch, actionContext(state, { clientId: "", focus: watch }));
+    const observation = await readWatch(watch, actionContext(state, { clientId: "", focus: watch }));
     if (closed || watch.status !== "active") return;
     if (watch.assignmentId && !watch.expectedRunId && observation.latestUserMessageId === watch.messageId && observation.runId !== watch.cursor?.runId) {
       watch.expectedRunId = observation.runId;
@@ -400,6 +410,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       watch.status = "pending";
       state.record.observations.push({ id: randomUUID(), watchId: watch.watchId, question: watch.question, reason,
         ...(watch.assignmentId ? { assignmentId: watch.assignmentId } : {}),
+        ...(watch.source ? { source: watch.source } : {}),
         focus: { projectSlug: watch.projectSlug, sessionId: watch.sessionId, conversationId: watch.conversationId },
         ...observation });
     }
@@ -448,6 +459,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   });
 
   return {
+    registerConversationSource(name, read) {
+      if (!/^[a-z][a-z0-9-]{0,63}$/u.test(name) || typeof read !== "function" || conversationSources.has(name)) {
+        throw new TypeError("A conversation source needs a unique name and an authorized reader.");
+      }
+      conversationSources.set(name, read);
+    },
     setNameResolver(resolver) {
       if (typeof resolver !== "function") throw new TypeError("Colleague name resolver must be a function.");
       resolveName = resolver;
@@ -484,11 +501,16 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       return changeWatches(state, async () => {
         if (closed) throw failure("Colleague is shutting down.");
         const existing = state.record.watches.find((watch) => watch.watchId === input.watchId);
-        if (existing) return { ok: true, watch: publicWatch(existing) };
+        if (existing) {
+          if (["source", "projectSlug", "sessionId", "conversationId", "condition", "question"].some(key => (existing[key] || "") !== (input[key] || "")) ||
+              (existing.once !== false) !== (input.once !== false)) throw failure("This watch ID belongs to a different request. Use a new watch ID.");
+          return { ok: true, watch: publicWatch(existing) };
+        }
         if (state.record.watches.filter((watch) => ["active", "pending", "paused"].includes(watch.status)).length >= 16) throw failure("Cancel an existing watch before adding another; up to 16 can be retained.");
         state.requestContext = context;
         const watch = { watchId: input.watchId, projectSlug: input.projectSlug, sessionId: input.sessionId,
           conversationId: input.conversationId || "", condition: input.condition, question: input.question,
+          ...(input.source ? { source: input.source } : {}),
           once: input.once !== false, status: "active", error: "" };
         // Verify access before retaining the target or admitting a notification.
         await observeWatch(state, watch);
