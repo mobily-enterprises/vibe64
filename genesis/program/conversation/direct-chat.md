@@ -688,14 +688,15 @@ passes through unchanged.
 
 Recovery labels original readable user/assistant messages, reasoning and tool
 records as historical context. It excludes old system/developer instructions and
-opaque reasoning. Missing or ambiguous boundaries, Undo/fork histories, unknown
-items, non-text attachments and oversized histories stop the foreign request
-with an explanation. It never discards readable records to fit. The initial
-limit is 32 MiB of saved rollout and a conservative complete-request byte budget
-of at most three quarters of the model's advertised token window, reserving any
-larger requested output allowance too. This deliberately rejects some histories
-that might fit with a provider-specific tokenizer. Continue with the previous
-model or use a new conversation when recovery is unsupported.
+opaque reasoning. Image-capable destinations receive the original image parts,
+with numbered references preserving their position in archived messages and tool
+results. Provider-owned file IDs, other unsupported attachments, missing or
+ambiguous boundaries, Undo/fork histories, unknown items and oversized histories
+stop the foreign request with an explanation. It never discards readable records
+to fit. Saved rollouts and recovered requests are bounded at 32 MiB; byte counts
+are not compared with token windows. The provider owns token counting and rejects
+context-window overflow. Continue with the previous model or use a new
+conversation when recovery is unsupported.
 
 The adapter bounds and decodes request bodies, forwards streamed HTTP responses,
 aborts upstream when native delivery disconnects, and adds no inference retry.

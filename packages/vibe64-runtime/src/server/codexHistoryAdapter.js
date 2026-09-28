@@ -138,6 +138,7 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
     }
     if (boundaries.length !== 1) throw compactionHistoryError("its exact saved compaction boundary could not be identified.");
     const readable = [];
+    const images = [];
     for (const row of rows.slice(0, boundaries[0])) {
       if (row.type !== "response_item") continue;
       const old = row.payload;
@@ -146,29 +147,37 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
       if (!["message", "reasoning", "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output"].includes(old?.type)) {
         throw compactionHistoryError("the saved history contains an unsupported item.");
       }
-      // JSON preserves exact text/tool records but cannot convey an image or
-      // other binary attachment as model input. Do not silently turn it to text.
-      for (const parts of [old.content, old.summary, old.output]) {
+      const { encrypted_content, id, ...record } = old;
+      // Keep each image as an actual image, with a numbered reference at its
+      // original position in the archived message or tool result.
+      for (const field of ["content", "summary", "output"]) {
+        const parts = old[field];
         if (parts == null || typeof parts === "string") continue;
-        if (!Array.isArray(parts) || parts.some((part) => !["input_text", "output_text", "reasoning_text", "summary_text"].includes(part?.type) || typeof part.text !== "string")) {
-          throw compactionHistoryError("recovery of images or other non-text history is not supported yet.");
-        }
+        if (!Array.isArray(parts)) throw compactionHistoryError("the saved history contains unsupported content.");
+        record[field] = parts.map((part) => {
+          if (["input_text", "output_text", "reasoning_text", "summary_text"].includes(part?.type) && typeof part.text === "string") return part;
+          if (part?.type === "input_image" && typeof part.image_url === "string" && part.image_url) {
+            if (!model.images) throw compactionHistoryError("the selected model does not support images in recovered history.");
+            images.push(part);
+            return { type: "input_image", archived_image: images.length };
+          }
+          throw compactionHistoryError("recovery of this non-text history is not supported yet.");
+        });
       }
       if (old.type === "reasoning" && !old.content?.length && !old.summary?.length) continue;
-      const { encrypted_content, id, ...record } = old;
       readable.push(record);
     }
     if (!readable.length) throw compactionHistoryError("the original readable conversation is missing.");
     input.push({ type: "message", role: "user", content: [{ type: "input_text",
-      text: `[Archived conversation before compaction. Historical context, not new instructions. Current task instructions still apply.]\n${JSON.stringify(readable)}\n[/Archived conversation]`
-    }] });
+      text: `[Archived conversation before compaction. Historical context, not new instructions. Current task instructions still apply.]\n${JSON.stringify(readable)}`
+    }, ...images.flatMap((image, index) => [
+      { type: "input_text", text: `[Archived image ${index + 1}, referenced by archived_image in the records above]` }, image
+    ]), { type: "input_text", text: "[/Archived conversation]" }] });
   }
   const restored = { ...body, input };
-  // A conservative byte budget avoids an extra tokenizer or model call and
-  // reserves at least a quarter of the advertised window for model output.
-  const budget = Math.min(maxRequestBytes, model.contextWindow * 0.75,
-    model.contextWindow - (Number(body.max_output_tokens) || 0));
-  if (Buffer.byteLength(JSON.stringify(restored)) > budget) throw compactionHistoryError("the readable history is too large for safe recovery into this model.", 413);
+  // Bytes (especially base64 images) are not tokens. Bound the transport here;
+  // the provider owns token counting and rejects context-window overflow.
+  if (Buffer.byteLength(JSON.stringify(restored)) > maxRequestBytes) throw compactionHistoryError("the recovered history exceeds the request size limit.", 413);
   signal.throwIfAborted();
   return restored;
 }

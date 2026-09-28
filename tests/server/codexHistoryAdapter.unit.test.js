@@ -218,7 +218,7 @@ test("managed process owns adapter lifetime and drains it with native shutdown",
   await assert.rejects(readFile(path.join(root, "history-adapter.json")), { code: "ENOENT" });
 });
 
-async function compactedFixture(t) {
+async function compactedFixture(t, { maxRequestBytes } = {}) {
   const home = await mkdtemp(path.join(os.tmpdir(), "vibe64-compacted-history-"));
   t.after(() => rm(home, { recursive: true, force: true }));
   const id = randomUUID();
@@ -239,7 +239,7 @@ async function compactedFixture(t) {
   const save = (rows = records, tail = "") => writeFile(historyPath, rows.map((row) => JSON.stringify(row)).join("\n") + "\n" + tail);
   await save();
   const calls = [];
-  const adapter = await startCodexHistoryAdapter({ token: randomUUID(), codexHome: home, fetchImpl: async (url, options) => {
+  const adapter = await startCodexHistoryAdapter({ token: randomUUID(), codexHome: home, maxRequestBytes, fetchImpl: async (url, options) => {
     calls.push({ url, ...options, body: options.body && JSON.parse(options.body) });
     return new Response("accepted");
   } });
@@ -278,6 +278,44 @@ test("mixed Codex recovery keeps exact text and tool facts without changing nati
   assert.equal(fixture.calls.length, 2, "one upstream request per user request");
 });
 
+test("compacted screenshots stay visible and associated with their original messages and tool results", async (t) => {
+  const fixture = await compactedFixture(t);
+  const images = [
+    { type: "input_image", image_url: "data:image/png;base64,first-image", detail: "original" },
+    { type: "input_image", image_url: "data:image/png;base64,second-image", detail: "high" }
+  ];
+  const before = [
+    { type: "response_item", payload: { type: "message", role: "user", content: [
+      { type: "input_text", text: "Compare this screenshot." }, images[0]
+    ] } },
+    { type: "response_item", payload: { type: "custom_tool_call_output", call_id: "screenshot-result", output: [
+      { type: "input_text", text: "Screenshot after the change." }, images[1]
+    ] } },
+    { type: "response_item", payload: { type: "message", role: "assistant", content: [
+      { type: "output_text", text: "Preserve a large, valid text history. ".repeat(30000) }
+    ] } }
+  ];
+  await fixture.save([fixture.records[0], ...before, ...fixture.records.slice(1)]);
+  const native = await readFile(fixture.historyPath);
+  const response = await fixture.send({ model: "deepseek-flash", input: [fixture.compacted] });
+  assert.equal(await response.text(), "accepted");
+  const content = fixture.calls[0].body.input[1].content;
+  assert.deepEqual(content.filter(({ type }) => type === "input_image"), images);
+  const archived = JSON.parse(content[0].text.slice(content[0].text.indexOf("\n") + 1));
+  assert.deepEqual(archived[0].content, [before[0].payload.content[0], { type: "input_image", archived_image: 1 }]);
+  assert.deepEqual(archived[1].output, [before[1].payload.output[0], { type: "input_image", archived_image: 2 }]);
+  assert.equal(archived[1].call_id, "screenshot-result");
+  assert.equal(archived[2].content[0].text, before[2].payload.content[0].text);
+  assert.match(content[1].text, /Archived image 1/);
+  assert.match(content[3].text, /Archived image 2/);
+  assert.equal(content.at(-1).text, "[/Archived conversation]");
+  assert.deepEqual(await readFile(fixture.historyPath), native);
+  const unsupported = await fixture.send({ model: "glm-5.3", input: [fixture.compacted] }, "zai-coding-plan");
+  assert.equal(unsupported.status, 422);
+  assert.match((await unsupported.json()).error.message, /does not support images/);
+  assert.equal(fixture.calls.length, 1);
+});
+
 test("single-provider and already readable compacted requests do not read native history", async (t) => {
   const fixture = await compactedFixture(t);
   const missing = path.join(fixture.home, "does-not-exist");
@@ -301,7 +339,7 @@ test("repeated compaction restores through the exact latest boundary and ignores
 });
 
 test("unsafe, unsupported or oversized compacted histories fail before any provider request", async (t) => {
-  const fixture = await compactedFixture(t);
+  const fixture = await compactedFixture(t, { maxRequestBytes: 4096 });
   const body = { model: "deepseek-flash", input: [fixture.compacted] };
   const check = async (promise, pattern, status = 422) => {
     const response = await promise;
@@ -317,14 +355,15 @@ test("unsafe, unsupported or oversized compacted histories fail before any provi
   await check(fixture.send(body), /after Undo/);
   await fixture.save([{ ...fixture.records[0], payload: { id: "another-thread" } }, ...fixture.records.slice(1)]);
   await check(fixture.send(body), /identify one supported conversation/);
-  for (const payload of [{ type: "unknown_tool" }, { type: "message", role: "user", content: [{ type: "input_image", image_url: "image" }] }]) {
+  for (const payload of [{ type: "unknown_tool" }, { type: "message", role: "user", content: [{ type: "input_audio", data: "audio" }] },
+    { type: "message", role: "user", content: [{ type: "input_image", file_id: "foreign-provider-file" }] }]) {
     await fixture.save([fixture.records[0], { type: "response_item", payload }, ...fixture.records.slice(1)]);
     await check(fixture.send(body), /unsupported|non-text/);
   }
   await fixture.save(fixture.records, 'malformed saved record\n');
   await check(fixture.send(body), /could not be read completely/);
   await fixture.save([fixture.records[0], { type: "response_item", payload: { type: "message", role: "user", content: "x".repeat(800_000) } }, ...fixture.records.slice(1)]);
-  await check(fixture.send(body), /too large/, 413);
+  await check(fixture.send(body), /request size limit/, 413);
   await fixture.save();
   const outside = await mkdtemp(path.join(os.tmpdir(), "vibe64-outside-history-"));
   t.after(() => rm(outside, { recursive: true, force: true }));
