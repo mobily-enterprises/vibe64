@@ -112,6 +112,77 @@ it("shows recovery controls for a stopped planning handoff", () => {
   expect(f.state().label).toBe("Back to planning · Codex (gpt-6-astra not recorded)");
 });
 
+it("removes every plan control on implementation and keeps it hidden during follow-up discussion", async () => {
+  const request = { mode: "auto", status: "done", workPlan: { status: "ready", revision: "one", text: "Detailed plan" } };
+  const f = mount(request);
+  f.state().planOpen = true;
+  await nextTick();
+  f.props.value.request = { ...request, workPlan: { ...request.workPlan, status: "implemented" } };
+  await nextTick();
+  expect(f.state().planOpen).toBe(false);
+  for (const status of ["done", "routing", "sent"]) {
+    f.props.value.request = { ...f.props.value.request, reason: "discussion", status };
+    await nextTick();
+    expect(f.state().planVisible).toBe(false);
+    expect(f.state().planReady).toBe(false);
+    expect(f.state().planRecoverable).toBe(false);
+  }
+  f.props.value.request = { ...request, status: "sent", reason: "discussion" };
+  await nextTick();
+  expect(f.state().planVisible).toBe(true);
+  expect(f.state().planStage).toBe("Plan ready");
+  f.props.value.request = { ...request, workPlan: { ...request.workPlan, status: "drafting", revision: "two" } };
+  await nextTick();
+  expect(f.state().planVisible).toBe(true);
+  expect(f.state().planRecoverable).toBe(true);
+});
+
+it("offers plan recovery for an idle Auto draft, paused plan or blocker, without offering coding", async () => {
+  const request = { mode: "auto", status: "done", workPlan: { status: "drafting", revision: "one", text: "Existing plan" } };
+  const f = mount(request);
+  for (const status of ["drafting", "paused", "blocked"]) {
+    f.props.value.request = { ...request, workPlan: { ...request.workPlan, status } };
+    await nextTick();
+    expect(f.state().planRecoverable).toBe(true);
+    expect(f.state().planReady).toBe(false);
+  }
+  for (const status of ["sent", "sending", "uncertain", "planning_pending"]) {
+    f.props.value.request = { ...request, status };
+    await nextTick();
+    expect(f.state().planRecoverable).toBe(false);
+  }
+  f.props.value = { mode: "junior", request };
+  await nextTick();
+  expect(f.state().planRecoverable).toBe(false);
+});
+
+it("separates the user overview from technical blocks and collapses details on reopening", async () => {
+  const text = "# Plan\n\n```md\n## Outcome and scope\nNot a heading.\n```\n\n## Outcome and scope\nPeople can choose a supervisor.\n\n### Checking it\nOpen the reporting tree.\n\n## Findings\nChange the assignment service.\n";
+  const f = mount({ mode: "auto", status: "done", workPlan: { text } });
+  const parts = f.state().planParts;
+  expect(JSON.stringify(parts.overview)).toContain("People can choose a supervisor.");
+  expect(JSON.stringify(parts.overview)).toContain("Open the reporting tree.");
+  expect(JSON.stringify(parts.overview)).not.toContain("Change the assignment service.");
+  expect(JSON.stringify(parts.technical)).toContain("Not a heading.");
+  expect(JSON.stringify(parts.technical)).toContain("Change the assignment service.");
+  expect(JSON.stringify(parts.technical)).not.toContain("People can choose a supervisor.");
+  f.state().planOpen = true;
+  await nextTick();
+  f.state().expandedPlanSection = "technical";
+  f.state().planOpen = false;
+  await nextTick();
+  f.state().planOpen = true;
+  await nextTick();
+  expect(f.state().expandedPlanSection).toBe(null);
+  expect(f.props.value.request.workPlan.text).toBe(text);
+});
+
+it("retains a legacy plan without an overview under technical details", () => {
+  const f = mount({ mode: "auto", status: "done", workPlan: { text: "# Existing plan\n\nDetailed notes." } });
+  expect(f.state().planParts.overview).toEqual([]);
+  expect(JSON.stringify(f.state().planParts.technical)).toContain("Detailed notes.");
+});
+
 it("leaves a mixed-request explanation on the unsent bubble instead of adding another banner", () => {
   const f = mount({ status: "failed", reason: "mixed_deslop_request", error: "Please request feature work and Deslop separately." });
   expect(f.state().actionable).toBe(false);

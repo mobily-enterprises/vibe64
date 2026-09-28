@@ -712,6 +712,8 @@ function useVibe64AutopilotView(props, emit, {
     (!composerSending.value || routingBusy.value)
   ));
   const assistantConnectionReady = computed(() => composerConnectionStatus.value === "connected");
+  const reasoningActive = computed(() => assistantConnectionReady.value && agentActive.value &&
+    !agentObservationLost.value && activeAgentTurn.value.phase === "reasoning");
   const assistantAccountUnavailable = computed(() => composerConnectionStatus.value === "unavailable");
   const assistantAccountMessage = computed(() => (
     (props.session?.assistantSelection?.engineId || VIBE64_DEFAULT_AGENT_PROVIDER_ID) === "codex"
@@ -2207,6 +2209,7 @@ function useVibe64AutopilotView(props, emit, {
     assistantDirectAllowed,
     assistantJuniorAllowed,
     agentActive,
+    reasoningActive,
     agentObservationLost,
     agentStopEnabled,
     agentStopVisible,

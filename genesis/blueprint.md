@@ -9,7 +9,8 @@ and ask coding agents for help through the same operations the UI uses. It has
 no repository tools or engineering role. Its continuing conversation remains
 available before a session exists or when a session cannot open. Each signed-in
 person keeps their own Colleague history and model choice. The current text
-conversation supports an Online host's global voice controls. People can ask it
+conversation supports an Online host's global voice controls and configured display name.
+Changing that name keeps the conversation and model choice. People can ask it
 to watch Main or temporary conversations for completed answers, finished work or
 explicit problems. Code observes the conversations; only relevant changes wake
 Colleague. People can also delegate bounded implementation assignments: Colleague
@@ -1332,10 +1333,21 @@ Auto sends new work to the planner first. For implementation work, the planner
 investigates and writes a very detailed, temporary plan outside the project's Git
 history, covering findings, exact changes, decisions, steps and acceptance checks.
 Chat carries its human-readable summary and compact View plan/Implement actions.
+View plan starts with a plain-language explanation of what will change and how to
+check it. Technical instructions and implementation details are collapsed until
+the person chooses to read them.
+Once implemented, the plan leaves no buttons or status row in the chat. Ordinary
+follow-up questions neither create a plan nor reopen a completed one; an unfinished
+plan retains its status. A new planning request explicitly reopens the document.
 In Auto, coding starts only after approval of that version, through the button or
 a clear reply. Junior keeps progress and blockers in the document. A material
 decision returns work to Senior, preserving edits, and a revised plan needs
 approval again. Optional Senior review checks implementation against the plan.
+If coding fails or is stopped while the approved plan is unchanged, Auto keeps
+Implement available for an explicit retry. An existing draft is completed by the
+planner within Auto; people do not need to select another agent to get unstuck.
+Recover plan is available beside View plan when planning needs attention. It
+restores the path to implementation without changing agents or starting coding.
 Direct Senior and Junior use the request and conversation, without
 reading, updating or requiring that document; automatic review is unavailable.
 The View plan and Implement controls belong to Auto and disappear when selecting

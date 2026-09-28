@@ -38,6 +38,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
   const users = new Map();
   let closed = false;
+  let resolveName = async () => "Colleague";
 
   function userKey(context) {
     const user = authenticatedVibe64User(context);
@@ -237,6 +238,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         tools = toolSet.tools.map(activeCatalog.toOpenAiToolSchema);
       }
       const prompt = JSON.stringify({
+        assistantName: await resolveName(),
         focus: connection.focus, userMessages: messages,
         observations, readOnly, autonomous,
         assignments: (state.record.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status) || observedAssignmentIds.includes(item.assignmentId))
@@ -446,6 +448,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   });
 
   return {
+    setNameResolver(resolver) {
+      if (typeof resolver !== "function") throw new TypeError("Colleague name resolver must be a function.");
+      resolveName = resolver;
+    },
     async read(input = {}, context = {}) {
       const state = await stateFor(context);
       state.requestContext = context;

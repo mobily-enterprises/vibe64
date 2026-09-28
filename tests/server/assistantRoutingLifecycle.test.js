@@ -244,6 +244,55 @@ test("Auto choosing Senior does not report that coding stopped or a review was s
   assert.equal(assistantRoutingStatusLabel({ ...f.state(), reviewStatus: "skipped_incomplete" }), "Senior · Codex (gpt-6-astra high)");
 });
 
+for (const planStatus of ["absent", "ready", "paused", "implemented", "implemented snapshot"]) {
+  for (const outcome of ["completed", "interrupted", "stopped"]) {
+    test(`Auto discussion preserves a ${planStatus} plan when ${outcome}, including after reconnect`, async (t) => {
+      const f = await fixture(t, undefined, { readyPlan: false });
+      if (planStatus !== "absent") {
+        await mkdir(path.dirname(workPlanPath(f.context)), { recursive: true });
+        await writeFile(workPlanPath(f.context), planDocument(planStatus === "implemented" ? "implemented" : "ready"));
+        const plan = await readWorkPlan(f.context);
+        f.metadata.assistant_routing_request = JSON.stringify({ status: "done", workPlan: {
+          ...plan, status: planStatus === "implemented snapshot" ? "implemented" : planStatus,
+          ...(planStatus === "ready" ? { approvedRevision: plan.revision } : {})
+        } });
+      }
+      const document = await readWorkPlan(f.context);
+      const snapshot = f.state()?.workPlan || null;
+      f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
+      await f.service.send("session-1", { ...request, message: "How thoroughly was this tested?" }, f.context);
+      assert.deepEqual(f.state().workPlan, snapshot);
+      assert.match(f.sends[0].input.message, /Answer the user's question/);
+      assert.doesNotMatch(f.sends[0].input.message, /You may edit application files|VERY DETAILED|Do not read or update/);
+      if (outcome === "stopped") await f.service.cancel("session-1", f.context);
+      await f.restart().afterTurn("session-1", completion("turn-1", outcome === "stopped" ? "completed" : outcome), f.context, { recovered: true });
+      assert.equal(f.state().status, "done");
+      assert.equal(f.sends.length, 1, "discussion never schedules another agent");
+      assert.deepEqual(f.state().workPlan, snapshot);
+      assert.deepEqual(await readWorkPlan(f.context), document);
+      for (const { payload } of f.events) {
+        assert.deepEqual(payload.assistantRoutingRequest.workPlan, snapshot, "no intermediate event changes the plan controls");
+      }
+      if (!document) await assert.rejects(lstat(path.dirname(workPlanPath(f.context))), { code: "ENOENT" });
+    });
+  }
+}
+
+test("new planning after discussion replaces the completed plan's status before inference", async (t) => {
+  const f = await fixture(t);
+  await writeFile(workPlanPath(f.context), planDocument("implemented"));
+  f.metadata.assistant_routing_request = JSON.stringify({ status: "done", workPlan: await readWorkPlan(f.context) });
+  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
+  await f.service.send("session-1", { ...request, message: "How does this work?" }, f.context);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.state().workPlan.status, "implemented");
+  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+  await f.service.send("session-1", { ...request, messageId: "new-plan", message: "Plan an additional feature." }, f.context);
+  assert.equal(f.state().workPlan.status, "drafting");
+  assert.equal((await readWorkPlan(f.context)).status, "drafting");
+  assert.match(f.sends[1].input.message, /VERY DETAILED/);
+});
+
 test("generated Junior preserves chat preferences and reports its destination before inference without routing or review", async (t) => {
   const f = await fixture(t, { mode: "senior", review: true });
   const preferences = f.metadata.assistant_routing;
@@ -531,6 +580,7 @@ test("Stop cancels routing while helper cleanup finishes and prevents delivery",
 
 test("Stop after classification finishes still prevents delivery while its helper closes", async (t) => {
   const f = await fixture(t);
+  const plan = f.state().workPlan;
   const closing = Promise.withResolvers();
   const release = Promise.withResolvers();
   const remove = f.agent.deleteEphemeralConversation;
@@ -557,6 +607,8 @@ test("Stop after classification finishes still prevents delivery while its helpe
   assert.equal(f.state().input.message, request.message);
   assert.equal(f.cleanupCalls(), 1);
   assert.equal(f.sends.length, 0);
+  assert.deepEqual(f.state().workPlan, plan);
+  assert.deepEqual(await readWorkPlan(f.context), plan);
 });
 
 test("Stop reports a clean routing cancellation instead of the provider's AbortError", async (t) => {
@@ -1311,6 +1363,105 @@ test("stale approval cannot start Junior after a plan file changes", async (t) =
   assert.equal(f.sends.length, 0);
 });
 
+for (const outcome of ["failed", "interrupted", "stopped"]) {
+  test(`Auto keeps an unchanged approved plan ready after coding is ${outcome}, without restarting work`, async (t) => {
+    const f = await fixture(t);
+    const plan = await readWorkPlan(f.context);
+    await f.service.send("session-1", { ...request, planRevision: plan.revision }, f.context);
+    if (outcome === "stopped") await f.service.cancel("session-1", f.context);
+    await f.service.afterTurn("session-1", completion("turn-1", outcome === "stopped" ? "completed" : outcome), f.context);
+    assert.equal(f.state().status, "done");
+    assert.equal(f.state().workPlan.status, "ready");
+    assert.equal(f.state().workPlan.revision, plan.revision);
+    assert.equal(f.state().workPlan.approvedRevision, plan.revision);
+    assert.deepEqual(await readWorkPlan(f.context), plan);
+    assert.equal(f.sends.length, 1, "failure and Stop never start another turn");
+
+    if (outcome === "stopped") {
+      const saved = f.state();
+      delete saved.workPlan.approvedRevision;
+      f.metadata.assistant_routing_request = JSON.stringify(saved);
+    }
+    const startHelper = f.agent.startEphemeralConversationTurn;
+    f.agent.startEphemeralConversationTurn = async (...args) => {
+      assert.match(args[1].message, /"approved":true/);
+      assert.match(args[1].message, /"message":"Continue"/);
+      return startHelper(...args);
+    };
+    await f.restart().send("session-1", { ...request, message: "Continue", messageId: "retry-coding" }, f.context);
+    assert.equal(f.state().mode, "auto");
+    assert.equal(f.state().resolvedMode, "junior");
+    assert.equal(f.state().workPlan.approvedRevision, plan.revision);
+    assert.equal(f.sends.length, 2);
+    assert.match(f.sends[1].input.message, /Read and implement the approved plan/);
+    assert.doesNotMatch(f.sends[1].input.message, /Only the designated working plan file may be written/);
+  });
+}
+
+for (const changedPlan of [planDocument() + "\nChanged proposal.\n", planDocument("blocked")]) {
+  test("failed coding cannot preserve readiness after changing the approved plan", async (t) => {
+    const f = await fixture(t);
+    await f.service.send("session-1", request, f.context);
+    await writeFile(workPlanPath(f.context), changedPlan);
+    await f.service.afterTurn("session-1", completion("turn-1", "failed"), f.context);
+    assert.equal(f.state().workPlan.status, "paused");
+    await assert.rejects(f.service.send("session-1", {
+      ...request, messageId: "retry-coding", planRevision: f.state().workPlan.revision
+    }, f.context), /no longer ready/);
+    assert.equal(f.sends.length, 1);
+  });
+}
+
+test("Recover plan restores readiness within Auto without classification, losing scope or starting coding", async (t) => {
+  const f = await fixture(t);
+  await writeFile(workPlanPath(f.context), planDocument("drafting"));
+  const draft = await readWorkPlan(f.context);
+  const recovery = { ...request, message: "Recover this existing plan.", planRecoveryRevision: draft.revision };
+  await f.service.send("session-1", recovery, f.context);
+  assert.equal(f.state().resolvedMode, "senior");
+  assert.equal(f.helperCalls(), 0, "recovery cannot be misclassified as another approval");
+  assert.equal(f.state().workPlan.approvedRevision, undefined);
+  assert.equal((await readWorkPlan(f.context)).text.replace(/^Status: drafting$/mu, "").trimStart(),
+    draft.text.replace(/^Status: drafting$/mu, "").trimStart());
+  assert.match(f.sends[0].input.message, /read the existing plan and resolve its readiness here/);
+  assert.match(f.sends[0].input.message, /mark it ready without rewriting its content/);
+  assert.match(f.sends[0].input.message, /Only the designated working plan file may be written/);
+  await f.restart().send("session-1", recovery, f.context);
+  assert.equal(f.sends.length, 1, "retry uses the existing receipt");
+  await writeFile(workPlanPath(f.context), planDocument());
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.state().workPlan.status, "ready");
+  assert.equal(f.sends.length, 1);
+  await f.service.send("session-1", {
+    ...request, messageId: "implement-ready-plan", planRevision: f.state().workPlan.revision
+  }, f.context);
+  assert.equal(f.state().mode, "auto");
+  assert.equal(f.state().resolvedMode, "junior");
+});
+
+test("Recover plan checks the displayed revision and cannot approve coding or steer a running turn", async (t) => {
+  const f = await fixture(t);
+  const revision = f.state().workPlan.revision;
+  await assert.rejects(f.service.send("session-1", { ...request, planRecoveryRevision: "stale" }, f.context), /plan changed/);
+  await assert.rejects(f.service.send("session-1", {
+    ...request, planRecoveryRevision: revision, planRevision: revision
+  }, f.context), /cannot also approve/);
+  f.agent.sessionState = async () => ({ turn: { active: true } });
+  await assert.rejects(f.service.send("session-1", {
+    ...request, submissionKind: "steer", planRecoveryRevision: revision
+  }, f.context), /current turn to finish/);
+  assert.equal(f.sends.length, 0);
+});
+
+test("Recover plan does not change a direct chat's selected mode", async (t) => {
+  const f = await fixture(t, { mode: "junior" });
+  await assert.rejects(f.service.send("session-1", {
+    ...request, planRecoveryRevision: f.state().workPlan.revision
+  }, f.context), /Auto planning action/);
+  assert.equal(JSON.parse(f.metadata.assistant_routing).mode, "junior");
+  assert.equal(f.sends.length, 0);
+});
+
 test("a file changed during natural-language approval is checked again before Junior delivery", async (t) => {
   const f = await fixture(t);
   f.agent.waitForEphemeralConversationTurn = async () => {
@@ -1374,7 +1525,7 @@ test("restart at a blocked handoff waits for an explicit continuation and sends 
 
 test("interrupted planning cannot offer an implementation button, even if the file says ready", async (t) => {
   const f = await fixture(t, { mode: "auto", review: false });
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
+  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
   await f.service.send("session-1", request, f.context);
   await writeFile(workPlanPath(f.context), planDocument());
   await f.service.afterTurn("session-1", completion("turn-1", "interrupted"), f.context);
@@ -1445,9 +1596,11 @@ for (const mode of ["auto", "senior", "junior"]) {
     assert.equal(f.sends[0].input.turnMetadata.assistantRouting.resolvedMode, "deslop");
     assert.match(f.sends[0].input.message, /You may edit code for behavior-preserving cleanup/);
     assert.doesNotMatch(f.sends[0].input.message, /Only the designated working plan file may be written|VERY DETAILED/);
-    assert.equal((await readWorkPlan(f.context)).status, mode === "auto" ? "drafting" : "ready", "only Auto owns the working plan");
+    assert.equal((await readWorkPlan(f.context)).status, "ready", "independent cleanup does not reopen planning");
     assert.equal(f.metadata.assistant_routing, preferences);
     await f.service.afterTurn("session-1", completion(), f.context);
+    assert.equal((await readWorkPlan(f.context)).status, "ready");
+    if (mode === "auto") assert.equal(f.state().workPlan.status, "ready");
     assert.equal(f.sends.length, 1);
     assert.equal(assistantRoutingStatusLabel(f.state()), "Senior Deslop · Codex (gpt-6-astra high)");
   });

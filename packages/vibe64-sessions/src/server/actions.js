@@ -392,7 +392,7 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_SEND_AGENT_MESSAGE,
-      assistant: conversationOperationTool("Send an agreed request or steering to Main chat in the exact selected project/session. Supply a unique messageId and reuse it unchanged on a retry. submissionKind=steer requires a running turn; send requires a new turn. A delivery receipt is not a completed answer: read the conversation or create a watch. Use planRevision only after the user has approved that exact current plan. Never send merely because a watch recommends more work."),
+      assistant: conversationOperationTool("Send an agreed request or steering to Main chat in the exact selected project/session. Supply a unique messageId and reuse it unchanged on a retry. submissionKind=steer requires a running turn; send requires a new turn. A delivery receipt is not a completed answer: read the conversation or create a watch. Use planRevision only after the user has approved that exact current plan. For a user-requested recovery of Auto's existing plan, use planRecoveryRevision with its current revision; this requests planning, never implementation. Never send merely because a watch recommends more work."),
       kind: "command",
       input: agentMessageActionInputValidator,
       execute: (input) => sessions.sendAgentMessage(input.sessionId, withoutSessionId(input))

@@ -2115,7 +2115,7 @@ async function fulfillJson(route: Route, payload: unknown) {
 }
 
 for (const width of [390, 820, 1280]) {
-  hintTest(`@working-plan detailed plan approval preserves drafts and fits at ${width}px`, async ({ page }, testInfo) => {
+  hintTest(`@working-plan plain-language overview and collapsed details preserve drafts and fits at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     const sent: Record<string, unknown>[] = [];
     await mockDirectChat(page, { onMessage: body => { sent.push(body); } });
@@ -2123,7 +2123,7 @@ for (const width of [390, 820, 1280]) {
     const selection = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra" };
     const routing = { mode: "auto", resolvedMode: "senior", status: "done", messageId: "planned",
       assignments: { senior: selection, junior: { ...selection, modelId: "deepseek-flash" } },
-      workPlan: { status: "ready", revision, text: "# Rename wash terminology\n\n## Findings\nThe job-card status after Waiting still says Washing.\n\n## Proposed changes\nReplace visible wording with Bathing; preserve stored identifiers.\n\n## Verification\nCheck the job card and search every display label.\n" } };
+      workPlan: { status: "ready", revision, text: "# Rename wash terminology\n\n## Outcome and scope\nThe job card will say Bathing instead of Washing. Your saved jobs will stay the same.\n\n## Findings\nThe job-card status after Waiting still says Washing.\n\n## Proposed changes\nReplace visible wording with Bathing; preserve stored identifiers.\n\n## Verification\nCheck the job card and search every display label.\n" } };
     const session = { ...directSession(), assistantSelection: selection, metadata: {
       assistant_routing: JSON.stringify({ mode: "auto", workflowEngineId: "codex", review: true }),
       assistant_routing_request: JSON.stringify(routing)
@@ -2139,21 +2139,58 @@ for (const width of [390, 820, 1280]) {
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Working plan" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("The job-card status after Waiting still says Washing.")).toBeVisible();
+    await expect(dialog.getByText("The job card will say Bathing instead of Washing. Your saved jobs will stay the same.")).toBeVisible();
+    const technical = dialog.getByRole("button", { name: "Technical details" });
+    const finding = dialog.getByText("The job-card status after Waiting still says Washing.");
+    await expect(finding).not.toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`plan-${width}.png`), animations: "disabled" });
     const box = await dialog.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-    await page.screenshot({ path: testInfo.outputPath(`plan-${width}.png`), animations: "disabled" });
+    for (const button of await dialog.getByRole("button").all()) {
+      const target = await button.boundingBox();
+      expect(target!.x).toBeGreaterThanOrEqual(box!.x);
+      expect(target!.x + target!.width).toBeLessThanOrEqual(box!.x + box!.width);
+      expect(target!.height).toBeGreaterThanOrEqual(48);
+    }
+    await technical.focus();
+    await page.keyboard.press("Enter");
+    await expect(finding).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
     await expect(view).toBeFocused();
     await expect(composer).toHaveValue("Keep my next question as a draft");
     await view.click();
+    await expect(finding).not.toBeVisible();
     await dialog.getByRole("button", { name: "Implement with Junior · Codex (deepseek-flash high)" }).click();
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0].planRevision).toBe(revision);
     expect(sent[0].message).toBe("Implement the plan I have approved.");
     await expect(composer).toHaveValue("Keep my next question as a draft");
+
+    routing.workPlan.status = "implemented";
+    session.metadata.assistant_routing_request = JSON.stringify(routing);
+    await page.reload();
+    await expect(composer).toBeVisible();
+    await expect(view).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Implement with Junior|^Recover plan$/ })).toHaveCount(0);
+    await expect(page.getByText("Implementation recorded", { exact: true })).toHaveCount(0);
+
+    routing.workPlan.status = "drafting";
+    session.metadata.assistant_routing_request = JSON.stringify(routing);
+    await page.reload();
+    await expect(page.getByRole("button", { name: /^Implement with Junior/ })).toHaveCount(0);
+    const recover = page.getByRole("button", { name: "Recover plan", exact: true });
+    await expect(recover).toBeVisible();
+    await composer.fill("Keep this draft during recovery");
+    await recover.focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => sent.length).toBe(2);
+    expect(sent[1].planRecoveryRevision).toBe(revision);
+    expect(sent[1].planRevision).toBeUndefined();
+    expect(sent[1].message).toContain("Do not start coding.");
+    await expect(composer).toHaveValue("Keep this draft during recovery");
+    await page.screenshot({ path: testInfo.outputPath(`plan-recovery-${width}.png`), animations: "disabled" });
   });
 }
 
@@ -2929,3 +2966,31 @@ test("@accounts-routing opens one named orchestrator from each account heading",
     await server.close();
   }
 });
+
+for (const width of [390, 820, 1280]) {
+  hintTest(`@reasoning-activity shows dots only during native reasoning at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const agentTurn = { active: true, id: "reasoning-turn", state: "active", phase: "reasoning" };
+    await mockDirectChat(page, { agentTurn, conversationLog: [scrollTestTurn(1)] });
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, route => fulfillJson(route, {
+      ok: true, ...directSession({ agentTurn }).agentSession
+    }));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    const indicator = page.locator(".studio-autopilot__reasoning-dots");
+    await expect(indicator).toBeVisible();
+    const resourceNotice = page.getByRole("button", { name: "Dismiss resource notification" });
+    if (await resourceNotice.isVisible()) await resourceNotice.click();
+    expect(await indicator.evaluate(element => getComputedStyle(element).animationName)).toMatch(/^reasoning-dots/);
+    await expect(indicator.locator("..")).toHaveText("Assistant is working...");
+    await expect(page.locator(".conversation-reasoning")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`reasoning-${width}.png`) });
+    agentTurn.phase = "";
+    await page.getByRole("button", { name: "Reload chat" }).click();
+    await expect(indicator).toHaveCount(0);
+    agentTurn.phase = "reasoning";
+    agentTurn.active = false;
+    await page.getByRole("button", { name: "Reload chat" }).click();
+    await expect(indicator).toHaveCount(0);
+  });
+}

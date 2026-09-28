@@ -96,6 +96,14 @@ final replies; only the trailing response is final after the turn stops working.
 Codex consumes both summary and exposed-content reasoning events, including
 completed-only items, and keeps one readable channel per native item. Temporary
 native-history reads use summaries when present, otherwise exposed content.
+Waiting Codex reasoning fragments share a persistence write. The next commentary,
+answer or lifecycle notification closes that batch, preserving event order without
+queuing a disk write per token. Native reasoning item start/completion controls
+the animated ellipsis in “Assistant is working…”; ordinary waiting, tool use, lost observation
+and idle turns do not animate. Reconnection clears an unconfirmed old phase.
+An unchanged ready plan retains its recorded approval after interrupted coding.
+The Auto router receives that approval when a user asks to continue; it still
+classifies questions and changed scope normally, without forcing an agent.
 
 Main chat shows “Compacting conversation context…” for native compaction in all
 three orchestrators: Codex's tracked compaction item, OpenCode's current unfinished
@@ -501,11 +509,23 @@ for outcome/scope, findings, proposed changes, decisions, implementation steps,
 verification, and progress/blockers. Ready requires every section to have content.
 The prompt requires concrete inspected files/occurrences, exact intended changes,
 resolved decisions and acceptance checks; structural validation cannot certify
-semantic completeness. Pure conversation need not create a document.
+semantic completeness. Auto discussion uses the Router's existing discussion
+reason and answers read-only. It neither creates nor updates a plan. Existing
+plan status and approval survive discussion, including interrupted turns and
+reconnects. Independent Deslop also leaves the plan alone.
 During Auto planning, Senior may write only this designated document, not application files. Beginning
 another planning turn invalidates readiness before inference. The conversation
 keeps a display snapshot and its content revision in the existing routing request;
-the file is the working authority. View plan opens a compact Markdown dialog.
+the file is the working authority. View plan opens a compact Markdown dialog with
+Outcome and scope presented first as What this will do. The planner writes this
+section in plain language for a non-developer, including visible changes, how to
+check them and required decisions. All remaining content is under Technical
+details, collapsed on each opening. Existing documents retain all their content;
+missing summaries show a brief explanation rather than exposing the whole
+technical document by default. Code-block headings do not split the document.
+An implemented plan hides the entire plan row and dialog, including View plan
+and Recover plan. New planning can make the controls relevant again; ordinary
+follow-up questions cannot.
 Implement submits the displayed revision through ordinary Send, retaining the
 draft and existing access checks. Natural-language approval uses the Router;
 only unambiguous approval of a currently ready plan can select Junior. The runtime
@@ -541,6 +561,20 @@ interrupted planning cannot leave an approvable plan. Recovered blockers after
 restart require Continue planning rather than running automatically. Delivery
 uncertainty checks the retained receipt before any retry. Both follow-up purposes
 reuse the existing routing owner and native delivery, not another agent runtime.
+An unsuccessful or stopped coding turn keeps the plan ready only when its ready
+file still exactly matches the approved revision. It never retries automatically;
+the person can use Implement or approve again within Auto. Changed or blocked
+documents and interrupted planning remain unready. If an existing draft reaches
+Senior with an implementation request, its instructions require resolving that
+document's readiness using the agreed scope, rather than referring the person to
+support or another agent. A ready result exposes the ordinary Implement action.
+Completed Auto requests with a drafting, paused or blocked plan offer Recover plan
+beside View plan and inside its dialog. It submits the displayed revision through
+ordinary Send and explicitly selects the workflow's planner without consulting
+the Router or changing chat mode. The server checks the revision, idle turn,
+access and goal constraints. Recovery retains the composer draft, never approves
+or starts coding, and preserves the existing plan's scope; readiness is followed
+by the ordinary Implement action. Repeated delivery uses the same receipt checks.
 
 Deslop is a task with permission to clean up code, not a separate selectable
 chat mode. It uses the configured Senior model in named modes and the exact

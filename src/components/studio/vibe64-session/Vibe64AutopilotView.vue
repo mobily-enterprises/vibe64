@@ -422,7 +422,12 @@
             @focusout="handlePromptHintsFocusOut"
             @preview="previewPromptHint"
             @select="selectPromptHint"
-          />
+          >
+            <template v-if="reasoningActive && composerAssistantLabel === 'Assistant is working...'" #activity>
+              <v-icon :icon="mdiCircle" size="7" color="primary" />
+              <span>Assistant is working<span class="studio-autopilot__reasoning-dots">...</span></span>
+            </template>
+          </AssistantComposerSupport>
         </template>
         <template #composer>
           <div
@@ -435,7 +440,8 @@
               :active="props.active && conversationLogVisible"
               :retrying="routingReviewRetrying"
               :busy="agentActive"
-              @implement="implementWorkingPlan"
+              @implement="sendWorkingPlanAction('implement', $event)"
+              @recover="sendWorkingPlanAction('recover', $event)"
               @retry="retryAutomaticReview"
               @skip="props.interruptAgentTurn({ reason: 'skip-review' })"
             />
@@ -910,6 +916,7 @@ import {
   mdiArrowTopRight,
   mdiAutorenew,
   mdiBroom,
+  mdiCircle,
   mdiConsoleNetworkOutline,
   mdiContentSaveOutline,
   mdiSourceCommit,
@@ -1121,6 +1128,7 @@ const {
   assistantDirectAllowed,
   assistantJuniorAllowed,
   agentActive,
+  reasoningActive,
   agentObservationLost,
   agentStopEnabled,
   agentStopVisible,
@@ -1301,12 +1309,15 @@ async function retryAutomaticReview() {
   try { await props.sendAgentMessage({ messageId: routingRequest.value.messageId, message: routingRequest.value.input.message, reviewAction: "retry" }); }
   finally { routingReviewRetrying.value = false; }
 }
-async function implementWorkingPlan(planRevision) {
+async function sendWorkingPlanAction(action, revision) {
   if (routingReviewRetrying.value || agentActive.value) return;
   routingReviewRetrying.value = true;
   try {
-    await props.sendAgentMessage({ messageId: crypto.randomUUID(), submissionKind: "send", planRevision,
-      message: "Implement the plan I have approved." });
+    await props.sendAgentMessage({ messageId: crypto.randomUUID(), submissionKind: "send",
+      ...(action === "recover" ? {
+        planRecoveryRevision: revision,
+        message: "Recover this existing plan so I can continue in Auto. Keep the agreed scope, inspect its readiness, and mark it ready if complete. Otherwise finish the missing planning work or explain the specific unresolved decision. Do not start coding."
+      } : { planRevision: revision, message: "Implement the plan I have approved." }) });
   } finally { routingReviewRetrying.value = false; }
 }
 const conversationAssistantLabel = computed(() => props.session?.assistantSelection
@@ -1728,6 +1739,18 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.studio-autopilot__reasoning-dots {
+  display: inline-block;
+  clip-path: inset(0 66.666% 0 0);
+  animation: reasoning-dots 1.5s step-end infinite;
+}
+@keyframes reasoning-dots {
+  33% { clip-path: inset(0 33.333% 0 0); }
+  66% { clip-path: inset(0 0 0 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-autopilot__reasoning-dots { animation: none; clip-path: none; }
+}
 .studio-autopilot__checkpoint-notice summary {
   cursor: pointer;
 }
