@@ -8,6 +8,9 @@ workspace.
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/actions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
+- `packages/vibe64-project/src/server/onboardingAssistantContracts.js`
+- `packages/vibe64-project/src/shared/onboardingRequest.js`
+- `tests/server/vibe64OnboardingActionTools.unit.test.js`
 - `tests/server/vibe64ProjectActionDispatch.unit.test.js`
 - `packages/vibe64-project/src/server/managedProject.js`
 - `packages/vibe64-genesis/src/server/index.js`
@@ -79,6 +82,15 @@ The browser sends only the selected catalogue ID. Neither session startup nor
 inspection runs application verification or workspace preparation.
 All onboarding conversation actions use the session's existing Temporary AI
 workspace, opening a new task with the current diagnostics or entered purpose.
+Colleague reads the same `vibe64.project.onboarding.read` action for setup state,
+bounded diagnostics and configured starter identities. The action accepts a
+purpose for preparing the same setup request as the UI; reading never starts an
+agent. Colleague delegates an agreed request through the existing Junior
+temporary-conversation actions, then rereads setup after completion. Starter
+selection uses the same `vibe64.project.templates.apply` action and source locks.
+The tool pages starters ten at a time and excludes repository locations and
+environment values. Application readiness still requires inspecting its outputs;
+a successful setup request is not a launch or Save.
 Main-assistant activity does not disable help, including failed inspections and
 newer-format warnings. Direct assistant access, an active unarchived session,
 and duplicate-click protection still apply. Starter import retains its separate

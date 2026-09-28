@@ -2141,7 +2141,7 @@ test("curated Codex connection management uses the existing workspace owner auth
     const visible = await service.readCodexProviders({ vibe64User: { role: "owner" } });
     assert.equal(visible.ok, true);
     assert.deepEqual(visible.providers.map(({ id, connected }) => ({ id, connected })), [
-      { id: "deepseek", connected: false }, { id: "zai-coding-plan", connected: false }
+      { id: "deepseek", connected: false }, { id: "zai-coding-plan", connected: false }, { id: "zai", connected: false }
     ]);
     assert.equal(checked.length, 7);
   });

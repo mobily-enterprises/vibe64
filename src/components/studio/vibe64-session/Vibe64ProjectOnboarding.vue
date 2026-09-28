@@ -107,12 +107,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, ref, watch, watchEffect } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import { projectOnboardingRequest } from "@local/vibe64-project/shared/onboardingRequest";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
+import { VIBE64_COLLEAGUE_PREVIEW_KEY } from "@/lib/vibe64AssistantHost.js";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { vibe64ResourceResponseError } from "@/lib/vibe64ApiResponses.js";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
@@ -165,6 +167,26 @@ const showPreview = computed(() => {
   if (props.archived || onboarding.value?.available === false || loadError.value) return true;
   return onboarding.value !== null && state.value !== "new" && state.value !== "adoption";
 });
+const colleaguePreview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
+const displayedPreview = {
+  get projectSlug() { return projectSlug.value; },
+  get sessionId() { return props.sessionId; },
+  get screen() {
+    if (showPreview.value) return !props.archived && (loadError.value || state.value === "attention")
+      ? "outputs-with-setup-warning" : "outputs";
+    if (state.value === "adoption") return "existing-project-setup";
+    if (state.value === "new") return "new-project-setup";
+    return "checking-project-setup";
+  }
+};
+watchEffect(() => {
+  if (!colleaguePreview) return;
+  if (props.active) colleaguePreview.value = displayedPreview;
+  else if (colleaguePreview.value === displayedPreview) colleaguePreview.value = null;
+});
+onBeforeUnmount(() => {
+  if (colleaguePreview?.value === displayedPreview) colleaguePreview.value = null;
+});
 const pending = computed(() => Boolean(applying.value || asking.value));
 const starterDisabled = computed(() => pending.value || props.busy || !enabled.value);
 const askDisabled = computed(() => pending.value || !enabled.value || !props.canAsk);
@@ -204,35 +226,10 @@ async function ask(kind) {
   if (askDisabled.value) return;
   const inspection = onboarding.value?.inspection;
   const diagnostic = loadError.value || inspection?.diagnostics.map(({ message }) => message).join(" ");
-  const requests = {
-    create: {
-      title: "Start this project",
-      message: "Help me start this project through conversation. Ask what I want to build, use answers I have already given, and help me choose a suitable Stack. I have not selected a starter."
-    },
-    adopt: {
-      title: "Set up this project",
-      message: `Set up this existing project for guided editing. What this project is and what I want to run: ${purpose.value.trim()}. Inspect its current implementation and work backwards into Genesis Blueprint, Stack, and Program, including its actual setup and run outputs. Preserve its source and Git history.`
-    },
-    inspect: {
-      title: "Inspect project setup",
-      message: "Set up this existing project for guided editing. Inspect it for me to identify what it does and its run targets. Ask me only where the evidence is ambiguous. Work backwards into Genesis Blueprint, Stack, and Program while preserving the implementation and Git history."
-    },
-    repair: {
-      title: "Fix project setup",
-      message: `Inspect and update this project's Genesis setup. The opening inspection reports: ${diagnostic}. ` +
-        (inspection?.nextAction === "update-genesis" ? "The project requires a newer Genesis installation; do not downgrade its source format. " : "") +
-        "Use the appropriate migration or repair, preserve source and Git history, and explain the specific change."
-    }
-  };
-  const { title, message } = requests[kind];
+  const request = projectOnboardingRequest(kind, { purpose: purpose.value, diagnostic, nextAction: inspection?.nextAction });
   asking.value = true;
   try {
-    await props.requestTemporaryAi({
-      title,
-      displayMessage: kind === "adopt" ? `${title}: ${purpose.value.trim()}` : `${title}.`,
-      message,
-      nextStepMessage: "Recheck setup after the AI finishes. Project edits remain in this session for review and Save."
-    });
+    await props.requestTemporaryAi(request);
   } finally {
     asking.value = false;
   }

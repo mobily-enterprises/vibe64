@@ -31,11 +31,14 @@ const projectRepositoryBranchesInputValidator = inputSchema({
   limit: { type: "integer", min: 1, max: 10 }
 });
 const projectOnboardingInputValidator = inputSchema({
-  sessionId: { type: "string", noTrim: false, required: true }
+  sessionId: { type: "string", noTrim: false, minLength: 1, required: true },
+  purpose: { type: "string", noTrim: false, maxLength: 24000 },
+  templateOffset: { type: "integer", min: 0 },
+  templateId: { type: "string", noTrim: false, minLength: 1, maxLength: 4096 }
 });
 const projectTemplateInputValidator = inputSchema({
-  sessionId: { type: "string", noTrim: false, required: true },
-  templateId: { type: "string", noTrim: false, required: true }
+  sessionId: { type: "string", noTrim: false, minLength: 1, required: true },
+  templateId: { type: "string", noTrim: false, minLength: 1, maxLength: 4096, required: true }
 });
 const previewApplicationIdentitiesReadInputValidator = inputSchema({
   sessionId: {

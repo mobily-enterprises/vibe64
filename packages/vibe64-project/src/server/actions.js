@@ -3,6 +3,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { issueTool, pullRequestTool } from "./assistantContracts.js";
+import { onboardingReadTool, onboardingTemplateTool } from "./onboardingAssistantContracts.js";
 
 import {
   projectRemoteInputValidator,
@@ -218,12 +219,14 @@ function createProjectActions({ project } = {}) {
     })),
     action({
       id: ACTION_READ_ONBOARDING,
+      assistant: onboardingReadTool,
       kind: "query",
       input: projectOnboardingInputValidator,
       execute: (input) => project.readOnboarding(input)
     }),
     action({
       id: ACTION_APPLY_TEMPLATE,
+      assistant: onboardingTemplateTool,
       kind: "command",
       input: projectTemplateInputValidator,
       events: [projectChangedEvent()],

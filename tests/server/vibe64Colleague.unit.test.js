@@ -134,7 +134,7 @@ async function until(predicate) {
 
 test("complete handover-sized Unicode arguments fit the native exchange while oversized envelopes remain rejected", async (t) => {
   const value = "😀".repeat(20000);
-  const argumentsText = JSON.stringify({ value }).replace(/[^\x00-\x7f]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
+  const argumentsText = JSON.stringify({ value }).replace(/[\u0080-\uffff]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
   const envelope = { kind: "tool", text: "", toolName: "vibe64_test_operate", arguments: argumentsText };
   const f = await fixture(t, [JSON.stringify(envelope), reply("Saved the agreed handover.")]);
   await f.send("Save the agreed handover.");
@@ -488,16 +488,19 @@ test("new steering captures its own focus without navigation silently retargetin
   const started = Promise.withResolvers();
   const response = Promise.withResolvers();
   const f = await fixture(t, [() => { started.resolve(); return response.promise; }, reply("Using your new target.")]);
-  await f.send("Work on this project.", "first", { focus: { projectSlug: "first-project" } });
+  const setupFocus = { projectSlug: "first-project", sessionId: "session-a", pane: "preview", previewScreen: "existing-project-setup" };
+  await f.send("Work on this project.", "first", { focus: setupFocus });
   await started.promise;
   await f.service.focus({ clientId: "browser-1", focus: { projectSlug: "second-project" } }, f.context);
-  assert.equal(JSON.parse(f.observations.starts[0].input.message).focus.projectSlug, "first-project");
+  assert.deepEqual(JSON.parse(f.observations.starts[0].input.message).focus, setupFocus);
   await f.send("Actually, use the project now open.", "second", { focus: { projectSlug: "second-project" } });
   response.resolve(call("obsolete"));
   const final = await f.service.wait(f.context);
   assert.equal(final.status, "ready");
   assert.deepEqual(f.observations.mutations, []);
   assert.equal(JSON.parse(f.observations.starts[1].input.message).focus.projectSlug, "second-project");
+  assert.equal(JSON.parse(f.observations.starts[1].input.message).focus.previewScreen, undefined);
+  await assert.rejects(f.send("Bad focus", "invalid", { focus: { previewScreen: "invented-screen" } }), { code: "ACTION_VALIDATION_FAILED" });
 });
 
 test("a timed-out native turn must be stopped before changing Colleague models", async (t) => {

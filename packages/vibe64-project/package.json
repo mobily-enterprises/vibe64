@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./shared/onboardingRequest": "./src/shared/onboardingRequest.js",
     "./server/actions": "./src/server/actions.js",
     "./server/managedProject": "./src/server/managedProject.js",
     "./server/resourceEnvironment": "./src/server/resourceEnvironment.js"
@@ -38,6 +39,10 @@
     "metadata": {
       "apiSummary": {
         "surfaces": [
+          {
+            "subpath": "./shared/onboardingRequest",
+            "summary": "Builds the shared setup requests delegated by onboarding controls and Colleague to Temporary AI."
+          },
           {
             "subpath": "./server/actions",
             "summary": "Exports project actions, identifiers, and the shared project-change publisher."

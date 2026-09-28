@@ -1041,6 +1041,11 @@ function createService({
     const catalogue = inspection.templateEligible
       ? await listTemplates({ projectRoot: source.sourceRoot })
       : { templates: [] };
+    const templates = input.templateId
+      ? catalogue.templates.filter((template) => template.id === input.templateId)
+      : catalogue.templates;
+    const pageTemplates = input.templateOffset !== undefined || Boolean(input.templateId);
+    const templateOffset = input.templateOffset || 0;
     let environmentSetup = null;
     if (inspection.state === "ready") {
       const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
@@ -1061,7 +1066,8 @@ function createService({
       available: true,
       inspection,
       environmentSetup,
-      templates: catalogue.templates,
+      templates: pageTemplates ? templates.slice(templateOffset, templateOffset + 10) : templates,
+      ...(pageTemplates ? { templateOffset, templateTotal: templates.length } : {}),
       source: { rootKind: source.rootKind, sessionId: source.sessionId }
     };
   }

@@ -144,6 +144,14 @@ supplied, omitting the temporary conversation selects Main; keeping a temporary
 chat selected requires its ID. The host acknowledges the actual route and loaded
 conversation. This capability opens existing views without giving Colleague
 repository contents, a terminal or screen access.
+The active Preview publishes its displayed setup state separately from the
+route name: new project, existing project awaiting setup, checking setup, or
+output controls with or without a setup warning. The host includes that state
+only when its project and session match the current Preview selection. Hidden
+or disposed views withdraw it. Typed messages and recordings capture this view
+along with their target, so later navigation cannot relabel an earlier request.
+These are semantic UI states, not screen or repository access; output controls
+alone do not prove an application is running.
 
 The existing session rename, archive and workspace-preparation retry actions are
 also available through bounded session summaries. They use the same current

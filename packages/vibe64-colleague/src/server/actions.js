@@ -2,7 +2,10 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 
 const text = { type: "string", noTrim: false, maxLength: 256, required: false };
-const focusSchema = createSchema(Object.fromEntries(["projectSlug", "sessionId", "conversationId", "pane", "route"].map((key) => [key, text])));
+const focusSchema = createSchema({
+  ...Object.fromEntries(["projectSlug", "sessionId", "conversationId", "pane", "route"].map((key) => [key, text])),
+  previewScreen: { type: "string", required: false, enum: ["existing-project-setup", "new-project-setup", "checking-project-setup", "outputs", "outputs-with-setup-warning"] }
+});
 const focusField = { type: "object", schema: focusSchema, required: false };
 const clientId = { ...text, minLength: 1, maxLength: 128, required: true };
 const watchFields = {
@@ -82,7 +85,7 @@ function createColleagueActions(colleague) {
     }),
     definition("context.read", {}, (input, context) => colleague.context(input, context), {
       alwaysAvailable: true,
-      description: "Read the project, session and conversation targeted by this Colleague request. An empty focus means the project chooser. Navigation does not silently retarget a pending request.",
+      description: "Read the project, session, conversation and displayed view targeted by this Colleague request. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. An empty focus means the project chooser. Navigation does not silently retarget a pending request.",
       output: { schema: createSchema({ ok: { type: "boolean", required: true }, focus: { ...focusField, required: true } }), mode: "replace" }
     })
   ];

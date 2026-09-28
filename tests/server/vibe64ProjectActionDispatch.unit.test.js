@@ -39,7 +39,7 @@ test("all project HTTP operations share canonical actions and current authority 
       ["GET", "/projects", "projects.list", "listProjects", {}],
       ["POST", "/projects", "projects.create", "createProject", { name: "Example", slug: "example" }],
       ["POST", "/projects/select", "projects.select", "selectProject", { slug: "example" }],
-      ["GET", "/onboarding", "onboarding.read", "readOnboarding", { sessionId: "session-1" }],
+      ["GET", "/onboarding", "onboarding.read", "readOnboarding", { sessionId: "session-1", templateOffset: 10, templateId: "official:jskit/public", purpose: "An invoice CLI" }],
       ["POST", "/templates/apply", "templates.apply", "applyTemplate", { sessionId: "session-1", templateId: "jskit:public" }],
       ["GET", "/env", "env.read", "readEnv", { environment: "dev", sessionId: "session-1" }],
       ["POST", "/env/reveal", "env.secret.reveal", "revealEnvSecret", { key: "API_KEY", sessionId: "session-1" }],
@@ -127,7 +127,9 @@ test("all project HTTP operations share canonical actions and current authority 
       ["pull-requests.merge", { number: 42, review, mergeMethod: "force" }],
       ["pull-requests.ready", { number: 42, review: {} }],
       ["pull-requests.update-branch", { number: 42, review: { ...review, headCommit: "latest" } }],
-      ["env.secret.reveal", {}], ["env.user-values.save", {}], ["prompt-hints.save", {}], ["templates.apply", { sessionId: "session-1" }]
+      ["env.secret.reveal", {}], ["env.user-values.save", {}], ["prompt-hints.save", {}], ["templates.apply", { sessionId: "session-1" }],
+      ["onboarding.read", {}], ["onboarding.read", { sessionId: " " }], ["onboarding.read", { sessionId: "session-1", templateOffset: -1 }],
+      ["onboarding.read", { sessionId: "session-1", templateId: " " }], ["templates.apply", { sessionId: "", templateId: "starter" }]
     ]) await assert.rejects(actions.execute({ actionId: `vibe64.project.${operation}`, input: { ...input, projectSlug: slug }, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" }, operation);
     assert.equal(calls.length, count);
     assert.equal(currentProjectRequestContext(), null);

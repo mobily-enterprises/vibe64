@@ -67,6 +67,12 @@ test("an empty session offers starters and applies only the configured selection
     assert.equal(before.inspection.state, "new");
     const choice = before.templates.find(({ id }) => id === "test:nodejs/public");
     assert.ok(choice, "the applied template must be offered by this installation's catalogue");
+    const page = await service.readOnboarding({ sessionId, templateOffset: 0 });
+    assert.deepEqual(page.templates, before.templates.slice(0, 10));
+    assert.equal(page.templateTotal, before.templates.length);
+    assert.deepEqual((await service.readOnboarding({ sessionId, templateId: choice.id })).templates, [choice]);
+    assert.deepEqual((await service.readOnboarding({ sessionId, templateId: "missing:starter" })).templates, []);
+    assert.deepEqual((await service.readOnboarding({ sessionId, templateOffset: before.templates.length })).templates, []);
     const result = await service.applyTemplate({ sessionId, templateId: choice.id, repository: "/untrusted-browser-input", branch: "wrong" });
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal((await service.readOnboarding({ sessionId })).inspection.state, "ready");

@@ -11,6 +11,7 @@ import * as Vue from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { routeLocationKey } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { VIBE64_COLLEAGUE_PREVIEW_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
 const mocks = vi.hoisted(() => ({ live: false, resource: null, query: null }));
 vi.mock("vuetify/components/VBtn", () => ({ VBtn: passthroughComponent("button") }));
@@ -106,6 +107,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   const outputs = { mounted: vi.fn(), unmounted: vi.fn() };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let closed = false;
+  const colleaguePreview = Vue.shallowRef(null);
   configureHttpWebClient({
     request(url, options) {
       if (url.startsWith("/api/vibe64/sessions/")) {
@@ -177,6 +179,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
     }
   });
   app.use(VueQueryPlugin, { queryClient });
+  app.provide(VIBE64_COLLEAGUE_PREVIEW_KEY, colleaguePreview);
   app.provide(Vue.ssrContextKey, { modules: new Set() });
   app.provide(routeLocationKey, Vue.reactive({ path: "/app/project/project-a", params: {}, query: {}, matched: [] }));
   app.provide("jskit.shell-web.runtime.web-error.client", feedback);
@@ -190,7 +193,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   const container = { children: [], props: {}, type: "root" };
   app.mount(container);
   return {
-    container, conversationRequests, feedback, listeners, outputs, props, reads, requestTemporaryAi, temporary, writes,
+    colleaguePreview, container, conversationRequests, feedback, listeners, outputs, props, reads, requestTemporaryAi, temporary, writes,
     button: (label) => findNode(container, (node) => node.type === "button" && nodeText(node).includes(label)),
     async projectChanged(projectSlug = "project-a") {
       for (const handler of listeners) handler({ projectSlug });
@@ -241,6 +244,40 @@ describe("Preview project onboarding", () => {
   beforeEach(() => {
     mocks.live = false;
     mocks.resource = { data: Vue.ref(null), isFetching: Vue.ref(false), loadError: Vue.ref(""), reload: vi.fn() };
+  });
+  it("reports the displayed setup screen and clears it when hidden or unmounted", async () => {
+    const fixture = mountOnboarding();
+    try {
+      expect({ ...fixture.colleaguePreview.value }).toEqual({ projectSlug: "project-a", sessionId: "session-a", screen: "checking-project-setup" });
+      await fixture.settleRead(0, opening("adoption"));
+      expect(fixture.colleaguePreview.value.screen).toBe("existing-project-setup");
+      expect(nodeText(fixture.container)).toContain("Set up this existing project");
+      fixture.props.projectPane = "dashboard";
+      await Vue.nextTick();
+      expect(fixture.colleaguePreview.value).toBeNull();
+      fixture.props.projectPane = "preview";
+      await Vue.nextTick();
+      expect(fixture.colleaguePreview.value.screen).toBe("existing-project-setup");
+      fixture.props.archived = true;
+      await Vue.nextTick();
+      expect(fixture.colleaguePreview.value.screen).toBe("outputs");
+      expect(nodeText(fixture.container)).not.toContain("Set up this existing project");
+      fixture.props.mounted = false;
+      await Vue.nextTick();
+      expect(fixture.colleaguePreview.value).toBeNull();
+    } finally { fixture.close(); }
+  });
+  it.each(["new", "ready", "attention"])("reports the actual %s view and never overwrites a newer owner on cleanup", async (state) => {
+    const fixture = mountOnboarding();
+    try {
+      await fixture.settleRead(0, opening(state));
+      expect(fixture.colleaguePreview.value.screen).toBe({ new: "new-project-setup", ready: "outputs", attention: "outputs-with-setup-warning" }[state]);
+      const newer = { projectSlug: "project-b", sessionId: "session-b", screen: "outputs" };
+      fixture.colleaguePreview.value = newer;
+      fixture.props.mounted = false;
+      await Vue.nextTick();
+      expect(fixture.colleaguePreview.value).toBe(newer);
+    } finally { fixture.close(); }
   });
   it("shows project requirements independently of outputs and hides them when satisfied or archived", async () => {
     const setup = { missingKeys: ["STORAGE_TOKEN"], warning: "" };
