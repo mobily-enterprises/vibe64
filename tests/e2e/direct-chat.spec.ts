@@ -2476,7 +2476,7 @@ for (const width of [390, 820, 1280]) {
       await expect(modes.getByRole("button", { name: /^Helper/ })).toHaveCount(0);
       await modes.getByRole("button", { name: /^Senior/ }).click();
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
-      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await page.getByRole("button", { name: "Close chat mode", exact: true }).click();
       await workspace.getByRole("textbox", { name: "Message temporary AI", exact: true }).fill("Keep this independent draft");
       await expect.poll(() => [...chats.values()][0]?.draft).toBe("Keep this independent draft");
       await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
@@ -2524,7 +2524,7 @@ for (const width of [390, 820, 1280]) {
       await expect(mainTrigger).toHaveAttribute("aria-label", /^Chat mode: Auto\./);
       await expect(page.getByRole("checkbox", { name: "Automatic deslop by Senior", exact: true })).toBeVisible();
       await expect(page.getByText(/Router reads your request|Uses one additional turn|Assign missing models in Configure/)).toHaveCount(0);
-      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await page.getByRole("button", { name: "Close chat mode", exact: true }).click();
       await openTemporaryAiWorkspace(page);
       await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
       await workspace.getByRole("button", { name: "New temporary AI task", exact: true }).click();
@@ -2743,7 +2743,7 @@ hintTest("@workflow-switch change orchestrator independently of named chat modes
     expect(changes).toEqual([]);
     releasePreparation();
     await expect(orchestrator).toBeEnabled();
-    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("button", { name: "Close chat mode", exact: true }).click();
     await composer.fill("Keep this unsent draft.");
     await trigger.click();
     await expect(orchestrator).toHaveValue("Codex");
@@ -2785,7 +2785,7 @@ hintTest("@workflow-switch change orchestrator independently of named chat modes
       await expect(modes.getByRole("button", { name: new RegExp(`^${mode}`) })).toHaveAttribute("aria-pressed", "true");
       await expect.poll(() => changes.at(-1)).toMatchObject({ mode: mode.toLowerCase(), workflowEngineId: mode === "Junior" ? "codex" : "claude" });
     }
-    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("button", { name: "Close chat mode", exact: true }).click();
     await expect(composer).toHaveValue("Keep this unsent draft.");
     await page.reload();
     await trigger.click();

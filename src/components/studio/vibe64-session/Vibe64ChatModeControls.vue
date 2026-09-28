@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiTuneVariant } from "@mdi/js";
+import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiClose, mdiCogOutline, mdiTuneVariant } from "@mdi/js";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { ModelRoutingForm, useModelRouting } from "@local/vibe64-accounts/client";
@@ -56,7 +56,7 @@ function roleLabel(role) {
   return `${vibe64AssistantSelectionLabel(selection)}${decision?.backupUsed ? ' · Shared backup' : ''}`;
 }
 function canConfigureMessage() {
-  return props.canConfigure ? "Choose a model in Configure model routing." : "Ask the owner to configure this mode.";
+  return props.canConfigure ? "Choose a model in routing settings." : "Ask the owner to configure this mode.";
 }
 
 const autoDescription = computed(() => decisions.value.auto?.available === false
@@ -127,7 +127,14 @@ function configure() {
     <v-card class="chat-modes__details" rounded="lg">
       <div class="d-flex align-center justify-space-between px-4">
         <strong>Chat mode</strong>
-        <v-btn variant="text" min-height="48" size="small" @click="detailsOpen = false">Close</v-btn>
+        <div class="d-flex">
+          <v-btn
+            v-if="canConfigure && (temporary || mode === 'custom')"
+            :icon="mdiCogOutline" variant="text" width="48" height="48"
+            aria-label="Configure model routing" title="Configure model routing" @click="configure"
+          />
+          <v-btn :icon="mdiClose" variant="text" width="48" height="48" aria-label="Close chat mode" title="Close" @click="detailsOpen = false" />
+        </div>
       </div>
       <div class="chat-modes__details-body">
         <p v-if="connecting || active || saving || !mode" class="text-body-small px-4 pb-2" role="status">{{ connecting ? 'Connecting assistant…' : saving ? 'Saving mode…' : active ? 'For your next request' : description }}</p>
@@ -139,7 +146,14 @@ function configure() {
             no-data-text="No orchestrators have connected models."
             :loading="connecting || workflows.isInitialLoading.value" :disabled="disabled || saving || connecting || active || hasGoal || !mode"
             @update:model-value="save(mode, review, $event)"
-          />
+          >
+            <template v-if="canConfigure" #append>
+              <v-btn
+                :icon="mdiCogOutline" variant="text" width="48" height="48"
+                aria-label="Configure model routing" title="Configure model routing" @click="configure"
+              />
+            </template>
+          </v-select>
           <p class="text-body-small mt-2">Switch coding tools and keep this conversation.</p>
           <p v-if="workflowError" class="text-body-small text-error" role="alert">{{ workflowError }} <v-btn variant="text" @click="workflows.reload()">Retry</v-btn></p>
         </div>
@@ -179,7 +193,6 @@ function configure() {
               <v-switch :model-value="review" :disabled="disabled || saving || connecting || !reviewAvailable || !review && decisions.review?.available === false" label="Automatic deslop by Senior" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
               <p v-if="reviewDescription" class="text-body-small">{{ reviewDescription }}</p>
             </template>
-            <v-btn v-if="canConfigure" variant="text" min-height="48" size="small" class="mt-2" @click="configure">Configure model routing</v-btn>
           </div>
         </template>
         <div class="px-4 pb-3"><slot /></div>

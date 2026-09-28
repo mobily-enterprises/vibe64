@@ -395,8 +395,9 @@ selection using its saved workflow, independently of the last native engine.
 The mode menu consumes the session's access decisions, including their loading,
 failure and retry state. It does not fetch the full routing configuration;
 the configuration form loads its scoped catalogue only when opened. Main's
-configuration action opens the saved workflow's named routing dialog without
-an orchestrator selector; that dialog saves only that workflow. The parent reads
+configuration cog sits to the right of the Orchestrator selector and opens the
+saved workflow's named routing dialog without an orchestrator selector; that
+dialog saves only that workflow. The parent reads
 the lightweight workflow response for configuration permission. Picker labels
 use `Orchestrator (model thinking)`, including Auto's Router.
 Main's named modes expose an independent Orchestrator selector using the same
@@ -462,6 +463,10 @@ One icon opens the mode choices, assigned models and review
 switch in Auto; these controls occupy no separate row above the composer. Its icon and
 accessible label reflect the selected mode. Owners open the shared Model routing
 form directly in an overlay, initially selecting this chat's orchestrator.
+Custom and temporary chats place the configuration cog in the menu header,
+where the Orchestrator selector is absent. The header's close control is an X.
+Both icons retain accessible labels and tooltips; there is no bottom
+configuration button.
 Other users have no configuration action. The mode icon remains reachable when
 the current mode is unavailable. Its menu shows the actor's effective destination,
 Shared backup and pair-preservation reasons, and explains unavailable choices.

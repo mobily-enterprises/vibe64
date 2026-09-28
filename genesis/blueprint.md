@@ -309,11 +309,13 @@ Temporary chats never run Auto, working plans or automatic review.
 Model routing opens for one named orchestrator and edits only its assignments,
 without an orchestrator selector inside the dialog. AI Accounts offers Configure
 routing beside each orchestrator with connected models; chat opens routing for
-its selected orchestrator. These settings are shared by chats using that
-orchestrator. Unconnected orchestrators are omitted from configuration choices.
+its selected orchestrator through a cog beside the Orchestrator selector. Custom
+and temporary chats keep the cog in the menu header. An X closes the menu.
+These settings are shared by chats using that orchestrator. Unconnected
+orchestrators are omitted from configuration choices.
 The dialog loads the selected orchestrator and its assigned models first; other
 model choices load when needed. Auto names any
-missing model assignments, and Configure model routing brings the first missing
+missing model assignments, and the routing cog brings the first missing
 assignment into view.
 Router is the first model assignment, directly below the compact Review
 recommendations button. That button lists only changes from the current form's
