@@ -579,9 +579,13 @@
       "implementationMap": "",
       "name": "project-values",
       "path": "genesis/program/environment/project-values.md",
-      "publicContract": "The environment view distinguishes editable user values from host-owned system\nvalues, masks secrets, supports explicit add, replace, and confirmed removal,\nand applies values to session preparation, checks, launches, and agent work.\nIntegration setup can prefill an Env key without supplying a value. Public\nvalues start empty and unmasked; secret entries start empty and masked.\nNavigation never saves a value automatically.\nWhen Genesis declares an environment-file projection, Vibe64 writes it outside\nordinary Git tracking with restrictive permissions and preserves a pre-existing\nuser file before taking ownership.\nBoth readiness inspection and materialization reject symbolic links in projected\nfile paths and the local Git exclude path, including its `info` directory.\n\nThe shared value table preserves readable value and action columns in narrow\npanes, scrolling within the table rather than collapsing a revealed value or\nwidening the page.\n\nExecution startup explicitly prepares resources and environment files under the\nsession source lock. Preview startup may reuse preparation after a read-only\ncheck confirms that the host reports its exact resources prepared and the\ndeclared dotenv files and local Git excludes match current values. Otherwise it\nresolves the declarations again under the lock before provisioning or writing.\nAn unreadable resource state is not evidence that preparation can be skipped.\nPreview status, assistant profile discovery, and helper\nconversation cleanup resolve existing values through the inspection API; they\ndo not provision resources or materialize project environment files.\nAn explicitly unprepared host response may omit resource values during\ninspection. Starter application, setup reads, and chat remain available without\ninventing credentials or treating preparation as complete. Execution still\nrequires every declared resource value, and malformed supplied values remain\nerrors in either path.\nConstructing a session runtime or reading session state does not resolve the\nproject environment. Prompt rendering and command execution resolve it when\nneeded and share one resolution within that runtime.\n\nInternal setup/output callers may request `includeResourceConfiguration` from\nthe same environment read. Its result contains the execution environment and a\nseparate SHA-256 configuration fingerprint. The existing environment owner\nhashes effective non-secret project values and logical resource/binding\ndeclarations. It excludes managed session addresses/credentials and uses the\nexisting scoped secret classification; a masked value is never substituted as\nconfiguration. User overrides supersede defaults. Inherited host variables and\ngenerated launch ports/tokens are not project settings.\nThe fingerprint selects comparable resource observations across sessions;\nchanging application settings selects a new generation, while rotating a\nsecret or receiving a different managed resource address does not. Failed\ndeclaration inspection returns an unavailable fingerprint, not proof of empty\nconfiguration. An unconfigured project can still use its supplied values.\nNo additional inspection, provisioning, file projection or persistent store is\nintroduced. Ordinary environment reads retain their environment-only result.\n\nStack declarations are inspected only from a real baseline checkout or an\nexplicit session source. A hosted catalog project's metadata namespace is not\nsource and is never passed to Genesis merely because no baseline checkout is\navailable; Env values remain usable without one.\n\nProject agents receive the managed `vibe64-helper env` command. It reads configuration\nmetadata without exposing values and delegates explicit development mutations\nto the project Env service. A host may contribute a production Env provider\nthrough the terminal service; public/local Vibe64 otherwise reports production\nas unavailable. Mutations require an explicit scope, accept values only on\nstdin, never copy values between scopes, and never reveal stored values.\nSuccessful development Env mutations publish the shared project refresh hint,\nso other tabs reread the protected project state without receiving values or\nsecrets over realtime.\n\nProject onboarding uses the same read-only environment resolution and alternative\nbinding rules as Env to report missing variable names, including for projects\nwith no runnable output. Existing host values, defaults, and allowed empty values\ncount toward satisfaction. The setup notice links to Env and can be rechecked;\nit does not provision resources, expose values, or replace the output area.\nPending host-managed resources are left to application preparation rather than\npresented as credentials the person must enter.",
+      "publicContract": "The environment view distinguishes editable user values from host-owned system\nvalues, masks secrets, supports explicit add, replace, and confirmed removal,\nand applies values to session preparation, checks, launches, and agent work.\nIntegration setup can prefill an Env key without supplying a value. Public\nvalues start empty and unmasked; secret entries start empty and masked.\nNavigation never saves a value automatically.\nColleague shares the canonical Env read action with current project and source\nauthority. Its bounded result includes names, ownership, editability, secret\nclassification, value presence and missing status, never values or private source\npaths. Missing totals include records outside the first 100 entries; truncation,\ninspection warnings and unavailability prevent a claim of complete setup.\nNames longer than the presentation bound also mark the result incomplete.\nThe returned source identifies the exact session inspected. The `prod` scope\non this project action describes project-stored configuration, not the hosted\ndeployment's production environment. Colleague opens the ordinary Env view for\nsecret entry or stored-value inspection. This metadata read neither prepares\nresources nor materializes files, and an empty or complete list does not prove\napplication readiness. Env writes and secret reveal are not Colleague tools yet.\nWhen Genesis declares an environment-file projection, Vibe64 writes it outside\nordinary Git tracking with restrictive permissions and preserves a pre-existing\nuser file before taking ownership.\nBoth readiness inspection and materialization reject symbolic links in projected\nfile paths and the local Git exclude path, including its `info` directory.\n\nThe shared value table preserves readable value and action columns in narrow\npanes, scrolling within the table rather than collapsing a revealed value or\nwidening the page.\n\nExecution startup explicitly prepares resources and environment files under the\nsession source lock. Preview startup may reuse preparation after a read-only\ncheck confirms that the host reports its exact resources prepared and the\ndeclared dotenv files and local Git excludes match current values. Otherwise it\nresolves the declarations again under the lock before provisioning or writing.\nAn unreadable resource state is not evidence that preparation can be skipped.\nPreview status, assistant profile discovery, and helper\nconversation cleanup resolve existing values through the inspection API; they\ndo not provision resources or materialize project environment files.\nAn explicitly unprepared host response may omit resource values during\ninspection. Starter application, setup reads, and chat remain available without\ninventing credentials or treating preparation as complete. Execution still\nrequires every declared resource value, and malformed supplied values remain\nerrors in either path.\nConstructing a session runtime or reading session state does not resolve the\nproject environment. Prompt rendering and command execution resolve it when\nneeded and share one resolution within that runtime.\n\nInternal setup/output callers may request `includeResourceConfiguration` from\nthe same environment read. Its result contains the execution environment and a\nseparate SHA-256 configuration fingerprint. The existing environment owner\nhashes effective non-secret project values and logical resource/binding\ndeclarations. It excludes managed session addresses/credentials and uses the\nexisting scoped secret classification; a masked value is never substituted as\nconfiguration. User overrides supersede defaults. Inherited host variables and\ngenerated launch ports/tokens are not project settings.\nThe fingerprint selects comparable resource observations across sessions;\nchanging application settings selects a new generation, while rotating a\nsecret or receiving a different managed resource address does not. Failed\ndeclaration inspection returns an unavailable fingerprint, not proof of empty\nconfiguration. An unconfigured project can still use its supplied values.\nNo additional inspection, provisioning, file projection or persistent store is\nintroduced. Ordinary environment reads retain their environment-only result.\n\nStack declarations are inspected only from a real baseline checkout or an\nexplicit session source. A hosted catalog project's metadata namespace is not\nsource and is never passed to Genesis merely because no baseline checkout is\navailable; Env values remain usable without one.\n\nProject agents receive the managed `vibe64-helper env` command. It reads configuration\nmetadata without exposing values and delegates explicit development mutations\nto the project Env service. A host may contribute a production Env provider\nthrough the terminal service; public/local Vibe64 otherwise reports production\nas unavailable. Mutations require an explicit scope, accept values only on\nstdin, never copy values between scopes, and never reveal stored values.\nSuccessful development Env mutations publish the shared project refresh hint,\nso other tabs reread the protected project state without receiving values or\nsecrets over realtime.\n\nProject onboarding uses the same read-only environment resolution and alternative\nbinding rules as Env to report missing variable names, including for projects\nwith no runnable output. Existing host values, defaults, and allowed empty values\ncount toward satisfaction. The setup notice links to Env and can be rechecked;\nit does not provision resources, expose values, or replace the output area.\nPending host-managed resources are left to application preparation rather than\npresented as credentials the person must enter.",
       "sourceFileIds": [
         "file:packages/vibe64-project/src/server/service.js",
+        "file:packages/vibe64-project/src/server/actions.js",
+        "file:packages/vibe64-project/src/server/inputSchemas.js",
+        "file:packages/vibe64-project/src/server/settingsAssistantContracts.js",
+        "file:tests/server/vibe64SettingsActionTools.unit.test.js",
         "file:packages/vibe64-project/src/server/resourceEnvironment.js",
         "file:packages/vibe64-project/src/server/projectEnvironmentFiles.js",
         "file:packages/vibe64-terminals/src/server/projectExecutionEnv.js",
@@ -592,6 +596,10 @@
       ],
       "sources": [
         "packages/vibe64-project/src/server/service.js",
+        "packages/vibe64-project/src/server/actions.js",
+        "packages/vibe64-project/src/server/inputSchemas.js",
+        "packages/vibe64-project/src/server/settingsAssistantContracts.js",
+        "tests/server/vibe64SettingsActionTools.unit.test.js",
         "packages/vibe64-project/src/server/resourceEnvironment.js",
         "packages/vibe64-project/src/server/projectEnvironmentFiles.js",
         "packages/vibe64-terminals/src/server/projectExecutionEnv.js",
@@ -1571,7 +1579,7 @@
     {
       "dataOwned": [],
       "dataUsed": [],
-      "description": "Owns project values supplied to managed application work.",
+      "description": "Owns project values supplied to managed application work.\nColleague uses the canonical Project Env read action through a bounded metadata\npresentation; stored values and secret reveal stay in the existing Env UI.",
       "id": "subsystem:environment",
       "parentId": null,
       "path": "environment",
@@ -2833,6 +2841,26 @@
       "fromId": "operation:genesis/program/environment/project-values.md",
       "kind": "implemented-by",
       "toId": "file:packages/vibe64-project/src/server/service.js"
+    },
+    {
+      "fromId": "operation:genesis/program/environment/project-values.md",
+      "kind": "implemented-by",
+      "toId": "file:packages/vibe64-project/src/server/actions.js"
+    },
+    {
+      "fromId": "operation:genesis/program/environment/project-values.md",
+      "kind": "implemented-by",
+      "toId": "file:packages/vibe64-project/src/server/inputSchemas.js"
+    },
+    {
+      "fromId": "operation:genesis/program/environment/project-values.md",
+      "kind": "implemented-by",
+      "toId": "file:packages/vibe64-project/src/server/settingsAssistantContracts.js"
+    },
+    {
+      "fromId": "operation:genesis/program/environment/project-values.md",
+      "kind": "implemented-by",
+      "toId": "file:tests/server/vibe64SettingsActionTools.unit.test.js"
     },
     {
       "fromId": "operation:genesis/program/environment/project-values.md",
@@ -4540,7 +4568,7 @@
       "toId": "file:src/components/studio/vibe64-session/Vibe64AutopilotView.vue"
     }
   ],
-  "programHash": "sha256:945eb6a1e672bf3a7b7b830abaa17ae7c9b019f093ff2de775fd56506fd78f46",
+  "programHash": "sha256:248378bf8c58445eb9bc2f88ddf3effb8b0cdee2536e1f622a5a75cfb46dfe09",
   "schema": "genesis.program-city.v1",
   "schemaVersion": 1,
   "status": "valid"

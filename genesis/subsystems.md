@@ -146,6 +146,8 @@ inspecting the selected project or session declaration.
 ## `environment` Project environment
 
 Owns project values supplied to managed application work.
+Colleague uses the canonical Project Env read action through a bounded metadata
+presentation; stored values and secret reveal stay in the existing Env UI.
 
 ### Program
 

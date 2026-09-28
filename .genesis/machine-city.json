@@ -6794,7 +6794,7 @@
       "title": "workspaceSetup.js"
     },
     {
-      "bytes": 14776,
+      "bytes": 14819,
       "districtId": "directory:packages/vibe64-project/src/server",
       "extractors": [
         "javascript"
@@ -6825,22 +6825,22 @@
         "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:248:16",
         "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:255:16",
         "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:262:16",
-        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:268:16",
-        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:275:16",
-        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:282:16",
-        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:289:16",
-        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:298:16",
-        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:307:16",
-        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:315:16",
-        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:323:16",
-        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:330:16",
-        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:338:16"
+        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:269:16",
+        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:276:16",
+        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:283:16",
+        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:290:16",
+        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:299:16",
+        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:308:16",
+        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:316:16",
+        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:324:16",
+        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:331:16",
+        "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:339:16"
       ],
-      "hash": "sha256:f9ae4abb4c87b14f218122dd30a5aeb2e4a998830ec2e2b66c7cd1257748022a",
+      "hash": "sha256:766294797916e3b412f9226c4d4861e12d43be6a56d759976d223b2a0b5f538a",
       "id": "file:packages/vibe64-project/src/server/actions.js",
       "internalFunctionCount": 33,
       "language": "javascript",
-      "lines": 362,
+      "lines": 363,
       "mode": 33188,
       "path": "packages/vibe64-project/src/server/actions.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-project",
@@ -6979,21 +6979,21 @@
       "title": "githubPullRequests.js"
     },
     {
-      "bytes": 9182,
+      "bytes": 9311,
       "districtId": "directory:packages/vibe64-project/src/server",
       "extractors": [
         "javascript"
       ],
       "functionIds": [
-        "function:packages/vibe64-project/src/server/inputSchemas.js:maxItems:function:5:18",
-        "function:packages/vibe64-project/src/server/inputSchemas.js:toJsonSchema:function:10:25",
-        "function:packages/vibe64-project/src/server/inputSchemas.js:inputSchema:function:13:1"
+        "function:packages/vibe64-project/src/server/inputSchemas.js:maxItems:function:6:18",
+        "function:packages/vibe64-project/src/server/inputSchemas.js:toJsonSchema:function:11:25",
+        "function:packages/vibe64-project/src/server/inputSchemas.js:inputSchema:function:14:1"
       ],
-      "hash": "sha256:8f9bf79b2ea55a533f33cf3b3e86978df696b3113a7eadac8bd17ab648e64d86",
+      "hash": "sha256:329b0def5a9ee5ca6b7462076ab67bd8c875d04e16547c7c6e39a0375416440a",
       "id": "file:packages/vibe64-project/src/server/inputSchemas.js",
       "internalFunctionCount": 3,
       "language": "javascript",
-      "lines": 272,
+      "lines": 274,
       "mode": 33188,
       "path": "packages/vibe64-project/src/server/inputSchemas.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-project",
@@ -7397,22 +7397,22 @@
       "title": "service.js"
     },
     {
-      "bytes": 11285,
+      "bytes": 13537,
       "districtId": "directory:packages/vibe64-project/src/server",
       "extractors": [
         "javascript"
       ],
       "functionIds": [
-        "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:sourceSummary:function:25:1",
-        "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:profileSummary:function:29:1",
-        "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:settingsTool:function:34:8",
-        "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:settingsTool.transformResult:method:60:5"
+        "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:sourceSummary:function:26:1",
+        "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:profileSummary:function:30:1",
+        "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:settingsTool:function:35:8",
+        "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:settingsTool.transformResult:method:69:5"
       ],
-      "hash": "sha256:cc95f2b1ed6fa0c26ffeddf5362c946def4bf3141ce906576c4d068d9043af91",
+      "hash": "sha256:84404116212c3a8ddcf1c2605380308ab95fbb2b8b5893ecc81e678f599b7828",
       "id": "file:packages/vibe64-project/src/server/settingsAssistantContracts.js",
       "internalFunctionCount": 3,
       "language": "javascript",
-      "lines": 111,
+      "lines": 134,
       "mode": 33188,
       "path": "packages/vibe64-project/src/server/settingsAssistantContracts.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-project",
@@ -21316,7 +21316,7 @@
       "title": "vite.config.mjs"
     }
   ],
-  "codeHash": "sha256:8c98fd9269a41b4132e96d08952a4c04e3dcaa2ea6d375653d21a8f7f8cc5125",
+  "codeHash": "sha256:12f5eb6e6a87933e01bd1712202aeb4774976352412064d29a6893a13f0c67c9",
   "diagnostics": [],
   "districts": [
     {
@@ -68554,10 +68554,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:268:16",
+      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:269:16",
       "kind": "function",
       "language": "javascript",
-      "line": 268,
+      "line": 269,
       "name": "execute",
       "parameters": [
         "input"
@@ -68575,10 +68575,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:275:16",
+      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:276:16",
       "kind": "function",
       "language": "javascript",
-      "line": 275,
+      "line": 276,
       "name": "execute",
       "parameters": [
         "input"
@@ -68596,10 +68596,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:282:16",
+      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:283:16",
       "kind": "function",
       "language": "javascript",
-      "line": 282,
+      "line": 283,
       "name": "execute",
       "parameters": [
         "input"
@@ -68617,10 +68617,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:289:16",
+      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:290:16",
       "kind": "function",
       "language": "javascript",
-      "line": 289,
+      "line": 290,
       "name": "execute",
       "parameters": [
         "input"
@@ -68638,10 +68638,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:298:16",
+      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:299:16",
       "kind": "function",
       "language": "javascript",
-      "line": 298,
+      "line": 299,
       "name": "execute",
       "parameters": [
         "input"
@@ -68659,10 +68659,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:307:16",
+      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:308:16",
       "kind": "function",
       "language": "javascript",
-      "line": 307,
+      "line": 308,
       "name": "execute",
       "parameters": [
         "input"
@@ -68680,10 +68680,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:315:16",
+      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:316:16",
       "kind": "function",
       "language": "javascript",
-      "line": 315,
+      "line": 316,
       "name": "execute",
       "parameters": [
         "input"
@@ -68701,10 +68701,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:323:16",
+      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:324:16",
       "kind": "function",
       "language": "javascript",
-      "line": 323,
+      "line": 324,
       "name": "execute",
       "parameters": [
         "input"
@@ -68722,10 +68722,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:330:16",
+      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:331:16",
       "kind": "function",
       "language": "javascript",
-      "line": 330,
+      "line": 331,
       "name": "execute",
       "parameters": [
         "input"
@@ -68743,10 +68743,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:338:16",
+      "id": "function:packages/vibe64-project/src/server/actions.js:createProjectActions.execute:function:339:16",
       "kind": "function",
       "language": "javascript",
-      "line": 338,
+      "line": 339,
       "name": "execute",
       "parameters": [
         "input"
@@ -69290,10 +69290,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/inputSchemas.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/inputSchemas.js:maxItems:function:5:18",
+      "id": "function:packages/vibe64-project/src/server/inputSchemas.js:maxItems:function:6:18",
       "kind": "function",
       "language": "javascript",
-      "line": 5,
+      "line": 6,
       "name": "maxItems",
       "parameters": [
         "{ value, parameterValue, throwParamError }"
@@ -69311,10 +69311,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/inputSchemas.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/inputSchemas.js:toJsonSchema:function:10:25",
+      "id": "function:packages/vibe64-project/src/server/inputSchemas.js:toJsonSchema:function:11:25",
       "kind": "function",
       "language": "javascript",
-      "line": 10,
+      "line": 11,
       "name": "toJsonSchema",
       "parameters": [
         "{ parameterValue }"
@@ -69332,10 +69332,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/inputSchemas.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/inputSchemas.js:inputSchema:function:13:1",
+      "id": "function:packages/vibe64-project/src/server/inputSchemas.js:inputSchema:function:14:1",
       "kind": "function",
       "language": "javascript",
-      "line": 13,
+      "line": 14,
       "name": "inputSchema",
       "parameters": [
         "fields"
@@ -73233,10 +73233,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/settingsAssistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:sourceSummary:function:25:1",
+      "id": "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:sourceSummary:function:26:1",
       "kind": "function",
       "language": "javascript",
-      "line": 25,
+      "line": 26,
       "name": "sourceSummary",
       "parameters": [
         "value"
@@ -73254,10 +73254,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/settingsAssistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:profileSummary:function:29:1",
+      "id": "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:profileSummary:function:30:1",
       "kind": "function",
       "language": "javascript",
-      "line": 29,
+      "line": 30,
       "name": "profileSummary",
       "parameters": [
         "value"
@@ -73275,10 +73275,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/settingsAssistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:settingsTool:function:34:8",
+      "id": "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:settingsTool:function:35:8",
       "kind": "function",
       "language": "javascript",
-      "line": 34,
+      "line": 35,
       "name": "settingsTool",
       "parameters": [
         "operation"
@@ -73296,10 +73296,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-project/src/server/settingsAssistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:settingsTool.transformResult:method:60:5",
+      "id": "function:packages/vibe64-project/src/server/settingsAssistantContracts.js:settingsTool.transformResult:method:69:5",
       "kind": "method",
       "language": "javascript",
-      "line": 60,
+      "line": 69,
       "name": "transformResult",
       "parameters": [
         "result"

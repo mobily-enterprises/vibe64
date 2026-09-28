@@ -8,7 +8,7 @@ import { createProjectActions } from "../../packages/vibe64-project/src/server/a
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 const preferences = { experience: "comfortable", explanationStyle: "concise", responseLength: "concise", tone: "encouraging" };
-const sourceOperations = ["settings.read", "engineering.read", "collaboration.save", "engineering.profile.save", "preview-identities.read", "preview-identities.save"];
+const sourceOperations = ["settings.read", "engineering.read", "collaboration.save", "engineering.profile.save", "preview-identities.read", "preview-identities.save", "env.read"];
 const operations = [...sourceOperations, "prompt-hints.save", "repository.workflow.save", "development-database.scope.save"];
 
 async function withSettingsTools(run) {
@@ -18,6 +18,14 @@ async function withSettingsTools(run) {
     state.developmentDatabase = { scope: "project", canChange: false, managed: true, disabledReason: "Close the open session first.",
       openSessionCount: 1, password: "private-password" };
     const source = { rootKind: "session-source", sessionId: "session-a", sourceRoot: "/private/source" };
+    state.env = { environment: "dev", configSource: source, unavailable: null, records: [
+      { key: "APP_NAME", owner: "user", scope: "dev", editable: true, secret: false, valuePresent: true, missing: false,
+        source: "/private/source", value: "private-plain-value" },
+      { key: "DB_PASSWORD", owner: "system", scope: "dev", editable: false, secret: true, valuePresent: true, missing: false,
+        source: "/private/system", value: "private-secret-value" },
+      { key: "REQUIRED_KEY", owner: "user", scope: "dev", editable: true, secret: true, valuePresent: false, missing: true, value: "********" },
+      { key: "OPTIONAL_NAME", owner: "user", scope: "dev", editable: true, secret: false, valuePresent: false, missing: false, value: "" }
+    ] };
     state.collaboration = { available: true, canEdit: true, source, status: "configured", unavailableReason: "",
       ...preferences, requirements: "Preserve this project requirement.\nAnd its second line.",
       choices: Object.fromEntries(Object.entries(preferences).map(([key, id]) => [key, [{ id, name: id, guidance: `Guidance for ${id}` }]])) };
@@ -29,6 +37,7 @@ async function withSettingsTools(run) {
     const record = (operation, input) => calls.push({ operation, input, context: currentProjectRequestContext() });
     const actions = createActionCatalogue({ events: { async publish(event) { events.push(event); } } });
     actions.register({ contributorId: "settings", domain: "project", actions: createProjectActions({ project: {
+      async readEnv(input) { record("env.read", input); return state.failure || { ok: true, env: state.env }; },
       async readSettings(input) {
         record("settings.read", input);
         return { ok: true, collaboration: state.collaboration, promptHints: { canEdit: true, enabled: true },
@@ -156,7 +165,7 @@ test("settings tools recheck owner and project authority and reject malformed in
       "collaboration.save": { ...preferences, requirements: "" },
       "engineering.profile.save": { profile: "durable.v1" }, "prompt-hints.save": { promptHints: false },
       "repository.workflow.save": { requirePullRequest: true }, "development-database.scope.save": { scope: "session" },
-      "preview-identities.read": {}, "preview-identities.save": { identities: state.identities }
+      "preview-identities.read": {}, "preview-identities.save": { identities: state.identities }, "env.read": {}
     };
     for (const operation of operations) {
       assert.equal((await execute(operation, { ...valid[operation], vibe64User: state.actor })).ok, false);
@@ -182,6 +191,63 @@ test("settings tools recheck owner and project authority and reject malformed in
     assert.equal(failed.result.code, "source_busy");
     assert.equal(failed.result.error, "Another conversation is editing this source.");
     assert.equal(JSON.stringify(failed).includes("private"), false);
+  });
+});
+
+test("Env tools share source authority while returning metadata without stored values or private paths", async () => {
+  await withSettingsTools(async ({ actions, calls, events, execute, slug, state, toolSet }) => {
+    state.actor = { username: "member", role: "member" };
+    const read = await execute("env.read", { environment: "dev" });
+    assert.equal(read.ok, true, JSON.stringify(read));
+    assert.deepEqual(read.result.env, {
+      environment: "dev", source: { rootKind: "session-source", sessionId: "session-a" },
+      warning: false, unavailable: false, total: 4, missingCount: 1, truncated: false,
+      records: state.env.records.map(({ key, owner, scope, editable, secret, valuePresent, missing }) =>
+        ({ key, owner, scope, editable, secret, valuePresent, missing }))
+    });
+    assert.doesNotMatch(JSON.stringify(read), /private-|\/private|\*{8}/u);
+    assert.equal(calls.at(-1).input.sessionId, "session-a");
+    assert.equal(calls.at(-1).context.vibe64User, state.actor);
+    assert.equal(events.length, 0);
+    assert.equal(toolSet.tools.some(({ actionId }) => ["vibe64.project.env.secret.reveal", "vibe64.project.env.user-values.save"].includes(actionId)), false);
+    const api = await actions.execute({ actionId: "vibe64.project.env.read",
+      input: { projectSlug: slug, sessionId: "session-b", environment: "dev" }, context: { channel: "api", surface: "app" } });
+    assert.equal(api.env.records[0].value, "private-plain-value", "the ordinary UI keeps its authorized value presentation");
+    assert.equal(calls.at(-1).input.sessionId, "session-b");
+    assert.equal(calls.at(-1).context.vibe64User, state.actor);
+    const count = calls.length;
+    assert.equal((await execute("env.read", { environment: "unsupported" })).ok, false);
+    await assert.rejects(actions.execute({ actionId: "vibe64.project.env.read",
+      input: { projectSlug: slug, environment: "unsupported" }, context: { channel: "api", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" });
+    assert.equal(calls.length, count);
+  });
+});
+
+test("Env metadata reports incomplete inspection and missing totals without treating an excerpt as complete", async () => {
+  await withSettingsTools(async ({ execute, state }) => {
+    state.env.records = Array.from({ length: 101 }, (_, i) => ({ ...state.env.records[0], key: `NAME_${i}`, missing: i === 100 }));
+    state.env.stackWarning = "private-warning with /private/path";
+    state.env.unavailable = { message: "private-unavailable-details" };
+    const read = await execute("env.read");
+    assert.equal(read.result.env.records.length, 100);
+    assert.equal(read.result.env.total, 101);
+    assert.equal(read.result.env.missingCount, 1, "the missing entry beyond the excerpt remains counted");
+    assert.equal(read.result.env.truncated, true);
+    assert.equal(read.result.env.warning, true);
+    assert.equal(read.result.env.unavailable, true);
+    assert.doesNotMatch(JSON.stringify(read), /private/u);
+    state.env.records = [{ ...state.env.records[0], key: "K".repeat(513) }];
+    const longName = await execute("env.read");
+    assert.equal(longName.result.env.records[0].key.length, 512);
+    assert.equal(longName.result.env.truncated, true);
+    state.env.records = [];
+    state.env.environment = "prod";
+    const empty = await execute("env.read", { environment: "prod" });
+    assert.equal(empty.result.env.environment, "prod");
+    assert.equal(empty.result.env.total, 0);
+    assert.equal(empty.result.env.unavailable, true);
+    state.failure = { ok: false, errors: [{ code: "env_unavailable", message: "Environment inspection failed.", details: "private-details" }] };
+    assert.deepEqual((await execute("env.read")).result, { ok: false, code: "env_unavailable", error: "Environment inspection failed." });
   });
 });
 

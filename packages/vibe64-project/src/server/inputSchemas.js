@@ -1,6 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 import { PREVIEW_APPLICATION_IDENTITY_LIMIT, PREVIEW_IDENTITY_SELECTOR_TYPES } from "@local/vibe64-core/server/previewAuth";
+import { RUNTIME_CONFIG_SCOPES } from "@local/vibe64-core/server/runtimeConfig";
 const createProjectSchema = createSchema.createFactory();
 const maxItems = ({ value, parameterValue, throwParamError }) => {
   if (Array.isArray(value) && value.length > parameterValue) {
@@ -138,6 +139,7 @@ const projectSelectInputValidator = inputSchema({
 const projectEnvReadInputValidator = inputSchema({
   environment: {
     type: "string",
+    enum: Object.values(RUNTIME_CONFIG_SCOPES),
     noTrim: false
   },
   sessionId: {

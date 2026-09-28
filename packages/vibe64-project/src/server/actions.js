@@ -263,6 +263,7 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_READ_ENV,
+      assistant: settingsTool("env.read"),
       kind: "query",
       input: projectEnvReadInputValidator,
       execute: (input) => project.readEnv(input)

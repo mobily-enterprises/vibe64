@@ -6,6 +6,10 @@ host provide managed system values separately.
 ## Sources
 
 - `packages/vibe64-project/src/server/service.js`
+- `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/inputSchemas.js`
+- `packages/vibe64-project/src/server/settingsAssistantContracts.js`
+- `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-project/src/server/resourceEnvironment.js`
 - `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
@@ -22,6 +26,18 @@ and applies values to session preparation, checks, launches, and agent work.
 Integration setup can prefill an Env key without supplying a value. Public
 values start empty and unmasked; secret entries start empty and masked.
 Navigation never saves a value automatically.
+Colleague shares the canonical Env read action with current project and source
+authority. Its bounded result includes names, ownership, editability, secret
+classification, value presence and missing status, never values or private source
+paths. Missing totals include records outside the first 100 entries; truncation,
+inspection warnings and unavailability prevent a claim of complete setup.
+Names longer than the presentation bound also mark the result incomplete.
+The returned source identifies the exact session inspected. The `prod` scope
+on this project action describes project-stored configuration, not the hosted
+deployment's production environment. Colleague opens the ordinary Env view for
+secret entry or stored-value inspection. This metadata read neither prepares
+resources nor materializes files, and an empty or complete list does not prove
+application readiness. Env writes and secret reveal are not Colleague tools yet.
 When Genesis declares an environment-file projection, Vibe64 writes it outside
 ordinary Git tracking with restrictive permissions and preserves a pre-existing
 user file before taking ownership.
