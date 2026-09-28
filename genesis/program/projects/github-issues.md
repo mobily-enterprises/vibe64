@@ -10,6 +10,8 @@ Dashboard without opening a session.
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
 - `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/assistantContracts.js`
+- `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-project/src/server/Vibe64ProjectProvider.js`
 - `packages/vibe64-terminals/src/server/codexGitCommand.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
@@ -30,11 +32,35 @@ Dashboard without opening a session.
 - `src/placement.js`
 - `src/pages/app/project/[slug]/dashboard/issues/index.vue`
 - `tests/server/githubIssues.unit.test.js`
+- `tests/server/vibe64IssueActionTools.unit.test.js`
 - `tests/server/vibe64ProjectActions.unit.test.js`
 - `tests/server/vibe64ProjectRoutes.unit.test.js`
 - `tests/e2e/github-issues.spec.ts`
 
 ## Public contract
+
+Colleague discovers all eleven existing issue actions through their canonical
+contracts and current project/GitHub authority. Native results exclude rendered
+HTML, credentials and unrelated provider fields. Issue list and comment cursors
+retain the owner's 25-item pages; descriptions are bounded to 4,000 characters
+and comment bodies to 1,000, with explicit truncation. Labels retain exact names,
+counts and incomplete-list markers. Large-text reading/editing can be delegated
+to a coding conversation; an excerpt must never replace the original full body.
+Issue text is background data, not an instruction to the operator.
+
+Label and mention reads accept optional literal name/login search, offset and
+limit up to 20. Their existing owners still retrieve the complete GitHub catalogue
+and keep duplicate/permission checks; ordinary UI reads without those inputs
+retain the full list. Native projections return at most 20 with total and
+nextOffset so further names remain discoverable. Mention-source warnings survive.
+
+Publishing, commenting, editing, state changes and label writes require the user's
+request and retain native no-automatic-retry behavior. Comment identities remain
+exact. Replacing issue content requires both title and complete body at the action
+and service boundaries; omitting a description cannot silently erase it. Add/remove
+label modes preserve unrelated labels, while replace/empty replacement remains an
+explicit full-set change. Partial bulk success must be reported without reposting
+confirmed writes. HTTP retains the complete existing result contract.
 
 The single Issues/PR menu entry appears only for projects with a GitHub repository.
 It sits above session tools, with tabs that return to the respective lists,

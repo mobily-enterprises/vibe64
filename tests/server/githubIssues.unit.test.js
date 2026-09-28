@@ -549,6 +549,7 @@ test("invalid edit inputs and bulk label modes make no GitHub calls", async () =
   const f = fixture([]);
   for (const input of [
     { operation: "edit", number: 7, title: " " },
+    { operation: "edit", number: 7, title: "Title only must not clear a description" },
     { operation: "edit", number: 7, title: "a".repeat(257) },
     { operation: "edit", number: 7, title: "Title", body: "a".repeat(65537) },
     { operation: "edit-comment", number: 7, commentId: "", body: "Text" },
@@ -557,4 +558,29 @@ test("invalid edit inputs and bulk label modes make no GitHub calls", async () =
     { operation: "set-labels", number: 7, labelMode: "unknown", labels: [] }
   ]) await assert.rejects(githubIssues(project, { ...input, vibe64User: user }, f.options), { code: "vibe64_issue_input_invalid" });
   assert.equal(f.calls.length, 0);
+});
+
+test("issue label and mention reads optionally page and search their existing complete catalogues", async () => {
+  const entries = Array.from({ length: 23 }, (_, i) => ({ name: `Entry ${i}`, login: `user-${i}`, color: "aabbcc", id: `L_${i}` }));
+  for (const operation of ["labels", "mentions"]) {
+    const key = operation === "labels" ? "labels" : "users";
+    for (const [input, expectedLength, expectedTotal, nextOffset] of [
+      [{ offset: 0, limit: 20 }, 20, 23, 20], [{ offset: 20, limit: 20 }, 3, 23, null],
+      [{ search: "entry 22" }, 1, 1, null], [{ search: "no-match" }, 0, 0, null]
+    ]) {
+      const page = { nodes: entries, pageInfo: { hasNextPage: false } };
+      const f = fixture([success({ data: { repository: { viewerPermission: "WRITE", [operation === "labels" ? "labels" : "collaborators"]: page } } })]);
+      const result = await githubIssues(project, { operation, ...input, vibe64User: user }, f.options);
+      assert.equal(result[key].length, expectedLength);
+      assert.equal(result.total, expectedTotal);
+      assert.equal(result.nextOffset, nextOffset);
+      if (operation === "labels") assert.equal(result.canCreateLabels, true);
+      assert.equal(f.calls.length, 1);
+    }
+    const invalid = fixture([]);
+    for (const input of [{ offset: -1 }, { offset: 0.5 }, { limit: 21 }, { limit: 0 }]) {
+      await assert.rejects(githubIssues(project, { operation, ...input, vibe64User: user }, invalid.options), { code: "vibe64_issue_input_invalid" });
+    }
+    assert.equal(invalid.calls.length, 0);
+  }
 });

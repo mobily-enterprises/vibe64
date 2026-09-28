@@ -3,7 +3,7 @@ import { githubApi, requireGithubRepository } from "./githubApi.js";
 
 const ISSUE_FIELDS = `id number title body bodyHTML url state stateReason createdAt updatedAt
   author { login } viewerCanClose viewerCanReopen viewerCanUpdate locked
-  labels(first:100) { nodes { name color description } }`;
+  labels(first:100) { totalCount nodes { name color description } }`;
 const COMMENT_FIELDS = "id body bodyHTML createdAt author { login } viewerCanUpdate";
 const ISSUE_LIST_FIELDS = `number title url state updatedAt author { login } comments { totalCount }
   labels(first:10) { totalCount nodes { name color description } }`;
@@ -11,6 +11,16 @@ const PAGE_INFO = "pageInfo { hasNextPage endCursor }";
 const LABEL_WRITE_PERMISSIONS = ["ADMIN", "MAINTAIN", "WRITE"];
 const LABEL_EDIT_PERMISSIONS = [...LABEL_WRITE_PERMISSIONS, "TRIAGE"];
 const LABEL_CREATION_UNCONFIRMED = "Label creation could not be confirmed. Refresh the labels before trying again.";
+
+function issueCataloguePage(result, key, input) {
+  if (input.search == null && input.offset == null && input.limit == null) return result;
+  const search = String(input.search || "").trim().toLowerCase();
+  const entries = result[key].filter((entry) => [entry.name, entry.login].some((value) => String(value || "").toLowerCase().includes(search)));
+  const offset = input.offset ?? 0;
+  const page = entries.slice(offset, offset + (input.limit ?? 20));
+  return { ...result, [key]: page, total: entries.length, offset,
+    nextOffset: offset + page.length < entries.length ? offset + page.length : null };
+}
 
 async function issueMentionUsers(api, owner, name, number) {
   const fields = `nodes { login name } ${PAGE_INFO}`;
@@ -101,6 +111,11 @@ export async function githubIssues(project, input = {}, options = {}) {
   const state = input.state || "open";
   let search = String(input.search || "").trim();
   const cursor = input.cursor || null;
+  if (["labels", "mentions"].includes(operation) &&
+      ((input.offset != null && (!Number.isSafeInteger(input.offset) || input.offset < 0)) ||
+       (input.limit != null && (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 20)))) {
+    throw vibe64Error("Choose a valid catalogue page of up to 20 entries.", "vibe64_issue_input_invalid");
+  }
   if (!["open", "closed", "all"].includes(state) || search.length > 200 ||
       (cursor !== null && (typeof cursor !== "string" || cursor.length > 500)) ||
       (operation === "state" && !["open", "closed"].includes(input.state)) ||
@@ -108,6 +123,7 @@ export async function githubIssues(project, input = {}, options = {}) {
     throw vibe64Error("Check the issue filters or comment and try again.", "vibe64_issue_input_invalid");
   }
   if (["create", "edit"].includes(operation) && (typeof input.title !== "string" || !input.title.trim() || input.title.length > 256 ||
+      (operation === "edit" && typeof input.body !== "string") ||
       (input.body != null && (typeof input.body !== "string" || input.body.length > 65536)))) {
     throw vibe64Error("Enter an issue title and a description of up to 65,536 characters.", "vibe64_issue_input_invalid");
   }
@@ -156,11 +172,11 @@ export async function githubIssues(project, input = {}, options = {}) {
       : operation === "create-label" ? LABEL_CREATION_UNCONFIRMED : ""
   });
   const [owner, name] = fullName.split("/");
-  if (operation === "mentions") return issueMentionUsers(api, owner, name, input.number == null ? null : number);
+  if (operation === "mentions") return issueCataloguePage(await issueMentionUsers(api, owner, name, input.number == null ? null : number), "users", input);
   let labelIds;
   if (["labels", "create-label", "set-labels"].includes(operation) || (operation === "create" && selectedLabels.length)) {
     const catalog = await repositoryLabels(api, owner, name);
-    if (operation === "labels") return { ok: true, ...catalog };
+    if (operation === "labels") return issueCataloguePage({ ok: true, ...catalog }, "labels", input);
     if (operation === "create-label") {
       if (!catalog.canCreateLabels) {
         throw vibe64Error("GitHub requires write access to create repository labels.", "vibe64_issue_permission_denied");

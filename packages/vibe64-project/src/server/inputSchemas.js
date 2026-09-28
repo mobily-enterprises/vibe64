@@ -207,18 +207,19 @@ const labels = { type: "array", items: { type: "string", minLength: 1 }, require
 const issueTitle = { type: "string", minLength: 1, maxLength: 256, required: true };
 const issueBody = { type: "string", noTrim: true, maxLength: 65536, required: false };
 const commentBody = { ...issueBody, minLength: 1, required: true };
+const issueCatalogueFields = { search, offset: { type: "integer", min: 0 }, limit: { type: "integer", min: 1, max: 20 } };
 const projectIssueInputValidators = {
   list: inputSchema({ state: { type: "string", enum: ["open", "closed", "all"] }, search, cursor, labels }),
   read: inputSchema({ number: issueNumber, cursor }),
   create: inputSchema({ title: issueTitle, body: issueBody, labels }),
-  edit: inputSchema({ number: issueNumber, title: issueTitle, body: issueBody }),
+  edit: inputSchema({ number: issueNumber, title: issueTitle, body: { ...issueBody, required: true } }),
   comment: inputSchema({ number: issueNumber, body: commentBody, originId: { type: "string", maxLength: 200 } }),
   "edit-comment": inputSchema({ number: issueNumber, commentId: { type: "string", minLength: 1, maxLength: 256, required: true }, body: commentBody }),
   state: inputSchema({ number: issueNumber, state: { type: "string", enum: ["open", "closed"], required: true } }),
-  labels: emptyProjectInputValidator,
-  "create-label": inputSchema({ name: { type: "string", minLength: 1, maxLength: 50, required: true }, color: { type: "string", minLength: 6, maxLength: 6, required: true } }),
+  labels: inputSchema(issueCatalogueFields),
+  "create-label": inputSchema({ name: { type: "string", minLength: 1, maxLength: 50, required: true }, color: { type: "string", pattern: /^[a-f\d]{6}$/iu, required: true } }),
   "set-labels": inputSchema({ number: issueNumber, labels: { ...labels, required: true }, labelMode: { type: "string", enum: ["replace", "add", "remove"] } }),
-  mentions: inputSchema({ number: { ...issueNumber, required: false } })
+  mentions: inputSchema({ number: { ...issueNumber, required: false }, ...issueCatalogueFields })
 };
 const pullRequestReviewSchema = createSchema({
   number: issueNumber,
