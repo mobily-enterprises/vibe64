@@ -65,8 +65,16 @@ const gitIdentityInputValidator = deepFreeze({
   mode: "create"
 });
 
+const modelRoutingReadInputValidator = deepFreeze({
+  schema: createSchema({
+    engineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
+    includeOtherModels: { type: "boolean", required: false }
+  }), mode: "create"
+});
+
 const modelRoutingInputValidator = deepFreeze({
   schema: createSchema({
+    engineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
     revision: { type: "integer", min: 0, required: true },
     reviewedHelperWorkflows: { type: "array", items: { type: "string", enum: ["codex", "claude", "opencode"] }, required: false },
     orchestrators: { type: "object", additionalProperties: true, required: true }
@@ -150,6 +158,7 @@ const aiConnectionInputValidators = deepFreeze(Object.fromEntries(Object.entries
 export {
   aiConnectionInputValidators,
   modelRoutingInputValidator,
+  modelRoutingReadInputValidator,
   codexProviderInputValidator,
   accountIdInputValidator,
   accountAuthSessionParamsValidator,

@@ -12,6 +12,7 @@ import {
 import {
   aiConnectionInputValidators,
   modelRoutingInputValidator,
+  modelRoutingReadInputValidator,
   codexProviderInputValidator,
   accountIdInputValidator,
   accountAuthSessionParamsValidator,
@@ -92,7 +93,7 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/codex-providers", {
     actionId: ACTION_READ_CODEX_PROVIDERS,
-    buildInput: (request) => withoutVibe64User(),
+    buildInput: () => withoutVibe64User(),
     summary: "Read curated Codex provider connections."
   });
   routes.actionRoute("PATCH", "/codex-providers", {
@@ -108,12 +109,12 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/model-routing/workflows", {
     actionId: ACTION_READ_MODEL_ROUTING_WORKFLOWS,
-    buildInput: (request) => withoutVibe64User(),
+    buildInput: () => withoutVibe64User(),
     summary: "Read saved workflows and connection access without model discovery."
   });
   routes.actionRoute("GET", "/model-routing", {
-    actionId: ACTION_READ_MODEL_ROUTING,
-    buildInput: (request) => withoutVibe64User(),
+    actionId: ACTION_READ_MODEL_ROUTING, query: modelRoutingReadInputValidator,
+    buildInput: (request) => withoutVibe64User(routes.requestQuery(request)),
     summary: "Read model roles, availability, and recommendations."
   });
   routes.actionRoute("PATCH", "/model-routing", {

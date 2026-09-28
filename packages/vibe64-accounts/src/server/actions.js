@@ -2,6 +2,7 @@ import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext
 import {
   aiConnectionInputValidators,
   modelRoutingInputValidator,
+  modelRoutingReadInputValidator,
   codexProviderInputValidator,
   accountIdInputValidator,
   accountAuthSessionInputValidator,
@@ -43,7 +44,7 @@ function createActions({ accounts } = {}) {
       execute: (input) => accounts.readModelRoutingWorkflows(input)
     },
     {
-      id: ACTION_READ_MODEL_ROUTING, version: 1, kind: "query", input: accountsReadInputValidator,
+      id: ACTION_READ_MODEL_ROUTING, version: 1, kind: "query", input: modelRoutingReadInputValidator,
       output: null, idempotency: "none", audit: { actionName: ACTION_READ_MODEL_ROUTING }, observability: {},
       execute: (input) => accounts.readModelRouting(input)
     },

@@ -24,7 +24,7 @@ const pickle = selection("opencode", "opencode", "big-pickle");
 function resourceData() {
   const choices = [astra, deepseek, foreign, pickle].map((item) => ({ ...item, label: item.modelId, engineLabel: item.engineId,
     providerLabel: item.modelProviderId, accessLabel: item === astra ? "Personal use" : "Workspace use", available: true, variants: [] }));
-  return { ok: true, revision: 3, canConfigure: true, engines: [{ engineId: "codex", label: "Codex",
+  return { ok: true, revision: 3, canConfigure: true, engines: [{ engineId: "codex", label: "Codex", connected: true,
     roles: Object.fromEntries(["senior", "junior", "helper", "router", "sharedBackup"].map((role) => [role, {
       assignment: role === "senior" ? astra : role === "junior" ? { ...astra, selectionSource: "explicit" } : pickle,
       recommendation: role === "senior" ? astra : deepseek, choices, error: ""
@@ -250,5 +250,29 @@ it("does not expose or submit the retired temporary chat default from cached dat
   mocks.resource.data.value.temporaryChatRole = "junior";
   const state = mount();
   expect(state.temporaryChatRole).toBeUndefined();
-  expect(mocks.command.buildRawPayload()).toEqual({ revision: 3, orchestrators: {}, reviewedHelperWorkflows: [] });
+  expect(mocks.command.buildRawPayload()).toEqual({ revision: 3, engineId: "codex", orchestrators: {}, reviewedHelperWorkflows: [] });
+});
+
+it("keeps edits and Helper acknowledgement inside the named orchestrator", () => {
+  const other = structuredClone(resourceData().engines[0]);
+  other.engineId = "opencode";
+  mocks.resource.data.value.engines.push(other);
+  const state = mount({ engineId: "codex" });
+  state.draft.opencode.helper = foreign;
+  state.reviewedHelpers = ["codex", "opencode"];
+  state.choose("helper", state.choiceId(deepseek));
+  expect(state.reviewedHelpers).toEqual([]);
+  state.reviewedHelpers = ["codex"];
+  expect(mocks.command.buildRawPayload()).toMatchObject({ engineId: "codex", reviewedHelperWorkflows: ["codex"] });
+  expect(Object.keys(mocks.command.buildRawPayload().orchestrators)).toEqual(["codex"]);
+});
+
+it("keeps the requested orchestrator when its connection disappears", async () => {
+  mocks.resource.data.value.engines[0].connected = false;
+  const state = mount({ engineId: "claude" });
+  expect(state.selectedEngine).toBe("claude");
+  expect(state.connectedEngines).toEqual([]);
+  expect(state.engine).toBeUndefined();
+  await state.save();
+  expect(mocks.resource.reload).not.toHaveBeenCalled();
 });

@@ -17,8 +17,8 @@ test("all account operations use project-independent canonical contracts and aut
     const cases = [
       ["GET", "", "read", "getStatus", { refresh: true, providerIds: ["codex"] }],
       ["GET", "/model-routing/workflows", "model-routing.workflows.read", "readModelRoutingWorkflows", {}],
-      ["GET", "/model-routing", "model-routing.read", "readModelRouting", {}],
-      ["PATCH", "/model-routing", "model-routing.save", "saveModelRouting", { revision: 1, orchestrators: {}, reviewedHelperWorkflows: ["codex"] }],
+      ["GET", "/model-routing", "model-routing.read", "readModelRouting", { engineId: "claude", includeOtherModels: true }],
+      ["PATCH", "/model-routing", "model-routing.save", "saveModelRouting", { revision: 1, engineId: "codex", orchestrators: {}, reviewedHelperWorkflows: ["codex"] }],
       ["POST", "/model-routing/preview", "model-routing.preview", "previewModelRouting", { revision: 1, orchestrators: {} }],
       ["GET", "/codex-providers", "codex-providers.read", "readCodexProviders", {}],
       ["PATCH", "/codex-providers", "codex-providers.save", "saveCodexProvider", { modelProviderId: "deepseek", apiKey: "fixture-only" }],

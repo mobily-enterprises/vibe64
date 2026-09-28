@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useDisplay } from "vuetify";
 import NativeProviderConnections from "./NativeProviderConnections.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
+import { useModelRouting } from "../composables/useModelRouting.js";
 import ProviderAccountsSetup from "./ProviderAccountsSetup.vue";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
 import { useVibe64Accounts } from "../composables/useVibe64Accounts.js";
@@ -71,6 +72,8 @@ const preparingProviderId = ref("");
 const catalogPreparationError = ref("");
 const editorOpen = ref(false);
 const routingOpen = ref(false);
+const routingEngineId = ref("");
+const { connectedWorkflows } = useModelRouting({ workflowsOnly: true, enabled: computed(() => props.isOwner && !props.onboarding) });
 const routingSaving = ref(false);
 const editorRoutingPending = ref(false);
 const editorRoutingSetupError = ref("");
@@ -831,7 +834,6 @@ defineExpose({ openProvider });
         class="vibe64-ai-connections__page-actions"
         aria-label="AI account actions"
       >
-        <v-btn variant="tonal" :disabled="accountsInitialLoading" @click="routingOpen = true">Model routing</v-btn>
         <v-btn
           :icon="mdiRefresh"
           aria-label="Refresh AI accounts"
@@ -935,7 +937,15 @@ defineExpose({ openProvider });
               v-for="group in configuredAiGroups" :key="group.id" tag="section" :aria-label="group.label"
               border class="vibe64-ai-connections__account-list" rounded="xl"
             >
-              <h2 class="text-title-large vibe64-ai-connections__group-title">{{ group.label }}</h2>
+              <div class="d-flex align-center justify-space-between flex-wrap ga-2 vibe64-ai-connections__group-title">
+                <h2 class="text-title-large">{{ group.label }}</h2>
+                <v-btn
+                  v-if="connectedWorkflows.some(choice => choice.engineId === group.id)" variant="tonal"
+                  :aria-label="`Configure ${group.label} routing`" @click="routingEngineId = group.id; routingOpen = true"
+                >
+                  Configure routing
+                </v-btn>
+              </div>
               <article
                 v-for="account in group.accounts"
                 :key="`${account.kind}:${account.id}`"
@@ -1527,9 +1537,11 @@ defineExpose({ openProvider });
     </v-dialog>
 
     <v-dialog v-model="routingOpen" max-width="38rem" :fullscreen="smAndDown" :persistent="routingSaving" scrollable>
-      <v-card><v-card-text>
-        <ModelRoutingForm v-if="routingOpen" :readonly="!isOwner" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingOpen = false; emit('changed')" />
-      </v-card-text></v-card>
+      <v-card>
+        <v-card-text>
+          <ModelRoutingForm v-if="routingOpen" :engine-id="routingEngineId" :readonly="!isOwner" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingOpen = false; emit('changed')" />
+        </v-card-text>
+      </v-card>
     </v-dialog>
 
     <v-dialog v-model="modelAccessConfirmOpen" max-width="31rem" persistent>

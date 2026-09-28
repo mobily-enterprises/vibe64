@@ -29,10 +29,10 @@ const modeLabel = computed(() => assistantModeLabel(mode.value));
 const savedWorkflowEngineId = computed(() => preferences.value?.workflowEngineId || props.session?.assistantSelection?.engineId);
 const workflowEngineId = ref("");
 watch(savedWorkflowEngineId, (value) => { workflowEngineId.value = value; }, { immediate: true });
-const { resource: workflows, loadError: workflowError } = useModelRouting({
+const { resource: workflows, connectedWorkflows, loadError: workflowError } = useModelRouting({
   enabled: computed(() => detailsOpen.value && !props.temporary && mode.value !== "custom"), workflowsOnly: true
 });
-const workflowChoices = computed(() => (workflows.data.value?.workflows || []).filter((choice) => choice.connected).map((choice) => ({
+const workflowChoices = computed(() => connectedWorkflows.value.map((choice) => ({
   ...choice, props: { disabled: !choice.available, "aria-disabled": !choice.available ? "true" : undefined, subtitle: choice.error || undefined }
 })));
 const decisions = computed(() => props.purposes || {});

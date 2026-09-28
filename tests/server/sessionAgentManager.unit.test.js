@@ -165,6 +165,26 @@ test("routing configuration preview shares admission decisions and exposes no co
   assert.equal(f.manager.binding("main"), "");
 });
 
+test("scoped routing discovers assigned engines and loads other catalogues only on request", async () => {
+  const f = routingManagerFixture();
+  f.configuration.orchestrators.codex = { senior: f.senior, junior: f.junior, helper: f.junior, router: f.junior, sharedBackup: f.junior };
+  const options = { ...f.options, engineId: "codex" };
+  const initial = await f.manager.inspectRoutingConfiguration(f.configuration, options);
+  assert.deepEqual(initial.engines.map(({ engineId }) => engineId), ["codex"]);
+  assert.equal(initial.engines[0].connected, true);
+  assert.ok(initial.engines[0].roles.router.choices.some(({ engineId }) => engineId === "opencode"));
+  assert.deepEqual(f.calls.filter(({ type, context }) => type === "catalog" && context.engineId === "opencode").map(({ input }) => input), [{ configuredOnly: "true" }]);
+  f.calls.length = 0;
+  const expanded = await f.manager.inspectRoutingConfiguration(f.configuration, { ...options, includeOtherModels: true });
+  assert.deepEqual(expanded.engines.map(({ engineId }) => engineId), ["codex"]);
+  assert.ok(f.calls.some(({ type, context, input }) => type === "catalog" && context.engineId === "opencode" && input.connectedOnly === "true"));
+  f.calls.length = 0;
+  f.configuration.orchestrators.codex.helper = f.helper;
+  const assigned = await f.manager.inspectRoutingConfiguration(f.configuration, options);
+  assert.equal(assigned.engines[0].roles.helper.error, "");
+  assert.ok(f.calls.some(({ type, context, input }) => type === "catalog" && context.engineId === "opencode" && input.connectedOnly === "true"));
+});
+
 test("workflow choices read saved pairs without model discovery and preserve collaborator backup decisions", async () => {
   const f = routingManagerFixture();
   f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.helper };

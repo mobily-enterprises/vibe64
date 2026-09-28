@@ -77,3 +77,35 @@ it("loads workflow choices independently of a slow configuration catalogue", asy
   expect(configuration.engines.value[0].engineId).toBe("catalogue");
   expect(picker.resource.data.value.workflows[0].engineId).toBe("codex");
 });
+
+it("separates orchestrator and expanded-choice caches and shares connected workflow filtering", async () => {
+  configureHttpWebClient({ request });
+  request.mockResolvedValue({ ok: true, revision: 1, engines: [], workflows: [
+    { engineId: "codex", connected: true, available: false },
+    { engineId: "claude", connected: false, available: false },
+    { engineId: "opencode", connected: true, available: true }
+  ] });
+  let codex;
+  let claude;
+  let expanded;
+  let picker;
+  const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  app = renderer.createApp({ setup() {
+    codex = useModelRouting({ engineId: "codex" });
+    claude = useModelRouting({ engineId: "claude" });
+    expanded = useModelRouting({ engineId: "codex", includeOtherModels: true });
+    picker = useModelRouting({ workflowsOnly: true });
+    return () => null;
+  } });
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  app.use(VueQueryPlugin, { queryClient });
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, ref({ actorKey: "owner", projectSlug: "first" }));
+  app.mount({});
+  await flush();
+  expect(new Set([codex.scopeKey.value, claude.scopeKey.value, expanded.scopeKey.value, picker.scopeKey.value]).size).toBe(4);
+  expect(request).toHaveBeenCalledTimes(4);
+  expect(picker.connectedWorkflows.value.map(({ engineId }) => engineId)).toEqual(["codex", "opencode"]);
+  expect(request.mock.calls.slice(0, 3).map(([, options]) => options.query)).toEqual([
+    { engineId: "codex" }, { engineId: "claude" }, { engineId: "codex", includeOtherModels: true }
+  ]);
+});

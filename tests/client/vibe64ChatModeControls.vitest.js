@@ -1,4 +1,4 @@
-import { createRenderer, nextTick, ref, ssrContextKey } from "vue";
+import { computed, createRenderer, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ save: vi.fn() }));
@@ -7,11 +7,15 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
 }));
 vi.mock("@local/vibe64-accounts/client", () => ({
   ModelRoutingForm: { render: () => null },
-  useModelRouting: () => ({ engines: ref([]), loadError: ref(""), resource: { isInitialLoading: ref(false), data: ref({ workflows: [
-    { engineId: "codex", label: "Codex", connected: true, available: true },
-    { engineId: "claude", label: "Claude Code", connected: true, available: true },
-    { engineId: "opencode", label: "OpenCode", connected: false, available: false, error: "Connect an account first." }
-  ] }) } })
+  useModelRouting: () => {
+    const data = ref({ workflows: [
+      { engineId: "codex", label: "Codex", connected: true, available: true },
+      { engineId: "claude", label: "Claude Code", connected: true, available: true },
+      { engineId: "opencode", label: "OpenCode", connected: false, available: false, error: "Connect an account first." }
+    ] });
+    return { engines: ref([]), loadError: ref(""), resource: { isInitialLoading: ref(false), data },
+      connectedWorkflows: computed(() => data.value.workflows.filter(choice => choice.connected)) };
+  }
 }));
 
 import Vibe64ChatModeControls from "../../src/components/studio/vibe64-session/Vibe64ChatModeControls.vue";

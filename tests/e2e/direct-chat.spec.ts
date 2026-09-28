@@ -2233,7 +2233,7 @@ for (const width of [390, 820, 1280]) {
       configurationReads++;
       await catalogueReady;
       return fulfillJson(route, {
-        ok: true, revision: 1, canConfigure, engines: [{ engineId: "codex", label: "Codex",
+        ok: true, revision: 1, canConfigure, engines: [{ engineId: "codex", label: "Codex", connected: true,
           roles: Object.fromEntries(Object.entries(assignments).map(([role, assignment]) => [role, { assignment, recommendation: assignment, choices }])),
           preview: { viewer: preview, owner: preview, collaborator: preview }
         }]
@@ -2400,7 +2400,9 @@ for (const width of [390, 820, 1280]) {
       });
       let canConfigure = true;
       let revision = 1;
-      const routing = (roles = assignments) => ({ ok: true, revision, canConfigure, engines: [{ engineId: "codex", label: "Codex",
+      let helperConfirmed = false;
+      const routing = (roles = assignments) => ({ ok: true, revision, canConfigure, engines: [{ engineId: "codex", label: "Codex", connected: true,
+        helperRoutingReview: helperConfirmed ? null : { previous: [junior, senior] },
         roles: Object.fromEntries(Object.entries(roles).map(([id, assignment]) => [id, { assignment, recommendation: id === "router" ? junior : id === "senior" ? senior : assignment, choices }])),
         preview: { viewer: purposes(roles), owner: purposes(roles), collaborator: purposes(roles) }
       }] });
@@ -2424,6 +2426,9 @@ for (const width of [390, 820, 1280]) {
           expect(canConfigure).toBe(true);
           const body = route.request().postDataJSON();
           expect(body.revision).toBe(revision);
+          expect(body.engineId).toBe("codex");
+          expect(body.reviewedHelperWorkflows).toEqual(["codex"]);
+          helperConfirmed = true;
           expect(body.temporaryChatRole).toBeUndefined();
           Object.assign(assignments, body.orchestrators.codex);
           revision++;
@@ -2485,8 +2490,9 @@ for (const width of [390, 820, 1280]) {
       const router = dialog.getByRole("combobox", { name: "Router", exact: true });
       await expect(router).toBeFocused();
       await expect(router).toBeInViewport();
-      await expect(dialog.locator('input[role="combobox"]').first()).toHaveAccessibleName("Workflow orchestrator");
-      await expect(dialog.locator('input[role="combobox"]').nth(1)).toHaveAccessibleName("Router");
+      await expect(dialog.getByText("Codex routing", { exact: true })).toBeVisible();
+      await expect(dialog.getByRole("combobox", { name: "Workflow orchestrator", exact: true })).toHaveCount(0);
+      await expect(dialog.locator('input[role="combobox"]').first()).toHaveAccessibleName("Router");
       await expect(dialog.getByRole("heading", { level: 3 })).toHaveText(["Router", "Senior", "Junior", "Helper", "Fallback for personal models"]);
       await expect(dialog.getByRole("combobox", { name: "Default role for temporary chats", exact: true })).toHaveCount(0);
       await dialog.locator(".model-routing__body").evaluate(element => { element.scrollTop = 0; });
@@ -2505,7 +2511,10 @@ for (const width of [390, 820, 1280]) {
       await expect(review).toBeHidden();
       await expect(dialog.locator(".model-routing__role").first()).toContainText("deepseek-flash");
       expect(assignments.router).toBeNull();
-      await expect(recommendations).toBeDisabled();
+      await expect(recommendations).toHaveCount(0);
+      await expect(dialog.getByText("No recommended changes.", { exact: true })).toBeVisible();
+      await dialog.getByRole("button", { name: "Confirm Helper", exact: true }).click();
+      await expect(dialog.getByText("Helper choice confirmed. Save routing to apply.", { exact: true })).toBeVisible();
       await expect(dialog.getByRole("button", { name: "Save routing", exact: true })).toBeEnabled();
       await dialog.getByRole("button", { name: "Save routing", exact: true }).click();
       await expect(dialog).not.toBeVisible();
@@ -2570,7 +2579,7 @@ for (const width of [390, 820, 1280]) {
       const choices = [senior, junior].map(selection => ({ ...selection, label: selection.modelId, engineLabel: "Codex",
         providerLabel: selection.modelProviderId, accessLabel: selection === senior ? "Personal use" : "Workspace use", available: true, variants: [] }));
       const patches: any[] = [];
-      const routing = (roles = assignments) => ({ ok: true, revision: 1 + patches.length, canConfigure: true, engines: [{ engineId: "codex", label: "Codex",
+      const routing = (roles = assignments) => ({ ok: true, revision: 1 + patches.length, canConfigure: true, engines: [{ engineId: "codex", label: "Codex", connected: true,
         roles: Object.fromEntries(Object.entries(roles).map(([id, assignment]) => [id, { assignment, recommendation: id === "senior" ? senior : junior, choices }])),
         preview: { collaborator: Object.fromEntries(["senior", "junior", "helper", "request_routing"].map(id => [id, { available: true, effectiveSelection: junior, backupUsed: id === "senior" }])) }
       }] });
@@ -2587,8 +2596,9 @@ for (const width of [390, 820, 1280]) {
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
       await page.getByRole("button", { name: "Account settings", exact: true }).click();
       await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
-      await page.getByRole("button", { name: "Add AI", exact: true }).click();
+      await page.getByRole("button", { name: "Add connection", exact: true }).click();
       await page.getByRole("button", { name: "Choose Codex", exact: true }).click();
+      await page.getByText("GPT", { exact: true }).click();
       await page.getByRole("button", { name: "Login with ChatGPT", exact: true }).click();
       const form = page.getByRole("region", { name: "Model routing", exact: true });
       await expect(form.getByText("Codex login connected", { exact: true })).toBeVisible();
@@ -2600,8 +2610,9 @@ for (const width of [390, 820, 1280]) {
       await page.screenshot({ path: info.outputPath(`connection-${width}.png`), animations: "disabled" });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (width === 1280) {
-        await form.getByRole("button", { name: "Customize routing", exact: true }).click();
-        await expect(form.locator('input[role="combobox"]').first()).toHaveAccessibleName("Workflow orchestrator");
+        await form.getByRole("button", { name: "Configure Codex routing", exact: true }).click();
+        await expect(form.getByText("Codex routing", { exact: true })).toBeVisible();
+        await expect(form.getByRole("combobox", { name: "Workflow orchestrator", exact: true })).toHaveCount(0);
         await expect(form.getByText("Collaborators: Codex (deepseek-flash high) (shared backup)", { exact: true })).toBeVisible();
         await form.getByRole("button", { name: "Cancel", exact: true }).click();
       } else if (width === 820) {
@@ -2851,3 +2862,70 @@ for (const width of [390, 820, 1280]) {
     expect(errors).toEqual([]);
   });
 }
+
+test("@accounts-routing opens one named orchestrator from each account heading", async ({ page }, info) => {
+  const server = await assistantStatusServer();
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  try {
+    await mockDirectChat(page);
+    await routeApiEndpoint(page, "/vibe64/accounts", route => fulfillJson(route, { ok: true, ready: true, accounts: [
+      { id: "codex", label: "Codex", connected: true, status: "connected" },
+      { id: "claude", label: "Claude", connected: false, status: "expired" }
+    ] }));
+    await routeApiEndpoint(page, "/vibe64/accounts/codex-providers", route => fulfillJson(route, { ok: true, providers: [] }));
+    await routeApiEndpoint(page, "/vibe64/accounts/ai-connections", route => fulfillJson(route, { ok: true, providers: [], connections: [
+      { id: "opencode", label: "OpenCode Zen", connected: true, builtIn: true, removable: false }
+    ] }));
+    await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", route => fulfillJson(route, {
+      ok: true, canConfigure: true, workflows: [
+        { engineId: "codex", connected: true, available: true },
+        { engineId: "claude", connected: false, available: false },
+        { engineId: "opencode", connected: true, available: false }
+      ]
+    }));
+    const reads: URLSearchParams[] = [];
+    await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => {
+      const query = new URL(route.request().url()).searchParams;
+      reads.push(query);
+      const engineId = query.get("engineId");
+      expect(["codex", "opencode"]).toContain(engineId);
+      const selection = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId,
+        modelProviderId: engineId === "codex" ? "openai" : "opencode", modelId: engineId === "codex" ? "gpt-6-astra" : "big-pickle" };
+      const choice = { ...selection, available: true, variants: [], providerLabel: selection.modelProviderId, accessLabel: "Workspace use" };
+      return fulfillJson(route, { ok: true, revision: 1, canConfigure: true, engines: [{ engineId,
+        label: engineId === "codex" ? "Codex" : "OpenCode", connected: true,
+        roles: Object.fromEntries(["senior", "junior", "helper", "router", "sharedBackup"].map(role => [role,
+          { assignment: selection, recommendation: selection, choices: [choice] }])),
+        preview: { collaborator: {} }
+      }] });
+    });
+    await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+    await page.getByRole("button", { name: "Account settings", exact: true }).click();
+    await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Model routing", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Configure Claude Code routing", exact: true })).toHaveCount(0);
+    for (const [width, label, engineId] of [[1280, "Codex", "codex"], [390, "OpenCode", "opencode"]] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.getByRole("button", { name: `Configure ${label} routing`, exact: true }).click();
+      const form = page.getByRole("region", { name: "Model routing", exact: true });
+      await expect(form.getByText(`${label} routing`, { exact: true })).toBeVisible();
+      await expect(form.getByRole("combobox", { name: "Senior", exact: true })).toBeVisible();
+      await expect(form.getByRole("combobox", { name: "Workflow orchestrator", exact: true })).toHaveCount(0);
+      await expect(form.getByText("No recommended changes.", { exact: true })).toBeVisible();
+      expect(reads.at(-1)?.get("engineId")).toBe(engineId);
+      expect(reads.filter(query => query.get("includeOtherModels"))).toHaveLength(width === 1280 ? 0 : 1);
+      await page.screenshot({ path: info.outputPath(`account-routing-${width}.png`), animations: "disabled" });
+      await form.getByRole("combobox", { name: "Helper", exact: true }).click();
+      await expect.poll(() => reads.filter(query => query.get("includeOtherModels") === "true").length).toBe(width === 1280 ? 1 : 2);
+      await page.keyboard.press("Escape");
+      await form.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(form).toBeHidden();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+    expect(errors).toEqual([]);
+  } finally {
+    await page.close();
+    await server.close();
+  }
+});

@@ -2,6 +2,9 @@ import { createRenderer, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ accounts: null, providers: null, connections: null }));
+vi.mock("../../packages/vibe64-accounts/src/client/composables/useModelRouting.js", () => ({
+  useModelRouting: () => ({ connectedWorkflows: ref([{ engineId: "codex", connected: true }, { engineId: "opencode", connected: true }]) })
+}));
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("vuetify", () => ({ useDisplay: () => ({ smAndDown: ref(false) }) }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useVibe64Accounts.js", () => ({

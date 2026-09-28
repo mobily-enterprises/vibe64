@@ -1,7 +1,7 @@
 import path from "node:path";
 import { requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "../assistantChangeover.js";
 import { ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROUTING_ASSIGNMENTS, recommendedRoutingAssignments,
-  routingAssignmentSelection, routingModelChoices, resolveAssistantPurpose } from "@local/vibe64-runtime/shared/assistantRouting";
+  routingAssignmentSelection, routingModelChoices, resolveAssistantPurpose, hasConnectedAssistantModels } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import {
   assertCanUseVibe64Assistant,
@@ -771,7 +771,7 @@ function createSessionAgentManager({
       const saved = configuration.orchestrators[provider.id] || {};
       const assignments = { ...saved };
       const catalog = catalogs.find(({ engineId }) => engineId === provider.id);
-      const connected = catalog?.modelProviders.some((entry) => entry.connected && entry.models.length > 0) === true;
+      const connected = hasConnectedAssistantModels(catalog);
       const error = needsSetup(provider.id) ? errors.get(provider.id) || "" : "";
       // First use still offers connected assistants (including included OpenCode).
       // Only configured defaults are read; creation discovers and saves full recommendations.
@@ -822,13 +822,20 @@ function createSessionAgentManager({
 
   async function inspectRoutingConfiguration(configuration, options = {}) {
     if (options.workflowsOnly === true) return inspectWorkflowChoices(configuration, options);
+    if (options.engineId && !providerById.has(options.engineId)) throw new Error("Choose a supported orchestrator.");
+    const assignmentsInScope = options.engineId
+      ? [configuration.orchestrators[options.engineId] || {}] : Object.values(configuration.orchestrators);
+    const requiredEngines = new Set([options.engineId, ...assignmentsInScope.flatMap((assignments) =>
+      ASSISTANT_ROUTING_ASSIGNMENTS.map((role) => assignments[role]?.engineId).filter(Boolean))]);
     const catalogs = [];
     const catalogErrors = new Map();
     const connectedEngineIds = new Set();
     await Promise.all([...providerById.values()].map(async (provider) => {
       try {
-        const catalog = await connectedProviderCatalog(provider, options);
-        if (catalog.modelProviders.some(({ connected }) => connected)) connectedEngineIds.add(provider.id);
+        const catalog = options.engineId && !options.includeOtherModels && !requiredEngines.has(provider.id)
+          ? await providerCapabilities(provider, { configuredOnly: "true" }, options)
+          : await connectedProviderCatalog(provider, options);
+        if (hasConnectedAssistantModels(catalog)) connectedEngineIds.add(provider.id);
         catalogs.push(catalog);
       } catch (error) { catalogErrors.set(provider.id, error.message); }
     }));
@@ -836,7 +843,7 @@ function createSessionAgentManager({
     const routeKey = (selection) => JSON.stringify([selection.engineId, selection.modelProviderId, selection.modelId]);
     const selections = new Map(catalogs.flatMap((engine) => routingModelChoices(engine, { purpose: "request_routing" }))
       .map((selection) => [routeKey(selection), selection]));
-    for (const assignments of Object.values(configuration.orchestrators)) {
+    for (const assignments of assignmentsInScope) {
       for (const role of ASSISTANT_ROUTING_ASSIGNMENTS) {
         if (assignments[role]) selections.set(routeKey(assignments[role]), assignments[role]);
       }
@@ -862,7 +869,7 @@ function createSessionAgentManager({
       const saved = configuration.orchestrators[engineId];
       return ASSISTANT_ROUTING_ASSIGNMENTS.some((role) => saved[role]) || saved.helperRoutingReview;
     })));
-    return { engines: [...engineIds].map((engineId) => {
+    return { engines: [...engineIds].filter((engineId) => !options.engineId || engineId === options.engineId).map((engineId) => {
       const engine = catalogs.find((entry) => entry.engineId === engineId);
       const assignments = configuration.orchestrators[engineId] || {};
       const recommendations = recommendedRoutingAssignments(engine, { catalogs, assignments, connectionAccess });

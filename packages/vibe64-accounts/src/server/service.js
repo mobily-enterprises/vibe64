@@ -2237,6 +2237,8 @@ function createService({
     if (typeof inspectRoutingConfiguration !== "function") throw new Error("Model routing is unavailable on this host.");
     const canConfigure = !codexManagementError(input);
     return inspectRoutingConfiguration(configuration, { vibe64User: input.vibe64User || null,
+      ...(input.engineId ? { engineId: input.engineId } : {}),
+      ...(input.includeOtherModels ? { includeOtherModels: true } : {}),
       includeCollaboratorPreview: canConfigure, workflowsOnly }).then((result) => ({
       ok: true, revision: configuration.revision, canConfigure, ...result
     }));
@@ -2286,6 +2288,11 @@ function createService({
     });
     if (!input.orchestrators || typeof input.orchestrators !== "object" || Array.isArray(input.orchestrators)) {
       throw new Error("Reload model routing and review your choices.");
+    }
+    if (input.engineId && (!["codex", "claude", "opencode"].includes(input.engineId) ||
+        Object.keys(input.orchestrators).some((id) => id !== input.engineId) ||
+        input.reviewedHelperWorkflows?.some((id) => id !== input.engineId))) {
+      throw new Error("Save routing only for the selected orchestrator.");
     }
     const orchestrators = structuredClone(saved.orchestrators);
     for (const [engineId, assignments] of Object.entries(input.orchestrators)) {

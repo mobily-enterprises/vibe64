@@ -61,6 +61,10 @@ function assistantRoutingStatusIsPending(status) {
   return ["routing", "sending", "uncertain", "review_pending", "review_sending", "review_uncertain", "planning_pending", "planning_sending", "planning_uncertain"].includes(status);
 }
 
+function hasConnectedAssistantModels(engine) {
+  return engine?.modelProviders?.some((provider) => provider.connected && provider.models?.length > 0) === true;
+}
+
 function routingModelChoices(engine, { purpose = "senior" } = {}) {
   if (!engine) return [];
   return (engine.modelProviders || []).filter((provider) => provider.connected).flatMap((provider) =>
@@ -365,5 +369,5 @@ function assistantRoutingStatusLabel(request) {
 
 export { ASSISTANT_MODES, ASSISTANT_ROUTING_METADATA, ASSISTANT_ROUTING_ROLES, ASSISTANT_ROUTING_ASSIGNMENTS,
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_PURPOSE_ROLES, ROUTING_REASONS, AUTO_MIXED_DESLOP_MESSAGE, routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences,
-  assistantRoutingFromMetadata, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
+  assistantRoutingFromMetadata, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantModeLabel, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingStatusLabel };

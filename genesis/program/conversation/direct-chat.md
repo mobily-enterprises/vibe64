@@ -394,7 +394,9 @@ in the existing conversation metadata. A role resolves to a live, available
 selection using its saved workflow, independently of the last native engine.
 The mode menu consumes the session's access decisions, including their loading,
 failure and retry state. It does not fetch the full routing configuration;
-the configuration form loads that catalogue only when opened. The parent reads
+the configuration form loads its scoped catalogue only when opened. Main's
+configuration action opens the saved workflow's named routing dialog without
+an orchestrator selector; that dialog saves only that workflow. The parent reads
 the lightweight workflow response for configuration permission. Picker labels
 use `Orchestrator (model thinking)`, including Auto's Router.
 Main's named modes expose an independent Orchestrator selector using the same

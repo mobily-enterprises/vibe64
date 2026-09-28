@@ -2219,6 +2219,30 @@ test("model routing setup initializes compatible missing roles once and preserve
   });
 });
 
+test("scoped routing saves one orchestrator and rejects edits or acknowledgements for another", async () => {
+  await withTempDir(async (root) => {
+    const f = await routingAccountsFixture(root);
+    await f.store.write({ codex: f.assignments, opencode: { senior: f.pickle, junior: f.pickle } }, 0);
+    const before = await f.store.read();
+    const view = await f.service.readModelRouting({ vibe64User: f.owner, engineId: "codex" });
+    assert.deepEqual(view.engines.map(({ engineId }) => engineId), ["codex"]);
+    for (const changes of [{ orchestrators: { opencode: { helper: f.pickle } } },
+      { orchestrators: {}, reviewedHelperWorkflows: ["opencode"] }]) {
+      const rejected = await f.service.saveModelRouting({ vibe64User: f.owner, revision: before.revision, engineId: "codex", ...changes });
+      assert.equal(rejected.ok, false);
+      assert.match(rejected.error, /selected orchestrator/);
+      assert.deepEqual(await f.store.read(), before);
+    }
+    const saved = await f.service.saveModelRouting({ vibe64User: f.owner, revision: before.revision, engineId: "codex",
+      orchestrators: { codex: { helper: f.pickle } } });
+    assert.equal(saved.ok, true, saved.error);
+    assert.deepEqual(saved.engines.map(({ engineId }) => engineId), ["codex"]);
+    const after = await f.store.read();
+    assert.equal(after.orchestrators.codex.helper.modelId, "big-pickle");
+    assert.deepEqual(after.orchestrators.opencode, before.orchestrators.opencode);
+  });
+});
+
 test("workflow reads use saved routing and scoped access without discovering model catalogues", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);

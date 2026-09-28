@@ -293,7 +293,7 @@ recommendations and opens them for review. Native Codex and Claude sign-in open
 this review from their confirmed login result, including immediate completion.
 The connection review shows optional current-to-suggested model changes and their
 access scope. Keeping current routing leaves the new connection available;
-Customize routing opens the workflow editor. Each assignment states what
+Each connected orchestrator has its own Configure routing action. Each assignment states what
 collaborators will get, including shared backups or access restrictions, without
 a separate preview section. The chat-mode switch is labelled Automatic deslop by Senior.
 A routing setup failure
@@ -306,24 +306,30 @@ then keeps its own selection and can change role independently; later changes in
 Main do not retarget existing temporary chats. Automatic tasks retain their
 explicit Junior assignments; bounded background tasks use Helper. There is no temporary-chat default setting.
 Temporary chats never run Auto, working plans or automatic review.
-Model routing puts the workflow orchestrator first and edits only that workflow's
-assignments. It shows connected orchestrators and retained saved configurations;
-unconnected orchestrators without saved assignments are omitted. Auto names any
+Model routing opens for one named orchestrator and edits only its assignments,
+without an orchestrator selector inside the dialog. AI Accounts offers Configure
+routing beside each orchestrator with connected models; chat opens routing for
+its selected orchestrator. These settings are shared by chats using that
+orchestrator. Unconnected orchestrators are omitted from configuration choices.
+The dialog loads the selected orchestrator and its assigned models first; other
+model choices load when needed. Auto names any
 missing model assignments, and Configure model routing brings the first missing
 assignment into view.
 Router is the first model assignment, directly below the compact Review
 recommendations button. That button lists only changes from the current form's
-models and thinking choices, showing only the proposed values. It is disabled
-when there are no changes. Apply to form accepts the list; Save routing saves
-the assignments. Cancelling the review leaves the form unchanged.
+models and thinking choices, showing only the proposed values. When there are
+none, the form says No recommended changes. Apply to form accepts the list;
+Save routing saves the assignments. Cancelling the review leaves the form unchanged.
+An older Helper settings conflict has a separate Confirm Helper action. It names
+the need to confirm future background tasks and is resolved when routing is saved.
 Main session creation and renewal share a workflow picker that
 previews the user's effective Senior and Junior models, including Shared backup.
 It opens from saved routing and connection state without live model discovery;
 uninitialized choices say “Recommended on creation” until exact models are selected.
 Creating the first chat explicitly fills missing defaults, so included OpenCode
 works without a credential-setup step. Reading those defaults does not save them.
-Owners can open Model routing directly over the chat, with its saved workflow
-selected, without visiting account settings. The form separates Senior/Junior from
+Owners can open the selected orchestrator's routing directly over the chat,
+without visiting account settings. The form separates Senior/Junior from
 independent Router/Helper and Shared backup. It previews what owners and
 collaborators will use before Save; a foreign Backup keeps planning and coding
 together there, including when review is off. Missing assignments point to this

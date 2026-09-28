@@ -102,13 +102,16 @@ The server validates changed assignments against their destination catalogue;
 an unrelated edit preserves unchanged unavailable references and their original
 recommendation provenance. Execution validates its actual destination again.
 The chat-mode menu also opens this same form in an owner-only overlay without
-navigating to AI Accounts. It initially selects the chat's saved workflow;
-the assignments remain shared across conversations. The workflow selector is the
-first field; selecting it chooses which configuration to edit, without switching
-Main chat. All five assignments belong to that workflow. Helper, Router and
+navigating to AI Accounts. Both entry points open one named orchestrator with no
+internal orchestrator selector. AI Accounts places Configure routing beside each
+connected orchestrator heading; Main uses its saved workflow. The assignments
+remain shared across conversations. All five assignments belong to that workflow. Helper, Router and
 Shared backup can use another orchestrator without becoming global settings.
-Only connected orchestrators and retained saved assignments appear; a retained
-disconnected workflow is marked Needs reconnection.
+The shared connected-model predicate feeds workflow choices, routing responses
+and configuration entry points. An orchestrator needs at least one connected
+model, independently of role assignments. A dialog whose connection disappears
+retains its named scope and asks to connect a model; it never selects another
+orchestrator. Retained saved assignments remain stored for reconnection.
 Catalogue failure after a connection has been observed retains its error; an
 unconnected, unconfigured catalogue does not create a selectable workflow.
 Auto identifies missing Senior, Junior or Router assignments. Opening configuration
@@ -121,8 +124,8 @@ conversation records need no format change or historical conversion.
 After connecting an account, the form shows only optional suggested changes,
 grouped by workflow with separate Current and Suggested model lines and the
 suggested connection's access scope. Keep current routing leaves the connection
-available. Apply saves only selected changes. Customize routing opens the full
-workflow editor; the connection-result view has no workflow selector or audience
+available. Apply saves only selected changes. Per-orchestrator Configure routing
+actions open that workflow's editor; the connection-result view has no workflow selector or audience
 preview. Native login completion names Codex login or Claude login explicitly.
 
 Accounts delegates saved and unsaved previews to the central terminal runtime,
@@ -134,6 +137,12 @@ or evaluate drafts. A foreign Backup moves both effective Senior and Junior even
 without review. Review uses effective Senior; Auto resolves Router, Senior and
 Junior through the same collaborator fallback policy, validating each purpose.
 Connection identities never enter this response.
+Scoped reads accept `engineId`; they discover catalogues only for that engine
+and the destinations of its saved assignments. Other engines contribute their
+configured model snapshots. Opening a cross-orchestrator model picker loads
+`includeOtherModels` in a separate query, preserving the visible form and draft.
+Caches distinguish orchestrator, expanded choices, project and actor. Scoped
+preview and Save reject edits or Helper acknowledgements for another orchestrator.
 OpenCode catalogue refreshes always use the clean catalogue process, including
 when a managed chat process is running; runtime output limits and defaults must
 not invalidate a verified provider connection. Pages are combined only at one revision, including models
@@ -162,7 +171,10 @@ separate role headings. Shared backup is labelled "Fallback for personal models"
 accessible shared assignments retain their models when the backup changes.
 Unsaved edits refresh cancellable access checks beneath each assignment;
 stale replies are ignored. Conflicting saves preserve the draft. Migrated helper
-conflicts require the owner's explicit acknowledgement of a valid Helper choice;
+conflicts show a separate Confirm Helper action for the selected Helper;
+changing that model or thinking clears the pending acknowledgement. Save validates
+the Helper before removing the existing migration marker. These conflicts require
+the owner's explicit acknowledgement of a valid Helper choice;
 an unrelated edit keeps the migration evidence. Helper and Router assignments
 replace the former per-account Helper model controls and endpoints. Native
 helpers receive the central resolver's exact model; they do not read the retired
@@ -172,8 +184,8 @@ unupgraded helper settings rather than erasing that evidence.
 Router appears first, below the outlined Review recommendations button. Its
 review lists changed selections against the current draft for the selected
 workflow, as `Orchestrator (model thinking)` in one compact line per role.
-Unchanged roles are omitted and the button is disabled when there are no
-changes. Apply to form uses the reviewed recommendations without
+Unchanged roles are omitted; No recommended changes replaces the button when
+there are no differences. Apply to form uses the reviewed recommendations without
 saving; Cancel preserves the draft. Save routing remains the persistence action.
 A routing reload or workflow/viewer change discards an open recommendation review;
 a conflicting revision prevents applying it.
