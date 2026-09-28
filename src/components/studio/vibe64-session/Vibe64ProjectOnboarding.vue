@@ -141,8 +141,12 @@ const resource = useEndpointResource({
   queryKey: computed(() => ["vibe64", "project-onboarding", projectSlug.value, props.sessionId]),
   queryOptions: { refetchOnMount: "always", refetchOnWindowFocus: true },
   realtime: {
-    events: ["vibe64.project.changed"],
-    matches: ({ payload = {} } = {}) => !payload.projectSlug || payload.projectSlug === projectSlug.value
+    events: ["vibe64.project.changed", "vibe64.session.changed"],
+    matches: ({ event, payload = {} } = {}) => {
+      if (payload.projectSlug && payload.projectSlug !== projectSlug.value) return false;
+      return event === "vibe64.project.changed" ||
+        (payload.sessionId === props.sessionId && payload.reason === "temporary-agent-turn-idle");
+    }
   },
   refreshOnPull: true,
   fallbackLoadError: "Project setup could not be read."

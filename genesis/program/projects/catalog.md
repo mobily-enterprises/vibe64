@@ -71,6 +71,10 @@ mounted and running; returning refreshes inspection through the same resource.
 An admitted starter operation may finish while hidden or after leaving the
 project, but it does not request another inspection from the hidden or disposed
 view. Returning to Preview performs its normal fresh inspection.
+Finishing a temporary coding conversation refreshes visible setup for that exact
+project and session, including work delegated by Colleague. Once setup is ready,
+the same pane reveals its outputs without a page reload. Streaming messages and
+other sessions do not cause setup inspections.
 
 Starter catalogues are owned by Genesis and map a namespace-qualified choice to
 one technology repository and branch. Applying a choice uses the ordinary

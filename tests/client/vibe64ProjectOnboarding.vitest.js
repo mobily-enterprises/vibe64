@@ -103,6 +103,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
   let temporary;
   const listeners = new Set();
+  const sessionListeners = new Set();
   const feedback = { dismiss: vi.fn(), report: vi.fn(() => ({ skipped: true })) };
   const outputs = { mounted: vi.fn(), unmounted: vi.fn() };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -184,8 +185,14 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   app.provide(routeLocationKey, Vue.reactive({ path: "/app/project/project-a", params: {}, query: {}, matched: [] }));
   app.provide("jskit.shell-web.runtime.web-error.client", feedback);
   app.provide("jskit.realtime.runtime.client.socket", {
-    on(event, handler) { if (event === "vibe64.project.changed") listeners.add(handler); },
-    off(event, handler) { if (event === "vibe64.project.changed") listeners.delete(handler); }
+    on(event, handler) {
+      if (event === "vibe64.project.changed") listeners.add(handler);
+      if (event === "vibe64.session.changed") sessionListeners.add(handler);
+    },
+    off(event, handler) {
+      if (event === "vibe64.project.changed") listeners.delete(handler);
+      if (event === "vibe64.session.changed") sessionListeners.delete(handler);
+    }
   });
   for (const [name, element] of [["VAlert", "aside"], ["VBtn", "button"], ["VTextarea", "textarea"], ["VSkeletonLoader", "div"]]) {
     app.component(name, passthroughComponent(element));
@@ -197,6 +204,10 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
     button: (label) => findNode(container, (node) => node.type === "button" && nodeText(node).includes(label)),
     async projectChanged(projectSlug = "project-a") {
       for (const handler of listeners) handler({ projectSlug });
+      await Vue.nextTick();
+    },
+    async sessionChanged(payload) {
+      for (const handler of sessionListeners) handler(payload);
       await Vue.nextTick();
     },
     async settleRead(index, data = opening()) {
@@ -244,6 +255,38 @@ describe("Preview project onboarding", () => {
   beforeEach(() => {
     mocks.live = false;
     mocks.resource = { data: Vue.ref(null), isFetching: Vue.ref(false), loadError: Vue.ref(""), reload: vi.fn() };
+  });
+  it("refreshes visible setup after a temporary agent finishes, scoped to its project and session", async () => {
+    const fixture = mountOnboarding();
+    const finished = { projectSlug: "project-a", sessionId: "session-a", reason: "temporary-agent-turn-idle" };
+    try {
+      await fixture.settleRead(0, opening("new"));
+      for (const payload of [
+        { ...finished, projectSlug: "project-b" },
+        { ...finished, sessionId: "session-b" },
+        { ...finished, reason: "assistant-stream" }
+      ]) await fixture.sessionChanged(payload);
+      expect(fixture.reads).toHaveLength(1);
+      await fixture.sessionChanged(finished);
+      expect(fixture.reads).toHaveLength(2);
+      await fixture.settleRead(1, opening());
+      expect(fixture.outputs.mounted).toHaveBeenCalledOnce();
+      expect(fixture.colleaguePreview.value.screen).toBe("outputs");
+      expect(nodeText(fixture.container)).not.toContain("What would you like to build with?");
+
+      fixture.props.active = false;
+      await Vue.nextTick();
+      await fixture.sessionChanged(finished);
+      expect(fixture.reads).toHaveLength(2);
+      fixture.props.active = true;
+      await Vue.nextTick();
+      expect(fixture.reads).toHaveLength(3);
+      await fixture.settleRead(2);
+      expect(fixture.outputs.mounted).toHaveBeenCalledOnce();
+      fixture.close();
+      await fixture.sessionChanged(finished);
+      expect(fixture.reads).toHaveLength(3);
+    } finally { fixture.close(); }
   });
   it("reports the displayed setup screen and clears it when hidden or unmounted", async () => {
     const fixture = mountOnboarding();
