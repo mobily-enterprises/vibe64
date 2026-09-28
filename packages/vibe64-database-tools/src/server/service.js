@@ -399,6 +399,8 @@ function createService({
         try { decision = await assistantDecision(context); }
         catch (error) { decision = { available: false, message: error.message }; }
         return {
+          activeQueries: [...(activeQueries.get(`${currentProjectScopeKey()}\0${context.sessionId}`) || [])]
+            .map(([queryId, query]) => ({ queryId, readOnly: query.readOnly, startedAt: query.startedAt, cancellable: Boolean(query.cancel) })),
           assistant: databaseAssistantAvailability(decision),
           connection: safeConnectionDescriptor(context.writeConnection, context),
           defaultQuery: schema.tables[0]

@@ -1,4 +1,5 @@
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { databaseControlTool } from "./assistantContracts.js";
 import {
   databaseOverviewInputValidator,
   databaseAssistantInputValidator,
@@ -29,13 +30,14 @@ const ACTION_DATABASE_SNIPPET_SAVE = "vibe64.database.snippet.save";
 const ACTION_DATABASE_SNIPPET_DELETE = "vibe64.database.snippet.delete";
 const ACTION_DATABASE_ASSISTANT_ASK = "vibe64.database.assistant.ask";
 
-function action({ execute, id, input, kind = "command" }) {
+function action({ execute, id, input, kind = "command", assistant }) {
   return withVibe64ActionContext({
     audit: {
       actionName: id
     },
     events: [],
     execute,
+    extensions: { assistant },
     id,
     idempotency: kind === "query" ? "none" : "optional",
     input,
@@ -60,12 +62,14 @@ function createDatabaseActions({ databaseTools } = {}) {
       execute: (input) => databaseTools.readState(input),
       id: ACTION_DATABASE_STATE_READ,
       input: databaseStateInputValidator,
+      assistant: databaseControlTool("state.read"),
       kind: "query"
     }),
     action({
       execute: (input) => databaseTools.refreshSchema(input),
       id: ACTION_DATABASE_SCHEMA_REFRESH,
-      input: databaseRefreshInputValidator
+      input: databaseRefreshInputValidator,
+      assistant: databaseControlTool("schema.refresh")
     }),
     action({
       execute: (input) => databaseTools.runQuery(input),
@@ -75,7 +79,8 @@ function createDatabaseActions({ databaseTools } = {}) {
     action({
       execute: (input) => databaseTools.cancelQuery(input),
       id: ACTION_DATABASE_QUERY_CANCEL,
-      input: databaseCancelInputValidator
+      input: databaseCancelInputValidator,
+      assistant: databaseControlTool("query.cancel")
     }),
     action({
       execute: (input) => databaseTools.updateCell(input),

@@ -3,6 +3,7 @@ import test from "node:test";
 import { mkdtemp, mkdir, readFile, writeFile, rm, access, readdir } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 async function databaseHelperRuntime(t) {
   const stateRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-database-helper-"));
@@ -1407,9 +1408,10 @@ for (const { name, scenario } of [
   { name: "database session close prevents a copilot query from executing after late acquisition", scenario: "assistant-acquiring" },
   { name: "database cancellation failure retains exact query ownership for retry", scenario: "cancel-error" },
   { name: "database cancellation isolates the same query id in different sessions", scenario: "session-isolation" },
+  { name: "database status and cancellation isolate the same session and query id across projects", scenario: "project-isolation" },
   { name: "database close skips pending acquisition without cancelling an unavailable connection", scenario: "pending-close" }
 ]) {
-  test(name, async (t) => {
+  test(name, async (t) => runWithProjectRequestContext({ slug: "first-project" }, async () => {
     const helperRuntime = await databaseHelperRuntime(t);
     const artifacts = new Map([["database/schema.json", JSON.stringify(testSchema())]]);
     const attempts = [0, 1].map((id) => ({
@@ -1567,6 +1569,9 @@ for (const { name, scenario } of [
           threadId: "acquisition-assistant"
         });
         await attempts[0].requested.promise;
+        const activity = (await service.readState(input)).activeQueries;
+        assert.equal(activity.length, 1, "Database Copilot SQL uses the same query activity");
+        assert.equal(activity[0].cancellable, false);
         if (scenario === "assistant-acquiring") {
           const closing = service.closeAssistantsForSession(input.sessionId);
           attempts[0].acquire.resolve(attempts[0].connection);
@@ -1589,10 +1594,15 @@ for (const { name, scenario } of [
       const first = service.runQuery(input);
       pending.push(first);
       await attempts[0].requested.promise;
+      const waiting = (await service.readState(input)).activeQueries;
+      assert.equal(waiting.length, 1);
+      assert.deepEqual(waiting[0], { queryId: input.queryId, readOnly: true, startedAt: waiting[0].startedAt, cancellable: false });
+      assert.equal(Number.isFinite(Date.parse(waiting[0].startedAt)), true);
       if (scenario === "early-stop") {
         assert.equal((await service.cancelQuery(input)).cancelled, false);
         attempts[0].acquire.resolve(attempts[0].connection);
         await attempts[0].started.promise;
+        assert.deepEqual((await service.readState(input)).activeQueries, [{ ...waiting[0], cancellable: true }]);
         const stopped = await service.cancelQuery(input);
         assert.equal(stopped.cancelled, true);
         assert.deepEqual(cancelled, [attempts[0].connection]);
@@ -1609,19 +1619,25 @@ for (const { name, scenario } of [
         assert.deepEqual(cancelled, [attempts[0].connection, attempts[0].connection]);
         assert.equal((await first).ok, false);
         assert.deepEqual(released, [attempts[0].connection]);
-      } else if (scenario === "session-isolation") {
+      } else if (["session-isolation", "project-isolation"].includes(scenario)) {
         attempts[0].acquire.resolve(attempts[0].connection);
         await attempts[0].started.promise;
         attempts[1].acquire.resolve(attempts[1].connection);
-        const otherInput = { ...input, sessionId: "other-session" };
-        const second = service.runQuery(otherInput);
+        const otherInput = { ...input, sessionId: scenario === "session-isolation" ? "other-session" : input.sessionId };
+        const inOtherProject = (operation) => runWithProjectRequestContext({ slug: scenario === "project-isolation" ? "other-project" : "first-project" }, operation);
+        assert.deepEqual((await inOtherProject(() => service.readState(otherInput))).activeQueries, []);
+        const second = inOtherProject(() => service.runQuery(otherInput));
         pending.push(second);
         await attempts[1].started.promise;
         assert.equal((await service.cancelQuery(input)).cancelled, true);
         assert.deepEqual(cancelled, [attempts[0].connection]);
         assert.equal((await first).ok, false);
         assert.deepEqual(released, [attempts[0].connection]);
-        assert.equal((await service.cancelQuery(otherInput)).cancelled, true);
+        assert.deepEqual((await service.readState(input)).activeQueries, []);
+        const remaining = (await inOtherProject(() => service.readState(otherInput))).activeQueries;
+        assert.equal(remaining.length, 1);
+        assert.equal(remaining[0].queryId, input.queryId);
+        assert.equal((await inOtherProject(() => service.cancelQuery(otherInput))).cancelled, true);
         assert.deepEqual(cancelled, [attempts[0].connection, attempts[1].connection]);
         assert.equal((await second).ok, false);
         assert.deepEqual(released, [attempts[0].connection, attempts[1].connection]);
@@ -1686,6 +1702,7 @@ for (const { name, scenario } of [
       const cancellationCount = cancelled.length;
       assert.equal((await service.cancelQuery(input)).cancelled, false);
       assert.equal(cancelled.length, cancellationCount);
+      assert.deepEqual((await service.readState(input)).activeQueries, []);
     } finally {
       providerResponse.resolve(providerAnswer);
       for (const attempt of attempts) {
@@ -1695,7 +1712,7 @@ for (const { name, scenario } of [
       await Promise.allSettled(pending);
       await service.close();
     }
-  });
+  }));
 }
 
 test("database copilot keeps failed cleanup for restart and closes a late cancelled helper without rerunning inference", async (t) => {

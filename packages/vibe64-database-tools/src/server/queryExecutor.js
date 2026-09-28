@@ -369,7 +369,7 @@ async function executeDatabaseQuery({
   const startedAt = Date.now();
   let connection = null;
   let readTransaction = false;
-  const active = { cancel: null };
+  const active = { cancel: null, readOnly, startedAt: new Date(startedAt).toISOString() };
   activeQueries.set(normalizedId, active);
   try {
     connection = await knex.client.acquireConnection();

@@ -7,6 +7,9 @@ connection and share one query-ownership boundary.
 
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-database-tools/src/server/actions.js`
+- `packages/vibe64-database-tools/src/server/assistantContracts.js`
+- `tests/server/vibe64DatabaseActionTools.unit.test.js`
+- `tests/server/databaseTools.unit.test.js`
 - `packages/vibe64-database-tools/src/server/inputSchemas.js`
 - `packages/vibe64-database-tools/src/server/registerRoutes.js`
 - `tests/server/vibe64DatabaseActionDispatch.unit.test.js`
@@ -31,6 +34,27 @@ actor or override the session in the URL. Services retain query ownership,
 confirmation, conflict and mutation checks. Conflict responses retain their
 existing HTTP status. These action contracts do not expose SQL, row editing or
 schema investigation as Colleague tools; Colleague delegates engineering work.
+
+Colleague can use the existing state-read, schema-refresh and query-cancel actions.
+Their assistant presentations whitelist database identity, development scope,
+schema object/schema counts and refresh time. State includes at most 50 current
+query reservations with exact ID, read-only flag, start time and whether the
+cancellation callback is available; total count and truncation are explicit.
+Names are bounded to 512 characters. SQL, rows, full schema, connection credentials,
+layout and workspace contents remain outside these tool results. Native service
+failures retain a bounded code with a generic message directing the person to
+Database; raw driver errors remain in the normal UI result. HTTP retains its full
+result, with added runtime query metadata.
+
+State can inspect and save the normal schema snapshot on its first read; later
+reads may use that snapshot. An explicit refresh uses the existing reader metadata
+inspection and snapshot/event path. Neither result proves application readiness
+or a freshly verified connection. Query activity is limited to manual and Copilot
+SQL owned by this project/session, not coding agents or other database clients.
+It is derived from the executor's existing reservation map, with no new persistence.
+Cancellation uses that same map and current project/session authority; success
+acknowledges the driver request, not settled execution, rollback or undone changes.
+
 
 Database copilot embeds the shared JSKIT conversation element. Its adapter maps
 SQL and table metadata into message actions, keeps configuration hidden and

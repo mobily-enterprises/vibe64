@@ -276,6 +276,16 @@ along with their target, so later navigation cannot relabel an earlier request.
 These are semantic UI states, not screen or repository access; output controls
 alone do not prove an application is running.
 
+Database status, schema refresh and exact-query cancellation are available through
+their existing authorized actions. Results contain bounded identity, schema counts,
+refresh time and active query IDs, never SQL, rows, credentials or full schema.
+Activity comes from the query executor's project/session reservations, including
+pending acquisition and Database Copilot SQL. Cancellation is a driver request;
+Colleague must reread activity before claiming the query has left that owner and
+must not infer rollback or undone writes. An empty list says nothing about other
+sessions, external database clients or coding-agent work. SQL/schema authoring,
+row editing and source investigation remain delegated engineering tasks.
+
 The existing session rename, archive and workspace-preparation retry actions are
 also available through bounded session summaries. They use the same current
 actor/project boundary and service guards as the UI. Archiving is an explicit

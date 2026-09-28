@@ -40,8 +40,9 @@ test("all ordinary database HTTP operations execute their authorized action and 
       authorizeProject: async () => { if (!allowed) throw Object.assign(new Error("Revoked"), { statusCode: 403 }); } });
     const app = testRouteApp();
     registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app" });
-    assert.equal(createServiceToolCatalog(actions).resolveToolSet({ surface: "app" }).tools.length, 0,
-      "Database engineering is not exposed to Colleague just because it has an action");
+    assert.deepEqual(createServiceToolCatalog(actions).resolveToolSet({ surface: "app" }).tools.map(({ actionId }) => actionId).sort(), [
+      "vibe64.database.query.cancel", "vibe64.database.schema.refresh", "vibe64.database.state.read"
+    ], "Only database status and controls are exposed to Colleague, not SQL or row editing");
     for (const [method, suffix, operation, serviceMethod, input] of cases) {
       const actionId = `vibe64.database.${operation}`;
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64/database/sessions/:sessionId${suffix}` });

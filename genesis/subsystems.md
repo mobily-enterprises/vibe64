@@ -194,6 +194,9 @@ resolution. It owns its bounded database loop and durable helper-cleanup referen
 the shared runtime owns scoped native conversations and their execution.
 Its thirteen ordinary HTTP operations share their named action contracts and
 trusted actor/project context; the database services own query and mutation safety.
+Colleague uses bounded presentations of the existing status, schema refresh and
+exact-query cancellation actions. Runtime activity comes from the executor's
+existing project/session query reservations, without a separate persisted tracker.
 
 ### Program
 

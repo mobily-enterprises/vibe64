@@ -4438,33 +4438,33 @@
       "title": "index.js"
     },
     {
-      "bytes": 4587,
+      "bytes": 4854,
       "districtId": "directory:packages/vibe64-database-tools/src/server",
       "extractors": [
         "javascript"
       ],
       "functionIds": [
-        "function:packages/vibe64-database-tools/src/server/actions.js:action:function:32:1",
-        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions:function:49:1",
-        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:55:16",
-        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:60:16",
-        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:66:16",
-        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:71:16",
-        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:76:16",
-        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:81:16",
+        "function:packages/vibe64-database-tools/src/server/actions.js:action:function:33:1",
+        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions:function:51:1",
+        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:57:16",
+        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:62:16",
+        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:69:16",
+        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:75:16",
+        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:80:16",
         "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:86:16",
         "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:91:16",
         "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:96:16",
-        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:102:16",
+        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:101:16",
         "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:107:16",
         "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:112:16",
-        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:117:16"
+        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:117:16",
+        "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:122:16"
       ],
-      "hash": "sha256:9afd32b832c1fac86620972d75dceb2d264b4343338ff3d127d04231bb55ea73",
+      "hash": "sha256:8f76e19f3c871508ca906d12f34e5f65b61162b794497d88239925f145615941",
       "id": "file:packages/vibe64-database-tools/src/server/actions.js",
       "internalFunctionCount": 14,
       "language": "javascript",
-      "lines": 139,
+      "lines": 144,
       "mode": 33188,
       "path": "packages/vibe64-database-tools/src/server/actions.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-database-tools",
@@ -4507,6 +4507,29 @@
       "publicFunctionCount": 4,
       "role": "source",
       "title": "assistant.js"
+    },
+    {
+      "bytes": 4824,
+      "districtId": "directory:packages/vibe64-database-tools/src/server",
+      "extractors": [
+        "javascript"
+      ],
+      "functionIds": [
+        "function:packages/vibe64-database-tools/src/server/assistantContracts.js:databaseControlTool:function:12:8",
+        "function:packages/vibe64-database-tools/src/server/assistantContracts.js:databaseControlTool.transformResult:method:31:5"
+      ],
+      "hash": "sha256:0a343ec80f38d8b2f01662d18d61e3f7ac1f4b249c3751e39e871df6422c6e4a",
+      "id": "file:packages/vibe64-database-tools/src/server/assistantContracts.js",
+      "internalFunctionCount": 1,
+      "language": "javascript",
+      "lines": 55,
+      "mode": 33188,
+      "path": "packages/vibe64-database-tools/src/server/assistantContracts.js",
+      "presentationCampusId": "presentation-campus:packages:packages/vibe64-database-tools",
+      "presentationRegionId": "packages",
+      "publicFunctionCount": 1,
+      "role": "source",
+      "title": "assistantContracts.js"
     },
     {
       "bytes": 4764,
@@ -4745,7 +4768,7 @@
       "title": "lookup.js"
     },
     {
-      "bytes": 18351,
+      "bytes": 18407,
       "districtId": "directory:packages/vibe64-database-tools/src/server",
       "extractors": [
         "javascript"
@@ -4782,7 +4805,7 @@
         "function:packages/vibe64-database-tools/src/server/queryExecutor.js:insertDatabaseRow:function:543:1",
         "function:packages/vibe64-database-tools/src/server/queryExecutor.js:deleteDatabaseRow:function:565:1"
       ],
-      "hash": "sha256:a955431d20df399bb1e7c06b2f5cda70c7dc4e59eb56a0adb2a8cc1130b4d547",
+      "hash": "sha256:bc10157c93b732d1b673f53419054d0b7e5658945e722c0fc11c7a4db0764816",
       "id": "file:packages/vibe64-database-tools/src/server/queryExecutor.js",
       "internalFunctionCount": 21,
       "language": "javascript",
@@ -4893,7 +4916,7 @@
       "title": "schemaInspector.js"
     },
     {
-      "bytes": 30774,
+      "bytes": 31028,
       "districtId": "directory:packages/vibe64-database-tools/src/server",
       "extractors": [
         "javascript"
@@ -4923,32 +4946,32 @@
         "function:packages/vibe64-database-tools/src/server/service.js:createService.readOverview:method:363:5",
         "function:packages/vibe64-database-tools/src/server/service.js:reference:function:368:27",
         "function:packages/vibe64-database-tools/src/server/service.js:createService.readState:method:389:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.refreshSchema:method:421:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.saveOverview:method:433:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.runQuery:method:458:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.cancelQuery:method:524:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.updateCell:method:540:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.insertRow:method:552:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.deleteRow:method:564:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.searchLookup:method:577:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.readErd:method:607:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.moveErdTables:method:617:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.saveLayout:method:632:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.saveSnippet:method:644:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.deleteSnippet:method:659:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.askAssistant:method:674:5",
-        "function:packages/vibe64-database-tools/src/server/service.js:retain:function:708:26",
-        "function:packages/vibe64-database-tools/src/server/service.js:cleanup:function:711:27",
-        "function:packages/vibe64-database-tools/src/server/service.js:onEvent:method:718:13",
-        "function:packages/vibe64-database-tools/src/server/service.js:executeReadQuery:function:737:33",
-        "function:packages/vibe64-database-tools/src/server/service.js:runAgentTurn:function:742:29",
-        "function:packages/vibe64-database-tools/src/server/service.js:createService.close:method:777:5"
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.refreshSchema:method:423:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.saveOverview:method:435:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.runQuery:method:460:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.cancelQuery:method:526:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.updateCell:method:542:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.insertRow:method:554:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.deleteRow:method:566:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.searchLookup:method:579:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.readErd:method:609:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.moveErdTables:method:619:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.saveLayout:method:634:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.saveSnippet:method:646:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.deleteSnippet:method:661:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.askAssistant:method:676:5",
+        "function:packages/vibe64-database-tools/src/server/service.js:retain:function:710:26",
+        "function:packages/vibe64-database-tools/src/server/service.js:cleanup:function:713:27",
+        "function:packages/vibe64-database-tools/src/server/service.js:onEvent:method:720:13",
+        "function:packages/vibe64-database-tools/src/server/service.js:executeReadQuery:function:739:33",
+        "function:packages/vibe64-database-tools/src/server/service.js:runAgentTurn:function:744:29",
+        "function:packages/vibe64-database-tools/src/server/service.js:createService.close:method:779:5"
       ],
-      "hash": "sha256:8ea85aa051ccfc4b157db1e57b6a9c6522bb0b2b952c26062ca4d5ff0e174968",
+      "hash": "sha256:2ccfa49e81c599c3bbee648b7920e2792f0be11a0ec04b5fd756c9e9683ff12c",
       "id": "file:packages/vibe64-database-tools/src/server/service.js",
       "internalFunctionCount": 42,
       "language": "javascript",
-      "lines": 791,
+      "lines": 793,
       "mode": 33188,
       "path": "packages/vibe64-database-tools/src/server/service.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-database-tools",
@@ -21358,7 +21381,7 @@
       "title": "vite.config.mjs"
     }
   ],
-  "codeHash": "sha256:fa2da0e48a6bd288b030a05a3df96fc0b682a46a6a9de5f6645f0275c4fa7ab9",
+  "codeHash": "sha256:60fff67fb2e2c17f4da40178c2b81d99b9e9a4b4f1140f8505df3f9ea004f7d7",
   "diagnostics": [],
   "districts": [
     {
@@ -51177,13 +51200,13 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/actions.js:action:function:32:1",
+      "id": "function:packages/vibe64-database-tools/src/server/actions.js:action:function:33:1",
       "kind": "function",
       "language": "javascript",
-      "line": 32,
+      "line": 33,
       "name": "action",
       "parameters": [
-        "{ execute, id, input, kind = \"command\" }"
+        "{ execute, id, input, kind = \"command\", assistant }"
       ],
       "path": "packages/vibe64-database-tools/src/server/actions.js",
       "qualifiedName": "action",
@@ -51198,10 +51221,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions:function:49:1",
+      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions:function:51:1",
       "kind": "function",
       "language": "javascript",
-      "line": 49,
+      "line": 51,
       "name": "createDatabaseActions",
       "parameters": [
         "{ databaseTools } = {}"
@@ -51219,10 +51242,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:55:16",
+      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:57:16",
       "kind": "function",
       "language": "javascript",
-      "line": 55,
+      "line": 57,
       "name": "execute",
       "parameters": [
         "input"
@@ -51240,10 +51263,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:60:16",
+      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:62:16",
       "kind": "function",
       "language": "javascript",
-      "line": 60,
+      "line": 62,
       "name": "execute",
       "parameters": [
         "input"
@@ -51261,10 +51284,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:66:16",
+      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:69:16",
       "kind": "function",
       "language": "javascript",
-      "line": 66,
+      "line": 69,
       "name": "execute",
       "parameters": [
         "input"
@@ -51282,10 +51305,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:71:16",
+      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:75:16",
       "kind": "function",
       "language": "javascript",
-      "line": 71,
+      "line": 75,
       "name": "execute",
       "parameters": [
         "input"
@@ -51303,31 +51326,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:76:16",
+      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:80:16",
       "kind": "function",
       "language": "javascript",
-      "line": 76,
-      "name": "execute",
-      "parameters": [
-        "input"
-      ],
-      "path": "packages/vibe64-database-tools/src/server/actions.js",
-      "qualifiedName": "createDatabaseActions.execute",
-      "role": "source",
-      "static": false,
-      "visibility": "internal"
-    },
-    {
-      "async": false,
-      "column": 16,
-      "container": "createDatabaseActions",
-      "extractor": "javascript",
-      "fileId": "file:packages/vibe64-database-tools/src/server/actions.js",
-      "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:81:16",
-      "kind": "function",
-      "language": "javascript",
-      "line": 81,
+      "line": 80,
       "name": "execute",
       "parameters": [
         "input"
@@ -51408,10 +51410,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:102:16",
+      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:101:16",
       "kind": "function",
       "language": "javascript",
-      "line": 102,
+      "line": 101,
       "name": "execute",
       "parameters": [
         "input"
@@ -51475,6 +51477,27 @@
       "kind": "function",
       "language": "javascript",
       "line": 117,
+      "name": "execute",
+      "parameters": [
+        "input"
+      ],
+      "path": "packages/vibe64-database-tools/src/server/actions.js",
+      "qualifiedName": "createDatabaseActions.execute",
+      "role": "source",
+      "static": false,
+      "visibility": "internal"
+    },
+    {
+      "async": false,
+      "column": 16,
+      "container": "createDatabaseActions",
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-database-tools/src/server/actions.js",
+      "generator": false,
+      "id": "function:packages/vibe64-database-tools/src/server/actions.js:createDatabaseActions.execute:function:122:16",
+      "kind": "function",
+      "language": "javascript",
+      "line": 122,
       "name": "execute",
       "parameters": [
         "input"
@@ -51782,6 +51805,48 @@
       ],
       "path": "packages/vibe64-database-tools/src/server/assistant.js",
       "qualifiedName": "runDatabaseAssistant.onEvent",
+      "role": "source",
+      "static": false,
+      "visibility": "internal"
+    },
+    {
+      "async": false,
+      "column": 8,
+      "container": null,
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-database-tools/src/server/assistantContracts.js",
+      "generator": false,
+      "id": "function:packages/vibe64-database-tools/src/server/assistantContracts.js:databaseControlTool:function:12:8",
+      "kind": "function",
+      "language": "javascript",
+      "line": 12,
+      "name": "databaseControlTool",
+      "parameters": [
+        "operation"
+      ],
+      "path": "packages/vibe64-database-tools/src/server/assistantContracts.js",
+      "qualifiedName": "databaseControlTool",
+      "role": "source",
+      "static": false,
+      "visibility": "public"
+    },
+    {
+      "async": false,
+      "column": 5,
+      "container": "databaseControlTool",
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-database-tools/src/server/assistantContracts.js",
+      "generator": false,
+      "id": "function:packages/vibe64-database-tools/src/server/assistantContracts.js:databaseControlTool.transformResult:method:31:5",
+      "kind": "method",
+      "language": "javascript",
+      "line": 31,
+      "name": "transformResult",
+      "parameters": [
+        "result"
+      ],
+      "path": "packages/vibe64-database-tools/src/server/assistantContracts.js",
+      "qualifiedName": "databaseControlTool.transformResult",
       "role": "source",
       "static": false,
       "visibility": "internal"
@@ -55187,10 +55252,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.refreshSchema:method:421:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.refreshSchema:method:423:5",
       "kind": "method",
       "language": "javascript",
-      "line": 421,
+      "line": 423,
       "name": "refreshSchema",
       "parameters": [
         "input = {}"
@@ -55208,10 +55273,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.saveOverview:method:433:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.saveOverview:method:435:5",
       "kind": "method",
       "language": "javascript",
-      "line": 433,
+      "line": 435,
       "name": "saveOverview",
       "parameters": [
         "input = {}"
@@ -55229,10 +55294,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.runQuery:method:458:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.runQuery:method:460:5",
       "kind": "method",
       "language": "javascript",
-      "line": 458,
+      "line": 460,
       "name": "runQuery",
       "parameters": [
         "input = {}"
@@ -55250,10 +55315,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.cancelQuery:method:524:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.cancelQuery:method:526:5",
       "kind": "method",
       "language": "javascript",
-      "line": 524,
+      "line": 526,
       "name": "cancelQuery",
       "parameters": [
         "input = {}"
@@ -55271,10 +55336,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.updateCell:method:540:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.updateCell:method:542:5",
       "kind": "method",
       "language": "javascript",
-      "line": 540,
+      "line": 542,
       "name": "updateCell",
       "parameters": [
         "input = {}"
@@ -55292,10 +55357,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.insertRow:method:552:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.insertRow:method:554:5",
       "kind": "method",
       "language": "javascript",
-      "line": 552,
+      "line": 554,
       "name": "insertRow",
       "parameters": [
         "input = {}"
@@ -55313,10 +55378,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.deleteRow:method:564:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.deleteRow:method:566:5",
       "kind": "method",
       "language": "javascript",
-      "line": 564,
+      "line": 566,
       "name": "deleteRow",
       "parameters": [
         "input = {}"
@@ -55334,10 +55399,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.searchLookup:method:577:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.searchLookup:method:579:5",
       "kind": "method",
       "language": "javascript",
-      "line": 577,
+      "line": 579,
       "name": "searchLookup",
       "parameters": [
         "input = {}"
@@ -55355,10 +55420,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.readErd:method:607:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.readErd:method:609:5",
       "kind": "method",
       "language": "javascript",
-      "line": 607,
+      "line": 609,
       "name": "readErd",
       "parameters": [
         "input = {}"
@@ -55376,10 +55441,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.moveErdTables:method:617:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.moveErdTables:method:619:5",
       "kind": "method",
       "language": "javascript",
-      "line": 617,
+      "line": 619,
       "name": "moveErdTables",
       "parameters": [
         "input = {}"
@@ -55397,10 +55462,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.saveLayout:method:632:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.saveLayout:method:634:5",
       "kind": "method",
       "language": "javascript",
-      "line": 632,
+      "line": 634,
       "name": "saveLayout",
       "parameters": [
         "input = {}"
@@ -55418,10 +55483,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.saveSnippet:method:644:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.saveSnippet:method:646:5",
       "kind": "method",
       "language": "javascript",
-      "line": 644,
+      "line": 646,
       "name": "saveSnippet",
       "parameters": [
         "input = {}"
@@ -55439,10 +55504,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.deleteSnippet:method:659:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.deleteSnippet:method:661:5",
       "kind": "method",
       "language": "javascript",
-      "line": 659,
+      "line": 661,
       "name": "deleteSnippet",
       "parameters": [
         "input = {}"
@@ -55460,10 +55525,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.askAssistant:method:674:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.askAssistant:method:676:5",
       "kind": "method",
       "language": "javascript",
-      "line": 674,
+      "line": 676,
       "name": "askAssistant",
       "parameters": [
         "input = {}"
@@ -55481,10 +55546,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:retain:function:708:26",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:retain:function:710:26",
       "kind": "function",
       "language": "javascript",
-      "line": 708,
+      "line": 710,
       "name": "retain",
       "parameters": [],
       "path": "packages/vibe64-database-tools/src/server/service.js",
@@ -55500,10 +55565,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:cleanup:function:711:27",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:cleanup:function:713:27",
       "kind": "function",
       "language": "javascript",
-      "line": 711,
+      "line": 713,
       "name": "cleanup",
       "parameters": [],
       "path": "packages/vibe64-database-tools/src/server/service.js",
@@ -55519,10 +55584,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:onEvent:method:718:13",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:onEvent:method:720:13",
       "kind": "method",
       "language": "javascript",
-      "line": 718,
+      "line": 720,
       "name": "onEvent",
       "parameters": [
         "event"
@@ -55540,10 +55605,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:executeReadQuery:function:737:33",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:executeReadQuery:function:739:33",
       "kind": "function",
       "language": "javascript",
-      "line": 737,
+      "line": 739,
       "name": "executeReadQuery",
       "parameters": [
         "sql"
@@ -55561,10 +55626,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:runAgentTurn:function:742:29",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:runAgentTurn:function:744:29",
       "kind": "function",
       "language": "javascript",
-      "line": 742,
+      "line": 744,
       "name": "runAgentTurn",
       "parameters": [
         "turnInput",
@@ -55583,10 +55648,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-database-tools/src/server/service.js",
       "generator": false,
-      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.close:method:777:5",
+      "id": "function:packages/vibe64-database-tools/src/server/service.js:createService.close:method:779:5",
       "kind": "method",
       "language": "javascript",
-      "line": 777,
+      "line": 779,
       "name": "close",
       "parameters": [],
       "path": "packages/vibe64-database-tools/src/server/service.js",
@@ -200531,7 +200596,7 @@
       "title": "vibe64-core"
     },
     {
-      "buildingCount": 40,
+      "buildingCount": 41,
       "districtId": "directory:packages/vibe64-database-tools",
       "id": "presentation-campus:packages:packages/vibe64-database-tools",
       "path": "packages/vibe64-database-tools",
@@ -200653,7 +200718,7 @@
   ],
   "presentationRegions": [
     {
-      "buildingCount": 373,
+      "buildingCount": 374,
       "component": "jskit",
       "fallback": false,
       "id": "packages",
