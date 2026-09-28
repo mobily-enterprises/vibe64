@@ -2,6 +2,10 @@
 
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
+The numbered `20260928-completed-discussion-plan` upgrade restores the exact
+verified completed-plan incident that an earlier discussion turn reset. It
+requires matching request and content identities, backs up both owned records,
+and preserves all conversation text; normal reads never perform this repair.
 Goal read/update, plan allowance, session preparation/reconnection, attachment
 read/upload/delete and terminal status/control use named actions shared by HTTP
 and automation. Actions validate required identities and supply the current

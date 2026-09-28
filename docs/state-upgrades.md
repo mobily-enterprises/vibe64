@@ -251,6 +251,18 @@ Focused evidence: `assistantRoleUpgrade.unit.test.js` and the packaged CLI in
 
 ## Conversation working plans
 
+`20260928-completed-discussion-plan` repairs one verified completed-plan incident
+that the old Auto discussion path reset to drafting. It matches the exact session,
+request identity, plan checksum and display snapshot. Changed plans and later
+requests are not reclassified; conflicting snapshots block repair. It restores
+only the document status and matching snapshot/revision, preserving all plan
+body text, messages, source and actor information. No inference is made from prose.
+The existing routing publication engine backs up and verifies both files before
+writing, and resumes interrupted publication from its before/after manifest under
+`upgrades/backups/20260928-completed-discussion-plan/`. Apply requires stopped
+writers. Other installations are no-ops. The runtime fix prevents recurrence;
+ordinary reads do not perform historical repairs.
+
 Working plans are new conversation-owned artifacts, created only by explicit
 planning work. They do not transform existing history or metadata and require no
 historical backfill. The existing request record may carry a `workPlan` display

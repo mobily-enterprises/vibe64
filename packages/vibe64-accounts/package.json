@@ -16,7 +16,8 @@
     "./server/aiConnectionRuntime": "./src/server/aiConnectionRuntime.js",
     "./server/assistantRoutingUpgrade": "./src/server/assistantRoutingUpgrade.js",
     "./server/assistantRoleUpgrade": "./src/server/assistantRoleUpgrade.js",
-    "./server/assistantHelperUpgrade": "./src/server/assistantHelperUpgrade.js"
+    "./server/assistantHelperUpgrade": "./src/server/assistantHelperUpgrade.js",
+    "./server/completedDiscussionPlanUpgrade": "./src/server/completedDiscussionPlanUpgrade.js"
   },
   "jskit": {
     "kind": "runtime",

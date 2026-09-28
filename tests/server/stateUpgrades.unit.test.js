@@ -8,6 +8,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runStateUpgrades } from "../../packages/vibe64-core/src/server/stateUpgrades.js";
 import { upgradeAssistantHelpers } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
+import { upgradeCompletedDiscussionPlan } from "../../packages/vibe64-accounts/src/server/completedDiscussionPlanUpgrade.js";
 import { upgradeAssistantRoles } from "../../packages/vibe64-accounts/src/server/assistantRoleUpgrade.js";
 import { upgradeAssistantRouting } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
 import { readCodexLoginId } from "../../packages/vibe64-core/src/server/codexAuthState.js";
@@ -19,7 +20,7 @@ import { RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
 const exec = promisify(execFile);
 const id = "20260923-codex-login-id";
 const routingId = "20260923-routing-v2";
-const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness"];
+const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan"];
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
 async function fixture(t) {
@@ -35,7 +36,7 @@ async function fixture(t) {
       await mkdir(path.dirname(markerPath), { recursive: true });
       await writeFile(markerPath, typeof value === "string" ? value : JSON.stringify(value));
     },
-    run: (apply = false) => runStateUpgrades({ systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, report: (level, message) => messages.push({ level, message }) })
+    run: (apply = false) => runStateUpgrades({ systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, report: (level, message) => messages.push({ level, message }) })
   };
 }
 
@@ -222,7 +223,7 @@ test("a crash after routing publication but before its ledger entry resumes the 
   await mkdir(path.dirname(routingPath), { recursive: true });
   const original = JSON.stringify({ schemaVersion: 1, revision: 4, orchestrators: {} });
   await writeFile(routingPath, original);
-  await assert.rejects(runStateUpgrades({ systemRoot: f.systemRoot, apply: true, upgradeAssistantRoles, upgradeAssistantHelpers, report: () => {},
+  await assert.rejects(runStateUpgrades({ systemRoot: f.systemRoot, apply: true, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, report: () => {},
     upgradeAssistantRouting: (context) => upgradeAssistantRouting({ ...context, report: (_level, message) => {
       if (message.startsWith("Published routing state:")) throw new Error("lost before ledger commit");
     } })

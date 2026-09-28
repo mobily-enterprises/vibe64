@@ -8,9 +8,10 @@ import assistantRoleNames from "./stateUpgrades/20260926-assistant-role-names.js
 
 import assistantHelper from "./stateUpgrades/20260927-assistant-helper.js";
 import nativeProviderReadiness from "./stateUpgrades/20260927-native-provider-readiness.js";
+import completedDiscussionPlan from "./stateUpgrades/20260928-completed-discussion-plan.js";
 
 // Published entries are immutable. Append new upgrades in order; never remove one.
-const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness];
+const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan];
 
 async function readLedger(ledgerPath) {
   let source;
@@ -32,7 +33,7 @@ async function readLedger(ledgerPath) {
   return ledger;
 }
 
-async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers,
+async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan,
   report = (level, message) => console.log(`[${level}] ${message}`) }) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) === path.parse(systemRoot).root) {
     throw new Error("State upgrades require an absolute, non-root Vibe64 system directory.");
@@ -62,6 +63,7 @@ async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRou
       upgradeAssistantRouting,
       upgradeAssistantRoles,
       upgradeAssistantHelpers,
+      upgradeCompletedDiscussionPlan,
       backupRoot: path.join(upgradeRoot, "backups", upgrade.id),
       report: (level, message) => report(level, `${upgrade.id}: ${message}`)
     }).catch(error => {
