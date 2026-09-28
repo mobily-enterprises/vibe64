@@ -2168,6 +2168,14 @@ for (const width of [390, 820, 1280]) {
     expect(sent[0].message).toBe("Implement the plan I have approved.");
     await expect(composer).toHaveValue("Keep my next question as a draft");
 
+    routing.workPlan.status = "implemented";
+    session.metadata.assistant_routing_request = JSON.stringify(routing);
+    await page.reload();
+    await expect(composer).toBeVisible();
+    await expect(view).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Implement with Junior|^Recover plan$/ })).toHaveCount(0);
+    await expect(page.getByText("Implementation recorded", { exact: true })).toHaveCount(0);
+
     routing.workPlan.status = "drafting";
     session.metadata.assistant_routing_request = JSON.stringify(routing);
     await page.reload();

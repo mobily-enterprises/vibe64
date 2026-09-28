@@ -81,7 +81,8 @@ const planParts = computed(() => {
   return { overview: blocks.slice(start + 1, end), technical: [...blocks.slice(0, start), ...blocks.slice(end)] };
 });
 watch(planOpen, (open) => { if (open) expandedPlanSection.value = null; });
-const planVisible = computed(() => props.mode === "auto" && props.request?.mode === "auto" && Boolean(props.request.workPlan?.text));
+const planVisible = computed(() => props.mode === "auto" && props.request?.mode === "auto" &&
+  Boolean(props.request.workPlan?.text) && props.request.workPlan.status !== "implemented");
 const planReady = computed(() => planVisible.value && props.request?.status === "done" && !props.request.error && props.request.workPlan?.status === "ready");
 const planRecoverable = computed(() => planVisible.value && props.request?.status === "done" &&
   ["drafting", "paused", "blocked"].includes(props.request.workPlan?.status));
@@ -90,12 +91,12 @@ const implementLabel = computed(() => `Implement with Junior${props.request?.ass
 const planStage = computed(() => {
   const request = props.request;
   if (request?.task === "deslop") return request.status === "sent" ? "Deslopping" : "Plan needs updating";
-  if (request?.status === "sent") return request.resolvedMode === "junior" ? "Coding" : "Planning";
+  if (request?.status === "sent" && request.reason !== "discussion") return request.resolvedMode === "junior" ? "Coding" : "Planning";
   if (request?.status === "reviewing") return "Reviewing";
   if (request?.status === "planning") return "Back to planning";
   return ({
     drafting: "Planning", ready: "Plan ready", blocked: "Needs planning",
-    implemented: "Implementation recorded", paused: "Paused"
+    paused: "Paused"
   })[request?.workPlan?.status] || "Planning";
 });
 function implementPlan() {

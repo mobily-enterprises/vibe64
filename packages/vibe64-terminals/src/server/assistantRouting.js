@@ -28,6 +28,7 @@ const OUTPUT_SCHEMA = {
 };
 const continuationStatus = (state, phase) => `${state.continuation === "planning" ? "planning" : "review"}_${phase}`;
 const continuationRole = (state) => state.continuation === "planning" ? "senior" : "review";
+const usesWorkPlan = (state) => state.mode === "auto" && state.reason !== "discussion" && state.task !== "deslop";
 const activeGoal = (goal) => goal && !["complete", "completed"].includes(goal.status);
 function failure(message, code = "vibe64_assistant_routing_unavailable") {
   return Object.assign(new Error(message), { code, statusCode: 409 });
@@ -300,11 +301,12 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         throw failure("The plan changed. Open View plan again before recovering it.");
       }
     }
-    const usesPlan = state.mode === "auto";
+    const usesPlan = usesWorkPlan(state);
     const file = usesPlan ? await prepareWorkPlan(context, role === "senior") : null;
     if (usesPlan && role === "senior" && state.workPlan) state.workPlan = await readWorkPlan(context);
     const message = assistantModePrompt(state.task || role, followup ? state.reviewMessage : state.input.message,
-      { planInstructions: file && state.task !== "deslop" ? workPlanInstructions(file, role) : "" });
+      { discussion: state.mode === "auto" && state.reason === "discussion",
+        planInstructions: file ? workPlanInstructions(file, role) : "" });
     await prepareSelection(sessionId, selection, context);
     state.deliverySelection = selection;
     await save(context, state);
@@ -468,7 +470,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           reason: explicitDeslop ? "deslop" : "",
           workPlan: plan ? {
             ...plan,
-            status: readyPlan ? "ready" : "drafting",
+            status: plan.revision === previousPlan?.revision ? previousPlan.status : plan.status === "ready" ? "drafting" : plan.status,
             ...(approving || readyPlan && previousApproval === plan.revision
               ? { approvedRevision: plan.revision } : {})
           } : null,
@@ -570,7 +572,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (!state) return false;
       const preparingFollowup = ["review_pending", "planning_pending"].includes(state.status);
       state.stopped = true;
-      if (state.workPlan) state.workPlan.status = "paused";
+      if (state.workPlan && state.attemptedMessageId && usesWorkPlan(state)) state.workPlan.status = "paused";
       state.review = false;
       if (preparingFollowup) {
         state.status = "done";
@@ -621,7 +623,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         state.error = "Auto is available in Main chat only. Choose Senior or Junior for your next request.";
         await save(context, state); return;
       }
-      const usesPlan = state.mode === "auto";
+      const usesPlan = usesWorkPlan(state);
       let plan;
       try { plan = usesPlan ? await readWorkPlan(context) : null; }
       catch (error) {

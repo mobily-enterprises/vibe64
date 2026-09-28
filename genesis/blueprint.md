@@ -1330,6 +1330,9 @@ Chat carries its human-readable summary and compact View plan/Implement actions.
 View plan starts with a plain-language explanation of what will change and how to
 check it. Technical instructions and implementation details are collapsed until
 the person chooses to read them.
+Once implemented, the plan leaves no buttons or status row in the chat. Ordinary
+follow-up questions neither create a plan nor reopen a completed one; an unfinished
+plan retains its status. A new planning request explicitly reopens the document.
 In Auto, coding starts only after approval of that version, through the button or
 a clear reply. Junior keeps progress and blockers in the document. A material
 decision returns work to Senior, preserving edits, and a revised plan needs

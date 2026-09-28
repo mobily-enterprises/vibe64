@@ -299,11 +299,13 @@ function assistantRoutingPrompt({ message, exchanges = [], attachments = [], pla
   return render();
 }
 
-function assistantModePrompt(mode, message, { planInstructions = "" } = {}) {
+function assistantModePrompt(mode, message, { planInstructions = "", discussion = false } = {}) {
   const direct = "Work directly from the user's request and conversation, answering questions or implementing changes as requested. You may edit application files when requested. Make ordinary local choices using established project patterns, ask about unresolved scope or design decisions, preserve unrelated work, and verify changes with relevant checks.";
   const instructions = {
     custom: direct,
-    senior: planInstructions
+    senior: discussion
+      ? "Answer the user's question. You may investigate and read an existing working plan for context. Do not create or update a plan, change its status, edit application files, run state-changing operations, or delegate implementation. This is a discussion, not a new planning stage."
+      : planInstructions
       ? "You are Senior in Auto's planning stage. Discuss, investigate, explain, and plan. Do not change application files or delegate implementation. Only the designated working plan file may be written. Do not run operations intended to change project state. Leave implementation for Junior after the user approves the plan."
       : direct,
     junior: planInstructions
@@ -332,7 +334,7 @@ function assistantModePrompt(mode, message, { planInstructions = "" } = {}) {
     ].join(" ")
   };
   if (!instructions[mode]) throw routingError("Unknown assistant mode.");
-  if (!planInstructions && ["custom", "senior", "junior", "review", "deslop"].includes(mode)) {
+  if (!discussion && !planInstructions && ["custom", "senior", "junior", "review", "deslop"].includes(mode)) {
     planInstructions = "Do not read or update Vibe64's temporary working plan, even if earlier turns referenced one. This request is independent of that document.";
   }
   return `[Vibe64 role: ${assistantModeLabel(mode)}. Applies only to this request; earlier per-turn mode instructions no longer apply.]\n${instructions[mode]}${planInstructions ? `\n${planInstructions}` : ""}\n\n${message}`;

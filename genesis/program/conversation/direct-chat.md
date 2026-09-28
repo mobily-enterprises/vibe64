@@ -509,7 +509,10 @@ for outcome/scope, findings, proposed changes, decisions, implementation steps,
 verification, and progress/blockers. Ready requires every section to have content.
 The prompt requires concrete inspected files/occurrences, exact intended changes,
 resolved decisions and acceptance checks; structural validation cannot certify
-semantic completeness. Pure conversation need not create a document.
+semantic completeness. Auto discussion uses the Router's existing discussion
+reason and answers read-only. It neither creates nor updates a plan. Existing
+plan status and approval survive discussion, including interrupted turns and
+reconnects. Independent Deslop also leaves the plan alone.
 During Auto planning, Senior may write only this designated document, not application files. Beginning
 another planning turn invalidates readiness before inference. The conversation
 keeps a display snapshot and its content revision in the existing routing request;
@@ -520,6 +523,9 @@ check them and required decisions. All remaining content is under Technical
 details, collapsed on each opening. Existing documents retain all their content;
 missing summaries show a brief explanation rather than exposing the whole
 technical document by default. Code-block headings do not split the document.
+An implemented plan hides the entire plan row and dialog, including View plan
+and Recover plan. New planning can make the controls relevant again; ordinary
+follow-up questions cannot.
 Implement submits the displayed revision through ordinary Send, retaining the
 draft and existing access checks. Natural-language approval uses the Router;
 only unambiguous approval of a currently ready plan can select Junior. The runtime

@@ -91,6 +91,11 @@ test("Senior permits only its working document while the scoped review instructi
   const text = "The original human text.";
   assert.match(assistantModePrompt("senior", text, { planInstructions: "Auto planning instructions" }), /Do not change application files/);
   assert.match(assistantModePrompt("senior", text), /You may edit application files when requested/);
+  const discussion = assistantModePrompt("senior", text, { discussion: true });
+  assert.match(discussion, /Do not create or update a plan, change its status, edit application files/);
+  assert.match(discussion, /read an existing working plan for context/);
+  assert.doesNotMatch(discussion, /Auto's planning stage|You may edit application files|Do not read or update/);
+  assert.ok(discussion.endsWith(text));
   assert.match(assistantModePrompt("junior", text, { planInstructions: "Approved Auto plan" }), /Stop for an unresolved architectural/);
   assert.match(assistantModePrompt("review", text), /may directly fix in-scope defects/);
   assert.ok(assistantModePrompt("review", text).endsWith(text));

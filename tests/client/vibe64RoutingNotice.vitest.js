@@ -112,6 +112,31 @@ it("shows recovery controls for a stopped planning handoff", () => {
   expect(f.state().label).toBe("Back to planning · Codex (gpt-6-astra not recorded)");
 });
 
+it("removes every plan control on implementation and keeps it hidden during follow-up discussion", async () => {
+  const request = { mode: "auto", status: "done", workPlan: { status: "ready", revision: "one", text: "Detailed plan" } };
+  const f = mount(request);
+  f.state().planOpen = true;
+  await nextTick();
+  f.props.value.request = { ...request, workPlan: { ...request.workPlan, status: "implemented" } };
+  await nextTick();
+  expect(f.state().planOpen).toBe(false);
+  for (const status of ["done", "routing", "sent"]) {
+    f.props.value.request = { ...f.props.value.request, reason: "discussion", status };
+    await nextTick();
+    expect(f.state().planVisible).toBe(false);
+    expect(f.state().planReady).toBe(false);
+    expect(f.state().planRecoverable).toBe(false);
+  }
+  f.props.value.request = { ...request, status: "sent", reason: "discussion" };
+  await nextTick();
+  expect(f.state().planVisible).toBe(true);
+  expect(f.state().planStage).toBe("Plan ready");
+  f.props.value.request = { ...request, workPlan: { ...request.workPlan, status: "drafting", revision: "two" } };
+  await nextTick();
+  expect(f.state().planVisible).toBe(true);
+  expect(f.state().planRecoverable).toBe(true);
+});
+
 it("offers plan recovery for an idle Auto draft, paused plan or blocker, without offering coding", async () => {
   const request = { mode: "auto", status: "done", workPlan: { status: "drafting", revision: "one", text: "Existing plan" } };
   const f = mount(request);
