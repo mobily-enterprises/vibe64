@@ -65,6 +65,8 @@ watch([selectedId, search], () => {
 });
 const requestedIntegration = computed(() => route.query.integrationSession === props.dashboardContext.sessionId &&
   typeof route.query.integration === "string" && route.query.integration.length <= 200 ? route.query.integration : "");
+const integrationDetail = ref(null);
+const pendingReveal = ref(null);
 function selectIntegration(id) {
   if (!id) return;
   const alreadySelected = environment.value === "development" && selectedId.value === id;
@@ -72,6 +74,7 @@ function selectIntegration(id) {
   selectedId.value = id;
   search.value = "";
   if (alreadySelected) refreshConnection();
+  pendingReveal.value = { id, key: navigationKey.value };
 }
 watch(requestedIntegration, selectIntegration, { immediate: true, flush: "sync" });
 
@@ -91,6 +94,17 @@ const filteredEntries = computed(() => entries.value.filter(([id, entry]) =>
 ));
 const selected = computed(() => Object.hasOwn(configuration.value?.integrations || {}, selectedId.value)
   ? configuration.value.integrations[selectedId.value] : undefined);
+watchEffect(() => {
+  const request = pendingReveal.value;
+  if (!request) return;
+  if (request.key !== navigationKey.value || request.id !== selectedId.value) {
+    pendingReveal.value = null;
+    return;
+  }
+  if (!integrationDetail.value || props.dashboardContext.active === false) return;
+  pendingReveal.value = null;
+  if (selected.value) integrationDetail.value.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
+}, { flush: "post" });
 const provider = computed(() => providers.find((entry) => entry.id === selected.value?.provider));
 const configurationOnly = computed(() => provider.value?.configurationOnly || provider.value?.configurationOnlyForSettings?.(selected.value?.settings || {}));
 const verificationIncomplete = computed(() => provider.value?.verificationFields?.some((field) =>
@@ -330,7 +344,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
           </v-expansion-panels>
           <p v-else-if="!production" role="status" class="text-body-medium">No services match your search.</p>
         </aside>
-        <main class="integrations-panel__detail">
+        <main ref="integrationDetail" class="integrations-panel__detail">
           <template v-if="selected">
             <header class="integrations-panel__header mb-4">
               <div class="d-flex align-center"><IntegrationServiceLogo :provider="selected.provider" /><div><h2>{{ selected.displayName || selected.provider }}</h2><p>Application configuration</p></div></div>

@@ -145,6 +145,9 @@ development slot through the existing dashboard route. The route carries its
 session and turn association. The panel ignores a selection for another session,
 restores the requested slot on reload, and reports a removed slot. This only
 selects configuration; connecting remains an explicit application setup operation.
+The requested detail scrolls into view after rendering, without animation or a
+keyboard-focus change. The request is discarded if its selected slot, project,
+session or environment changes; connection updates do not keep scrolling it.
 
 Integrations is a typed form over the selected session's `integrations.json`.
 Provider setup instructions can vary with the selected authentication method.

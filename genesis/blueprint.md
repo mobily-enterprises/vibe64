@@ -37,8 +37,9 @@ development integration and knows which slot and environment are actually shown,
 including whether the displayed configuration has unsaved changes. Missing slots
 or failed loads are reported instead of claiming the requested integration opened.
 Reopening the same slot refreshes its connection status through the existing
-application command. On compact screens, opening a project view reveals it;
-opening a coding conversation reveals chat. Colleague distinguishes hidden
+application command. Its configuration and connection controls are brought into
+view after loading, without moving keyboard focus. On compact screens, opening
+a project view reveals it; opening a coding conversation reveals chat. Colleague distinguishes hidden
 project views from the chat currently shown.
 Existing owner-only payment
 and advertising controls retain their account, environment, review and explicit

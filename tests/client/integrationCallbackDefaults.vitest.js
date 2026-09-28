@@ -25,11 +25,78 @@ vi.mock("@/lib/browserLocalStorage.js", () => ({ readLocalStorageJson: (_key, fa
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ref("dogandgroom") }));
 vi.mock("@/composables/useVibe64Integrations.js", () => ({ useVibe64Integrations: () => ({
   releaseId: ref(""), connection: ref(null), verificationInput: ref({}), dirty: ref(false),
+  refreshConnection: vi.fn(),
   configuration: ref({ registrations: { google: { callbackUrlRef: "env:GOOGLE_CALLBACK" } }, integrations: {
     calendar: { provider: "google-calendar", authentication: { method: "oauth2", registrationRef: "google" } }
   } })
 }) }));
 import IntegrationsPanel from "@/components/studio/IntegrationsPanel.vue";
+
+it("reveals a requested integration once its detail renders, including repeated selection, without moving focus", async () => {
+  const scope = effectScope();
+  const props = reactive({ dashboardContext: { sessionId: "session-1", active: true } });
+  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  const detail = { scrollIntoView: vi.fn(), focus: vi.fn() };
+  try {
+    await nextTick();
+    expect(detail.scrollIntoView).not.toHaveBeenCalled();
+    form.integrationDetail.value = detail;
+    await nextTick();
+    expect(detail.scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: "start", inline: "nearest", behavior: "instant" });
+    form.connection.value = { status: "pending" };
+    form.configuration.value = JSON.parse(JSON.stringify(form.configuration.value));
+    await nextTick();
+    expect(detail.scrollIntoView).toHaveBeenCalledTimes(1);
+    form.selectIntegration("calendar");
+    await nextTick();
+    expect(detail.scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(form.refreshConnection).toHaveBeenCalledOnce();
+    expect(detail.focus).not.toHaveBeenCalled();
+  } finally { scope.stop(); }
+});
+
+it("defers reveal while inactive and cancels it when the session, environment or selection changes", async () => {
+  const scope = effectScope();
+  const props = reactive({ dashboardContext: { sessionId: "session-1", active: false } });
+  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  const detail = { scrollIntoView: vi.fn() };
+  try {
+    form.integrationDetail.value = detail;
+    await nextTick();
+    expect(detail.scrollIntoView).not.toHaveBeenCalled();
+    props.dashboardContext.active = true;
+    await nextTick();
+    expect(detail.scrollIntoView).toHaveBeenCalledOnce();
+    detail.scrollIntoView.mockClear();
+
+    for (const change of [
+      () => { form.selectedId.value = "missing"; },
+      () => { props.dashboardContext.sessionId = "session-2"; },
+      () => { form.environment.value = "production"; }
+    ]) {
+      form.integrationDetail.value = null;
+      form.selectIntegration("calendar");
+      change();
+      await nextTick();
+      form.integrationDetail.value = detail;
+      await nextTick();
+      expect(detail.scrollIntoView).not.toHaveBeenCalled();
+    }
+
+    form.selectIntegration("missing");
+    await nextTick();
+    expect(detail.scrollIntoView).not.toHaveBeenCalled();
+    form.selectedId.value = "calendar";
+    await nextTick();
+    expect(detail.scrollIntoView).not.toHaveBeenCalled();
+    form.integrationDetail.value = null;
+    form.selectIntegration("calendar");
+    scope.stop();
+    form.integrationDetail.value = detail;
+    await nextTick();
+    expect(detail.scrollIntoView).not.toHaveBeenCalled();
+  } finally { scope.stop(); }
+});
 
 it("updates the application callback suggestion without changing an explicit override or saved Env reference", async () => {
   const scope = effectScope();

@@ -249,6 +249,12 @@ an active command settles. It never repeats Connect or Disconnect. Draft,
 source-suspension, per-user and active-view guards still apply; failures remain
 visible without automatic retries. Opening acknowledges the selection, not a
 successful provider check.
+An explicit integration selection also brings its detail into view after the
+panel renders, including a repeated request for the same slot. It does not move
+keyboard focus or animate scrolling. The request is local to that panel's
+project/session/environment and is cancelled by a different selection; inactive
+panels defer it. Missing slots do not scroll, and subsequent connection/status
+updates do not repeatedly move the page.
 
 The existing app-page layout owner publishes its ready project and pane visibility
 to the host. An explicit project view reveals that pane on compact screens;
