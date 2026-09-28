@@ -66,6 +66,8 @@ merely opening a different project does not change an earlier request's target.
 The host can mount the reusable text drawer outside routed project content.
 Its shared chat element accepts messages and steering while a turn is active.
 The host supplies the existing avatar and optional persistent voice controls.
+The drawer fits the available viewport width, including when a classic scrollbar
+is present. Its minimize, model and watch controls have 48-pixel touch targets.
 Voice submissions use the same message-ID admission as text, carry their
 recording's original focus, and never alter the typed draft. Colleague's API stays global when the
 selected project changes. Opening a view sends a command only to the initiating

@@ -35,7 +35,7 @@ function reportFailure(error) {
     dedupeKey: `vibe64.colleague:${message}`, dedupeWindowMs: 1000 });
 }
 
-async function request(suffix = "", options = {}) {
+async function requestColleague(suffix = "", options = {}) {
   const result = await props.request(`/api/vibe64/colleague${suffix}`, options);
   if (result?.ok === false) throw new Error(result.error || result.errors?.[0]?.message || "Colleague could not complete this request.");
   return result;
@@ -54,7 +54,7 @@ async function handleNavigation(command) {
       try { navigationReceipt = { commandId: command.id, clientId, ok: true, focus: await props.navigate(command) }; }
       catch (error) { navigationReceipt = { commandId: command.id, clientId, ok: false, error: error.message }; }
     }
-    await request("/navigation/ack", { method: "POST", body: navigationReceipt });
+    await requestColleague("/navigation/ack", { method: "POST", body: navigationReceipt });
   } catch (error) { connectionError.value = error.message; }
   finally { navigating = null; }
 }
@@ -65,7 +65,7 @@ function schedule() {
 async function refresh() {
   const expectedRevision = ++revision;
   try {
-    const result = await request(`?clientId=${encodeURIComponent(clientId)}`, { method: "GET" });
+    const result = await requestColleague(`?clientId=${encodeURIComponent(clientId)}`, { method: "GET" });
     apply(result, expectedRevision);
     if (mounted && expectedRevision === revision) connectionError.value = "";
   } catch (error) { if (mounted && expectedRevision === revision) connectionError.value = error.message; }
@@ -76,7 +76,7 @@ async function sendMessage(message, options = {}) {
   sending.value = true;
   const expectedRevision = ++revision;
   try {
-    const result = await request("/messages", { method: "POST", body: { message, messageId: options.messageId, clientId, focus: options.focus } });
+    const result = await requestColleague("/messages", { method: "POST", body: { message, messageId: options.messageId, clientId, focus: options.focus } });
     apply(result, expectedRevision);
     connectionError.value = "";
     return result;
@@ -94,14 +94,14 @@ async function submit() {
 }
 async function stop() {
   const expectedRevision = ++revision;
-  try { apply(await request("/stop", { method: "POST", body: {} }), expectedRevision); }
+  try { apply(await requestColleague("/stop", { method: "POST", body: {} }), expectedRevision); }
   catch (error) { reportFailure(error); }
   schedule();
 }
 async function selectModel(assistantSelection) {
   const expectedRevision = ++revision;
   try {
-    const result = await request("/model", { method: "POST", body: { assistantSelection } });
+    const result = await requestColleague("/model", { method: "POST", body: { assistantSelection } });
     apply(result, expectedRevision);
     connectionError.value = "";
     return result;
@@ -110,7 +110,7 @@ async function selectModel(assistantSelection) {
 }
 async function changeWatch(watchId, operation) {
   try {
-    await request(`/watches/${operation}`, { method: "POST", body: { watchId } });
+    await requestColleague(`/watches/${operation}`, { method: "POST", body: { watchId } });
     await refresh();
   } catch (error) { reportFailure(error); }
 }
@@ -134,7 +134,7 @@ const adapter = computed(() => ({
 watch(open, (value) => { if (value) void refresh(); else schedule(); });
 watch(() => state.value.error, (error) => { if (error) reportFailure(error); });
 watch(() => props.focus, (focus) => {
-  void request("/focus", { method: "POST", body: { clientId, focus } }).catch((error) => { connectionError.value = error.message; });
+  void requestColleague("/focus", { method: "POST", body: { clientId, focus } }).catch((error) => { connectionError.value = error.message; });
 }, { deep: true });
 onMounted(() => { void refresh(); window.addEventListener("focus", refresh); });
 onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; window.removeEventListener("focus", refresh); });
@@ -175,35 +175,37 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
     <div v-if="$slots.voice" class="vibe64-colleague__voice">
       <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" />
     </div>
-    <Vibe64SessionAssistantMenu v-model="modelMenu" :target="modelButton" :selection="state.assistantSelection"
-      :save-selection="selectModel" catalog-path="/api/vibe64/colleague/models" :changes-disabled="working || sending" />
+    <Vibe64SessionAssistantMenu
+      v-model="modelMenu" :target="modelButton" :selection="state.assistantSelection"
+      :save-selection="selectModel" catalog-path="/api/vibe64/colleague/models" :changes-disabled="working || sending"
+    />
   </aside>
 </template>
 
 <style scoped>
-.vibe64-colleague { position: fixed; right: 20px; bottom: max(18px, env(safe-area-inset-bottom)); z-index: 1800; color: rgb(var(--v-theme-on-surface)); }
+.vibe64-colleague { position: fixed; right: 20px; bottom: max(18px, env(safe-area-inset-bottom)); max-width: calc(100% - 40px); z-index: 1800; color: rgb(var(--v-theme-on-surface)); }
 .vibe64-colleague__launcher { display: flex; align-items: center; gap: 9px; padding: 5px 19px 5px 6px; background: rgb(var(--v-theme-surface)); border: 1px solid rgba(var(--v-theme-secondary), .5); border-radius: 32px; box-shadow: 0 5px 24px #0002; cursor: pointer; text-align: left; }
 .vibe64-colleague strong { font-size: 15px; font-weight: 650; letter-spacing: .015em; }
 .vibe64-colleague small { display: block; font-size: 12px; opacity: .75; }
 .vibe64-colleague__avatar { display: block; width: 50px; height: 50px; flex: 0 0 50px; overflow: hidden; border-radius: 50%; }
 .vibe64-colleague__avatar :deep(svg) { width: 100%; height: 100%; }
-.vibe64-colleague--open { display: flex; flex-direction: column; width: min(460px, calc(100vw - 32px)); height: min(690px, calc(100dvh - 100px)); background: rgb(var(--v-theme-surface)); border: 1px solid rgba(var(--v-theme-secondary), .5); border-radius: 22px; overflow: hidden; box-shadow: 0 16px 65px #0003; }
+.vibe64-colleague--open { display: flex; flex-direction: column; width: 460px; height: min(690px, calc(100dvh - 100px)); background: rgb(var(--v-theme-surface)); border: 1px solid rgba(var(--v-theme-secondary), .5); border-radius: 22px; overflow: hidden; box-shadow: 0 16px 65px #0003; }
 .vibe64-colleague__header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: linear-gradient(115deg, rgba(var(--v-theme-secondary), .16), rgba(var(--v-theme-primary), .05)); border-bottom: 1px solid rgba(var(--v-theme-on-surface), .1); }
 .vibe64-colleague__identity { flex: 1; min-width: 0; }
 .vibe64-colleague__identity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vibe64-colleague__close { width: 36px; height: 36px; border-radius: 50%; font-size: 25px; cursor: pointer; }
+.vibe64-colleague__close { width: 48px; height: 48px; flex-shrink: 0; border-radius: 50%; font-size: 25px; cursor: pointer; }
 .vibe64-colleague__close:hover { background: rgba(var(--v-theme-on-surface), .08); }
 .vibe64-colleague__conversation { flex: 1; min-height: 0; display: flex; padding: 12px; }
 .vibe64-colleague__conversation :deep(.assistant-conversation) { width: 100%; min-height: 0; }
-.vibe64-colleague__footer { display: flex; justify-content: space-between; gap: 8px; padding: 8px 16px 12px; font-size: 11px; opacity: .72; }
-.vibe64-colleague__model { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vibe64-colleague__footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px 12px; font-size: 11px; opacity: .72; }
+.vibe64-colleague__model { min-width: 48px; min-height: 48px; max-width: 45%; padding: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vibe64-colleague__watches { padding: 6px 16px; font-size: 12px; max-height: 160px; overflow: auto; }
-.vibe64-colleague__watches summary { cursor: pointer; }
+.vibe64-colleague__watches summary { min-height: 48px; padding-block: 14px; line-height: 20px; cursor: pointer; }
 .vibe64-colleague__watches ul { list-style: none; padding: 0; }
 .vibe64-colleague__watches li { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
 .vibe64-colleague__watches li > span { flex: 1; min-width: 0; }
-.vibe64-colleague__watches button { color: rgb(var(--v-theme-primary)); }
+.vibe64-colleague__watches button { min-width: 48px; min-height: 48px; color: rgb(var(--v-theme-primary)); }
 .vibe64-colleague__voice { padding: 8px 12px; background: rgb(var(--v-theme-surface)); border-radius: 18px; }
-.vibe64-colleague:not(.vibe64-colleague--open) .vibe64-colleague__voice { margin-top: 6px; max-width: min(360px, calc(100vw - 32px)); box-shadow: 0 5px 24px #0002; }
-@media (max-width: 600px) { .vibe64-colleague { right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); } .vibe64-colleague--open { width: calc(100vw - 20px); height: calc(100dvh - 80px); } }
+.vibe64-colleague:not(.vibe64-colleague--open) .vibe64-colleague__voice { margin-top: 6px; max-width: 360px; box-shadow: 0 5px 24px #0002; }
+@media (max-width: 600px) { .vibe64-colleague { right: 10px; max-width: calc(100% - 20px); bottom: max(10px, env(safe-area-inset-bottom)); } .vibe64-colleague--open { width: calc(100% - 20px); height: calc(100dvh - 80px); } }
 </style>
