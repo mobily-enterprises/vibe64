@@ -3,8 +3,10 @@ import { compile } from "@vue/compiler-dom";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import * as Vue from "vue";
 import { describe, expect, it, vi } from "vitest";
+import { VIBE64_COLLEAGUE_DATABASE_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
-const mocks = vi.hoisted(() => ({ database: null, overviewMounts: 0, overviewUnmounts: 0 }));
+const mocks = vi.hoisted(() => ({ database: null, route: null, router: null, overviewMounts: 0, overviewUnmounts: 0 }));
+vi.mock("vue-router", () => ({ useRoute: () => mocks.route, useRouter: () => mocks.router }));
 
 vi.mock("../../packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js", () => ({
   useVibe64DatabaseTools: () => mocks.database
@@ -86,7 +88,12 @@ async function flushWorkspace(runQuery) {
 }
 
 function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout = vi.fn(), view = "data" } = {}) {
-  const props = Vue.reactive({ active, sessionId: "database-session" });
+  const props = Vue.reactive({ active, projectSlug: "alpha", sessionId: "database-session" });
+  const route = Vue.reactive({ path: "/app/alpha/dashboard/database", query: { session: props.sessionId, databaseView: view } });
+  const router = { replace: vi.fn(async (location) => Object.assign(route, location)) };
+  mocks.route = route;
+  mocks.router = router;
+  const colleagueDatabase = Vue.shallowRef(null);
   const state = Vue.ref(initialState);
   const runQuery = vi.fn(async () => ({
     kind: "result-set", columns: [{ index: 0, label: "value", databaseType: "text" }],
@@ -129,11 +136,12 @@ function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout
     ["VCard", "article"], ["VCardTitle", "header"], ["VCardText", "div"], ["VCardActions", "footer"]
   ]) app.component(name, passthroughComponent(element));
   app.provide(Vue.ssrContextKey, { modules: new Set() });
+  app.provide(VIBE64_COLLEAGUE_DATABASE_KEY, colleagueDatabase);
   const container = { type: "root", children: [], props: {} };
   app.mount(container);
   app._instance.subTree.component.setupState.activeView = view;
   return {
-    container, props, state, runQuery,
+    container, props, state, runQuery, route, router, colleagueDatabase,
     workspace: app._instance.subTree.component.setupState,
     editor: () => findNode(container, (node) => node.props["data-sql-editor"] === true),
     async close() {
@@ -420,5 +428,83 @@ describe("Database Workspace shared ERD hydration", () => {
     await fixture.close();
     await pending;
     expect(saveLayout).not.toHaveBeenCalled();
+  });
+});
+
+describe("Database view navigation and Colleague awareness", () => {
+  it("hydrates a requested view before data arrives and publishes only its visible semantic state", async () => {
+    const fixture = mountDatabaseWorkspace({ view: "erd" });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("erd");
+      expect({ ...fixture.colleagueDatabase.value }).toEqual({ projectSlug: "alpha", sessionId: "database-session", view: "erd", screen: "loading" });
+      mocks.database.error.value = "Private driver detail";
+      expect(fixture.colleagueDatabase.value.screen).toBe("unavailable");
+      mocks.database.loading.value = true;
+      expect(fixture.colleagueDatabase.value.screen).toBe("loading");
+      mocks.database.error.value = "";
+      mocks.database.loading.value = false;
+      fixture.state.value = firstState;
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.colleagueDatabase.value.screen).toBe("workspace");
+      expect(fixture.runQuery).not.toHaveBeenCalled();
+      fixture.props.active = false;
+      await Vue.nextTick();
+      expect(fixture.colleagueDatabase.value).toBeNull();
+      fixture.props.active = true;
+      await Vue.nextTick();
+      expect(fixture.colleagueDatabase.value.view).toBe("erd");
+    } finally { await fixture.close(); }
+    expect(fixture.colleagueDatabase.value).toBeNull();
+  });
+
+  it("keeps manual view selection in the URL and preserves SQL drafts across warm navigation", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: firstState });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.runQuery).toHaveBeenCalledTimes(1);
+      fixture.workspace.updateSqlText("SELECT a_saved_draft;");
+      fixture.workspace.activeView = "overview";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.route.query.databaseView).toBe("overview");
+      fixture.props.active = false;
+      await Vue.nextTick();
+      fixture.route.query = { session: fixture.props.sessionId, databaseView: "data" };
+      await Vue.nextTick();
+      expect(fixture.colleagueDatabase.value).toBeNull();
+      fixture.props.active = true;
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("data");
+      expect(fixture.editor().props.value).toBe("SELECT a_saved_draft;");
+      expect(fixture.runQuery).toHaveBeenCalledTimes(1);
+      fixture.route.query.databaseView = "erd";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.colleagueDatabase.value.view).toBe("erd");
+      delete fixture.route.query.databaseView;
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("overview");
+    } finally { await fixture.close(); }
+  });
+
+  it("honours a new subsystem table request without letting its old request override later view navigation", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: firstState, view: "overview", active: false });
+    try {
+      fixture.props.openRequest = { qualifiedName: firstTable.qualifiedName, sequence: 1 };
+      await Vue.nextTick();
+      expect(fixture.workspace.activeView).toBe("overview");
+      fixture.props.active = true;
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("erd");
+      expect(fixture.route.query.databaseView).toBe("erd");
+      fixture.route.query.databaseView = "overview";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("overview");
+      fixture.props.active = false;
+      await Vue.nextTick();
+      fixture.props.active = true;
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("overview");
+      expect(fixture.runQuery).not.toHaveBeenCalled();
+    } finally { await fixture.close(); }
   });
 });

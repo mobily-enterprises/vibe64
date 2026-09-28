@@ -576,6 +576,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     },
     async navigate(input, context) {
       const state = await stateFor(context);
+      if (input.databaseView && (input.pane !== "database" || !input.sessionId)) {
+        return { ok: false, error: "Choose the exact session and Database pane before selecting a database view." };
+      }
       if (input.integrationId && (input.pane !== "integrations" || !input.sessionId)) {
         return { ok: false, error: "Choose the exact session and Integrations view before opening an integration." };
       }
@@ -589,6 +592,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         ...(input.managementView ? { managementView: input.managementView } : {}),
         ...(input.pane ? { pane: input.pane } : {}),
         ...(input.integrationId ? { integrationId: input.integrationId } : {}),
+        ...(input.databaseView ? { databaseView: input.databaseView } : {}),
         sessionId: input.sessionId || "", conversationId: input.conversationId || "", status: "pending" };
       connection.navigation = command;
       return new Promise((resolve) => {

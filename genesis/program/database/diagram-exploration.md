@@ -31,6 +31,23 @@ requiring every table and field to be read at once.
 
 ## Public contract
 
+Overview, ERD and Data selection lives in the Database URL's `databaseView` query
+parameter. An absent or invalid value selects Overview. Manual view changes
+update that selection, and reopening a warm route restores it. Switching the
+three views preserves the mounted SQL draft and diagram state; disposing or
+reloading the workspace does not persist an unsaved SQL draft. A new Subsystems table request selects ERD
+through the same owner and updates the URL; its old request cannot override later
+view navigation. Hidden workspaces defer route selection until active.
+
+The active workspace publishes only its project/session identity, selected view
+and loading/unavailable/workspace state for Colleague. Publication ends on hiding
+or disposal, and never includes SQL, schema contents, rows or driver errors.
+Colleague can request one of those views through its existing navigation action;
+the browser acknowledges the matching loaded workspace, not merely its URL.
+A failed database load cannot be acknowledged as a selected workspace. Data keeps
+its ordinary initial table-read behavior and existing draft-preservation rules;
+view selection is not a request to run authored SQL.
+
 Automatic database reads follow the visible Database pane. A retained hidden
 workspace defers automatic table opening until it is active again, including
 when schema data arrives after leaving. Returning to the same selected table

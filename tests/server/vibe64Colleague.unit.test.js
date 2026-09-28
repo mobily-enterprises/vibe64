@@ -1266,3 +1266,34 @@ test("integration navigation needs the exact session and pane and retains the pa
   f.observations.projectAllowed = false;
   await assert.rejects(execute(input), { statusCode: 403 });
 });
+
+test("database view navigation requires its session and pane and retains the acknowledged workspace state", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const execute = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
+  const input = { projectSlug: "alpha", sessionId: "session-1", pane: "database", databaseView: "erd" };
+  for (const invalid of [{ sessionId: "" }, { pane: "env" }]) {
+    assert.equal((await execute({ ...input, ...invalid })).ok, false);
+    assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
+  }
+  for (const databaseView of ["", "sql", {}]) {
+    await assert.rejects(execute({ ...input, databaseView }), { code: "ACTION_VALIDATION_FAILED" });
+  }
+  for (const databaseView of ["overview", "erd", "data"]) {
+    const pending = execute({ ...input, databaseView });
+    let state;
+    for (let index = 0; index < 20; index += 1) {
+      state = await f.service.read({ clientId: "tab-a" }, f.context);
+      if (state.navigation?.status === "pending") break;
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.equal(state.navigation.databaseView, databaseView);
+    const focus = { ...input, databaseView, databaseScreen: "workspace" };
+    await f.actions.execute({ actionId: "vibe64.colleague.navigation.acknowledge", context: f.context,
+      input: { clientId: "tab-a", commandId: state.navigation.id, ok: true, focus } });
+    assert.deepEqual(await pending, { ok: true, focus });
+  }
+  f.observations.projectAllowed = false;
+  await assert.rejects(execute(input), { statusCode: 403 });
+});

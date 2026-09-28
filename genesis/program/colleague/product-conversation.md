@@ -276,6 +276,16 @@ along with their target, so later navigation cannot relabel an earlier request.
 These are semantic UI states, not screen or repository access; output controls
 alone do not prove an application is running.
 
+Database navigation can include `databaseView` (`overview`, `erd` or `data`) with
+an exact session and the Database pane. The host carries it in the URL and waits
+for the actual workspace to load that view, reporting failed loads or changed
+selections instead of claiming success. Captured focus reports `databaseScreen`
+for loading, unavailable or workspace, with `databaseView` only for a loaded
+workspace. It follows the active panel, not stale query parameters, and omits that
+state for foreign project/session owners or hidden compact project content.
+These fields contain no SQL, table contents or credentials, and do not prove
+connection health. Opening Data retains the UI's normal automatic table reads.
+
 Database status, schema refresh and exact-query cancellation are available through
 their existing authorized actions. Results contain bounded identity, schema counts,
 refresh time and active query IDs, never SQL, rows, credentials or full schema.

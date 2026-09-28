@@ -46,7 +46,10 @@ and advertising controls retain their account, environment, review and explicit
 confirmation requirements; development source may still address a real provider
 account. Colleague can report a session's database identity, schema counts and
 current query activity, refresh its schema snapshot, and request cancellation of
-one exact query. It receives no SQL, rows or credentials. A cancellation receipt
+one exact query. It can open Overview, ERD or Data, and distinguishes a loading or
+unavailable database from a loaded view. View selection survives navigation and
+reload through the URL. Switching between its three views preserves the mounted
+SQL draft; leaving or reloading the workspace does not preserve an unsaved draft. It receives no SQL, rows or credentials. A cancellation receipt
 is not proof that execution has stopped or changes were undone; engineering work
 still goes to coding conversations. Complete product-operation coverage remains
 in progress.

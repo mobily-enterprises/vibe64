@@ -532,13 +532,17 @@ import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/co
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import {
   computed,
+  inject,
   nextTick,
   onBeforeUnmount,
   reactive,
   ref,
   shallowRef,
-  watch
+  watch,
+  watchEffect
 } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { VIBE64_COLLEAGUE_DATABASE_KEY } from "/src/lib/vibe64AssistantHost.js";
 import {
   mdiAlertCircleOutline,
   mdiBookmarkOutline,
@@ -653,6 +657,8 @@ const {
 } = database;
 
 const activeView = ref("overview");
+const route = useRoute();
+const router = useRouter();
 // Retain each visited view in the same grid cell. Its diagram and camera stay
 // mounted; switching views only changes visibility and interaction.
 const openedViews = reactive({ overview: true, erd: false, data: false });
@@ -666,9 +672,6 @@ let disposed = false;
 const navigatorTab = ref("tables");
 const tableSearch = ref("");
 const selectedTableName = ref("");
-watch([() => props.openRequest, () => props.active], ([request, active]) => {
-  if (request?.qualifiedName && active) activeView.value = "erd";
-}, { immediate: true });
 const sqlText = ref("");
 const queryResult = ref(null);
 const activeQueryId = ref("");
@@ -840,6 +843,43 @@ watch(() => props.sessionId, () => {
     openedViews.data = false;
   }
 }, { immediate: true });
+
+let appliedOpenRequest = null;
+watch([() => route.query.databaseView, () => props.openRequest, () => props.active, () => props.sessionId],
+  ([view, request, active]) => {
+    if (!active) return;
+    if (request?.qualifiedName && request !== appliedOpenRequest) {
+      appliedOpenRequest = request;
+      activeView.value = "erd";
+    } else {
+      activeView.value = ["overview", "erd", "data"].includes(view) ? view : "overview";
+    }
+  }, { immediate: true });
+watch(activeView, (view) => {
+  if (props.active && route.query.databaseView !== view) {
+    void router.replace({ path: route.path, query: { ...route.query, databaseView: view } });
+  }
+}, { flush: "post", immediate: true });
+
+const colleagueDatabase = inject(VIBE64_COLLEAGUE_DATABASE_KEY, null);
+const displayedDatabase = {
+  get projectSlug() { return props.projectSlug; },
+  get sessionId() { return props.sessionId; },
+  get view() { return activeView.value; },
+  get screen() {
+    if (state.value) return "workspace";
+    if (loading.value || !error.value) return "loading";
+    return "unavailable";
+  }
+};
+watchEffect(() => {
+  if (!colleagueDatabase) return;
+  if (props.active) colleagueDatabase.value = displayedDatabase;
+  else if (colleagueDatabase.value === displayedDatabase) colleagueDatabase.value = null;
+});
+onBeforeUnmount(() => {
+  if (colleagueDatabase?.value === displayedDatabase) colleagueDatabase.value = null;
+});
 
 watch([() => state.value?.layout, () => props.active, diagramSavesPending], ([layout, active, pending]) => {
   if (active && !pending && layout && layout.revision > (erdLayout.value.revision || 0)) {
