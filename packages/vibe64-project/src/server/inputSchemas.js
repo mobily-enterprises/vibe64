@@ -25,6 +25,11 @@ const projectRemoteInputValidator = inputSchema({
   settings: { type: "object", additionalProperties: true }
 });
 const projectsReadInputValidator = inputSchema({});
+const projectRepositoryBranchesInputValidator = inputSchema({
+  name: { type: "string", minLength: 1, maxLength: 4096, noTrim: true },
+  offset: { type: "integer", min: 0 },
+  limit: { type: "integer", min: 1, max: 10 }
+});
 const projectOnboardingInputValidator = inputSchema({
   sessionId: { type: "string", noTrim: false, required: true }
 });
@@ -225,6 +230,7 @@ const projectPullRequestInputValidators = {
 };
 
 export {
+  projectRepositoryBranchesInputValidator,
   emptyProjectInputValidator,
   projectRepositoryWorkflowInputValidator,
   projectIssueInputValidators,

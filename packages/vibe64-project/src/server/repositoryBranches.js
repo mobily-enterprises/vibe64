@@ -40,7 +40,17 @@ async function repositoryBranches(project, input = {}, {
         return { name, commit };
       }));
     }
-    if (!input.selection) return { ok: true, branches, defaultBranch: project.repository.defaultBranch };
+    if (!input.selection) {
+      branches.sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
+      if (input.name === undefined && input.offset === undefined && input.limit === undefined) {
+        return { ok: true, branches, defaultBranch: project.repository.defaultBranch };
+      }
+      const matched = input.name === undefined ? branches : branches.filter((branch) => branch.name === input.name);
+      const offset = input.offset || 0;
+      const page = matched.slice(offset, offset + (input.limit || 10));
+      return { ok: true, branches: page, defaultBranch: project.repository.defaultBranch,
+        total: matched.length, offset, nextOffset: offset + page.length < matched.length ? offset + page.length : null };
+    }
     const { name, fromBranch, expectedCommit } = input.selection;
     if (!validRepositoryBranch(name) || (fromBranch && !validRepositoryBranch(fromBranch))) {
       throw new Error("Choose a valid repository branch.");

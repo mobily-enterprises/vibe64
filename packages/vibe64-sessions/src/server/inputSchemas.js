@@ -290,7 +290,11 @@ const sessionPullRequestInputValidator = patchSchema({
 
 const sessionCreateInputValidator = patchSchema({
   workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
-  repositoryBranch: { type: "object", additionalProperties: true, required: false },
+  repositoryBranch: { type: "object", required: false, schema: createSchema({
+    name: { type: "string", minLength: 1, maxLength: 255, noTrim: true, required: true },
+    fromBranch: { type: "string", minLength: 1, maxLength: 255, noTrim: true, required: false },
+    expectedCommit: { type: "string", pattern: /^[a-f0-9]{40,64}$/u, required: true }
+  }) },
   pullRequestNumber: { type: "integer", min: 1, required: false },
   assistantSelection: {
     type: "object",

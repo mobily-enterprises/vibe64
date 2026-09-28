@@ -57,6 +57,7 @@ function registerRoutes(http, {
   });
   routes.actionRoute("GET", "/repository/branches", {
     actionId: "vibe64.project.repository.branches.read",
+    buildInput: (request) => routes.requestQuery(request),
     summary: "List repository branches for a new session."
   });
   routes.actionRoute("PUT", "/repository/workflow", {

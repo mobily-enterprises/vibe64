@@ -132,6 +132,27 @@ test("GitHub branch choices validate the reviewed commit and never overwrite an 
   }
 });
 
+test("branch reads page deterministically and exact lookup can find a branch beyond the first page", async () => {
+  const rows = Array.from({ length: 23 }, (_, i) => ({ name: `branch-${String(i).padStart(2, "0")}`, commit: { sha: i.toString(16).padStart(40, "0") } })).reverse();
+  async function read(input = {}) {
+    const f = fixture([success(rows)]);
+    const result = await repositoryBranches({ ...project, projectRuntimeRoot: "/test/project" }, { ...input, vibe64User: user },
+      { ...f.options, runExclusive: async (_root, operation) => operation() });
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls[0].args.includes("POST"), false, "listing cannot create a ref");
+    return result;
+  }
+  assert.equal((await read()).branches.length, 23, "the ordinary unpaged UI contract is retained");
+  const pages = await Promise.all([read({ offset: 0, limit: 10 }), read({ offset: 10, limit: 10 }), read({ offset: 20, limit: 10 })]);
+  assert.deepEqual(pages.map(page => page.nextOffset), [10, 20, null]);
+  assert.ok(pages.every(page => page.total === 23));
+  assert.deepEqual(pages.flatMap(page => page.branches.map(branch => branch.name)), rows.map(row => row.name).reverse());
+  const exact = await read({ name: "branch-22" });
+  assert.deepEqual(exact.branches, [{ name: "branch-22", commit: (22).toString(16).padStart(40, "0") }]);
+  assert.equal(exact.nextOffset, null);
+  assert.equal((await read({ name: "absent" })).total, 0);
+});
+
 test("PR workflow settings default without backfilling and reject malformed persisted state", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-repository-workflow-"));
   t.after(() => rm(root, { recursive: true, force: true }));

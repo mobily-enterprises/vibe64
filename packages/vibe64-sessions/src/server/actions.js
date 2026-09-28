@@ -189,7 +189,7 @@ function createSessionActions({ sessions } = {}) {
     action({
       id: ACTION_CREATE_SESSION,
       kind: "command",
-      assistant: sessionTool("Create a coding session in the selected project using its normal workspace and resource admission. workflowEngineId chooses an existing configured workflow (codex, claude or opencode). Creation can start workspace preparation; inspect the returned session before sending work. If the result is uncertain, inspect the session list before retrying."),
+      assistant: sessionTool("Create a coding session in the selected project using its normal workspace and resource admission. workflowEngineId chooses an existing configured workflow (codex, claude or opencode). To open a saved GitHub/Vibe64 Git branch, read repository.branches.read first and supply repositoryBranch with its exact name and expectedCommit. To create a new branch, name is the requested new name, fromBranch is the reviewed existing source name, and expectedCommit is that source's exact commit. This creates a repository branch and session from saved source; it does not copy another session's unsaved work or conversation. Inspect that session's work and explain the source before branching; never silently Save to include unsaved work. The service checks capacity before branch creation, rejects existing target names and stale source commits, and forbids combining a branch with pullRequestNumber. Creation can start preparation; inspect the returned session before sending work. On an uncertain result inspect both sessions and branches before retrying; an admitted branch may exist even if later workspace creation failed."),
       input: sessionCreateInputValidator,
       execute: (input) => sessions.createSession(input || {})
     }),

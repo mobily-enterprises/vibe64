@@ -17,7 +17,7 @@ test("all project HTTP operations share canonical actions and current authority 
     const review = { repository: "example/project", number: 42, headBranch: "work", headCommit: "a".repeat(40), baseBranch: "main", baseCommit: "b".repeat(40), headRepository: "example/project" };
     const cases = [
       ["GET", "/repository/remote", "repository.remote.read", "repositoryRemote", {}],
-      ["GET", "/repository/branches", "repository.branches.read", "repositoryBranches", {}],
+      ["GET", "/repository/branches", "repository.branches.read", "repositoryBranches", { name: "feature/search", offset: 0, limit: 10 }],
       ["PUT", "/repository/workflow", "repository.workflow.save", "saveRepositoryWorkflow", { requirePullRequest: true }],
       ["POST", "/repository/remote", "repository.remote", "repositoryRemote", { action: "pull", review: { head: "reviewed-head" }, merge: false }],
       ["GET", "/issues", "issues.list", "githubIssues", { state: "all", search: "layout", cursor: null, labels: ["bug", "help wanted"] }],
@@ -116,6 +116,8 @@ test("all project HTTP operations share canonical actions and current authority 
     }
     const count = calls.length;
     for (const [operation, input] of [
+      ["repository.branches.read", { limit: 11 }], ["repository.branches.read", { offset: -1 }],
+      ["repository.branches.read", { name: "" }], ["repository.branches.read", { selection: { name: "new" } }],
       ["issues.comment", { number: 42 }], ["issues.set-labels", { number: 42 }],
       ["issues.create", { title: "Title", labels: [{}] }], ["issues.state", { number: 42, state: "merged" }],
       ["issues.create", { title: "Title", labels: Array(101).fill("bug") }], ["issues.read", { number: Number.MAX_SAFE_INTEGER + 1 }],

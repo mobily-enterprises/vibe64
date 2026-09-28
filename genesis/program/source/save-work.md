@@ -8,6 +8,9 @@ Git commands.
 
 - `packages/vibe64-core/src/server/projectRepository.js`
 - `packages/vibe64-project/src/server/repositoryBranches.js`
+- `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/inputSchemas.js`
+- `packages/vibe64-project/src/server/registerRoutes.js`
 - `packages/vibe64-terminals/src/server/sessionTurnCheckpoint.js`
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 - `src/components/studio/ProjectSettingsPanel.vue`
@@ -49,6 +52,19 @@ Colleague reports publication that still needs reconciliation separately from
 a completed Save. After an uncertain result it inspects the saved operation
 before retrying. Update does not publish work and may restart workspace
 preparation; acceptance of either operation does not establish completion.
+
+Colleague can read saved branches and open a session on an existing branch or
+create a new named branch through ordinary session creation. Branch discovery
+returns at most ten exact names/commits with a continuation offset; an exact-name
+query can find a choice beyond the first page. The ordinary unpaged UI keeps its
+complete list. Pages are sorted by exact name, and session creation rechecks the
+reviewed source commit, so a stale choice cannot silently use newer source.
+Creation checks session capacity before creating a branch and never replaces an
+existing target name. Its typed branch selection requires a name and source
+commit; `fromBranch` distinguishes a new branch from an existing one. This starts
+from saved repository source, without copying unsaved work or chat history.
+Colleague must explain that source and cannot silently Save to include changes.
+If later workspace creation fails, it inspects branches and sessions before retry.
 
 File Save writes only that file in the session. The compact Save changes review
 shows the changed-file count, View diff and captured destination, with a short

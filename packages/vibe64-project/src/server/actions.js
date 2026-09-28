@@ -1,9 +1,11 @@
 import { createEntityChangedActionEvent } from "@jskit-ai/kernel/server/actions";
+import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import {
   projectRemoteInputValidator,
+  projectRepositoryBranchesInputValidator,
   projectEnvSecretRevealInputValidator,
   emptyProjectInputValidator,
   projectRepositoryWorkflowInputValidator,
@@ -148,13 +150,14 @@ function createVibe64ProjectChangedPublisher({ events = null } = {}) {
   };
 }
 
-function action({ events = [], execute, id, input, kind, ownerRequired = false }) {
+function action({ assistant, events = [], execute, id, input, kind, ownerRequired = false }) {
   return withVibe64ActionContext({
     id,
     version: 1,
     kind,
     input,
     output: null,
+    ...(assistant ? { extensions: { assistant } } : {}),
     idempotency: kind === "query" ? "none" : "optional",
     audit: {
       actionName: id
@@ -173,7 +176,28 @@ function createProjectActions({ project } = {}) {
   return Object.freeze([
     action({ id: "vibe64.project.repository.remote.read", kind: "query", input: emptyProjectInputValidator,
       execute: () => project.repositoryRemote() }),
-    action({ id: "vibe64.project.repository.branches.read", kind: "query", input: emptyProjectInputValidator,
+    action({ id: "vibe64.project.repository.branches.read", kind: "query", input: projectRepositoryBranchesInputValidator,
+      assistant: {
+        description: "Read current saved branch names and exact commits for a GitHub or Vibe64 Git project. Returns at most ten branches: use nextOffset to continue, or name for an exact branch lookup. These are saved repository branches, not another session's unsaved files or conversation. Pass a freshly read commit unchanged as repositoryBranch.expectedCommit when creating a session. Opening an existing branch uses name; creating a new branch also supplies fromBranch. Local-source projects use their existing local Git controls through a coding conversation.",
+        output: { mode: "replace", schema: createSchema({
+          ok: { type: "boolean", required: true }, error: { type: "string", maxLength: 512, required: false },
+          branches: { type: "array", required: true, items: createSchema({
+            name: { type: "string", maxLength: 4096, noTrim: true, required: true },
+            commit: { type: "string", maxLength: 64, required: true }
+          }) },
+          defaultBranch: { type: "string", maxLength: 4096, noTrim: true, required: false },
+          total: { type: "integer", required: true }, offset: { type: "integer", required: true },
+          nextOffset: { type: "integer", nullable: true, required: true }
+        }) },
+        transformResult(result) {
+          const branches = (result.branches || []).slice(0, 10).map(({ name, commit }) => ({ name, commit }));
+          const offset = result.offset || 0;
+          const total = result.total ?? (result.branches || []).length;
+          return { ok: result.ok === true, branches, total, offset, nextOffset: offset + branches.length < total ? offset + branches.length : null,
+            ...(result.defaultBranch ? { defaultBranch: result.defaultBranch } : {}),
+            ...(result.error || result.errors?.[0]?.message ? { error: String(result.error || result.errors[0].message).slice(0, 512) } : {}) };
+        }
+      },
       execute: (input) => project.repositoryBranches(input) }),
     action({ id: "vibe64.project.repository.workflow.save", kind: "command", input: projectRepositoryWorkflowInputValidator,
       ownerRequired: true, execute: (input) => project.saveRepositoryWorkflow(input) }),
