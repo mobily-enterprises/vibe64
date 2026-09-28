@@ -25,6 +25,8 @@ from saved project work, and inspect one exact file change at a time.
 - `packages/vibe64-source-editor/src/server/starredFiles.js`
 - `packages/vibe64-source-editor/src/server/registerRoutes.js`
 - `packages/vibe64-source-editor/src/server/actions.js`
+- `packages/vibe64-source-editor/src/server/integrationAssistantContracts.js`
+- `tests/server/vibe64IntegrationActionTools.unit.test.js`
 - `tests/server/vibe64SourceEditorRoutes.unit.test.js`
 - `src/composables/useVibe64StarredFiles.js`
 - `src/components/studio/vibe64-session/Vibe64StarredFilesMenu.vue`
@@ -50,7 +52,7 @@ from saved project work, and inspect one exact file change at a time.
 
 ## Public contract
 
-The thirty named `vibe64.source-editor.*` actions own ordinary source, file-area,
+The named `vibe64.source-editor.*` actions own ordinary source, file-area,
 integration and explanation inputs. HTTP JSON handlers execute those actions;
 downloads and multipart uploads retain transport framing while dispatching the
 same domain operation. Every action resolves the current actor and project access
@@ -61,8 +63,20 @@ executable, environment or source root supplied by a caller. Existing service
 revision, owner, path and session-admission checks still apply.
 
 Live file observation and streamed explanation/follow-up responses retain their
-transport-owned callbacks and lifetime. Colleague does not discover these source
-actions: repository investigation and editing belong to its coding conversations.
+transport-owned callbacks and lifetime. Repository investigation and editing
+belong to coding conversations. Colleague discovers only two read controls here:
+`integrations.read` projects the same authorized configuration read into slot IDs,
+providers, display names, account modes, authentication methods and scope counts;
+it omits settings, registrations, references, extensions and source details.
+The summary reports the full count, considers at most 50 slots and flags omitted
+long IDs or extra slots as incomplete. It cannot be used to replace configuration.
+`integrations.providers.read` searches the installed UI provider catalogue by ID,
+name and description, returning at most 20 names/descriptions and a next offset.
+It still checks the selected session but requires neither valid configuration nor
+Env preparation or external provider calls. These results describe configuration
+and available choices, never connection or implementation readiness. The full
+configuration HTTP read and all source/connection mutations retain their existing
+behavior; those mutations are not yet exposed to Colleague.
 
 Files presents Repo, Drop Zone and Session as icon-labelled areas, separate from
 folder navigation. Repo retains source editing, stars, explanations and selected

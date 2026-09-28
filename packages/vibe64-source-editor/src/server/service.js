@@ -1237,6 +1237,23 @@ function createService({
       });
     },
 
+    async readIntegrationProviders(input = {}) {
+      return runSourceEditorOperation(async () => {
+        await sourceEditorContext(input.sessionId);
+        const search = String(input.search || "").trim().toLowerCase();
+        const matches = [googleCalendarDefinition, ...connectorDefinitions].filter((provider) =>
+          `${provider.id} ${provider.name} ${provider.description || ""}`.toLowerCase().includes(search));
+        const offset = input.offset || 0;
+        return {
+          ok: true, total: matches.length, nextOffset: offset + 20 < matches.length ? offset + 20 : null,
+          providers: matches.slice(offset, offset + 20).map((provider) => ({
+            id: provider.id, name: provider.name, description: String(provider.description || "").slice(0, 512),
+            descriptionTruncated: String(provider.description || "").length > 512
+          }))
+        };
+      });
+    },
+
     async saveIntegrations(input = {}) {
       return runSourceEditorOperation(async () => {
         const configuration = validateIntegrationConfiguration(input.configuration, {

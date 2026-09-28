@@ -1,5 +1,6 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { integrationReadTool } from "./integrationAssistantContracts.js";
 
 const text = { type: "string", noTrim: true, required: false };
 const requiredText = { ...text, minLength: 1, required: true };
@@ -15,12 +16,12 @@ const selection = {
 };
 
 function createSourceEditorActions({ sourceEditor, publishFileChanged = async () => {} }) {
-  const action = (name, fields, execute, { kind = "command", changed = null } = {}) => withVibe64ActionContext({
+  const action = (name, fields, execute, { kind = "command", changed = null, assistant = { exclude: true } } = {}) => withVibe64ActionContext({
     id: `vibe64.source-editor.${name}`, version: 1, kind,
     input: { schema: createSchema({ sessionId: identity, ...fields }), mode: "create" },
     output: null, idempotency: kind === "query" ? "none" : "optional",
-    // Source/engineering access remains with coding agents, not Colleague.
-    extensions: { assistant: { exclude: true } },
+    // Only explicit product controls are exposed; source work stays with coding agents.
+    extensions: { assistant },
     async execute(input, context) {
       const result = await execute(input, context);
       if (changed) await publishFileChanged(result, { operation: typeof changed === "function" ? changed(input) : changed });
@@ -40,7 +41,10 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged = async ()
     }, (input, context) => sourceEditor.fileArea(input, operation,
       operation === "upload" ? { readUpload: context.sourceEditorUpload?.readUpload } : {}),
     ["tree", "file", "download", "archive"].includes(operation) ? query : {})),
-    action("integrations.read", {}, (input) => sourceEditor.readIntegrations(input), query),
+    action("integrations.read", {}, (input) => sourceEditor.readIntegrations(input), { ...query, assistant: integrationReadTool("integrations.read") }),
+    action("integrations.providers.read", {
+      search: { ...text, maxLength: 200 }, offset: { type: "integer", min: 0, required: false }
+    }, (input) => sourceEditor.readIntegrationProviders(input), { ...query, assistant: integrationReadTool("integrations.providers.read") }),
     action("integrations.n8n.discover", { serverUrl: requiredText }, (input) => sourceEditor.discoverN8nIntegration(input), query),
     action("integrations.save", integration, (input) => sourceEditor.saveIntegrations(input), { changed: (input) => input.baseHash === null ? "created" : "saved" }),
     action("integrations.oauth-client.register", { ...integration, integrationId: identity, callbackUrl: requiredText },

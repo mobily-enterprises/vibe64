@@ -150,6 +150,7 @@ function registerRoutes(http, {
   }));
 
   route("GET", "/integrations", "integrations.read", { summary: "Read portable integration configuration." });
+  route("GET", "/integrations/providers", "integrations.providers.read", { summary: "Search available integration providers." }, query);
   route("POST", "/integrations/n8n/discovery", "integrations.n8n.discover", { bodyLimit: 4096, summary: "Discover public n8n OAuth metadata." }, body);
   route("PUT", "/integrations", "integrations.save", { bodyLimit: 2 * 1024 * 1024, summary: "Validate and save integration configuration." }, body);
   route("POST", "/integrations/:integrationId/oauth-client", "integrations.oauth-client.register", {

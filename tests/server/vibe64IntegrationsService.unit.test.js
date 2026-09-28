@@ -107,6 +107,34 @@ test("UI configuration writes the CLI file and preserves extensions through late
   assert.deepEqual(updated.configuration.integrations.calendar.extensions, cli.integrations.calendar.extensions);
 });
 
+test("integration provider discovery is bounded, searchable and independent of configuration or provider traffic", async (t) => {
+  const { source, service, calls, environmentCalls } = await fixture(t);
+  // Discovery must still work when the source configuration needs repair.
+  await writeFile(path.join(source, "integrations.json"), "invalid JSON");
+  let page = await service.readIntegrationProviders({ sessionId: "one" });
+  const total = page.total;
+  const ids = [];
+  while (page) {
+    assert.equal(page.ok, true);
+    assert.ok(page.providers.length <= 20);
+    assert.equal(page.total, total);
+    ids.push(...page.providers.map(({ id }) => id));
+    page = page.nextOffset === null ? null : await service.readIntegrationProviders({ sessionId: "one", offset: page.nextOffset });
+  }
+  assert.equal(ids.length, total);
+  assert.equal(new Set(ids).size, total);
+  assert.ok(ids.includes("google-calendar"));
+  assert.ok(ids.includes("resend"));
+  const found = await service.readIntegrationProviders({ sessionId: "one", search: "  ReSeNd  " });
+  assert.deepEqual(found.providers.map(({ id }) => id), ["resend"]);
+  assert.equal(found.nextOffset, null);
+  assert.equal((await service.readIntegrationProviders({ sessionId: "one", search: "not-a-provider-fixture" })).total, 0);
+  assert.deepEqual((await service.readIntegrationProviders({ sessionId: "one", offset: total })).providers, []);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(environmentCalls, []);
+  assert.equal(await readFile(path.join(source, "integrations.json"), "utf8"), "invalid JSON");
+});
+
 test("conflicting creates, stale saves, and missing versions preserve the existing file", async (t) => {
   const { service, source } = await fixture(t);
   const input = { sessionId: "one", configuration: configuration() };

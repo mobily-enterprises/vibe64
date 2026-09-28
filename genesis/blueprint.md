@@ -26,8 +26,11 @@ can also explain development Env setup from variable names, presence and ownersh
 without receiving stored values, apply values supplied by the person, and remove
 explicitly requested user overrides. It preserves other entries and opens Env
 for secret entry or stored-value inspection. Host-owned values remain protected.
-An Env change does not restart the app or prove it runs. Complete product-operation
-coverage remains in progress.
+An Env change does not restart the app or prove it runs. Colleague can list a
+session's configured integration slots and search the editor's available services.
+It receives metadata, not saved settings or credentials, and distinguishes
+configuration from working connections. Complete product-operation coverage
+remains in progress.
 
 On phones and narrow layouts, Colleague has one compact avatar button in the
 header. It opens a full-screen conversation with voice controls inside, leaving

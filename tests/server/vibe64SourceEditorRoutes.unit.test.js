@@ -278,6 +278,7 @@ test("source operations share validated inputs and fresh project authority acros
       ["POST", "/files/:area/directory", "file-area.mkdir", "fileArea", { path: "new" }],
       ["DELETE", "/files/:area/file", "file-area.delete", "fileArea", { path: "old.txt" }],
       ["GET", "/integrations", "integrations.read", "readIntegrations", {}],
+      ["GET", "/integrations/providers", "integrations.providers.read", "readIntegrationProviders", { search: "email", offset: 20 }],
       ["POST", "/integrations/n8n/discovery", "integrations.n8n.discover", "discoverN8nIntegration", { serverUrl: "https://example.com" }],
       ["PUT", "/integrations", "integrations.save", "saveIntegrations", { baseHash: null, configuration: { integrations: [] } }],
       ["POST", "/integrations/:integrationId/oauth-client", "integrations.oauth-client.register", "registerOAuthIntegration", { baseHash: "hash", configuration: {}, callbackUrl: "https://example.com/callback" }],
