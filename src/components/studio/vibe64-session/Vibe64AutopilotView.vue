@@ -379,7 +379,6 @@
       <Vibe64ConversationLog
         ref="conversationElement"
         :working="agentStopVisible"
-        :reasoning-active="reasoningActive"
         :integration-action-pending="props.conversationLog?.integrationActionPending"
         :integration-connections="props.conversationLog?.integrationConnections"
         :integration-action-error="props.conversationLog?.integrationActionError"
@@ -423,7 +422,12 @@
             @focusout="handlePromptHintsFocusOut"
             @preview="previewPromptHint"
             @select="selectPromptHint"
-          />
+          >
+            <template v-if="reasoningActive && composerAssistantLabel === 'Assistant is working...'" #activity>
+              <v-icon :icon="mdiCircle" size="7" color="primary" />
+              <span>Assistant is working<span class="studio-autopilot__reasoning-dots">...</span></span>
+            </template>
+          </AssistantComposerSupport>
         </template>
         <template #composer>
           <div
@@ -912,6 +916,7 @@ import {
   mdiArrowTopRight,
   mdiAutorenew,
   mdiBroom,
+  mdiCircle,
   mdiConsoleNetworkOutline,
   mdiContentSaveOutline,
   mdiSourceCommit,
@@ -1734,6 +1739,18 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.studio-autopilot__reasoning-dots {
+  display: inline-block;
+  clip-path: inset(0 66.666% 0 0);
+  animation: reasoning-dots 1.5s step-end infinite;
+}
+@keyframes reasoning-dots {
+  33% { clip-path: inset(0 33.333% 0 0); }
+  66% { clip-path: inset(0 0 0 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studio-autopilot__reasoning-dots { animation: none; clip-path: none; }
+}
 .studio-autopilot__checkpoint-notice summary {
   cursor: pointer;
 }

@@ -2955,11 +2955,13 @@ for (const width of [390, 820, 1280]) {
       ok: true, ...directSession({ agentTurn }).agentSession
     }));
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-    const indicator = page.getByRole("status", { name: "Reasoning in progress" });
+    const indicator = page.locator(".studio-autopilot__reasoning-dots");
     await expect(indicator).toBeVisible();
     const resourceNotice = page.getByRole("button", { name: "Dismiss resource notification" });
     if (await resourceNotice.isVisible()) await resourceNotice.click();
-    expect(await indicator.locator("span").evaluate(element => getComputedStyle(element).animationName)).toMatch(/^reasoning-dots/);
+    expect(await indicator.evaluate(element => getComputedStyle(element).animationName)).toMatch(/^reasoning-dots/);
+    await expect(indicator.locator("..")).toHaveText("Assistant is working...");
+    await expect(page.locator(".conversation-reasoning")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`reasoning-${width}.png`) });
     agentTurn.phase = "";

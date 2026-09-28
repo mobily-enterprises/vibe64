@@ -74,10 +74,7 @@
         </v-card-text>
       </v-card>
     </template>
-    <template v-if="$slots.hints || reasoningActive" #hints>
-      <div v-if="reasoningActive" class="conversation-reasoning" role="status" aria-label="Reasoning in progress">
-        <span aria-hidden="true">...</span>
-      </div>
+    <template v-if="$slots.hints" #hints>
       <slot name="hints" />
     </template>
     <template v-if="$slots.composer" #composer>
@@ -96,7 +93,6 @@ import { thinkingMessagePresentation, usesCommentaryForThinking } from "@/lib/vi
 import { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 
 const props = defineProps({
-  reasoningActive: { type: Boolean, default: false },
   working: { type: Boolean, default: undefined },
   integrationConnections: { default: () => ({}), type: Object },
   integrationActionPending: { default: null, type: Object },
@@ -255,25 +251,3 @@ const adapter = computed(() => ({
   }
 }));
 </script>
-
-<style scoped>
-.conversation-reasoning {
-  color: rgb(var(--v-theme-primary));
-  padding-inline: 28px;
-  font-size: 1.25rem;
-  line-height: 1;
-}
-.conversation-reasoning span {
-  display: inline-block;
-  font-family: monospace;
-  clip-path: inset(0 66.666% 0 0);
-  animation: reasoning-dots 1.5s step-end infinite;
-}
-@keyframes reasoning-dots {
-  33% { clip-path: inset(0 33.333% 0 0); }
-  66% { clip-path: inset(0 0 0 0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .conversation-reasoning span { animation: none; clip-path: none; }
-}
-</style>

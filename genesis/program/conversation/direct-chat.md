@@ -99,7 +99,7 @@ native-history reads use summaries when present, otherwise exposed content.
 Waiting Codex reasoning fragments share a persistence write. The next commentary,
 answer or lifecycle notification closes that batch, preserving event order without
 queuing a disk write per token. Native reasoning item start/completion controls
-an animated ellipsis below progress; ordinary waiting, tool use, lost observation
+the animated ellipsis in “Assistant is working…”; ordinary waiting, tool use, lost observation
 and idle turns do not animate. Reconnection clears an unconfirmed old phase.
 An unchanged ready plan retains its recorded approval after interrupted coding.
 The Auto router receives that approval when a user asks to continue; it still
