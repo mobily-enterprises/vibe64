@@ -52,6 +52,8 @@ function mount(t, request) {
   const module = { exports: {} };
   const imports = {
     vue,
+    vuetify: { useDisplay: () => ({ width: vue.ref(390) }) },
+    "@/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher") },
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {} },
     "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages: () => [] },
