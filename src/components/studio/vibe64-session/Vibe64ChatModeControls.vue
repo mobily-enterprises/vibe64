@@ -10,7 +10,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 
-const props = defineProps({ session: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, temporary: Boolean, disabled: Boolean, active: Boolean, canConfigure: Boolean, loading: Boolean, loadError: { type: String, default: "" } });
+const props = defineProps({ session: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, temporary: Boolean, disabled: Boolean, active: Boolean, connecting: Boolean, canConfigure: Boolean, loading: Boolean, loadError: { type: String, default: "" } });
 const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
@@ -83,11 +83,12 @@ const command = useCommand({
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
 });
 function openCustom() {
+  if (props.connecting) return;
   detailsOpen.value = false;
   emit("custom", modeMenu.value?.activatorEl);
 }
 async function save(nextMode = mode.value, nextReview = review.value, nextWorkflow = workflowEngineId.value) {
-  if (saving.value || props.disabled || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && (hasGoal.value || props.temporary)) return;
+  if (saving.value || props.disabled || props.connecting || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && (hasGoal.value || props.temporary)) return;
   if (nextWorkflow !== workflowEngineId.value && (props.temporary || props.active || hasGoal.value || nextMode === "custom" ||
       !workflowChoices.value.some((choice) => choice.engineId === nextWorkflow && choice.available))) return;
   const previous = { mode: mode.value, review: review.value, workflowEngineId: workflowEngineId.value, override: modelOverride.value };
@@ -129,13 +130,13 @@ function configure() {
         <v-btn variant="text" min-height="48" size="small" @click="detailsOpen = false">Close</v-btn>
       </div>
       <div class="chat-modes__details-body">
-        <p v-if="active || saving || !mode" class="text-body-small px-4 pb-2" role="status">{{ saving ? 'Saving mode…' : active ? 'For your next request' : description }}</p>
+        <p v-if="connecting || active || saving || !mode" class="text-body-small px-4 pb-2" role="status">{{ connecting ? 'Connecting assistant…' : saving ? 'Saving mode…' : active ? 'For your next request' : description }}</p>
         <v-alert v-if="saveError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ saveError }}</v-alert>
         <div v-if="!temporary && mode !== 'custom'" class="px-4 pt-2 pb-2">
           <v-select
             :model-value="workflowEngineId" :items="workflowChoices" item-title="label" item-value="engineId"
             label="Orchestrator" variant="outlined" density="compact" hide-details
-            :loading="workflows.isInitialLoading.value" :disabled="disabled || saving || active || hasGoal || !mode"
+            :loading="connecting || workflows.isInitialLoading.value" :disabled="disabled || saving || connecting || active || hasGoal || !mode"
             @update:model-value="save(mode, review, $event)"
           />
           <p class="text-body-small mt-2">Switch coding tools and keep this conversation.</p>
@@ -144,7 +145,7 @@ function configure() {
         <v-list :lines="false" class="py-0">
           <v-list-item
             title="Custom" :prepend-icon="modeIcons.custom" :active="mode === 'custom'" role="button"
-            :aria-pressed="mode === 'custom'" :disabled="disabled || saving || hasGoal || active" color="primary" min-height="60"
+            :aria-pressed="mode === 'custom'" :disabled="disabled || saving || connecting || hasGoal || active" color="primary" min-height="60"
             @click="openCustom"
           >
             <template #subtitle><span class="chat-modes__model">{{ mode === 'custom' ? description : roleLabel('custom') }}</span></template>
@@ -159,8 +160,8 @@ function configure() {
               v-for="choice in modes.filter(({ id }) => id !== 'custom')" :key="choice.id"
               :title="choice.label" :prepend-icon="modeIcons[choice.id]"
               :active="mode === choice.id" :aria-pressed="mode === choice.id" role="button"
-              :disabled="disabled || saving || hasGoal || decisions[choice.id]?.available !== true" color="primary" min-height="60"
-              :aria-disabled="disabled || saving || hasGoal || decisions[choice.id]?.available !== true ? 'true' : undefined"
+              :disabled="disabled || saving || connecting || hasGoal || decisions[choice.id]?.available !== true" color="primary" min-height="60"
+              :aria-disabled="disabled || saving || connecting || hasGoal || decisions[choice.id]?.available !== true ? 'true' : undefined"
               @click="save(choice.id)"
             >
               <template #subtitle>
@@ -174,7 +175,7 @@ function configure() {
           <div class="px-4 pb-3">
             <p v-if="decisions[mode]?.backupReason === 'keep_workflow_together'" class="text-body-small mt-2">Senior and Junior use the shared backup together to keep this workflow in one orchestrator.</p>
             <template v-if="!temporary && mode === 'auto'">
-              <v-switch :model-value="review" :disabled="disabled || saving || !reviewAvailable || !review && decisions.review?.available === false" label="Automatic deslop by Senior" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
+              <v-switch :model-value="review" :disabled="disabled || saving || connecting || !reviewAvailable || !review && decisions.review?.available === false" label="Automatic deslop by Senior" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
               <p v-if="reviewDescription" class="text-body-small">{{ reviewDescription }}</p>
             </template>
             <v-btn v-if="canConfigure" variant="text" min-height="48" size="small" class="mt-2" @click="configure">Configure model routing</v-btn>

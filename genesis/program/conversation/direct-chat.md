@@ -407,6 +407,11 @@ identity, active work, unfinished goals and pending delivery/review before nativ
 changeover and persistence. A failed switch retains the prior selection; the
 next ordinary Send supplies the existing conversation catch-up. Custom retains
 its exact-model picker, and temporary chats retain their independent controls.
+Main passes its existing initializing/reconciling state into the mode menu.
+The menu shows Connecting assistant and disables the orchestrator, modes, Custom
+entry and review toggle until preparation finishes, avoiding overlapping
+selection writes against the preparation lock. Failed or unavailable connections
+still allow explicit selection recovery; server locks remain authoritative.
 The access inspection resolves saved assignments and current actor/connection
 permissions without provider catalogue discovery. Dispatch still validates models
 and capabilities against the live catalogue; a removed model can appear in the

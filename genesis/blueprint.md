@@ -270,6 +270,8 @@ switches coding tools while keeping the selected mode and conversation. It uses
 the destination's saved model assignments. An unavailable destination or failed
 handover keeps the previous choice; active work and unfinished goals must finish
 before switching. Custom continues to choose an exact AI independently.
+While the assistant starts or reconnects, the chat-mode menu shows connection
+progress and waits before enabling another model, mode or orchestrator change.
 Switching orchestrators uses the existing conversation handoff. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
 mode and comes first. Its menu shows
 effective model and thinking assignments and the selected role, including Router

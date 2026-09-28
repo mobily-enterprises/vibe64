@@ -476,6 +476,7 @@
                   <Vibe64ChatModeControls
                     v-if="!props.sessionSelectionArchived" :session="props.session" :sessions-api-path="props.sessionsApiPath"
                     :purposes="assistantPurposes" :disabled="sourceOperationsSuspended || composerSending" :active="agentActive" :can-configure="assistantCanConfigureRouting"
+                    :connecting="['initializing', 'reconciling'].includes(props.agentConnectionStatus)"
                     :loading="assistantAccessLoading" :load-error="assistantAccessError" @reload="reloadAssistantAccess"
                     @saved="reloadAssistantAccess"
                     @custom="composerSettingsButton = $event; composerSettingsOpen = true"

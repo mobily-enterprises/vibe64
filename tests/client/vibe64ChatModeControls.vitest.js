@@ -1,4 +1,4 @@
-import { createRenderer, ref, ssrContextKey } from "vue";
+import { createRenderer, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ save: vi.fn() }));
@@ -108,4 +108,21 @@ it("does not switch an active or unavailable workflow, or silently change Custom
   const active = mount(undefined, false, { active: true });
   await active.save("junior", false, "claude");
   expect(mocks.save).not.toHaveBeenCalled();
+});
+
+it("blocks selection changes during reconnection and permits them when preparation finishes", async () => {
+  const state = mount(undefined, false, { connecting: true });
+  state.detailsOpen = true;
+  await state.save("junior", false, "claude");
+  await state.save("senior", false);
+  state.openCustom();
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(state.workflowEngineId).toBe("codex");
+  expect(state.mode).toBe("junior");
+  expect(state.detailsOpen).toBe(true);
+  expect(state.saveError).toBe("");
+  app._instance.props.connecting = false;
+  await nextTick();
+  await state.save("junior", false, "claude");
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "junior", review: false, workflowEngineId: "claude" });
 });
