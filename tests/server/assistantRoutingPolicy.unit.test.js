@@ -233,6 +233,37 @@ test("independent recommendations compare engines, retain saved ties and filter 
   assert.equal(recommendedRoutingAssignments(engine, { assignments: { junior: saved } }).junior.modelId, "model-b");
 });
 
+test("equal recommendations prefer the workflow orchestrator before saved or alphabetical ties", () => {
+  const catalogs = [
+    ["claude", "claude_stream_json"], ["codex", "codex_app_server"], ["opencode", "opencode_server"]
+  ].map(([engineId, transportId]) => ({
+    ...catalog(["deepseek"]), engineId, transportId,
+    defaults: { agentId: engineId, modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "low" },
+    agents: [{ id: engineId, mode: "primary" }]
+  }));
+  const connectionAccess = catalogs.map(({ engineId }) => ({
+    engineId, modelProviderId: "deepseek", ownerOnly: false, available: true
+  }));
+  for (const engine of catalogs) {
+    const foreign = catalogs.find((candidate) => candidate.engineId !== engine.engineId);
+    const assignments = recommendedRoutingAssignments(foreign, { connectionAccess });
+    const saved = structuredClone(assignments);
+    for (const orderedCatalogs of [catalogs, [...catalogs].reverse()]) {
+      const roles = recommendedRoutingAssignments(engine, { catalogs: orderedCatalogs, assignments, connectionAccess });
+      for (const role of ["router", "helper", "sharedBackup"]) {
+        assert.equal(roles[role].engineId, engine.engineId, `${engine.engineId} ${role}`);
+        assert.equal(roles[role].modelId, "deepseek-flash");
+      }
+    }
+    assert.deepEqual(assignments, saved, "recommendations leave saved choices unchanged");
+    const unavailable = connectionAccess.map((access) => ({ ...access, available: access.engineId !== engine.engineId }));
+    const roles = recommendedRoutingAssignments(engine, { catalogs, assignments, connectionAccess: unavailable });
+    for (const role of ["router", "helper", "sharedBackup"]) {
+      assert.equal(roles[role].engineId, foreign.engineId, "an unavailable local connection cannot win a tie");
+    }
+  }
+});
+
 test("Auto names missing assignments and preserves connection and access failure reasons", () => {
   const f = routingFixture();
   const roles = f.input.configuration.orchestrators.codex;

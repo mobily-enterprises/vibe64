@@ -111,6 +111,7 @@ function recommendedRoutingAssignments(engine, { catalogs = engine ? [engine] : 
     const sameRoute = (left, right) => ["engineId", "modelProviderId", "modelId", "agentId"].every((key) => left?.[key] === right?.[key]);
     const stableKey = (choice) => JSON.stringify([choice.engineId, choice.modelProviderId, choice.modelId, choice.agentId]);
     choices.sort((left, right) => routingModelScore(right, role) - routingModelScore(left, role)
+      || Number(right.engineId === engine?.engineId) - Number(left.engineId === engine?.engineId)
       || Number(sameRoute(right, assignments[role])) - Number(sameRoute(left, assignments[role]))
       || stableKey(left).localeCompare(stableKey(right), "en"));
     const choice = choices[0];

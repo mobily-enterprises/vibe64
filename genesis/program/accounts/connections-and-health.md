@@ -201,9 +201,10 @@ policy filters eligible choices before applying those scores. It prefers Astra
 for Codex Senior and DeepSeek Flash for Junior, Helper and Router. Sol ranks
 above GLM for Junior; Luna ranks above GLM for economical assistance. Claude's
 listed native aliases use corresponding tiers. Other eligible models receive
-the JSON default scores, with included Pickle ranked last. Saved eligible
-choices win score ties; exact route ordering makes other ties stable. Scores
-change recommendations, never saved assignments or execution destinations.
+the JSON default scores, with included Pickle ranked last. Score ties prefer
+the orchestrator being configured, then saved eligible choices; exact route
+ordering makes remaining ties stable. Recommendations never change saved
+assignments or execution destinations without an explicit save.
 These priorities apply only to qualified routing choices. Codex currently admits
 native OpenAI models, DeepSeek Flash, and GLM 5.3 through Z.AI Coding Plan. Both
 external routes passed managed Astra → coding model → Astra tool-history and

@@ -286,8 +286,10 @@ automatic handoff or review. These names describe the model roles, not limits
 on the kinds of work they can do.
 Unavailable modes explain why and are identified as disabled to screen readers.
 Recommendations rank compatible models for each job, favouring Astra for planning
-and DeepSeek for economical implementation. They preserve saved choices rather
-than silently changing models when the catalogue or recommendation policy changes.
+and DeepSeek for economical implementation. Equally suitable models prefer the
+orchestrator being configured, including Router, Helper and shared Backup.
+They preserve saved choices rather than silently changing models when the
+catalogue or recommendation policy changes.
 Connecting a newly usable assistant fills missing routing roles with compatible
 recommendations and opens them for review. Native Codex and Claude sign-in open
 this review from their confirmed login result, including immediate completion.
