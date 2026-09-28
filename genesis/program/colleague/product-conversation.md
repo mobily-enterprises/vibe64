@@ -31,6 +31,9 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `packages/vibe64-colleague/src/server/protocol.js`
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
+- `src/components/Vibe64ColleagueLauncherTarget.vue`
+- `src/components/StudioAppShellLayout.vue`
+- `src/components/ShellLayout.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue`
 - `src/composables/useVibe64AssistantCatalog.js`
 - `src/lib/studioUrls.js`
@@ -79,6 +82,16 @@ and includes its current value as data in each model turn. Changing the name
 updates labels and future replies without replacing native history or typed drafts.
 The drawer fits the available viewport width, including when a classic scrollbar
 is present. Its minimize, model and watch controls have 48-pixel touch targets.
+At the shell's narrow-layout breakpoint (980 pixels), a 48-pixel header button
+replaces the floating launcher and voice strip. It opens a full-screen Vuetify
+dialog with text and voice controls, focus containment and return to the launcher
+on close. The host shares the routed header target through its root; Teleport
+moves the existing panel without remounting the voice connection or clearing
+drafts. While a header is unavailable, the compact launcher stays at the top edge.
+The `@colleague-mobile` browser cases run against a composed host with
+`VIBE64_E2E_COLLEAGUE_HOST=1` and `PLAYWRIGHT_BASE_URL` set. They click the real
+session Send control before and after opening Colleague, preserve both drafts,
+and cover compact, tablet, desktop and reduced-height layouts.
 Voice submissions use the same message-ID admission as text, carry their
 recording's original focus, and never alter the typed draft. Colleague's API stays global when the
 selected project changes. Opening a view sends a command only to the initiating

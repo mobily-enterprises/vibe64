@@ -5,6 +5,9 @@ export const VIBE64_ASSISTANT_HOST_KEY = Symbol("vibe64.assistant.host");
 export const VIBE64_COLLEAGUE_VIEW_KEY = Symbol("vibe64.colleague.view");
 export const VIBE64_COLLEAGUE_PREVIEW_KEY = Symbol("vibe64.colleague.preview");
 
+// The host keeps Colleague alive while routed headers supply its mobile launcher location.
+export const VIBE64_COLLEAGUE_LAUNCHER_KEY = Symbol("vibe64.colleague.launcher");
+
 // An optional workspace conversation contributed by the composing host.
 export const VIBE64_HOST_CONVERSATION_KEY = Symbol("vibe64.host.conversation");
 

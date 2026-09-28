@@ -15,6 +15,7 @@
     <div class="studio-app-shell-layout__top-right">
       <ShellOutlet target="shell-layout:top-right" />
       <slot name="top-right" />
+      <Vibe64ColleagueLauncherTarget />
     </div>
   </v-app-bar>
 
@@ -35,6 +36,7 @@
 <script setup>
 import { watch } from "vue";
 import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
+import Vibe64ColleagueLauncherTarget from "./Vibe64ColleagueLauncherTarget.vue";
 
 const SWIPE_MIN_DISTANCE_PX = 64;
 const SWIPE_INTENT_DISTANCE_PX = 12;

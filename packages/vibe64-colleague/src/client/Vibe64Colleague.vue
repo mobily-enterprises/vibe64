@@ -1,5 +1,7 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useDisplay } from "vuetify";
+import { VIBE64_COLLEAGUE_LAUNCHER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
@@ -12,6 +14,12 @@ const props = defineProps({
   focus: { type: Object, default: () => ({}) }
 });
 const open = ref(false);
+const { width } = useDisplay();
+const compact = computed(() => width.value <= 980);
+const launcherTarget = inject(VIBE64_COLLEAGUE_LAUNCHER_KEY, null);
+const mobileLauncher = ref(null);
+const mobilePanelTarget = ref(null);
+const mobileOpen = computed({ get: () => compact.value && open.value, set: (value) => { if (compact.value) open.value = value; } });
 const draft = ref("");
 const state = ref({ messages: [], status: "ready", error: "" });
 const sending = ref(false);
@@ -143,56 +151,70 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
 </script>
 
 <template>
-  <aside class="vibe64-colleague" :class="{ 'vibe64-colleague--open': open }" :aria-label="name">
-    <button v-if="!open" class="vibe64-colleague__launcher" :aria-label="`Open ${name}`" @click="open = true">
-      <span class="vibe64-colleague__avatar"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
-      <span class="vibe64-colleague__identity"><strong class="d-block text-truncate">{{ name }}</strong><small>{{ working ? 'Working…' : 'Let’s talk' }}</small></span>
-    </button>
-    <template v-else>
-      <header class="vibe64-colleague__header">
+  <Teleport v-if="compact" :to="launcherTarget || 'body'" :disabled="!launcherTarget">
+    <v-btn
+      ref="mobileLauncher" class="vibe64-colleague__mobile-launcher" :class="{ 'vibe64-colleague__mobile-launcher--floating': !launcherTarget }"
+      icon variant="text" width="48" height="48" :aria-label="`Open ${name}`" :title="name" aria-haspopup="dialog" :aria-expanded="open"
+    >
+      <span class="vibe64-colleague__mobile-avatar"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
+      <span v-if="working" class="vibe64-colleague__working" :aria-label="`${name} is working`" />
+    </v-btn>
+  </Teleport>
+  <v-dialog v-model="mobileOpen" :activator="mobileLauncher?.$el" fullscreen eager :aria-label="`${name} conversation`" :aria-hidden="!mobileOpen">
+    <div ref="mobilePanelTarget" class="vibe64-colleague__mobile-panel" />
+  </v-dialog>
+  <Teleport :to="mobilePanelTarget || 'body'" :disabled="!compact || !mobilePanelTarget">
+    <aside v-show="!compact || open" class="vibe64-colleague" :class="{ 'vibe64-colleague--open': open, 'vibe64-colleague--mobile': compact }" :aria-label="name">
+      <button v-if="!compact && !open" class="vibe64-colleague__launcher" :aria-label="`Open ${name}`" @click="open = true">
         <span class="vibe64-colleague__avatar"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
-        <div class="vibe64-colleague__identity"><strong class="d-block text-truncate">{{ name }}</strong><small>{{ destination }}</small></div>
-        <button class="vibe64-colleague__close" :aria-label="`Minimize ${name}`" :title="`Minimize ${name}`" @click="open = false">−</button>
-      </header>
-      <div class="vibe64-colleague__conversation">
-        <AssistantConversationElement :adapter="adapter" :label="`${name} conversation`" />
+        <span class="vibe64-colleague__identity"><strong class="d-block text-truncate">{{ name }}</strong><small>{{ working ? 'Working…' : 'Let’s talk' }}</small></span>
+      </button>
+      <template v-else>
+        <header class="vibe64-colleague__header">
+          <span class="vibe64-colleague__avatar"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
+          <div class="vibe64-colleague__identity"><strong class="d-block text-truncate">{{ name }}</strong><small>{{ destination }}</small></div>
+          <button class="vibe64-colleague__close" :aria-label="compact ? `Close ${name}` : `Minimize ${name}`" :title="compact ? `Close ${name}` : `Minimize ${name}`" @click="open = false">{{ compact ? '×' : '−' }}</button>
+        </header>
+        <div class="vibe64-colleague__conversation">
+          <AssistantConversationElement :adapter="adapter" :label="`${name} conversation`" />
+        </div>
+        <details v-if="watches.length" class="vibe64-colleague__watches">
+          <summary>{{ watches.length }} conversation {{ watches.length === 1 ? 'watch' : 'watches' }}</summary>
+          <ul>
+            <li v-for="item in watches" :key="item.watchId">
+              <span><strong>{{ item.projectSlug }}</strong> · {{ item.status }}<small>{{ item.question }}</small><small v-if="item.error">{{ item.error }}</small></span>
+              <button v-if="item.status === 'paused'" :aria-label="`Resume watch: ${item.question}`" @click="changeWatch(item.watchId, 'resume')">Resume</button>
+              <button :aria-label="`Cancel watch: ${item.question}`" @click="changeWatch(item.watchId, 'cancel')">Cancel</button>
+            </li>
+          </ul>
+        </details>
+        <details v-if="assignments.length" class="vibe64-colleague__watches">
+          <summary>{{ assignments.length }} ongoing {{ assignments.length === 1 ? 'assignment' : 'assignments' }}</summary>
+          <ul>
+            <li v-for="item in assignments" :key="item.assignmentId">
+              <span><strong>{{ item.projectSlug }}</strong> · {{ item.turnLimit - item.turnsUsed }} turns left
+                <small>{{ item.summary }}</small>
+                <small>{{ item.criteria }}</small>
+              </span>
+            </li>
+          </ul>
+        </details>
+        <footer class="vibe64-colleague__footer">
+          <span aria-live="polite" :title="connectionError">{{ connectionError ? 'Reconnecting…' : working ? 'Working · you can steer me' : 'Available across your projects' }}</span>
+          <button ref="modelButton" class="vibe64-colleague__model" :aria-label="`Choose ${name} model`" :disabled="working || sending" @click="modelMenu = true">
+            {{ state.assistantSelection?.modelId || 'Choose model' }} ▾
+          </button>
+        </footer>
+      </template>
+      <div v-if="$slots.voice" class="vibe64-colleague__voice">
+        <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" />
       </div>
-      <details v-if="watches.length" class="vibe64-colleague__watches">
-        <summary>{{ watches.length }} conversation {{ watches.length === 1 ? 'watch' : 'watches' }}</summary>
-        <ul>
-          <li v-for="item in watches" :key="item.watchId">
-            <span><strong>{{ item.projectSlug }}</strong> · {{ item.status }}<small>{{ item.question }}</small><small v-if="item.error">{{ item.error }}</small></span>
-            <button v-if="item.status === 'paused'" :aria-label="`Resume watch: ${item.question}`" @click="changeWatch(item.watchId, 'resume')">Resume</button>
-            <button :aria-label="`Cancel watch: ${item.question}`" @click="changeWatch(item.watchId, 'cancel')">Cancel</button>
-          </li>
-        </ul>
-      </details>
-      <details v-if="assignments.length" class="vibe64-colleague__watches">
-        <summary>{{ assignments.length }} ongoing {{ assignments.length === 1 ? 'assignment' : 'assignments' }}</summary>
-        <ul>
-          <li v-for="item in assignments" :key="item.assignmentId">
-            <span><strong>{{ item.projectSlug }}</strong> · {{ item.turnLimit - item.turnsUsed }} turns left
-              <small>{{ item.summary }}</small>
-              <small>{{ item.criteria }}</small>
-            </span>
-          </li>
-        </ul>
-      </details>
-      <footer class="vibe64-colleague__footer">
-        <span aria-live="polite" :title="connectionError">{{ connectionError ? 'Reconnecting…' : working ? 'Working · you can steer me' : 'Available across your projects' }}</span>
-        <button ref="modelButton" class="vibe64-colleague__model" :aria-label="`Choose ${name} model`" :disabled="working || sending" @click="modelMenu = true">
-          {{ state.assistantSelection?.modelId || 'Choose model' }} ▾
-        </button>
-      </footer>
-    </template>
-    <div v-if="$slots.voice" class="vibe64-colleague__voice">
-      <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" />
-    </div>
-    <Vibe64SessionAssistantMenu
-      v-model="modelMenu" :target="modelButton" :selection="state.assistantSelection"
-      :save-selection="selectModel" catalog-path="/api/vibe64/colleague/models" :changes-disabled="working || sending"
-    />
-  </aside>
+      <Vibe64SessionAssistantMenu
+        v-model="modelMenu" :target="modelButton" :selection="state.assistantSelection"
+        :save-selection="selectModel" catalog-path="/api/vibe64/colleague/models" :changes-disabled="working || sending"
+      />
+    </aside>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -220,5 +242,11 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
 .vibe64-colleague__watches button { min-width: 48px; min-height: 48px; color: rgb(var(--v-theme-primary)); }
 .vibe64-colleague__voice { padding: 8px 12px; background: rgb(var(--v-theme-surface)); border-radius: 18px; }
 .vibe64-colleague:not(.vibe64-colleague--open) .vibe64-colleague__voice { margin-top: 6px; max-width: 360px; box-shadow: 0 5px 24px #0002; }
-@media (max-width: 600px) { .vibe64-colleague { right: 10px; max-width: calc(100% - 20px); bottom: max(10px, env(safe-area-inset-bottom)); } .vibe64-colleague--open { width: calc(100% - 20px); height: calc(100dvh - 80px); } }
+.vibe64-colleague__mobile-launcher { flex: 0 0 48px; }
+.vibe64-colleague__mobile-launcher--floating { position: fixed; right: 8px; top: env(safe-area-inset-top, 0px); z-index: 1800; }
+.vibe64-colleague__mobile-avatar { display: block; width: 36px; height: 36px; overflow: hidden; border-radius: 50%; }
+.vibe64-colleague__mobile-avatar :deep(svg) { width: 100%; height: 100%; }
+.vibe64-colleague__working { position: absolute; right: 5px; bottom: 5px; width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--v-theme-primary)); }
+.vibe64-colleague__mobile-panel { height: 100%; min-height: 0; }
+.vibe64-colleague--mobile { position: static; width: 100%; max-width: none; height: 100%; border: 0; border-radius: 0; box-shadow: none; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
 </style>

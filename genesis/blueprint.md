@@ -21,6 +21,11 @@ answers across projects and sessions, while keeping their separate worktrees,
 targets and allowances. Questions requiring a product decision return to the person. Complete
 product-operation coverage remains in progress.
 
+On phones and narrow layouts, Colleague has one compact avatar button in the
+header. It opens a full-screen conversation with voice controls inside, leaving
+the coding session's message and Send controls clear when closed. Closing it
+preserves both conversations' drafts.
+
 Maintainers can develop Vibe64 inside another editor's preview. The development
 preview runs a complete editor with its own runtime state and an independent
 copy of a bundled, dependency-free Node example. The example has complete

@@ -48,6 +48,7 @@
     "@local/vibe64-accounts": "0.1.0",
     "@local/vibe64-terminals": "0.1.0",
     "@local/vibe64-runtime": "0.1.0",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "vuetify": "^4.0.0"
   }
 }
