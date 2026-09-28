@@ -18,7 +18,7 @@ function requireResult(result) {
 }
 function publicWatch({ cursor, ...watch }) { return watch; }
 
-function createColleagueService({ actions, accounts, terminals, systemRoot, events, publish = () => {}, watchPollMs = 30000, watchDebounceMs = 250 }) {
+function createColleagueService({ actions, accounts, terminals, systemRoot, events, watchPollMs = 30000, watchDebounceMs = 250 }) {
   if (!path.isAbsolute(systemRoot || "")) throw new TypeError("Colleague needs the private application system root.");
   const toolLimits = { maxToolArgumentBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT, maxToolResultBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT };
   const catalog = createServiceToolCatalog(actions, toolLimits);
@@ -29,7 +29,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const storage = createMemoryConversationStorage();
   const transcript = createConversationTranscript({ storage });
   const summaries = createConversationSummary({ actions, terminals, persist,
-    workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(state, context)).engineId });
+    workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
   const users = new Map();
   let closed = false;
 
@@ -39,40 +39,44 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
   async function stateFor(context) {
     const key = userKey(context);
-    if (!users.has(key)) users.set(key, (async () => {
-      const root = path.join(systemRoot, "colleague", key);
-      let saved;
-      try { saved = JSON.parse(await readFile(path.join(root, "conversation.json"), "utf8")); }
-      catch (error) { if (error.code !== "ENOENT") throw error; }
-      if (saved && saved.schemaVersion !== 1) throw failure("This Colleague history needs a compatible Vibe64 release; no state was changed.");
-      const state = {
-        key, root, record: saved || {
-          schemaVersion: 1, scopeId: `colleague_${randomUUID().replaceAll("-", "")}`,
-          conversationId: "", assistantSelection: null, status: "ready", error: "", operation: null,
-          runId: "", currentTurnId: "", conversationLog: []
-        },
-        saving: Promise.resolve(), admission: Promise.resolve(), running: null,
-        generation: 0, pendingMessages: [], connections: new Map(), requestContext: null,
-        needsObservation: Boolean(saved?.runId || saved?.status === "working"), stopping: false, nextConnection: null,
-        watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve()
-      };
-      const record = state.record;
-      record.watches ||= [];
-      record.observations ||= [];
-      await storage.write(key, async (transaction) => {
-        for (const turn of record.conversationLog) for (const message of turn.messages) await transaction.appendMessage(turn.turnId, message);
-      });
-      if (record.operation?.status === "executing") {
-        record.operation = { ...record.operation, status: "unknown" };
-        record.error = "The server restarted before the operation result was saved. Inspect its target before retrying.";
-      }
-      if (record.status === "working") {
-        record.status = "interrupted";
-        record.error ||= "The server restarted. Your history is kept; send a message to continue.";
-      }
-      return state;
-    })());
+    if (!users.has(key)) users.set(key, loadState(key));
     return users.get(key);
+  }
+
+  async function loadState(key) {
+    const root = path.join(systemRoot, "colleague", key);
+    let saved;
+    try { saved = JSON.parse(await readFile(path.join(root, "conversation.json"), "utf8")); }
+    catch (error) { if (error.code !== "ENOENT") throw error; }
+    if (saved && saved.schemaVersion !== 1) throw failure("This Colleague history needs a compatible Vibe64 release; no state was changed.");
+    const record = saved || {
+      schemaVersion: 1, scopeId: `colleague_${randomUUID().replaceAll("-", "")}`,
+      conversationId: "", assistantSelection: null, status: "ready", error: "", operation: null,
+      runId: "", currentTurnId: "", conversationLog: []
+    };
+    record.watches ||= [];
+    record.observations ||= [];
+    await storage.write(key, async (transaction) => {
+      for (const turn of record.conversationLog) {
+        for (const message of turn.messages) await transaction.appendMessage(turn.turnId, message);
+      }
+    });
+    const state = {
+      key, root, record,
+      saving: Promise.resolve(), admission: Promise.resolve(), running: null,
+      generation: 0, pendingMessages: [], connections: new Map(), requestContext: null,
+      needsObservation: Boolean(saved?.runId || saved?.status === "working"), stopping: false, nextConnection: null,
+      watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve()
+    };
+    if (record.operation?.status === "executing") {
+      record.operation = { ...record.operation, status: "unknown" };
+      record.error = "The server restarted before the operation result was saved. Inspect its target before retrying.";
+    }
+    if (record.status === "working") {
+      record.status = "interrupted";
+      record.error ||= "The server restarted. Your history is kept; send a message to continue.";
+    }
+    return state;
   }
 
   async function persist(state) {
@@ -84,7 +88,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         await writeFile(temporary, JSON.stringify(state.record), { mode: 0o600 });
         await rename(temporary, path.join(state.root, "conversation.json"));
       } finally { await rm(temporary, { force: true }); }
-      publish({ userKey: state.key, status: state.record.status });
     });
     state.saving = operation.catch(() => {});
     return operation;
@@ -124,7 +127,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     };
   }
 
-  async function chooseSelection(state, context, selection) {
+  async function chooseSelection(context, selection) {
     const user = authenticatedVibe64User(context);
     if (selection) {
       const resolved = await terminals.resolveAssistantSelection(selection, { vibe64User: user });
@@ -141,7 +144,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   async function prepare(state, selection) {
-    if (!state.record.assistantSelection) state.record.assistantSelection = await chooseSelection(state, state.requestContext, selection);
+    if (!state.record.assistantSelection) state.record.assistantSelection = await chooseSelection(state.requestContext, selection);
     await terminals.requireAssistantSelectionAccess(state.record.assistantSelection, providerOptions(state));
     await mkdir(scope(state).workdir, { recursive: true, mode: 0o700 });
     if (state.needsObservation && state.record.conversationId) {
@@ -445,7 +448,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           }, { assistantSelection: state.record.assistantSelection, vibe64User: authenticatedVibe64User(context) }));
           if (activeStates.has(observed.status)) throw failure("Stop Colleague's previous native turn before changing its model.");
         }
-        const selected = await chooseSelection(state, context, input.assistantSelection);
+        const selected = await chooseSelection(context, input.assistantSelection);
         const changed = ["engineId", "modelProviderId", "modelId", "agentId", "variantId"]
           .some((key) => (state.record.assistantSelection?.[key] || "") !== (selected[key] || ""));
         const previous = { ...state.record };
@@ -464,7 +467,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       await selecting;
       return snapshot(state);
     },
-    async context(_input = {}, context = {}) {
+    async context(_input, context = {}) {
       const state = await stateFor(context);
       if (context.requestMeta?.request) state.requestContext = context;
       const focused = context.colleague?.focus || state.connections.get(context.colleague?.clientId)?.focus || null;

@@ -7,6 +7,14 @@ const focusSchema = createSchema({
   previewScreen: { type: "string", required: false, enum: ["existing-project-setup", "new-project-setup", "checking-project-setup", "outputs", "outputs-with-setup-warning"] }
 });
 const focusField = { type: "object", schema: focusSchema, required: false };
+const navigationOutput = {
+  mode: "replace",
+  schema: createSchema({
+    ok: { type: "boolean", required: true },
+    error: { ...text, maxLength: 2000 },
+    focus: focusField
+  })
+};
 const clientId = { ...text, minLength: 1, maxLength: 128, required: true };
 const watchFields = {
   watchId: clientId, projectSlug: { ...text, required: true }, sessionId: { ...text, required: true }, conversationId: text,
@@ -32,7 +40,7 @@ function createColleagueActions(colleague) {
     definition("focus.update", { clientId, focus: { ...focusField, required: true } }, (input, context) => colleague.focus(input, context)),
     definition("message.send", {
       clientId, focus: focusField,
-      messageId: { ...clientId },
+      messageId: clientId,
       message: { type: "string", noTrim: false, minLength: 1, maxLength: 24000, required: true },
       assistantSelection: { type: "object", additionalProperties: true, required: false }
     }, (input, context) => colleague.send(input, context)),
@@ -75,13 +83,13 @@ function createColleagueActions(colleague) {
       pane: { type: "string", required: false, enum: ["preview", "settings", "repository-settings", "env", "integrations", "access", "resources", "deploy", "history", "health", "session", "changes", "repository", "files", "database", "system", "ai-terminal", "issues", "pull-requests"] }
     }, (input, context) => colleague.navigate(input, context), {
       description: "Open a project, session, saved temporary conversation or project view in the user's active browser. Provide exact IDs. pane defaults to preview; settings means Project settings, repository-settings means hosted repository settings, access means App access, history means Session History, system means Subsystems. Session views (session, changes, repository, files, database, system, ai-terminal) require sessionId. A temporary conversation also requires sessionId. Omitting conversationId selects Main when sessionId is supplied; include the current conversationId to keep a temporary chat selected. This opens existing UI and does not grant you repository or screen tools. Wait for the returned browser acknowledgement before claiming the view opened.",
-      output: { schema: createSchema({ ok: { type: "boolean", required: true }, error: { ...text, maxLength: 2000 }, focus: focusField }), mode: "replace" }
+      output: navigationOutput
     }, true),
     definition("navigation.open-management", {
       managementView: { type: "string", enum: ["launcher", "projects", "studio-health", "accounts", "assistant", "users", "vps-access"], required: true }
     }, (input, context) => colleague.navigate(input, context), {
       description: "Open a global Vibe64 Management page, without requiring a project or session. projects opens the project chooser; launcher shows project work; accounts opens AI Accounts; assistant opens Speech and Colleague settings; users opens user management; vps-access opens owner SSH access; studio-health runs the existing read-only platform checks. This only opens a page, it does not change its settings. Wait for the browser acknowledgement.",
-      output: { schema: createSchema({ ok: { type: "boolean", required: true }, error: { ...text, maxLength: 2000 }, focus: focusField }), mode: "replace" }
+      output: navigationOutput
     }),
     definition("context.read", {}, (input, context) => colleague.context(input, context), {
       alwaysAvailable: true,
