@@ -216,7 +216,10 @@ const workPlanReadInputValidator = validator({
   expectedRevision: { ...optionalText, minLength: 64, maxLength: 64 }
 });
 const outputStatusInputValidator = validator({
-  sessionId: sessionIdField, publicHost: optionalText, publicProtocol: optionalText
+  sessionId: sessionIdField, publicHost: optionalText, publicProtocol: optionalText,
+  outputTargetId: { ...optionalText, minLength: 1 },
+  targetOffset: { type: "integer", min: 0, required: false },
+  runOffset: { type: "integer", min: 0, required: false }
 });
 const outputResultInputValidator = validator({ sessionId: sessionIdField, resultId: requiredText });
 const agentGoalInputValidator = validator({

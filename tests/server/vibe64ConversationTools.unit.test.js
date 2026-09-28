@@ -49,10 +49,10 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   actions.register({ contributorId: "conversation-tools", domain: "vibe64", actions: [
     ...createSessionActions({ sessions }), ...createTerminalActions({ terminals })
   ].map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
-  const catalog = createServiceToolCatalog(actions);
+  const catalog = createServiceToolCatalog(actions, { maxDirectTools: 100 });
   const context = { surface: "app" };
   const toolSet = catalog.resolveToolSet(context);
-  assert.equal(toolSet.tools.length, 32);
+  assert.equal(toolSet.tools.length, 37);
   assert.equal(toolSet.tools.some((tool) => tool.actionId.includes("attachment") || tool.actionId.includes("repository")), false);
   async function execute(actionId, input) {
     const tool = toolSet.tools.find((entry) => entry.actionId === actionId);

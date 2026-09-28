@@ -236,7 +236,7 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/sessions/:sessionId/outputs", {
     actionId: "vibe64.terminals.outputs.read",
-    buildInput: (request) => ({ ...sessionInput(request), ...requestPublicRouting(request) }),
+    buildInput: (request) => ({ ...routes.requestQuery(request), ...sessionInput(request), ...requestPublicRouting(request) }),
     summary: "Read Vibe64 output target and run status."
   });
 

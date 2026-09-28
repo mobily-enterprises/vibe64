@@ -10,6 +10,23 @@ Result download HTTP adapters preserve digest, media, filename and cache
 headers, await byte delivery and close the opened handle. Project-runtime
 open/close also uses named actions; terminal WebSockets remain transport adapters.
 
+Colleague exposes output inspection, declared-target start/stop and output-terminal
+read/close through those same actions. Inspection returns at most ten targets,
+five recent runs and twenty result identities per run, with counts, continuation
+offsets and explicit truncation. Reading an exact target returns its declared
+parameter defaults and current selection. Ordinary UI reads retain full results.
+The model receives bounded console output, never raw commands, source paths,
+identity grants or download handles. Identity names describe available choices,
+not the browser's active identity. Browser identity exchange and downloading
+results still use the ordinary Preview controls.
+
+Start can replace a running output, even without forcing restart. Colleague must
+inspect current state before starting and must not repeat an uncertain start.
+Running and closing acknowledgements are not readiness or completed cleanup;
+the model inspects the actual preview/terminal state. Stop retains the log;
+Close waits for cleanup and removes the terminal and its log. Coding agents and
+immutable download results remain separately owned.
+
 ## Sources
 
 - `packages/current-app/src/server/actions.js`
@@ -17,9 +34,12 @@ open/close also uses named actions; terminal WebSockets remain transport adapter
 - `packages/current-app/src/server/registerRoutes.js`
 - `packages/current-app/src/server/service.js`
 - `packages/vibe64-terminals/src/server/actions.js`
+- `packages/vibe64-terminals/src/server/outputAssistantContracts.js`
 - `packages/vibe64-terminals/src/server/inputSchemas.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `tests/server/vibe64TerminalActionDispatch.unit.test.js`
+- `tests/server/vibe64OutputActionTools.unit.test.js`
+- `tests/server/vibe64OutputTools.integration.test.js`
 - `packages/vibe64-genesis/src/server/outputs.js`
 - `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`

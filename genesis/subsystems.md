@@ -121,6 +121,8 @@ Owns workspace preparation, execution resource estimates and workflow accounting
 Owns running project applications and their preview identities.
 Output lifecycle, status, logs and result access share canonical terminal
 actions with current actor/project authority and existing service admission.
+Colleague uses bounded output status and terminal lifecycle presentations of
+those actions; browser identity exchange and downloads remain UI operations.
 Current-app output discovery uses the same fresh project authority before
 inspecting the selected project or session declaration.
 

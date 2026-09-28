@@ -113,7 +113,8 @@ test("terminal and output HTTP operations share validated actions and fresh auth
         assert.equal(fromHttp.args[2].vibe64User, owner);
       }
       assert.equal(actions.getDefinition(actionId).input.mode, "create");
-      assert.equal(actions.getDefinition(actionId).extensions.assistant.exclude === true, operation !== "work-plan.read");
+      assert.equal(actions.getDefinition(actionId).extensions.assistant.exclude === true,
+        !["work-plan.read", "outputs.read", "output-target.start", "output-target.stop", "output-terminal.read", "output-terminal.close"].includes(operation));
       const count = calls.length;
       allowed = false;
       await assert.rejects(route.handler(request, reply), { statusCode: 403 });

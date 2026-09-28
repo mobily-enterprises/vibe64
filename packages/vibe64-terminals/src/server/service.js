@@ -3126,7 +3126,20 @@ function createService({
       if (closedRuntime) {
         return closedProjectOutputTargetStatus(closedRuntime);
       }
-      return { ...await outputTarget.launchStatus(sessionId, options), testApproval: agentPreviewCommand.testApprovalStatus(sessionId) };
+      const result = { ...await outputTarget.launchStatus(sessionId, options), testApproval: agentPreviewCommand.testApprovalStatus(sessionId) };
+      if (result.ok !== true) return result;
+      if (options.outputTargetId != null || options.targetOffset != null || options.runOffset != null) {
+        const targets = (result.outputTargets || []).filter(target => !options.outputTargetId || target.id === options.outputTargetId);
+        const targetOffset = options.targetOffset ?? 0;
+        const runs = result.outputRuns || [];
+        const runOffset = options.runOffset ?? 0;
+        return { ...result,
+          requestedOutputTargetId: options.outputTargetId || "",
+          outputTargets: targets.slice(targetOffset, targetOffset + 10), outputTargetCount: targets.length, targetOffset,
+          outputRuns: runs.slice(runOffset, runOffset + 5), outputRunCount: runs.length, runOffset
+        };
+      }
+      return result;
     },
 
     openOutputTarget(sessionId) {
