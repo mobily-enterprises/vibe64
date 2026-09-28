@@ -4,6 +4,7 @@ import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { issueTool, pullRequestTool } from "./assistantContracts.js";
 import { onboardingReadTool, onboardingTemplateTool } from "./onboardingAssistantContracts.js";
+import { settingsTool } from "./settingsAssistantContracts.js";
 
 import {
   projectRemoteInputValidator,
@@ -274,18 +275,21 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_READ_PROJECT_SETTINGS,
+      assistant: settingsTool("settings.read"),
       kind: "query",
       input: projectSettingsReadInputValidator,
       execute: (input) => project.readSettings(input)
     }),
     action({
       id: ACTION_READ_ENGINEERING_SETTINGS,
+      assistant: settingsTool("engineering.read"),
       kind: "query",
       input: projectEngineeringSettingsReadInputValidator,
       execute: (input) => project.readEngineeringSettings(input)
     }),
     action({
       id: ACTION_SAVE_COLLABORATION_SETTINGS,
+      assistant: settingsTool("collaboration.save"),
       ownerRequired: true,
       kind: "command",
       input: projectCollaborationInputValidator,
@@ -294,6 +298,7 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_SAVE_PROJECT_PROMPT_HINTS,
+      assistant: settingsTool("prompt-hints.save"),
       ownerRequired: true,
       kind: "command",
       input: projectPromptHintsInputValidator,
@@ -302,6 +307,7 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_SAVE_ENGINEERING_PROFILE,
+      assistant: settingsTool("engineering.profile.save"),
       kind: "command",
       input: projectEngineeringProfileInputValidator,
       events: [projectChangedEvent()],

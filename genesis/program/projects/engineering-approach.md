@@ -8,6 +8,8 @@ choice into machine-local Vibe64 metadata.
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-project/src/server/actions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
+- `packages/vibe64-project/src/server/settingsAssistantContracts.js`
+- `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
 - `packages/vibe64-project/src/server/service.js`
 - `src/components/studio/ProjectSettingsPanel.vue`
@@ -46,6 +48,14 @@ racing renewal or another source mutation.
 Every profile retains Genesis's universal simplicity gate: changes remain easy
 to reason about, minimal, and targeted, and the AI asks before a concrete need
 forces materially greater complexity.
+
+Colleague can read this current profile catalogue and select a requested profile
+through the same actions and source-work locks. It retains the exact source
+session from the read and uses a returned profile ID. Its result bounds names,
+descriptions and the list of choices, explicitly reporting incomplete results.
+No source paths are exposed. Changing a profile retains ordinary project/source
+permissions, preserves project requirements, and does not change the model or
+save the session's work to its repository.
 
 ## Implementation map
 

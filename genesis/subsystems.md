@@ -8,6 +8,8 @@ Its ordinary HTTP operations dispatch canonical project actions with fresh actor
 and project authority. Existing services retain source/repository review checks,
 GitHub credentials and locks; secret reveal and owner settings enforce the same
 permissions for direct callers.
+Colleague shares these actions for collaboration preferences, engineering
+profiles and prompt suggestions through bounded settings results.
 
 ### Program
 

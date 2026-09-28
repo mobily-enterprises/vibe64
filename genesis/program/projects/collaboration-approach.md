@@ -9,6 +9,8 @@ conveniences outside agent prompts.
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-project/src/server/actions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
+- `packages/vibe64-project/src/server/settingsAssistantContracts.js`
+- `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-core/src/server/projectPromptHints.js`
@@ -57,6 +59,15 @@ agent instructions or `genesis/collaboration.md`. The preferred name is a
 personal account or local profile choice used in Vibe64 welcomes and
 collaboration cues. It is never written into project source or sent as agent
 context.
+
+Colleague reads and changes collaboration and prompt suggestions through these
+same actions, with fresh actor/project authorization and the same owner checks.
+Its bounded settings result identifies the source session and returns the current
+Genesis choice IDs. It marks incomplete requirements and choice descriptions;
+an excerpt must never replace complete requirements. A requested preference
+change preserves the other fields from a fresh, complete read. Large requirements
+edits can use Project settings or a delegated coding conversation. Colleague does
+not receive source paths or environment credentials from this settings view.
 
 ## Implementation map
 
