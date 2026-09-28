@@ -717,6 +717,15 @@ function createService({
     return listed.currentProject || null;
   }
 
+  async function notifyGithubChanged(project, payload = { githubRefresh: true }, reason = "github-refreshed") {
+    try {
+      await publishProjectChanged?.({ ...payload, projectSlug: project.slug }, { reason });
+    } catch (error) {
+      // Publication is already confirmed; a notification failure must not invite a duplicate write.
+      logger?.warn?.({ error: String(error?.message || error) }, "GitHub change notification could not be published.");
+    }
+  }
+
   async function currentDevelopmentDatabaseScope() {
     return (await currentDevelopmentDatabaseConfiguration()).developmentDatabaseScope;
   }
@@ -1342,26 +1351,24 @@ function createService({
         const project = await currentProjectState();
         const result = await githubIssues(project, input, { env });
         if (input.operation === "comment") {
-          try {
-            await publishProjectChanged?.({
-              projectSlug: project.slug,
-              originId: input.originId,
-              issueComment: {
-                number: Number(input.number),
-                id: result.comment.id,
-                author: result.comment.author.login
-              }
-            }, { reason: "github-issue-commented" });
-          } catch (error) {
-            logger?.warn?.({ error: String(error?.message || error) }, "Issue comment notification could not be published.");
-          }
+          await notifyGithubChanged(project, {
+            originId: input.originId,
+            issueComment: { number: Number(input.number), id: result.comment.id, author: result.comment.author.login }
+          }, "github-issue-commented");
+        } else if (["create", "edit", "edit-comment", "state", "create-label", "set-labels"].includes(input.operation)) {
+          await notifyGithubChanged(project);
         }
         return result;
       });
     },
 
     async githubPullRequests(input = {}) {
-      return projectResult(async () => githubPullRequests(await currentProjectState(), input, { env }));
+      return projectResult(async () => {
+        const project = await currentProjectState();
+        const result = await githubPullRequests(project, input, { env });
+        if (["ready", "update-branch", "merge"].includes(input.operation)) await notifyGithubChanged(project);
+        return result;
+      });
     },
 
     async resolvePullRequestSource(input = {}) {
@@ -1374,7 +1381,10 @@ function createService({
     },
 
     async publishSessionPullRequest(source, input = {}) {
-      return publishSessionPullRequest(source, input, { env });
+      const project = await currentProjectState();
+      const result = await publishSessionPullRequest(source, input, { env });
+      await notifyGithubChanged(project);
+      return result;
     },
 
     async readCurrentProject() {

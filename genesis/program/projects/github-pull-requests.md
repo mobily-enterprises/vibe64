@@ -37,6 +37,7 @@ work as a new PR. GitHub remains the PR store.
 - `src/placement.js`
 - `tests/server/githubPullRequests.unit.test.js`
 - `tests/server/vibe64PullRequestActionTools.unit.test.js`
+- `tests/server/githubProjectNotifications.unit.test.js`
 
 ## Public contract
 
@@ -64,6 +65,11 @@ and ambiguous writes require inspection before any explicit retry. These tools
 do not automatically save to unblock a merge, update worktrees, archive sessions,
 delete branches or deploy. Opening a PR uses ordinary session creation with its
 number, current GitHub identity and the existing source admission checks.
+Confirmed PR creation, readiness, branch-update acceptance and merge publish the
+existing project-scoped GitHub refresh event to invalidate open issue/PR views,
+including writes made by Colleague. The notification cannot retarget to a project
+selected during the operation. Delivery failures are logged separately from the
+confirmed GitHub result and never cause automatic retries.
 
 All Issues and PR navigation and session actions are hidden without a GitHub
 repository. The backend independently rejects non-GitHub project operations.

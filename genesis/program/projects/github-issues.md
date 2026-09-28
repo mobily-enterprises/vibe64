@@ -33,6 +33,7 @@ Dashboard without opening a session.
 - `src/pages/app/project/[slug]/dashboard/issues/index.vue`
 - `tests/server/githubIssues.unit.test.js`
 - `tests/server/vibe64IssueActionTools.unit.test.js`
+- `tests/server/githubProjectNotifications.unit.test.js`
 - `tests/server/vibe64ProjectActions.unit.test.js`
 - `tests/server/vibe64ProjectRoutes.unit.test.js`
 - `tests/e2e/github-issues.spec.ts`
@@ -136,6 +137,11 @@ success feedback. Hosted delivery uses the existing project read-access gate.
 Notification failure cannot turn a successfully posted comment into a failed
 write. Notifications are transient and cover comments posted through Vibe64;
 there is no inbox, polling or webhook subscription for external GitHub activity.
+Other confirmed issue and label writes publish the existing project-scoped GitHub
+refresh event, so changes made through Colleague also invalidate open views.
+The event stays bound to the project captured before the GitHub operation. A
+delivery failure is logged separately and cannot make a confirmed write retryable;
+an explicitly requested refresh still reports its own delivery failure.
 After changing GitHub issues, comments, labels or PRs, agents run
 `vibe64-helper github refresh`. Session guidance supplies this instruction alongside
 the existing managed Git commands. The command uses their authenticated Unix
