@@ -11686,27 +11686,37 @@ function createCodexTerminalController({
         onEvent,
         timeoutMs: Number(input.timeoutMs || 0) > 0
           ? Number(input.timeoutMs)
-          : CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS
+          : input.persistent === true ? 0 : CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS
       });
+      const conversationState = codexAppServerConversation(sessionId, conversationId);
+      if (input.persistent && conversationState) conversationState.watcher = watcher;
       const waitForResult = watcher.wait();
+      void waitForResult.catch(() => {});
       watcher.setTurnId(runId);
-      const current = await context.provider.readThread(conversationId);
-      const status = codexAppServerThreadStatus(current);
-      if (codexAppServerTurnStatusIsProviderFailure(status)) {
-        watcher.failNow(new Error(
-          codexAppServerThreadError(current) || `Codex app-server turn ${status}.`
-        ));
-      } else if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
-        await watcher.completeNow(status);
+      try {
+        const current = await context.provider.readThread(conversationId);
+        const status = codexAppServerThreadStatus(current);
+        if (codexAppServerTurnStatusIsProviderFailure(status)) {
+          watcher.failNow(new Error(
+            codexAppServerThreadError(current) || `Codex app-server turn ${status}.`
+          ));
+        } else if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
+          await watcher.completeNow(status);
+        }
+        const result = await waitForResult;
+        return {
+          conversationId,
+          ok: true,
+          runId,
+          status: result.status || status || "completed",
+          ...codexAppServerConversationResponse(result.text)
+        };
+      } catch (error) {
+        watcher.failNow(error);
+        throw error;
+      } finally {
+        if (conversationState?.watcher === watcher) conversationState.watcher = null;
       }
-      const result = await waitForResult;
-      return {
-        conversationId,
-        ok: true,
-        runId,
-        status: result.status || status || "completed",
-        ...codexAppServerConversationResponse(result.text)
-      };
     });
   }
 
@@ -11741,6 +11751,8 @@ function createCodexTerminalController({
       if (conversationState) {
         conversationState.status = "interrupted";
         if (conversationState.goal?.status === "active") conversationState.goal = { ...conversationState.goal, status: "paused" };
+        conversationState.watcher?.failNow(new Error("Temporary AI turn was stopped."));
+        conversationState.watcher = null;
       }
       return { ok: true, conversationId, status: "interrupted" };
     }

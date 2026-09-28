@@ -9,7 +9,8 @@ and project authority. Existing services retain source/repository review checks,
 GitHub credentials and locks; secret reveal and owner settings enforce the same
 permissions for direct callers.
 Colleague shares these actions for collaboration preferences, engineering
-profiles and prompt suggestions through bounded settings results.
+profiles, prompt suggestions, pull-request policy and development database scope
+through bounded settings results.
 
 ### Program
 
@@ -245,7 +246,8 @@ Owns each person's independent conversation for discussing ideas and operating
 Vibe64 across projects, including tool exchange, focused targets, retained
 operation outcomes, conversation watches, bounded implementation assignments
 and Helper summaries. Assignment records retain user intent, exact participants,
-turn allowances and evidence; existing conversation owners still execute work. It also
+turn allowances, authorized communication links, dependency waits and evidence;
+existing conversation owners still execute work. It also
 owns acknowledged project/session and global Management navigation commands. Code subscribes to session events
 and reconciles watched conversations through their existing authorized actions.
 It consumes existing native conversation and JSKIT transcript

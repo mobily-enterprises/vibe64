@@ -731,17 +731,26 @@ function createClaudeSessionAgentProvider({
     const entry = await entryFor(context, input.conversationId || input.threadId);
     if (entry.executionId && !entry.process) await stopEntry(entry, "Claude was interrupted when Vibe64 disconnected.");
     if (!entry.turn?.active) return readConversation(context, input);
-    const timeoutMs = Math.min(Number(input.timeoutMs) || 180_000, entry.profile?.limits.timeoutMs || Infinity);
+    const timeoutMs = Math.min(
+      Number(input.timeoutMs) > 0 ? Number(input.timeoutMs) : entry.persistent ? Infinity : 180_000,
+      entry.profile?.limits.timeoutMs || Infinity
+    );
     let timer;
+    let timedOut = false;
     const abort = () => { void interrupt(entry).catch(() => {}); };
     context.signal?.addEventListener("abort", abort, { once: true });
     if (context.signal?.aborted) abort();
     try {
+      if (timeoutMs === Infinity) return await entry.completion.promise;
       return await Promise.race([entry.completion.promise, new Promise((_, reject) => {
         timer = setTimeout(() => {
-          void interrupt(entry).then(() => reject(error("Claude did not finish within the time limit.")), reject);
+          timedOut = true;
+          reject(error("Claude did not finish within the time limit."));
         }, timeoutMs);
       })]);
+    } catch (failure) {
+      if (timedOut) await interrupt(entry);
+      throw failure;
     } finally {
       clearTimeout(timer);
       context.signal?.removeEventListener("abort", abort);

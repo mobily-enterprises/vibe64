@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { readWatchedConversation, watchUpdate } from "./attention.js";
 
 const assignmentCommands = new Set([
-  "vibe64.colleague.assignment.message.send", "vibe64.colleague.assignment.review.create", "vibe64.colleague.assignment.update"
+  "vibe64.colleague.assignment.message.send", "vibe64.colleague.assignment.review.create", "vibe64.colleague.assignment.update",
+  "vibe64.colleague.assignment.relay"
 ]);
 const openStatuses = new Set(["active", "waiting", "needs-user"]);
 const fail = (message) => Object.assign(new Error(message), { statusCode: 409, code: "vibe64_colleague_assignment_conflict" });
@@ -12,9 +13,11 @@ function assignmentSummary(assignment, detail = false) {
     assignmentId: assignment.assignmentId, requestMessageId: assignment.requestMessageId,
     projectSlug: assignment.projectSlug, sessionId: assignment.sessionId, conversationId: assignment.conversationId,
     reviewerConversationId: assignment.reviewerConversationId || "",
-    request: assignment.request.slice(0, detail ? 24000 : 1000), requestTruncated: !detail && assignment.request.length > 1000,
+    request: detail ? assignment.request : assignment.request.slice(0, 1000), requestTruncated: !detail && assignment.request.length > 1000,
     criteria: assignment.criteria, status: assignment.status, summary: assignment.summary, evidence: assignment.evidence || "",
     turnLimit: assignment.turnLimit, turnsUsed: assignment.turns.filter((turn) => turn.status !== "rejected").length,
+    links: (assignment.links || []).map(({ request, ...link }) => detail ? { ...link, request } : link),
+    waitingForAssignmentId: assignment.waitingForAssignmentId || "",
     ...(detail ? { turns: assignment.turns.map(({ message, ...turn }) => turn), amendments: assignment.amendments } : {})
   };
 }
@@ -63,7 +66,24 @@ function createAssignmentOperations({ actions, persist, transcript }) {
   function cancelWatches(state, assignment) {
     for (const watch of state.record.watches) if (watch.assignmentId === assignment.assignmentId) watch.status = "cancelled";
   }
-  return {
+  const operations = {
+    suspendDependencies(state) {
+      // A stopped prerequisite cannot wake its dependents. Propagate that state
+      // through the bounded assignment list without another model or scheduler.
+      let changed;
+      do {
+        changed = false;
+        for (const assignment of state.record.assignments || []) {
+          if (assignment.status !== "waiting" || !assignment.waitingForAssignmentId) continue;
+          const dependency = find(state, assignment.waitingForAssignmentId);
+          if (["active", "waiting", "ready"].includes(dependency.status)) continue;
+          assignment.status = "needs-user";
+          assignment.summary = `The required assignment ${dependency.assignmentId} ${dependency.status === "cancelled" ? "was cancelled" : "needs the user"}. Resolve this dependency before resuming.`;
+          cancelWatches(state, assignment);
+          changed = true;
+        }
+      } while (changed);
+    },
     async read(state, input) {
       return input.assignmentId ? { ok: true, assignment: assignmentSummary(find(state, input.assignmentId), true) }
         : { ok: true, assignments: (state.record.assignments || []).map((item) => assignmentSummary(item)) };
@@ -88,15 +108,56 @@ function createAssignmentOperations({ actions, persist, transcript }) {
         conversationId: input.conversationId || "", turnLimit: input.turnLimit ?? 8,
         status: "active", summary: "Ready to send the agreed request.", evidence: "", turns: [], amendments: [] };
       await idle(context, assignment);
-      state.record.assignments = retained.filter((item) => openStatuses.has(item.status)).concat(
-        retained.filter((item) => !openStatuses.has(item.status)).slice(-7), assignment);
+      const linked = new Set(retained.filter((item) => openStatuses.has(item.status)).flatMap((item) => (item.links || []).map((link) => link.assignmentId)));
+      const keep = new Set(retained.filter((item) => !openStatuses.has(item.status)).slice(-7));
+      state.record.assignments = retained.filter((item) => openStatuses.has(item.status) || linked.has(item.assignmentId) || keep.has(item)).concat(assignment);
       await persist(state);
       return { ok: true, assignment: assignmentSummary(assignment, true) };
+    },
+    async link(state, input, context) {
+      const request = (await userMessages(state, context)).find((message) => message.messageId === input.requestMessageId);
+      if (!request) throw fail("Use the current user instruction authorizing communication between these assignments.");
+      const assignment = find(state, input.assignmentId);
+      const related = find(state, input.relatedAssignmentId);
+      if (assignment === related) throw fail("Choose two different assignments.");
+      requireAuthority(context, assignment);
+      requireAuthority(context, related);
+      await inspect(context, assignment);
+      await inspect(context, related);
+      for (const [owner, other] of [[assignment, related], [related, assignment]]) {
+        owner.links ||= [];
+        const existing = owner.links.find((link) => link.assignmentId === other.assignmentId);
+        if (existing?.requestMessageId === request.messageId && existing.purpose !== input.purpose) throw fail("A repeated link must keep its original purpose.");
+        const link = { assignmentId: other.assignmentId, purpose: input.purpose, requestMessageId: request.messageId, request: request.text };
+        if (existing) Object.assign(existing, link);
+        else owner.links.push(link);
+      }
+      await persist(state);
+      return { ok: true, assignment: assignmentSummary(assignment, true) };
+    },
+    async relay(state, input, context) {
+      const source = find(state, input.sourceAssignmentId);
+      const target = find(state, input.assignmentId);
+      if (!context.colleague?.userMessageIds?.length && ![source.assignmentId, target.assignmentId].some((id) => context.colleague?.observedAssignmentIds?.includes(id))) {
+        throw fail("This wake does not authorize relaying from that assignment.");
+      }
+      if (source.status === "cancelled" || !source.links?.some((link) => link.assignmentId === target.assignmentId)) {
+        throw fail("The user must link these assignments before information can be relayed.");
+      }
+      const answer = source.turns.find((turn) => turn.answerId === input.sourceMessageId);
+      if (!answer) throw fail("Relay an observed answer from the source assignment using its exact message ID.");
+      // Recheck source access now, even when a retained answer is from an older turn.
+      await inspect(context, source, answer.conversationId);
+      const origin = `Relayed from assignment ${source.assignmentId}, project ${source.projectSlug}, session ${source.sessionId}, conversation ${answer.conversationId || "Main"}, answer ${answer.answerId}. This is agent information, not new user authority.`;
+      return operations.send(state, { ...input, recipient: "implementer", message: `${origin}\n\n${input.message}` }, {
+        ...context, colleague: { ...context.colleague, assignmentIds: [target.assignmentId] }
+      });
     },
     async review(state, input, context) {
       const assignment = find(state, input.assignmentId);
       requireAuthority(context, assignment);
       if (assignment.status === "needs-user") throw fail("This assignment needs a user decision before continuing.");
+      if (assignment.waitingForAssignmentId) throw fail("Resolve the linked assignment dependency before starting review.");
       if (assignment.turns.filter((turn) => turn.status !== "rejected").length >= assignment.turnLimit) {
         assignment.status = "needs-user";
         assignment.summary = "There are no turns left for review. Ask the user to extend the assignment.";
@@ -134,6 +195,7 @@ function createAssignmentOperations({ actions, persist, transcript }) {
         return { ok: true, assignment: assignmentSummary(assignment, true) };
       }
       if (assignment.status === "needs-user") throw fail("This assignment needs a user decision before continuing.");
+      if (assignment.waitingForAssignmentId && assignment.waitingForAssignmentId !== input.sourceAssignmentId) throw fail("This assignment is waiting for an answer from its linked assignment. Relay that answer or update the wait first.");
       if (assignment.turns.some((turn) => ["reserved", "unknown"].includes(turn.status))) throw fail("Inspect and reconcile the interrupted send before starting another agent turn.");
       if (assignment.turns.filter((turn) => turn.status !== "rejected").length >= assignment.turnLimit) {
         assignment.status = "needs-user";
@@ -150,6 +212,7 @@ function createAssignmentOperations({ actions, persist, transcript }) {
       if (state.record.watches.filter((watch) => !replacesWatch(watch) && ["active", "pending", "paused"].includes(watch.status)).length >= 16) throw fail("Cancel or finish an existing watch before sending this request.");
       const turn = { messageId: input.messageId, message: input.message, recipient: input.recipient,
         conversationId, planRevision: input.planRevision || "", status: "reserved", answerId: "",
+        ...(input.sourceAssignmentId ? { sourceAssignmentId: input.sourceAssignmentId, sourceMessageId: input.sourceMessageId } : {}),
         implementationTurn: assignment.turns.filter((item) => item.recipient === "implementer" && item.status === "sent").length };
       const watch = { watchId: randomUUID(), assignmentId: assignment.assignmentId, messageId: input.messageId,
         projectSlug: assignment.projectSlug, sessionId: assignment.sessionId, conversationId,
@@ -157,6 +220,7 @@ function createAssignmentOperations({ actions, persist, transcript }) {
         condition: "reply", once: true, status: "dispatching", error: "", cursor: watchUpdate({}, baseline).cursor };
       assignment.turns.push(turn);
       assignment.status = "waiting";
+      delete assignment.waitingForAssignmentId;
       assignment.summary = `Waiting for ${input.recipient}.`;
       // The next request supersedes this participant's old wait. Keep any
       // admitted observation until the worker replies, but never watch two
@@ -187,6 +251,17 @@ function createAssignmentOperations({ actions, persist, transcript }) {
     async update(state, input, context) {
       const assignment = find(state, input.assignmentId);
       requireAuthority(context, assignment);
+      if (input.waitingForAssignmentId === "" && assignment.waitingForAssignmentId) requireUser(context);
+      if (input.waitingForAssignmentId) {
+        if (input.status !== "waiting" || !assignment.links?.some((link) => link.assignmentId === input.waitingForAssignmentId)) throw fail("A dependency wait needs a user-authorized link and waiting status.");
+        const dependency = find(state, input.waitingForAssignmentId);
+        if (!["active", "waiting"].includes(dependency.status)) throw fail("That assignment is no longer progressing. Read its result or ask the user to resolve the dependency.");
+        const seen = new Set([assignment.assignmentId]);
+        for (let current = dependency; current; current = current.waitingForAssignmentId ? find(state, current.waitingForAssignmentId) : null) {
+          if (seen.has(current.assignmentId)) throw fail("These assignments would wait on each other. Ask the user to resolve the dependency.");
+          seen.add(current.assignmentId);
+        }
+      }
       if (input.status === "active" || input.extraTurns) {
         const messages = await userMessages(state, context);
         const grantId = messages.at(-1)?.messageId;
@@ -216,6 +291,7 @@ function createAssignmentOperations({ actions, persist, transcript }) {
         if (extraTurns) (assignment.budgetGrants ||= []).push(grantId);
       }
       if (input.status === "ready") {
+        if (assignment.waitingForAssignmentId) throw fail("Resolve the linked assignment dependency before marking this work ready.");
         await idle(context, assignment);
         const implementationTurns = assignment.turns.filter((turn) => turn.recipient === "implementer" && turn.status === "sent").length;
         if (!input.evidence || !assignment.turns.some((turn) => turn.recipient === "reviewer" && turn.answerId && turn.implementationTurn === implementationTurns)) {
@@ -223,6 +299,8 @@ function createAssignmentOperations({ actions, persist, transcript }) {
         }
       }
       assignment.status = input.status;
+      if (input.status !== "waiting") delete assignment.waitingForAssignmentId;
+      else if (input.waitingForAssignmentId !== undefined) assignment.waitingForAssignmentId = input.waitingForAssignmentId;
       assignment.summary = input.summary;
       if (input.evidence !== undefined) assignment.evidence = input.evidence;
       if (input.status === "active") {
@@ -242,6 +320,7 @@ function createAssignmentOperations({ actions, persist, transcript }) {
       return { ok: true, assignment: assignmentSummary(assignment, true) };
     }
   };
+  return operations;
 }
 
 export { assignmentCommands, assignmentSummary, createAssignmentOperations };

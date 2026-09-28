@@ -8,7 +8,8 @@ import { createProjectActions } from "../../packages/vibe64-project/src/server/a
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 const preferences = { experience: "comfortable", explanationStyle: "concise", responseLength: "concise", tone: "encouraging" };
-const operations = ["settings.read", "engineering.read", "collaboration.save", "engineering.profile.save", "prompt-hints.save"];
+const sourceOperations = ["settings.read", "engineering.read", "collaboration.save", "engineering.profile.save"];
+const operations = [...sourceOperations, "prompt-hints.save", "repository.workflow.save", "development-database.scope.save"];
 
 async function withSettingsTools(run) {
   await withRouteProject(async ({ projectContext, slug }) => {
@@ -48,6 +49,16 @@ async function withSettingsTools(run) {
       async savePromptHints(input) {
         record("prompt-hints.save", input);
         return { ok: true, projectSlug: slug, promptHints: { canEdit: true, enabled: input.promptHints } };
+      },
+      async saveRepositoryWorkflow(input) {
+        record("repository.workflow.save", input);
+        return { ok: true, workflow: { requirePullRequest: input.requirePullRequest, secret: "private-credential" } };
+      },
+      async saveDevelopmentDatabaseScope(input) {
+        record("development-database.scope.save", input);
+        if (!state.developmentDatabase.canChange) return { ok: false, errors: [{ code: "vibe64_development_database_scope_busy", message: state.developmentDatabase.disabledReason }] };
+        state.developmentDatabase.scope = input.scope;
+        return { ok: true, ...state.developmentDatabase };
       }
     } }).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => state.actor,
@@ -60,7 +71,7 @@ async function withSettingsTools(run) {
       assert.ok(tool, operation);
       assert.doesNotThrow(() => catalog.toOpenAiToolSchema(tool));
       return catalog.executeToolCall({ toolName: tool.name, toolSet, context: callerContext,
-        argumentsText: JSON.stringify({ projectSlug: slug, ...(operation === "prompt-hints.save" ? {} : { sessionId: "session-a" }), ...input }) });
+        argumentsText: JSON.stringify({ projectSlug: slug, ...(sourceOperations.includes(operation) ? { sessionId: "session-a" } : {}), ...input }) });
     };
     await run({ actions, calls, events, execute, slug, state });
   });
@@ -132,17 +143,19 @@ test("settings tools recheck owner and project authority and reject malformed in
     const valid = {
       "settings.read": {}, "engineering.read": {},
       "collaboration.save": { ...preferences, requirements: "" },
-      "engineering.profile.save": { profile: "durable.v1" }, "prompt-hints.save": { promptHints: false }
+      "engineering.profile.save": { profile: "durable.v1" }, "prompt-hints.save": { promptHints: false },
+      "repository.workflow.save": { requirePullRequest: true }, "development-database.scope.save": { scope: "session" }
     };
     for (const operation of operations) {
       assert.equal((await execute(operation, { ...valid[operation], vibe64User: state.actor })).ok, false);
       assert.equal((await execute(operation, { ...valid[operation], sourceRoot: "/another/source" })).ok, false);
     }
-    for (const operation of ["collaboration.save", "engineering.profile.save", "prompt-hints.save"]) assert.equal((await execute(operation)).ok, false);
+    for (const operation of operations.filter((name) => name.endsWith(".save"))) assert.equal((await execute(operation)).ok, false);
     assert.equal((await execute("prompt-hints.save", { promptHints: { enabled: false } })).ok, false);
+    assert.equal((await execute("development-database.scope.save", { scope: "workspace" })).ok, false);
     assert.equal(calls.length, 0);
     state.actor = { username: "member", role: "member" };
-    for (const operation of ["collaboration.save", "prompt-hints.save"]) assert.equal((await execute(operation, valid[operation])).ok, false);
+    for (const operation of ["collaboration.save", "prompt-hints.save", "repository.workflow.save"]) assert.equal((await execute(operation, valid[operation])).ok, false);
     assert.equal(calls.length, 0);
     // Engineering intentionally retains the source editor's ordinary project permission.
     assert.equal((await execute("engineering.profile.save", valid["engineering.profile.save"])).ok, true);
@@ -157,5 +170,32 @@ test("settings tools recheck owner and project authority and reject malformed in
     assert.equal(failed.result.code, "source_busy");
     assert.equal(failed.result.error, "Another conversation is editing this source.");
     assert.equal(JSON.stringify(failed).includes("private"), false);
+  });
+});
+
+test("workflow and database policy tools share canonical actions, preserve blockers and omit private fields", async () => {
+  await withSettingsTools(async ({ actions, calls, events, execute, slug, state }) => {
+    const workflow = await execute("repository.workflow.save", { requirePullRequest: true });
+    assert.equal(workflow.ok, true, JSON.stringify(workflow));
+    assert.deepEqual(workflow.result.repositoryWorkflow, { requirePullRequest: true });
+    assert.equal(JSON.stringify(workflow).includes("private"), false);
+    const blocked = await execute("development-database.scope.save", { scope: "session" });
+    assert.equal(blocked.result.ok, false);
+    assert.equal(blocked.result.code, "vibe64_development_database_scope_busy");
+    assert.equal(blocked.result.error, state.developmentDatabase.disabledReason);
+    assert.equal(state.developmentDatabase.scope, "project");
+    state.developmentDatabase = { ...state.developmentDatabase, canChange: true, disabledReason: "", openSessionCount: 0 };
+    const changed = await execute("development-database.scope.save", { scope: "session" });
+    assert.equal(changed.ok, true, JSON.stringify(changed));
+    assert.equal(changed.result.developmentDatabase.scope, "session");
+    assert.equal(changed.result.developmentDatabase.canChange, true);
+    assert.equal(JSON.stringify(changed).includes("private"), false);
+    // API and automation callers invoke one owner, with the same trusted project context.
+    const api = await actions.execute({ actionId: "vibe64.project.development-database.scope.save",
+      input: { projectSlug: slug, scope: "project" }, context: { surface: "app", channel: "api" } });
+    assert.equal(api.scope, "project");
+    assert.equal(calls.at(-1).context.slug, slug);
+    assert.equal(calls.at(-1).input.vibe64User, state.actor);
+    assert.equal(events.at(-1).realtime.payload.projectSlug, slug);
   });
 });

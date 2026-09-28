@@ -428,6 +428,9 @@ It requires an explicit admitted provider/model selection but requires no
 project, session, worktree, History, or Genesis project conversation kind.
 The host can opt into native persistent retention without relaxing this scope;
 its own storage still owns discovery, transcript and explicit clearing.
+Persistent interactive waits have no default turn deadline. Native completion,
+Stop and connection loss settle the wait; an explicit deadline or a bounded
+Helper execution profile still limits the turn.
 Codex runs that scope read-only with dynamic tools and inherited facilities
 disabled; OpenCode retains its native tool definitions with approval required,
 and the session plugin rejects every host-conversation tool call before native

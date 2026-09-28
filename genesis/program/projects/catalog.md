@@ -8,6 +8,8 @@ workspace.
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/actions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
+- `packages/vibe64-project/src/server/settingsAssistantContracts.js`
+- `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-project/src/server/onboardingAssistantContracts.js`
 - `packages/vibe64-project/src/shared/onboardingRequest.js`
 - `tests/server/vibe64OnboardingActionTools.unit.test.js`
@@ -39,6 +41,14 @@ Secret reveal keeps its uncached HTTP response around the same owner-only action
 Project refresh events identify the affected result project, including creation
 or selection from a different requesting project. Action registration alone does
 not expose these operations to Colleague; bounded assistant contracts are separate.
+
+Colleague can read the current Project settings and change the requested GitHub
+pull-request requirement or managed development database scope through the same
+canonical actions. The workflow setting remains owner-only and GitHub-specific.
+Database scope retains the existing installation and open-session guards; a
+refusal never authorizes archiving a session to make the change possible. Its
+bounded result reports the saved policy or the actual blocker, without credentials.
+Changing policy does not migrate application data or change unsaved session source.
 
 The compact project shell shares its existing chat/project pane state with
 touch navigation. A deliberate single-finger horizontal swipe left reveals the

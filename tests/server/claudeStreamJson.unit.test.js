@@ -951,6 +951,53 @@ test("Claude conversation rewind selects the retained native branch across retri
 });
 
 
+test("persistent Claude waits beyond three minutes but retains completion, Stop and bounded deadlines", async (t) => {
+  const f = await fixture(t);
+  t.after(() => f.provider.closeProject());
+  for (const outcome of ["complete", "stop", "deadline", "helper"]) {
+    const abort = new AbortController();
+    const context = { assistantSelection: f.context.assistantSelection, signal: abort.signal, sessionId: "persistent_wait",
+      assistantScope: { id: "persistent_wait", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "wait-runtime") } };
+    const executionProfile = outcome === "helper"
+      ? await f.provider.resolveExecutionProfile(context, { profileId: "helper", workloadId: "request_routing" }) : undefined;
+    const { conversationId } = await f.provider.createConversation(context, { persistent: true, executionProfile });
+    await f.provider.startConversationTurn(context, { conversationId, persistent: true, executionProfile,
+      message: "Investigate", messageId: outcome });
+    const subscribed = Promise.withResolvers();
+    const addListener = abort.signal.addEventListener.bind(abort.signal);
+    t.mock.method(abort.signal, "addEventListener", (...args) => {
+      addListener(...args);
+      subscribed.resolve();
+    });
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      let settled = false;
+      const pending = f.provider.waitForConversationTurn(context, {
+        conversationId, ...(["deadline", "helper"].includes(outcome) ? { timeoutMs: 200_000 } : {})
+      });
+      void pending.then(() => { settled = true; }, () => { settled = true; });
+      await subscribed.promise;
+      t.mock.timers.tick(outcome === "helper" ? executionProfile.limits.timeoutMs - 1 : 180_001);
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(settled, false, "retained interactive work has no default Helper deadline");
+      if (outcome === "complete") {
+        await f.processes.at(-1).options.onEvent({ type: "result", subtype: "success", result: "Finished" });
+        assert.equal((await pending).status, "completed");
+      } else if (outcome === "stop") {
+        abort.abort();
+        assert.equal((await pending).status, "interrupted");
+      } else {
+        t.mock.timers.tick(outcome === "helper" ? 1 : 19_999);
+        await assert.rejects(pending, /time limit/);
+        assert.equal(f.processes.at(-1).stopped, true, "deadline failure waits for native Stop proof");
+      }
+    } finally {
+      t.mock.timers.reset();
+      await f.provider.stopConversation(context, { conversationId });
+    }
+  }
+});
+
 test("temporary Claude accepts active-turn steering in its existing native conversation", async (t) => {
   const f = await fixture(t);
   const { conversationId } = await f.provider.createConversation(f.context, { persistent: true });

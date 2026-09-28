@@ -95,6 +95,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
 
   async function persist(state) {
     const operation = state.saving.then(async () => {
+      assignments.suspendDependencies(state);
       state.record.conversationLog = await transcript.readConversationLog(state.key);
       await mkdir(state.root, { recursive: true, mode: 0o700 });
       const temporary = path.join(state.root, `conversation.${randomUUID()}.tmp`);
@@ -220,10 +221,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       if (autonomous && !observations.length) { state.record.status = "ready"; await persist(state); return; }
       const assignmentIds = observations.filter((observation) => state.record.assignments?.some((assignment) =>
         assignment.assignmentId === observation.assignmentId && ["active", "waiting"].includes(assignment.status))).map((observation) => observation.assignmentId);
+      const observedAssignmentIds = observations.flatMap((observation) => observation.assignmentId ? [observation.assignmentId] : []);
+      const canRelay = (state.record.assignments || []).some((assignment) => observedAssignmentIds.includes(assignment.assignmentId) &&
+        assignment.status !== "cancelled" && assignment.links?.some((link) => state.record.assignments.some((target) =>
+          target.assignmentId === link.assignmentId && ["active", "waiting"].includes(target.status))));
       context = { ...actionContext(state, connection), colleague: {
-        ...actionContext(state, connection).colleague, userMessageIds, assignmentIds
+        ...actionContext(state, connection).colleague, userMessageIds, assignmentIds, observedAssignmentIds
       } };
-      const readOnly = autonomous && !assignmentIds.length;
+      const readOnly = autonomous && !assignmentIds.length && !canRelay;
       const nextCatalog = autonomous ? (readOnly ? observationCatalog : assignmentCatalog) : catalog;
       if (activeCatalog !== nextCatalog || toolProject !== context.projectSlug) {
         activeCatalog = nextCatalog;
@@ -234,7 +239,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const prompt = JSON.stringify({
         focus: connection.focus, userMessages: messages,
         observations, readOnly, autonomous,
-        assignments: (state.record.assignments || []).map((item) => assignmentSummary(item)),
+        assignments: (state.record.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status) || observedAssignmentIds.includes(item.assignmentId))
+          .map((item) => {
+            const { assignmentId, projectSlug, sessionId, conversationId, status, summary, turnLimit, turnsUsed, waitingForAssignmentId, links } = assignmentSummary(item);
+            return { assignmentId, projectSlug, sessionId, conversationId, status, summary, turnLimit, turnsUsed, waitingForAssignmentId, links };
+          }),
         // A new native conversation gets bounded written history, including after
         // a model change or a restart between native creation and first admission.
         ...(!state.record.runId ? { recentConversation: (await snapshot(state)).messages.slice(-24)
@@ -254,10 +263,20 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         await terminals.stopEphemeralAgentConversation(scope(state), { conversationId: state.record.conversationId, persistent: true, runId: state.record.runId }, providerOptions(state));
         return;
       }
-      const response = activeStates.has(started.status)
-        ? requireResult(await terminals.waitForEphemeralAgentConversationTurn(scope(state), {
-          conversationId: state.record.conversationId, persistent: true, runId: state.record.runId
-        }, providerOptions(state))) : started;
+      let response = started;
+      if (activeStates.has(started.status)) {
+        const target = { conversationId: state.record.conversationId, persistent: true, runId: state.record.runId };
+        try {
+          response = requireResult(await terminals.waitForEphemeralAgentConversationTurn(scope(state), target, providerOptions(state)));
+        } catch (error) {
+          if (!isCurrent()) return;
+          // A lost completion notification is not a lost answer. Reconcile the
+          // exact native turn before reporting failure; never start a replacement.
+          const observed = await terminals.readEphemeralAgentConversation(scope(state), target, providerOptions(state)).catch(() => null);
+          if (!observed?.ok || observed.status !== "completed" || observed.runId !== target.runId) throw error;
+          response = observed;
+        }
+      }
       if (!isCurrent()) return;
       if (activeStates.has(response.status)) throw failure("The provider has not finished this response. Your message is retained.");
       state.needsObservation = false;

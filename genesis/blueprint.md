@@ -15,7 +15,9 @@ explicit problems. Code observes the conversations; only relevant changes wake
 Colleague. People can also delegate bounded implementation assignments: Colleague
 retains the original request, follows up within a turn allowance, arranges review
 in the same session and brings back evidence when the work is ready for their
-testing. Questions requiring a product decision return to the person. Complete
+testing. Explicitly linked assignments can exchange relevant questions and
+answers across projects and sessions, while keeping their separate worktrees,
+targets and allowances. Questions requiring a product decision return to the person. Complete
 product-operation coverage remains in progress.
 
 Maintainers can develop Vibe64 inside another editor's preview. The development

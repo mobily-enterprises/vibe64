@@ -203,6 +203,7 @@ function createProjectActions({ project } = {}) {
       },
       execute: (input) => project.repositoryBranches(input) }),
     action({ id: "vibe64.project.repository.workflow.save", kind: "command", input: projectRepositoryWorkflowInputValidator,
+      assistant: settingsTool("repository.workflow.save"),
       ownerRequired: true, execute: (input) => project.saveRepositoryWorkflow(input) }),
     action({ id: "vibe64.project.env.secret.reveal", kind: "query", input: projectEnvSecretRevealInputValidator,
       ownerRequired: true, execute: (input) => project.revealEnvSecret(input) }),
@@ -315,6 +316,7 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_SAVE_DEVELOPMENT_DATABASE_SCOPE,
+      assistant: settingsTool("development-database.scope.save"),
       kind: "command",
       input: projectDevelopmentDatabaseScopeInputValidator,
       events: [projectChangedEvent()],

@@ -108,6 +108,9 @@ one. Assignment-linked watches and receipts are new writes in the existing priva
 conversation record. This addition needs no historical transformation or numbered
 upgrade. Runtime interruption handling observes retained operation/message IDs;
 it does not backfill assignments or repeat unconfirmed sends.
+Optional communication links, dependency IDs and relay receipt references are
+written only by new explicit coordination operations. Their absence means no
+coordination authority or dependency; old assignments need no conversion.
 
 ## Example: changing saved message format
 

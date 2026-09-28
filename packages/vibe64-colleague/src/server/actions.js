@@ -31,8 +31,12 @@ const assignmentSchema = createSchema({
   request: { ...text, maxLength: 24000 }, requestTruncated: { type: "boolean", required: true },
   criteria: { ...text, maxLength: 4000 }, status: text, summary: { ...text, maxLength: 2000 }, evidence: { ...text, maxLength: 4000 },
   turnLimit: { type: "integer", required: true }, turnsUsed: { type: "integer", required: true },
+  waitingForAssignmentId: text,
+  links: { type: "array", required: false, items: createSchema({ assignmentId: clientId, requestMessageId: clientId,
+    purpose: { ...text, maxLength: 2000 }, request: { ...text, maxLength: 24000 } }) },
   turns: { type: "array", required: false, items: createSchema({
     messageId: clientId, recipient: text, conversationId: text, planRevision: text, status: text, answerId: text,
+    sourceAssignmentId: text, sourceMessageId: text,
     implementationTurn: { type: "integer", required: true }
   }) },
   amendments: { type: "array", required: false, items: createSchema({ messageId: clientId, text: { ...text, maxLength: 24000 } }) }
@@ -77,6 +81,18 @@ function createColleagueActions(colleague) {
     }, (input, context) => colleague.assignment("create", input, context), {
       description: "Retain a user-requested implementation assignment before sending work. Use the actual current user messageId, exact project/session and optional temporary implementer conversationId. Omit conversationId for Main. Resolve the agent using existing routing; do not require the user to name Senior/Junior. Capture the original acceptance criteria. Default allowance is eight agent turns including implementation, plan approval and review; use another limit only when requested. Reuse assignmentId on retry. This records intent but does not send work. Ordinary questions or watches do not authorize creating assignments.", output: assignmentOutput
     }, true),
+    definition("assignment.link", {
+      assignmentId: clientId, relatedAssignmentId: clientId, requestMessageId: clientId,
+      purpose: { ...text, minLength: 1, maxLength: 2000, required: true }
+    }, (input, context) => colleague.assignment("link", input, context), {
+      description: "Record the current user's explicit permission for two existing assignments to exchange relevant questions/answers. Retain their actual requestMessageId and bounded purpose. Only user instructions can link assignments; an agent suggestion cannot. This enables direct mediation, not shared source, transitive links or expanded scope/budget. Create both assignments before linking them. Use assignment.relay for exchanges.", output: assignmentOutput
+    }),
+    definition("assignment.relay", {
+      assignmentId: clientId, sourceAssignmentId: clientId, sourceMessageId: clientId, messageId: clientId,
+      message: { ...text, minLength: 1, maxLength: 22000, required: true }
+    }, (input, context) => colleague.assignment("relay", input, context), {
+      description: "Relay a relevant observed agent question/answer to a directly user-linked assignment's implementer. assignmentId is the receiver; sourceMessageId must be an answerId in the source assignment's turn receipts. Summarize only the authorized information. The server identifies its origin, charges the RECEIVER one turn, preserves its target and watches its answer. It never transfers source. Reuse messageId and content on retry. Wait if the receiver is busy; resume mediation when its own watch wakes. This can resolve the receiver's wait for the source. The link cannot authorize new scope, budget, plan approval or a cancelled/paused assignment.", output: assignmentOutput
+    }),
     definition("assignment.message.send", {
       assignmentId: clientId, messageId: clientId, recipient: { type: "string", enum: ["implementer", "reviewer"], required: true },
       message: { ...text, minLength: 1, maxLength: 24000, required: true }, planRevision: { ...text, maxLength: 64 }
@@ -89,9 +105,10 @@ function createColleagueActions(colleague) {
     definition("assignment.update", {
       assignmentId: clientId, status: { type: "string", enum: ["active", "waiting", "needs-user", "ready", "cancelled"], required: true },
       summary: { ...text, minLength: 1, maxLength: 2000, required: true }, evidence: { ...text, maxLength: 4000 },
+      waitingForAssignmentId: { ...text, maxLength: 128 },
       extraTurns: { type: "integer", min: 1, max: 64, required: false }
     }, (input, context) => colleague.assignment("update", input, context), {
-      description: "Record the assignment's next wait, user decision, cancellation or readiness for human testing. ready requires evidence against EVERY original criterion, a completed review of the latest implementation, and disclosure of checks still needing the user; agents agreeing is not proof. needs-user stops autonomous follow-through. active/resuming and extraTurns require a new user instruction; record amended requirements from that instruction. Cancelling follow-through does not stop a running coding agent or speech. Never mark ready merely because the budget is exhausted.", output: assignmentOutput
+      description: "Record the assignment's next wait, user decision, cancellation or readiness for human testing. For a required answer from another directly linked assignment use waiting status and waitingForAssignmentId; its existing watch will wake Colleague, so do not poll with the model. Relay the answer to resolve that wait. Circular waits or stopped dependencies need the user. ready requires evidence against EVERY original criterion, a completed review of the latest implementation, and disclosure of checks still needing the user; agents agreeing is not proof. needs-user stops autonomous follow-through. active/resuming and extraTurns require a new user instruction; record amended requirements from that instruction. Cancelling follow-through does not stop a running coding agent or speech. Never mark ready merely because the budget is exhausted.", output: assignmentOutput
     }),
     definition("conversation-summary.read", {
       projectSlug: { ...text, required: true }, sessionId: { ...text, required: true }, conversationId: text,

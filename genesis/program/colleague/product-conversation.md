@@ -57,6 +57,12 @@ execution and again with its result. A restart during execution reports an unkno
 outcome and does not retry that operation. Credentials and HTTP requests are never
 persisted. A fresh authenticated request is required to continue after restart.
 
+Persistent interactive turns wait for native completion, Stop or connection loss,
+without the ordinary three-minute detached-helper wait. Explicit caller deadlines
+and bounded Helper profiles still apply. If a completion wait fails, Colleague
+reads the exact retained native run once and accepts an already completed answer;
+an active, failed or different run retains the failure without resending work.
+
 An accepted request captures its UI focus. Subsequent navigation does not silently
 redirect its operations. New steering can arrive while a model response is active;
 code checks it before dispatching that response's tool. Stopping Colleague stops
@@ -138,8 +144,9 @@ Assignments retain an actual user message and its original request, criteria,
 exact project/session/implementer identity, subsequent user amendments, turn
 allowance, receipts, summary and evidence in the same private Colleague record.
 An absent assignment list means none were created; historical conversations are
-not reclassified. A compact list is supplied on every model exchange, with a
-detail action for the full request. The drawer lists open assignments separately
+not reclassified. Each model exchange receives a compact overview of open and
+currently observed assignments, omitting full requests and evidence. The detail
+action supplies those when needed. The drawer lists open assignments separately
 from ordinary watches and keeps polling while minimized.
 
 Assignment sends invoke the existing Main or temporary-conversation actions,
@@ -151,7 +158,8 @@ Quota exhaustion becomes needs-user; only a new user instruction can extend it.
 Default allowance is eight turns, including approval, follow-ups and review.
 
 An assignment observation grants only its own bounded continuation commands
-through the same JSKIT catalogue, including discovery-mode execution. Ordinary
+through the same JSKIT catalogue, including discovery-mode execution. Explicitly
+linked mediation has the separate, bounded relay permission below. Ordinary
 watches still expose query actions only. The assignment owner checks the retained
 target and allowance before invoking product actions; those actions recheck current
 actor/project access. Replies to a different user message pause follow-through.
@@ -169,6 +177,25 @@ criterion with that evidence, distinguish reported checks from observed results
 and return material product decisions to the user. This does not prove source
 correctness merely because the agents agree. Separate sessions retain separate
 worktrees; assignment messaging never implicitly transfers source.
+
+The current user's instruction can link two existing assignments for a stated
+communication purpose. Links retain that actual instruction and do not grant
+transitive authority. On either participant's observed reply, Colleague may relay
+an observed answer to the other implementer. The relay checks current access to
+both projects, identifies the originating assignment/session/conversation and
+answer, retains those references in the send receipt, and spends the receiver's
+allowance through the existing send/watch path. Links never authorize ordinary
+cross-assignment sends, new scope, extra turns or resuming a paused/cancelled task.
+Busy recipients wait for their existing native turn; there is no extra scheduler.
+
+An assignment may record that it is waiting for another directly linked task.
+The source's existing watch supplies the wake; a relay resolves the wait without
+model polling. Circular waits are rejected. When a prerequisite is cancelled or
+needs the user, runtime checkpoints suspend its waiting dependents, including
+chains, without another model call. They retain the dependency for the user's
+decision and do not resume automatically. Cancelling one assignment leaves
+unrelated work and its native agents alone. Linked completed records remain retained while an open task references
+them, and link/wait/send identities survive the same authenticated restart path.
 
 
 Global Management navigation uses `vibe64.colleague.navigation.open-management`

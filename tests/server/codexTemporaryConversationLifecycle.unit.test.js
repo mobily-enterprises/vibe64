@@ -11206,6 +11206,52 @@ test("a fresh Codex observer pauses an unobserved temporary goal before exposing
 });
 
 
+test("persistent Codex waits beyond three minutes but retains completion, Stop, connection loss and explicit deadlines", async (t) => {
+  for (const outcome of ["complete", "stop", "disconnect", "deadline"]) {
+    await withConversationController(async ({ captures, controller, subscribers }) => {
+      captures.persistentHistory = [];
+      const { conversationId } = await controller.createConversation("session-1", { persistent: true });
+      const started = await controller.startConversationTurn("session-1", {
+        conversationId, persistent: true, messageId: "slow-turn", message: "Continue the investigation"
+      });
+      assert.equal(started.ok, true, JSON.stringify(started));
+      captures.persistentHistory = [{ id: started.runId, status: "inProgress", items: [] }];
+      captures.persistentStatus = "inProgress";
+      t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+      try {
+        const count = subscribers.size;
+        let settled = false;
+        const pending = controller.waitForConversationTurn("session-1", {
+          conversationId, runId: started.runId, persistent: true,
+          ...(outcome === "deadline" ? { timeoutMs: 200_000 } : {})
+        });
+        void pending.then(() => { settled = true; });
+        await waitForSessionValue(() => subscribers.size, (size) => size > count, "native completion watcher");
+        t.mock.timers.tick(180_001);
+        await flushPromises();
+        assert.equal(settled, false, "an interactive turn is not a three-minute Helper job");
+        if (outcome === "complete") {
+          completeDetachedTurn(subscribers, { threadId: conversationId, turnId: started.runId, text: "Investigation finished" });
+        } else if (outcome === "stop") {
+          assert.equal((await controller.stopConversation("session-1", { conversationId, persistent: true })).ok, true);
+        } else if (outcome === "disconnect") {
+          captures.connectionGeneration += 1;
+          t.mock.timers.tick(1000);
+        } else {
+          t.mock.timers.tick(19_999);
+        }
+        const result = await pending;
+        assert.equal(result.ok, outcome === "complete", JSON.stringify(result));
+        if (outcome === "complete") assert.equal(result.rawText, "Investigation finished");
+        else assert.match(result.error, outcome === "stop" ? /stopped/i : outcome === "disconnect" ? /connection.*lost/i : /timed out/i);
+        assert.equal(captures.turns.length, 1, "waiting never resends the request");
+      } finally {
+        t.mock.timers.reset();
+      }
+    });
+  }
+});
+
 test("temporary Codex steers its exact active native conversation without starting a second turn", async () => {
   await withConversationController(async ({ captures, controller, calls }) => {
     captures.persistentHistory = [];
