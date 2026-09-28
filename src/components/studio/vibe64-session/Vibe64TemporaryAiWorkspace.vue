@@ -335,6 +335,7 @@ import { VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_HOST_CONVERSATION_KEY } from "@/lib/v
 const emit = defineEmits(["select-main-chat", "task-finished", "check-update"]);
 const props = defineProps({
   active: Boolean,
+  sessionSelected: Boolean,
   assistantReady: Boolean,
   canConfigureRouting: Boolean,
   connectionUnavailable: Boolean,
@@ -750,7 +751,7 @@ const selectedView = {
   get temporarySelected() { return temporary.open.value && !hostConversation?.value?.selected; },
   get conversationId() { return this.temporarySelected ? activeTask.value?.conversationId || "" : ""; },
   async openConversation(conversationId, isCurrent = () => true) {
-    if (!props.active || !props.assistantReady || !isCurrent()) throw new Error("This session is no longer available.");
+    if (!props.sessionSelected || !props.assistantReady || !isCurrent()) throw new Error("This session is no longer available.");
     if (!conversationId) {
       hostConversation?.value?.close();
       temporary.closeWorkspace();
@@ -762,7 +763,7 @@ const selectedView = {
     const revision = selectionRevision.value;
     const hostSelected = hostConversation?.value?.selected;
     await temporary.restoreTasks();
-    if (!isCurrent() || !props.active || !props.assistantReady || props.projectSlug !== projectSlug ||
+    if (!isCurrent() || !props.sessionSelected || !props.assistantReady || props.projectSlug !== projectSlug ||
       props.sessionId !== sessionId || selectionRevision.value !== revision || hostConversation?.value?.selected !== hostSelected) {
       throw new Error("The selected conversation changed before it opened.");
     }
@@ -771,13 +772,13 @@ const selectedView = {
     hostConversation?.value?.close();
     temporary.selectTask(task.id);
     await nextTick();
-    if (!isCurrent() || !props.active || props.sessionId !== sessionId || selectionRevision.value !== revision ||
+    if (!isCurrent() || !props.sessionSelected || props.sessionId !== sessionId || selectionRevision.value !== revision ||
       temporary.activeTaskId.value !== task.id || !temporary.open.value) throw new Error("The selected conversation changed before it opened.");
   }
 };
 watchEffect(() => {
   if (!colleagueView) return;
-  if (props.active) colleagueView.value = selectedView;
+  if (props.sessionSelected) colleagueView.value = selectedView;
   else if (colleagueView.value === selectedView) colleagueView.value = null;
 });
 onBeforeUnmount(() => {

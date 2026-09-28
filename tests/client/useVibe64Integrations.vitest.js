@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { effectScope, nextTick, ref } from "vue";
+import { effectScope, nextTick, reactive, ref } from "vue";
 import { useVibe64Integrations } from "@/composables/useVibe64Integrations.js";
 
 const mocks = vi.hoisted(() => ({ resource: null, save: null, setup: null }));
@@ -7,7 +7,7 @@ vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: () => mocks.resource
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
-  useCommand: (options) => ({ isRunning: false,
+  useCommand: (options) => reactive({ isRunning: false,
     run: options.writeMethod === "PUT" ? (...args) => mocks.save(...args) : (...args) => mocks.setup(...args) })
 }));
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent: () => {} }));
@@ -32,6 +32,54 @@ function fixture() {
   const selected = ref("");
   return { context, selected, model: scope.run(() => useVibe64Integrations(context, selected)) };
 }
+
+it("refreshing a mounted connection supersedes a busy response and only follows it with one status read", async () => {
+  const { selected, model } = fixture();
+  selected.value = "calendar";
+  await nextTick();
+  const old = Promise.withResolvers();
+  mocks.setup.mockReset();
+  mocks.setup.mockImplementationOnce(() => {
+    model.setupCommand.isRunning = true;
+    return old.promise.finally(() => { model.setupCommand.isRunning = false; });
+  });
+  mocks.setup.mockResolvedValue({ status: "pending", attemptId: "new-consent", authorizationUrl: "https://provider.invalid/consent" });
+  const working = model.runSetup("connect");
+  model.refreshConnection();
+  model.refreshConnection();
+  await nextTick();
+  expect(mocks.setup).toHaveBeenCalledTimes(1);
+  expect(model.connection.value).toBeNull();
+  old.resolve({ status: "connected", accountLabel: "Old response" });
+  await working;
+  await nextTick();
+  expect(mocks.setup.mock.calls.map(([request]) => request.body.operation)).toEqual(["connect", "status"]);
+  expect(model.connection.value).toMatchObject({ status: "pending", attemptId: "new-consent" });
+  expect(model.connectionError.value).toBe("");
+});
+
+it("an explicit refresh clears stale status, preserves drafts and reports failure without repeated commands", async () => {
+  const { selected, model } = fixture();
+  selected.value = "calendar";
+  await nextTick();
+  const configuration = JSON.stringify(model.configuration.value);
+  mocks.setup.mockReset();
+  mocks.setup.mockRejectedValue(new Error("Status unavailable"));
+  model.connection.value = { status: "connected", accountLabel: "Stale" };
+  model.refreshConnection();
+  await nextTick();
+  await nextTick();
+  expect(model.connection.value).toBeNull();
+  expect(model.connectionError.value).toBe("Status unavailable");
+  expect(mocks.setup).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(model.configuration.value)).toBe(configuration);
+  mocks.setup.mockClear();
+  model.configuration.value.extensions.name = "draft";
+  model.refreshConnection();
+  await nextTick();
+  expect(mocks.setup).not.toHaveBeenCalled();
+  expect(model.configuration.value.extensions.name).toBe("draft");
+});
 
 it.each([false, true])("cancelling replacement consent rereads the old grant without reconnecting (status failure: %s)", async (statusFails) => {
   const { selected, model } = fixture();
@@ -527,4 +575,23 @@ it("production payment reviews are owner-only and tied to the published release"
   mocks.setup.mockClear();
   await model.runPaymentOperation({ operation: "payments-publish", paymentEnvironment: "live", reviewId: "review" });
   expect(mocks.setup).not.toHaveBeenCalled();
+});
+
+
+it.each(["inactive", "per-user", "suspended"])("connection refresh preserves the %s guard", async (unavailable) => {
+  const { selected, context, model } = fixture();
+  selected.value = "calendar";
+  await nextTick();
+  mocks.setup.mockClear();
+  if (unavailable === "inactive") context.value.active = false;
+  if (unavailable === "per-user") {
+    const configuration = payload("per-user");
+    configuration.configuration.integrations.calendar.accountMode = "per-user";
+    mocks.resource.data.value = configuration;
+  }
+  if (unavailable === "suspended") context.value.sourceOperationsSuspended = true;
+  model.refreshConnection();
+  await nextTick();
+  expect(mocks.setup).not.toHaveBeenCalled();
+  expect(model.dirty.value).toBe(false);
 });

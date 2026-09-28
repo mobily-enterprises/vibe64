@@ -158,7 +158,11 @@ export function useVibe64Integrations(context, selectedId) {
         typeof request.requestId !== "string" || !/^[a-f0-9]{64}$/u.test(request.requestId)) return null;
     return { turnId: request.turnId, requestId: request.requestId, configurationHash: baseHash.value };
   });
-  const connectionKey = computed(() => `${path.value}/${selectedId.value || ""}/${baseHash.value || ""}/${releaseId.value}/${setupRequest.value?.turnId || ""}/${setupRequest.value?.requestId || ""}`);
+  const connectionRefresh = ref(0);
+  const connectionKey = computed(() => `${path.value}/${selectedId.value || ""}/${baseHash.value || ""}/${releaseId.value}/${setupRequest.value?.turnId || ""}/${setupRequest.value?.requestId || ""}/${connectionRefresh.value}`);
+  function refreshConnection() {
+    connectionRefresh.value += 1;
+  }
   const paymentResult = ref(null);
   const paymentError = ref("");
   const paymentOperation = ref("");
@@ -356,5 +360,5 @@ export function useVibe64Integrations(context, selectedId) {
     if (result?.data?.configuration && !result.isError && !disposed && path.value === requestPath) apply(result.data);
   }
 
-  return { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, releaseId, connection, connectionError, verificationInput, setupCommand, runSetup, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard };
+  return { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, releaseId, connection, connectionError, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard };
 }

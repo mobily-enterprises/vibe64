@@ -258,6 +258,8 @@ existing conversation owners still execute work. It also
 owns acknowledged project/session and global Management navigation commands.
 The Integrations panel owns its actual slot selection and publishes bounded view
 state for Colleague's acknowledged navigation and captured request focus.
+The existing project layout owner supplies actual pane visibility and reveal
+operations; the integration owner refreshes status through its current command.
 Code subscribes to session events and reconciles watched conversations through
 their existing authorized actions.
 It consumes existing native conversation and JSKIT transcript

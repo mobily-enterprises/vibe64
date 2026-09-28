@@ -242,6 +242,25 @@ fields only for the matching project/session and an available selected slot;
 manual changes update them independently of old URL parameters. Hidden or disposed
 panels withdraw their selection. A displayed draft is not saved-state or provider
 readiness evidence.
+Reopening the already selected development slot explicitly refreshes connection
+status through the existing setup owner. Its request identity invalidates older
+responses and the existing busy-command handling schedules the status read after
+an active command settles. It never repeats Connect or Disconnect. Draft,
+source-suspension, per-user and active-view guards still apply; failures remain
+visible without automatic retries. Opening acknowledges the selection, not a
+successful provider check.
+
+The existing app-page layout owner publishes its ready project and pane visibility
+to the host. An explicit project view reveals that pane on compact screens;
+session/conversation navigation without a pane reveals chat. A project-only open
+reveals Preview. Navigation waits for the matching ready layout and releases its
+watchers afterward. Captured focus reports `pane=chat` when the compact project
+pane is hidden, omitting its Preview and integration detail. An unready or missing
+layout reports no displayed pane. Publication ends with the layout's lifetime;
+no new layout controller or persisted preference is introduced.
+The selected session's conversation owner remains available when chat is hidden;
+visibility still controls its ordinary UI activity. Selecting another session or
+disposing the workspace withdraws that owner and rejects late navigation.
 The active Preview publishes its displayed setup state separately from the
 route name: new project, existing project awaiting setup, checking setup, or
 output controls with or without a setup warning. The host includes that state

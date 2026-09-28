@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from "vue-router";
 import {
   mdiChevronDown,
@@ -9,6 +9,7 @@ import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealt
 import { useQueryClient } from "@tanstack/vue-query";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { vibe64RealtimePayloadFromCurrentTab } from "@/lib/vibe64BrowserTabOrigin.js";
+import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
 import { invalidateGithubIssueQueries } from "@/lib/vibe64GithubProject.js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
@@ -163,6 +164,15 @@ function useVibe64AppPage() {
   }));
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value && chatCollapsed.value);
   const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value);
+  const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
+  const layoutOwner = {
+    get projectSlug() { return projectSlug.value; },
+    get ready() { return projectPaneNavigationVisible.value; },
+    get projectVisible() { return !mobilePaneLayout.value || chatCollapsed.value; },
+    get chatVisible() { return !chatCollapsed.value; },
+    showProject: showProjectPane,
+    showChat() { setChatCollapsed(false); }
+  };
   const previewToolbarHostVisible = computed(() => previewToolbarTargetVisible({
     chatCollapsed: chatCollapsed.value,
     mobilePaneLayout: mobilePaneLayout.value,
@@ -269,9 +279,11 @@ function useVibe64AppPage() {
         mobilePaneMediaQuery.addListener?.(syncMobilePaneLayout);
       }
     }
+    if (colleagueLayout) colleagueLayout.value = layoutOwner;
   });
 
   onBeforeUnmount(() => {
+    if (colleagueLayout?.value === layoutOwner) colleagueLayout.value = null;
     removeProjectNavigation();
     clearSelfTargetAutoSelectTimer();
     setHomeShellActive(false);

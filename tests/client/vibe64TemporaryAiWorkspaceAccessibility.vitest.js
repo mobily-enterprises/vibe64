@@ -87,6 +87,10 @@ vi.mock("@/components/studio/vibe64-session/Vibe64AgentSettingsMenu.vue", () => 
   default: defineComponent({ render: () => null })
 }));
 
+vi.mock("@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue", () => ({
+  default: defineComponent({ render: () => null })
+}));
+
 vi.mock("@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue", () => ({
   default: defineComponent({ render: () => null })
 }));
@@ -97,9 +101,10 @@ vi.mock("@/components/studio/vibe64-session/Vibe64ConversationAttachments.vue", 
 
 import Vibe64TemporaryAiWorkspace from "../../src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
+import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session/Vibe64ConversationStatus.vue";
 
 import * as SharedConversation from "@jskit-ai/assistant-core/client/conversation";
-import { VIBE64_HOST_CONVERSATION_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { VIBE64_HOST_CONVERSATION_KEY, VIBE64_COLLEAGUE_VIEW_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { AssistantProgress as Vibe64ConversationProgress } from "@jskit-ai/assistant-core/client/conversation";
 import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
@@ -108,7 +113,8 @@ for (const [name, component] of [
   ...["AssistantConversationElement", "AssistantTranscript", "AssistantProgress", "LongTextPreviewBlocks", "LongTextInlineParts", "AssistantPromptInput", "AssistantComposerActions"].map((name) => [name, SharedConversation[name]]),
   ["AssistantComposerSupport", AssistantComposerSupport],
   ["Vibe64TemporaryAiWorkspace", Vibe64TemporaryAiWorkspace],
-  ["Vibe64EphemeralConversationMessages", Vibe64EphemeralConversationMessages]
+  ["Vibe64EphemeralConversationMessages", Vibe64EphemeralConversationMessages],
+  ["Vibe64ConversationStatus", Vibe64ConversationStatus]
 ]) {
   const componentPath = path.resolve(SharedConversation[name]
     ? `node_modules/@jskit-ai/assistant-core/src/client/conversation/${name}.vue`
@@ -238,9 +244,10 @@ function testRenderer() {
   });
 }
 
-function mountWorkspace(container, props, hostConversation = null) {
+function mountWorkspace(container, props, hostConversation = null, colleagueView = null) {
   const app = testRenderer().createApp(Vibe64TemporaryAiWorkspace, props);
   if (hostConversation) app.provide(VIBE64_HOST_CONVERSATION_KEY, hostConversation);
+  if (colleagueView) app.provide(VIBE64_COLLEAGUE_VIEW_KEY, colleagueView);
   app.component("VAlert", defineComponent({
     inheritAttrs: false,
     props: {
@@ -296,6 +303,40 @@ async function flushWorkspaceReveal() {
 }
 
 describe("Temporary AI recovery workspace accessibility", () => {
+  it("retains the selected conversation owner while chat is hidden and withdraws it on deselection", async () => {
+    temporaryProvider.value = temporaryAiTestState();
+    const view = VueRuntime.shallowRef(null);
+    const selectedMain = vi.fn();
+    const { app, workspace } = mountWorkspace({ children: [] }, {
+      active: false, sessionSelected: true, assistantReady: true,
+      projectSlug: "alpha", sessionId: "one", onSelectMainChat: selectedMain
+    }, null, view);
+    try {
+      const owner = view.value;
+      expect(owner.sessionId).toBe("one");
+      expect(owner.ready).toBe(true);
+      await owner.openConversation("");
+      expect(selectedMain).toHaveBeenCalledOnce();
+      expect(temporaryProvider.value.restoreTasks).not.toHaveBeenCalled();
+      workspace.$.props.active = true;
+      await nextTick();
+      expect(view.value).toBe(owner);
+      workspace.$.props.active = false;
+      await nextTick();
+      expect(view.value).toBe(owner);
+      workspace.$.props.sessionSelected = false;
+      await nextTick();
+      expect(view.value).toBeNull();
+      await expect(owner.openConversation("")).rejects.toThrow("no longer available");
+      workspace.$.props.sessionSelected = true;
+      await nextTick();
+      expect(view.value).toBe(owner);
+    } finally {
+      app.unmount();
+    }
+    expect(view.value).toBeNull();
+  });
+
   beforeEach(() => {
     vi.stubGlobal("requestAnimationFrame", (callback) => {
       callback();

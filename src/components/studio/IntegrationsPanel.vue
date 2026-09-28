@@ -37,7 +37,7 @@ const integrationContext = computed(() => ({
     turnId: route.query.integrationTurn, requestId: route.query.integrationRequest
   }
 }));
-const { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, releaseId, connection, connectionError, verificationInput, setupCommand, runSetup, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard } =
+const { adsResult, adsError, runAdsOperation, paymentResult, paymentError, paymentOperation, runPaymentOperation, registrationCommand, registrationError, registrationNeedsReview, registerOAuthClient, discoveryCommand, discoveryError, discoverN8n, releaseId, connection, connectionError, verificationInput, setupCommand, runSetup, refreshConnection, configuration, dirty, resource, command, fieldErrors, error, changedElsewhere, save, discard } =
   useVibe64Integrations(integrationContext, selectedId);
 const projectSlug = useVibe64ProjectSlug();
 function openPaymentEnv({ key, value, secret }) {
@@ -67,9 +67,11 @@ const requestedIntegration = computed(() => route.query.integrationSession === p
   typeof route.query.integration === "string" && route.query.integration.length <= 200 ? route.query.integration : "");
 function selectIntegration(id) {
   if (!id) return;
+  const alreadySelected = environment.value === "development" && selectedId.value === id;
   environment.value = "development";
   selectedId.value = id;
   search.value = "";
+  if (alreadySelected) refreshConnection();
 }
 watch(requestedIntegration, selectIntegration, { immediate: true, flush: "sync" });
 

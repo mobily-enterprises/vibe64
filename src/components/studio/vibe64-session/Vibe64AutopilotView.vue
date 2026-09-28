@@ -599,6 +599,7 @@
       <Vibe64TemporaryAiWorkspace
         ref="temporaryAiWorkspace"
         :active="props.active && !chatCollapsed"
+        :session-selected="props.active"
         :assistant-selection="props.session?.assistantSelection"
         :assistant-ready="Boolean(sessionId) && !props.sessionSelectionArchived"
         :can-configure-routing="assistantCanConfigureRouting"
