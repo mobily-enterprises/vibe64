@@ -2,6 +2,7 @@ import { createEntityChangedActionEvent } from "@jskit-ai/kernel/server/actions"
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { pullRequestTool } from "./assistantContracts.js";
 
 import {
   projectRemoteInputValidator,
@@ -210,6 +211,7 @@ function createProjectActions({ project } = {}) {
     })),
     ...Object.entries(projectPullRequestInputValidators).map(([operation, input]) => action({
       id: `vibe64.project.pull-requests.${operation}`, input,
+      assistant: pullRequestTool(operation),
       kind: ["list", "read"].includes(operation) ? "query" : "command",
       execute: (input) => project.githubPullRequests({ ...input, operation })
     })),

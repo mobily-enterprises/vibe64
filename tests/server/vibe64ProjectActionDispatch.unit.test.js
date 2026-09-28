@@ -123,6 +123,8 @@ test("all project HTTP operations share canonical actions and current authority 
       ["issues.create", { title: "Title", labels: Array(101).fill("bug") }], ["issues.read", { number: Number.MAX_SAFE_INTEGER + 1 }],
       ["pull-requests.merge", { number: 42, mergeMethod: "squash" }],
       ["pull-requests.merge", { number: 42, review, mergeMethod: "force" }],
+      ["pull-requests.ready", { number: 42, review: {} }],
+      ["pull-requests.update-branch", { number: 42, review: { ...review, headCommit: "latest" } }],
       ["env.secret.reveal", {}], ["env.user-values.save", {}], ["prompt-hints.save", {}], ["templates.apply", { sessionId: "session-1" }]
     ]) await assert.rejects(actions.execute({ actionId: `vibe64.project.${operation}`, input: { ...input, projectSlug: slug }, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" }, operation);
     assert.equal(calls.length, count);

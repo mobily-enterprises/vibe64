@@ -1,5 +1,5 @@
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool, sessionWorkTool } from "./assistantContracts.js";
+import { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool } from "./assistantContracts.js";
 import {
   sessionRenameActionInputValidator,
   conversationRewindActionInputValidator,
@@ -324,6 +324,7 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_CREATE_PULL_REQUEST,
+      assistant: sessionPullRequestTool(),
       kind: "command",
       input: sessionPullRequestInputValidator,
       execute: (input) => sessions.createSessionPullRequest(input.sessionId, withoutSessionId(input))

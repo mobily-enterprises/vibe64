@@ -52,7 +52,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const catalog = createServiceToolCatalog(actions);
   const context = { surface: "app" };
   const toolSet = catalog.resolveToolSet(context);
-  assert.equal(toolSet.tools.length, 31);
+  assert.equal(toolSet.tools.length, 32);
   assert.equal(toolSet.tools.some((tool) => tool.actionId.includes("attachment") || tool.actionId.includes("repository")), false);
   async function execute(actionId, input) {
     const tool = toolSet.tools.find((entry) => entry.actionId === actionId);

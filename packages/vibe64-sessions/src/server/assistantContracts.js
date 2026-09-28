@@ -167,6 +167,33 @@ function sessionWorkTool(description) {
   };
 }
 
+function sessionPullRequestTool() {
+  const sourceStrings = ["url", "baseRepository", "baseBranch", "headRepository", "headBranch"];
+  return {
+    description: "Publish this session's work as a GitHub pull request only when the user asks to create a PR. First inspect work, explain the reviewed repository/branch and pass its exact destination unchanged as destinationReview. Supply the user's intended title and description; draft defaults to true. This publishes all current session work through ordinary Save and binds the session to its PR source. It does not merge or deploy. An already bound PR is returned without editing its title/body. If publication fails or is uncertain, inspect work and existing PRs before any explicit retry: the session may already be bound and the code may already be published. Read the returned PR through pull-requests.read for current status and commit identities; saveCommit is the actual saved commit when this call saved work.",
+    output: { mode: "replace", schema: createSchema({
+      ok: { type: "boolean", required: true }, error: { ...shortText, maxLength: 512 }, code: shortText,
+      saveCommit: shortText,
+      pullRequest: { type: "object", required: false, schema: createSchema({
+        number: { type: "integer", min: 1, required: true }, title: shortText,
+        ...Object.fromEntries(sourceStrings.map((key) => [key, { ...shortText, maxLength: 4096, noTrim: true }]))
+      }) }
+    }) },
+    transformResult(result) {
+      const output = { ok: result.ok === true,
+        ...Object.fromEntries(["error", "code", "saveCommit"].flatMap((key) => typeof result[key] === "string"
+          ? [[key, result[key].slice(0, key === "error" ? 512 : 256)]] : [])) };
+      if (result.pullRequest) {
+        const pr = result.pullRequest;
+        output.pullRequest = { number: pr.number,
+          ...Object.fromEntries(["title", ...sourceStrings].flatMap((key) => typeof pr[key] === "string"
+            ? [[key, pr[key].slice(0, key === "title" ? 256 : 4096)]] : [])) };
+      }
+      return output;
+    }
+  };
+}
+
 function conversationLogTool() {
   return {
     description: "Read a bounded page of Main conversation text in a session. Returns up to six turns with stable turn IDs and nextBeforeTurnId for older pages. Truncated text is explicitly marked; use Colleague's conversation summary for a large range. Status/phase comes from session inspection, not from silence in this log. rewindTurnId identifies the current Undo candidate independently of the requested history page; rewindPending means that exact Undo needs recovery. The Undo service rechecks access, idle work and native boundaries before removing it.",
@@ -265,4 +292,4 @@ function renewalTool(description, { includeDraft = false } = {}) {
   };
 }
 
-export { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool, sessionWorkTool };
+export { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool };

@@ -220,7 +220,14 @@ const projectIssueInputValidators = {
   "set-labels": inputSchema({ number: issueNumber, labels: { ...labels, required: true }, labelMode: { type: "string", enum: ["replace", "add", "remove"] } }),
   mentions: inputSchema({ number: { ...issueNumber, required: false } })
 };
-const pullRequestReview = { type: "object", additionalProperties: true, required: true };
+const pullRequestReviewSchema = createSchema({
+  number: issueNumber,
+  ...Object.fromEntries(["repository", "headRepository", "headBranch", "baseBranch"].map((key) =>
+    [key, { type: "string", minLength: 1, maxLength: 4096, noTrim: true, required: true }])),
+  ...Object.fromEntries(["headCommit", "baseCommit"].map((key) =>
+    [key, { type: "string", pattern: /^[a-f0-9]{40,64}$/u, noTrim: true, required: true }]))
+});
+const pullRequestReview = { type: "object", schema: pullRequestReviewSchema, required: true };
 const projectPullRequestInputValidators = {
   list: inputSchema({ state: { type: "string", enum: ["open", "closed", "merged", "all"] }, search, cursor }),
   read: inputSchema({ number: issueNumber }),
@@ -230,6 +237,7 @@ const projectPullRequestInputValidators = {
 };
 
 export {
+  pullRequestReviewSchema,
   projectRepositoryBranchesInputValidator,
   emptyProjectInputValidator,
   projectRepositoryWorkflowInputValidator,

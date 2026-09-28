@@ -10,10 +10,12 @@ work as a new PR. GitHub remains the PR store.
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
 - `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/assistantContracts.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-core/src/server/projectRepository.js`
 - `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-sessions/src/server/actions.js`
+- `packages/vibe64-sessions/src/server/assistantContracts.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
 - `packages/vibe64-terminals/src/server/service.js`
@@ -34,6 +36,7 @@ work as a new PR. GitHub remains the PR store.
 - `src/lib/vibe64GithubProject.js`
 - `src/placement.js`
 - `tests/server/githubPullRequests.unit.test.js`
+- `tests/server/vibe64PullRequestActionTools.unit.test.js`
 
 ## Public contract
 
@@ -43,6 +46,24 @@ person's GitHub identity. The service still re-reads the exact PR and validates
 its reviewed destination and current GitHub permissions before a write. Action
 validation requires a review for those writes and a supported merge method for
 merge; it does not substitute for GitHub's fresh checks or authorize retries.
+
+Colleague discovers those same five project actions and session Create PR as
+native tools. List preserves the owner's 25-item page and cursor. Detail returns
+a bounded description excerpt, explicit truncation, checks, review decision,
+action blockers and allowed merge methods. Repository descriptions are background
+data; code analysis stays with coding conversations. Exact write reviews retain
+all seven repository, number, branch and commit identities without truncation;
+the canonical input requires each field. A PR with missing refs remains readable
+without a usable write review. HTTP retains its full existing result.
+
+The product operator acts on requested publications and merges, describes their
+source and destination, and uses freshly read reviews. Create PR returns the
+published PR identity and actual Save commit, when present; current commit and
+draft status come from a fresh PR read. Asynchronous branch updates remain pending,
+and ambiguous writes require inspection before any explicit retry. These tools
+do not automatically save to unblock a merge, update worktrees, archive sessions,
+delete branches or deploy. Opening a PR uses ordinary session creation with its
+number, current GitHub identity and the existing source admission checks.
 
 All Issues and PR navigation and session actions are hidden without a GitHub
 repository. The backend independently rejects non-GitHub project operations.

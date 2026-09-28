@@ -280,8 +280,8 @@ const sessionHistoryReviewSchema = createSchema({
 
 const sessionPullRequestInputValidator = patchSchema({
   destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: true },
-  sessionId: { type: "string", required: true },
-  title: { type: "string", required: true, maxLength: 256 },
+  sessionId: { type: "string", required: true, minLength: 1 },
+  title: { type: "string", required: true, minLength: 1, maxLength: 256 },
   body: { type: "string", required: false, maxLength: 65536, noTrim: true },
   draft: { type: "boolean", required: false },
   ...optionalOrigin,
