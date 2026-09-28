@@ -128,6 +128,10 @@ and need no historical state upgrade.
 Codex's encrypted OpenAI compaction cannot convey readable facts to DeepSeek or
 GLM. On a foreign request containing that item, the managed adapter supplies
 the saved readable conversation from before the exact native compaction boundary.
+Recovery starts from the latest earlier readable native compaction replacement
+and includes subsequent recorded items through that boundary. Superseded raw
+history is not re-expanded; later encrypted replacements retain that readable
+baseline. Current instructions, retained images and native files stay intact.
 This also supplies context to native foreign compaction, so returning to Astra
 can retain those facts after the foreign model summarizes. It adds no model call
 and never rewrites the native rollout. Single-provider requests and ordinary text

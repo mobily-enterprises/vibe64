@@ -338,6 +338,49 @@ test("repeated compaction restores through the exact latest boundary and ignores
   assert.doesNotMatch(supplement, /exact-native-compaction/);
 });
 
+test("foreign recovery honors the latest readable native compaction before a later encrypted boundary", async (t) => {
+  const fixture = await compactedFixture(t, { maxRequestBytes: 4096 });
+  const message = (role, text) => ({ type: "message", role, content: [{ type: role === "assistant" ? "output_text" : "input_text", text }] });
+  const image = { type: "input_image", image_url: "data:image/png;base64,retained-image", detail: "original" };
+  const retained = message("user", "Keep the approved scope and screenshot.");
+  retained.content.push(image);
+  const summary = message("user", "Native summary: feature complete; finish outstanding checks.");
+  const recentTool = { type: "function_call_output", call_id: "recent-check", output: "RECENT_CHECK_RESULT" };
+  const intermediate = { type: "compaction", encrypted_content: "intermediate-opaque-state" };
+  const latest = { type: "compaction", encrypted_content: "latest-opaque-state" };
+  await fixture.save([
+    ...fixture.records,
+    { type: "response_item", payload: message("assistant", "SUPERSEDED_OUTPUT".repeat(10000)) },
+    { type: "compacted", payload: { message: "Older native summary", replacement_history: [message("user", "Older native summary")] } },
+    { type: "response_item", payload: message("assistant", "SUPERSEDED_BETWEEN_SUMMARIES") },
+    { type: "compacted", payload: { message: summary.content[0].text, replacement_history: [
+      message("developer", "OLD_DEVELOPER_INSTRUCTIONS"), retained, summary
+    ] } },
+    { type: "response_item", payload: recentTool },
+    { type: "compacted", payload: { replacement_history: [intermediate] } },
+    { type: "response_item", payload: message("assistant", "AFTER_INTERMEDIATE_BOUNDARY") },
+    { type: "compacted", payload: { replacement_history: [latest] } },
+    { type: "response_item", payload: message("user", "AFTER_TARGET_BOUNDARY") }
+  ]);
+  const native = await readFile(fixture.historyPath);
+  const current = message("developer", "CURRENT_INSTRUCTIONS");
+  const request = message("user", "Implement the plan I have approved.");
+  const response = await fixture.send({ model: "deepseek-flash", input: [current, latest, request] });
+  assert.equal(await response.text(), "accepted");
+  assert.equal(fixture.calls.length, 1);
+  const input = fixture.calls[0].body.input;
+  assert.deepEqual(input[0], current);
+  assert.deepEqual(input[1], latest);
+  assert.deepEqual(input.at(-1), request);
+  const content = input[2].content;
+  assert.match(content[0].text, /Native summary: feature complete; finish outstanding checks/);
+  assert.match(content[0].text, /RECENT_CHECK_RESULT/);
+  assert.match(content[0].text, /AFTER_INTERMEDIATE_BOUNDARY/);
+  assert.doesNotMatch(content[0].text, /SUPERSEDED|Older native summary|RANDOM_TOOL_FACT|OLD_DEVELOPER_INSTRUCTIONS|AFTER_TARGET_BOUNDARY|opaque-state/);
+  assert.deepEqual(content.filter(({ type }) => type === "input_image"), [image]);
+  assert.deepEqual(await readFile(fixture.historyPath), native);
+});
+
 test("unsafe, unsupported or oversized compacted histories fail before any provider request", async (t) => {
   const fixture = await compactedFixture(t, { maxRequestBytes: 4096 });
   const body = { model: "deepseek-flash", input: [fixture.compacted] };

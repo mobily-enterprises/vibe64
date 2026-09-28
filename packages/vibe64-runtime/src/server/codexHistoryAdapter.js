@@ -137,11 +137,24 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
       }
     }
     if (boundaries.length !== 1) throw compactionHistoryError("its exact saved compaction boundary could not be identified.");
+    let history = [];
+    for (const row of rows.slice(0, boundaries[0])) {
+      if (row.type === "response_item") history.push(row.payload);
+      if (row.type !== "compacted") continue;
+      const replacement = row.payload?.replacement_history;
+      // A readable native summary already replaced everything before it.
+      // Replaying those superseded tool results undoes compaction and can
+      // overflow the destination even when the native context still fits.
+      // Opaque replacements cannot supply that baseline to another provider.
+      if (typeof row.payload?.message === "string" && row.payload.message.trim() &&
+          Array.isArray(replacement) && replacement.length &&
+          !replacement.some((old) => old?.type === "compaction")) {
+        history = [...replacement];
+      }
+    }
     const readable = [];
     const images = [];
-    for (const row of rows.slice(0, boundaries[0])) {
-      if (row.type !== "response_item") continue;
-      const old = row.payload;
+    for (const old of history) {
       if (old?.type === "message" && ["developer", "system"].includes(old.role)) continue;
       if (old?.type === "compaction") continue;
       if (!["message", "reasoning", "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output"].includes(old?.type)) {
