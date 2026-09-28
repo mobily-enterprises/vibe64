@@ -3565,3 +3565,66 @@ test("Auto cannot bypass an unfinished goal when native goal observation is unav
   assert.notEqual(cleared.ok, false, JSON.stringify(cleared));
   assert.equal(JSON.parse(session.metadata.assistant_routing).mode, "auto");
 });
+
+test("named chat modes switch workflow through authorized native handover and preserve the mode", async () => {
+  for (const mode of ["senior", "junior", "auto"]) {
+    for (const failure of ["unavailable", "access", "active", "goal", "pending", "shutdown", "", "same-native-backup"]) {
+      const lock = agentWriteLockHarness();
+      const operations = [];
+      const actor = { role: "member", username: "member" };
+      const current = { agentId: "codex", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "codex",
+        modelId: "gpt-6-astra", modelProviderId: "openai", schema: "vibe64.assistant-selection.v1", variantId: "high" };
+      const next = failure === "same-native-backup" ? current : { ...current,
+        engineId: "claude", agentId: "claude", modelProviderId: "deepseek", modelId: "deepseek-flash" };
+      const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
+        assistant_selection: JSON.stringify(current),
+        assistant_routing: JSON.stringify({ mode, review: mode === "auto", workflowEngineId: "codex", override: current }),
+        ...(failure === "pending" ? { assistant_routing_request: JSON.stringify({ status: "review_pending" }) } : {}),
+        ...(failure === "goal" ? { assistant_routing_goal: JSON.stringify({ status: "paused" }) } : {})
+      } };
+      const original = { ...session.metadata };
+      const runtime = { async getSession() { return session; }, store: { ...lock.store,
+        async writeMetadataValue(_id, name, value) { operations.push("write"); session.metadata[name] = value; }
+      } };
+      const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+        async resolveAssistantPurpose(input, options) {
+          assert.deepEqual(input, { purpose: mode, workflowEngineId: "claude", reviewEnabled: mode === "auto" });
+          assert.equal(options.vibe64User, actor);
+          operations.push("resolve");
+          const destination = { effectiveSelection: next, connectionIdentity: "connection-1" };
+          return { available: failure !== "unavailable", message: "Configure this workflow first.", reasonCode: "unconfigured",
+            ...destination, seniorJuniorPair: { senior: destination } };
+        },
+        async requireAssistantSelectionAccess(selection, options) {
+          assert.deepEqual(selection, next);
+          assert.equal(options.expectedConnectionIdentity, "connection-1");
+          assert.equal(options.vibe64User, actor);
+          operations.push("access");
+          if (failure === "access") throw new Error("Destination access was revoked.");
+        },
+        async agentSessionState() { return { turn: { active: failure === "active" } }; },
+        async readAgentGoal() { return { status: "unavailable" }; },
+        async prepareAssistantChangeover(id, context) {
+          assert.equal(id, session.sessionId);
+          assert.equal(context.session.metadata.assistant_selection, original.assistant_selection);
+          operations.push("shutdown");
+          return failure === "shutdown" ? { ok: false, code: "stop-failed" } : { ok: true };
+        }
+      } });
+      const result = await service.updateAssistantSelection(session.sessionId, {
+        assistantRouting: { mode, review: mode === "auto", workflowEngineId: "claude" }, vibe64User: actor
+      });
+      if (failure && failure !== "same-native-backup") {
+        assert.equal(result.ok, false, `${mode}: ${failure}`);
+        assert.deepEqual(session.metadata, original);
+        assert.ok(!operations.includes("write"));
+        if (failure !== "shutdown") assert.ok(!operations.includes("shutdown"));
+      } else {
+        assert.notEqual(result.ok, false, JSON.stringify(result));
+        assert.deepEqual(JSON.parse(session.metadata.assistant_selection), next);
+        assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode, review: mode === "auto", workflowEngineId: "claude" });
+        assert.deepEqual(operations, ["resolve", "access", ...(failure === "same-native-backup" ? [] : ["shutdown"]), "write", "write"]);
+      }
+    }
+  }
+});

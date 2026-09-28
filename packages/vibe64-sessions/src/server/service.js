@@ -1645,34 +1645,45 @@ function createService({
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
           const session = await runtime.getSession(sessionId, { inspectSource: false });
           const current = vibe64AssistantSelectionFromMetadata(session.metadata);
+          let preferences = null;
+          let resolved;
+          let connectionIdentity;
           if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
             const previous = assistantRoutingFromMetadata(session.metadata);
-            const preferences = assistantRoutingPreferences({ ...input.assistantRouting,
-              workflowEngineId: previous?.workflowEngineId || current.engineId });
+            const previousWorkflow = previous?.workflowEngineId || current.engineId;
+            preferences = assistantRoutingPreferences({ ...input.assistantRouting,
+              workflowEngineId: input.assistantRouting.workflowEngineId || previousWorkflow });
             if (["senior", "junior"].includes(preferences.mode) && preferences.override?.engineId &&
                 preferences.override.engineId !== preferences.workflowEngineId) throw new Error("Senior and Junior overrides must use the workflow orchestrator.");
-            if (preferences.mode === "auto") {
-              const observed = await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User });
-              const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
-              const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
-              if (goal && !["complete", "completed"].includes(goal.status)) throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
+            if (preferences.workflowEngineId === previousWorkflow) {
+              if (preferences.mode === "auto") {
+                const observed = await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User });
+                const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
+                const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
+                if (goal && !["complete", "completed"].includes(goal.status)) throw new Error("Auto is unavailable while this conversation has an unfinished goal.");
+              }
+              await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
+              return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
             }
-            await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
-            return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
+            const decision = await terminals.resolveAssistantPurpose({
+              purpose: preferences.mode, workflowEngineId: preferences.workflowEngineId, reviewEnabled: preferences.review,
+              ...(preferences.override ? { override: { role: preferences.mode, selection: preferences.override } } : {})
+            }, { vibe64User });
+            if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
+            const destination = preferences.mode === "auto" ? decision.seniorJuniorPair.senior : decision;
+            resolved = destination.effectiveSelection;
+            connectionIdentity = destination.connectionIdentity;
+          } else {
+            const requestedSelection = input.assistantRouting?.mode === "custom"
+              ? input.assistantRouting.override : input.assistantSelection;
+            if (!requestedSelection) throw new Error("Choose an assistant or a chat mode.");
+            resolved = await resolveAssistantSelection({
+              ...record(requestedSelection),
+              engineId: text(requestedSelection.engineId) || current.engineId
+            }, vibe64User);
           }
-          const requestedSelection = input.assistantRouting?.mode === "custom"
-            ? input.assistantRouting.override : input.assistantSelection;
-          if (!requestedSelection) throw new Error("Choose an assistant or a chat mode.");
-          const requested = {
-            ...record(requestedSelection),
-            engineId: text(requestedSelection.engineId) || current.engineId
-          };
-          const resolved = await resolveAssistantSelection(
-            requested,
-            vibe64User
-          );
           await terminals.requireAssistantSelectionAccess(resolved, {
-            vibe64User
+            vibe64User, ...(connectionIdentity ? { expectedConnectionIdentity: connectionIdentity } : {})
           });
           const agentSession = typeof terminals.agentSessionState === "function"
             ? await terminals.agentSessionState(sessionId, { runtime, session })
@@ -1698,7 +1709,7 @@ function createService({
             });
             if (changeover?.ok === false) return changeover;
           }
-          await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify({
+          await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences || {
             mode: "custom", review: false, workflowEngineId: next.engineId, override: next
           }));
           await runtime.store.writeMetadataValue(

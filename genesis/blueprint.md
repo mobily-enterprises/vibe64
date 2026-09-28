@@ -265,6 +265,11 @@ Main chat offers Custom, Senior, Junior and Auto; ordinary temporary chats offer
 Custom, Senior and Junior. Custom appears first and opens three fields:
 Orchestrator, Model, Thinking. Apply saves the exact choice; Cancel keeps the
 previous mode. Custom does not require configured role assignments or a Router.
+In Main chat's Senior, Junior and Auto modes, a separate Orchestrator choice
+switches coding tools while keeping the selected mode and conversation. It uses
+the destination's saved model assignments. An unavailable destination or failed
+handover keeps the previous choice; active work and unfinished goals must finish
+before switching. Custom continues to choose an exact AI independently.
 Switching orchestrators uses the existing conversation handoff. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
 mode and comes first. Its menu shows
 effective model and thinking assignments and the selected role, including Router

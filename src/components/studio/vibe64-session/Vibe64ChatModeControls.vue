@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiTuneVariant } from "@mdi/js";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { ModelRoutingForm } from "@local/vibe64-accounts/client";
+import { ModelRoutingForm, useModelRouting } from "@local/vibe64-accounts/client";
 import { ASSISTANT_MODES, assistantModeLabel, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
@@ -15,6 +15,7 @@ const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
 const review = ref(false);
+const modelOverride = ref(null);
 const saving = ref(false);
 const saveError = ref("");
 const detailsOpen = ref(false);
@@ -25,7 +26,15 @@ const routingSaving = ref(false);
 const modeIcons = { custom: mdiTuneVariant, senior: mdiAccountStarOutline, junior: mdiAccountOutline, auto: mdiAutoFix };
 const modes = computed(() => ASSISTANT_MODES.filter(({ id }) => !props.temporary || id !== "auto"));
 const modeLabel = computed(() => assistantModeLabel(mode.value));
-const workflowEngineId = computed(() => preferences.value?.workflowEngineId || props.session?.assistantSelection?.engineId);
+const savedWorkflowEngineId = computed(() => preferences.value?.workflowEngineId || props.session?.assistantSelection?.engineId);
+const workflowEngineId = ref("");
+watch(savedWorkflowEngineId, (value) => { workflowEngineId.value = value; }, { immediate: true });
+const { resource: workflows, loadError: workflowError } = useModelRouting({
+  enabled: computed(() => detailsOpen.value && !props.temporary && mode.value !== "custom"), workflowsOnly: true
+});
+const workflowChoices = computed(() => (workflows.data.value?.workflows || []).map((choice) => ({
+  ...choice, props: { disabled: !choice.available, "aria-disabled": !choice.available ? "true" : undefined, subtitle: choice.error || undefined }
+})));
 const decisions = computed(() => props.purposes || {});
 const goal = computed(() => props.session?.agentSession?.goal || props.session?.agentGoal?.goal ||
   JSON.parse(props.session?.metadata?.assistant_routing_goal || "null"));
@@ -33,8 +42,11 @@ const hasGoal = computed(() => Boolean(goal.value && !["completed", "complete"].
   Boolean(props.session?.agentSession?.turn?.goalStatus && !["completed", "complete"].includes(props.session.agentSession.turn.goalStatus)));
 const reviewAvailable = computed(() => !props.temporary && !hasGoal.value && mode.value === "auto");
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
-  ...(mode.value === preferences.value?.mode && preferences.value.override ? { override: preferences.value.override } : {}) }));
-watch(preferences, (value) => { mode.value = value?.mode || ""; review.value = value?.review === true; }, { immediate: true });
+  ...(!props.temporary && workflowEngineId.value ? { workflowEngineId: workflowEngineId.value } : {}),
+  ...(modelOverride.value ? { override: modelOverride.value } : {}) }));
+watch(preferences, (value) => {
+  mode.value = value?.mode || ""; review.value = value?.review === true; modelOverride.value = value?.override || null;
+}, { immediate: true });
 function roleLabel(role) {
   if (role === "custom" && preferences.value?.mode !== "custom") return "Choose an orchestrator, model and thinking level.";
   const decision = decisions.value[role === "router" ? "request_routing" : role];
@@ -74,17 +86,24 @@ function openCustom() {
   detailsOpen.value = false;
   emit("custom", modeMenu.value?.activatorEl);
 }
-async function save(nextMode = mode.value, nextReview = review.value) {
+async function save(nextMode = mode.value, nextReview = review.value, nextWorkflow = workflowEngineId.value) {
   if (saving.value || props.disabled || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && (hasGoal.value || props.temporary)) return;
-  const previous = { mode: mode.value, review: review.value };
-  mode.value = nextMode; review.value = !props.temporary && nextReview; saving.value = true;
+  if (nextWorkflow !== workflowEngineId.value && (props.temporary || props.active || hasGoal.value || nextMode === "custom" ||
+      !workflowChoices.value.some((choice) => choice.engineId === nextWorkflow && choice.available))) return;
+  const previous = { mode: mode.value, review: review.value, workflowEngineId: workflowEngineId.value, override: modelOverride.value };
+  if (nextMode !== mode.value || nextWorkflow !== workflowEngineId.value) modelOverride.value = null;
+  mode.value = nextMode; review.value = !props.temporary && nextReview; workflowEngineId.value = nextWorkflow; saving.value = true;
   saveError.value = "";
   try {
     const result = props.savePreferences ? await props.savePreferences(updatedPreferences.value) : await command.run();
     if (result?.ok === false) throw new Error(result.error || "Chat mode could not be saved.");
     emit("saved");
   }
-  catch (error) { mode.value = previous.mode; review.value = previous.review; saveError.value = error.message || "Chat mode could not be saved."; }
+  catch (error) {
+    mode.value = previous.mode; review.value = previous.review; workflowEngineId.value = previous.workflowEngineId;
+    modelOverride.value = previous.override;
+    saveError.value = error.message || "Chat mode could not be saved.";
+  }
   finally { saving.value = false; }
 }
 function configure() {
@@ -112,6 +131,16 @@ function configure() {
       <div class="chat-modes__details-body">
         <p v-if="active || saving || !mode" class="text-body-small px-4 pb-2" role="status">{{ saving ? 'Saving mode…' : active ? 'For your next request' : description }}</p>
         <v-alert v-if="saveError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ saveError }}</v-alert>
+        <div v-if="!temporary && mode !== 'custom'" class="px-4 pt-2 pb-2">
+          <v-select
+            :model-value="workflowEngineId" :items="workflowChoices" item-title="label" item-value="engineId"
+            label="Orchestrator" variant="outlined" density="compact" hide-details
+            :loading="workflows.isInitialLoading.value" :disabled="disabled || saving || active || hasGoal || !mode"
+            @update:model-value="save(mode, review, $event)"
+          />
+          <p class="text-body-small mt-2">Switch coding tools and keep this conversation.</p>
+          <p v-if="workflowError" class="text-body-small text-error" role="alert">{{ workflowError }} <v-btn variant="text" @click="workflows.reload()">Retry</v-btn></p>
+        </div>
         <v-list :lines="false" class="py-0">
           <v-list-item
             title="Custom" :prepend-icon="modeIcons.custom" :active="mode === 'custom'" role="button"

@@ -397,6 +397,16 @@ failure and retry state. It does not fetch the full routing configuration;
 the configuration form loads that catalogue only when opened. The parent reads
 the lightweight workflow response for configuration permission. Picker labels
 use `Orchestrator (model thinking)`, including Auto's Router.
+Main's named modes expose an independent Orchestrator selector using the same
+lightweight workflow response. Choosing a workflow preserves Senior, Junior or
+Auto and its review preference, drops the previous workflow's model override,
+and resolves the destination's saved assignments through the actor-aware purpose
+resolver. Auto validates Router and the pair, then selects Senior for the idle
+conversation. The existing selection update checks destination connection
+identity, active work, unfinished goals and pending delivery/review before native
+changeover and persistence. A failed switch retains the prior selection; the
+next ordinary Send supplies the existing conversation catch-up. Custom retains
+its exact-model picker, and temporary chats retain their independent controls.
 The access inspection resolves saved assignments and current actor/connection
 permissions without provider catalogue discovery. Dispatch still validates models
 and capabilities against the live catalogue; a removed model can appear in the

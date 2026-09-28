@@ -2671,6 +2671,90 @@ test("@helper-hydration delayed history opens at the failed request and reports 
   }
 });
 
+hintTest("@workflow-switch change orchestrator independently of named chat modes", async ({ page }, info) => {
+  await mockDirectChat(page);
+  const selections = {
+    codex: { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra" },
+    claude: { agentId: "claude", engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "high" }
+  };
+  const session = { ...directSession(), assistantSelection: selections.codex, metadata: {
+    assistant_routing: JSON.stringify({ mode: "auto", review: true, workflowEngineId: "codex" })
+  } };
+  const changes: Record<string, unknown>[] = [];
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+  await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", route => fulfillJson(route, {
+    ok: true, canConfigure: false, workflows: [
+      { engineId: "codex", label: "Codex", available: true },
+      { engineId: "claude", label: "Claude Code", available: true },
+      { engineId: "opencode", label: "OpenCode", available: false, error: "Connect an account first." }
+    ]
+  }));
+  await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/assistant-access`, route => {
+    const decision = { available: true, effectiveSelection: session.assistantSelection };
+    return fulfillJson(route, { ok: true, available: true, canUse: true,
+      currentMode: JSON.parse(session.metadata.assistant_routing).mode,
+      purposes: { senior: decision, junior: decision, auto: { available: true }, review: decision, request_routing: decision }
+    });
+  });
+  await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/assistant-selection`, route => {
+    const change = route.request().postDataJSON().assistantRouting;
+    changes.push(change);
+    if (changes.length === 1) return fulfillJson(route, { ok: false, error: "Previous assistant could not stop." });
+    const next = { ...JSON.parse(session.metadata.assistant_routing), ...change };
+    session.metadata.assistant_routing = JSON.stringify(next);
+    session.assistantSelection = selections[next.workflowEngineId];
+    return fulfillJson(route, { ok: true, ...session });
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+  const composer = page.getByLabel("Message AI assistant");
+  await composer.fill("Keep this unsent draft.");
+  const trigger = page.getByRole("button", { name: /^Chat mode:/ });
+  await trigger.click();
+  const orchestrator = page.getByRole("combobox", { name: "Orchestrator", exact: true });
+  const modes = page.getByRole("list", { name: "Choose chat mode" });
+  await expect(orchestrator).toHaveValue("Codex");
+  await orchestrator.press("ArrowDown");
+  await expect(page.getByRole("option", { name: /^OpenCode/ })).toHaveAttribute("aria-disabled", "true");
+  await page.getByRole("option", { name: "Claude Code", exact: true }).click();
+  await expect(page.locator(".chat-modes__details").getByText("Previous assistant could not stop.", { exact: true })).toBeVisible();
+  await expect(orchestrator).toHaveValue("Codex");
+  await orchestrator.press("ArrowDown");
+  await page.getByRole("option", { name: "Claude Code", exact: true }).click();
+  await expect(orchestrator).toHaveValue("Claude Code");
+  await expect(modes.getByRole("button", { name: /^Auto/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("checkbox", { name: "Automatic deslop by Senior" })).toBeChecked();
+  await expect(modes.getByRole("button", { name: /^Senior/ })).toContainText("Claude Code (deepseek-flash high)");
+  expect(changes[1]).toEqual({ mode: "auto", review: true, workflowEngineId: "claude" });
+  await page.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await trigger.click();
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(orchestrator).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`orchestrator-${width}.png`), animations: "disabled" });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  for (const mode of ["Junior", "Senior"]) {
+    await modes.getByRole("button", { name: new RegExp(`^${mode}`) }).click();
+    const next = mode === "Junior" ? "Codex" : "Claude Code";
+    await orchestrator.press("ArrowDown");
+    await page.getByRole("option", { name: next, exact: true }).click();
+    await expect(orchestrator).toHaveValue(next);
+    await expect(modes.getByRole("button", { name: new RegExp(`^${mode}`) })).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => changes.at(-1)).toMatchObject({ mode: mode.toLowerCase(), workflowEngineId: mode === "Junior" ? "codex" : "claude" });
+  }
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(composer).toHaveValue("Keep this unsent draft.");
+  await page.reload();
+  await trigger.click();
+  await expect(orchestrator).toHaveValue("Claude Code");
+  await expect(modes.getByRole("button", { name: /^Senior/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("dialog", { name: "Custom AI", exact: true })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 for (const width of [390, 820, 1280]) {
   hintTest(`@custom-ai select orchestrator, model and thinking; recover and close at ${width}px`, async ({ page }, info) => {
     await page.setViewportSize({ width, height: 900 });
