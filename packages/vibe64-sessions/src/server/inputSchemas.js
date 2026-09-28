@@ -266,8 +266,20 @@ const sessionListInputValidator = patchSchema({
   ...optionalUser
 });
 
+const sessionRepositoryReviewSchema = createSchema({
+  sessionId: { type: "string", minLength: 1, maxLength: 256, required: true },
+  mode: { type: "string", enum: ["github", "managed_git", "local_source"], required: true },
+  repository: { type: "string", minLength: 1, maxLength: 4096, required: true, noTrim: true },
+  branch: { type: "string", minLength: 1, maxLength: 4096, required: true, noTrim: true }
+});
+const sessionHistoryReviewSchema = createSchema({
+  ...Object.fromEntries(["baseCommit", "canonicalCommit", "sessionHead", "worktreeTree"].map((key) =>
+    [key, { type: "string", minLength: 1, maxLength: 128, required: true }])),
+  changedPaths: { type: "array", items: { type: "string", noTrim: true }, required: false }
+});
+
 const sessionPullRequestInputValidator = patchSchema({
-  destinationReview: { type: "object", additionalProperties: true, required: true },
+  destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: true },
   sessionId: { type: "string", required: true },
   title: { type: "string", required: true, maxLength: 256 },
   body: { type: "string", required: false, maxLength: 65536, noTrim: true },
@@ -405,18 +417,19 @@ const sessionIdInputValidator = patchSchema({
 });
 
 const sessionSaveInputValidator = patchSchema({
-  destinationReview: { type: "object", additionalProperties: true, required: true },
+  destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: true },
   ...optionalOrigin,
   ...optionalUser,
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
 
 const sessionUpdateInputValidator = patchSchema({
-  historyReview: { type: "object", additionalProperties: true },
+  historyReview: { type: "object", schema: sessionHistoryReviewSchema, required: false },
   ...optionalOrigin,
   ...optionalUser,
   reviewedConflictId: {
@@ -430,6 +443,7 @@ const sessionUpdateInputValidator = patchSchema({
   sessionId: {
     type: "string",
     noTrim: false,
+    minLength: 1,
     required: true
   }
 });
@@ -602,6 +616,8 @@ const integrationSetupRequestActionInputValidator = requiredInputSchema({
 });
 
 export {
+  sessionRepositoryReviewSchema,
+  sessionHistoryReviewSchema,
   sessionRenameInputValidator,
   sessionRenameActionInputValidator,
   conversationRewindInputValidator,

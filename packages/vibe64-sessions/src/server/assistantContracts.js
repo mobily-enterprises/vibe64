@@ -1,4 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
+import { sessionHistoryReviewSchema, sessionRepositoryReviewSchema } from "./inputSchemas.js";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS } from "./sessionRenewalState.js";
 
@@ -113,6 +114,59 @@ function sessionTool(description) {
   };
 }
 
+function sessionWorkTool(description) {
+  const strings = ["sessionId", "repositoryMode", "mode", "branch", "relationship", "updateStrategy", "status", "operationId",
+    "baseCommit", "canonicalCommit", "sessionHead", "saveCommit", "verifiedCommit", "code"];
+  const booleans = ["unsaved", "dirty", "worktreeClean", "updateAvailable", "sessionCurrent", "sessionMatchesCanonical",
+    "publicationRequiresPullRequest", "reconciled", "recovered", "cached"];
+  const operationStrings = ["operationId", "kind", "status", "stage", "code", "error", "conflictReviewId"];
+  const operationSchema = createSchema(Object.fromEntries(operationStrings.map((key) => [key, { ...shortText, maxLength: 512 }])));
+  return {
+    description,
+    output: { mode: "replace", schema: createSchema({
+      ok: { type: "boolean", required: true }, error: { ...shortText, maxLength: 512 },
+      ...Object.fromEntries(strings.map((key) => [key, { ...shortText, maxLength: 256 }])),
+      ...Object.fromEntries(booleans.map((key) => [key, { type: "boolean", required: false }])),
+      ahead: { type: "integer", required: false }, behind: { type: "integer", required: false },
+      changedPaths: { type: "array", items: { type: "string", noTrim: true, maxLength: 512 }, required: false },
+      changedPathCount: { type: "integer", required: false }, changedPathsTruncated: { type: "boolean", required: false },
+      destination: { type: "object", schema: sessionRepositoryReviewSchema, required: false },
+      historyReview: { type: "object", schema: sessionHistoryReviewSchema, required: false },
+      ...Object.fromEntries(["operation", "updateOperation", "activeOperation"].map((key) => [key, { type: "object", schema: operationSchema, required: false }])),
+      cacheMaintenance: { type: "object", required: false, schema: createSchema({
+        status: shortText, retryable: { type: "boolean", required: false }, message: { ...shortText, maxLength: 512 }
+      }) }
+    }) },
+    transformResult(result) {
+      const output = { ok: result.ok === true,
+        ...Object.fromEntries([...strings, "error"].flatMap((key) => typeof result[key] === "string" ? [[key, result[key].slice(0, key === "error" ? 512 : 256)]] : [])),
+        ...Object.fromEntries(booleans.flatMap((key) => typeof result[key] === "boolean" ? [[key, result[key]]] : [])),
+        ...Object.fromEntries(["ahead", "behind"].flatMap((key) => Number.isSafeInteger(result[key]) ? [[key, result[key]]] : [])) };
+      if (Array.isArray(result.changedPaths)) {
+        output.changedPathCount = result.changedPaths.length;
+        output.changedPaths = result.changedPaths.slice(0, 40).map((value) => String(value).slice(0, 512));
+        output.changedPathsTruncated = result.changedPaths.length > 40 || result.changedPaths.some((value) => String(value).length > 512);
+      }
+      for (const [name, fields] of [["destination", ["sessionId", "mode", "repository", "branch"]],
+        ["historyReview", ["baseCommit", "canonicalCommit", "sessionHead", "worktreeTree"]]]) {
+        const record = result[name];
+        // These are exact confirmation identities, not display excerpts.
+        if (record) output[name] = Object.fromEntries(fields.map((key) => [key, record[key]]));
+      }
+      for (const name of ["operation", "updateOperation", "activeOperation"]) {
+        if (!result[name]) continue;
+        const record = { ...result[name], conflictReviewId: result[name].conflictRecovery?.reviewId };
+        output[name] = Object.fromEntries(operationStrings.flatMap((key) => typeof record[key] === "string" ? [[key, record[key].slice(0, 512)]] : []));
+      }
+      if (result.cacheMaintenance) {
+        output.cacheMaintenance = { retryable: result.cacheMaintenance.retryable === true,
+          ...Object.fromEntries(["status", "message"].flatMap((key) => typeof result.cacheMaintenance[key] === "string" ? [[key, result.cacheMaintenance[key].slice(0, key === "message" ? 512 : 256)]] : [])) };
+      }
+      return output;
+    }
+  };
+}
+
 function conversationLogTool() {
   return {
     description: "Read a bounded page of Main conversation text in a session. Returns up to six turns with stable turn IDs and nextBeforeTurnId for older pages. Truncated text is explicitly marked; use Colleague's conversation summary for a large range. Status/phase comes from session inspection, not from silence in this log. rewindTurnId identifies the current Undo candidate independently of the requested history page; rewindPending means that exact Undo needs recovery. The Undo service rechecks access, idle work and native boundaries before removing it.",
@@ -211,4 +265,4 @@ function renewalTool(description, { includeDraft = false } = {}) {
   };
 }
 
-export { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool };
+export { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool, sessionWorkTool };

@@ -1,5 +1,5 @@
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool } from "./assistantContracts.js";
+import { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool, sessionWorkTool } from "./assistantContracts.js";
 import {
   sessionRenameActionInputValidator,
   conversationRewindActionInputValidator,
@@ -317,6 +317,7 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_INSPECT_SESSION_WORK,
+      assistant: sessionWorkTool("Inspect the exact session's saved-work status, changed-file names, repository destination and any Save/Update operation. This reads no file contents or diffs; delegate code analysis to a coding conversation. It may reconcile an already interrupted repository operation through normal recovery. destination is the exact Save confirmation identity: describe the repository/branch to the user and pass it unchanged as destinationReview only when saving is requested. For local-source projects its repository value is a path used solely as that equality guard. Fresh remote update checks use updates.check; an inspection alone is not a remote fetch."),
       kind: "query",
       input: sessionIdInputValidator,
       execute: (input) => sessions.inspectSessionWork(input.sessionId)
@@ -329,18 +330,21 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_SAVE_SESSION_WORK,
+      assistant: sessionWorkTool("Save/publish this session's work only when the user requests Save. First inspect work and review its exact destination; pass the complete returned destination unchanged as destinationReview. GitHub Save pushes to that repository branch; managed/local Save updates the configured canonical project. This saves all current work, not selected files, and does not deploy the application. The existing service blocks active agents, changed destinations, stale canonical bases and required PR workflows. Do not automatically apply updates or discard work to make Save pass. Inspect after an uncertain result before retrying; published_needs_reconcile means publication happened but local reconciliation is incomplete."),
       kind: "command",
       input: sessionSaveInputValidator,
       execute: (input) => sessions.saveSessionWork(input.sessionId, withoutSessionId(input))
     }),
     action({
       id: ACTION_CHECK_SESSION_UPDATES,
+      assistant: sessionWorkTool("Check the exact session against its canonical project version. force=true refreshes authority instead of using the short-lived cached check; this fetches repository state but does not update session files. Report updateAvailable and ahead/behind. A returned historyReview means local-source history was rewritten: explain it and obtain the user's instruction to reconcile that exact reviewed state before passing it to updates.apply. Do not invent or alter the review identities."),
       kind: "command",
       input: sessionUpdateInputValidator,
       execute: (input) => sessions.checkSessionUpdates(input.sessionId, withoutSessionId(input))
     }),
     action({
       id: ACTION_UPDATE_SESSION_WORK,
+      assistant: sessionWorkTool("Update/rebase this session onto its current saved project version only when the user requests it. It preserves local work, checks active agents and existing source locks, and may rerun the project's declared workspace preparation. It does not publish. Ordinary updates need only sessionId. For rewritten local history, pass the exact historyReview from a fresh check only after the user agrees to reconcile it. For a coding-agent-resolved conflict, use the saved updateOperation.conflictReviewId as reviewedConflictId only after the requested repair is done. On conflicts, report and delegate repair rather than resolving or discarding code yourself. Inspect work and workspace setup after completion; preparation may still be running."),
       kind: "command",
       input: sessionUpdateInputValidator,
       execute: (input) => sessions.updateSessionWork(input.sessionId, withoutSessionId(input))

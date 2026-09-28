@@ -23,6 +23,9 @@ Git commands.
 - `src/components/studio/repository/Vibe64LocalRemoteControls.vue`
 - `src/components/studio/repository/Vibe64RepositoryWorkspace.vue`
 - `packages/vibe64-sessions/src/server/service.js`
+- `packages/vibe64-sessions/src/server/actions.js`
+- `packages/vibe64-sessions/src/server/inputSchemas.js`
+- `packages/vibe64-sessions/src/server/assistantContracts.js`
 - `src/components/studio/Vibe64TemporaryActionTerminal.vue`
 - `src/components/studio/Vibe64TerminalSurface.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
@@ -31,6 +34,21 @@ Git commands.
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 
 ## Public contract
+
+Colleague can inspect work, Save, check for updates and apply an Update through
+the same session actions as the UI. Its bounded results include changed-file
+names, repository status, operation progress and exact destination/history
+review identities, without file contents, diffs or internal recovery records.
+Save requires the complete destination from a current inspection and the user's
+instruction to publish there. The action validates its shape; the existing
+repository owner checks its current identity under the publication lock.
+Rewritten local history requires the exact reviewed commit/tree identities and
+the user's instruction to reconcile them. Conflict repair is delegated to a
+coding conversation and retains the existing conflict-review guard.
+Colleague reports publication that still needs reconciliation separately from
+a completed Save. After an uncertain result it inspects the saved operation
+before retrying. Update does not publish work and may restart workspace
+preparation; acceptance of either operation does not establish completion.
 
 File Save writes only that file in the session. The compact Save changes review
 shows the changed-file count, View diff and captured destination, with a short
