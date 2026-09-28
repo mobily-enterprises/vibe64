@@ -99,7 +99,7 @@ test("remaining Vibe64 features use named capabilities and register direct route
     ...[
       "file-areas.read", "file-area.tree", "file-area.file", "file-area.download", "file-area.archive",
       "file-area.upload", "file-area.save", "file-area.rename", "file-area.mkdir", "file-area.delete",
-      "integrations.read", "integrations.n8n.discover", "integrations.save", "integrations.oauth-client.register", "integrations.setup",
+      "integrations.read", "integrations.providers.read", "integrations.n8n.discover", "integrations.save", "integrations.oauth-client.register", "integrations.setup",
       "tree.read", "files.find", "file.download", "stars.read", "star.set", "search", "path.resolve",
       "explanation.create", "explanations.cleanup", "explanation.delete", "explanation.stop", "explanation.followup",
       "file.read", "file.create", "file.save"
@@ -108,15 +108,18 @@ test("remaining Vibe64 features use named capabilities and register direct route
   ].sort());
   for (const action of actions.listDefinitions().filter(({ id }) => id.startsWith("vibe64.source-editor."))) {
     assert.equal(action.input.mode, "create");
-    assert.equal(action.extensions.assistant.exclude, true, "Source tools belong to coding sessions.");
+    assert.equal(action.extensions.assistant.exclude === true,
+      !["vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.setup"].includes(action.id),
+      "Only integration product controls are exposed; source tools belong to coding sessions.");
   }
-  assert.equal(routes.length, 40);
+  assert.equal(routes.length, 41);
   for (const [method, suffix] of [
     ["GET", "/source-editor/download"],
     ["GET", "/source-editor/stars"],
     ["POST", "/source-editor/stars"],
     ["GET", "/sessions/:sessionId/files/:area/archive"],
     ["POST", "/sessions/:sessionId/integrations/:integrationId/setup"],
+    ["GET", "/sessions/:sessionId/integrations/providers"],
     ["GET", "/system-graph/sessions/:sessionId/subsystems"]
   ]) {
     assert.equal(

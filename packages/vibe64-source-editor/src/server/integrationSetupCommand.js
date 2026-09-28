@@ -3,7 +3,7 @@ import path from "node:path";
 
 const INTEGRATION_SETUP_PROTOCOL = "vibe64.integration-setup.command.v1";
 const ADS_OPERATIONS = ["ads-discover", "ads-targets", "ads-conversion", "ads-preview", "ads-create", "ads-campaign", "ads-launch", "ads-pause", "ads-report"];
-const OPERATIONS = [...ADS_OPERATIONS,"status", "connect", "cancel", "disconnect", "payments-preview", "payments-publish", "payments-readiness", "payments-recover", "payments-history"];
+const INTEGRATION_SETUP_OPERATIONS = [...ADS_OPERATIONS,"status", "connect", "cancel", "disconnect", "payments-preview", "payments-publish", "payments-readiness", "payments-recover", "payments-history"];
 const STATUSES = ["unconfigured", "disconnected", "connected", "pending", "reconnect-required", "cancelled"];
 const MAX_BYTES = 32768;
 
@@ -170,7 +170,7 @@ function parsePaymentManagementResponse(result, request) {
 
 function createIntegrationSetupRequest(selection) {
   const { operation, integrationId, attemptId, verificationInput, paymentEnvironment, reviewId, providerId, subjectId, collection, after, ads } = selection || {};
-  if (!OPERATIONS.includes(operation) || typeof integrationId !== "string" ||
+  if (!INTEGRATION_SETUP_OPERATIONS.includes(operation) || typeof integrationId !== "string" ||
       !/^[a-z][a-z0-9-]*$/u.test(integrationId) || integrationId.length > 200 ||
       ["constructor", "prototype"].includes(integrationId)) invalid("Choose a valid integration setup operation.", 422);
   if (operation === "cancel" && (typeof attemptId !== "string" || !/^[A-Za-z0-9_-]{1,256}$/u.test(attemptId))) {
@@ -246,4 +246,4 @@ async function runIntegrationSetupCommand({
   return parseIntegrationSetupResponse(result.stdout, request);
 }
 
-export { createIntegrationSetupRequest, INTEGRATION_SETUP_PROTOCOL, parseIntegrationSetupResponse, runIntegrationSetupCommand };
+export { createIntegrationSetupRequest, INTEGRATION_SETUP_OPERATIONS, INTEGRATION_SETUP_PROTOCOL, parseIntegrationSetupResponse, runIntegrationSetupCommand };

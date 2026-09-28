@@ -29,8 +29,13 @@ for secret entry or stored-value inspection. Host-owned values remain protected.
 An Env change does not restart the app or prove it runs. Colleague can list a
 session's configured integration slots and search the editor's available services.
 It receives metadata, not saved settings or credentials, and distinguishes
-configuration from working connections. Complete product-operation coverage
-remains in progress.
+configuration from working connections. Through an application's declared
+development setup command it can check connections, start requested connection
+or verification work, cancel pending consent and disconnect an app connection.
+The person completes browser consent in Integrations. Existing owner-only payment
+and advertising controls retain their account, environment, review and explicit
+confirmation requirements; development source may still address a real provider
+account. Complete product-operation coverage remains in progress.
 
 On phones and narrow layouts, Colleague has one compact avatar button in the
 header. It opens a full-screen conversation with voice controls inside, leaving

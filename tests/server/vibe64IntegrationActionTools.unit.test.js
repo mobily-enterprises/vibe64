@@ -5,6 +5,7 @@ import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/actions.js";
+import { createIntegrationSetupRequest, parseIntegrationSetupResponse } from "../../packages/vibe64-source-editor/src/server/integrationSetupCommand.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 async function withIntegrationTools(run) {
@@ -21,7 +22,14 @@ async function withIntegrationTools(run) {
     actions.register({ contributorId: "source", domain: "source", actions: createSourceEditorActions({ sourceEditor: {
       async readIntegrations(input) { record(input); return state.failure || { ok: true, configuration: state.configuration, baseHash: "a".repeat(64), sourceRoot: "/private/source" }; },
       async readIntegrationProviders(input) { record(input); return { ok: true, total: 1, nextOffset: null,
-        providers: [{ id: "resend", name: "Resend", description: "Email", descriptionTruncated: false }] }; }
+        providers: [{ id: "resend", name: "Resend", description: "Email", descriptionTruncated: false }] }; },
+      async runIntegrationSetup(input) {
+        const request = createIntegrationSetupRequest(input);
+        record(input);
+        if (state.failure) return state.failure;
+        const result = parseIntegrationSetupResponse(JSON.stringify({ protocol: request.protocol, requestId: request.requestId, ...state.setupResult }), request);
+        return { ok: true, ...result, ...(state.setupRequestResult ? { integrationSetup: state.setupRequestResult } : {}) };
+      }
     } }).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => state.actor,
       authorizeProject() { if (!state.allowed) throw Object.assign(new Error("Access revoked"), { statusCode: 403 }); } });
@@ -42,7 +50,7 @@ async function withIntegrationTools(run) {
 test("integration tools expose metadata through the same authorized session action without source or credentials", async () => {
   await withIntegrationTools(async ({ actions, calls, execute, slug, state, toolSet }) => {
     assert.deepEqual(toolSet.tools.map(({ actionId }) => actionId).sort(), [
-      "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.read"
+      "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.setup"
     ]);
     const response = await execute("integrations.read");
     assert.equal(response.ok, true, JSON.stringify(response));
@@ -93,5 +101,81 @@ test("integration discovery rejects forged authority and invalid pages before se
     state.allowed = false;
     for (const operation of ["integrations.read", "integrations.providers.read"]) assert.equal((await execute(operation)).ok, false);
     assert.equal(calls.length, 0);
+  });
+});
+
+test("integration connection tools retain exact selections and omit consent URLs, callbacks and chat request details", async () => {
+  await withIntegrationTools(async ({ calls, execute, state }) => {
+    state.setupResult = { status: "pending", authorizationUrl: "https://provider.example/authorize?state=private-url",
+      callbackUrl: "https://private.example/callback", attemptId: "attempt-one", expiresAt: "2026-09-29T12:00:00Z" };
+    let response = await execute("integrations.setup", { integrationId: "mail", operation: "status" });
+    assert.equal(response.ok, true, JSON.stringify(response));
+    assert.deepEqual(response.result, { ok: true, status: "pending", consentRequired: true, attemptId: "attempt-one", expiresAt: state.setupResult.expiresAt });
+    assert.equal(JSON.stringify(response).includes("private"), false);
+    assert.equal(calls.at(-1).input.environment, "development");
+    assert.equal(calls.at(-1).input.vibe64User, state.actor);
+    state.setupResult = { status: "connected", verifiedAt: "2026-09-29T11:00:00Z", accountLabel: "Fixture account", grantedScopes: ["read-records"] };
+    state.setupRequestResult = { outcome: "completed", message: "private-chat-details" };
+    const request = { turnId: "000012", requestId: "a".repeat(64), configurationHash: "b".repeat(64) };
+    response = await execute("integrations.setup", { integrationId: "mail", operation: "connect", verificationInput: { documentId: "supplied-id" }, setupRequest: request });
+    assert.equal(response.ok, true, JSON.stringify(response));
+    assert.deepEqual(response.result, { ok: true, ...state.setupResult, consentRequired: false, setupRequestOutcome: "completed" });
+    assert.deepEqual(calls.at(-1).input.setupRequest, request);
+    assert.deepEqual(calls.at(-1).input.verificationInput, { documentId: "supplied-id" });
+    delete state.setupRequestResult;
+    for (const [operation, status] of [["cancel", "cancelled"], ["disconnect", "disconnected"]]) {
+      state.setupResult = { status };
+      response = await execute("integrations.setup", { integrationId: "mail", operation, ...(operation === "cancel" ? { attemptId: "attempt-one" } : {}) });
+      assert.equal(response.ok, true, JSON.stringify(response));
+      assert.equal(response.result.status, status);
+    }
+    assert.equal(calls.every(({ input }) => input.sessionId === "session-a" && input.integrationId === "mail"), true);
+  });
+});
+
+test("setup tools preserve complete native payment reviews and advertising values without inventing readiness", async () => {
+  await withIntegrationTools(async ({ execute, state }) => {
+    state.setupResult = { status: "payments", paymentEnvironment: "sandbox", providerAccountId: "acct_fixture", review: {
+      reviewId: "c".repeat(64), changes: [{ action: "create-price", planId: "pro", amount: 1234, currency: "USD", interval: "month" }],
+      drift: [{ planId: "pro", reason: "Provider record differs" }], removed: ["old"], pending: true,
+      pendingOperation: { action: "create-product", planId: "pro", name: "Pro" }
+    } };
+    let response = await execute("integrations.setup", { integrationId: "billing", operation: "payments-preview", paymentEnvironment: "sandbox" });
+    assert.equal(response.ok, true, JSON.stringify(response));
+    assert.deepEqual(response.result.review, state.setupResult.review);
+    state.setupResult = { status: "payments-history", paymentEnvironment: "sandbox", providerAccountId: "acct_fixture", subjectId: "subject-one", collection: "transactions",
+      items: [{ id: "invoice-one", kind: "invoice", status: "open", createdAt: "2026-09-29T11:00:00.000Z", currency: "USD", totalMinor: "123456789012345678901234", paidMinor: null }], nextCursor: "next-page" };
+    response = await execute("integrations.setup", { integrationId: "billing", operation: "payments-history", paymentEnvironment: "sandbox", subjectId: "subject-one", collection: "transactions" });
+    assert.equal(response.ok, true, JSON.stringify(response));
+    assert.deepEqual(response.result.items, state.setupResult.items);
+    assert.equal(response.result.nextCursor, "next-page");
+    state.setupResult = { status: "ads", operation: "ads-report", data: { campaigns: [{ campaign: { id: "12345678901234567890" }, metrics: { costMicros: "1234567890123456789" } }] } };
+    response = await execute("integrations.setup", { integrationId: "advertising", operation: "ads-report", ads: {} });
+    assert.equal(response.ok, true, JSON.stringify(response));
+    assert.deepEqual(response.result.data, state.setupResult.data);
+    state.setupResult.data.credential = "private-key";
+    response = await execute("integrations.setup", { integrationId: "advertising", operation: "ads-report", ads: {} });
+    assert.equal(response.ok, false);
+    assert.equal(JSON.stringify(response).includes("private-key"), false);
+  });
+});
+
+test("setup tools reject invalid contracts or revoked authority before work and preserve uncertain failures", async () => {
+  await withIntegrationTools(async ({ calls, execute, state }) => {
+    const base = { integrationId: "mail", operation: "connect" };
+    for (const input of [{ operation: "run-shell" }, { environment: "production" }, { vibe64User: { role: "owner" } },
+      { sourceRoot: "/other" }, { setupRequest: { turnId: "000001" } }, { paymentEnvironment: "production" },
+      { reviewId: "invented" }, { ads: { actor: "owner" } }, { ads: { trackingConfirmed: "yes" } }]) {
+      assert.equal((await execute("integrations.setup", { ...base, ...input })).ok, false);
+    }
+    assert.equal(calls.length, 0);
+    state.allowed = false;
+    assert.equal((await execute("integrations.setup", base)).ok, false);
+    assert.equal(calls.length, 0);
+    state.allowed = true;
+    state.failure = { ok: false, code: "vibe64_integration_configuration_changed", error: "Reload and inspect before retrying.", diagnostics: "private-stderr" };
+    const result = (await execute("integrations.setup", base)).result;
+    assert.deepEqual(result, { ok: false, code: state.failure.code, error: state.failure.error });
+    assert.equal(calls.length, 1);
   });
 });

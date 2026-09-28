@@ -1,6 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { integrationReadTool } from "./integrationAssistantContracts.js";
+import { integrationReadTool, integrationSetupTool } from "./integrationAssistantContracts.js";
+import { INTEGRATION_SETUP_OPERATIONS } from "./integrationSetupCommand.js";
 
 const text = { type: "string", noTrim: true, required: false };
 const requiredText = { ...text, minLength: 1, required: true };
@@ -8,6 +9,17 @@ const identity = { ...requiredText, maxLength: 256 };
 const filePath = { ...text, maxLength: 4096 };
 const object = { type: "object", additionalProperties: true, required: false };
 const origin = { originId: text, projectSlug: text };
+const reviewId = { ...text, minLength: 64, maxLength: 64, pattern: "^[a-f0-9]{64}$" };
+const adsSelection = createSchema({
+  customerId: { ...text, pattern: "^[0-9]{10}$" }, name: { ...text, minLength: 1, maxLength: 100 },
+  campaignId: { ...text, pattern: "^[0-9]{1,20}$" }, reviewId,
+  trackingConfirmed: { type: "boolean", strictBoolean: true, required: false },
+  billingConfirmed: { type: "boolean", strictBoolean: true, required: false }
+});
+const setupRequest = createSchema({
+  turnId: { ...requiredText, pattern: "^[0-9]{6,32}$" },
+  requestId: { ...reviewId, required: true }, configurationHash: { ...reviewId, required: true }
+});
 const selection = {
   path: { ...filePath, required: true }, startLine: { type: "integer", min: 1, required: true },
   startColumn: { type: "integer", min: 1, required: false }, endLine: { type: "integer", min: 1, required: true },
@@ -49,10 +61,16 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged = async ()
     action("integrations.save", integration, (input) => sourceEditor.saveIntegrations(input), { changed: (input) => input.baseHash === null ? "created" : "saved" }),
     action("integrations.oauth-client.register", { ...integration, integrationId: identity, callbackUrl: requiredText },
       (input) => sourceEditor.registerOAuthIntegration(input), { changed: (input) => input.baseHash === null ? "created" : "saved" }),
-    action("integrations.setup", { integrationId: identity, operation: requiredText, attemptId: text,
-      setupRequest: object, verificationInput: object, ads: object, paymentEnvironment: text, reviewId: text,
-      providerId: text, subjectId: text, collection: text, after: { ...text, nullable: true } },
-    (input) => sourceEditor.runIntegrationSetup({ ...input, environment: "development" })),
+    action("integrations.setup", {
+      integrationId: { ...identity, maxLength: 200, pattern: "^[a-z][a-z0-9-]*$" },
+      operation: { ...requiredText, enum: INTEGRATION_SETUP_OPERATIONS },
+      attemptId: { ...text, pattern: "^[A-Za-z0-9_-]{1,256}$" },
+      setupRequest: { type: "object", schema: setupRequest, required: false }, verificationInput: object,
+      ads: { type: "object", schema: adsSelection, required: false },
+      paymentEnvironment: { ...text, enum: ["sandbox", "live"] }, reviewId,
+      providerId: { ...text, pattern: "^[A-Za-z0-9_-]{1,200}$" }, subjectId: { ...text, minLength: 1, maxLength: 200 },
+      collection: { ...text, enum: ["subscriptions", "transactions"] }, after: { ...text, nullable: true, pattern: "^[A-Za-z0-9_-]{1,200}$" }
+    }, (input) => sourceEditor.runIntegrationSetup({ ...input, environment: "development" }), { assistant: integrationSetupTool() }),
     action("tree.read", { path: filePath, limit: text, offset: text }, (input) => sourceEditor.readTree(input), query),
     action("files.find", { query: text, limit: text }, (input) => sourceEditor.listFiles(input), query),
     action("file.download", { path: { ...filePath, required: true } }, (input) => sourceEditor.downloadFile(input), query),

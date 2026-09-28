@@ -9525,23 +9525,23 @@
       "title": "Vibe64SessionsProvider.js"
     },
     {
-      "bytes": 6238,
+      "bytes": 7484,
       "districtId": "directory:packages/vibe64-source-editor/src/server",
       "extractors": [
         "javascript"
       ],
       "functionIds": [
-        "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions:function:18:1",
-        "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.action:function:19:18",
-        "function:packages/vibe64-source-editor/src/server/actions.js:action.execute:method:25:5",
-        "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.changed:function:49:106",
-        "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.changed:function:51:75"
+        "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions:function:30:1",
+        "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.action:function:31:18",
+        "function:packages/vibe64-source-editor/src/server/actions.js:action.execute:method:37:5",
+        "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.changed:function:61:106",
+        "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.changed:function:63:75"
       ],
-      "hash": "sha256:1d77583d532e9df33f3231aa0dcaf2c527bf79de1e45693b178f8368143f032c",
+      "hash": "sha256:1f63b4d922e880c147bf633913cf66bce2d2c454936aa300c26977e0d2874ba8",
       "id": "file:packages/vibe64-source-editor/src/server/actions.js",
       "internalFunctionCount": 4,
       "language": "javascript",
-      "lines": 74,
+      "lines": 92,
       "mode": 33188,
       "path": "packages/vibe64-source-editor/src/server/actions.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-source-editor",
@@ -9625,30 +9625,33 @@
       "title": "filePolicy.js"
     },
     {
-      "bytes": 3409,
+      "bytes": 9345,
       "districtId": "directory:packages/vibe64-source-editor/src/server",
       "extractors": [
         "javascript"
       ],
       "functionIds": [
-        "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationReadTool:function:6:8",
-        "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationReadTool.transformResult:method:24:5"
+        "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationFailure:function:6:1",
+        "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationReadTool:function:13:8",
+        "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationReadTool.transformResult:method:31:5",
+        "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationSetupTool:function:46:8",
+        "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationSetupTool.transformResult:method:68:5"
       ],
-      "hash": "sha256:b82d5ffeacefdb71ce1d5d92179193c6bc4cfc42db6828cf1930d3251d0aea84",
+      "hash": "sha256:e0a7936ba9f9bb3d994a1e10389a01eabcfbfaf03005173c3ef6995fc274af5e",
       "id": "file:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
-      "internalFunctionCount": 1,
+      "internalFunctionCount": 3,
       "language": "javascript",
-      "lines": 40,
+      "lines": 79,
       "mode": 33188,
       "path": "packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-source-editor",
       "presentationRegionId": "packages",
-      "publicFunctionCount": 1,
+      "publicFunctionCount": 2,
       "role": "source",
       "title": "integrationAssistantContracts.js"
     },
     {
-      "bytes": 18918,
+      "bytes": 18984,
       "districtId": "directory:packages/vibe64-source-editor/src/server",
       "extractors": [
         "javascript"
@@ -9669,7 +9672,7 @@
         "function:packages/vibe64-source-editor/src/server/integrationSetupCommand.js:createIntegrationSetupRequest:function:171:1",
         "function:packages/vibe64-source-editor/src/server/integrationSetupCommand.js:runIntegrationSetupCommand:function:218:1"
       ],
-      "hash": "sha256:4a249f2e37106bdd4d67d77c114d2d2366bc53b00a5cf168fc929cc1cb51fa9b",
+      "hash": "sha256:ac95d267e18020e8c88c630e2e815ac3678f3c67c62a69c4369b20fc6fcbd7bf",
       "id": "file:packages/vibe64-source-editor/src/server/integrationSetupCommand.js",
       "internalFunctionCount": 11,
       "language": "javascript",
@@ -21340,7 +21343,7 @@
       "title": "vite.config.mjs"
     }
   ],
-  "codeHash": "sha256:63f931cb1b6b871fa0acce8db1f1a73087d4918782f73e68b99288cc2d16657c",
+  "codeHash": "sha256:6b7f16f9d1f2b3fc6c4a00a0ac4c98773c3aa9749328baa9f7c9e708892af2ab",
   "diagnostics": [],
   "districts": [
     {
@@ -96395,10 +96398,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-source-editor/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions:function:18:1",
+      "id": "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions:function:30:1",
       "kind": "function",
       "language": "javascript",
-      "line": 18,
+      "line": 30,
       "name": "createSourceEditorActions",
       "parameters": [
         "{ sourceEditor, publishFileChanged = async () => {} }"
@@ -96416,10 +96419,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-source-editor/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.action:function:19:18",
+      "id": "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.action:function:31:18",
       "kind": "function",
       "language": "javascript",
-      "line": 19,
+      "line": 31,
       "name": "action",
       "parameters": [
         "name",
@@ -96440,10 +96443,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-source-editor/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-source-editor/src/server/actions.js:action.execute:method:25:5",
+      "id": "function:packages/vibe64-source-editor/src/server/actions.js:action.execute:method:37:5",
       "kind": "method",
       "language": "javascript",
-      "line": 25,
+      "line": 37,
       "name": "execute",
       "parameters": [
         "input",
@@ -96462,10 +96465,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-source-editor/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.changed:function:49:106",
+      "id": "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.changed:function:61:106",
       "kind": "function",
       "language": "javascript",
-      "line": 49,
+      "line": 61,
       "name": "changed",
       "parameters": [
         "input"
@@ -96483,10 +96486,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-source-editor/src/server/actions.js",
       "generator": false,
-      "id": "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.changed:function:51:75",
+      "id": "function:packages/vibe64-source-editor/src/server/actions.js:createSourceEditorActions.changed:function:63:75",
       "kind": "function",
       "language": "javascript",
-      "line": 51,
+      "line": 63,
       "name": "changed",
       "parameters": [
         "input"
@@ -96728,15 +96731,37 @@
     },
     {
       "async": false,
+      "column": 1,
+      "container": null,
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
+      "generator": false,
+      "id": "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationFailure:function:6:1",
+      "kind": "function",
+      "language": "javascript",
+      "line": 6,
+      "name": "integrationFailure",
+      "parameters": [
+        "result",
+        "message"
+      ],
+      "path": "packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
+      "qualifiedName": "integrationFailure",
+      "role": "source",
+      "static": false,
+      "visibility": "internal"
+    },
+    {
+      "async": false,
       "column": 8,
       "container": null,
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationReadTool:function:6:8",
+      "id": "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationReadTool:function:13:8",
       "kind": "function",
       "language": "javascript",
-      "line": 6,
+      "line": 13,
       "name": "integrationReadTool",
       "parameters": [
         "operation"
@@ -96754,16 +96779,56 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
       "generator": false,
-      "id": "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationReadTool.transformResult:method:24:5",
+      "id": "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationReadTool.transformResult:method:31:5",
       "kind": "method",
       "language": "javascript",
-      "line": 24,
+      "line": 31,
       "name": "transformResult",
       "parameters": [
         "result"
       ],
       "path": "packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
       "qualifiedName": "integrationReadTool.transformResult",
+      "role": "source",
+      "static": false,
+      "visibility": "internal"
+    },
+    {
+      "async": false,
+      "column": 8,
+      "container": null,
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
+      "generator": false,
+      "id": "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationSetupTool:function:46:8",
+      "kind": "function",
+      "language": "javascript",
+      "line": 46,
+      "name": "integrationSetupTool",
+      "parameters": [],
+      "path": "packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
+      "qualifiedName": "integrationSetupTool",
+      "role": "source",
+      "static": false,
+      "visibility": "public"
+    },
+    {
+      "async": false,
+      "column": 5,
+      "container": "integrationSetupTool",
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
+      "generator": false,
+      "id": "function:packages/vibe64-source-editor/src/server/integrationAssistantContracts.js:integrationSetupTool.transformResult:method:68:5",
+      "kind": "method",
+      "language": "javascript",
+      "line": 68,
+      "name": "transformResult",
+      "parameters": [
+        "result"
+      ],
+      "path": "packages/vibe64-source-editor/src/server/integrationAssistantContracts.js",
+      "qualifiedName": "integrationSetupTool.transformResult",
       "role": "source",
       "static": false,
       "visibility": "internal"

@@ -64,7 +64,7 @@ revision, owner, path and session-admission checks still apply.
 
 Live file observation and streamed explanation/follow-up responses retain their
 transport-owned callbacks and lifetime. Repository investigation and editing
-belong to coding conversations. Colleague discovers only two read controls here:
+belong to coding conversations. Colleague discovers two read controls here:
 `integrations.read` projects the same authorized configuration read into slot IDs,
 providers, display names, account modes, authentication methods and scope counts;
 it omits settings, registrations, references, extensions and source details.
@@ -75,8 +75,33 @@ name and description, returning at most 20 names/descriptions and a next offset.
 It still checks the selected session but requires neither valid configuration nor
 Env preparation or external provider calls. These results describe configuration
 and available choices, never connection or implementation readiness. The full
-configuration HTTP read and all source/connection mutations retain their existing
-behavior; those mutations are not yet exposed to Colleague.
+configuration HTTP read retains its existing behavior. Configuration editing and
+OAuth client registration are not yet exposed to Colleague.
+
+Colleague also discovers the existing `integrations.setup` command action. Its
+input lists the native operation names and structured chat-request/Ads selection
+fields; the same application-command owner still checks operation-specific
+requirements, current bindings, member/owner access and source admission. Native
+parser results remain bounded and allowlisted. The Colleague response omits
+authorization URLs, callbacks, protocol IDs and internal saved-request details,
+preserves verified account labels/scopes/times and pending attempt identity, and
+reports whether human consent is needed. A saved Configure request outcome does
+not imply that the coding conversation resumed. Status can prepare development
+Env through the existing owner; it reads current connection state without claiming
+fresh provider verification. Connect, cancel and disconnect retain their existing
+semantics and require the user's intended operation, with browser consent in
+Integrations and a status check after cancellation or consent.
+
+Payment and Ads result records pass through their existing protocol parser rather
+than a second shape/validation implementation. Complete review digests, account
+identities, pending/drift state, manual/unknown readiness checks, pagination and
+decimal-string amounts are retained. Tool instructions require approval of the
+exact account/environment/review before publication, explicit real-spending
+approval before Ads launch and the person's tracking/billing confirmations.
+Source selection and payment environment are distinct. Uncertain provider writes
+must be inspected before retry; disconnect does not stop advertising or revoke
+provider-side permissions. Source configuration edits remain with the ordinary
+form or coding agents while their separate Colleague mutation work is pending.
 
 Files presents Repo, Drop Zone and Session as icon-labelled areas, separate from
 folder navigation. Repo retains source editing, stars, explanations and selected

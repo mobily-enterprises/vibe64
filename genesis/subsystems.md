@@ -168,8 +168,10 @@ Owns editing, reviewing and saving project source changes, including derived
 filename and content indexes for each working session.
 Its ordinary source-editor operations share named action contracts and current
 actor/project authorization across HTTP and automation. Colleague receives bounded
-integration slot metadata and provider discovery through those actions. Source
-tools remain with coding conversations; Colleague delegates source investigation.
+integration slot metadata, provider discovery and bounded application setup
+results through those actions. The existing setup owner retains connection,
+payment and advertising authorization and revision checks. Source tools remain
+with coding conversations; Colleague delegates source investigation.
 
 ### Program
 
