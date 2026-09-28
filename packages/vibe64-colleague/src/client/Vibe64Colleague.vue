@@ -9,10 +9,53 @@ import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe6
 
 const props = defineProps({
   name: { type: String, default: "Colleague" },
+  holdToTalk: Boolean,
   request: { type: Function, required: true },
   navigate: { type: Function, default: null },
   focus: { type: Object, default: () => ({}) }
 });
+const emit = defineEmits(["voice-hold-start", "voice-hold-end", "voice-hold-cancel"]);
+const holdingAvatar = ref(false);
+let avatarPressTimer;
+let avatarPointer = null;
+let suppressAvatarClick = false;
+
+function startAvatarPress(event) {
+  if (!props.holdToTalk || event.button !== 0 || event.isPrimary === false || avatarPointer !== null) return;
+  suppressAvatarClick = false;
+  avatarPointer = event.pointerId;
+  event.currentTarget.setPointerCapture(event.pointerId);
+  avatarPressTimer = setTimeout(() => {
+    holdingAvatar.value = true;
+    emit("voice-hold-start");
+  }, 350);
+}
+function endAvatarPress(event) {
+  if (event.pointerId !== avatarPointer) return;
+  clearTimeout(avatarPressTimer);
+  avatarPointer = null;
+  if (holdingAvatar.value) {
+    holdingAvatar.value = false;
+    suppressAvatarClick = true;
+    emit("voice-hold-end");
+  }
+}
+function cancelAvatarPress() {
+  clearTimeout(avatarPressTimer);
+  avatarPointer = null;
+  if (holdingAvatar.value) {
+    holdingAvatar.value = false;
+    suppressAvatarClick = true;
+    emit("voice-hold-cancel");
+  }
+}
+function avatarClick(event) {
+  if (suppressAvatarClick && event.detail !== 0) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+  suppressAvatarClick = false;
+}
 const open = ref(false);
 const { width } = useDisplay();
 const compact = computed(() => width.value <= 980);
@@ -146,15 +189,30 @@ watch(() => state.value.error, (error) => { if (error) reportFailure(error); });
 watch(() => props.focus, (focus) => {
   void requestColleague("/focus", { method: "POST", body: { clientId, focus } }).catch((error) => { connectionError.value = error.message; });
 }, { deep: true });
-onMounted(() => { void refresh(); window.addEventListener("focus", refresh); });
-onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; window.removeEventListener("focus", refresh); });
+onMounted(() => {
+  void refresh();
+  window.addEventListener("focus", refresh);
+  window.addEventListener("blur", cancelAvatarPress);
+  window.addEventListener("pagehide", cancelAvatarPress);
+});
+onBeforeUnmount(() => {
+  mounted = false;
+  clearTimeout(timer);
+  cancelAvatarPress();
+  revision += 1;
+  window.removeEventListener("focus", refresh);
+  window.removeEventListener("blur", cancelAvatarPress);
+  window.removeEventListener("pagehide", cancelAvatarPress);
+});
 </script>
 
 <template>
   <Teleport v-if="compact" :to="launcherTarget || 'body'" :disabled="!launcherTarget">
     <v-btn
-      ref="mobileLauncher" class="vibe64-colleague__mobile-launcher" :class="{ 'vibe64-colleague__mobile-launcher--floating': !launcherTarget }"
-      icon variant="text" width="48" height="48" :aria-label="`Open ${name}`" :title="name" aria-haspopup="dialog" :aria-expanded="open"
+      ref="mobileLauncher" class="vibe64-colleague__mobile-launcher" :class="{ 'vibe64-colleague__mobile-launcher--floating': !launcherTarget, 'vibe64-colleague__mobile-launcher--listening': holdingAvatar }"
+      icon variant="text" width="48" height="48" :aria-label="`Open ${name}`" :title="holdToTalk ? `${name} · Hold to talk` : name" aria-haspopup="dialog" :aria-expanded="open"
+      @pointerdown="startAvatarPress" @pointerup="endAvatarPress" @pointercancel="cancelAvatarPress" @lostpointercapture="cancelAvatarPress"
+      @click.capture="avatarClick" @contextmenu.prevent
     >
       <span class="vibe64-colleague__mobile-avatar"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
       <span v-if="working" class="vibe64-colleague__working" :aria-label="`${name} is working`" />
@@ -207,7 +265,7 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
         </footer>
       </template>
       <div v-if="$slots.voice" class="vibe64-colleague__voice">
-        <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" />
+        <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" :launcher="mobileLauncher?.$el" />
       </div>
       <Vibe64SessionAssistantMenu
         v-model="modelMenu" :target="modelButton" :selection="state.assistantSelection"
@@ -242,7 +300,8 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
 .vibe64-colleague__watches button { min-width: 48px; min-height: 48px; color: rgb(var(--v-theme-primary)); }
 .vibe64-colleague__voice { padding: 8px 12px; background: rgb(var(--v-theme-surface)); border-radius: 18px; }
 .vibe64-colleague:not(.vibe64-colleague--open) .vibe64-colleague__voice { margin-top: 6px; max-width: 360px; box-shadow: 0 5px 24px #0002; }
-.vibe64-colleague__mobile-launcher { flex: 0 0 48px; }
+.vibe64-colleague__mobile-launcher { flex: 0 0 48px; touch-action: none; user-select: none; -webkit-touch-callout: none; }
+.vibe64-colleague__mobile-launcher--listening { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-colleague__mobile-launcher--floating { position: fixed; right: 8px; top: env(safe-area-inset-top, 0px); z-index: 1800; }
 .vibe64-colleague__mobile-avatar { display: block; width: 36px; height: 36px; overflow: hidden; border-radius: 50%; }
 .vibe64-colleague__mobile-avatar :deep(svg) { width: 100%; height: 100%; }

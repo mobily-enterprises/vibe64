@@ -31,6 +31,10 @@ On phones and narrow layouts, Colleague has one compact avatar button in the
 header. It opens a full-screen conversation with voice controls inside, leaving
 the coding session's message and Send controls clear when closed. Closing it
 preserves both conversations' drafts.
+Holding the header avatar records a voice message when the host supports speech.
+A bubble across the left two-thirds shows recognized words, leaving the right
+third clear of the hand holding the avatar. Release keeps it for review with
+explicit Send and Discard controls.
 
 Maintainers can develop Vibe64 inside another editor's preview. The development
 preview runs a complete editor with its own runtime state and an independent

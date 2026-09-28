@@ -2177,6 +2177,100 @@ for (const width of [320, 390, 820, 1280]) {
   });
 }
 
+hintTest("@mobile-preview-resources hides meters only in mobile Preview", async ({ page }, info) => {
+  test.skip(process.env.VIBE64_E2E_COLLEAGUE_HOST !== "1", "Requires the composed Online project shell.");
+  await page.setViewportSize({ width: 390, height: 720 });
+  await mockDirectChat(page);
+  await page.route("**/api/vibe64/colleague**", route => fulfillJson(route, { ok: true, messages: [], status: "ready" }));
+  await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+  const meters = page.getByRole("button", { name: /Show CPU and RAM activity/ });
+  await expect(meters).toBeVisible();
+  await page.getByRole("button", { name: "Show project", exact: true }).click();
+  await expect(meters).toBeVisible();
+  await page.getByRole("button", { name: "Go to preview", exact: true }).click();
+  await expect(meters).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open Colleague", exact: true })).toBeInViewport();
+  await page.screenshot({ path: info.outputPath("mobile-preview-header.png"), animations: "disabled" });
+  await page.getByRole("button", { name: "Show chat", exact: true }).click();
+  await expect(meters).toBeVisible();
+  await page.getByRole("button", { name: "Show project", exact: true }).click();
+  await expect(meters).toHaveCount(0);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(meters).toBeVisible();
+});
+
+for (const width of [320, 390, 820]) {
+  hintTest(`@colleague-hold touch recording previews text before Send or Discard at ${width}px`, async ({ page }, info) => {
+    test.skip(process.env.VIBE64_E2E_COLLEAGUE_HOST !== "1", "Requires a composed Colleague host.");
+    await page.setViewportSize({ width, height: 720 });
+    await mockDirectChat(page);
+    const sent: Record<string, unknown>[] = [];
+    await page.route("**/api/vibe64/colleague**", async route => {
+      if (route.request().method() === "POST" && new URL(route.request().url()).pathname.endsWith("/messages")) sent.push(route.request().postDataJSON());
+      await fulfillJson(route, { ok: true, conversationId: "held-voice", status: "ready", messages: [], watches: [], assignments: [] });
+    });
+    await page.route("**/api/auth/assistant-settings", route => fulfillJson(route, { ok: true, canEdit: true,
+      settings: { colleagueName: "Colleague", avatar: "merc", sendMode: "immediately" } }));
+    await page.addInitScript(() => {
+      navigator.mediaDevices.getUserMedia = async () => {
+        const audio = new AudioContext({ sampleRate: 16000 });
+        const output = audio.createMediaStreamDestination();
+        const track = output.stream.getAudioTracks()[0];
+        const stop = track.stop.bind(track);
+        track.stop = () => { stop(); void audio.close(); };
+        return output.stream;
+      };
+    });
+    await page.routeWebSocket("**/api/vibe64/colleague/voice/ws", socket => {
+      socket.send(JSON.stringify({ type: "voice.ready" }));
+      socket.onMessage(message => {
+        if (typeof message !== "string") return;
+        const control = JSON.parse(message);
+        if (control.type === "listen.start") socket.send(JSON.stringify({ type: "transcript.partial", turnId: control.turnId, text: "Please inspect" }));
+        if (control.type === "listen.stop") socket.send(JSON.stringify({ type: "transcript.final", turnId: control.turnId, text: "Please inspect this project." }));
+      });
+    });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    const launcher = page.getByRole("button", { name: "Open Colleague", exact: true });
+    await expect(launcher).toBeVisible();
+    const touch = await page.context().newCDPSession(page);
+    const bubble = page.getByRole("dialog", { name: "Review voice message", exact: true });
+    for (const action of ["Discard", "Send"]) {
+      const box = await launcher.boundingBox();
+      await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 }] });
+      await expect(bubble.getByText("Please inspect", { exact: true })).toBeVisible();
+      await expect(bubble.getByRole("button", { name: "Send", exact: true })).toHaveCount(0);
+      const heldBox = await bubble.boundingBox();
+      expect(heldBox!.x).toBeLessThanOrEqual(16);
+      expect(heldBox!.x + heldBox!.width).toBeLessThanOrEqual(width * 2 / 3 + 4);
+      if (action === "Send") await page.screenshot({ path: info.outputPath(`voice-holding-${width}.png`), animations: "disabled" });
+      await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await expect(bubble.getByText("Please inspect this project.", { exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Colleague conversation", exact: true })).not.toBeVisible();
+      expect(sent).toHaveLength(0);
+      await expect(bubble.getByRole("button", { name: action, exact: true })).toBeInViewport();
+      const reviewBox = await bubble.boundingBox();
+      expect(reviewBox!.x).toBeLessThanOrEqual(16);
+      expect(reviewBox!.x + reviewBox!.width).toBeLessThanOrEqual(width * 2 / 3 + 4);
+      for (const button of await bubble.getByRole("button").all()) {
+        const target = await button.boundingBox();
+        expect(target!.height).toBeGreaterThanOrEqual(48);
+        expect(target!.x + target!.width).toBeLessThanOrEqual(reviewBox!.x + reviewBox!.width);
+      }
+      if (action === "Send") await page.screenshot({ path: info.outputPath(`voice-review-${width}.png`), animations: "disabled" });
+      await bubble.getByRole("button", { name: action, exact: true }).click();
+      await expect(bubble).not.toBeVisible();
+    }
+    expect(sent).toHaveLength(1);
+    expect(sent[0].message).toBe("Please inspect this project.");
+    expect(errors).toEqual([]);
+    await launcher.click();
+    await expect(page.getByRole("dialog", { name: "Colleague conversation", exact: true })).toBeVisible();
+  });
+}
+
 for (const width of [390, 820, 1280]) {
   hintTest(`@working-plan plain-language overview and collapsed details preserve drafts and fits at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });

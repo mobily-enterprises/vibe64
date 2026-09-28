@@ -88,6 +88,10 @@ dialog with text and voice controls, focus containment and return to the launche
 on close. The host shares the routed header target through its root; Teleport
 moves the existing panel without remounting the voice connection or clearing
 drafts. While a header is unavailable, the compact launcher stays at the top edge.
+When the host supplies speech, holding this button for 350ms emits a recording
+gesture. Release finishes it; cancellation, lost capture or leaving the window
+cancels it. Its trailing click cannot also open the conversation. The voice slot
+receives the launcher element to anchor the host's transcript review bubble.
 The `@colleague-mobile` browser cases run against a composed host with
 `VIBE64_E2E_COLLEAGUE_HOST=1` and `PLAYWRIGHT_BASE_URL` set. They click the real
 session Send control before and after opening Colleague, preserve both drafts,

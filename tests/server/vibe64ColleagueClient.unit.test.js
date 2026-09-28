@@ -62,6 +62,7 @@ test("renaming updates conversation and composer labels without losing the draft
 
 function mount(t, request, props = vue.reactive({ name: "Colleague" })) {
   const notices = [];
+  const events = [];
   const module = { exports: {} };
   const imports = {
     vue,
@@ -86,12 +87,46 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" })) {
   });
   const app = renderer.createApp({ setup() {
     Object.assign(props, { request, focus: {}, navigate: null });
-    state = module.exports.default.setup(props, { expose() {} });
+    state = module.exports.default.setup(props, { expose() {}, emit: (...args) => events.push(args) });
     return () => null;
   } });
   app.mount({});
   t.after(() => { app.unmount(); if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow; });
-  return { state, notices };
+  return { state, notices, events };
 }
+
+test("avatar tap stays a tap; holding emits one recording gesture and suppresses its trailing click", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const view = mount(t, async () => ({ messages: [], status: "ready" }), vue.reactive({ name: "Colleague", holdToTalk: true }));
+  await flush();
+  const press = { pointerId: 1, button: 0, isPrimary: true, currentTarget: { setPointerCapture() {} } };
+  view.state.startAvatarPress(press);
+  t.mock.timers.tick(100);
+  view.state.endAvatarPress(press);
+  t.mock.timers.tick(400);
+  assert.deepEqual(view.events, []);
+  view.state.startAvatarPress(press);
+  t.mock.timers.tick(350);
+  assert.deepEqual(view.events, [["voice-hold-start"]]);
+  view.state.endAvatarPress(press);
+  view.state.cancelAvatarPress();
+  assert.deepEqual(view.events, [["voice-hold-start"], ["voice-hold-end"]]);
+  let prevented = false;
+  view.state.avatarClick({ detail: 1, preventDefault() { prevented = true; }, stopImmediatePropagation() {} });
+  assert.equal(prevented, true);
+  view.state.avatarClick({ detail: 0, preventDefault() { assert.fail("Keyboard activation remains available."); } });
+});
+
+test("cancelled avatar holds stop once and do not complete a recording", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const view = mount(t, async () => ({ messages: [], status: "ready" }), vue.reactive({ name: "Colleague", holdToTalk: true }));
+  await flush();
+  const press = { pointerId: 2, button: 0, currentTarget: { setPointerCapture() {} } };
+  view.state.startAvatarPress(press);
+  t.mock.timers.tick(350);
+  view.state.cancelAvatarPress();
+  view.state.endAvatarPress(press);
+  assert.deepEqual(view.events, [["voice-hold-start"], ["voice-hold-cancel"]]);
+});
 
 async function flush() { await new Promise(resolve => setImmediate(resolve)); await vue.nextTick(); }
