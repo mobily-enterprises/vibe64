@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
+import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 
 const props = defineProps({
@@ -14,6 +15,7 @@ const draft = ref("");
 const state = ref({ messages: [], status: "ready", error: "" });
 const sending = ref(false);
 const connectionError = ref("");
+const feedback = useShellWebErrorRuntime();
 const modelMenu = ref(false);
 const modelButton = ref(null);
 const clientId = crypto.randomUUID();
@@ -26,6 +28,12 @@ let revision = 0;
 let pendingMessage = null;
 let navigating = null;
 let navigationReceipt = null;
+
+function reportFailure(error) {
+  const message = String(error?.message || error || "Colleague could not complete this request.");
+  feedback.report({ source: "vibe64.colleague", intent: "action-feedback", severity: "error", message,
+    dedupeKey: `vibe64.colleague:${message}`, dedupeWindowMs: 1000 });
+}
 
 async function request(suffix = "", options = {}) {
   const result = await props.request(`/api/vibe64/colleague${suffix}`, options);
@@ -59,8 +67,8 @@ async function refresh() {
   try {
     const result = await request(`?clientId=${encodeURIComponent(clientId)}`, { method: "GET" });
     apply(result, expectedRevision);
-    connectionError.value = "";
-  } catch (error) { if (mounted) connectionError.value = error.message; }
+    if (mounted && expectedRevision === revision) connectionError.value = "";
+  } catch (error) { if (mounted && expectedRevision === revision) connectionError.value = error.message; }
   finally { schedule(); }
 }
 async function sendMessage(message, options = {}) {
@@ -82,12 +90,12 @@ async function submit() {
     await sendMessage(message, pendingMessage);
     if (draft.value.trim() === message) draft.value = "";
     pendingMessage = null;
-  } catch (error) { connectionError.value = error.message; }
+  } catch (error) { reportFailure(error); }
 }
 async function stop() {
   const expectedRevision = ++revision;
   try { apply(await request("/stop", { method: "POST", body: {} }), expectedRevision); }
-  catch (error) { connectionError.value = error.message; }
+  catch (error) { reportFailure(error); }
   schedule();
 }
 async function selectModel(assistantSelection) {
@@ -97,14 +105,14 @@ async function selectModel(assistantSelection) {
     apply(result, expectedRevision);
     connectionError.value = "";
     return result;
-  } catch (error) { connectionError.value = error.message; return { ok: false }; }
+  } catch (error) { reportFailure(error); return { ok: false }; }
   finally { schedule(); }
 }
 async function changeWatch(watchId, operation) {
   try {
     await request(`/watches/${operation}`, { method: "POST", body: { watchId } });
     await refresh();
-  } catch (error) { connectionError.value = error.message; }
+  } catch (error) { reportFailure(error); }
 }
 const adapter = computed(() => ({
   conversation: {
@@ -124,6 +132,7 @@ const adapter = computed(() => ({
   actions: { setDraft: (value) => { draft.value = value; }, submit, stop }
 }));
 watch(open, (value) => { if (value) void refresh(); else schedule(); });
+watch(() => state.value.error, (error) => { if (error) reportFailure(error); });
 watch(() => props.focus, (focus) => {
   void request("/focus", { method: "POST", body: { clientId, focus } }).catch((error) => { connectionError.value = error.message; });
 }, { deep: true });
@@ -156,9 +165,8 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
           </li>
         </ul>
       </details>
-      <p v-if="connectionError || state.error" class="vibe64-colleague__error" role="alert">{{ connectionError || state.error }}</p>
       <footer class="vibe64-colleague__footer">
-        <span aria-live="polite">{{ working ? 'Working · you can steer me' : 'Available across your projects' }}</span>
+        <span aria-live="polite" :title="connectionError">{{ connectionError ? 'Reconnecting…' : working ? 'Working · you can steer me' : 'Available across your projects' }}</span>
         <button ref="modelButton" class="vibe64-colleague__model" aria-label="Choose Colleague model" :disabled="working || sending" @click="modelMenu = true">
           {{ state.assistantSelection?.modelId || 'Choose model' }} ▾
         </button>
@@ -189,7 +197,6 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
 .vibe64-colleague__conversation :deep(.assistant-conversation) { width: 100%; min-height: 0; }
 .vibe64-colleague__footer { display: flex; justify-content: space-between; gap: 8px; padding: 8px 16px 12px; font-size: 11px; opacity: .72; }
 .vibe64-colleague__model { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vibe64-colleague__error { padding: 8px 16px; color: rgb(var(--v-theme-error)); font-size: 13px; }
 .vibe64-colleague__watches { padding: 6px 16px; font-size: 12px; max-height: 160px; overflow: auto; }
 .vibe64-colleague__watches summary { cursor: pointer; }
 .vibe64-colleague__watches ul { list-style: none; padding: 0; }

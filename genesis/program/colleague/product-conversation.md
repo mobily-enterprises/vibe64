@@ -71,6 +71,11 @@ recording's original focus, and never alter the typed draft. Colleague's API sta
 selected project changes. Opening a view sends a command only to the initiating
 browser; the actual router and conversation owners acknowledge its result.
 An unacknowledged or failed navigation is reported as failure, not completion.
+Connection failures use the existing footer status and clear on a current
+successful refresh. Stale failed reads cannot restore a recovered error.
+Command and model failures use shared transient action feedback without adding
+an error block to the drawer; an unchanged retained model error is not announced
+again on every poll. Failed text submission preserves its draft and retry identity.
 
 Retained Claude scopes save their native identity, account binding, execution
 reference and turn state atomically under their private runtime root. Restoring
