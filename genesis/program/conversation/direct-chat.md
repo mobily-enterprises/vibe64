@@ -513,7 +513,13 @@ semantic completeness. Pure conversation need not create a document.
 During Auto planning, Senior may write only this designated document, not application files. Beginning
 another planning turn invalidates readiness before inference. The conversation
 keeps a display snapshot and its content revision in the existing routing request;
-the file is the working authority. View plan opens the full Markdown document.
+the file is the working authority. View plan opens a compact Markdown dialog with
+Outcome and scope presented first as What this will do. The planner writes this
+section in plain language for a non-developer, including visible changes, how to
+check them and required decisions. All remaining content is under Technical
+details, collapsed on each opening. Existing documents retain all their content;
+missing summaries show a brief explanation rather than exposing the whole
+technical document by default. Code-block headings do not split the document.
 Implement submits the displayed revision through ordinary Send, retaining the
 draft and existing access checks. Natural-language approval uses the Router;
 only unambiguous approval of a currently ready plan can select Junior. The runtime

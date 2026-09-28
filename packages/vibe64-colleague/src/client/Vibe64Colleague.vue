@@ -6,6 +6,7 @@ import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 
 const props = defineProps({
+  name: { type: String, default: "Colleague" },
   request: { type: Function, required: true },
   navigate: { type: Function, default: null },
   focus: { type: Object, default: () => ({}) }
@@ -117,16 +118,16 @@ async function changeWatch(watchId, operation) {
 const adapter = computed(() => ({
   conversation: {
     turns: conversationTurnsFromMessages(state.value.messages || []),
-    assistantLabel: "Colleague", systemLabel: "Vibe64",
+    assistantLabel: props.name, systemLabel: "Vibe64",
     scrollKey: state.value.conversationId || "colleague", working: working.value,
     variant: "task", visible: open.value, userMessageFormat: "plain", progressPreviewLimit: 0,
     welcomeMessage: state.value.messages?.length ? "" : "Let's think it through. I can discuss an idea, check on your agents, or help you operate Vibe64."
   },
   composer: {
-    draft: draft.value, ariaLabel: "Message Colleague", placeholder: "Talk it through with Colleague…",
+    draft: draft.value, ariaLabel: `Message ${props.name}`, placeholder: `Talk it through with ${props.name}…`,
     rows: 1, density: "compact", disabled: sending.value,
     canSend: Boolean(draft.value.trim()) && !sending.value, canStop: working.value,
-    submitAriaLabel: working.value ? "Steer Colleague" : "Send to Colleague",
+    submitAriaLabel: working.value ? `Steer ${props.name}` : `Send to ${props.name}`,
     submitLabel: working.value ? "Steer" : "Send"
   },
   actions: { setDraft: (value) => { draft.value = value; }, submit, stop }
@@ -141,19 +142,19 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
 </script>
 
 <template>
-  <aside class="vibe64-colleague" :class="{ 'vibe64-colleague--open': open }" aria-label="Colleague">
-    <button v-if="!open" class="vibe64-colleague__launcher" aria-label="Open Colleague" @click="open = true">
+  <aside class="vibe64-colleague" :class="{ 'vibe64-colleague--open': open }" :aria-label="name">
+    <button v-if="!open" class="vibe64-colleague__launcher" :aria-label="`Open ${name}`" @click="open = true">
       <span class="vibe64-colleague__avatar"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
-      <span><strong>Colleague</strong><small>{{ working ? 'Working…' : 'Let’s talk' }}</small></span>
+      <span class="vibe64-colleague__identity"><strong class="d-block text-truncate">{{ name }}</strong><small>{{ working ? 'Working…' : 'Let’s talk' }}</small></span>
     </button>
     <template v-else>
       <header class="vibe64-colleague__header">
         <span class="vibe64-colleague__avatar"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
-        <div class="vibe64-colleague__identity"><strong>Colleague</strong><small>{{ destination }}</small></div>
-        <button class="vibe64-colleague__close" aria-label="Minimize Colleague" title="Minimize Colleague" @click="open = false">−</button>
+        <div class="vibe64-colleague__identity"><strong class="d-block text-truncate">{{ name }}</strong><small>{{ destination }}</small></div>
+        <button class="vibe64-colleague__close" :aria-label="`Minimize ${name}`" :title="`Minimize ${name}`" @click="open = false">−</button>
       </header>
       <div class="vibe64-colleague__conversation">
-        <AssistantConversationElement :adapter="adapter" label="Colleague conversation" />
+        <AssistantConversationElement :adapter="adapter" :label="`${name} conversation`" />
       </div>
       <details v-if="watches.length" class="vibe64-colleague__watches">
         <summary>{{ watches.length }} conversation {{ watches.length === 1 ? 'watch' : 'watches' }}</summary>
@@ -167,7 +168,7 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
       </details>
       <footer class="vibe64-colleague__footer">
         <span aria-live="polite" :title="connectionError">{{ connectionError ? 'Reconnecting…' : working ? 'Working · you can steer me' : 'Available across your projects' }}</span>
-        <button ref="modelButton" class="vibe64-colleague__model" aria-label="Choose Colleague model" :disabled="working || sending" @click="modelMenu = true">
+        <button ref="modelButton" class="vibe64-colleague__model" :aria-label="`Choose ${name} model`" :disabled="working || sending" @click="modelMenu = true">
           {{ state.assistantSelection?.modelId || 'Choose model' }} ▾
         </button>
       </footer>
@@ -184,7 +185,7 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
 
 <style scoped>
 .vibe64-colleague { position: fixed; right: 20px; bottom: max(18px, env(safe-area-inset-bottom)); max-width: calc(100% - 40px); z-index: 1800; color: rgb(var(--v-theme-on-surface)); }
-.vibe64-colleague__launcher { display: flex; align-items: center; gap: 9px; padding: 5px 19px 5px 6px; background: rgb(var(--v-theme-surface)); border: 1px solid rgba(var(--v-theme-secondary), .5); border-radius: 32px; box-shadow: 0 5px 24px #0002; cursor: pointer; text-align: left; }
+.vibe64-colleague__launcher { max-width: 100%; display: flex; align-items: center; gap: 9px; padding: 5px 19px 5px 6px; background: rgb(var(--v-theme-surface)); border: 1px solid rgba(var(--v-theme-secondary), .5); border-radius: 32px; box-shadow: 0 5px 24px #0002; cursor: pointer; text-align: left; }
 .vibe64-colleague strong { font-size: 15px; font-weight: 650; letter-spacing: .015em; }
 .vibe64-colleague small { display: block; font-size: 12px; opacity: .75; }
 .vibe64-colleague__avatar { display: block; width: 50px; height: 50px; flex: 0 0 50px; overflow: hidden; border-radius: 50%; }

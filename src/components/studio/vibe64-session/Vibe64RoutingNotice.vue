@@ -24,15 +24,23 @@
         <v-spacer />
         <v-btn :icon="mdiClose" variant="text" aria-label="Close plan" @click="planOpen = false" />
       </v-card-title>
-      <v-card-subtitle>Temporary session document · kept outside Git</v-card-subtitle>
-      <v-card-text><GithubMarkdown :text="request?.workPlan?.text || ''" /></v-card-text>
+      <v-card-text>
+        <h2 class="text-title-medium mb-3">What this will do</h2>
+        <LongTextPreviewBlocks v-if="planParts.overview.length" :blocks="planParts.overview" />
+        <p v-else>A plain-language overview has not been added yet. The full plan is under Technical details.</p>
+        <v-expansion-panels v-model="expandedPlanSection" variant="accordion" class="mt-6">
+          <v-expansion-panel value="technical" title="Technical details">
+            <v-expansion-panel-text><LongTextPreviewBlocks :blocks="planParts.technical" /></v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
+      </v-card-text>
       <v-card-actions>
-        <v-btn variant="text" @click="planOpen = false">Close</v-btn>
+        <v-btn variant="text" min-height="48" @click="planOpen = false">Close</v-btn>
         <v-spacer />
-        <v-btn v-if="planReady" variant="tonal" color="primary" :disabled="busy || retrying" @click="implementPlan">
-          {{ implementLabel }}
+        <v-btn v-if="planReady" variant="tonal" color="primary" min-height="48" :disabled="busy || retrying" :aria-label="implementLabel" :title="implementLabel" @click="implementPlan">
+          Implement
         </v-btn>
-        <v-btn v-else-if="planRecoverable" variant="tonal" :disabled="busy || retrying" @click="recoverPlan">Recover plan</v-btn>
+        <v-btn v-else-if="planRecoverable" variant="tonal" min-height="48" :disabled="busy || retrying" @click="recoverPlan">Recover plan</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -56,13 +64,23 @@ import { mdiClose, mdiFileDocumentOutline } from "@mdi/js";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-
-import GithubMarkdown from "../GithubMarkdown.vue";
+import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
+import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conversation";
 
 const props = defineProps({ request: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, retrying: Boolean, busy: Boolean });
 const emit = defineEmits(["retry", "skip", "implement", "recover"]);
 const planOpen = ref(false);
+const expandedPlanSection = ref(null);
 const planActivator = ref(null);
+const planParts = computed(() => {
+  const blocks = parseLongTextReviewBlocks(props.request?.workPlan?.text || "");
+  const start = blocks.findIndex((block) => block.type === "heading" && block.level === 2 && block.text.trim().toLowerCase() === "outcome and scope");
+  if (start < 0) return { overview: [], technical: blocks };
+  const next = blocks.findIndex((block, index) => index > start && block.type === "heading" && block.level <= 2);
+  const end = next < 0 ? blocks.length : next;
+  return { overview: blocks.slice(start + 1, end), technical: [...blocks.slice(0, start), ...blocks.slice(end)] };
+});
+watch(planOpen, (open) => { if (open) expandedPlanSection.value = null; });
 const planVisible = computed(() => props.mode === "auto" && props.request?.mode === "auto" && Boolean(props.request.workPlan?.text));
 const planReady = computed(() => planVisible.value && props.request?.status === "done" && !props.request.error && props.request.workPlan?.status === "ready");
 const planRecoverable = computed(() => planVisible.value && props.request?.status === "done" &&

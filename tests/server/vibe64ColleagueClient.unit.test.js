@@ -47,7 +47,20 @@ test("an older failed refresh cannot restore a recovered connection error", asyn
   assert.equal(view.notices.length, 0);
 });
 
-function mount(t, request) {
+test("renaming updates conversation and composer labels without losing the draft", async (t) => {
+  const props = vue.reactive({ name: "Colleague" });
+  const view = mount(t, async () => ({ messages: [], status: "ready" }), props);
+  await flush();
+  view.state.draft.value = "Keep my question";
+  props.name = "Ada";
+  await flush();
+  assert.equal(view.state.adapter.value.conversation.assistantLabel, "Ada");
+  assert.equal(view.state.adapter.value.composer.ariaLabel, "Message Ada");
+  assert.equal(view.state.adapter.value.composer.submitAriaLabel, "Send to Ada");
+  assert.equal(view.state.draft.value, "Keep my question");
+});
+
+function mount(t, request, props = vue.reactive({ name: "Colleague" })) {
   const notices = [];
   const module = { exports: {} };
   const imports = {
@@ -70,7 +83,8 @@ function mount(t, request) {
     parentNode: () => null, nextSibling: () => null
   });
   const app = renderer.createApp({ setup() {
-    state = module.exports.default.setup({ request, focus: {}, navigate: null }, { expose() {} });
+    Object.assign(props, { request, focus: {}, navigate: null });
+    state = module.exports.default.setup(props, { expose() {} });
     return () => null;
   } });
   app.mount({});

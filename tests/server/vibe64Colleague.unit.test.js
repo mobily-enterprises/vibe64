@@ -132,6 +132,24 @@ async function until(predicate) {
   assert.fail("Expected asynchronous watch state did not arrive.");
 }
 
+test("the current display name reaches every turn without replacing the conversation", async (t) => {
+  const f = await fixture(t, [reply("Hello."), reply("I'm Ada."), reply("Now I'm Grace.")]);
+  await f.send("Hello.");
+  await f.service.wait(f.context);
+  assert.equal(JSON.parse(f.observations.starts[0].input.message).assistantName, "Colleague");
+  let name = "Ada";
+  f.service.setNameResolver(async () => name);
+  await f.send("What is your name?", "user-2");
+  await f.service.wait(f.context);
+  name = "Grace";
+  await f.send("And now?", "user-3");
+  const result = await f.service.wait(f.context);
+  assert.equal(result.status, "ready", result.error);
+  assert.deepEqual(f.observations.starts.map(({ input }) => JSON.parse(input.message).assistantName), ["Colleague", "Ada", "Grace"]);
+  assert.equal(f.observations.creates, 1, "changing the display name keeps the same native conversation");
+  assert.equal(result.messages.filter(message => message.role === "user").length, 3);
+});
+
 test("complete handover-sized Unicode arguments fit the native exchange while oversized envelopes remain rejected", async (t) => {
   const value = "😀".repeat(20000);
   const argumentsText = JSON.stringify({ value }).replace(/[\u0080-\uffff]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
