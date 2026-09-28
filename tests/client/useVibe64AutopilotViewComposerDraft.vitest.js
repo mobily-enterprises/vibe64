@@ -454,6 +454,25 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(requestTemporaryAi).not.toHaveBeenCalled();
   });
 
+  it("shows reasoning activity only for a confirmed active reasoning phase", async () => {
+    const { props, view } = await createViewWithProps();
+    props.session.agentSession.turn = { active: true, id: "turn-1", state: "active", phase: "" };
+    expect(view.reasoningActive.value).toBe(false);
+    props.session.agentSession.turn.phase = "reasoning";
+    expect(view.reasoningActive.value).toBe(true);
+    props.session.agentSession.turn.phase = "compacting";
+    expect(view.reasoningActive.value).toBe(false);
+    props.session.agentSession.turn.phase = "reasoning";
+    props.session.agentSession.turn.status = "observation_lost";
+    expect(view.reasoningActive.value).toBe(false);
+    props.session.agentSession.turn.status = "active";
+    props.agentConnectionStatus = "reconciling";
+    expect(view.reasoningActive.value).toBe(false);
+    props.agentConnectionStatus = "connected";
+    props.session.agentSession.turn.active = false;
+    expect(view.reasoningActive.value).toBe(false);
+  });
+
   it("shows the active compaction phase and clears it for an idle or uncertain turn", async () => {
     const { props, view } = await createViewWithProps();
     props.session.agentSession.turn = { active: true, id: "turn-1", state: "active", phase: "compacting" };

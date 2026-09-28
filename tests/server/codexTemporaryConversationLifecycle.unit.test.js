@@ -2247,6 +2247,28 @@ test("Codex compaction phase follows native items and clears on completion and i
   });
 });
 
+test("Codex reasoning activity follows native item boundaries, clears on tool use and ignores old turns", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "reasoning-phase" });
+    const { threadId, turnId } = captures.provider;
+    const notify = (method, type, id = turnId) => emitCodexNotification(captures.subscribers, {
+      method, params: { threadId, turnId: id, item: { id: `${type}-item`, type } }
+    });
+    const phase = async () => (await store.readAgentRun(sessionId, "codex_app_server")).providerPhase;
+    notify("item/started", "reasoning");
+    await waitForSessionValue(phase, (value) => value === "reasoning", "active reasoning");
+    notify("item/started", "commandExecution");
+    await waitForSessionValue(phase, (value) => value === "", "tool execution clears reasoning");
+    notify("item/started", "reasoning");
+    await waitForSessionValue(phase, (value) => value === "reasoning", "next reasoning item");
+    notify("item/completed", "reasoning");
+    await waitForSessionValue(phase, (value) => value === "", "reasoning completion");
+    notify("item/started", "reasoning", "old-turn");
+    await controller.closeAllForSession(sessionId);
+    assert.notEqual(await phase(), "reasoning");
+  });
+});
+
 test("assistant verification shares a stalled status read while attachments remain usable", { timeout: 15_000 }, async () => {
   await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
     assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
@@ -10496,6 +10518,47 @@ test("Codex streams answer chunks before persistence, replaces the live answer a
     await controller.closeAllForSession(sessionId);
     assert.deepEqual(store.readConversationStream(sessionId).messages, []);
     assert.equal((await store.readConversationLog(sessionId)).filter((row) => row.assistant).length, 1);
+  });
+});
+
+test("Codex coalesces queued reasoning fragments without delaying commentary behind per-token writes", async () => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+    await controller.sendMessage(sessionId, { message: "Work", messageId: "reasoning-burst" });
+    const { threadId, turnId } = captures.provider;
+    const writes = [];
+    const write = store.writeConversationThinkingMessage;
+    let release;
+    const blockedWrite = new Promise((resolve) => { release = resolve; });
+    store.writeConversationThinkingMessage = async (...args) => {
+      writes.push(args[1].text);
+      if (writes.length === 1) await blockedWrite;
+      return write.apply(store, args);
+    };
+    try {
+      const fragment = (itemId, delta) => emitCodexNotification(captures.subscribers, {
+        method: "item/reasoning/textDelta", params: { threadId, turnId, itemId, contentIndex: 0, delta }
+      });
+      fragment("first", "Start ");
+      await waitForSessionValue(() => writes.length, (count) => count === 1, "first reasoning write");
+      for (let index = 0; index < 1_000; index += 1) fragment("first", "word ");
+      emitCodexNotification(captures.subscribers, assistantItemCompleted({
+        threadId, turnId, itemId: "progress", phase: "commentary", text: "Checking the files."
+      }));
+      for (let index = 0; index < 1_000; index += 1) fragment("second", "next ");
+      release();
+      await waitForSessionValue(() => store.readConversationLog(sessionId),
+        (rows) => rows.some((row) => row.thinking?.some(({ text }) => text === "next ".repeat(1_000).trim())),
+        "reasoning after the progress update");
+      const messages = (await store.readConversationLog(sessionId)).flatMap((row) => row.messages || [])
+        .filter(({ role }) => ["thinking", "commentary"].includes(role));
+      assert.deepEqual(messages.map(({ text }) => text), [
+        `Start ${"word ".repeat(1_000)}`.trim(), "Checking the files.", "next ".repeat(1_000).trim()
+      ]);
+      assert.equal(writes.length, 3, "queued fragments share a write; commentary remains between the two reasoning items");
+    } finally {
+      release();
+      store.writeConversationThinkingMessage = write;
+    }
   });
 });
 

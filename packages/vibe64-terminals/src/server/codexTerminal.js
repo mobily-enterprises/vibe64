@@ -1425,6 +1425,7 @@ function createCodexTerminalController({
   const codexAppServerMirroredTerminalItems = new Set();
   const codexAppServerNotificationTasks = new Map();
   const codexAppServerPendingStreams = new Map();
+  const codexAppServerPendingReasoning = new Map();
   let codexAppServerProviderLifecycle = Promise.resolve();
   let codexAppServerServerClosing = false;
   let codexAppServerShutdownPromise = null;
@@ -4058,6 +4059,7 @@ function createCodexTerminalController({
     // Other notifications end the pending stream batch so completion, reasoning
     // and turn changes retain their position in the provider's event order.
     codexAppServerPendingStreams.delete(taskSessionKey);
+    codexAppServerPendingReasoning.delete(taskSessionKey);
     const previous = codexAppServerNotificationTasks.get(taskSessionKey) || Promise.resolve();
     const task = previous
       .catch(() => null)
@@ -4886,7 +4888,26 @@ function createCodexTerminalController({
     return false;
   }
 
-  async function recordCodexAppServerReasoningForSession(sessionId = "", threadId = "", notification = {}) {
+  function queueCodexAppServerReasoning(context, notification) {
+    if (codexAppServerServerClosing) return;
+    const pending = codexAppServerPendingReasoning.get(context.sessionKey);
+    if (pending && pending.threadId === context.threadId && pending.turnId === context.turnId) {
+      pending.notifications.push(notification);
+      return;
+    }
+    const batch = { threadId: context.threadId, turnId: context.turnId, notifications: [notification] };
+    runCodexAppServerNotificationTask(context, () => {
+      if (codexAppServerPendingReasoning.get(context.sessionKey) === batch) {
+        codexAppServerPendingReasoning.delete(context.sessionKey);
+      }
+      return recordCodexAppServerReasoningForSession(context.sessionId, context.threadId, batch.notifications);
+    });
+    // Merge only work waiting behind a write. Other notifications close this
+    // batch, preserving commentary and turn boundaries without a timer.
+    codexAppServerPendingReasoning.set(context.sessionKey, batch);
+  }
+
+  async function recordCodexAppServerReasoningForSession(sessionId = "", threadId = "", notifications = []) {
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(threadId);
     const store = await createStoreForSession(normalizedSessionId);
@@ -4894,17 +4915,19 @@ function createCodexTerminalController({
     const currentTurn = codexAppServerTurnStateFromAgentRun(run || {});
     const ownerTurnId = codexAppServerOutputOwnerTurnId({
       notificationThreadId: normalizedThreadId,
-      notificationTurnId: codexAppServerNotificationTurnId(notification),
+      notificationTurnId: codexAppServerNotificationTurnId(notifications[0]),
       trackedActive: currentTurn.active,
       trackedState: currentTurn.state,
       trackedThreadId: currentTurn.threadId,
       trackedTurnId: currentTurn.turnId
     });
-    if (!recordCodexAppServerReasoningNotification(normalizedThreadId, notification, {
-      turnId: ownerTurnId
-    })) {
-      return false;
+    let changed = false;
+    for (const notification of notifications) {
+      if (recordCodexAppServerReasoningNotification(normalizedThreadId, notification, { turnId: ownerTurnId })) {
+        changed = true;
+      }
     }
+    if (!changed) return false;
     await queueCodexAppServerReasoningPersist(
       normalizedSessionId,
       normalizedThreadId,
@@ -7505,12 +7528,12 @@ function createCodexTerminalController({
     if (existing) {
       unsubscribeCodexAppServerEventSubscription(key);
     }
-    // A new observer cannot know whether compaction finished while disconnected.
-    // New native item events will restore the phase if compaction starts again.
+    // A new observer cannot confirm a previously active phase. Fresh native
+    // events restore it; a stored phase alone must not animate activity.
     runCodexAppServerNotificationTask({ projectContext, provider, sessionId: normalizedSessionId, sessionKey }, async () => {
       const store = await createStoreForSession(normalizedSessionId);
       const run = await readCodexAppServerAgentRunForSession(store, normalizedSessionId);
-      if (run?.providerPhase !== "compacting" || run.providerThreadId !== normalizedThreadId) return;
+      if (!run?.providerPhase || run.providerThreadId !== normalizedThreadId) return;
       await markCodexAppServerTurnActive(normalizedSessionId, {
         phase: "", requireTrackedTurn: true,
         threadId: normalizedThreadId, turnId: run.providerTurnId
@@ -7553,14 +7576,22 @@ function createCodexTerminalController({
         return;
       }
       const contextRefreshReason = codexAppServerContextRefreshReason(notification);
-      if (codexAppServerNotificationItem(notification)?.type === "contextCompaction" &&
-          ["item/started", "item/completed"].includes(method)) {
-        runCodexAppServerNotificationTask(notificationContext, () => markCodexAppServerTurnActive(normalizedSessionId, {
-          phase: method === "item/started" ? "compacting" : "",
-          requireTrackedTurn: true,
-          threadId: normalizedThreadId,
-          turnId: codexAppServerNotificationTurnId(notification)
-        }));
+      const itemType = codexAppServerNotificationItem(notification)?.type;
+      if (!codexAppServerAutomaticHookThreads.has(normalizedThreadId) &&
+          (method === "item/started" || method === "item/completed" && ["contextCompaction", "reasoning"].includes(itemType))) {
+        runCodexAppServerNotificationTask(notificationContext, async () => {
+          const phase = method === "item/started"
+            ? ({ contextCompaction: "compacting", reasoning: "reasoning" })[itemType] || ""
+            : "";
+          const store = await createStoreForSession(normalizedSessionId);
+          const run = await readCodexAppServerAgentRunForSession(store, normalizedSessionId);
+          if (normalizeText(run?.providerPhase) === phase) return;
+          return markCodexAppServerTurnActive(normalizedSessionId, {
+            phase, requireTrackedTurn: true,
+            threadId: normalizedThreadId,
+            turnId: codexAppServerNotificationTurnId(notification)
+          });
+        });
       }
       if (contextRefreshReason) {
         runCodexAppServerNotificationTask(notificationContext, () => {
@@ -7598,13 +7629,7 @@ function createCodexTerminalController({
           method === "item/completed" && codexAppServerNotificationItem(notification)?.type === "reasoning") &&
         !codexAppServerAutomaticHookThreads.has(normalizedThreadId)
       ) {
-        runCodexAppServerNotificationTask(notificationContext, () => {
-          return recordCodexAppServerReasoningForSession(
-            normalizedSessionId,
-            normalizedThreadId,
-            notification
-          );
-        });
+        queueCodexAppServerReasoning(notificationContext, notification);
       }
       if (["assistant_started", "assistant_delta"].includes(classification.kind) &&
           !codexAppServerAutomaticHookThreads.has(normalizedThreadId)) {

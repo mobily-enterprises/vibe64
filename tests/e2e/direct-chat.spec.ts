@@ -2154,6 +2154,22 @@ for (const width of [390, 820, 1280]) {
     expect(sent[0].planRevision).toBe(revision);
     expect(sent[0].message).toBe("Implement the plan I have approved.");
     await expect(composer).toHaveValue("Keep my next question as a draft");
+
+    routing.workPlan.status = "drafting";
+    session.metadata.assistant_routing_request = JSON.stringify(routing);
+    await page.reload();
+    await expect(page.getByRole("button", { name: /^Implement with Junior/ })).toHaveCount(0);
+    const recover = page.getByRole("button", { name: "Recover plan", exact: true });
+    await expect(recover).toBeVisible();
+    await composer.fill("Keep this draft during recovery");
+    await recover.focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => sent.length).toBe(2);
+    expect(sent[1].planRecoveryRevision).toBe(revision);
+    expect(sent[1].planRevision).toBeUndefined();
+    expect(sent[1].message).toContain("Do not start coding.");
+    await expect(composer).toHaveValue("Keep this draft during recovery");
+    await page.screenshot({ path: testInfo.outputPath(`plan-recovery-${width}.png`), animations: "disabled" });
   });
 }
 
@@ -2929,3 +2945,29 @@ test("@accounts-routing opens one named orchestrator from each account heading",
     await server.close();
   }
 });
+
+for (const width of [390, 820, 1280]) {
+  hintTest(`@reasoning-activity shows dots only during native reasoning at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const agentTurn = { active: true, id: "reasoning-turn", state: "active", phase: "reasoning" };
+    await mockDirectChat(page, { agentTurn, conversationLog: [scrollTestTurn(1)] });
+    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, route => fulfillJson(route, {
+      ok: true, ...directSession({ agentTurn }).agentSession
+    }));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+    const indicator = page.getByRole("status", { name: "Reasoning in progress" });
+    await expect(indicator).toBeVisible();
+    const resourceNotice = page.getByRole("button", { name: "Dismiss resource notification" });
+    if (await resourceNotice.isVisible()) await resourceNotice.click();
+    expect(await indicator.locator("span").evaluate(element => getComputedStyle(element).animationName)).toMatch(/^reasoning-dots/);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`reasoning-${width}.png`) });
+    agentTurn.phase = "";
+    await page.getByRole("button", { name: "Reload chat" }).click();
+    await expect(indicator).toHaveCount(0);
+    agentTurn.phase = "reasoning";
+    agentTurn.active = false;
+    await page.getByRole("button", { name: "Reload chat" }).click();
+    await expect(indicator).toHaveCount(0);
+  });
+}

@@ -274,6 +274,7 @@ function assistantRoutingPrompt({ message, exchanges = [], attachments = [], pla
     "New work ALWAYS goes to senior, even direct imperatives like 'change all washers to bathers'.",
     "Discussion, investigation, new scope, revisions, decisions, mixed requests, and uncertainty go to senior.",
     "Choose junior ONLY when the supplied working plan has status ready AND this message unambiguously approves implementing that specific plan without changing its scope.",
+    "When that ready plan also has approved:true, the same revision was already approved. A request to continue or resume its interrupted implementation is plan_approval; it does not require another planning round. Questions, changed scope and ambiguous continuations still go to senior.",
     "Use reason plan_approval in that case.",
     "A prior ticket or an implementation request is not approval of a prepared plan.",
     "When approval is ambiguous, choose senior.",

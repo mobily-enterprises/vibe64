@@ -112,6 +112,25 @@ it("shows recovery controls for a stopped planning handoff", () => {
   expect(f.state().label).toBe("Back to planning · Codex (gpt-6-astra not recorded)");
 });
 
+it("offers plan recovery for an idle Auto draft, paused plan or blocker, without offering coding", async () => {
+  const request = { mode: "auto", status: "done", workPlan: { status: "drafting", revision: "one", text: "Existing plan" } };
+  const f = mount(request);
+  for (const status of ["drafting", "paused", "blocked"]) {
+    f.props.value.request = { ...request, workPlan: { ...request.workPlan, status } };
+    await nextTick();
+    expect(f.state().planRecoverable).toBe(true);
+    expect(f.state().planReady).toBe(false);
+  }
+  for (const status of ["sent", "sending", "uncertain", "planning_pending"]) {
+    f.props.value.request = { ...request, status };
+    await nextTick();
+    expect(f.state().planRecoverable).toBe(false);
+  }
+  f.props.value = { mode: "junior", request };
+  await nextTick();
+  expect(f.state().planRecoverable).toBe(false);
+});
+
 it("leaves a mixed-request explanation on the unsent bubble instead of adding another banner", () => {
   const f = mount({ status: "failed", reason: "mixed_deslop_request", error: "Please request feature work and Deslop separately." });
   expect(f.state().actionable).toBe(false);

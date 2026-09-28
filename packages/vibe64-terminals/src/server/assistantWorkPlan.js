@@ -108,6 +108,7 @@ function workPlanInstructions(file, role) {
       "For every proposed implementation, inspect the actual project and write a VERY DETAILED plan: enumerate relevant occurrences and affected files/code locations, explain exact proposed changes and boundaries, record decisions and unresolved questions, ordered implementation steps, concrete acceptance criteria and verification, and completed work/blockers.",
       "Do not substitute a chat summary for the file.",
       "Update the same document after steering or discoveries.",
+      "If the user asks to implement an existing plan but Auto sends this request to planning, read the existing plan and resolve its readiness here. Reuse the agreed scope and existing project plan; do not invent a replacement plan. If it is already complete and has no unresolved decisions, mark it ready without rewriting its content. Otherwise complete the missing planning work or explain the specific unresolved decision. Do not send the user to support, ask them to change agents, or merely report that planning instructions prevent coding. The next step is the Implement action once the plan is ready.",
       "Mark ready only when the plan is complete and decisions are resolved, then summarize it for the human and ask whether to implement it.",
       "Do not start or delegate coding.",
       "Pure conversation does not require manufacturing a plan.",

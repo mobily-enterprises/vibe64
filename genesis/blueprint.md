@@ -1330,6 +1330,11 @@ In Auto, coding starts only after approval of that version, through the button o
 a clear reply. Junior keeps progress and blockers in the document. A material
 decision returns work to Senior, preserving edits, and a revised plan needs
 approval again. Optional Senior review checks implementation against the plan.
+If coding fails or is stopped while the approved plan is unchanged, Auto keeps
+Implement available for an explicit retry. An existing draft is completed by the
+planner within Auto; people do not need to select another agent to get unstuck.
+Recover plan is available beside View plan when planning needs attention. It
+restores the path to implementation without changing agents or starting coding.
 Direct Senior and Junior use the request and conversation, without
 reading, updating or requiring that document; automatic review is unavailable.
 The View plan and Implement controls belong to Auto and disappear when selecting

@@ -12,6 +12,9 @@
     >
       Implement
     </v-btn>
+    <v-btn v-else-if="planRecoverable" variant="tonal" min-height="48" :disabled="busy || retrying" @click="recoverPlan">
+      Recover plan
+    </v-btn>
     <span v-else class="text-body-small text-medium-emphasis">{{ planStage }}</span>
   </div>
   <v-dialog v-if="planVisible" v-model="planOpen" :activator="planActivator?.$el" max-width="880" scrollable aria-label="Working plan">
@@ -29,6 +32,7 @@
         <v-btn v-if="planReady" variant="tonal" color="primary" :disabled="busy || retrying" @click="implementPlan">
           {{ implementLabel }}
         </v-btn>
+        <v-btn v-else-if="planRecoverable" variant="tonal" :disabled="busy || retrying" @click="recoverPlan">Recover plan</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -56,11 +60,13 @@ import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import GithubMarkdown from "../GithubMarkdown.vue";
 
 const props = defineProps({ request: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, retrying: Boolean, busy: Boolean });
-const emit = defineEmits(["retry", "skip", "implement"]);
+const emit = defineEmits(["retry", "skip", "implement", "recover"]);
 const planOpen = ref(false);
 const planActivator = ref(null);
 const planVisible = computed(() => props.mode === "auto" && props.request?.mode === "auto" && Boolean(props.request.workPlan?.text));
 const planReady = computed(() => planVisible.value && props.request?.status === "done" && !props.request.error && props.request.workPlan?.status === "ready");
+const planRecoverable = computed(() => planVisible.value && props.request?.status === "done" &&
+  ["drafting", "paused", "blocked"].includes(props.request.workPlan?.status));
 const implementLabel = computed(() => `Implement with Junior${props.request?.assignments?.junior
   ? ` · ${vibe64AssistantSelectionLabel(props.request.assignments.junior)}` : ""}`);
 const planStage = computed(() => {
@@ -76,6 +82,10 @@ const planStage = computed(() => {
 });
 function implementPlan() {
   emit("implement", props.request.workPlan.revision);
+  planOpen.value = false;
+}
+function recoverPlan() {
+  emit("recover", props.request.workPlan.revision);
   planOpen.value = false;
 }
 watch(() => props.active, (active) => { if (!active) planOpen.value = false; });

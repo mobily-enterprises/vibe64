@@ -162,7 +162,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           message: state.input.message,
           exchanges,
           plan: state.workPlan ? {
-            status: state.workPlan.status, revision: state.workPlan.revision, outline: state.workPlan.text.slice(0, 6000)
+            status: state.workPlan.status, revision: state.workPlan.revision,
+            approved: state.workPlan.approvedRevision === state.workPlan.revision,
+            outline: state.workPlan.text.slice(0, 6000)
           } : null,
           attachments: state.input.attachments || state.input.displayAttachments
         })
@@ -292,6 +294,12 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         throw failure("The plan changed before coding started. Return to planning and approve the updated plan.");
       }
     }
+    if (!followup && state.input.planRecoveryRevision) {
+      const plan = await readWorkPlan(context);
+      if (plan?.revision !== state.input.planRecoveryRevision) {
+        throw failure("The plan changed. Open View plan again before recovering it.");
+      }
+    }
     const usesPlan = state.mode === "auto";
     const file = usesPlan ? await prepareWorkPlan(context, role === "senior") : null;
     if (usesPlan && role === "senior" && state.workPlan) state.workPlan = await readWorkPlan(context);
@@ -370,6 +378,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         }
         return;
       }
+      if (input.planRecoveryRevision && preferences?.mode !== "auto") throw failure("Recover plan is an Auto planning action.");
       if (!preferences) { direct = true; return; }
       const store = context.runtime.store;
       state = await read(store, sessionId);
@@ -387,6 +396,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         return;
       }
       const native = await agent.sessionState(sessionId, context);
+      if (input.planRecoveryRevision && native?.turn?.active) throw failure("Wait for the current turn to finish before recovering the plan.");
       // Steering keeps the running model and its instructions. It never goes
       // through the classifier, including while a review turn is running.
       if (native?.turn?.active) {
@@ -423,9 +433,17 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         }
         const mode = pinnedGoal?.mode || options.purpose || preferences.mode;
         const approving = Boolean(input.planRevision);
+        const recoveringPlan = Boolean(input.planRecoveryRevision);
         const plan = mode === "auto" ? await readWorkPlan(context) : null;
         const previousPlan = state?.workPlan;
+        const previousApproval = previousPlan?.approvedRevision || state?.input?.planRevision;
         const readyPlan = plan?.status === "ready" && previousPlan?.status === "ready" && plan.revision === previousPlan.revision;
+        if (recoveringPlan && (mode !== "auto" || approving || explicitDeslop)) {
+          throw failure("Recover plan is an Auto planning action; it cannot also approve implementation or request Deslop.");
+        }
+        if (recoveringPlan && (!plan || plan.revision !== input.planRecoveryRevision)) {
+          throw failure("The plan changed. Open View plan again before recovering it.");
+        }
         if (approving && mode !== "auto") throw failure("Choose Auto to implement its working plan. Direct roles work from your message and conversation.");
         if (approving && (activeGoal(goal) ||
             !readyPlan || plan.revision !== input.planRevision)) {
@@ -433,6 +451,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         }
         let resolvedMode = mode;
         if (explicitDeslop) resolvedMode = mode === "custom" ? "custom" : "senior";
+        else if (recoveringPlan) resolvedMode = "senior";
         else if (approving) resolvedMode = "junior";
         else if (mode === "auto") resolvedMode = "";
         const review = mode === "auto" && !explicitDeslop && !options.purpose && preferences.review && !activeGoal(goal);
@@ -441,7 +460,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           messageId: input.messageId,
           input: Object.fromEntries(Object.entries(input).filter(([name]) => [
             "message", "displayMessage", "attachmentIds", "displayAttachments", "genesisTask",
-            "originId", "presentation", "promptLabel", "outputSchema", "planRevision"
+            "originId", "presentation", "promptLabel", "outputSchema", "planRevision", "planRecoveryRevision"
           ].includes(name))),
           mode,
           resolvedMode,
@@ -450,7 +469,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           workPlan: plan ? {
             ...plan,
             status: readyPlan ? "ready" : "drafting",
-            ...(approving ? { approvedRevision: plan.revision } : {})
+            ...(approving || readyPlan && previousApproval === plan.revision
+              ? { approvedRevision: plan.revision } : {})
           } : null,
           schemaVersion: 4,
           workflowEngineId,
@@ -613,9 +633,17 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       }
       if (plan) {
         let status = plan.status;
-        if (run.state !== "completed" || state.stopped) status = "paused";
+        if (run.state !== "completed" || state.stopped) {
+          // Stopping the coder does not invalidate the proposal the user reviewed.
+          // Continuing still needs a new user request; changed plans stay paused.
+          const approvedPlanUnchanged = role === "junior" && plan.status === "ready" &&
+            plan.revision === state.workPlan?.approvedRevision;
+          if (!approvedPlanUnchanged) status = "paused";
+        }
         else if (role !== "senior" && status !== "blocked") status = "implemented";
-        state.workPlan = { ...plan, status };
+        state.workPlan = { ...plan, status,
+          ...(status === "ready" && plan.revision === state.workPlan?.approvedRevision
+            ? { approvedRevision: plan.revision } : {}) };
       }
       if (run.state === "completed" && !state.stopped && ["junior", "review"].includes(role) && plan?.status === "blocked") {
         const needsRetry = recovered && liveFollowupRequests.get(keyFor(sessionId, context)) !== state.messageId;
