@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, inject, onMounted, onUnmounted, ref, watch, watchEffect } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { IntegrationConfigurationFields } from "@jskit-ai/connectors-web/client";
 import { getProviderClientAuthenticationMethods, getProviderScopes } from "@jskit-ai/connectors-core/shared/configuration";
@@ -10,6 +10,7 @@ import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { integrationCallbackUrl } from "@/lib/integrationCallbackUrl.js";
 import { readLocalStorageJson, writeLocalStorageJson } from "@/lib/browserLocalStorage.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
+import { VIBE64_COLLEAGUE_INTEGRATIONS_KEY } from "@/lib/vibe64AssistantHost.js";
 import GoogleAdsSearchPanel from "@/components/studio/GoogleAdsSearchPanel.vue";
 import googleAdsSearchGuide from "@local/vibe64-source-editor/docs/application-google-ads.md?raw";
 import PaymentConfigurationPanel from "@/components/studio/PaymentConfigurationPanel.vue";
@@ -64,12 +65,13 @@ watch([selectedId, search], () => {
 });
 const requestedIntegration = computed(() => route.query.integrationSession === props.dashboardContext.sessionId &&
   typeof route.query.integration === "string" && route.query.integration.length <= 200 ? route.query.integration : "");
-watch(requestedIntegration, (id) => {
+function selectIntegration(id) {
   if (!id) return;
   environment.value = "development";
   selectedId.value = id;
   search.value = "";
-}, { immediate: true, flush: "sync" });
+}
+watch(requestedIntegration, selectIntegration, { immediate: true, flush: "sync" });
 
 const discardOpen = ref(false);
 const removeOpen = ref(false);
@@ -193,6 +195,26 @@ async function copySetupValue(value, label = "Callback URL") {
 }
 const disabled = computed(() => registrationCommand.isRunning || discoveryCommand.isRunning || command.isRunning || setupCommand.isRunning || (!production.value && props.dashboardContext.sourceOperationsSuspended === true) || (production.value && props.dashboardContext.owner !== true) || changedElsewhere.value);
 const loadError = computed(() => resource.loadError.value || (resource.data.value?.ok === false ? resource.data.value.error : ""));
+const colleagueIntegrations = inject(VIBE64_COLLEAGUE_INTEGRATIONS_KEY, null);
+const displayedIntegrations = {
+  get projectSlug() { return projectSlug.value; },
+  get sessionId() { return props.dashboardContext.sessionId || ""; },
+  get environment() { return environment.value; },
+  get integrationId() { return selectedId.value; },
+  get ready() { return Boolean(configuration.value && !resource.isInitialLoading.value && !loadError.value); },
+  get error() { return loadError.value ? "Integrations could not load." : ""; },
+  get exists() { return Boolean(selected.value); },
+  get dirty() { return dirty.value; },
+  select: selectIntegration
+};
+watchEffect(() => {
+  if (!colleagueIntegrations) return;
+  if (props.dashboardContext.active !== false) colleagueIntegrations.value = displayedIntegrations;
+  else if (colleagueIntegrations.value === displayedIntegrations) colleagueIntegrations.value = null;
+});
+onUnmounted(() => {
+  if (colleagueIntegrations?.value === displayedIntegrations) colleagueIntegrations.value = null;
+});
 
 function add(provider) {
   if (production.value) return;

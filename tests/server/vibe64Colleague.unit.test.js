@@ -1234,3 +1234,35 @@ test("global Management navigation works without project access and cannot accep
   f.observations.allow = false;
   await assert.rejects(execute({ managementView: "projects" }), { statusCode: 401 });
 });
+
+test("integration navigation needs the exact session and pane and retains the panel's acknowledged selection", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const execute = (input) => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
+  for (const input of [
+    { projectSlug: "alpha", integrationId: "mail", pane: "integrations" },
+    { projectSlug: "alpha", integrationId: "mail", sessionId: "session-1", pane: "env" }
+  ]) {
+    assert.equal((await execute(input)).ok, false);
+    assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
+  }
+  const input = { projectSlug: "alpha", sessionId: "session-1", pane: "integrations", integrationId: "mail" };
+  for (const integrationId of ["", "x".repeat(201), {}]) {
+    await assert.rejects(execute({ ...input, integrationId }), { code: "ACTION_VALIDATION_FAILED" });
+  }
+  const pending = execute(input);
+  let state;
+  for (let index = 0; index < 20; index += 1) {
+    state = await f.service.read({ clientId: "tab-a" }, f.context);
+    if (state.navigation) break;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  for (const [key, value] of Object.entries(input)) assert.equal(state.navigation[key], value);
+  const focus = { ...input, integrationEnvironment: "development", integrationDirty: true };
+  await f.actions.execute({ actionId: "vibe64.colleague.navigation.acknowledge", context: f.context,
+    input: { clientId: "tab-a", commandId: state.navigation.id, ok: true, focus } });
+  assert.deepEqual(await pending, { ok: true, focus });
+  f.observations.projectAllowed = false;
+  await assert.rejects(execute(input), { statusCode: 403 });
+});

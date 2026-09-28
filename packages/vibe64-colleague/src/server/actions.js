@@ -2,8 +2,12 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 
 const text = { type: "string", noTrim: false, maxLength: 256, required: false };
+const integrationId = { ...text, noTrim: true, minLength: 1, maxLength: 200 };
 const focusSchema = createSchema({
   ...Object.fromEntries(["projectSlug", "sessionId", "conversationId", "pane", "route"].map((key) => [key, text])),
+  integrationId,
+  integrationEnvironment: { type: "string", required: false, enum: ["development", "production"] },
+  integrationDirty: { type: "boolean", required: false },
   previewScreen: { type: "string", required: false, enum: ["existing-project-setup", "new-project-setup", "checking-project-setup", "outputs", "outputs-with-setup-warning"] }
 });
 const focusField = { type: "object", schema: focusSchema, required: false };
@@ -138,10 +142,10 @@ function createColleagueActions(colleague) {
       clientId, commandId: clientId, ok: { type: "boolean", required: true },
       error: { ...text, maxLength: 2000 }, focus: focusField
     }, (input, context) => colleague.acknowledgeNavigation(input, context)),
-    definition("navigation.open", { projectSlug: text, sessionId: text, conversationId: text,
+    definition("navigation.open", { projectSlug: text, sessionId: text, conversationId: text, integrationId,
       pane: { type: "string", required: false, enum: ["preview", "settings", "repository-settings", "env", "integrations", "access", "resources", "deploy", "history", "health", "session", "changes", "repository", "files", "database", "system", "ai-terminal", "issues", "pull-requests"] }
     }, (input, context) => colleague.navigate(input, context), {
-      description: "Open a project, session, saved temporary conversation or project view in the user's active browser. Provide exact IDs. pane defaults to preview; settings means Project settings, repository-settings means hosted repository settings, access means App access, history means Session History, system means Subsystems. Session views (session, changes, repository, files, database, system, ai-terminal) require sessionId. A temporary conversation also requires sessionId. Omitting conversationId selects Main when sessionId is supplied; include the current conversationId to keep a temporary chat selected. This opens existing UI and does not grant you repository or screen tools. Wait for the returned browser acknowledgement before claiming the view opened.",
+      description: "Open a project, session, saved temporary conversation or project view in the user's active browser. Provide exact IDs. pane defaults to preview; settings means Project settings, repository-settings means hosted repository settings, access means App access, history means Session History, system means Subsystems. Session views (session, changes, repository, files, database, system, ai-terminal) require sessionId. A temporary conversation also requires sessionId. For a particular integration, supply integrationId with pane=integrations and sessionId: this selects its development configuration and waits for the actual panel. Missing slots fail. Provider consent remains the person's action there; opening a slot does not complete consent or prove a connection. Omitting conversationId selects Main when sessionId is supplied; include the current conversationId to keep a temporary chat selected. This opens existing UI and does not grant you repository or screen tools. Wait for the returned browser acknowledgement before claiming the view opened.",
       output: navigationOutput
     }, true),
     definition("navigation.open-management", {
@@ -152,7 +156,7 @@ function createColleagueActions(colleague) {
     }),
     definition("context.read", {}, (input, context) => colleague.context(input, context), {
       alwaysAvailable: true,
-      description: "Read the project, session, conversation and displayed view targeted by this Colleague request. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. An empty focus means the project chooser. Navigation does not silently retarget a pending request.",
+      description: "Read the project, session, conversation and displayed view targeted by this Colleague request. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. integrationId and integrationEnvironment describe the actual visible Integrations selection; integrationDirty means the displayed draft is unsaved, so this is not proof of saved configuration or a working connection. These fields are absent when the selection is unavailable. An empty focus means the project chooser. Navigation does not silently retarget a pending request.",
       output: { schema: createSchema({ ok: { type: "boolean", required: true }, focus: { ...focusField, required: true } }), mode: "replace" }
     })
   ];

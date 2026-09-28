@@ -32,7 +32,11 @@ It receives metadata, not saved settings or credentials, and distinguishes
 configuration from working connections. Through an application's declared
 development setup command it can check connections, start requested connection
 or verification work, cancel pending consent and disconnect an app connection.
-The person completes browser consent in Integrations. Existing owner-only payment
+The person completes browser consent in Integrations. Colleague can open the exact
+development integration and knows which slot and environment are actually shown,
+including whether the displayed configuration has unsaved changes. Missing slots
+or failed loads are reported instead of claiming the requested integration opened.
+Existing owner-only payment
 and advertising controls retain their account, environment, review and explicit
 confirmation requirements; development source may still address a real provider
 account. Complete product-operation coverage remains in progress.

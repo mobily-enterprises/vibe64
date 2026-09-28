@@ -231,6 +231,17 @@ supplied, omitting the temporary conversation selects Main; keeping a temporary
 chat selected requires its ID. The host acknowledges the actual route and loaded
 conversation. This capability opens existing views without giving Colleague
 repository contents, a terminal or screen access.
+For Integrations, an optional exact integration ID requires both the Integrations
+pane and session ID. The browser selects that development slot through the panel's
+existing selection owner, even when the same URL is already open. Acknowledgement
+waits for the matching panel to load and contain the slot; missing slots, failed
+loads or changed selections fail. This does not start or complete provider consent.
+The active panel publishes only its selection, environment and draft state to
+Colleague, never configuration values or connection URLs. Focus includes those
+fields only for the matching project/session and an available selected slot;
+manual changes update them independently of old URL parameters. Hidden or disposed
+panels withdraw their selection. A displayed draft is not saved-state or provider
+readiness evidence.
 The active Preview publishes its displayed setup state separately from the
 route name: new project, existing project awaiting setup, checking setup, or
 output controls with or without a setup warning. The host includes that state

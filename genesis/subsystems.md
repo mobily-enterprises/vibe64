@@ -255,8 +255,11 @@ operation outcomes, conversation watches, bounded implementation assignments
 and Helper summaries. Assignment records retain user intent, exact participants,
 turn allowances, authorized communication links, dependency waits and evidence;
 existing conversation owners still execute work. It also
-owns acknowledged project/session and global Management navigation commands. Code subscribes to session events
-and reconciles watched conversations through their existing authorized actions.
+owns acknowledged project/session and global Management navigation commands.
+The Integrations panel owns its actual slot selection and publishes bounded view
+state for Colleague's acknowledged navigation and captured request focus.
+Code subscribes to session events and reconciles watched conversations through
+their existing authorized actions.
 It consumes existing native conversation and JSKIT transcript
 and action catalogues. Coding work and ordinary product operations retain their
 existing subsystem owners. State is private application filesystem data.
