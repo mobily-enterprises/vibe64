@@ -99,6 +99,16 @@ permissions opportunistically. Project-specific upgrades must explicitly
 enumerate their canonical state through its owning subsystem and report each
 affected project; never infer it from the current editor tab.
 
+## Colleague assignment records
+
+Colleague's optional `assignments` list is created only by an explicit assignment
+request. Existing schema-version-1 conversation records remain valid unchanged;
+absence means no assignments, and no historical message is inferred to authorize
+one. Assignment-linked watches and receipts are new writes in the existing private
+conversation record. This addition needs no historical transformation or numbered
+upgrade. Runtime interruption handling observes retained operation/message IDs;
+it does not backfill assignments or repeat unconfirmed sends.
+
 ## Example: changing saved message format
 
 A message-format upgrade must discover the actual canonical stores through the

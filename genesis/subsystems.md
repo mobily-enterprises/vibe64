@@ -243,7 +243,9 @@ and coordinate stopped-service upgrades before activation.
 
 Owns each person's independent conversation for discussing ideas and operating
 Vibe64 across projects, including tool exchange, focused targets, retained
-operation outcomes, conversation watches and bounded Helper summaries. It also
+operation outcomes, conversation watches, bounded implementation assignments
+and Helper summaries. Assignment records retain user intent, exact participants,
+turn allowances and evidence; existing conversation owners still execute work. It also
 owns acknowledged project/session and global Management navigation commands. Code subscribes to session events
 and reconciles watched conversations through their existing authorized actions.
 It consumes existing native conversation and JSKIT transcript

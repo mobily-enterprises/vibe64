@@ -12,7 +12,11 @@ person keeps their own Colleague history and model choice. The current text
 conversation supports an Online host's global voice controls. People can ask it
 to watch Main or temporary conversations for completed answers, finished work or
 explicit problems. Code observes the conversations; only relevant changes wake
-Colleague. Complete product-operation coverage remains in progress.
+Colleague. People can also delegate bounded implementation assignments: Colleague
+retains the original request, follows up within a turn allowance, arranges review
+in the same session and brings back evidence when the work is ready for their
+testing. Questions requiring a product decision return to the person. Complete
+product-operation coverage remains in progress.
 
 Maintainers can develop Vibe64 inside another editor's preview. The development
 preview runs a complete editor with its own runtime state and an independent

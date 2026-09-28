@@ -18,14 +18,19 @@ const selection = { engineId: "codex", modelProviderId: "openai", modelId: "test
 const reply = (text) => JSON.stringify({ kind: "reply", text, toolName: "", arguments: "" });
 const call = (value) => JSON.stringify({ kind: "tool", text: "", toolName: "vibe64_test_operate", arguments: JSON.stringify({ value }) });
 
-async function fixture(t, responses, { systemRoot, discovery = false, watching = false, watchPollMs = 30000 } = {}) {
+async function fixture(t, responses, { systemRoot, discovery = false, discoveryQueries = false, watching = false, assigning = false, watchPollMs = 30000 } = {}) {
+  watching ||= assigning;
   const root = systemRoot || await mkdtemp(path.join(os.tmpdir(), "colleague-test-"));
   if (!systemRoot) t.after(() => rm(root, { force: true, recursive: true }));
   const actions = createActionCatalogue();
   const observations = { starts: [], mutations: [], creates: 0, allow: true, projectAllowed: true, reads: 0,
-    helperCalls: [],
+    helperCalls: [], sent: [], conversations: {},
     target: { ok: true, status: "inProgress", runId: "work-1", messages: [{ id: "question", role: "user", text: "What happened?" }] },
     session: { ok: true, status: "active", agentSession: { turn: { id: "main-1", active: true, state: "inProgress" } } }, log: [] };
+  if (assigning) {
+    observations.target = { ok: true, status: "completed", runId: "", messages: [] };
+    observations.session.agentSession.turn = { id: "", active: false, state: "completed" };
+  }
   const user = { username: "member", uid: 42, role: "member" };
   const context = { channel: "api", surface: "app", requestMeta: { request: { vibe64User: user } } };
   registerVibe64ActionContext(actions, {
@@ -37,7 +42,21 @@ async function fixture(t, responses, { systemRoot, discovery = false, watching =
     }
   });
   const terminals = {
-    async readTemporaryConversation() { observations.reads += 1; return structuredClone(observations.target); },
+    async readTemporaryConversation(_sessionId, input) { observations.reads += 1; return structuredClone(observations.conversations[input.conversationId] || observations.target); },
+    async createTemporaryConversation(sessionId, input) {
+      observations.createdReview = { sessionId, input };
+      observations.conversations[input.conversationId] ||= { ok: true, conversationId: input.conversationId, status: "completed", runId: "", messages: [] };
+      return structuredClone(observations.conversations[input.conversationId]);
+    },
+    async startTemporaryConversationTurn(sessionId, input) {
+      observations.sent.push({ sessionId, ...input });
+      if (observations.sendFailure) throw observations.sendFailure;
+      const target = observations.conversations[input.conversationId] || observations.target;
+      target.messages.push({ id: input.messageId, role: "user", text: input.message });
+      target.runId = `agent-${observations.sent.length}`;
+      target.status = "inProgress";
+      return { ...structuredClone(target), ok: true };
+    },
     async requireAssistantSelectionAccess(actual, options) {
       assert.equal(options.vibe64User.username, "member");
       if (actual.modelId === "denied") throw Object.assign(new Error("Model access denied."), { statusCode: 403 });
@@ -110,11 +129,19 @@ async function fixture(t, responses, { systemRoot, discovery = false, watching =
     output: { schema: createSchema({ ok: { type: "boolean", required: true } }), mode: "replace" },
     async execute(input) { observations.mutations.push(input.value); if (observations.failure) throw observations.failure; return { ok: true }; }
   }, { projectScoped: false });
-  const extras = discovery ? Array.from({ length: 33 }, (_, i) => ({ ...operation, id: `vibe64.test.extra-${i}` })) : [];
-  if (watching) extras.push(...createTerminalActions({ terminals }).filter(({ id }) => id === "vibe64.terminals.temporary-conversation.read"), ...createSessionActions({ sessions: {
+  const extras = discovery ? Array.from({ length: 33 }, (_, i) => ({ ...operation, kind: discoveryQueries ? "query" : "command", id: `vibe64.test.extra-${i}` })) : [];
+  if (watching) extras.push(...createTerminalActions({ terminals }).filter(({ id }) => id === "vibe64.terminals.temporary-conversation.read" ||
+    (assigning && ["vibe64.terminals.temporary-conversation.create", "vibe64.terminals.temporary-conversation.turn.start"].includes(id))), ...createSessionActions({ sessions: {
     async inspectSession() { observations.reads += 1; return structuredClone(observations.session); },
-    async readSessionConversationLog() { return { ok: true, conversationLog: structuredClone(observations.log) }; }
-  } }).filter(({ id }) => ["vibe64.sessions.inspect", "vibe64.sessions.conversation-log.read"].includes(id)));
+    async readSessionConversationLog() { return { ok: true, conversationLog: structuredClone(observations.log) }; },
+    async sendAgentMessage(sessionId, input) {
+      observations.sent.push({ sessionId, ...input });
+      if (observations.sendFailure) throw observations.sendFailure;
+      observations.log.push({ messages: [{ messageId: input.messageId, role: "user", text: input.message }] });
+      observations.session.agentSession.turn = { id: `agent-${observations.sent.length}`, active: true, state: "inProgress" };
+      return { ok: true };
+    }
+  } }).filter(({ id }) => ["vibe64.sessions.inspect", "vibe64.sessions.conversation-log.read"].includes(id) || (assigning && id === "vibe64.sessions.agent-message.send")));
   actions.register({ contributorId: "colleague-test", domain: "vibe64", actions: [operation, ...extras, ...createColleagueActions(service)]
     .map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   const send = (message, messageId = "user-1", extra = {}) => actions.execute({ actionId: "vibe64.colleague.message.send", input: {
@@ -131,6 +158,339 @@ async function until(predicate) {
   for (let tries = 0; tries < 100; tries += 1) { if (await predicate()) return; await new Promise((resolve) => setTimeout(resolve, 10)); }
   assert.fail("Expected asynchronous watch state did not arrive.");
 }
+
+const assignmentTool = (name, input) => JSON.stringify({ kind: "tool", text: "", toolName: `vibe64_colleague_${name.replaceAll(".", "_")}`, arguments: JSON.stringify(input) });
+const assignmentInput = { assignmentId: "assignment-1", requestMessageId: "user-1", projectSlug: "alpha", sessionId: "session-1",
+  conversationId: "temporary-1", criteria: "Reset the tally to zero and retain the value on reload." };
+const assignmentSend = (messageId, recipient = "implementer", extra = {}) => assignmentTool("assignment.message.send", {
+  assignmentId: "assignment-1", recipient, messageId, message: `Request ${messageId}: implement or check the agreed requirements.`, ...extra
+});
+async function finishAssignedTurn(f, conversationId = "temporary-1", text = "Implemented and tested.") {
+  if (conversationId) {
+    const target = f.observations.conversations[conversationId] || f.observations.target;
+    target.status = "completed";
+    target.messages.push({ id: `answer-${f.observations.sent.length}`, role: "assistant", text });
+  } else {
+    f.observations.session.agentSession.turn.active = false;
+    f.observations.session.agentSession.turn.state = "completed";
+    f.observations.log.at(-1).messages.push({ messageId: `answer-${f.observations.sent.length}`, role: "assistant", text });
+  }
+  const before = f.observations.starts.length;
+  await changed(f);
+  await until(() => f.observations.starts.length > before);
+  return f.service.wait(f.context);
+}
+
+test("assignment retains the real request, follows a reply into same-session review and reports evidence for testing", async (t) => {
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("I will follow this through with eight turns.")];
+  const f = await fixture(t, responses, { assigning: true });
+  await f.send("Get the agent to add reset and reload persistence to the tally.");
+  let result = await f.service.wait(f.context);
+  assert.equal(result.status, "ready", JSON.stringify(JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8")).operation));
+  assert.equal(result.assignments[0].turnsUsed, 1);
+  assert.equal(result.assignments[0].request, "Get the agent to add reset and reload persistence to the tally.");
+  responses.push(assignmentTool("assignment.review.create", { assignmentId: "assignment-1" }), assignmentSend("review-1", "reviewer"), reply("Implementation answered; its independent review is running."));
+  result = await finishAssignedTurn(f);
+  assert.equal(result.status, "ready", result.error);
+  const reviewer = result.assignments[0].reviewerConversationId;
+  assert.ok(reviewer.startsWith("review-"));
+  assert.equal(f.observations.createdReview.sessionId, "session-1");
+  assert.equal(f.observations.sent[1].conversationId, reviewer);
+  const prompt = JSON.parse(f.observations.starts[3].input.message);
+  assert.equal(prompt.autonomous, true);
+  assert.equal(prompt.readOnly, false);
+  responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "ready", summary: "Ready for your testing.",
+    evidence: "Implementer reported reset/reload checks passing; reviewer confirmed both requirements, with no defects. Human device testing remains." }), reply("Ready for your testing: reset and reload were checked; please try it on your device."));
+  result = await finishAssignedTurn(f, reviewer, "Reviewed reset and reload persistence; both have passing checks, no defects found.");
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.assignments[0].status, "ready");
+  assert.equal(result.assignments[0].turnsUsed, 2);
+  assert.equal(f.observations.sent.length, 2);
+  assert.equal(result.messages.at(-1).role, "assistant");
+  assert.match(result.messages.at(-1).text, /Ready for your testing/);
+  const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  assert.equal(saved.assignments[0].turns[1].answerId, "answer-2");
+});
+
+test("assignment quota and canonical background catalogue prevent extra sends and unrelated mutations", async (t) => {
+  const responses = [assignmentTool("assignment.create", { ...assignmentInput, turnLimit: 1 }), assignmentSend("implement-1"), reply("One turn assigned.")];
+  const f = await fixture(t, responses, { assigning: true });
+  await f.send("Implement this with a one-turn allowance.");
+  await f.service.wait(f.context);
+  responses.push(call("forbidden"), assignmentSend("implement-2"), reply("The allowance is exhausted; review still needs your permission for more turns."));
+  const result = await finishAssignedTurn(f);
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.assignments[0].status, "needs-user");
+  assert.equal(result.assignments[0].turnsUsed, 1);
+  assert.equal(f.observations.sent.length, 1);
+  assert.deepEqual(f.observations.mutations, []);
+  assert.equal(JSON.parse(JSON.parse(f.observations.starts[4].input.message).feedback).result.ok, false);
+});
+
+test("review findings return to the implementer and readiness requires reviewing the corrected implementation", async (t) => {
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("Working.")];
+  const f = await fixture(t, responses, { assigning: true });
+  await f.send("Implement reset and persistence, follow review findings through, then report testing evidence.");
+  await f.service.wait(f.context);
+  responses.push(assignmentTool("assignment.review.create", { assignmentId: "assignment-1" }), assignmentSend("review-1", "reviewer"), reply("Reviewing."));
+  let result = await finishAssignedTurn(f);
+  const reviewer = result.assignments[0].reviewerConversationId;
+  responses.push(assignmentSend("fix-persistence", "implementer", { message: "The reviewer found that reset changes the display but leaves the persisted value. Fix it and run a reload regression." }), reply("The reviewer found a persistence defect; correction is underway."));
+  await finishAssignedTurn(f, reviewer, "Reset leaves the old value in storage; reload restores it. This fails the original persistence requirement.");
+  responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "ready", summary: "Ready", evidence: "The implementer reports fixing persistence." }),
+    assignmentSend("review-2", "reviewer", { message: "Review the corrected persistence behavior against the original criteria, without editing." }), reply("Reviewing the corrected implementation."));
+  const before = f.observations.starts.length;
+  result = await finishAssignedTurn(f, "temporary-1", "Persistence is corrected; reset/reload regression passes.");
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.assignments[0].status, "waiting");
+  assert.equal(JSON.parse(JSON.parse(f.observations.starts[before + 1].input.message).feedback).result.ok, false, "The older review cannot approve a later implementation.");
+  responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "ready", summary: "Ready for user testing.",
+    evidence: "The original reset and reload requirements now have a passing regression and a review of the corrected code. Device testing remains." }), reply("The correction and its review are complete; ready for your testing."));
+  result = await finishAssignedTurn(f, reviewer, "The corrected reset persists zero and the regression covers reload. No remaining material findings.");
+  assert.equal(result.assignments[0].status, "ready");
+  assert.equal(result.assignments[0].turnsUsed, 4);
+  assert.deepEqual(f.observations.sent.map((item) => item.messageId), ["implement-1", "review-1", "fix-persistence", "review-2"]);
+});
+
+test("Main assignment forwards the exact plan revision through the existing action and counts approval", async (t) => {
+  const revision = "a".repeat(64);
+  const responses = [assignmentTool("assignment.create", { ...assignmentInput, conversationId: "" }), assignmentSend("plan-request"), reply("Planning is underway.")];
+  const f = await fixture(t, responses, { assigning: true });
+  await f.send("Implement the agreed tally feature and approve an in-scope plan.");
+  await f.service.wait(f.context);
+  responses.push(assignmentSend("plan-approved", "implementer", { planRevision: revision }), reply("The exact plan revision is approved; waiting for implementation."));
+  const result = await finishAssignedTurn(f, "", "Plan revision is ready.");
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(f.observations.sent[1].planRevision, revision);
+  assert.equal(f.observations.sent[1].sessionId, "session-1");
+  assert.equal(result.assignments[0].turnsUsed, 2);
+});
+
+test("a completed answer from before assignment dispatch cannot be treated as its completion", async (t) => {
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("Working.")];
+  const f = await fixture(t, responses, { assigning: true });
+  f.observations.target.messages.push({ id: "old-user", role: "user", text: "Old question." }, { id: "old-answer", role: "assistant", text: "Old answer." });
+  await f.send("Implement the new task.");
+  const result = await f.service.wait(f.context);
+  assert.equal(result.status, "ready", result.error);
+  await changed(f);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(f.observations.starts.length, 3);
+  assert.equal(result.assignments[0].status, "waiting");
+});
+
+test("a long native turn can page out its user message without losing the assignment's verified run identity", async (t) => {
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("Waiting.")];
+  const f = await fixture(t, responses, { assigning: true });
+  await f.send("Implement this.");
+  let result = await f.service.wait(f.context);
+  assert.equal(result.watches[0].expectedRunId, "agent-1");
+  f.observations.target.messages = [];
+  responses.push(assignmentSend("follow-up"), reply("The reported implementation still needs a check."));
+  result = await finishAssignedTurn(f);
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.assignments[0].status, "waiting");
+  assert.equal(f.observations.sent.length, 2);
+  f.observations.target.messages = [];
+  f.observations.target.runId = "another-native-run";
+  responses.push(reply("A different run finished; I need your direction."));
+  result = await finishAssignedTurn(f);
+  assert.equal(result.assignments[0].status, "needs-user");
+  assert.equal(f.observations.sent.length, 2);
+});
+
+test("a follow-up replaces that participant's earlier watch even when its previous answer was not delivered", async (t) => {
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("Waiting.")];
+  const f = await fixture(t, responses, { assigning: true });
+  await f.send("Implement this.");
+  await f.service.wait(f.context);
+  f.observations.target.status = "completed";
+  f.observations.target.messages.push({ id: "first-answer", role: "assistant", text: "Done." });
+  responses.push(assignmentSend("evidence-2"), reply("Checking the existing implementation's evidence."));
+  await f.send("Ask the implementer to confirm its evidence before review.", "check-evidence");
+  let result = await f.service.wait(f.context);
+  assert.equal(result.watches.filter((watch) => watch.status === "active").length, 1);
+  assert.equal(result.watches[0].messageId, "evidence-2");
+  f.observations.target.messages = [];
+  responses.push(reply("The evidence arrived for the follow-up, with the original scope intact."));
+  result = await finishAssignedTurn(f);
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.assignments[0].status, "active");
+  assert.equal(result.assignments[0].turnsUsed, 2);
+});
+
+test("explicit resume reconciles an observed but undelivered answer without repeating implementation", async (t) => {
+  const f = await fixture(t, [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("Waiting.")], { assigning: true });
+  await f.send("Implement the feature.");
+  await f.service.wait(f.context);
+  await f.service.close();
+  const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  saved.assignments[0].status = "needs-user";
+  saved.watches[0].status = "paused";
+  saved.watches[0].cursor = { status: "completed", runId: "agent-1", answerId: "retained-answer", error: "", needsUser: false };
+  await writeFile(file, JSON.stringify(saved));
+  const responses = [assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "active", summary: "Resume the retained assignment." })];
+  const resumed = await fixture(t, responses, { assigning: true, systemRoot: f.root });
+  resumed.observations.target = { ok: true, status: "completed", runId: "agent-1", messages: [{ id: "retained-answer", role: "assistant", text: "Implementation and tests are complete." }] };
+  responses.push(async () => {
+    await until(async () => (await watchAction(resumed, "assignments.read", { assignmentId: "assignment-1" })).assignment.turns[0].answerId === "retained-answer");
+    return assignmentTool("assignment.review.create", { assignmentId: "assignment-1" });
+  }, reply("The completed implementation is retained and its review conversation is ready."));
+  await resumed.send("Resume directly with review of the completed work.", "resume-proof");
+  const result = await resumed.service.wait(resumed.context);
+  assert.equal(result.status, "ready", result.error);
+  assert.ok(result.assignments[0].reviewerConversationId);
+  assert.equal(result.assignments[0].turnsUsed, 1);
+  assert.equal(resumed.observations.sent.length, 0);
+});
+
+test("ready needs a review of the latest implementation and a cancelled assignment cannot be continued", async (t) => {
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("Working.")];
+  const f = await fixture(t, responses, { assigning: true });
+  await f.send("Implement the task.");
+  await f.service.wait(f.context);
+  responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "ready", summary: "Done", evidence: "The implementer says done." }),
+    assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "needs-user", summary: "Need a product choice before review." }), reply("I need your choice before continuing."));
+  const result = await finishAssignedTurn(f);
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.assignments[0].status, "needs-user");
+  assert.equal(JSON.parse(JSON.parse(f.observations.starts[4].input.message).feedback).result.ok, false);
+  responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "cancelled", summary: "Cancelled at your request." }), assignmentSend("forbidden-after-cancel"), reply("Cancelled follow-through; the coding agent is unchanged."));
+  await f.send("Cancel that assignment.", "cancel-user");
+  const cancelled = await f.service.wait(f.context);
+  assert.equal(cancelled.assignments[0].status, "cancelled");
+  assert.equal(f.observations.sent.length, 1);
+});
+
+test("assignment sends and user budget grants are idempotent and background turns cannot extend their own allowance", async (t) => {
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), assignmentSend("implement-1"), reply("Working.")];
+  const f = await fixture(t, responses, { assigning: true });
+  await f.send("Implement this with the usual allowance.");
+  let result = await f.service.wait(f.context);
+  assert.equal(f.observations.sent.length, 1);
+  responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "active", summary: "More turns", extraTurns: 2 }), reply("I cannot grant myself more turns."));
+  result = await finishAssignedTurn(f);
+  assert.equal(result.assignments[0].turnLimit, 8);
+  const grant = assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "active", summary: "Two extra turns approved.", extraTurns: 2 });
+  responses.push(grant, grant, reply("The allowance is now ten turns."));
+  await f.send("Give it two more turns.", "grant-2");
+  result = await f.service.wait(f.context);
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.assignments[0].turnLimit, 10);
+});
+
+test("assignment restart waits for fresh authentication, retains targets and does not repeat the initial send", async (t) => {
+  const f = await fixture(t, [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("Waiting.")], { assigning: true });
+  await f.send("Implement and review this feature.");
+  await f.service.wait(f.context);
+  await f.service.close();
+  const responses = [assignmentSend("follow-up"), reply("Waiting for the missing evidence.")];
+  const resumed = await fixture(t, responses, { assigning: true, systemRoot: f.root, watchPollMs: 15 });
+  resumed.observations.target = structuredClone(f.observations.target);
+  resumed.observations.target.status = "completed";
+  resumed.observations.target.messages.push({ id: "after-restart", role: "assistant", text: "The implementation needs another check." });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(resumed.observations.starts.length, 0);
+  await resumed.service.read({}, resumed.context);
+  await until(() => resumed.observations.starts.length > 0);
+  const result = await resumed.service.wait(resumed.context);
+  assert.equal(result.status, "ready", result.error);
+  assert.deepEqual(resumed.observations.sent.map((item) => item.messageId), ["follow-up"]);
+  assert.equal(resumed.observations.sent[0].sessionId, "session-1");
+  assert.equal(result.assignments[0].turnsUsed, 2);
+});
+
+test("unknown assignment admission keeps its reservation and requires observed message identity before continuation", async (t) => {
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("uncertain"), reply("This should not run.")];
+  const f = await fixture(t, responses, { assigning: true });
+  f.observations.sendFailure = new Error("Transport disappeared.");
+  await f.send("Implement the task.");
+  let result = await f.service.wait(f.context);
+  assert.equal(result.status, "failed");
+  assert.equal(result.assignments[0].turnsUsed, 1);
+  assert.equal(result.assignments[0].status, "needs-user");
+  responses.length = 0;
+  responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "active", summary: "Try to reconcile." }), reply("The interrupted message has not been confirmed; I have not resent it."));
+  await f.send("Check whether that request reached the agent.", "inspect-uncertain");
+  result = await f.service.wait(f.context);
+  assert.equal(result.assignments[0].status, "needs-user");
+  assert.equal(f.observations.sent.length, 1);
+  f.observations.target.messages.push({ id: "uncertain", role: "user", text: "The request that actually reached the provider." });
+  f.observations.target.status = "inProgress";
+  f.observations.target.runId = "admitted";
+  responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "active", summary: "Admission confirmed; watching its result." }), reply("The existing request reached it; I am waiting for its answer."));
+  await f.send("Reconcile again and continue if it reached the agent.", "inspect-uncertain-2");
+  result = await f.service.wait(f.context);
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.assignments[0].turnsUsed, 1);
+  assert.equal(f.observations.sent.length, 1);
+  assert.equal(result.watches.at(-1).status, "active");
+});
+
+test("revocation and outside conversation activity never authorize automatic assignment continuation", async (t) => {
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("Waiting.")];
+  const f = await fixture(t, responses, { assigning: true });
+  await f.send("Implement this.");
+  await f.service.wait(f.context);
+  f.observations.projectAllowed = false;
+  await changed(f);
+  await until(async () => (await f.service.read({}, f.context)).watches[0].status === "paused");
+  assert.equal(f.observations.starts.length, 3);
+  assert.equal(f.observations.sent.length, 1);
+  f.observations.projectAllowed = true;
+  responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "active", summary: "Access restored; check the assignment again." }), reply("Checking the retained request."),
+    reply("Someone else changed that conversation. I need your direction before continuing."));
+  f.observations.target.status = "completed";
+  f.observations.target.messages.push({ id: "outside", role: "user", text: "A different request" }, { id: "outside-answer", role: "assistant", text: "Done" });
+  await f.send("Access is restored; resume this assignment.", "access-restored");
+  await f.service.wait(f.context);
+  await until(async () => (await f.service.read({}, f.context)).assignments[0].status === "needs-user");
+  const result = await f.service.wait(f.context);
+  assert.equal(result.assignments[0].status, "needs-user");
+  assert.equal(f.observations.sent.length, 1);
+});
+
+test("discovered assignment tools cannot mutate another task or bypass the background command restriction", async (t) => {
+  const tool = (toolName, args) => JSON.stringify({ kind: "tool", text: "", toolName, arguments: JSON.stringify(args) });
+  const discover = (name, input) => [tool("assistant_action_contract", { actionId: `vibe64.colleague.${name}`, version: 1 }),
+    tool("assistant_action_execute", { actionId: `vibe64.colleague.${name}`, version: 1, input })];
+  const responses = [...discover("assignment.create", assignmentInput),
+    ...discover("assignment.create", { ...assignmentInput, assignmentId: "assignment-2", projectSlug: "beta", sessionId: "session-2", conversationId: "temporary-2" }),
+    ...discover("assignment.message.send", { assignmentId: "assignment-1", recipient: "implementer", messageId: "implement-1", message: "Implement the request." }), reply("The first assignment is working.")];
+  const f = await fixture(t, responses, { assigning: true, discovery: true, discoveryQueries: true });
+  await f.send("Work on these two projects, starting with Alpha.");
+  let result = await f.service.wait(f.context);
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.assignments.length, 2);
+  responses.push(...discover("assignment.message.send", { assignmentId: "assignment-2", recipient: "implementer", messageId: "wrong-target", message: "This wake is for a different assignment." }),
+    tool("assistant_action_execute", { actionId: "vibe64.test.operate", version: 1, input: { value: "forbidden" } }), reply("The update belongs to Alpha; no other assignment was changed."));
+  result = await finishAssignedTurn(f);
+  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.assignments[1].turnsUsed, 0);
+  assert.equal(f.observations.sent.length, 1);
+  assert.deepEqual(f.observations.mutations, []);
+});
+
+test("new user cancellation supersedes a pending assignment follow-up and stop suspends retained assignments", async (t) => {
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("Waiting.")];
+  const f = await fixture(t, responses, { assigning: true });
+  await f.send("Implement this.");
+  await f.service.wait(f.context);
+  responses.push(async () => {
+    await f.send("Cancel that assignment.", "cancel-while-thinking");
+    return assignmentSend("must-not-send");
+  }, assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "cancelled", summary: "Cancelled by the user." }), reply("Cancelled follow-through."));
+  let result = await finishAssignedTurn(f);
+  assert.equal(result.assignments[0].status, "cancelled");
+  assert.equal(f.observations.sent.length, 1);
+  responses.push(assignmentTool("assignment.create", { ...assignmentInput, assignmentId: "assignment-2", requestMessageId: "start-again" }), reply("Assignment recorded."));
+  await f.send("Start a new assignment for the same task.", "start-again");
+  await f.service.wait(f.context);
+  result = await f.service.stop({}, f.context);
+  assert.equal(result.assignments[1].status, "needs-user");
+  assert.match(result.assignments[1].summary, /stopped/);
+});
 
 test("complete handover-sized Unicode arguments fit the native exchange while oversized envelopes remain rejected", async (t) => {
   const value = "😀".repeat(20000);

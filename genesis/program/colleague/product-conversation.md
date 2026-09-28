@@ -15,8 +15,9 @@ prerequisites without connection bindings or execution profiles.
 
 Colleague reads Main's Auto work plan through its canonical paged action. It
 must finish all pages of one revision before describing the complete document;
-a changed revision restarts the read. Only the user's approval authorizes sending
-that exact revision as `planRevision` through ordinary Main Send. Readiness,
+a changed revision restarts the read. The user's approval, including explicit
+delegation to approve an in-scope assignment plan, authorizes sending that exact
+revision as `planRevision` through the existing Main Send action. Readiness,
 active work, role, goal and access checks remain in the existing routing owner.
 
 ## Sources
@@ -25,6 +26,7 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `packages/vibe64-colleague/src/server/actions.js`
 - `packages/vibe64-colleague/src/server/service.js`
 - `packages/vibe64-colleague/src/server/attention.js`
+- `packages/vibe64-colleague/src/server/assignments.js`
 - `packages/vibe64-colleague/src/server/conversationSummary.js`
 - `packages/vibe64-colleague/src/server/protocol.js`
 - `packages/vibe64-core/src/server/actionContext.js`
@@ -113,7 +115,7 @@ do not. Reads resume after authentication, recheck target access, and pause visi
 on a read failure. Resume reconciles from the retained cursor. Notifications also
 recheck project access before sending their bounded observation to the model.
 
-Updates wait for a decision boundary when Colleague is busy. Autonomous reports
+Updates wait for a decision boundary when Colleague is busy. Ordinary autonomous reports
 use the same JSKIT catalogue filtered to query actions, so they cannot assign
 work or stop an agent. New user steering takes priority and captures its own
 focus. Reports get their own canonical system/assistant turn, preserving the
@@ -131,6 +133,42 @@ execution and cleanup state are retained before work starts; failed cleanup must
 finish before another Helper can start. Stop Colleague aborts and cleans up that
 Helper too. Non-conversation watches remain to be added.
 Online owns global capture, playback and avatar behavior through the voice slot.
+
+Assignments retain an actual user message and its original request, criteria,
+exact project/session/implementer identity, subsequent user amendments, turn
+allowance, receipts, summary and evidence in the same private Colleague record.
+An absent assignment list means none were created; historical conversations are
+not reclassified. A compact list is supplied on every model exchange, with a
+detail action for the full request. The drawer lists open assignments separately
+from ordinary watches and keeps polling while minimized.
+
+Assignment sends invoke the existing Main or temporary-conversation actions,
+reserve an agent-directed turn before dispatch and automatically attach an
+existing one-shot watch with its pre-send cursor and message identity. Repeated
+send IDs do not spend another turn or send again. Unknown admissions retain their
+reservation and require an observed user-message identity before continuation.
+Quota exhaustion becomes needs-user; only a new user instruction can extend it.
+Default allowance is eight turns, including approval, follow-ups and review.
+
+An assignment observation grants only its own bounded continuation commands
+through the same JSKIT catalogue, including discovery-mode execution. Ordinary
+watches still expose query actions only. The assignment owner checks the retained
+target and allowance before invoking product actions; those actions recheck current
+actor/project access. Replies to a different user message pause follow-through.
+New user steering supersedes pending model tools. Stop Colleague suspends open
+assignments, while assignment cancellation does not stop coding agents or speech.
+After restart, fresh authentication is required; interrupted mutations need
+inspection and are never automatically resent.
+
+After implementation answers, review uses a temporary conversation in the same
+session, with its existing configured routing and shared worktree. Assignment
+work waits for its current participants to settle before sending another turn.
+Readiness for human testing requires recorded evidence and a completed review
+after the latest implementation send. The model must compare every original
+criterion with that evidence, distinguish reported checks from observed results
+and return material product decisions to the user. This does not prove source
+correctness merely because the agents agree. Separate sessions retain separate
+worktrees; assignment messaging never implicitly transfers source.
 
 
 Global Management navigation uses `vibe64.colleague.navigation.open-management`

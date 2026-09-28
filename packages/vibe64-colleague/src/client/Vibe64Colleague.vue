@@ -20,7 +20,8 @@ const modelMenu = ref(false);
 const modelButton = ref(null);
 const clientId = crypto.randomUUID();
 const working = computed(() => state.value.status === "working");
-const watches = computed(() => (state.value.watches || []).filter((item) => ["active", "pending", "paused"].includes(item.status)));
+const watches = computed(() => (state.value.watches || []).filter((item) => !item.assignmentId && ["active", "pending", "paused"].includes(item.status)));
+const assignments = computed(() => (state.value.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status)));
 const destination = computed(() => props.focus.projectSlug || "All projects");
 let timer;
 let mounted = true;
@@ -60,7 +61,7 @@ async function handleNavigation(command) {
 }
 function schedule() {
   clearTimeout(timer);
-  if (mounted && (open.value || working.value || watches.value.length)) timer = setTimeout(refresh, open.value || working.value ? 1000 : 5000);
+  if (mounted && (open.value || working.value || watches.value.length || assignments.value.length)) timer = setTimeout(refresh, open.value || working.value ? 1000 : 5000);
 }
 async function refresh() {
   const expectedRevision = ++revision;
@@ -162,6 +163,17 @@ onBeforeUnmount(() => { mounted = false; clearTimeout(timer); revision += 1; win
             <span><strong>{{ item.projectSlug }}</strong> · {{ item.status }}<small>{{ item.question }}</small><small v-if="item.error">{{ item.error }}</small></span>
             <button v-if="item.status === 'paused'" :aria-label="`Resume watch: ${item.question}`" @click="changeWatch(item.watchId, 'resume')">Resume</button>
             <button :aria-label="`Cancel watch: ${item.question}`" @click="changeWatch(item.watchId, 'cancel')">Cancel</button>
+          </li>
+        </ul>
+      </details>
+      <details v-if="assignments.length" class="vibe64-colleague__watches">
+        <summary>{{ assignments.length }} ongoing {{ assignments.length === 1 ? 'assignment' : 'assignments' }}</summary>
+        <ul>
+          <li v-for="item in assignments" :key="item.assignmentId">
+            <span><strong>{{ item.projectSlug }}</strong> · {{ item.turnLimit - item.turnsUsed }} turns left
+              <small>{{ item.summary }}</small>
+              <small>{{ item.criteria }}</small>
+            </span>
           </li>
         </ul>
       </details>

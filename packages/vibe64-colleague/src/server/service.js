@@ -7,6 +7,7 @@ import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, outputSchema, readEnvelope } from "./protocol.js";
 import { readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
+import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
 
 const activeStates = new Set(["starting", "inProgress"]);
 function failure(message, code = "vibe64_colleague_failed", statusCode = 409) {
@@ -26,8 +27,13 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     listDefinitions: () => actions.listDefinitions().filter((definition) => definition.kind === "query"),
     execute: (input) => actions.execute(input)
   }, toolLimits);
+  const assignmentCatalog = createServiceToolCatalog({
+    listDefinitions: () => actions.listDefinitions().filter((definition) => definition.kind === "query" || assignmentCommands.has(definition.id)),
+    execute: (input) => actions.execute(input)
+  }, toolLimits);
   const storage = createMemoryConversationStorage();
   const transcript = createConversationTranscript({ storage });
+  const assignments = createAssignmentOperations({ actions, persist, transcript });
   const summaries = createConversationSummary({ actions, terminals, persist,
     workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
   const users = new Map();
@@ -76,6 +82,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       record.status = "interrupted";
       record.error ||= "The server restarted. Your history is kept; send a message to continue.";
     }
+    for (const assignment of record.assignments || []) {
+      if (assignment.turns.some((turn) => ["reserved", "unknown"].includes(turn.status)) ||
+          (assignment.reviewerConversationId && !assignment.reviewCreated)) {
+        assignment.status = "needs-user";
+        assignment.summary = "An assignment operation was interrupted. Inspect its target before continuing; no request has been repeated.";
+        for (const watch of record.watches) if (watch.assignmentId === assignment.assignmentId) watch.status = "paused";
+      }
+    }
     return state;
   }
 
@@ -123,6 +137,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       }))),
       pagination: page.pagination,
       watches: record.watches.map(publicWatch),
+      assignments: (record.assignments || []).map((item) => assignmentSummary(item)),
       navigation: state.connections.get(clientId)?.navigation || null
     };
   }
@@ -164,27 +179,24 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
 
   async function run(state, connection, generation) {
     const isCurrent = () => !closed && generation === state.generation;
-    let readOnly = !state.pendingMessages.length;
-    let activeCatalog = readOnly ? observationCatalog : catalog;
+    let autonomous = !state.pendingMessages.length;
+    const userMessageIds = [];
     let context = actionContext(state, connection);
-    let toolSet = activeCatalog.resolveToolSet(context);
-    let tools = toolSet.tools.map(activeCatalog.toOpenAiToolSchema);
+    let activeCatalog, toolSet, tools, toolProject;
     let feedback = "";
     let invalidResponses = 0;
     await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context });
     await prepare(state, connection.assistantSelection);
     for (let step = 0; step < 24 && isCurrent(); step += 1) {
-      if (state.pendingMessages.length && connection !== state.nextConnection) {
-        readOnly = false;
-        activeCatalog = catalog;
+      if (state.pendingMessages.length) {
+        autonomous = false;
         connection = state.nextConnection;
         context = actionContext(state, connection);
-        toolSet = activeCatalog.resolveToolSet(context);
-        tools = toolSet.tools.map(activeCatalog.toOpenAiToolSchema);
       }
       await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context });
       if (!isCurrent()) return;
       const messages = state.pendingMessages.splice(0);
+      userMessageIds.push(...messages.map((message) => message.messageId));
       let replyTurnId = state.record.currentTurnId;
       const observations = [];
       for (const observation of state.record.observations.slice()) {
@@ -196,14 +208,33 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         } catch (error) {
           const watch = state.record.watches.find((item) => item.watchId === observation.watchId);
           if (watch?.status === "pending") { watch.status = "paused"; watch.error = `Watching paused: ${error.message}`.slice(0, 512); }
+          const assignment = state.record.assignments?.find((item) => item.assignmentId === observation.assignmentId);
+          if (assignment && ["active", "waiting"].includes(assignment.status)) {
+            assignment.status = "needs-user";
+            assignment.summary = "Assignment access could not be verified. Resolve access before resuming.";
+          }
           state.record.observations = state.record.observations.filter((item) => item.id !== observation.id);
           await persist(state);
         }
       }
-      if (readOnly && !observations.length) { state.record.status = "ready"; await persist(state); return; }
+      if (autonomous && !observations.length) { state.record.status = "ready"; await persist(state); return; }
+      const assignmentIds = observations.filter((observation) => state.record.assignments?.some((assignment) =>
+        assignment.assignmentId === observation.assignmentId && ["active", "waiting"].includes(assignment.status))).map((observation) => observation.assignmentId);
+      context = { ...actionContext(state, connection), colleague: {
+        ...actionContext(state, connection).colleague, userMessageIds, assignmentIds
+      } };
+      const readOnly = autonomous && !assignmentIds.length;
+      const nextCatalog = autonomous ? (readOnly ? observationCatalog : assignmentCatalog) : catalog;
+      if (activeCatalog !== nextCatalog || toolProject !== context.projectSlug) {
+        activeCatalog = nextCatalog;
+        toolProject = context.projectSlug;
+        toolSet = activeCatalog.resolveToolSet(context);
+        tools = toolSet.tools.map(activeCatalog.toOpenAiToolSchema);
+      }
       const prompt = JSON.stringify({
         focus: connection.focus, userMessages: messages,
-        observations, readOnly,
+        observations, readOnly, autonomous,
+        assignments: (state.record.assignments || []).map((item) => assignmentSummary(item)),
         // A new native conversation gets bounded written history, including after
         // a model change or a restart between native creation and first admission.
         ...(!state.record.runId ? { recentConversation: (await snapshot(state)).messages.slice(-24)
@@ -234,7 +265,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         feedback = "The user supplied new steering while you were responding. No operation from that response was executed. Follow their latest message.";
         continue;
       }
-      if (readOnly && !observations.some((item) => state.record.observations.some((pending) => pending.id === item.id))) {
+      if (autonomous && !observations.some((item) => state.record.observations.some((pending) => pending.id === item.id))) {
         state.record.status = "ready";
         await persist(state);
         return;
@@ -248,7 +279,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         continue;
       }
       if (envelope.kind === "reply") {
-        if (readOnly) {
+        if (autonomous) {
           const turn = await transcript.writeConversationSystemMessage(state.key, { text: "An update from your watched conversations." });
           replyTurnId = turn.turnId;
         }
@@ -327,12 +358,27 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   async function observeWatch(state, watch) {
     const observation = await readWatchedConversation(actions, watch, actionContext(state, { clientId: "", focus: watch }));
     if (closed || watch.status !== "active") return;
+    if (watch.assignmentId && !watch.expectedRunId && observation.latestUserMessageId === watch.messageId && observation.runId !== watch.cursor?.runId) {
+      watch.expectedRunId = observation.runId;
+    }
     const { cursor, reason } = watchUpdate(watch, observation);
     watch.cursor = cursor;
     watch.error = "";
     if (reason) {
+      if (watch.assignmentId) {
+        const assignment = state.record.assignments?.find((item) => item.assignmentId === watch.assignmentId);
+        if (!assignment || !["active", "waiting"].includes(assignment.status)) { watch.status = "paused"; return; }
+        const turn = assignment.turns.find((item) => item.messageId === watch.messageId);
+        const correlated = observation.latestUserMessageId ? observation.latestUserMessageId === watch.messageId
+          : Boolean(watch.expectedRunId && observation.runId === watch.expectedRunId);
+        if (turn && observation.answered && correlated) turn.answerId = observation.answerId;
+        assignment.status = correlated ? "active" : "needs-user";
+        assignment.summary = !correlated ? "The conversation changed outside this assignment. Inspect it before continuing."
+          : observation.attention ? "The agent needs attention; inspect its latest result." : "An agent answered; evaluating the next step.";
+      }
       watch.status = "pending";
       state.record.observations.push({ id: randomUUID(), watchId: watch.watchId, question: watch.question, reason,
+        ...(watch.assignmentId ? { assignmentId: watch.assignmentId } : {}),
         focus: { projectSlug: watch.projectSlug, sessionId: watch.sessionId, conversationId: watch.conversationId },
         ...observation });
     }
@@ -349,6 +395,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           if (watch.status !== "active") continue;
           watch.status = "paused";
           watch.error = `Watching paused: ${error.message}`.slice(0, 512);
+          const assignment = state.record.assignments?.find((item) => item.assignmentId === watch.assignmentId);
+          if (assignment && ["active", "waiting"].includes(assignment.status)) {
+            assignment.status = "needs-user";
+            assignment.summary = "The assignment's conversation could not be read. Resolve the watch error before resuming.";
+          }
         }
       }
       await persist(state);
@@ -384,6 +435,16 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       return snapshot(state, input.clientId);
     },
     async listWatches(_input, context) { return { ok: true, watches: (await snapshot(await stateFor(context))).watches }; },
+    async assignment(operation, input, context) {
+      const state = await stateFor(context);
+      if (operation === "read") return assignments.read(state, input, context);
+      return changeWatches(state, async () => {
+        if (closed || state.stopping) throw failure("Colleague is stopping.");
+        const result = await assignments[operation](state, input, context);
+        scheduleWatches(state, watchDebounceMs);
+        return result;
+      });
+    },
     async summarize(input, context) {
       const state = await stateFor(context);
       if (closed || state.stopping || state.summaryRunning) throw failure("Finish or stop the current Colleague summary first.");
@@ -417,7 +478,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const state = await stateFor(context);
       return changeWatches(state, async () => {
         const watch = state.record.watches.find((item) => item.watchId === input.watchId);
-        if (watch) watch.status = "cancelled";
+        if (watch) {
+          watch.status = "cancelled";
+          const assignment = state.record.assignments?.find((item) => item.assignmentId === watch.assignmentId);
+          if (assignment && ["active", "waiting"].includes(assignment.status)) {
+            assignment.status = "needs-user";
+            assignment.summary = "Assignment watching was cancelled. Ask Colleague to resume or cancel the assignment.";
+          }
+        }
         state.record.observations = state.record.observations.filter((item) => item.watchId !== input.watchId);
         await persist(state);
         return { ok: true };
@@ -428,6 +496,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       return changeWatches(state, async () => {
         const watch = state.record.watches.find((item) => item.watchId === input.watchId);
         if (!watch || watch.status !== "paused") throw failure("Only a paused watch can be resumed.");
+        if (watch.assignmentId) throw failure("Resume the assignment through assignment.update after a new user instruction.");
         state.requestContext = context;
         watch.status = "active";
         try { await observeWatch(state, watch); }
@@ -548,6 +617,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       state.pendingMessages = [];
       for (const connection of state.connections.values()) connection.acknowledge?.({ ok: false, error: "Navigation was cancelled when Colleague stopped." });
       state.record.status = "interrupted";
+      for (const assignment of state.record.assignments || []) {
+        if (!["active", "waiting"].includes(assignment.status)) continue;
+        assignment.status = "needs-user";
+        assignment.summary = "Colleague was stopped. Ask to resume this assignment when ready.";
+        for (const watch of state.record.watches) if (watch.assignmentId === assignment.assignmentId) watch.status = "paused";
+      }
       state.requestContext = context;
       try {
         if (state.record.conversationId && state.record.runId) requireResult(await terminals.stopEphemeralAgentConversation(scope(state), {

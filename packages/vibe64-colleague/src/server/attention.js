@@ -38,7 +38,9 @@ async function readWatchedConversation(actions, watch, context) {
   const answerId = answer ? String(answer.id || answer.messageId || createHash("sha256").update(`${answer.at || ""}:${answer.text || ""}`).digest("hex")) : "";
   const settled = !working.has(status) && status !== "unknown";
   return {
-    status, runId, answerId, settled, needsUser,
+    status, runId, answerId, settled, needsUser, working: working.has(status),
+    userMessageIds: messages.filter((message) => message.role === "user").map((message) => String(message.messageId || message.id || "")),
+    latestUserMessageId: String(messages.findLast((message) => message.role === "user")?.messageId || messages.findLast((message) => message.role === "user")?.id || ""),
     attention: attention.has(status) || Boolean(error) || needsUser,
     answered: settled && latest?.role === "assistant",
     error: String(error).slice(0, 512),
