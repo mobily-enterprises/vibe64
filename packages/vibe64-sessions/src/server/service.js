@@ -1446,11 +1446,23 @@ function createService({
         }
         const openSessions = await sessionsOccupyingPolicySlots(runtime, sessions);
         const policy = await project.developmentDatabasePolicy({ openSessions });
+        const activityReads = await Promise.allSettled(sessions.map(async (session) => (
+          runtime.store.readAgentRuns(session.sessionId)
+        )));
         return {
           creation: policy.creation,
           limits: policy.limits,
           ok: true,
-          sessions,
+          sessions: sessions.map((session, index) => {
+            const activity = activityReads[index];
+            return {
+              ...session,
+              agentActivity: {
+                active: activity.status === "fulfilled" ? activity.value.some((run) => run.active) : null,
+                revision: session.revision
+              }
+            };
+          }),
           unavailableSessions: summaries.filter((session) => session.unavailable)
         };
       });

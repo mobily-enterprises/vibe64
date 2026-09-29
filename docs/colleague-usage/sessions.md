@@ -58,7 +58,9 @@ through its existing navigation action when you ask it to.
 
 The dot beside a session tab pulses while that session reports active assistant
 work, including when you are viewing another session. It stops when that work
-finishes; you do not need to select the session to see the change.
+finishes; you do not need to select the session to see the change. This also
+works immediately after opening the project, before you have visited that
+session. If its activity cannot be read, the dot does not claim it is working.
 
 **Loading assistant…** means the initial assistant connection is being prepared,
 including after you select a different assistant. Checking an already healthy

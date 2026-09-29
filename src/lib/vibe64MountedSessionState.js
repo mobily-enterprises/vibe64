@@ -45,7 +45,7 @@ function sessionRecordHasDetailProjection(session = null) {
 }
 
 function sessionRecordHasActiveAgentWork(session = null) {
-  return session?.agentSession?.turn?.active === true;
+  return (session?.agentSession?.turn?.active ?? session?.agentActivity?.active) === true;
 }
 
 function sessionRecordMatchesId(session = null, sessionId = "") {

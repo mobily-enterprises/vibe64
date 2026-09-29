@@ -185,6 +185,11 @@ describe("mounted direct session state", () => {
       agentSession: { turn: { active: true } }
     })).toBe(true);
     expect(sessionRecordHasActiveAgentWork({})).toBe(false);
+    expect(sessionRecordHasActiveAgentWork({ agentActivity: { active: true } })).toBe(true);
+    expect(sessionRecordHasActiveAgentWork({ agentActivity: { active: null } })).toBe(false);
+    expect(sessionRecordHasActiveAgentWork({
+      agentSession: { turn: { active: false } }, agentActivity: { active: true }
+    })).toBe(false);
   });
 
   it("refreshes detail for durable changes but not transient turn or preview events", () => {

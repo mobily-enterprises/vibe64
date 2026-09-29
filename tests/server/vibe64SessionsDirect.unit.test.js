@@ -2912,7 +2912,7 @@ test("assistant model-access updates delegate the authenticated owner to the hos
 });
 
 test("session listing reports unavailable sessions separately without changing creation policy inputs", async () => {
-  const healthy = { sessionId: "healthy", status: "active" };
+  const healthy = { sessionId: "healthy", status: "active", revision: 7 };
   const unavailable = { sessionId: "missing", unavailable: { code: "vibe64_session_source_required", message: "Missing checkout." } };
   const creation = { canCreate: true };
   const limits = { openSessionCount: 1 };
@@ -2920,6 +2920,7 @@ test("session listing reports unavailable sessions separately without changing c
     project: {
       async createRuntime() {
         return {
+          store: { async readAgentRuns() { return []; } },
           async listSessionSummaries(options) {
             assert.deepEqual(options, { statusGroup: "open", includeUnavailable: true });
             return [unavailable, healthy];
@@ -2935,7 +2936,56 @@ test("session listing reports unavailable sessions separately without changing c
     workspaceSetupRunner: { isRunning: () => false, wait: () => null }
   });
   assert.deepEqual(await service.listSessions(), {
-    ok: true, sessions: [healthy], unavailableSessions: [unavailable], creation, limits
+    ok: true, sessions: [{ ...healthy, agentActivity: { active: false, revision: 7 } }],
+    unavailableSessions: [unavailable], creation, limits
+  });
+});
+
+test("session listing reads saved activity without opening chats and isolates unreadable activity", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createVibe64SessionStore({ projectContextRoot: targetRoot, projectRuntimeRoot: projectRuntimeRoot(targetRoot) });
+    for (const [sessionId, runId, state] of [
+      ["codex", "codex_app_server", "active"],
+      ["claude", "claude_stream_json", "finalizing"],
+      ["opencode", "opencode_server", "starting"],
+      ["idle", "codex_app_server", "completed"],
+      ["new", "", ""],
+      ["unreadable", "", ""]
+    ]) {
+      await store.createSession({ runtimeKind: "genesis", sessionId });
+      if (runId) await store.writeAgentRunEvent(sessionId, runId, { patch: { state } });
+    }
+    const summaries = await store.listSessionSummaries({ statusGroup: "open" });
+    const runtime = {
+      listSessionSummaries: store.listSessionSummaries,
+      store: {
+        async readAgentRuns(id) {
+          if (id === "unreadable") throw new Error("Activity record unreadable");
+          return store.readAgentRuns(id);
+        }
+      }
+    };
+    const service = createService({
+      project: {
+        async createRuntime(options) {
+          assert.deepEqual(options, { inspectSource: false });
+          return runtime;
+        },
+        async developmentDatabasePolicy() { return { creation: {}, limits: {} }; }
+      },
+      terminals: {},
+      workspaceSetupRunner: { isRunning: () => false, wait: () => null }
+    });
+    const result = await service.listSessions();
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.sessions, summaries.map((session) => ({
+      ...session,
+      agentActivity: {
+        active: session.sessionId === "unreadable" ? null : ["codex", "claude", "opencode"].includes(session.sessionId),
+        revision: session.revision
+      }
+    })));
+    assert.deepEqual(await store.listSessionSummaries({ statusGroup: "open" }), summaries);
   });
 });
 

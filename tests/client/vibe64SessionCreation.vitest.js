@@ -173,6 +173,53 @@ beforeEach(() => {
 });
 
 describe("Vibe64 session creation", () => {
+  it("shows and updates activity for a session that has never been selected or mounted", async () => {
+    creationHarness.selectedId.value = "selected";
+    creationHarness.queryData.value.sessions = [
+      { sessionId: "selected", status: "active", revision: 1, agentActivity: { active: false, revision: 1 } },
+      { sessionId: "background", status: "active", revision: 1, agentActivity: { active: true, revision: 1 } }
+    ];
+    const scope = effectScope();
+    const panel = scope.run(() => useVibe64SessionPanel({ projectPane: "dashboard" }, vi.fn()));
+    try {
+      await nextTick();
+      expect(panel.runtimeHostSessionIds.value).toEqual(["selected"]);
+      expect(panel.toolbar.sessions.find((session) => session.sessionId === "background").agentThinking).toBe(true);
+
+      const listener = creationHarness.realtime;
+      const payload = {
+        projectSlug: "project-a", sessionId: "background", revision: 3,
+        reason: "codex-app-server-turn-idle", agentSession: { turn: { active: false } }
+      };
+      expect(listener.matches({ payload })).toBe(true);
+      expect(listener.matches({ payload: { ...payload, projectSlug: "different-project" } })).toBe(false);
+      listener.onEvent({ payload });
+      await nextTick();
+      expect(panel.toolbar.sessions.find((session) => session.sessionId === "background").agentThinking).toBe(false);
+
+      listener.onEvent({ payload: { ...payload, revision: 2, agentSession: { turn: { active: true } } } });
+      creationHarness.queryData.value = { ...creationHarness.queryData.value };
+      await nextTick();
+      expect(panel.toolbar.sessions.find((session) => session.sessionId === "background").agentThinking).toBe(false);
+
+      listener.onEvent({ payload: { ...payload, revision: 4, agentSession: { turn: { active: true } } } });
+      await nextTick();
+      expect(panel.toolbar.sessions.find((session) => session.sessionId === "background").agentThinking).toBe(true);
+      expect(panel.selection.selectedSessionId).toBe("selected");
+      expect(panel.runtimeHostSessionIds.value).toEqual(["selected"]);
+      expect(creationHarness.refetch).not.toHaveBeenCalled();
+
+      creationHarness.projectSlug.value = "different-project";
+      creationHarness.queryData.value.sessions = [{
+        sessionId: "background", status: "active", revision: 1, agentActivity: { active: false, revision: 1 }
+      }];
+      await nextTick();
+      expect(panel.toolbar.sessions[0].agentThinking).toBe(false);
+    } finally {
+      scope.stop();
+    }
+  });
+
   it("shows loading while a remembered session runtime mounts before the session list arrives", async () => {
     creationHarness.selectedId.value = "remembered-session";
     creationHarness.queryData.value = undefined;

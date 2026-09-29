@@ -51,6 +51,10 @@ import {
 import {
   mountedSessionRealtimeShouldRefresh
 } from "@/lib/vibe64MountedSessionState.js";
+import {
+  agentTurnRealtimeOverlayFromPayload,
+  latestAgentTurnRealtimeOverlay
+} from "@/lib/vibe64AgentTurnRealtimeOverlay.js";
 
 const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "assistant-stream",
@@ -227,7 +231,7 @@ function useVibe64SessionData({
     },
     requestRecoveryLabel: "Vibe64 sessions",
     realtime: {
-      event: VIBE64_SESSION_CHANGED_EVENT,
+      events: [VIBE64_SESSION_CHANGED_EVENT, "connect"],
       matches: (event) => sessionListRealtimeShouldRefresh(event, projectSlug.value)
     }
   });
@@ -317,6 +321,7 @@ function useVibe64SessionData({
     currentSessionPublisher.stop();
   });
   const archiveAttempts = ref({});
+  const agentActivityBySessionId = ref({});
   const sessions = computed(() => {
     const items = new Map((sessionList.items || []).map((session) => [session.sessionId, session]));
     for (const [id, attempt] of Object.entries(archiveAttempts.value)) {
@@ -334,6 +339,10 @@ function useVibe64SessionData({
       const operation = sessionArchiveOperation(session);
       return {
         ...session,
+        agentActivity: latestAgentTurnRealtimeOverlay(
+          session.agentActivity,
+          agentActivityBySessionId.value[session.sessionId]
+        ),
         archiveOperation: operation,
         archiveStartedAt: operation?.startedAt || session.archiveStartedAt,
         archiveError: operation?.status === "failed" ? operation.error : "",
@@ -537,6 +546,7 @@ function useVibe64SessionData({
   const shownArchiveFailures = new Set();
   watch(projectSlug, () => {
     archiveAttempts.value = {};
+    agentActivityBySessionId.value = {};
     shownArchiveFailures.clear();
   });
   useRealtimeEvent({
@@ -545,6 +555,13 @@ function useVibe64SessionData({
     onEvent: ({ payload = {} } = {}) => {
       const id = String(payload.sessionId || "");
       if (!id) return;
+      const activity = agentTurnRealtimeOverlayFromPayload(payload, id);
+      if (activity) {
+        agentActivityBySessionId.value[id] = latestAgentTurnRealtimeOverlay(
+          agentActivityBySessionId.value[id],
+          { active: activity.active, revision: activity.revision }
+        );
+      }
       if (payload.reason === "session-archiving") {
         const session = sessions.value.find((item) => item.sessionId === id);
         if (session) {
@@ -562,6 +579,9 @@ function useVibe64SessionData({
     }
   });
   watch(() => sessionList.items, (items) => {
+    for (const id of Object.keys(agentActivityBySessionId.value)) {
+      if (!items.some((session) => session.sessionId === id)) delete agentActivityBySessionId.value[id];
+    }
     for (const [id, attempt] of Object.entries(archiveAttempts.value)) {
       if (attempt.succeeded || archive.archivingSessionId === id) continue;
       const session = items.find((item) => item.sessionId === id);

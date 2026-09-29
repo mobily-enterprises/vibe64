@@ -68,10 +68,14 @@ The creation dialog uses its existing pending state to prevent outside-click,
 Escape, Close and Cancel dismissal until creation succeeds or fails. Success
 closes the dialog; failure leaves the selection available for retry or dismissal.
 
-The session panel collects live activity from mounted session runtimes. Each
-runtime's toolbar preserves other sessions' activity flags while deriving its
-own flag from its live conversation. Background tabs therefore keep pulsing
-while their assistant is working and stop when that runtime reports completion.
+Session listing projects saved agent-run activity and its session revision into
+`agentActivity`; unreadable activity remains unknown. The session-data owner
+applies newer turn events to every listed session and refreshes on reconnect.
+These project-scoped updates cannot be replaced by older responses or events.
+Mounted runtimes still supply live conversation activity, and each toolbar
+preserves other sessions' activity. Tabs therefore pulse even before being
+visited and stop when their assistant finishes, without preparing unopened
+chats or loading their conversation history.
 
 The session inspection tool reports actual native turn activity and phase,
 including its run identity and current routing status/mode. Main conversation
