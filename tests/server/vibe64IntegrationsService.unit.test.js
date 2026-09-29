@@ -309,9 +309,15 @@ test("setup rechecks application ownership after Env preparation", async (t) => 
 });
 
 
-test("release setup uses its saved declaration and Env reference without a session", async (t) => {
+test("release setup uses its artifact declaration and Env reference without Git or a session", async (t) => {
   const { source } = await fixture(t, { setup: true });
   await writeFile(path.join(source, "integrations.json"), JSON.stringify(configuration()));
+  await rm(path.join(source, ".git"), { recursive: true });
+  await assert.rejects(runApplicationIntegrationSetup({
+    sourceRoot: source,
+    selection: { operation: "status", integrationId: "calendar" },
+    runCommand: async () => assert.fail("Development inspection must retain its Git requirement")
+  }), { code: "GIT_REPOSITORY_REQUIRED" });
   const environmentFile = path.join(source, "../service/environment");
   let called = false;
   const result = await runApplicationIntegrationSetup({

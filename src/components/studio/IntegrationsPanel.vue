@@ -63,20 +63,36 @@ watch([selectedId, search], () => {
     selectedId: selectedId.value, search: search.value
   });
 });
-const requestedIntegration = computed(() => route.query.integrationSession === props.dashboardContext.sessionId &&
-  typeof route.query.integration === "string" && route.query.integration.length <= 200 ? route.query.integration : "");
+const requestedIntegration = computed(() => {
+  const id = typeof route.query.integration === "string" && route.query.integration.length <= 200 ? route.query.integration : "";
+  const target = route.query.integrationEnvironment === "production" ? "production" : "development";
+  if (target === "production" && !props.dashboardContext.productionIntegrationsApiPath) return null;
+  if (target === "development" && route.query.integrationSession !== props.dashboardContext.sessionId) return null;
+  return id || route.query.integrationEnvironment ? { id, environment: target } : null;
+});
 const integrationDetail = ref(null);
 const pendingReveal = ref(null);
-function selectIntegration(id) {
+function selectIntegration(id, target = "development") {
+  if (target === "production" && !props.dashboardContext.productionIntegrationsApiPath) return;
+  const alreadySelected = environment.value === target && selectedId.value === id;
+  environment.value = target;
   if (!id) return;
-  const alreadySelected = environment.value === "development" && selectedId.value === id;
-  environment.value = "development";
   selectedId.value = id;
   search.value = "";
   if (alreadySelected) refreshConnection();
   pendingReveal.value = { id, key: navigationKey.value };
 }
-watch(requestedIntegration, selectIntegration, { immediate: true, flush: "sync" });
+// Dashboard context refreshes must not replay an unchanged URL selection over
+// a person's subsequent environment or slot choice.
+watch([
+  () => requestedIntegration.value?.id,
+  () => requestedIntegration.value?.environment,
+  projectSlug,
+  () => requestedIntegration.value?.environment === "development" ? props.dashboardContext.sessionId : ""
+], () => {
+  const selection = requestedIntegration.value;
+  if (selection) selectIntegration(selection.id, selection.environment);
+}, { immediate: true, flush: "sync" });
 
 const discardOpen = ref(false);
 const removeOpen = ref(false);

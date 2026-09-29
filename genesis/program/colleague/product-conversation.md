@@ -242,18 +242,20 @@ supplied, omitting the temporary conversation selects Main; keeping a temporary
 chat selected requires its ID. The host acknowledges the actual route and loaded
 conversation. This capability opens existing views without giving Colleague
 repository contents, a terminal or screen access.
-For Integrations, an optional exact integration ID requires both the Integrations
-pane and session ID. The browser selects that development slot through the panel's
-existing selection owner, even when the same URL is already open. Acknowledgement
+For Integrations, an optional exact integration ID requires the Integrations
+pane and either a development session or the production environment. The browser
+selects that slot through the existing panel owner, even when the same URL is
+already open. Acknowledgement
 waits for the matching panel to load and contain the slot; missing slots, failed
 loads or changed selections fail. This does not start or complete provider consent.
 The active panel publishes only its selection, environment and draft state to
-Colleague, never configuration values or connection URLs. Focus includes those
-fields only for the matching project/session and an available selected slot;
+Colleague, never configuration values or connection URLs. Focus includes
+environment and draft state only for the matching loaded project and, for
+development, session. A slot ID additionally requires an available selected slot;
 manual changes update them independently of old URL parameters. Hidden or disposed
 panels withdraw their selection. A displayed draft is not saved-state or provider
 readiness evidence.
-Reopening the already selected development slot explicitly refreshes connection
+Reopening the already selected slot explicitly refreshes connection
 status through the existing setup owner. Its request identity invalidates older
 responses and the existing busy-command handling schedules the status read after
 an active command settles. It never repeats Connect or Disconnect. Draft,
@@ -266,6 +268,15 @@ keyboard focus or animate scrolling. The request is local to that panel's
 project/session/environment and is cancelled by a different selection; inactive
 panels defer it. Missing slots do not scroll, and subsequent connection/status
 updates do not repeatedly move the page.
+
+Integration navigation also accepts an explicit development or production
+environment. Development requires the exact session; a host's published view
+needs only the project. The existing panel selection owner and URL carry the
+requested environment and optional slot through reload and Back/Forward. The
+host waits for the loaded environment and requested slot, including on an already
+open URL. Empty loaded configuration can acknowledge the environment alone.
+Production focus is independent of a development session; no configuration,
+credentials or consent URLs enter Colleague's focus.
 
 The existing app-page layout owner publishes its ready project and pane visibility
 to the host. An explicit project view reveals that pane on compact screens;

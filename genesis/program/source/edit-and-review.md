@@ -26,6 +26,7 @@ from saved project work, and inspect one exact file change at a time.
 - `packages/vibe64-source-editor/src/server/registerRoutes.js`
 - `packages/vibe64-source-editor/src/server/actions.js`
 - `packages/vibe64-source-editor/src/server/integrationAssistantContracts.js`
+- `packages/vibe64-source-editor/src/server/integrationSetupInput.js`
 - `tests/server/vibe64IntegrationActionTools.unit.test.js`
 - `tests/server/vibe64SourceEditorRoutes.unit.test.js`
 - `src/composables/useVibe64StarredFiles.js`
@@ -91,6 +92,16 @@ Env through the existing owner; it reads current connection state without claimi
 fresh provider verification. Connect, cancel and disconnect retain their existing
 semantics and require the user's intended operation, with browser consent in
 Integrations and a status check after cancellation or consent.
+
+The package exports the shared integration setup input fields and bounded
+assistant projections for hosts that select a published application. A host can
+restrict available operations while reusing the same public command semantics;
+source/release selection, production Env and host permissions remain with that
+host. Production projections retain the actual release ID and environment,
+require the reviewed release on subsequent calls, and preserve the human consent
+handoff. Saved Configure requests and advertising operations remain development
+controls. Published configuration is read-only here; changes go through a coding
+conversation and the requested Save/publication workflow.
 
 Payment and Ads result records pass through their existing protocol parser rather
 than a second shape/validation implementation. Complete review digests, account
@@ -977,6 +988,10 @@ draft; the selected chat mode resolves the person's permitted model when sent.
 `runApplicationIntegrationSetup` also accepts a host-selected release source root
 and private Env-file reference. It reuses the same file policy, provider
 configuration checks, Genesis operation inspection and bounded command protocol.
+With the host-selected release Env file, it explicitly reads the artifact
+directory through Genesis 1.7.7’s directory inspection mode. Published artifacts
+need no Git metadata and never resolve to a containing repository. Development
+inspection retains its ordinary Git discovery and trust checks.
 After the command returns, it rereads the configuration and rejects a changed
 file with a conflict response. This catches external CLI edits and command-owned
 source edits that bypass the editor lock; it never repeats the command to recover.

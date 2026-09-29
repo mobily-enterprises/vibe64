@@ -7,6 +7,8 @@
   "exports": {
     "./server/registerRoutes": "./src/server/registerRoutes.js",
     "./server/service": "./src/server/service.js",
+    "./server/integrationAssistantContracts": "./src/server/integrationAssistantContracts.js",
+    "./server/integrationSetupInput": "./src/server/integrationSetupInput.js",
     "./docs/application-integration-setup.md": "./docs/application-integration-setup.md",
     "./docs/application-payments-laravel.md": "./docs/application-payments-laravel.md",
     "./docs/application-google-ads.md": "./docs/application-google-ads.md",

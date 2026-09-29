@@ -641,7 +641,8 @@ async function inspectApplicationIntegrationSetup(context, input) {
     }
     paymentAccountId = payment.providerAccountId;
   }
-  const setup = await inspectVibe64IntegrationSetup({ projectRoot: context.sourceRoot });
+  const setup = await inspectVibe64IntegrationSetup({ projectRoot: context.sourceRoot,
+    rootMode: context.releaseEnvironmentFile ? "directory" : "repository" });
   if (setup.status !== "ready") {
     return { ok: true, status: "unconfigured", setupStatus: setup.status };
   }
@@ -656,7 +657,7 @@ async function runApplicationIntegrationSetup({
   runCommand = runVibe64Command
 }) {
   createIntegrationSetupRequest(selection);
-  const checked = await inspectApplicationIntegrationSetup({ sourceRoot, policy: sourceEditorFilePolicy() }, selection);
+  const checked = await inspectApplicationIntegrationSetup({ sourceRoot, releaseEnvironmentFile, policy: sourceEditorFilePolicy() }, selection);
   if (!checked.setup) return checked;
   const result = await runIntegrationSetupCommand({
     runCommand, command: checked.setup.command, sourceRoot,

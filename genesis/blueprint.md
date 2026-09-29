@@ -38,7 +38,8 @@ configuration from working connections. Through an application's declared
 development setup command it can check connections, start requested connection
 or verification work, cancel pending consent and disconnect an app connection.
 The person completes browser consent in Integrations. Colleague can open the exact
-development integration and knows which slot and environment are actually shown,
+development integration, or a production integration when the host supplies that
+view without requiring a development session. It knows which slot and environment are actually shown,
 including whether the displayed configuration has unsaved changes. Missing slots
 or failed loads are reported instead of claiming the requested integration opened.
 Reopening the same slot refreshes its connection status through the existing

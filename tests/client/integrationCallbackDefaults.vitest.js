@@ -1,5 +1,8 @@
 import { effectScope, nextTick, reactive, ref } from "vue";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
+
+const navigation = vi.hoisted(() => ({ route: null }));
+beforeEach(() => { navigation.route = reactive({ query: { integrationSession: "session-1", integration: "calendar" } }); });
 
 // This exercises form state only; rendered Vuetify controls are covered by browser fixtures.
 vi.mock("vuetify/components/VAlert", () => ({ VAlert: {} }));
@@ -14,7 +17,7 @@ vi.mock("vuetify/components/VTextField", () => ({ VTextField: {} }));
 vi.mock("vuetify/components/VTextarea", () => ({ VTextarea: {} }));
 vi.mock("vue", async (load) => ({ ...await load(), onMounted() {}, onUnmounted() {}, useSSRContext: () => ({ modules: new Set() }) }));
 vi.mock("vue-router", () => ({
-  useRoute: () => ({ query: { integrationSession: "session-1", integration: "calendar" } }),
+  useRoute: () => navigation.route,
   useRouter: () => ({ push: vi.fn() })
 }));
 vi.mock("@jskit-ai/connectors-web/client", () => ({ IntegrationConfigurationFields: {} }));
@@ -31,6 +34,25 @@ vi.mock("@/composables/useVibe64Integrations.js", () => ({ useVibe64Integrations
   } })
 }) }));
 import IntegrationsPanel from "@/components/studio/IntegrationsPanel.vue";
+
+it("does not replay URL selection when unrelated dashboard context refreshes", async () => {
+  navigation.route.query = { integration: "calendar", integrationEnvironment: "production" };
+  const scope = effectScope();
+  const props = reactive({ dashboardContext: { sessionId: "session-1", productionIntegrationsApiPath: "/production" } });
+  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  try {
+    expect(form.environment.value).toBe("production");
+    form.selectIntegration("calendar", "development");
+    await nextTick();
+    props.dashboardContext = { ...props.dashboardContext, applicationPublicUrl: "https://fixture.example" };
+    await nextTick();
+    expect(form.environment.value).toBe("development");
+    expect(form.selectedId.value).toBe("calendar");
+    props.dashboardContext.sessionId = "session-2";
+    await nextTick();
+    expect(form.environment.value).toBe("development");
+  } finally { scope.stop(); }
+});
 
 it("reveals a requested integration once its detail renders, including repeated selection, without moving focus", async () => {
   const scope = effectScope();
@@ -182,5 +204,46 @@ it("prepares Canva metadata from current fields without publishing it or includi
     form.registration.value.clientId = "http://insecure.example/client.json";
     expect(form.clientMetadata.value.json).toBe("");
     expect(form.clientMetadata.value.error).toContain("valid Client metadata URL");
+  } finally { scope.stop(); }
+});
+
+
+it("hydrates production navigation without a development session and follows Back/Forward environment selection", async () => {
+  navigation.route.query = { integrationEnvironment: "production", integration: "calendar" };
+  const scope = effectScope();
+  const props = reactive({ dashboardContext: { sessionId: "", productionIntegrationsApiPath: "/production/integrations" } });
+  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  try {
+    expect(form.environment.value).toBe("production");
+    expect(form.selectedId.value).toBe("calendar");
+    props.dashboardContext.sessionId = "session-1";
+    navigation.route.query = { integrationEnvironment: "development", integrationSession: "session-1", integration: "calendar" };
+    await nextTick();
+    expect(form.environment.value).toBe("development");
+    expect(form.selectedId.value).toBe("calendar");
+    navigation.route.query = { integrationEnvironment: "production", integration: "calendar" };
+    await nextTick();
+    expect(form.environment.value).toBe("production");
+    form.selectIntegration("calendar", "production");
+    expect(form.refreshConnection).toHaveBeenCalledOnce();
+    navigation.route.query = { integrationSession: "foreign", integration: "missing" };
+    await nextTick();
+    expect(form.environment.value).toBe("production");
+    expect(form.selectedId.value).toBe("calendar");
+  } finally { scope.stop(); }
+});
+
+it("applies a production link when its host API becomes available after mount", async () => {
+  navigation.route.query = { integrationEnvironment: "production", integration: "calendar" };
+  const scope = effectScope();
+  const props = reactive({ dashboardContext: { sessionId: "" } });
+  const form = scope.run(() => IntegrationsPanel.setup(props, { expose() {} }));
+  try {
+    expect(form.environment.value).toBe("development");
+    expect(form.selectedId.value).toBe("");
+    props.dashboardContext.productionIntegrationsApiPath = "/production/integrations";
+    await nextTick();
+    expect(form.environment.value).toBe("production");
+    expect(form.selectedId.value).toBe("calendar");
   } finally { scope.stop(); }
 });

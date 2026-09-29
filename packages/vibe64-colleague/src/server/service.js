@@ -604,8 +604,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       if (input.databaseView && (input.pane !== "database" || !input.sessionId)) {
         return { ok: false, error: "Choose the exact session and Database pane before selecting a database view." };
       }
-      if (input.integrationId && (input.pane !== "integrations" || !input.sessionId)) {
-        return { ok: false, error: "Choose the exact session and Integrations view before opening an integration." };
+      if ((input.integrationId || input.integrationEnvironment) && (input.pane !== "integrations" ||
+          (input.integrationEnvironment !== "production" && !input.sessionId))) {
+        return { ok: false, error: "Choose Integrations and either a development session or the production environment." };
       }
       if (!input.sessionId && (input.conversationId || ["session", "changes", "repository", "files", "database", "system", "ai-terminal"].includes(input.pane))) {
         return { ok: false, error: "Choose the exact session before opening this conversation or session view." };
@@ -617,6 +618,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         ...(input.managementView ? { managementView: input.managementView } : {}),
         ...(input.pane ? { pane: input.pane } : {}),
         ...(input.integrationId ? { integrationId: input.integrationId } : {}),
+        ...(input.integrationEnvironment ? { integrationEnvironment: input.integrationEnvironment } : {}),
         ...(input.databaseView ? { databaseView: input.databaseView } : {}),
         ...(input.databaseTable ? { databaseTable: input.databaseTable } : {}),
         sessionId: input.sessionId || "", conversationId: input.conversationId || "", status: "pending" };
