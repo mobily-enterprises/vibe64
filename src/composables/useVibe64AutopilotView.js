@@ -359,6 +359,7 @@ function useVibe64AutopilotView(props, emit, {
   assistantCanUseAi = null,
   assistantCanRouteChat = null,
   assistantCanUseJunior = null,
+  assistantCanUseSenior = null,
   assistantCanUseNative = null,
   assistantProgressLabel = null,
   onAttachmentsAccepted = null,
@@ -399,6 +400,8 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const assistantJuniorAllowed = computed(() => assistantCanUseJunior === null
     ? assistantDirectAllowed.value : unref(assistantCanUseJunior) === true);
+  const assistantSeniorAllowed = computed(() => assistantCanUseSenior === null
+    ? assistantDirectAllowed.value : unref(assistantCanUseSenior) === true);
   const sessionGithubActor = computed(() => sessionGithubCommandActor(props.session || {}));
   const sessionGithubActorHeaderVisible = computed(() => Boolean(
     props.active &&
@@ -793,16 +796,16 @@ function useVibe64AutopilotView(props, emit, {
     running: "Preparing workspace…",
     succeeded: "Workspace prepared"
   })[workspaceSetupStatus.value] || "");
-  const workspaceSetupCurrentLabel = computed(() => (
-    workspaceSetupStatus.value === "pending"
-      ? "Workspace preparation will start automatically after the update."
-      : workspaceSetupRunning.value
-      ? normalizedAgentTurnText(workspaceSetup.value?.currentLabel)
-      : ""
-  ));
   const workspaceSetupDiagnostic = computed(() => (
     workspaceSetupRetryError.value || normalizedAgentTurnText(workspaceSetup.value?.diagnostic)
   ));
+  const workspaceSetupCurrentLabel = computed(() => {
+    if (workspaceSetupStatus.value === "required") return workspaceSetupDiagnostic.value;
+    if (workspaceSetupStatus.value === "pending") return "Workspace preparation will start automatically after the update.";
+    return workspaceSetupRunning.value ? normalizedAgentTurnText(workspaceSetup.value?.currentLabel) : "";
+  });
+  const workspaceSetupError = computed(() => workspaceSetupRetryError.value ||
+    (workspaceSetupNeedsAttention.value && workspaceSetupStatus.value !== "required" ? workspaceSetupDiagnostic.value : ""));
   const workspaceSetupRetryDisabled = computed(() => Boolean(
     workspaceSetupRunning.value ||
     workspaceSetupRetrying.value ||
@@ -980,11 +983,11 @@ function useVibe64AutopilotView(props, emit, {
     return result !== false && result?.ok !== false;
   }
 
-  function temporaryAiRecoveryUnavailable() {
+  function temporaryAiRecoveryUnavailable(isUpdate = false) {
     return Boolean(
       repositoryRecoverySending.value ||
       typeof requestTemporaryAi !== "function" ||
-      !assistantJuniorAllowed.value ||
+      !(isUpdate ? assistantSeniorAllowed.value : assistantJuniorAllowed.value) ||
       !props.active ||
       !sessionId.value ||
       props.sessionSelectionArchived ||
@@ -993,7 +996,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   async function fixRepositoryActionError() {
-    if (temporaryAiRecoveryUnavailable() || !saveWorkCanResolveWithTemporaryAi.value) {
+    if (temporaryAiRecoveryUnavailable(saveWorkActivityIsUpdate.value) || !saveWorkCanResolveWithTemporaryAi.value) {
       return false;
     }
     const action = saveWorkActivityIsUpdate.value ? "Update" : "Save";
@@ -1035,7 +1038,7 @@ function useVibe64AutopilotView(props, emit, {
   } = {}) {
     const diagnostic = normalizedAgentTurnText(error);
     const isUpdate = ["vibe64_session_update_conflict", "vibe64_session_update_history_diverged"].includes(code);
-    if (temporaryAiRecoveryUnavailable() || !diagnostic) {
+    if (temporaryAiRecoveryUnavailable(isUpdate) || !diagnostic) {
       return false;
     }
     repositoryRecoverySending.value = true;
@@ -2164,6 +2167,7 @@ function useVibe64AutopilotView(props, emit, {
     Vibe64OutputControls,
     assistantDirectAllowed,
     assistantJuniorAllowed,
+    assistantSeniorAllowed,
     agentActive,
     reasoningActive,
     agentObservationLost,
@@ -2299,6 +2303,7 @@ function useVibe64AutopilotView(props, emit, {
     workspaceSetupDismissed,
     workspaceSetupFixSending,
     workspaceSetupNeedsAttention,
+    workspaceSetupError,
     workspaceSetupOutput,
     workspaceSetupRetryDisabled,
     workspaceSetupRetrying,

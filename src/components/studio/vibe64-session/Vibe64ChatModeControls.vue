@@ -10,7 +10,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 
-const props = defineProps({ session: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, temporary: Boolean, disabled: Boolean, active: Boolean, connecting: Boolean, canConfigure: Boolean, loading: Boolean, loadError: { type: String, default: "" } });
+const props = defineProps({ session: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, requiredMode: { type: String, default: "" }, temporary: Boolean, disabled: Boolean, active: Boolean, connecting: Boolean, canConfigure: Boolean, loading: Boolean, loadError: { type: String, default: "" } });
 const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
@@ -24,7 +24,7 @@ const routingOpen = ref(false);
 const routingFocusRole = ref("");
 const routingSaving = ref(false);
 const modeIcons = { custom: mdiTuneVariant, senior: mdiAccountStarOutline, junior: mdiAccountOutline, auto: mdiAutoFix };
-const modes = computed(() => ASSISTANT_MODES.filter(({ id }) => !props.temporary || id !== "auto"));
+const modes = computed(() => ASSISTANT_MODES.filter(({ id }) => (!props.temporary || id !== "auto") && (!props.requiredMode || id === "custom" || id === props.requiredMode)));
 const modeLabel = computed(() => assistantModeLabel(mode.value));
 const savedWorkflowEngineId = computed(() => preferences.value?.workflowEngineId || props.session?.assistantSelection?.engineId);
 const workflowEngineId = ref("");
@@ -159,7 +159,7 @@ function configure() {
         </div>
         <v-list :lines="false" class="py-0">
           <v-list-item
-            title="Custom" :prepend-icon="modeIcons.custom" :active="mode === 'custom'" role="button"
+            :title="requiredMode ? 'Choose model' : 'Custom'" :prepend-icon="modeIcons.custom" :active="mode === 'custom'" role="button"
             :aria-pressed="mode === 'custom'" :disabled="disabled || saving || connecting || hasGoal || active" color="primary" min-height="60"
             @click="openCustom"
           >
@@ -188,6 +188,7 @@ function configure() {
             </v-list-item>
           </v-list>
           <div class="px-4 pb-3">
+            <p v-if="requiredMode" class="text-body-small">Merge repairs always use Senior. Stop the current turn before choosing another model.</p>
             <p v-if="decisions[mode]?.backupReason === 'keep_workflow_together'" class="text-body-small mt-2">Senior and Junior use the shared backup together to keep this workflow in one orchestrator.</p>
             <template v-if="!temporary && mode === 'auto'">
               <p class="text-body-small">Senior always reviews Junior's completed work. Deslop is optional.</p>

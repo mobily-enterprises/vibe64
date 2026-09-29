@@ -47,16 +47,16 @@ test("checklist progress is live but only Senior can explicitly complete or reop
   assert.equal((await readWorkPlanHistory(f.context)).length, 0, "reopening the current plan does not duplicate it in History");
 });
 
-test("new plans require an archive announcement and reopening moves the selected archive back to current", async t => {
+test("new plans require acknowledged replacement and reopening moves the selected archive back to current", async t => {
   const f = await fixture(t);
   await f.change("new", "senior", { text: openText });
   const first = await readWorkPlan(f.context);
-  await assert.rejects(f.change("new", "senior", { text: "# Myosh\n- [ ] Inspect administration" }), /Tell the user/);
+  await assert.rejects(f.change("new", "senior", { text: "# Myosh\n- [ ] Inspect administration" }), /Once the user has authorized replacement/);
   assert.equal((await readWorkPlan(f.context)).revision, first.revision);
   const second = await f.change("new", "senior", { text: "# Myosh\n- [ ] Inspect administration", archiveCurrent: true });
   assert.match(second.notice, /Archived “Reporting tree”/);
   assert.equal(second.history[0].status, "active", "archiving is not completion");
-  await assert.rejects(f.change("reopen", "senior", { archiveId: first.revision }), /Tell the user/);
+  await assert.rejects(f.change("reopen", "senior", { archiveId: first.revision }), /Once the user has authorized replacement/);
   await f.change("reopen", "senior", { archiveId: first.revision, archiveCurrent: true });
   assert.equal((await readWorkPlan(f.context)).text, first.text);
   assert.equal((await readWorkPlanHistory(f.context)).length, 1);

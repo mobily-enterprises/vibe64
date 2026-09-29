@@ -344,7 +344,7 @@ function createClaudeSessionAgentProvider({
           block.text += delta;
           checkOutputLimit(entry, block.text, block.role);
           await publishMessage(entry, block);
-          await entry.onEvent?.({ type: block.role === "thinking" ? "thinking" : "text", text: delta, threadId: entry.id });
+          await entry.onEvent?.({ type: block.role === "thinking" ? "thinking" : "text", text: delta, messageId: id, threadId: entry.id });
         }
       } else if (event.type === "content_block_stop") {
         entry.messages.delete(id);

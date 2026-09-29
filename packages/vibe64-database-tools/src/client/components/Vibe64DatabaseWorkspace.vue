@@ -856,7 +856,9 @@ watch([() => route.query.databaseView, () => props.openRequest, () => props.acti
     }
   }, { immediate: true });
 watch(activeView, (view) => {
-  if (props.active && route.query.databaseView !== view) {
+  const routeView = ["overview", "erd", "data"].includes(route.query.databaseView) ? route.query.databaseView : "overview";
+  // The default Overview needs no URL write: mounting must not cancel navigation away.
+  if (props.active && routeView !== view) {
     void router.replace({ path: route.path, query: { ...route.query, databaseView: view } });
   }
 }, { flush: "post", immediate: true });

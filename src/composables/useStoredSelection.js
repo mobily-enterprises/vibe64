@@ -68,14 +68,16 @@ function useStoredSelection({
     }
 
     const itemIds = items.map((item) => String(getId(item) || "").trim()).filter(Boolean);
-    const preferredSelectionId = activePreferredId.value;
-    if (itemIds.includes(preferredSelectionId)) {
-      select(preferredSelectionId);
+    // The route initializes selection and its watcher handles later navigation.
+    // Reconciliation must preserve a newer explicit selection while it is available.
+    if (itemIds.includes(selectedId.value)) {
+      select(selectedId.value);
       return selectedId.value;
     }
 
-    if (itemIds.includes(selectedId.value)) {
-      select(selectedId.value);
+    const preferredSelectionId = activePreferredId.value;
+    if (itemIds.includes(preferredSelectionId)) {
+      select(preferredSelectionId);
       return selectedId.value;
     }
 

@@ -12,7 +12,7 @@ if (!operation || ["--help", "-h"].includes(operation)) {
     + 'Mutations require expectedRevision from the current read, unless no current plan exists.\\n'
     + 'Read uses offset/limit/expectedRevision; follow nextOffset while hasMore.\\n'
     + 'Read/reopen may select an archiveId from history.\\n'
-    + 'Before replacing a current plan, announce its archival to the user, then pass archiveCurrent:true.\\n'
+    + 'If a current plan exists, ask whether to update it or archive and replace it unless the user already chose. Explain that the archive remains accessible; pass archiveCurrent:true only after replacement is authorized.\\n'
     + 'Only Senior can create, complete, reopen or archive. Junior updates checklist progress with write.');
   process.exit(0);
 }

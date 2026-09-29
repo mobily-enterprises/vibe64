@@ -11281,9 +11281,14 @@ function createCodexTerminalController({
       if (turnId) state.runId = turnId;
       const status = codexAppServerNotificationTurnStatus(notification);
       if (status) state.status = status;
+      if (notification.method === "item/agentMessage/delta") {
+        state.onEvent?.({ type: "text", text: notification.params.delta,
+          messageId: notification.params.itemId, threadId: conversationId, turnId });
+      }
       if (notification.method === "thread/goal/updated") state.goal = notification.params.goal;
       if (notification.method === "thread/goal/cleared") state.goal = null;
       if (notification.method === "turn/completed") {
+        state.onEvent = null;
         const completedTurnId = state.runId;
         const completedStatus = state.status;
         void checkpointSessionTurn({
@@ -11534,6 +11539,7 @@ function createCodexTerminalController({
         conversationState.watcher = watcher;
       }
       let delivery = null;
+      if (input.persistent && conversationState) conversationState.onEvent = options.onEvent;
       try {
         await input.onPromptSending?.({ threadId: conversationId });
         delivery = executionProfile ? await sendCodexAppServerHelperTurn({
@@ -11550,6 +11556,7 @@ function createCodexTerminalController({
           workdir: context.workdir
         });
       } catch (error) {
+        if (input.persistent && conversationState) conversationState.onEvent = null;
         watcher?.failNow(error);
         await waitForResult?.catch(() => null);
         if (conversationState) {

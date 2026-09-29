@@ -47,7 +47,7 @@
         {{ summaryText }}
       </span>
       <slot name="actions-before" />
-      <slot v-if="error" name="error-actions" />
+      <slot v-if="error || status === 'required'" name="error-actions" />
     </template>
     <template v-for="slotName in forwardedSlots" #[slotName]="slotProps">
       <slot :name="slotName" v-bind="slotProps || {}" />
@@ -126,14 +126,14 @@ const forwardedSlots = [
   "overlay"
 ];
 const visible = computed(() => !props.dismissed && Boolean(
-  props.active || props.error || detailsViewed.value
+  props.active || props.error || props.status === "required" || detailsViewed.value
 ));
 const summaryText = computed(() => {
   const outputLine = terminalLastMeaningfulLine(props.output);
   if (props.error) {
     return props.error;
   }
-  if (props.stage && outputLine && props.stage !== outputLine) {
+  if (props.status !== "required" && props.stage && outputLine && props.stage !== outputLine) {
     return `${props.stage} · ${outputLine}`;
   }
   return props.stage || outputLine || "Working…";

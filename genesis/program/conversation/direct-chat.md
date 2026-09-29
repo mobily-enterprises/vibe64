@@ -15,6 +15,10 @@ preserved exactly and Git attribution is enabled by the action, never supplied
 by a caller. Quiet and snapshot HTTP controls share one snapshot action.
 Raw terminal controls are excluded from Colleague tools. Attachment multipart,
 binary download and terminal WebSocket framing remain transport adapters.
+Non-collapsible mobile terminals expose Exit full screen / Full screen through
+`Vibe64TerminalSurface.vue`. Leaving the takeover releases background inertness
+and restores navigation without closing or interrupting the native terminal.
+The separate Close terminal action retains its process-lifecycle meaning.
 The contracts and adapters are in
 `packages/vibe64-terminals/src/server/actions.js`, `inputSchemas.js` and
 `registerRoutes.js`; HTTP/direct authority and byte-stream evidence is in
@@ -105,6 +109,13 @@ answer or lifecycle notification closes that batch, preserving event order witho
 queuing a disk write per token. Native reasoning item start/completion controls
 the animated ellipsis in “Assistant is working…”; ordinary waiting, tool use, lost observation
 and idle turns do not animate. Reconnection clears an unconfirmed old phase.
+Mounted-session checks retain a healthy connection's visible activity while
+rechecking it. Assistant selection changes initialize the new connection;
+disconnections and failed checks still expose recovery. Session debug logs
+identify selection, account, socket and retry triggers separately.
+The access composable suppresses its restriction message while the initial
+access query is pending. It retains submission guards and displays actual access
+denials or load failures once known, avoiding an unavailable flash on tab changes.
 Interrupted coding leaves the explicit plan status intact. Auto classifies a
 request to continue against the current active plan; questions and scope changes
 remain distinct intents.
@@ -340,6 +351,12 @@ references consistent. A confirmed send clears only its accepted receipts.
 
 ## Public contract
 
+The session header preserves label space by tightening its right-aligned action
+group in 512–640 px chat panes: 44 px controls, 20 px icons and no inter-button
+gap. Larger panes retain 48 px controls and their normal gaps; smaller panes use
+the existing Session actions menu. Update uses the existing commit icon rotated
+vertically, distinct from the pull-request branch glyph.
+
 Session and temporary-conversation actions resolve their project and acting user
 through the shared action boundary. The acting user is trusted context, never
 an action argument. HTTP URL selection and explicit action selection must agree;
@@ -545,12 +562,22 @@ and reconciles display snapshots from the actual document, never turn success.
 It preserves exact body text, takes backups and includes archived/closing sessions
 and temporary conversation artifacts. Ordinary reads never perform migration.
 
+Direct Senior and Junior receive the same saved-plan format and helper guidance
+as plan-related Auto turns. A request to make a plan means a persisted Vibe64
+checklist unless the user explicitly requests a chat-only draft or another format.
+Senior reads the current plan and clarifies update versus archive-and-replace
+when the user has not chosen. Creation/update claims require a successful helper
+response confirming the saved current checklist. Merely dispatching or completing
+a planning turn does not create a plan. Unrelated direct requests do not read or
+attach the current plan; Junior's lifecycle permissions remain unchanged.
+
 The model uses vibe64-helper plan read/history/new/write/complete/archive/reopen,
 through the existing bound session command socket. The server derives Senior,
 Junior or review authority from the admitted turn, never a caller's claimed role.
 Junior can write checklist progress and evidence only. Senior owns lifecycle
 commands. Replacing the current plan requires an archive acknowledgement after
-telling the user which plan will be retained. Archive moves the exact current
+the user authorizes replacement and is told which plan will be retained. An
+explicit archive-and-replace request supplies that authorization. Archive moves the exact current
 record to History. Reopening an archive publishes its body as the active current
 plan, then removes the selected history entry; replacing another current plan
 archives that other plan first. Reopening the current plan creates no duplicate.
@@ -1389,6 +1416,13 @@ pause recovery retries and resume them when visible. A successful provider check
 requires an explicit success response and remains verified if a subsequent
 display refresh fails. Failed checks preserve the active conversation and log
 their error code for diagnosis.
+Selecting an already verified mounted session performs no assistant check or
+transcript reload. Reconnection still refreshes missed session/history state and
+recovers active provider work. An idle hidden session defers provider preparation
+until selected; that read alone does not mark its provider verified. Account and
+session-assistant changes are observed by hidden hosts too, so their next selection
+cannot reuse invalidated readiness. Known unavailable/restricted/failed states
+keep their explicit recovery path rather than retrying on every tab click.
 An empty conversation's welcome can use a host-provided reactive name for the
 current person. Without that presentation provider it uses the standalone
 personal profile. An explicitly empty host name stays generic instead of falling

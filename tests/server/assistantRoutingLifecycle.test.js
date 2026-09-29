@@ -187,7 +187,11 @@ for (const mode of ["senior", "junior"]) {
       const prompt = f.sends[0].input.message;
       assert.ok(!prompt.includes(file), "do not supply the plan path");
       assert.doesNotMatch(prompt, /Read the plan|Read the working plan|Progress and blockers|Status: blocked|Do not change application files/);
-      assert.match(prompt, /direct request is independent/);
+      assert.match(prompt, /Unrelated requests do not need a plan/);
+      assert.match(prompt, /means save a Vibe64 checklist through vibe64-helper plan/);
+      assert.match(prompt, /Writes require expectedRevision from the latest read/);
+      assert.match(prompt, /Only report a plan created or updated after the helper succeeds/);
+      if (mode === "junior") assert.match(prompt, /You cannot create, archive, reopen or complete the plan/);
       await f.service.afterTurn("session-1", completion(), f.context);
       await f.restart().afterTurn("session-1", completion(), f.context, { recovered: true });
       assert.equal(f.sends.length, 1, "no automatic planning or review turn");
@@ -278,6 +282,33 @@ test("new planning leaves a completed document intact until Senior explicitly re
   assert.equal((await readWorkPlan(f.context)).status, "completed");
   assert.match(f.sends[1].input.message, /checklists/);
 });
+
+for (const mode of ["senior", "auto"]) {
+  test(`${mode} plan creation receives the saved-plan contract without changing a plan on admission`, async (t) => {
+    const f = await fixture(t, { mode, review: false }, { readyPlan: false });
+    f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+    const message = "Make a plan to complete issue 53.";
+    await f.service.send("session-1", { ...request, message }, f.context);
+    const prompt = f.sends[0].input.message;
+    assert.match(prompt, /means save a Vibe64 checklist through vibe64-helper plan/);
+    assert.match(prompt, /Read the current plan first/);
+    assert.match(prompt, /ask whether to update it or archive it and start a new plan/);
+    assert.match(prompt, /wait for their answer before replacing it/);
+    assert.match(prompt, /explicit instruction to archive and replace already counts/);
+    assert.match(prompt, /Only report a plan created or updated after the helper succeeds/);
+    assert.equal(f.sends[0].input.displayMessage, message);
+    assert.equal(await readWorkPlan(f.context), null, "sending a request cannot create a plan on its own");
+    assert.equal(f.helperCalls(), mode === "auto" ? 1 : 0, "direct Senior needs no classification call");
+
+    const saved = await manageWorkPlan(f.context, {
+      operation: "new", text: "# Complete issue 53\n- [ ] Implement the agreed outcome\n- [ ] Verify acceptance"
+    }, f.state().resolvedMode);
+    assert.equal(saved.available, true);
+    assert.equal(saved.current.revision, (await readWorkPlan(f.context)).revision);
+    assert.equal(saved.total, 2);
+    assert.equal(saved.status, "active");
+  });
+}
 
 test("generated Junior preserves chat preferences and reports its destination before inference without routing or review", async (t) => {
   const f = await fixture(t, { mode: "senior", review: true });

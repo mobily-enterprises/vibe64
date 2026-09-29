@@ -492,6 +492,9 @@ function eventSummary(event = {}) {
     modelId: text(model.id || model.modelID || info.modelID),
     modelProviderId: text(model.providerID || info.providerID),
     partId: text(part.id || data.partID),
+    ...(part.type === "text" && typeof part.text === "string" ? { textSnapshot: part.text } : {}),
+    ...(payload.type === "message.part.delta" && data.field === "text" && typeof data.delta === "string"
+      ? { textDelta: data.delta } : {}),
     partType: text(part.type) || (
       text(payload.type) === "session.next.reasoning.ended"
         ? "reasoning"

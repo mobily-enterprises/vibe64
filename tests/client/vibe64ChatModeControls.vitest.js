@@ -76,6 +76,23 @@ it("does not save Helper as a chat mode", async () => {
   expect(state.mode).toBe("junior");
 });
 
+it("keeps a merge repair on Senior while exposing the custom model picker", async () => {
+  const openPicker = vi.fn();
+  const state = mount(mocks.save, true, { requiredMode: "senior", onCustom: openPicker, session: {
+    sessionId: "repair", metadata: { assistant_routing: JSON.stringify({ mode: "senior", review: false, workflowEngineId: "codex" }) }
+  } });
+  expect(state.modeLabel).toBe("Senior");
+  expect(state.modes.map(({ id }) => id)).toEqual(["custom", "senior"]);
+  await state.save("junior");
+  await state.save("auto");
+  expect(mocks.save).not.toHaveBeenCalled();
+  state.detailsOpen = true;
+  state.openCustom();
+  expect(state.detailsOpen).toBe(false);
+  expect(openPicker).toHaveBeenCalledOnce();
+  expect(state.mode).toBe("senior");
+});
+
 for (const mode of ["senior", "junior", "auto"]) {
   it(`switches the orchestrator in ${mode} without entering Custom or carrying the old model override`, async () => {
     const state = mount();

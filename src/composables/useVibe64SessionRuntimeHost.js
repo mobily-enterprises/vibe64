@@ -648,12 +648,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     flush: "sync",
     immediate: true
   });
-  watch(() => props.active, (active, previous) => {
-    if (active && previous === false) {
-      void mounted.reconcileMountedAgentSession("selected");
-      void conversationLog.reload().catch(() => null);
-    }
-  });
   watch(() => {
     return `${selectedSessionId.value}:${selectedSessionArchived.value}:${runtimeHostWorkTaskRevision(selectedSession.value)}`;
   }, () => {

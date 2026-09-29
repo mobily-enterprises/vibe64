@@ -66,6 +66,15 @@ and bounded Helper profiles still apply. If a completion wait fails, Colleague
 reads the exact retained native run once and accepts an already completed answer;
 an active, failed or different run retains the failure without resending work.
 
+Native text events update an in-memory reply projection. Only the decoded text
+of the expected reply envelope prefix is exposed; tool requests and reasoning
+stay private. Existing one-second client refreshes display it as one pending
+assistant message. Completed envelope validation still controls saved history
+and tool dispatch. Stop, steering, failures and superseded model steps discard
+the projection; reopening reads the latest projection without replaying actions.
+The host's voice slot receives canonical messages, so partial replies do not
+trigger duplicate or incomplete speech. No streamed fragments are persisted.
+
 An accepted request captures its UI focus. Subsequent navigation does not silently
 redirect its operations. New steering can arrive while a model response is active;
 code checks it before dispatching that response's tool. Stopping Colleague stops
@@ -84,7 +93,16 @@ The drawer fits the available viewport width, including when a classic scrollbar
 is present. Its close, model and watch controls have 48-pixel touch targets.
 At every screen size, a 48-pixel header button opens a full-height drawer on the
 right, 460 pixels wide or the available viewport width on smaller screens. Its
-Vuetify dialog provides text and voice controls, focus containment and return to the launcher
+104-pixel portrait stays pinned at the top right (84 pixels on mobile); Close is
+at the top left and the former name/project heading is removed. The portrait
+and composer do not scroll. A float inside the existing transcript scroller
+reserves the portrait's visible corner; its shape follows the scroll offset,
+so text uses the full message width below that corner. The component observes
+its conversation and portrait size, and refreshes the inset after state updates
+and scrolling. Its local flow styles retain the shared transcript's rendering,
+scroll following and message actions without introducing another scroll owner.
+The observer is disconnected on unmount. Hosts without an avatar reserve no space.
+The Vuetify dialog provides text and voice controls, focus containment and return to the launcher
 on close. The model, microphone, speaker, Stop and Send/Steer controls share a compact icon
 toolbar inside the message box, using the main chat button styles. No separate
 status or voice footer reserves vertical space. No floating launcher or voice

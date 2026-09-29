@@ -27,6 +27,10 @@ the model inspects the actual preview/terminal state. Stop retains the log;
 Close waits for cleanup and removes the terminal and its log. Coding agents and
 immutable download results remain separately owned.
 
+The shared terminal surface lets people exit and re-enter mobile full screen
+without stopping the output. This restores the underlying page navigation;
+Close, Stop and collapsible task details retain their own existing behavior.
+
 ## Sources
 
 - `packages/current-app/src/server/actions.js`

@@ -89,7 +89,7 @@ async function flushWorkspace(runQuery) {
 
 function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout = vi.fn(), view = "data" } = {}) {
   const props = Vue.reactive({ active, projectSlug: "alpha", sessionId: "database-session" });
-  const route = Vue.reactive({ path: "/app/alpha/dashboard/database", query: { session: props.sessionId, databaseView: view } });
+  const route = Vue.reactive({ path: "/app/alpha/dashboard/database", query: { session: props.sessionId, ...(view === null ? {} : { databaseView: view }) } });
   const router = { replace: vi.fn(async (location) => Object.assign(route, location)) };
   mocks.route = route;
   mocks.router = router;
@@ -139,7 +139,7 @@ function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout
   app.provide(VIBE64_COLLEAGUE_DATABASE_KEY, colleagueDatabase);
   const container = { type: "root", children: [], props: {} };
   app.mount(container);
-  app._instance.subTree.component.setupState.activeView = view;
+  if (["overview", "erd", "data"].includes(view)) app._instance.subTree.component.setupState.activeView = view;
   return {
     container, props, state, runQuery, route, router, colleagueDatabase,
     workspace: app._instance.subTree.component.setupState,
@@ -432,6 +432,21 @@ describe("Database Workspace shared ERD hydration", () => {
 });
 
 describe("Database view navigation and Colleague awareness", () => {
+  it.each([null, "unknown"])("opens the default Overview without replacing the route for %s", async (view) => {
+    const fixture = mountDatabaseWorkspace({ view });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.workspace.activeView).toBe("overview");
+      expect(fixture.router.replace).not.toHaveBeenCalled();
+      fixture.workspace.activeView = "erd";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.route.query.databaseView).toBe("erd");
+      fixture.workspace.activeView = "overview";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.route.query.databaseView).toBe("overview");
+    } finally { await fixture.close(); }
+  });
+
   it("hydrates a requested view before data arrives and publishes only its visible semantic state", async () => {
     const fixture = mountDatabaseWorkspace({ view: "erd" });
     try {

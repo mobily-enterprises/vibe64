@@ -397,7 +397,9 @@ function useVibe64SessionRepositoryStatusRegistry({
       if (!visibleSessionIds.value.includes(id)) canonicalCheckedAt.delete(id);
     }
     inspectVisible();
-    void checkCanonical(selectedId.value);
+    if (!canonicalCheckedAt.has(selectedId.value)) {
+      void checkCanonical(selectedId.value);
+    }
   }, { immediate: true });
 
   let priorSuspendedSessionIds = new Set();

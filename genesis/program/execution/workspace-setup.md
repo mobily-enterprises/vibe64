@@ -23,6 +23,13 @@ contract transported by the project's Stack.
 
 ## Public contract
 
+Required workspace preparation is a neutral, dismissible action notice. The
+existing terminal summary shows the declared setup diagnostic once and keeps
+Prepare workspace available without error styling or a duplicate error panel.
+Earlier setup output remains in the expandable log, not the required notice's summary.
+Failed/ambiguous preparation and failures to start it retain error diagnostics,
+retry and repair controls. Running output and terminal expansion are unchanged.
+
 `vibe64.workspace-setup.v1` is the only accepted schema. Its source is strict,
 readable Markdown: each `Prepare` entry declares a label, runtimes, optional
 working directory and path condition, then separate backticked argv values.

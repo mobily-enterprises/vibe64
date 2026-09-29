@@ -251,6 +251,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   }
 
   async function deliver(sessionId, context, state, followup = false) {
+    if (context.requiredAssistantMode && state.resolvedMode !== context.requiredAssistantMode) {
+      throw failure("Merge repairs now require Senior. Cancel the old request and send it again.");
+    }
     if (!allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and choose Senior or Junior.");
     const store = context.runtime.store;
     context = { ...context, vibe64User: state.submittedBy };
@@ -311,9 +314,10 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     }
     const usesPlan = usesWorkPlan(state);
     if (usesPlan && role === "senior" && state.workPlan) state.workPlan = await readWorkPlan(context);
+    const includePlanInstructions = usesPlan || (state.task !== "deslop" && ["senior", "junior"].includes(state.mode));
     const message = assistantModePrompt(role, followup ? state.reviewMessage : state.input.message,
       { intent: followup ? "review" : state.task || (state.mode === "auto" ? state.reason : ""),
-        planInstructions: usesPlan ? workPlanInstructions(role) : "" });
+        planInstructions: includePlanInstructions ? workPlanInstructions(role) : "" });
     await prepareSelection(sessionId, selection, context);
     state.deliverySelection = selection;
     await save(context, state);
@@ -410,6 +414,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       // Steering keeps the running model and its instructions. It never goes
       // through the classifier, including while a review turn is running.
       if (native?.turn?.active) {
+        if (context.requiredAssistantMode && state?.resolvedMode !== context.requiredAssistantMode) {
+          throw failure("Merge repairs now require Senior. Stop the running turn before continuing.");
+        }
         if (explicitDeslop) throw failure("Deslop uses the Senior model in its own turn. Finish or stop the current turn, then send Deslop again.");
         if (input.submissionKind === "send") throw failure("The assistant started another turn. Review it before sending.");
         direct = true; return;
@@ -438,10 +445,13 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         if (!options.purpose && preferences.mode === "auto" && activeGoal(goal)) throw failure("Choose Senior or Junior before working on a goal.");
         const saved = await createAssistantRoutingStore({ systemRoot }).read();
         const pinnedGoal = activeGoal(goal) && savedGoal;
+        if (context.requiredAssistantMode && pinnedGoal && pinnedGoal.mode !== context.requiredAssistantMode) {
+          throw failure("Merge repairs require Senior. Finish or cancel the current goal before continuing.");
+        }
         if (options.purpose && activeGoal(goal) && pinnedGoal?.mode !== options.purpose) {
           throw failure("Finish or cancel the current goal before starting this Junior task.");
         }
-        const mode = pinnedGoal?.mode || options.purpose || preferences.mode;
+        const mode = context.requiredAssistantMode || pinnedGoal?.mode || options.purpose || preferences.mode;
         const hasPlanRevision = Boolean(input.planRevision);
         const plan = mode === "auto" ? await readWorkPlan(context) : null;
         if (hasPlanRevision && mode !== "auto") throw failure("Choose Auto to implement its plan. Direct roles work from your message.");

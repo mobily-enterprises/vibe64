@@ -127,7 +127,7 @@ function useVibe64AssistantAccess({
     )
   ));
   const restrictionMessage = computed(() => {
-    if (canUseChat.value) return "";
+    if (canUseChat.value || initialAccessLoading.value) return "";
     if (access.value?.steering && access.value?.ownerOnly && !canUseNative.value) {
       return "Only the owner can steer this turn. You can send a message when it finishes.";
     }

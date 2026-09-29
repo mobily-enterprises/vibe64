@@ -273,9 +273,18 @@ function useVibe64MountedSessionData({
     const cancelled = new Promise((_resolve, reject) => {
       controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true });
     });
-    agentConnectionStatus.value = ["disconnected", "unknown", "reconciling", "unavailable", "failed"].includes(agentConnectionStatus.value)
-      ? "reconciling"
-      : "initializing";
+    // Rechecking a healthy connection does not restart the assistant. Keep
+    // confirmed activity visible until the check actually reports a problem.
+    if (agentConnectionStatus.value !== "connected") {
+      agentConnectionStatus.value = ["disconnected", "unknown", "reconciling", "unavailable", "failed"].includes(agentConnectionStatus.value)
+        ? "reconciling"
+        : "initializing";
+    }
+    vibe64SessionDebugLog("client.mountedSession.agentConnection.check", {
+      reason,
+      sessionId: activeSessionId.value,
+      status: agentConnectionStatus.value
+    });
     const checking = (async () => {
       const refreshed = await refresh({ reason });
       if (!currentConnection() || controller.signal.aborted) {
@@ -285,24 +294,28 @@ function useVibe64MountedSessionData({
         throw refreshed.error;
       }
       const recoveringActiveAgentWork = sessionRecordHasActiveAgentWork(session.value);
-      if (mountedActive.value || recoveringActiveAgentWork) {
-        const result = await getHttpWebClient().request(
-          vibe64SessionPath(
-            activeSessionsApiPath.value,
-            activeSessionId.value,
-            "/agent-session"
-          ),
-          {
-            body: {},
-            method: "POST",
-            signal: controller.signal
-          }
-        );
-        if (result?.ok !== true) {
-          throw Object.assign(new Error(result?.error || "Assistant status could not be reconciled."), {
-            code: result?.code
-          });
+      if (!mountedActive.value && !recoveringActiveAgentWork) {
+        // A hidden idle session needs only the missed state after reconnect.
+        // Prepare its provider if it is selected later, not on every tab switch.
+        agentConnectionStatus.value = "initializing";
+        return session.value;
+      }
+      const result = await getHttpWebClient().request(
+        vibe64SessionPath(
+          activeSessionsApiPath.value,
+          activeSessionId.value,
+          "/agent-session"
+        ),
+        {
+          body: {},
+          method: "POST",
+          signal: controller.signal
         }
+      );
+      if (result?.ok !== true) {
+        throw Object.assign(new Error(result?.error || "Assistant status could not be reconciled."), {
+          code: result?.code
+        });
       }
       if (currentConnection() && !controller.signal.aborted) {
         agentConnectionStatus.value = "connected";
@@ -353,31 +366,38 @@ function useVibe64MountedSessionData({
       // the check needs one replacement once its predecessor has settled.
       if (!disposed && realtimeSocket.connected && generation !== connectionGeneration) {
         void reconcileMountedAgentSession("realtime-reconnected");
+      } else if (!disposed && realtimeSocket.connected && mountedActive.value && agentConnectionStatus.value === "initializing") {
+        // Selection may have joined a check that already deferred this idle provider.
+        void reconcileMountedAgentSession("provider-not-prepared");
       }
     });
     return reconciliationInFlight;
   }
 
-  const reconcileAfterRealtimeConnect = () => {
+  const reconcileAfterConnectionChange = (reason) => {
     connectionGeneration += 1;
     reconciliationRetryDelay = 1_000;
     reconciliationController?.abort();
-    void reconcileMountedAgentSession();
+    void reconcileMountedAgentSession(reason);
   };
+  const reconcileAfterRealtimeConnect = () => reconcileAfterConnectionChange("realtime-connect");
   useRealtimeEvent({
-    enabled: mountedActive,
+    enabled: computed(() => Boolean(activeSessionId.value)),
     event: VIBE64_CONNECTIONS_CHANGED_EVENT,
-    onEvent: reconcileAfterRealtimeConnect
+    onEvent: () => reconcileAfterConnectionChange("account-connections-changed")
   });
   useRealtimeEvent({
-    enabled: mountedActive,
+    enabled: computed(() => Boolean(activeSessionId.value)),
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => (
       payload.projectSlug === projectSlug.value &&
       payload.sessionId === activeSessionId.value &&
       payload.reason === "session-assistant-selection-updated"
     ),
-    onEvent: reconcileAfterRealtimeConnect
+    onEvent: () => {
+      agentConnectionStatus.value = "initializing";
+      reconcileAfterConnectionChange("assistant-selection-changed");
+    }
   });
   const markRealtimeDisconnected = () => {
     connectionGeneration += 1;
@@ -406,6 +426,11 @@ function useVibe64MountedSessionData({
       void reconcileMountedAgentSession("initial-realtime-connect");
     });
   }
+  watch(mountedActive, (active) => {
+    if (active && ["initializing", "disconnected", "unknown", "reconciling"].includes(agentConnectionStatus.value)) {
+      void reconcileMountedAgentSession("provider-not-ready");
+    }
+  });
   onScopeDispose(() => {
     disposed = true;
     clearReconciliationRetry();
@@ -476,7 +501,6 @@ function useVibe64MountedSessionData({
     agentConnectionError,
     agentConnectionStatus,
     detailState,
-    reconcileMountedAgentSession,
     retryAgentConnection,
     refresh,
     resource: detailResource,

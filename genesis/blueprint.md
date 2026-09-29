@@ -10,6 +10,8 @@ no repository tools or engineering role. Its continuing conversation remains
 available before a session exists or when a session cannot open. Each signed-in
 person keeps their own Colleague history and model choice. The current text
 conversation supports an Online host's global voice controls and configured display name.
+Colleague displays reply text incrementally; only the completed answer enters
+saved history and voice playback. Stopping or steering clears unfinished text.
 Colleague can browse open and archived sessions beyond the first page, while
 reporting unavailable records separately and keeping historical sessions inactive.
 Changing that name keeps the conversation and model choice. People can ask it
@@ -72,7 +74,11 @@ product-operation coverage remains in progress.
 
 On every screen size, Colleague has one compact avatar button in the header.
 It opens a 460-pixel-wide drawer on the right, using the available width on smaller
-screens. Model selection, microphone, speaker, Stop and Send/Steer use compact icon
+screens. A larger face stays pinned at the top right, smaller on mobile, while
+conversation text wraps around it and returns to the wider space below. A compact
+Close button sits at the top left, without a separate name/project header. Only
+the messages scroll; the face and message box remain in place.
+Model selection, microphone, speaker, Stop and Send/Steer use compact icon
 buttons inside the message box, matching the main chat toolbar and leaving
 the page's comment, message and Send controls clear when closed. Closing it
 preserves both conversations' drafts.
@@ -117,6 +123,11 @@ Opening the same project in another browser tab refreshes its runtime activity
 without making existing tabs reload unchanged project data. Returning to a tab
 reuses a recent repository check shared by the server; source-change events
 still request an immediate fresh check.
+Switching between loaded session tabs reveals their existing chats without
+reloading history, repeating assistant preparation, or rechecking known repository
+state. Hidden chats continue receiving live updates. Initial loading, a lost
+connection, changed assistant configuration and genuine data changes still have
+their own checks; ordinary tab switching does not itself disable Send or Save/Update.
 Tabs inspecting the same session share an already-running worktree inspection;
 completed results are not cached, and different projects stay independent.
 Clicking an already-selected dashboard tab keeps the conversation and dashboard
@@ -313,6 +324,8 @@ An interruption failure stays visible without covering the composer or its retry
 Once an unsent request is fully cancelled, its old error notice disappears,
 including after reload. Unfinished cleanup or uncertain delivery stays visible.
 Repair conversations keep their input and action buttons visible on small screens.
+Required workspace preparation is a neutral action notice with one Prepare
+workspace control; actual setup or startup failures retain error diagnostics.
 Main and temporary chat restore uploaded files visibly alongside saved drafts.
 New uploads keep existing files, and removing one updates its numbered references.
 Long drafts scroll inside the input; repair details start collapsed, and a shared
@@ -324,6 +337,10 @@ collapsed and scrollable when opened.
 The main chat composer keeps Chat mode, Add, Goal, plan allowance, and icon-only
 Send together, with Stop beside Send while needed. Goal and available allowance
 stay visible when menus are closed. Add holds left-aligned attachment actions.
+Session header actions keep their normal spacing when the chat pane has room,
+then use smaller icons and tighter spacing before the compact actions menu is
+needed. They stay aligned right to preserve space for session labels. Update's
+vertical commit symbol is distinct from the branching pull-request action.
 New replies retain their answering orchestrator, model and thinking level when
 the selection changes, formatted as `Orchestrator (model thinking)`.
 Temporary replies keep that identity across tool progress and the final answer,
@@ -377,8 +394,12 @@ left empty. New main chats start with Senior, with Auto review off.
 User-created temporary chats inherit Main chat's role, workflow and custom model
 choice when created. Main's Auto mode starts them as Senior. Each temporary chat
 then keeps its own selection and can change role independently; later changes in
-Main do not retarget existing temporary chats. Automatic tasks retain their
-explicit Junior assignments; bounded background tasks use Helper. There is no temporary-chat default setting.
+Main do not retarget existing temporary chats. Automatic implementation tasks
+retain explicit Junior assignments; merge-repair chats always use Senior and
+check Senior access. After stopping a repair, the user can choose another
+orchestrator, model and thinking level for that chat while keeping its Senior
+role, repair instructions and history. Bounded background tasks use Helper.
+There is no temporary-chat default setting.
 Temporary chats never run Auto, working plans or automatic review.
 Model routing opens for one named orchestrator and edits only its assignments,
 without an orchestrator selector inside the dialog. AI Accounts offers Configure
@@ -500,6 +521,11 @@ Reconnecting preserves the selected model and reasoning effort and requests
 short reasoning summaries for continuing goals as well as new messages.
 Assistant status recovers automatically after a failed connection check, without
 requiring a page reload or interrupting the assistant's work.
+Rechecking a healthy assistant retains confirmed activity instead of showing
+initial loading again. Selecting a different assistant initializes its connection;
+actual disconnections and failed checks still show recovery or an error.
+An access check still loading does not claim that the AI connection is
+unavailable; sending remains disabled until access is confirmed.
 Failed checks retain their reported reason beside Retry. A server configuration
 error or failed assistant-control recovery stops automatic retries, keeps the
 draft editable, and clears only after a successful check. Retry and Renew remain
@@ -587,7 +613,9 @@ on a table's neighbours, arrange or group tables, pin important positions, undo
 layout changes, and keep named views. The session's diagram layout is shared
 among its users: moving a table updates the other open diagrams automatically.
 Data overview is the default database view, followed by the detailed ERD and
-the query/data view. The diagram keeps the working space: routine search and Fit
+the query/data view. Opening the default view does not rewrite the URL or
+interrupt a person's navigation away while the database loads.
+The diagram keeps the working space: routine search and Fit
 stay visible, while occasional display and arrangement controls live in an
 options menu. Overview concepts can be dragged continuously without waiting for
 saves or jumping on drop, and retain their positions when reopened. It shows main actors with explicitly assigned supporting tables,
@@ -1209,6 +1237,9 @@ The application authorizes access and resolves its own provider customer mapping
 Dashboard sections use a compact navigation selector on small screens while
 keeping the active form mounted across viewport changes. Resizing does not
 discard its unsaved values, validation feedback or loaded results.
+Full-screen mobile terminals expose an Exit full screen control that restores
+page navigation without stopping the process. Full screen reopens that view;
+collapsible task output retains its Collapse control.
 
 
 Amplitude setup can register a new confidential OAuth client at its selected US
@@ -1408,10 +1439,16 @@ requires an active current document; unrelated work needs no plan and never
 resurrects an archived or completed task. Combined requests are handled within
 the selected role's authority instead of imposing a separate planning workflow.
 
+Asking Senior to make a plan, directly or through Auto, creates a saved Vibe64
+checklist unless the person explicitly requests a chat-only draft or another
+format. Both Senior and Junior know the plan format and commands. Senior checks
+for a current plan and asks whether to update or archive and replace it when the
+person has not chosen. Creation and update confirmations follow successful saves.
+
 Each Main conversation has one current plan outside the repository, plus accessible
 archived snapshots. Senior creates, changes, reopens and archives plans. Starting
-a distinct plan archives the current one, after telling the person which plan
-will be archived and that it remains accessible. Archiving does not imply
+a distinct plan archives the current one, after the person authorizes replacement
+and is told which plan will be archived and that it remains accessible. Archiving does not imply
 completion. Reopening an archived plan moves it back to current as active, with
 its checklist and evidence intact, and removes that entry from History. Reopening
 the current plan does not create a history duplicate. Session retention owns these runtime files.

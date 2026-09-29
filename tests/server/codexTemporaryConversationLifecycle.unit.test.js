@@ -11269,6 +11269,33 @@ test("a fresh Codex observer pauses an unobserved temporary goal before exposing
 });
 
 
+test("persistent Codex streams reply deltas from Send through completion", async () => {
+  await withConversationController(async ({ captures, controller, subscribers }) => {
+    captures.persistentHistory = [];
+    const { conversationId } = await controller.createConversation("session-1", { persistent: true });
+    const events = [];
+    captures.onSendTurn = ({ turnId }) => {
+      emitCodexNotification(subscribers, { method: "item/agentMessage/delta", params: {
+        threadId: conversationId, turnId, itemId: "answer", delta: '{"kind":"reply","text":"Hello '
+      } });
+    };
+    const started = await controller.startConversationTurn("session-1", {
+      conversationId, persistent: true, messageId: "streaming", message: "Hello"
+    }, { onEvent: (event) => events.push(event) });
+    assert.equal(started.ok, true, JSON.stringify(started));
+    assert.equal(events[0]?.text, '{"kind":"reply","text":"Hello ', "capture text sent before the start acknowledgement");
+    const params = { threadId: conversationId, turnId: started.runId, itemId: "answer" };
+    emitCodexNotification(subscribers, { method: "item/agentMessage/delta", params: { ...params, delta: "world" } });
+    assert.equal(events[1].text, "world");
+    assert.equal(events[1].messageId, "answer");
+    emitCodexNotification(subscribers, { method: "turn/completed", params: {
+      threadId: conversationId, turn: { id: started.runId, status: "completed" }
+    } });
+    emitCodexNotification(subscribers, { method: "item/agentMessage/delta", params: { ...params, delta: "late" } });
+    assert.equal(events.length, 2);
+  });
+});
+
 test("persistent Codex waits beyond three minutes but retains completion, Stop, connection loss and explicit deadlines", async (t) => {
   for (const outcome of ["complete", "stop", "disconnect", "deadline"]) {
     await withConversationController(async ({ captures, controller, subscribers }) => {

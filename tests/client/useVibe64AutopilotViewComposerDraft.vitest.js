@@ -413,6 +413,37 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(requestTemporaryAi).toHaveBeenCalledTimes(4);
   });
 
+  it("admits merge repair through Senior even when Junior and the main model are unavailable", async () => {
+    const senior = ref(true);
+    const junior = ref(false);
+    const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
+    const view = await createView({}, { assistantCanUseAi: ref(false), assistantCanUseSenior: senior,
+      assistantCanUseJunior: junior, requestTemporaryAi });
+    const conflict = { code: "vibe64_session_update_conflict", error: "Keep both changes." };
+    expect(await view.fixRepositoryError(conflict)).toBe(true);
+    expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({ recoveryOperation: "update" }));
+    senior.value = false;
+    junior.value = true;
+    expect(await view.fixRepositoryError(conflict)).toBe(false);
+    expect(requestTemporaryAi).toHaveBeenCalledOnce();
+  });
+
+  it("treats required preparation neutrally but exposes actual setup and start failures", async () => {
+    const { view, props } = await createViewWithProps({ session: { ...viewProps().session,
+      workspaceSetup: { status: "required", diagnostic: "Install updated dependencies.", transcript: "Previous setup output." }
+    }, retryWorkspaceSetup: vi.fn(async () => { throw new Error("Unable to start setup."); }) });
+    expect(view.workspaceSetupError.value).toBe("");
+    expect(view.workspaceSetupNeedsAttention.value).toBe(true);
+    expect(view.workspaceSetupCurrentLabel.value).toBe("Install updated dependencies.");
+    expect(view.workspaceSetupOutput.value).toBe("Previous setup output.");
+    await view.retryWorkspaceSetup();
+    expect(view.workspaceSetupError.value).toBe("Unable to start setup.");
+    props.session = { ...props.session, workspaceSetup: { status: "failed", diagnostic: "npm install failed." } };
+    // A fresh operation's failure is independently visible without a failed start.
+    const failed = await createView({ session: props.session });
+    expect(failed.workspaceSetupError.value).toBe("npm install failed.");
+  });
+
   it("checks the native connection for the AI terminal independently of routed chat access", async () => {
     const canChat = ref(true);
     const canNative = ref(false);

@@ -41,6 +41,10 @@ the canonical project and from other sessions.
 
 ## Public contract
 
+Session URL selection initializes the current session and follows subsequent
+navigation. Available-session reconciliation preserves a newer explicit tab
+selection instead of repeatedly restoring the session from the earlier URL.
+
 Session and temporary-conversation actions resolve their project and acting user
 through the shared action boundary. The acting user is trusted context, never
 an action argument. HTTP URL selection and explicit action selection must agree;
@@ -148,6 +152,15 @@ workspace. Expired payloads return 410 while their descriptions remain readable.
 Routine session-detail refreshes read session and agent state without launching
 Git source inspections. Source operations retain their explicit health checks;
 chat updates do not need a new managed Git process to report activity.
+Already visited sessions keep their runtime hosts mounted under `v-show`.
+Selecting one no longer reloads conversation history or unconditionally reconciles
+its provider. Actor-scoped assistant-access and model-routing resources remain
+subscribed while their host is hidden, so selection does not re-enable their
+queries. Archive state and actor identity still govern those resources.
+Confirmed repository checks are reused across selection; first checks, explicit
+Refresh, source/canonical changes and bounded checks for out-of-band Git work
+remain. The assistant connection owner separately prepares an unverified provider
+after first loading, a real reconnection or an assistant-configuration change.
 Session text and metadata are replaced atomically, like the store's JSON records.
 Concurrent readers see a complete previous or next value during assistant changes;
 a failed replacement preserves the saved value. This does not make multiple

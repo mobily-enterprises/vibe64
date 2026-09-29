@@ -170,6 +170,10 @@ Returning to a visible tab requests a normal canonical check, allowing the
 server's 25-second shared result cache to serve sibling tabs. Explicit source
 and canonical-change invalidations still force a fresh check. Worktree fallback
 inspection on visibility remains immediate.
+This visibility recovery refers to the browser document. Switching session chips
+reuses a recorded canonical check instead of requesting it again. A session
+without a confirmed check still gets its first check, and the existing five-minute
+canonical fallback detects upstream Git changes that publish no Vibe64 event.
 Clicking the muted repository action explicitly forces a server update check through
 the same registry and waits for the work inspection to settle. A visible
 “Checking…” hint and busy state last for that request, with repeated clicks

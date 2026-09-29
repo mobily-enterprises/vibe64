@@ -324,6 +324,8 @@ describe("useVibe64TemporaryAi", () => {
     );
     const first = await temporary.startTask({ ...input, dedupeKey: "eight-files" });
     await flushPromises();
+    expect(mocks.requests.find(([path, options]) => path.endsWith("/temporary-conversations") && options.method === "POST")[1].body.assistantRouting)
+      .toEqual({ mode: "senior", review: false });
     mocks.responses.push(
       { ok: true, runId: "turn-2", status: "inProgress" },
       { ok: true, status: "completed", outcome: { kind: "complete" } }

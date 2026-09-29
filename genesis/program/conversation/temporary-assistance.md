@@ -117,9 +117,12 @@ through the ordinary purpose resolver; inherited choices do not grant new access
 Existing temporary chats keep their own role and model choices after Main changes
 or the view reloads. The compact role selector can change each chat independently.
 There is no workspace default or reset-to-default action. App-generated
-implementation and repair drafts explicitly select Junior with review off;
-background helpers keep their assigned roles. Direct roles use the conversation and user request; they neither consult Auto's working plan nor trigger an automatic reviewer. Dedicated repairs
-retain their instructions and cannot change mode. Reply labels show the role
+implementation drafts select Junior with review off; Update merge repairs always
+select Senior. Background helpers keep their assigned roles. Direct roles use
+the conversation and user request; unrelated requests leave saved plans unchanged
+and do not trigger an automatic reviewer. Merge repairs retain their instructions
+and Senior role, but offer Choose model through the same picker. An explicit
+selection saves a Senior override with its selected orchestrator. Reply labels show the role
 first, followed by the orchestrator and model, as in main chat.
 The authenticated actor supplied by the HTTP turn action is captured with the
 routing request, so retries and reconciliation retain the submitting user's
@@ -155,7 +158,13 @@ its displayed bubble. Failure leaves that request available through Retry/Edit;
 it does not copy the prompt back into the composer. Retry resends the saved
 payload and identity without reading or clearing the draft, including after
 reload. Edit explicitly places the visible request text into the composer.
-Dedicated repair requests keep their own instructions and do not expose modes.
+Dedicated merge repairs keep their own instructions. Their mode menu exposes
+Senior and Choose model; Junior and Auto cannot be selected. Stop an active or
+pending repair before changing its model. Existing idle repair records receive
+Senior policy for new requests without rewriting saved preferences on read.
+Old non-Senior pending requests cannot resume; cancel and resend them. An older
+running non-Senior turn must be stopped before another request. Native history,
+repair context and verification remain owned by the existing conversation.
 
 Each ordinary temporary chat reads availability from the same central resolver as
 Send, using its own workflow, mode and custom override. Its menu labels the user's
@@ -333,7 +342,8 @@ Every product-owned repair entry, including project setup warnings, uses the
 shared Fix it with AI control and temporary-task sender. It opens, selects, and
 focuses a separate Temporary AI task immediately, even while the main assistant
 is working. These entries and subsystem generation check the viewer's effective
-Junior access, independently of the main chat's mode or personal connection.
+Junior access, independently of the main chat's mode or personal connection,
+except Update merge-repair entries, which check Senior access.
 Onboarding's create, inspect and adoption actions use that same
 temporary-chat path. Each onboarding request opens a fresh chat. The task
 shows a concise user-facing repair request and a compact status heading while
@@ -557,8 +567,9 @@ Custom is the first mode in ordinary temporary chats and opens the same
 Orchestrator → Model → Thinking dialog as Main. Apply validates the exact
 selection and stores it in this conversation's routing preferences. The next
 send uses the existing native changeover and conversation handoff, leaving Main
-untouched. Active goals and dedicated repair conversations retain their existing
-selection restrictions. Custom never silently substitutes a collaborator backup.
+untouched. Active goals retain their selection restrictions. Merge repair uses
+the same picker after Stop while retaining Senior and its repair instructions.
+Custom never silently substitutes a collaborator backup.
 
 Temporary conversation reads optionally accept a stable message cursor and a
 bounded count, return messages in chronological order, and report whether earlier

@@ -32,7 +32,8 @@ requiring every table and field to be read at once.
 ## Public contract
 
 Overview, ERD and Data selection lives in the Database URL's `databaseView` query
-parameter. An absent or invalid value selects Overview. Manual view changes
+parameter. An absent or invalid value selects Overview without rewriting the
+URL on mount, so initial loading cannot cancel navigation away. Manual view changes
 update that selection, and reopening a warm route restores it. Switching the
 three views preserves the mounted SQL draft and diagram state; disposing or
 reloading the workspace does not persist an unsaved SQL draft. A new Subsystems table request selects ERD

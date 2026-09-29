@@ -5,6 +5,7 @@ import * as vue from "vue";
 import * as mdi from "@mdi/js";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { transform } from "esbuild";
+import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 
 const filename = new URL("../../packages/vibe64-colleague/src/client/Vibe64Colleague.vue", import.meta.url);
 const { descriptor } = parse(await readFile(filename, "utf8"), { filename: String(filename) });
@@ -34,6 +35,28 @@ test("Colleague recovers connection status and reports failed commands without c
   await view.state.refresh();
   await flush();
   assert.equal(view.notices.length, 2, "unchanged retained failures are reported once, not every poll");
+});
+
+test("Colleague updates one reply bubble while keeping unfinished text out of voice history", async (t) => {
+  const response = { messages: [{ id: "user", role: "user", text: "Hi" }], status: "working", streamingReply: null };
+  const view = mount(t, async () => structuredClone(response));
+  await flush();
+  response.streamingReply = { id: "answer", role: "assistant", text: "Hello", status: "inProgress" };
+  await view.state.refresh();
+  assert.equal(view.state.adapter.value.conversation.turns[0].assistant.text, "Hello");
+  assert.equal(view.state.adapter.value.conversation.turns[0].pending, true);
+  assert.equal(view.state.state.value.messages.length, 1, "voice receives only saved messages");
+  response.streamingReply.text = "Hello world";
+  await view.state.refresh();
+  assert.equal(view.state.adapter.value.conversation.turns.length, 1);
+  assert.equal(view.state.adapter.value.conversation.turns[0].assistant.text, "Hello world");
+  response.messages.push({ id: "answer", role: "assistant", text: "Hello world" });
+  response.streamingReply = null;
+  response.status = "ready";
+  await view.state.refresh();
+  assert.equal(view.state.adapter.value.conversation.turns.length, 1);
+  assert.equal(view.state.adapter.value.conversation.turns[0].pending, false);
+  assert.equal(view.state.state.value.messages.length, 2);
 });
 
 test("an older failed refresh cannot restore a recovered connection error", async (t) => {
@@ -71,7 +94,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" })) {
     "@/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher") },
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantPromptInput: {} },
-    "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages: () => [] },
+    "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages },
     "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue": { default: {} }
   };
   new Function("require", "module", "exports", code)(name => {

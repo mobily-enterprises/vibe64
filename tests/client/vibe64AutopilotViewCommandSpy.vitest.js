@@ -103,8 +103,8 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain('class="studio-autopilot__activity"');
     expect(component).toContain(".studio-autopilot__activity:empty");
     expect(composable).toContain("Vibe64—not Temporary AI—owns every repository operation");
-    expect(component).toContain(':disabled="repositoryRecoverySending || !assistantJuniorAllowed"');
-    expect(component).toContain(":title=\"assistantJuniorAllowed ? 'Open temporary AI to resolve this repository problem' : assistantJuniorRestrictionMessage\"");
+    expect(component).toContain(':disabled="repositoryRecoverySending || !(saveWorkActivityIsUpdate ? assistantSeniorAllowed : assistantJuniorAllowed)"');
+    expect(component).toContain(":title=\"(saveWorkActivityIsUpdate ? assistantSeniorAllowed : assistantJuniorAllowed) ? 'Open temporary AI to resolve this repository problem' : saveWorkActivityIsUpdate ? assistantSeniorRestrictionMessage : assistantJuniorRestrictionMessage\"");
     expect(component).toContain(":title=\"assistantJuniorAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantJuniorRestrictionMessage\"");
     expect(component).toContain("assistantDirectAllowed: assistantDirectAllowed.value");
     expect(component).toContain("assistantRestrictionMessage: assistantRestrictionMessage.value");
@@ -132,7 +132,7 @@ describe("Vibe64 direct session view", () => {
       component.indexOf("</header>")
     );
     expect(sessionHeader).toContain("studio-autopilot__save-work");
-    expect(sessionHeader).toContain('<v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceBranchSync" />');
+    expect(sessionHeader).toContain('<v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />');
     expect(sessionHeader).toContain('v-else-if="props.workState?.destination?.mode === \'github\'"');
     expect(sessionHeader).toContain('class="studio-autopilot__save-symbol-commit"');
     expect(sessionHeader).toContain('<v-icon v-else :icon="mdiContentSaveOutline" />');

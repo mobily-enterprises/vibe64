@@ -236,7 +236,7 @@ test("temporary direct Junior ignores an unusable working plan and persists no p
     await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "question", message });
     assert.equal(f.native.starts, 1);
     assert.equal(f.native.lastInput.displayMessage, message);
-    assert.match(f.native.lastInput.message, /Do not read or update Vibe64's temporary working plan/);
+    assert.match(f.native.lastInput.message, /Unrelated requests do not need a plan and must leave existing plans unchanged/);
     assert.ok(!f.native.lastInput.message.includes(planPath));
     f.native.status = "completed";
     await f.service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-1" } });
@@ -709,7 +709,7 @@ test("temporary availability uses its own override and actor without inferring o
   });
 });
 
-test("generated and repair drafts explicitly choose Junior while preserving the parent workflow", async () => {
+test("generated drafts choose Junior and merge repairs choose Senior in the parent workflow", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root, { role: "member", username: "member" });
     await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true, workflowEngineId: "codex" }));
@@ -718,8 +718,9 @@ test("generated and repair drafts explicitly choose Junior while preserving the 
       { conversationId: "repair", presentation: { recoveryOperation: "update" } }
     ]) {
       const created = await f.service.createTemporaryConversation("one", input, f.options);
-      assert.deepEqual(JSON.parse(created.routingMetadata.assistant_routing), { mode: "junior", review: false, workflowEngineId: "codex" });
-      assert.equal(created.purposes.junior.effectiveSelection.engineId, "opencode");
+      const role = input.presentation?.recoveryOperation ? "senior" : "junior";
+      assert.deepEqual(JSON.parse(created.routingMetadata.assistant_routing), { mode: role, review: false, workflowEngineId: "codex" });
+      assert.equal(created.purposes[role].effectiveSelection.engineId, "opencode");
     }
     assert.equal(f.calls.starts.length, 0);
   });
@@ -1019,7 +1020,7 @@ test("temporary chats inherit Main's role and custom model; Auto becomes Senior"
     assert.equal(f.native.turnSelection.modelId, "chosen");
     assert.equal(f.native.turnSelection.variantId, "ultra");
     assert.match(f.native.lastInput.message, /Vibe64 role: Junior/);
-    assert.match(f.native.lastInput.message, /Do not read or update Vibe64's temporary working plan/);
+    assert.match(f.native.lastInput.message, /Unrelated requests do not need a plan and must leave existing plans unchanged/);
     assert.deepEqual(await f.store.readConversationLog("one"), []);
   });
 });
@@ -1042,7 +1043,7 @@ test("inherited temporary choices stay independent across Main changes and resta
     const explicit = await service.createTemporaryConversation("one", { conversationId: "generated", assistantRouting: { mode: "junior" } });
     assert.equal(JSON.parse(explicit.routingMetadata.assistant_routing).mode, "junior");
     const repair = await service.createTemporaryConversation("one", { conversationId: "repair", presentation: { recoveryOperation: "update" } });
-    assert.equal(JSON.parse(repair.routingMetadata.assistant_routing).mode, "junior");
+    assert.equal(JSON.parse(repair.routingMetadata.assistant_routing).mode, "senior");
   });
 });
 
@@ -1058,6 +1059,88 @@ test("a Main chat without routing preferences passes its exact AI into a new tem
   });
 });
 
+
+test("existing idle merge repairs use Senior without rewriting saved preferences on read", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root);
+    await f.store.writeSessionConversation("one", "chat", { recoveryOperation: "update" });
+    const before = await f.record();
+    const observed = await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    assert.equal(JSON.parse(observed.routingMetadata.assistant_routing).mode, "senior");
+    assert.deepEqual((await f.record()).routingMetadata, before.routingMetadata);
+    await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
+      assistantRouting: { mode: "junior" } }, f.options), /always use Senior/);
+    const started = await f.service.startTemporaryConversationTurn("one", {
+      conversationId: "chat", messageId: "repair", message: "Resolve this merge while preserving both changes."
+    }, f.options);
+    assert.notEqual(started.ok, false, JSON.stringify(started));
+    assert.equal(f.calls.starts[0].selection.modelId, "gpt-6-astra");
+    assert.match(f.calls.starts[0].input.message, /Vibe64 role: Senior/);
+    assert.equal(f.calls.starts[0].input.turnMetadata.assistantRouting.resolvedMode, "senior");
+    await assert.rejects(f.service.updateTemporaryConversation("one", { conversationId: "chat",
+      assistantRouting: { mode: "custom", override: f.helper } }, f.options), /Stop this repair/);
+    await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    await f.service.close();
+  });
+});
+
+test("a repair can move to a chosen Codex model after Stop and retains history, instructions and Senior role", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root);
+    const main = (await f.store.readSession("one")).metadata;
+    await f.service.updateTemporaryConversation("one", { conversationId: "chat",
+      assistantRouting: { mode: "custom", override: f.helper } }, f.options);
+    await f.service.startTemporaryConversationTurn("one", {
+      conversationId: "chat", messageId: "original", message: "Preserve the booking validation while repairing this merge."
+    }, f.options);
+    // Existing active repairs from before this policy retain their native turn until Stop.
+    await f.store.writeSessionConversation("one", "chat", { recoveryOperation: "update", recoveryContext: "Keep both versions' validation." });
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", {
+      conversationId: "chat", messageId: "steer-old", message: "Continue"
+    }, f.options), /Stop the running turn/);
+    await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    const changed = await f.service.updateTemporaryConversation("one", { conversationId: "chat",
+      assistantRouting: { mode: "custom", override: f.senior } }, f.options);
+    const preferences = JSON.parse(changed.routingMetadata.assistant_routing);
+    assert.equal(preferences.mode, "senior");
+    assert.equal(preferences.workflowEngineId, "codex");
+    assert.equal(preferences.override.modelId, "gpt-6-astra");
+    assert.equal((await f.record()).recoveryContext, "Keep both versions' validation.");
+    const result = await f.service.startTemporaryConversationTurn("one", {
+      conversationId: "chat", messageId: "take-over", message: "Check the merge and finish it correctly."
+    }, f.options);
+    assert.notEqual(result.ok, false, JSON.stringify(result));
+    assert.equal(f.calls.starts[1].selection.engineId, "codex");
+    assert.equal(f.calls.starts[1].selection.modelId, "gpt-6-astra");
+    assert.match(f.calls.starts[1].input.message, /Preserve the booking validation/);
+    assert.match(f.calls.starts[1].input.message, /Vibe64 role: Senior/);
+    assert.equal((await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options)).messages.filter(message => message.role === "user").length, 2);
+    assert.deepEqual((await f.store.readSession("one")).metadata, main);
+    await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    await f.service.close();
+  });
+});
+
+test("an old pending Junior repair cannot be resumed by polling or retry", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await temporaryChangeoverFixture(root);
+    await f.send("junior", "previous");
+    await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    const record = await f.record();
+    const request = JSON.parse(record.routingMetadata.assistant_routing_request);
+    Object.assign(request, { messageId: "old-unsent", status: "sending", attemptedMessageId: "",
+      input: { message: "Repair the merge.", displayMessage: "Repair the merge." } });
+    await f.store.writeSessionConversation("one", "chat", { recoveryOperation: "update", routingMetadata: {
+      ...record.routingMetadata, assistant_routing_request: JSON.stringify(request)
+    } });
+    await f.service.readTemporaryConversation("one", { conversationId: "chat" }, f.options);
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", {
+      conversationId: "chat", messageId: "old-unsent", message: "Repair the merge."
+    }, f.options), /require Senior/);
+    assert.equal(f.calls.starts.length, 1);
+    await f.service.close();
+  });
+});
 
 test("temporary Custom changes orchestrator with conversation context and leaves Main unchanged", async () => {
   await withTemporaryRoot(async (root) => {

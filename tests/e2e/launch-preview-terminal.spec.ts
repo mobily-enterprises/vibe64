@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { controllerHarness } from "../fixtures/opencodeController.js";
 import { createPreviewPreparationFixture } from "../fixtures/previewPreparation.js";
+import { assistantStatusServer } from "./support/assistant-status-server";
 
 import {
   injectLaunchPreviewBridge
@@ -649,6 +650,7 @@ const PERSONAL_ASSISTANT_ACCESS = Object.freeze({
   accessLabel: "Personal use",
   available: true,
   canUse: true,
+  nativeCanUse: true,
   ok: true,
   ownerOnly: true
 });
@@ -1807,6 +1809,213 @@ test("@preview-lifecycle Temporary AI keeps its shared upload queue across task 
   await expect.poll(() => launchSession.getAttachmentDeletes()).toEqual(["attachment-1"]);
 });
 
+for (const width of [390, 720, 768, 1280]) {
+  test(`@mobile-navigation AI Terminal has a non-destructive way out at ${width}px`, async ({ page }, testInfo) => {
+    page.setDefaultTimeout(10_000);
+    await page.setViewportSize({ width, height: 844 });
+    await mockLaunchTerminalSocket(page);
+    await mockLaunchSession(page, { assistantAccess: PERSONAL_ASSISTANT_ACCESS, session: sessionPayload({
+      agentTerminal: { commandPreview: "codex", id: "server-agent-terminal", status: "running" }
+    }) });
+    const deletes: string[] = [];
+    page.on("request", (request) => { if (request.method() === "DELETE") deletes.push(request.url()); });
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/ai-terminal?session=${SESSION_ID}&chat=main`);
+    if (width <= 720) {
+      const dialog = page.getByRole("dialog", { name: "Codex terminal" });
+      await expect(dialog).toBeVisible();
+      const exit = dialog.getByRole("button", { name: "Exit full screen", exact: true });
+      await expect(exit).toBeInViewport();
+      await page.screenshot({ path: testInfo.outputPath("terminal-fullscreen.png") });
+      await exit.click();
+      await expect(dialog).toHaveCount(0);
+      await expect.poll(() => page.locator("#app").evaluate((element) => element.inert)).toBe(false);
+      await expect(page.getByRole("region", { name: "Codex terminal" })).toBeVisible();
+      const fullScreen = page.getByRole("button", { name: "Full screen", exact: true });
+      await fullScreen.click();
+      await expect(dialog).toBeVisible();
+      await exit.click();
+      expect(deletes).toEqual([]);
+    }
+    if (width <= 760) {
+      await page.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Dashboard section" }) }).click();
+      await page.getByRole("combobox", { name: "Dashboard section" }).press("Home");
+      await page.getByRole("option", { name: "Env", exact: true }).click();
+    } else {
+      await page.getByRole("navigation", { name: "Dashboard sections" }).getByRole("link", { name: "Env", exact: true }).click();
+    }
+    await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/env(?:\\?|$)`));
+    await page.screenshot({ path: testInfo.outputPath("dashboard-restored.png") });
+    expect(deletes).toEqual([]);
+  });
+}
+
+for (const route of ["session", "repository", "changes", "files", "database", "system", "settings", "env", "integrations", "access", "history", "health", "issues", "pull-requests"]) {
+  test(`@mobile-navigation direct ${route} page has a usable dashboard exit`, async ({ page }) => {
+    page.setDefaultTimeout(10_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockLaunchTerminalSocket(page);
+    await mockLaunchSession(page, route === "files" ? { sourceEditorFiles: { "example.txt": "Navigation fixture." } } : {});
+    if (route === "files") await page.route("**/sessions/*/files", (request) => fulfillJson(request, {
+      ok: true, areas: ["repo", "drop-zone", "session"]
+    }));
+    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/${route}?session=${SESSION_ID}&chat=main`);
+    await expect(page.getByRole("button", { name: /^Show (project|chat)$/ })).toBeVisible();
+    const showProject = page.getByRole("button", { name: "Show project", exact: true });
+    if (await showProject.isVisible()) await showProject.click();
+    if (["changes", "files", "database", "system", "issues", "pull-requests"].includes(route)) {
+      const back = page.getByRole("button", { name: "Back to dashboard", exact: true })
+        .or(page.getByRole("link", { name: "Back to dashboard", exact: true }));
+      await expect(back).toBeInViewport();
+      await back.click();
+      await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/env(?:\\?|$)`));
+    }
+    await page.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Dashboard section" }) }).click();
+    await page.getByRole("combobox", { name: "Dashboard section" }).press("Home");
+    await page.getByRole("option", { name: route === "settings" ? "Env" : "Project settings", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/${route === "settings" ? "env" : "settings"}(?:\\?|$)`));
+  });
+}
+
+test("@temporary-model merge repair exposes the shared picker and retains Senior after Apply", async ({ page }, testInfo) => {
+  page.setDefaultTimeout(10_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockLaunchTerminalSocket(page);
+  const catalog = assistantCatalogPayload({ includeOpenCode: true });
+  const codex = sessionPayload().assistantSelection;
+  const previous = { ...codex, engineId: "opencode", agentId: "build", modelProviderId: "zai-coding-plan", modelId: "glm-5.3", variantId: "high" };
+  await mockLaunchSession(page, { assistantAccess: PERSONAL_ASSISTANT_ACCESS, assistantCatalog: catalog });
+  const record = { conversationId: "repair-model", state: "open", title: "Resolve Update", status: "completed", messages: [],
+    assistantSelection: previous, agentSettings: { model: previous.modelId, thinking: "high" },
+    recoveryOperation: "update", recoveryContext: "Preserve booking validation.",
+    routingMetadata: { assistant_routing: JSON.stringify({ mode: "senior", review: false, workflowEngineId: "opencode" }) },
+    purposes: { senior: { available: true, effectiveSelection: previous } } };
+  const selections: any[] = [];
+  await page.route("**/temporary-conversations", (route) => fulfillJson(route, { ok: true, conversations: [record] }));
+  await page.route("**/temporary-conversations/repair-model", async (route) => {
+    if (route.request().method() === "PATCH") {
+      const input = route.request().postDataJSON();
+      if (input.assistantRouting) {
+        selections.push(input.assistantRouting);
+        record.routingMetadata.assistant_routing = JSON.stringify({ ...input.assistantRouting, mode: "senior", review: false });
+        record.purposes.senior.effectiveSelection = input.assistantRouting.override;
+      }
+    }
+    await fulfillJson(route, { ok: true, ...record });
+  });
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
+  await page.getByRole("button", { name: /^Session actions/ }).click();
+  await page.locator("[data-vibe64-temporary-ai-action]:visible").click();
+  const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
+  await workspace.getByRole("button", { name: "Resolve Update", exact: true }).click();
+  await workspace.getByRole("button", { name: /^Chat mode/ }).click();
+  await expect(page.getByRole("button", { name: /^Junior/ })).toHaveCount(0);
+  await page.getByRole("button", { name: /^Choose model/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Custom AI" });
+  await expect(dialog).toBeVisible();
+  await dialog.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Orchestrator", exact: true }) }).click();
+  await page.getByRole("option", { name: "Codex", exact: true }).click();
+  await dialog.getByRole("combobox", { name: "Model", exact: true }).fill("GPT");
+  await page.getByRole("option", { name: /GPT-5.6 Sol/ }).click();
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(selections).toHaveLength(1);
+  expect(selections[0].override.engineId).toBe("codex");
+  expect(record.recoveryContext).toBe("Preserve booking validation.");
+  await expect(workspace.getByRole("button", { name: /^Chat mode: Senior.*Codex/ })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("repair-model-changed.png") });
+});
+
+test("@session-toolbar crowded actions shrink, recover their spacing, and use a vertical commit icon", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockLaunchTerminalSocket(page);
+  const sessions = ["#60 Booking validation", "#61 Invoice totals", "#53 Appointment screen"].map((sessionName, index) =>
+    sessionPayload({ sessionName, sessionId: index ? `toolbar-${index}` : SESSION_ID }));
+  await mockLaunchSession(page, { assistantAccess: PERSONAL_ASSISTANT_ACCESS, session: sessions[0], sessionList: sessions });
+  await page.route("**/sessions/*/work", (route) => fulfillJson(route, {
+    ok: true, checkedAt: new Date().toISOString(), unsaved: true, updateAvailable: true
+  }));
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
+  const separator = page.getByRole("separator", { name: "Resize chat" });
+  await separator.focus();
+  await separator.press("End");
+  const header = page.locator(".studio-autopilot__session-header:visible");
+  const undo = header.getByRole("button", { name: "Undo last turn", exact: true });
+  await expect.poll(async () => Math.round((await undo.boundingBox())!.width)).toBe(48);
+  await expect.poll(() => header.locator(".studio-autopilot__header-actions--expanded").evaluate(element => getComputedStyle(element).gap)).toBe("6.4px");
+  await header.screenshot({ path: testInfo.outputPath("toolbar-roomy.png") });
+  for (let i = 0; i < 7; i += 1) await separator.press("ArrowLeft");
+  await expect.poll(async () => Math.round((await undo.boundingBox())!.width)).toBe(44);
+  const actions = header.locator(".studio-autopilot__header-actions--expanded");
+  await expect.poll(() => actions.evaluate(element => getComputedStyle(element).gap)).toBe("0px");
+  const actionBox = (await actions.boundingBox())!;
+  const headerBox = (await header.boundingBox())!;
+  expect(headerBox.x + headerBox.width - actionBox.x - actionBox.width).toBeLessThanOrEqual(5);
+  const commit = header.locator(".studio-autopilot__save-work svg path").first();
+  await expect(commit).toBeVisible();
+  const commitBox = (await commit.boundingBox())!;
+  expect(commitBox.height).toBeGreaterThan(commitBox.width);
+  await header.screenshot({ path: testInfo.outputPath("toolbar-crowded.png") });
+  await separator.press("End");
+  await expect.poll(async () => Math.round((await undo.boundingBox())!.width)).toBe(48);
+});
+
+for (const status of ["required", "failed"]) {
+  test(`@preparation-notice ${status} preparation has the appropriate presentation`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 600, height: 844 });
+    await mockLaunchTerminalSocket(page);
+    const session = { ...sessionPayload(), workspaceSetup: { status, updatedAt: "2026-09-29T07:00:00Z",
+      transcript: "Previous setup output.",
+      diagnostic: status === "required" ? "Install updated project dependencies." : "npm install failed." } };
+    await mockLaunchSession(page, { session, assistantAccess: PERSONAL_ASSISTANT_ACCESS });
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
+    const notice = page.locator(".vibe64-temporary-action-terminal:visible").filter({ hasText: /Workspace preparation/ });
+    await expect(notice).toBeVisible();
+    if (status === "required") {
+      await expect(notice).not.toHaveClass(/--error/);
+      await expect(notice.getByRole("button", { name: "Prepare workspace", exact: true })).toBeEnabled();
+      await expect(notice.getByText("Workspace preparation needs attention", { exact: true })).toHaveCount(0);
+      await expect(notice.locator(".vibe64-terminal-surface__body")).toBeHidden();
+      await expect(notice.getByText(session.workspaceSetup.diagnostic, { exact: true }).filter({ visible: true })).toHaveCount(1);
+      await expect(notice.getByText(session.workspaceSetup.transcript, { exact: true })).toBeHidden();
+    } else {
+      await expect(notice).toHaveClass(/--error/);
+      await expect(notice.getByRole("alert", { name: "Project dependency preparation", exact: true })).toHaveText(session.workspaceSetup.diagnostic);
+      await expect(notice.getByRole("button", { name: "Retry", exact: true })).toBeEnabled();
+      await notice.getByRole("button", { name: "Show terminal error details", exact: true }).click();
+      await expect(notice.getByText("Workspace preparation needs attention", { exact: true })).toBeVisible();
+    }
+    await notice.screenshot({ path: testInfo.outputPath(`preparation-${status}.png`) });
+  });
+}
+
+test("@assistant-activity reasoning dots animate only for the confirmed phase", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const chat = await responsiveChatHarness(page, { active: true });
+  Object.assign(chat.sessions[0].agentSession.turn, { phase: "reasoning" });
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
+  // The HTTP fixture has no live Socket.IO server. Deliver a confirmed connection
+  // through the real client listeners before checking connection-gated activity.
+  await page.waitForFunction(() => (document.querySelector("#app") as any)?.__vue_app__?._context.provides["jskit.realtime.runtime.client.socket"]);
+  await page.evaluate(() => {
+    const socket = (document.querySelector("#app") as any).__vue_app__._context.provides["jskit.realtime.runtime.client.socket"];
+    socket.connected = true;
+    socket.emitEvent(["connect"]);
+  });
+  const dots = page.locator(".studio-autopilot__reasoning-dots:visible");
+  await expect(dots).toBeVisible();
+  await expect.poll(() => dots.evaluate((element) => element.getAnimations().some((animation) =>
+    animation.playState === "running" && Number(animation.currentTime) > 0))).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("reasoning-dots.png") });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect.poll(() => dots.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+  Object.assign(chat.sessions[0].agentSession.turn, { phase: "tool" });
+  await chat.publish({ reason: "codex-app-server-turn-active" });
+  await expect(dots).toHaveCount(0);
+  await expect(chat.visible.getByRole("status").filter({ hasText: /^Assistant is working\.\.\.$/ })).toBeVisible();
+  await chat.close();
+});
+
 test("@preview-lifecycle Codex interactive terminal keeps one attachment queue and retries handoff", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 960 });
   await mockLaunchTerminalSocket(page);
@@ -2858,6 +3067,66 @@ for (const viewport of [{ width: 1280, height: 577 }, { width: 960, height: 700 
       releaseStarter.resolve();
       await launchSession.close();
     }
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`@session-switch-cache loaded session switching makes no chat or repository reloads at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const chat = await responsiveChatHarness(page, { twoSessions: true });
+    await page.route("**/sessions/*/updates/check", async (route) => fulfillJson(route, {
+      ok: true, checkedAt: new Date().toISOString(), relationship: "current", updateAvailable: false
+    }));
+    await page.route("**/sessions/*/work", async (route) => fulfillJson(route, {
+      ok: true, unsaved: true, operation: null, updateOperation: null,
+      destination: { mode: "managed_git", repository: "example-target-app", branch: "main" }
+    }));
+    await page.route("**/sessions/*/agent-session", async (route) => fulfillJson(route, { ok: true }));
+    const requests: string[] = [];
+    let checking = false;
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (checking && (/\/sessions\/session-renderer(?:-beta)?(?:\/(?:agent-session|conversation-log|assistant-access|work|updates\/check))?$/u.test(path) ||
+        path.endsWith("/model-routing/workflows"))) requests.push(`${request.method()} ${path}`);
+    });
+    const save = () => chat.visible.getByRole("button", { name: "Review selected session changes", exact: true });
+    const realtime = await assistantStatusServer();
+    try {
+      await page.route("**/socket.io/**", async (route) => {
+        const url = new URL(route.request().url());
+        const response = await route.fetch({ url: `${realtime.url}${url.pathname}${url.search}` });
+        await route.fulfill({ response });
+      });
+      await page.addInitScript((realtimeUrl) => {
+        const OriginalWebSocket = window.WebSocket;
+        window.WebSocket = class extends OriginalWebSocket {
+          constructor(url: string | URL, protocols?: string | string[]) {
+            const target = new URL(url, window.location.href);
+            if (target.pathname === "/socket.io/") target.host = new URL(realtimeUrl).host;
+            super(target, protocols);
+          }
+        };
+      }, realtime.url);
+      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+      for (const name of ["Alpha", "Beta"]) {
+        await chat.visible.locator(".studio-ai-sessions__tab", { hasText: name }).click();
+        await chat.composer.fill(`${name}'s retained draft`);
+        await expect(chat.send).toBeEnabled();
+        await expect(save()).toBeEnabled();
+      }
+      await page.waitForLoadState("networkidle");
+      checking = true;
+      for (const name of ["Alpha", "Beta", "Alpha", "Beta"]) {
+        await chat.visible.locator(".studio-ai-sessions__tab", { hasText: name }).click();
+        await expect(chat.composer).toHaveValue(`${name}'s retained draft`);
+        expect(await chat.send.isEnabled()).toBe(true);
+        expect(await save().isEnabled()).toBe(true);
+        await expect(chat.visible.getByText("Loading assistant…", { exact: true })).toHaveCount(0);
+      }
+      await page.waitForLoadState("networkidle");
+      expect(requests).toEqual([]);
+      expect(chat.errors).toEqual([]);
+    } finally { await chat.close(); await realtime.close(); }
   });
 }
 

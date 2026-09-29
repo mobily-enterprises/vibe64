@@ -14,7 +14,7 @@
         'vibe64-terminal-surface--draggable': draggable,
         'vibe64-terminal-surface--fill': fill,
         'vibe64-terminal-surface--focused': focused,
-        'vibe64-terminal-surface--mobile-takeover': mobileTakeover
+        'vibe64-terminal-surface--mobile-takeover': mobileTakeoverActive
       }"
       :role="mobileTakeoverActive ? 'dialog' : 'region'"
       :tabindex="mobileTakeoverActive ? -1 : undefined"
@@ -97,6 +97,15 @@
             @click="toggleExpanded"
           >
             {{ surfaceExpanded ? "Collapse" : "Expand" }}
+          </v-btn>
+          <v-btn
+            v-if="mobileTakeover && mobileTakeoverViewport && !collapsible"
+            ref="expansionToggle"
+            size="small"
+            variant="text"
+            @click="toggleMobileFullscreen"
+          >
+            {{ mobileTakeoverActive ? "Exit full screen" : "Full screen" }}
           </v-btn>
           <v-btn
             v-if="showClose"
@@ -338,6 +347,7 @@ const componentId = useId();
 const expansionToggle = ref(null);
 const takeoverRoot = ref(null);
 const mobileTakeoverViewport = ref(false);
+const mobileFullscreenDismissed = ref(false);
 const errorDetailsOpen = ref(false);
 const bodyId = `vibe64-terminal-body-${componentId}`;
 const errorDetailsId = `vibe64-terminal-error-details-${componentId}`;
@@ -346,7 +356,7 @@ const collapsedSummaryLine = computed(() => (
 ));
 const surfaceExpanded = computed(() => !props.collapsible || props.expanded);
 const mobileTakeoverActive = computed(() => Boolean(
-  props.mobileTakeover && surfaceExpanded.value && mobileTakeoverViewport.value
+  props.mobileTakeover && surfaceExpanded.value && mobileTakeoverViewport.value && !mobileFullscreenDismissed.value
 ));
 const errorDetailsToggleLabel = computed(() => (
   errorDetailsOpen.value ? "Hide terminal error details" : "Show terminal error details"
@@ -384,6 +394,13 @@ function toggleExpanded() {
       target?.focus?.({ preventScroll: true });
     });
   }
+}
+
+function toggleMobileFullscreen() {
+  const target = expansionToggle.value?.$el || expansionToggle.value;
+  takeoverPendingRestoreTarget = target;
+  mobileFullscreenDismissed.value = !mobileFullscreenDismissed.value;
+  void nextTick(() => target?.focus?.({ preventScroll: true }));
 }
 
 function handleTakeoverKeydown(event) {

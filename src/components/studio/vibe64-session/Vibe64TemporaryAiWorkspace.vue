@@ -214,15 +214,16 @@
                 @submit="sendTask(task.id)"
                 @stop="stopTask(task.id)"
               >
-                <Vibe64ChatModeControls
-                  v-if="task.id === activeTask.id && !task.recoveryOperation" :session="modeSession" temporary
-                  :save-preferences="(preferences) => temporary.updateRouting(task.id, preferences)"
-                  :active="task.busy" :disabled="props.repositoryBusy || task.status === 'closing'"
-                  :can-configure="props.canConfigureRouting"
-                  :purposes="task.purposes"
-                  :loading="!task.purposes"
-                  @custom="customTarget = $event; customOpen = true"
-                />
+                  <Vibe64ChatModeControls
+                    v-if="task.id === activeTask.id" :session="modeSession" temporary
+                    :required-mode="task.recoveryOperation === 'update' ? 'senior' : ''"
+                    :save-preferences="(preferences) => temporary.updateRouting(task.id, preferences)"
+                    :active="task.busy" :disabled="props.repositoryBusy || task.status === 'closing'"
+                    :can-configure="props.canConfigureRouting"
+                    :purposes="task.purposes"
+                    :loading="!task.purposes"
+                    @custom="customTarget = $event; customOpen = true"
+                  />
                 <v-btn
                   aria-label="Attach files"
                   :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles"

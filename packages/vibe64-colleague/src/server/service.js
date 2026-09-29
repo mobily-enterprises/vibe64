@@ -4,7 +4,7 @@ import path from "node:path";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createConversationTranscript, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, outputSchema, readEnvelope } from "./protocol.js";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, outputSchema, readEnvelope, readPartialReply } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
@@ -72,7 +72,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     const state = {
       key, root, record,
       saving: Promise.resolve(), admission: Promise.resolve(), running: null,
-      generation: 0, pendingMessages: [], connections: new Map(), requestContext: null,
+      generation: 0, pendingMessages: [], connections: new Map(), requestContext: null, streamingReply: null,
       needsObservation: Boolean(saved?.runId || saved?.status === "working"), stopping: false, nextConnection: null,
       watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve()
     };
@@ -138,6 +138,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       messages: page.conversationLog.flatMap((turn) => turn.messages.map((message) => ({
         id: message.messageId || `${turn.turnId}:${message.role}`, role: message.role, text: message.text, at: message.at
       }))),
+      streamingReply: state.streamingReply?.text ? { ...state.streamingReply } : null,
       pagination: page.pagination,
       watches: record.watches.map(publicWatch),
       assignments: (record.assignments || []).map((item) => assignmentSummary(item)),
@@ -258,10 +259,30 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         feedback, tools
       });
       state.needsObservation = true;
+      const streamingReply = {
+        id: `${replyTurnId || randomUUID()}:assistant`, role: "assistant",
+        text: "", at: new Date().toISOString(), status: "inProgress"
+      };
+      state.streamingReply = streamingReply;
+      let rawReply = "";
+      let messageId = "";
+      const onEvent = (event) => {
+        if (!isCurrent() || state.streamingReply !== streamingReply || state.pendingMessages.length) return;
+        const delta = event.type === "text" ? event.text : event.textDelta;
+        const textSnapshot = event.partType === "text" ? event.textSnapshot : undefined;
+        if (typeof delta !== "string" && typeof textSnapshot !== "string") return;
+        const nextId = event.partId || event.messageId || "";
+        if (nextId && nextId !== messageId) {
+          rawReply = "";
+          messageId = nextId;
+        }
+        rawReply = (typeof textSnapshot === "string" ? textSnapshot : rawReply + delta).slice(0, COLLEAGUE_TOOL_PAYLOAD_LIMIT);
+        streamingReply.text = readPartialReply(rawReply);
+      };
       const started = requireResult(await terminals.startEphemeralAgentConversationTurn(scope(state), {
         conversationId: state.record.conversationId, persistent: true,
         messageId: randomUUID(), message: prompt, outputSchema, policy: "read"
-      }, providerOptions(state)));
+      }, { ...providerOptions(state), onEvent }));
       state.record.runId = started.runId || "";
       await persist(state);
       if (!isCurrent()) {
@@ -283,6 +304,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         }
       }
       if (!isCurrent()) return;
+      state.streamingReply = null;
       if (activeStates.has(response.status)) throw failure("The provider has not finished this response. Your message is retained.");
       state.needsObservation = false;
       if (state.pendingMessages.length) {
@@ -345,6 +367,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         state.record.error = error.message;
         await persist(state);
       }).finally(() => {
+        state.streamingReply = null;
         state.running = null;
         if (!closed && !state.stopping && state.record.status === "ready") {
           if (state.pendingMessages.length) startWorker(state, state.nextConnection);
@@ -657,6 +680,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         state.record.currentTurnId = turn.turnId;
         state.requestContext = context;
         state.pendingMessages.push({ messageId: input.messageId, text: input.message });
+        state.streamingReply = null;
         state.record.error = "";
         await persist(state);
         const previous = state.connections.get(input.clientId) || {};
@@ -674,6 +698,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       state.stopping = true;
       await state.admission;
       state.generation += 1;
+      state.streamingReply = null;
       state.summaryAbort?.abort();
       state.pendingMessages = [];
       for (const connection of state.connections.values()) connection.acknowledge?.({ ok: false, error: "Navigation was cancelled when Colleague stopped." });

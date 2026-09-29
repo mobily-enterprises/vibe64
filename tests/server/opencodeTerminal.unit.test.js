@@ -27,6 +27,25 @@ import {
 
 import { agents, controllerHarness, providerDefinition } from "../fixtures/opencodeController.js";
 
+test("OpenCode conversation events retain exact text snapshots and deltas for live replies", async (t) => {
+  const harness = await controllerHarness({ providerEvents: [
+    { data: { type: "message.part.updated", properties: { part: {
+      id: "part-1", messageID: "message-1", type: "text", text: '{"kind":"reply","text":"Hello '
+    } } } },
+    { data: { type: "message.part.delta", properties: {
+      partID: "part-1", messageID: "message-1", field: "text", delta: "world "
+    } } }
+  ] });
+  t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { recursive: true, force: true }); });
+  const events = [];
+  const options = { runtime: harness.runtime, session: harness.session, onEvent: (event) => events.push(event) };
+  const { conversationId } = await harness.controller.createConversation("session-1", {}, options);
+  await harness.controller.runDetachedChatTurn("session-1", { conversationId, prompt: "Hello" }, options);
+  assert.equal(events.find((event) => event.type === "message.part.updated").textSnapshot, '{"kind":"reply","text":"Hello ');
+  assert.equal(events.find((event) => event.type === "message.part.delta").textDelta, "world ");
+  assert.equal(events.find((event) => event.type === "message.part.delta").partId, "part-1");
+});
+
 test("OpenCode shutdown waits for the completed turn's checkpoint persistence", async (t) => {
   const harness = await controllerHarness();
   const entered = Promise.withResolvers();

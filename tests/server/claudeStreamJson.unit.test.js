@@ -317,6 +317,8 @@ test("Claude stop requires process exit proof and resume keeps the native conver
 
 test("Claude split native frames retain thinking and answers across streaming and history", async (t) => {
   const f = await fixture(t);
+  const deltas = [];
+  f.context.onEvent = (event) => { if (event.type === "text") deltas.push(event); };
   const completedStreams = [];
   f.context.runtime.store.completeConversationStreamMessage = (_id, messageId) => completedStreams.push(messageId);
   const sent = await f.provider.sendMessage(f.context, { message: "Go", messageId: "go" });
@@ -334,6 +336,9 @@ test("Claude split native frames retain thinking and answers across streaming an
     await event(nativeFrames[index]);
   }
   await event({ type: "result", subtype: "success", result: "Done." });
+  assert.deepEqual(deltas.map(({ messageId, text }) => ({ messageId, text })), [
+    { messageId: "claude_shared-api-id_1", text: "Done." }
+  ]);
   const live = await f.provider.readConversation(f.context);
   assert.deepEqual(live.messages.map(({ role, text }) => ({ role, text })), [
     { role: "thinking", text: "Exposed summary." }, { role: "assistant", text: "Done." }

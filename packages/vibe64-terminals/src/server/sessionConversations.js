@@ -86,6 +86,15 @@ function createSessionConversations({
       agent_identity_conversation_id: record.providerConversationId || "",
       agent_identity_model_provider: record.providerConversationId ? selection.modelProviderId : ""
     });
+    if (record.recoveryOperation === "update") {
+      const preferences = assistantRoutingFromMetadata(metadata);
+      // Enforce repair policy for future turns without rewriting saved requests or history.
+      metadata.assistant_routing = JSON.stringify(assistantRoutingPreferences({
+        ...preferences, mode: "senior", review: false,
+        workflowEngineId: preferences?.workflowEngineId || selection.engineId,
+        override: preferences?.mode === "senior" ? preferences.override : undefined
+      }));
+    }
     return { ...ctx, routingConversationId: record.conversationId, assistantSelection: selection,
       session: { ...ctx.session, metadata } };
   }
@@ -178,6 +187,7 @@ function createSessionConversations({
         canSteer: ["starting", "inProgress"].includes(response.status)
           ? (await sessionAgent.assistantAccess(sessionId, ctx)).canUse : null } : {}),
       conversationId: record.conversationId,
+      routingMetadata: { ...record.routingMetadata, assistant_routing: ctx.session.metadata.assistant_routing },
       messages,
       ok: true,
       ...(route && assistantRoutingStatusIsPending(route.status)
@@ -241,6 +251,7 @@ function createSessionConversations({
       scopedStore[name] = (_id, ...args) => store[name](scope, ...args);
     }
     return { ...selected, routingConversationId: conversationId, conversationContext: ctx,
+      requiredAssistantMode: record.recoveryOperation === "update" ? "senior" : "",
       runtime: { ...ctx.runtime, store: scopedStore }, session: { ...ctx.session, metadata } };
   }
   const nativeContext = (ctx) => ({ ...ctx, runtime: ctx.conversationContext.runtime });
@@ -380,7 +391,7 @@ function createSessionConversations({
         const inheritedPreferences = parentPreferences
           ? { ...parentPreferences, mode: parentPreferences.mode === "auto" ? "senior" : parentPreferences.mode }
           : { mode: "senior", override: parentSelection };
-        const requestedPreferences = input.presentation?.recoveryOperation ? { mode: "junior", review: false }
+        const requestedPreferences = input.presentation?.recoveryOperation === "update" ? { mode: "senior", review: false }
           : input.assistantRouting || inheritedPreferences;
         if (requestedPreferences.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
         const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false,
@@ -441,21 +452,26 @@ function createSessionConversations({
           const current = await snapshot(ctx, record);
           if (current.readError) throw new Error("Reconnect this conversation before changing its mode or model.");
           if (current.goal && !["complete", "completed"].includes(current.goal.status)) throw new Error("Finish this goal before changing chat modes or models.");
+          if (record.recoveryOperation === "update" && (["starting", "inProgress"].includes(current.status) || assistantRoutingStatusIsPending(current.status))) {
+            throw new Error("Stop this repair before changing its model.");
+          }
         }
         if (input.assistantRouting) {
-          if (record.recoveryOperation) throw new Error("Repair conversations keep their dedicated instructions and model settings.");
           const requested = assistantRoutingPreferences(input.assistantRouting);
           if (requested.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
-          const override = requested.mode === "custom"
+          const repair = record.recoveryOperation === "update";
+          if (repair && !["senior", "custom"].includes(requested.mode)) throw new Error("Merge repairs always use Senior. You can choose a different model for Senior.");
+          const selectingModel = requested.mode === "custom" || repair && requested.override;
+          const override = selectingModel
             ? await sessionAgent.resolveSelection(requested.override, ctx) : requested.override;
-          if (requested.mode === "custom") await sessionAgent.requireAssistantAccessForSelection(override, ctx);
-          const preferences = assistantRoutingPreferences({ ...requested, override, review: false,
-            workflowEngineId: requested.mode === "custom" ? override.engineId
+          if (selectingModel) await sessionAgent.requireAssistantAccessForSelection(override, ctx);
+          const preferences = assistantRoutingPreferences({ ...requested, mode: repair ? "senior" : requested.mode, override, review: false,
+            workflowEngineId: selectingModel ? override.engineId
               : JSON.parse(record.routingMetadata?.assistant_routing || "null")?.workflowEngineId || record.assistantSelection.engineId });
           fields.routingMetadata = { ...record.routingMetadata, assistant_routing: JSON.stringify(preferences) };
         }
         if (settingsChanged && !input.assistantRouting) {
-          const preferences = assistantRoutingFromMetadata(record.routingMetadata);
+          const preferences = assistantRoutingFromMetadata(selectedContext(ctx, record).session.metadata);
           if (preferences.mode === "auto") throw new Error("Choose Senior or Junior before customizing its model.");
           const selection = record.assistantSelection;
           if (["senior", "junior"].includes(preferences.mode) && selection.engineId !== preferences.workflowEngineId) {

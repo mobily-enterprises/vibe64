@@ -18,6 +18,44 @@ let queryClient;
 afterEach(() => { app?.unmount(); queryClient?.clear(); request.mockReset(); configureHttpWebClient(originalClient); });
 const flush = async () => { await nextTick(); await new Promise((resolve) => setTimeout(resolve, 0)); await nextTick(); };
 
+it.each([true, false])("waits for the newly selected session's access result before reporting availability (%s)", async (available) => {
+  configureHttpWebClient({ request });
+  project.slug = ref("first");
+  const selected = ref("session-a");
+  const second = Promise.withResolvers();
+  request.mockImplementation((path) => path.includes("session-b") ? second.promise : Promise.resolve({
+    ok: true, available: true, canUse: true
+  }));
+  const access = {};
+  app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
+    .createApp({ setup() {
+      for (const sessionId of ["session-a", "session-b"]) {
+        access[sessionId] = useVibe64AssistantAccess({
+          active: () => selected.value === sessionId,
+          sessionId, sessionsApiPath: "/api/sessions"
+        });
+      }
+      return () => null;
+    } });
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  app.use(VueQueryPlugin, { queryClient });
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, ref({ actorKey: "owner" }));
+  app.mount({});
+  await flush();
+  expect(access["session-a"].canUseChat.value).toBe(true);
+
+  selected.value = "session-b";
+  await flush();
+  expect(access["session-b"].initialAccessLoading.value).toBe(true);
+  expect(access["session-b"].canUseChat.value).toBe(false);
+  expect(access["session-b"].restrictionMessage.value).toBe("");
+  second.resolve({ ok: true, available, canUse: available });
+  await flush();
+  expect(access["session-b"].initialAccessLoading.value).toBe(false);
+  expect(access["session-b"].canUseChat.value).toBe(available);
+  expect(access["session-b"].restrictionMessage.value).toBe(available ? "" : "The selected AI connection is unavailable.");
+});
+
 it("isolates real access caches when users or projects change", async () => {
   configureHttpWebClient({ request });
   project.slug = ref("first");

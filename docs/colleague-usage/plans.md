@@ -3,6 +3,23 @@
 Plans belong to a session's Main chat. Open the project and session whose plan
 you want to inspect. Temporary chats do not have Auto plans.
 
+## Create or update a plan
+
+Ask **Senior**, directly or through **Auto**, to make a plan. This means a saved
+Vibe64 checklist available through the plan icon. You can explicitly request a
+chat-only draft or another format instead.
+
+Senior checks whether there is a current plan first. If there is, say whether to
+update it or archive it and start another. If your request does not make that
+choice clear, Senior asks before replacing it. An explicit instruction to archive
+and replace the plan already authorizes that choice; the archive stays in History.
+Senior confirms creation or updates after the plan helper has saved the result.
+
+Both direct Senior and Junior receive the plan format and command instructions.
+Junior can read plans and update checklist progress and evidence. Creating,
+reopening, archiving and completing a plan still require Senior. An unsuccessful
+save must be reported, and a chat outline alone is not a saved plan.
+
 ## Read the current plan
 
 1. Select the document icon beside the usage percentage inside the chat composer.
@@ -57,8 +74,8 @@ If the move fails, shared error feedback explains the problem.
 
 If a current plan already exists, either archive it first or explicitly ask Senior
 in Main chat to reopen the desired archive, identifying its title and date.
-If this replaces a current plan, Senior must tell you that the current plan will
-be archived and remain accessible. To implement
+If this replaces a current plan, Senior identifies which plan will be archived
+and confirms your choice unless you already authorized replacement. To implement
 an active plan, explicitly request it in chat; the viewer has no Implement button.
 
 ## Loading, errors and Colleague assistance

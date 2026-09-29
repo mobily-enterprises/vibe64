@@ -432,6 +432,42 @@ describe("session repository status registry", () => {
     expect(repositoryStatusRealtimeShouldRefresh({ reason: "codex-app-server-live-progress" })).toBe(false);
   });
 
+  it("reuses checked repository state across session switches and still responds to real invalidation", async () => {
+    const selectedSessionId = ref("session-a");
+    let revision = 0;
+    registryHarness.requestHandler = (path) => String(path).endsWith("/updates/check")
+      ? { ok: true, checkedAt: new Date(Date.now() + revision++).toISOString(), updateAvailable: false }
+      : { ok: true, changedPaths: [], unsaved: true };
+    const scope = effectScope();
+    const registry = scope.run(() => useVibe64SessionRepositoryStatusRegistry({
+      selectedSessionId,
+      sessions: ref([{ sessionId: "session-a" }, { sessionId: "session-b" }]),
+      sessionsApiPath: ref("/api/app/sample/vibe64/sessions")
+    }));
+    await settleRegistryRequests();
+    selectedSessionId.value = "session-b";
+    await settleRegistryRequests();
+    expect(registryHarness.requests.filter(({ options }) => options.method === "POST")).toHaveLength(2);
+    registryHarness.requests.length = 0;
+    for (const id of ["session-a", "session-b", "session-a"]) {
+      selectedSessionId.value = id;
+      await settleRegistryRequests();
+    }
+    expect(registryHarness.requests).toEqual([]);
+
+    const sourceEvent = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.source-editor.file.changed");
+    sourceEvent.onEvent({ payload: { sessionId: "session-b" } });
+    await settleRegistryRequests();
+    expect(registryHarness.requests.map(({ path }) => path)).toEqual([
+      "/api/app/sample/vibe64/sessions/session-b/work"
+    ]);
+    registryHarness.requests.length = 0;
+    await registry.refresh("session-a");
+    expect(registryHarness.requests.some(({ options, path }) => options.method === "POST" &&
+      options.body.force && path.endsWith("/session-a/updates/check"))).toBe(true);
+    scope.stop();
+  });
+
   it("refreshes visible repository fallbacks without bypassing the server's shared check cache", async () => {
     const scope = effectScope();
     scope.run(() => useVibe64SessionRepositoryStatusRegistry({

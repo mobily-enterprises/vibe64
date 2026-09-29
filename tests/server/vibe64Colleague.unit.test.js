@@ -9,7 +9,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { registerVibe64ActionContext, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, readEnvelope } from "../../packages/vibe64-colleague/src/server/protocol.js";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, readEnvelope, readPartialReply } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
@@ -108,8 +108,8 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
       assert.ok(scope.workdir.startsWith(path.join(root, "colleague")));
       return { ok: true, conversationId: `native-${observations.creates}`, status: "ready" };
     },
-    async startEphemeralAgentConversationTurn(scope, input) {
-      observations.starts.push({ scope, input });
+    async startEphemeralAgentConversationTurn(scope, input, options) {
+      observations.starts.push({ scope, input, options });
       return { ok: true, runId: `run-${observations.starts.length}`, status: "inProgress" };
     },
     async waitForEphemeralAgentConversationTurn() {
@@ -153,6 +153,94 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
 }
 
 const watchInput = { watchId: "watch-1", projectSlug: "alpha", sessionId: "session-1", conversationId: "temporary-1", condition: "reply", question: "Tell me when the agent answers." };
+
+test("Colleague decodes only reply text, including every split inside JSON escapes", () => {
+  const text = 'Hello "there"!\n\\path 🐈 café';
+  const encoded = reply(text).replace("🐈", "\\ud83d\\udc08").replace("é", "\\u00e9");
+  for (let end = 0; end <= encoded.length; end += 1) {
+    const partial = readPartialReply(encoded.slice(0, end));
+    assert.ok(text.startsWith(partial), JSON.stringify(partial));
+    assert.doesNotMatch(partial, /[\uD800-\uDBFF]$/);
+  }
+  assert.equal(readPartialReply(encoded), text);
+  for (const hidden of [call("private arguments"), '{"kind":"tool","text":"secret', 'Thinking first', '{"text":"unknown kind']) {
+    assert.equal(readPartialReply(hidden), "");
+  }
+});
+
+for (const engine of ["codex", "claude", "opencode"]) {
+  test(`Colleague streams ${engine} reply text before completion and saves one final answer`, async (t) => {
+    const finish = Promise.withResolvers();
+    t.after(() => finish.resolve(reply("Hello world")));
+    const f = await fixture(t, [() => finish.promise]);
+    await f.send("Hello");
+    await until(() => f.observations.starts.length === 1);
+    const emit = f.observations.starts[0].options.onEvent;
+    const prefix = '{"kind":"reply","text":"Hello ';
+    emit({ type: "thinking", text: "Do not show this." });
+    assert.equal((await f.service.read({}, f.context)).streamingReply, null);
+    if (engine === "opencode") {
+      emit({ type: "message.part.updated", partType: "text", partId: "answer", textSnapshot: prefix });
+    } else emit({ type: "text", messageId: "answer", text: prefix });
+    const first = await f.service.read({}, f.context);
+    assert.equal(first.streamingReply.text, "Hello ");
+    assert.equal(first.messages.filter((message) => message.role === "assistant").length, 0);
+    assert.deepEqual((await f.service.read({ clientId: "another-browser" }, f.context)).streamingReply, first.streamingReply);
+    if (engine === "opencode") emit({ type: "message.part.delta", partId: "answer", textDelta: "world" });
+    else emit({ type: "text", messageId: "answer", text: "world" });
+    assert.equal((await f.service.read({}, f.context)).streamingReply.text, "Hello world");
+    const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+    assert.equal(saved.streamingReply, undefined);
+    finish.resolve(reply("Hello world"));
+    const final = await f.service.wait(f.context);
+    assert.equal(final.streamingReply, null);
+    assert.deepEqual(final.messages.filter((message) => message.role === "assistant").map((message) => message.text), ["Hello world"]);
+    emit({ type: "text", text: "late" });
+    assert.equal((await f.service.read({}, f.context)).streamingReply, null);
+  });
+}
+
+for (const action of ["stop", "steer", "failure"]) {
+  test(`Colleague clears unfinished replies on ${action} and ignores late events`, async (t) => {
+    const finish = Promise.withResolvers();
+    t.after(() => finish.resolve(reply("Stale answer")));
+    const f = await fixture(t, [() => finish.promise, reply("Latest answer")]);
+    await f.send("First question");
+    await until(() => f.observations.starts.length === 1);
+    const emit = f.observations.starts[0].options.onEvent;
+    emit({ type: "text", text: '{"kind":"reply","text":"Unfinished' });
+    assert.equal((await f.service.read({}, f.context)).streamingReply.text, "Unfinished");
+    if (action === "stop") {
+      f.observations.onStop = () => finish.resolve(reply("Stale answer"));
+      await f.service.stop({}, f.context);
+    } else if (action === "steer") {
+      await f.send("Change direction", "user-2");
+      assert.equal((await f.service.read({}, f.context)).streamingReply, null);
+      finish.resolve(reply("Stale answer"));
+    } else finish.reject(new Error("Provider disconnected"));
+    const result = await f.service.wait(f.context);
+    assert.equal(result.streamingReply, null);
+    emit({ type: "text", text: " stale update" });
+    assert.equal((await f.service.read({}, f.context)).streamingReply, null);
+    assert.deepEqual(result.messages.filter((message) => message.role === "assistant").map((message) => message.text), action === "steer" ? ["Latest answer"] : []);
+    assert.equal(result.status, action === "stop" ? "interrupted" : action === "failure" ? "failed" : "ready");
+  });
+}
+
+test("Colleague never displays or executes a partial tool request", async (t) => {
+  const finish = Promise.withResolvers();
+  t.after(() => finish.resolve(call("allowed")));
+  const f = await fixture(t, [() => finish.promise, reply("Done")]);
+  await f.send("Do it");
+  await until(() => f.observations.starts.length === 1);
+  const emit = f.observations.starts[0].options.onEvent;
+  for (const text of call("allowed")) emit({ type: "text", text });
+  assert.equal((await f.service.read({}, f.context)).streamingReply, null);
+  assert.deepEqual(f.observations.mutations, []);
+  finish.resolve(call("allowed"));
+  await f.service.wait(f.context);
+  assert.deepEqual(f.observations.mutations, ["allowed"]);
+});
 const watchAction = (f, operation, input) => f.actions.execute({ actionId: `vibe64.colleague.${operation}`, input, context: f.context });
 const changed = (f, overrides = {}) => f.events.publish({ type: "entity.changed", source: "vibe64", entity: "session", entityId: "session-1", realtime: { payload: { projectSlug: "alpha" } }, ...overrides });
 async function until(predicate) {

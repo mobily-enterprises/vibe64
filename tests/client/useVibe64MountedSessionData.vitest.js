@@ -194,9 +194,9 @@ describe("useVibe64MountedSessionData", () => {
     realtimeMocks.socket.connected = true;
     realtimeMocks.handlers.get("connect")();
     await vi.waitFor(() => {
-      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(endpointMocks.resource.query.refetch).toHaveBeenCalledTimes(1);
     });
-    expect(endpointMocks.resource.query.refetch).toHaveBeenCalledTimes(1);
+    expect(controller.agentConnectionStatus.value).toBe("initializing");
     expect(httpMocks.request).not.toHaveBeenCalled();
 
     scope.stop();
@@ -383,15 +383,15 @@ describe("useVibe64MountedSessionData", () => {
       vi.unstubAllGlobals();
     });
 
-    function mountAssistant({ connect = true } = {}) {
+    function mountAssistant({ connect = true, active = ref(true), turnActive = true } = {}) {
       endpointMocks.resource.data.value = {
-        agentSession: { turn: { active: true, id: "turn-a", state: "active" } },
+        agentSession: { turn: { active: turnActive, id: "turn-a", state: turnActive ? "active" : "idle" } },
         revision: 10,
         sessionId: "session-a"
       };
       scope = effectScope();
       const controller = scope.run(() => useVibe64MountedSessionData({
-        active: ref(true),
+        active,
         sessionId: ref("session-a"),
         sessionsApiPath: ref("/api/vibe64/sessions")
       }));
@@ -401,6 +401,68 @@ describe("useVibe64MountedSessionData", () => {
       }
       return controller;
     }
+
+    it.each([false, true])("switches a verified session without fetching or preparing again (working: %s)", async (turnActive) => {
+      const active = ref(true);
+      const controller = mountAssistant({ active, turnActive });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      const reads = endpointMocks.resource.query.refetch.mock.calls.length;
+      const prepares = httpMocks.request.mock.calls.length;
+      for (let visit = 0; visit < 3; visit++) {
+        active.value = false;
+        await nextTick();
+        active.value = true;
+        await vi.advanceTimersByTimeAsync(0);
+        expect(controller.agentConnectionStatus.value).toBe("connected");
+      }
+      expect(endpointMocks.resource.query.refetch).toHaveBeenCalledTimes(reads);
+      expect(httpMocks.request).toHaveBeenCalledTimes(prepares);
+    });
+
+    it.each([false, true])("recovers a hidden session after a real disconnect (working: %s)", async (turnActive) => {
+      const active = ref(true);
+      const controller = mountAssistant({ active, turnActive });
+      await vi.advanceTimersByTimeAsync(0);
+      active.value = false;
+      await nextTick();
+      realtimeMocks.socket.connected = false;
+      realtimeMocks.handlers.get("disconnect")();
+      expect(controller.agentConnectionStatus.value).toBe("disconnected");
+      realtimeMocks.socket.connected = true;
+      realtimeMocks.handlers.get("connect")();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe(turnActive ? "connected" : "initializing");
+      expect(httpMocks.request).toHaveBeenCalledTimes(turnActive ? 2 : 1);
+      active.value = true;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+      active.value = false;
+      await nextTick();
+      active.value = true;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(["vibe64.connections.changed", "vibe64.session.changed"])("observes %s while hidden before allowing reuse", async (event) => {
+      const active = ref(true);
+      const controller = mountAssistant({ active, turnActive: false });
+      await vi.advanceTimersByTimeAsync(0);
+      active.value = false;
+      await nextTick();
+      const payload = { projectSlug: "project-a", sessionId: "session-a", reason: "session-assistant-selection-updated" };
+      const listener = realtimeMocks.events.find((entry) => entry.event === event && (!entry.matches || entry.matches({ payload })));
+      expect(listener.enabled.value).toBe(true);
+      listener.onEvent({ payload });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("initializing");
+      expect(httpMocks.request).toHaveBeenCalledTimes(1);
+      active.value = true;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(httpMocks.request).toHaveBeenCalledTimes(2);
+    });
 
     it.each([false, true])("initializes quietly with socket connected=%s until the first check succeeds", async (connected) => {
       realtimeMocks.socket.connected = connected;
@@ -429,6 +491,41 @@ describe("useVibe64MountedSessionData", () => {
       expect(controller.agentConnectionStatus.value).toBe("unknown");
       await vi.advanceTimersByTimeAsync(1_000);
       expect(controller.agentConnectionStatus.value).toBe("reconciling");
+      response.resolve({ ok: true });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+    });
+
+    it.each(["manual-retry", "account-connections-changed"])("keeps confirmed reasoning visible during a healthy %s check", async (reason) => {
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      endpointMocks.resource.data.value = {
+        agentSession: { turn: { active: true, id: "turn-a", state: "active", phase: "reasoning" } },
+        revision: 11, sessionId: "session-a"
+      };
+      await nextTick();
+      const response = Promise.withResolvers();
+      httpMocks.request.mockReturnValueOnce(response.promise);
+      if (reason === "manual-retry") void controller.retryAgentConnection();
+      else realtimeMocks.events.find(({ event }) => event === "vibe64.connections.changed").onEvent({});
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("connected");
+      expect(controller.session.value.agentSession.turn.phase).toBe("reasoning");
+      response.resolve({ ok: false, error: "Status check failed" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("unknown");
+      expect(controller.agentConnectionError.value).toBe("Status check failed");
+    });
+
+    it("initializes the newly selected assistant even when the previous connection was healthy", async () => {
+      const controller = mountAssistant();
+      await vi.advanceTimersByTimeAsync(0);
+      const response = Promise.withResolvers();
+      httpMocks.request.mockReturnValueOnce(response.promise);
+      const payload = { projectSlug: "project-a", sessionId: "session-a", reason: "session-assistant-selection-updated" };
+      realtimeMocks.events.find(({ event, matches }) => event === "vibe64.session.changed" && matches?.({ payload })).onEvent({ payload });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(controller.agentConnectionStatus.value).toBe("initializing");
       response.resolve({ ok: true });
       await vi.advanceTimersByTimeAsync(0);
       expect(controller.agentConnectionStatus.value).toBe("connected");
@@ -598,14 +695,14 @@ describe("useVibe64MountedSessionData", () => {
       expect(controller.agentConnectionStatus.value).toBe("connected");
     });
 
-    it("coalesces selection and connection checks in the same connection", async () => {
+    it("coalesces manual retry and connection checks in the same connection", async () => {
       const response = Promise.withResolvers();
       httpMocks.request.mockReturnValueOnce(response.promise);
       const controller = mountAssistant();
       await vi.advanceTimersByTimeAsync(0);
-      const selected = controller.reconcileMountedAgentSession("selected");
+      const retry = controller.retryAgentConnection();
       response.resolve({ ok: true });
-      await selected;
+      await retry;
       await vi.advanceTimersByTimeAsync(0);
       expect(controller.agentConnectionStatus.value).toBe("connected");
       expect(httpMocks.request).toHaveBeenCalledTimes(1);

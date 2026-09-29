@@ -55,15 +55,15 @@
               :class="{ 'studio-autopilot__save-work--check': saveWorkCheckAvailable }"
               :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'primary' : undefined)"
               :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable) || temporaryAiWorkspace?.updateRepairTask?.busy"
-              height="48"
+              height="var(--session-action-size, 48px)"
               icon
               :title="saveWorkHeaderHint"
               type="button"
               variant="tonal"
-              width="48"
+              width="var(--session-action-size, 48px)"
               @click="requestSessionSaveWork"
             >
-              <v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceBranchSync" />
+              <v-icon v-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />
               <span v-else-if="props.workState?.destination?.mode === 'github'" class="studio-autopilot__save-symbol" aria-hidden="true">
                 <v-icon :icon="mdiContentSaveOutline" size="26" class="studio-autopilot__save-symbol-disk" />
                 <v-icon :icon="mdiSourceCommit" size="24" class="studio-autopilot__save-symbol-commit" />
@@ -140,10 +140,10 @@
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--expanded">
           <v-btn
             aria-label="Undo last turn" :title="rewindHint" :disabled="rewindDisabled"
-            :icon="mdiUndo" size="48" variant="text" @click="openConversationRewind"
+            :icon="mdiUndo" height="var(--session-action-size, 48px)" width="var(--session-action-size, 48px)" variant="text" @click="openConversationRewind"
           />
           <v-btn
-            v-if="githubProject" :icon="mdiSourcePull" size="48" variant="text"
+            v-if="githubProject" :icon="mdiSourcePull" height="var(--session-action-size, 48px)" width="var(--session-action-size, 48px)" variant="text"
             :aria-label="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
             :title="sessionPullRequest?.number ? `View pull request #${sessionPullRequest.number}` : 'Create pull request'"
             :to="sessionPullRequestTarget" :disabled="!sessionPullRequest?.number && sourceOperationsSuspended"
@@ -161,12 +161,12 @@
               :aria-label="sessionRenewalActionPresentation.label"
               :color="sessionRenewalActionPresentation.color"
               data-vibe64-session-renew-action
-              height="48"
+              height="var(--session-action-size, 48px)"
               :icon="mdiAutorenew"
               :title="sessionRenewalActionPresentation.reason"
               type="button"
               variant="text"
-              width="48"
+              width="var(--session-action-size, 48px)"
               @click="requestSessionRenewal($event.currentTarget)"
             />
           </v-badge>
@@ -174,12 +174,12 @@
             <v-btn
               :aria-label="temporaryAiHasUnreadMessages ? 'Open temporary AI: unread messages' : 'Open temporary AI'"
               :disabled="!sessionId || props.sessionSelectionArchived"
-              height="48"
+              height="var(--session-action-size, 48px)"
               :icon="mdiIncognito"
               :title="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a temporary AI conversation'"
               type="button"
               variant="text"
-              width="48"
+              width="var(--session-action-size, 48px)"
               @click="openTemporaryAi"
             />
           </v-badge>
@@ -275,9 +275,9 @@
           <template v-if="saveWorkError && (saveWorkCanResolveWithTemporaryAi || saveWorkCanCreatePullRequest)" #error-actions>
             <Vibe64TemporaryAiFixAction
               v-if="saveWorkCanResolveWithTemporaryAi"
-              :disabled="repositoryRecoverySending || !assistantJuniorAllowed"
+              :disabled="repositoryRecoverySending || !(saveWorkActivityIsUpdate ? assistantSeniorAllowed : assistantJuniorAllowed)"
               :pending="repositoryRecoverySending"
-              :title="assistantJuniorAllowed ? 'Open temporary AI to resolve this repository problem' : assistantJuniorRestrictionMessage"
+              :title="(saveWorkActivityIsUpdate ? assistantSeniorAllowed : assistantJuniorAllowed) ? 'Open temporary AI to resolve this repository problem' : saveWorkActivityIsUpdate ? assistantSeniorRestrictionMessage : assistantJuniorRestrictionMessage"
               @click="fixRepositoryActionError"
             />
             <v-btn
@@ -292,7 +292,7 @@
         <Vibe64TemporaryActionTerminal
           :active="workspaceSetupRunning || workspaceSetupRetrying"
           :dismissed="workspaceSetupDismissed"
-          :error="workspaceSetupNeedsAttention ? workspaceSetupDiagnostic : ''"
+          :error="workspaceSetupError"
           error-title="Workspace preparation needs attention"
           height="clamp(8rem, 22vh, 14rem)"
           :operation-key="workspaceSetupActivityKey"
@@ -891,7 +891,6 @@ import {
   mdiPaperclip,
   mdiPlus,
   mdiSend,
-  mdiSourceBranchSync,
   mdiSourcePull,
   mdiStop,
   mdiUndo,
@@ -1061,7 +1060,7 @@ watch([
 }, { immediate: true });
 const { resource: modelRoutingResource } = useModelRouting({
   workflowsOnly: true,
-  enabled: computed(() => props.active && !props.sessionSelectionArchived && Boolean(selectedAssistantSessionId.value))
+  enabled: computed(() => !props.sessionSelectionArchived && Boolean(selectedAssistantSessionId.value))
 });
 const assistantCanConfigureRouting = computed(() => modelRoutingResource.data.value?.canConfigure === true);
 const {
@@ -1076,7 +1075,7 @@ const {
   reload: reloadAssistantAccess,
   restrictionMessage: assistantRestrictionMessage
 } = useVibe64AssistantAccess({
-  active: computed(() => props.active && !props.sessionSelectionArchived),
+  active: computed(() => !props.sessionSelectionArchived),
   sessionId: selectedAssistantSessionId,
   sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath))
 });
@@ -1092,6 +1091,7 @@ const {
   Vibe64OutputControls,
   assistantDirectAllowed,
   assistantJuniorAllowed,
+  assistantSeniorAllowed,
   agentActive,
   reasoningActive,
   agentObservationLost,
@@ -1215,10 +1215,10 @@ const {
   workspaceSetupAskDisabled,
   workspaceSetupActivityKey,
   workspaceSetupCurrentLabel,
-  workspaceSetupDiagnostic,
   workspaceSetupDismissed,
   workspaceSetupFixSending,
   workspaceSetupNeedsAttention,
+  workspaceSetupError,
   workspaceSetupOutput,
   workspaceSetupRetryDisabled,
   workspaceSetupRetrying,
@@ -1230,6 +1230,7 @@ const {
   assistantCanUseAi: assistantCanUseAiState,
   assistantCanRouteChat,
   assistantCanUseJunior: computed(() => assistantCanUsePurpose("junior")),
+  assistantCanUseSenior: computed(() => assistantCanUsePurpose("senior")),
   assistantCanUseNative,
   assistantProgressLabel: openCodeProgressLabel,
   onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds }),
@@ -1392,6 +1393,7 @@ const saveWorkNeedsPullRequest = computed(() => githubProject.value &&
 const saveWorkCanCreatePullRequest = computed(() => githubProject.value && !sessionPullRequest.value?.number &&
   saveWorkFailure.value?.code === "vibe64_pull_request_required");
 const assistantJuniorRestrictionMessage = computed(() => assistantPurposes.value.junior?.message || "Junior is unavailable. Review model routing.");
+const assistantSeniorRestrictionMessage = computed(() => assistantPurposes.value.senior?.message || "Senior is unavailable. Review model routing.");
 const publicationLabel = computed(() => {
   const destination = saveWorkReview.value;
   if (destination?.mode === "github") return "Commit & push";
@@ -1403,6 +1405,8 @@ const dashboardContext = computed(() => ({
   assistantDraftAvailable: sourceEditorAskCodexAvailable.value,
   assistantJuniorAllowed: assistantJuniorAllowed.value,
   assistantJuniorRestrictionMessage: assistantJuniorRestrictionMessage.value,
+  assistantSeniorAllowed: assistantSeniorAllowed.value,
+  assistantSeniorRestrictionMessage: assistantSeniorRestrictionMessage.value,
   assistantRestrictionMessage: assistantRestrictionMessage.value,
   requestAssistantDraft: (text) => prefillComposer(text, { append: true }),
   requestUpdateWork: props.updateSessionWork,
@@ -1514,7 +1518,7 @@ function openTemporaryAi() {
 }
 
 async function startTemporaryAiTask(options = {}) {
-  if (!assistantCanUsePurpose("junior") || props.sessionSelectionArchived) {
+  if (!assistantCanUsePurpose(options.recoveryOperation === "update" ? "senior" : "junior") || props.sessionSelectionArchived) {
     return false;
   }
   emit("chat-attention");
@@ -1801,10 +1805,29 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__header-actions {
   flex: 0 0 auto;
+  margin-inline-start: auto;
 }
 
 .studio-autopilot__header-actions--compact {
   display: none;
+}
+
+@container studio-chat-pane (min-width: 32.01rem) and (max-width: 40rem) {
+  .studio-autopilot__session-header {
+    --session-action-size: 44px;
+  }
+  .studio-autopilot__header-actions {
+    gap: 0;
+  }
+  .studio-autopilot__header-actions :deep(.v-icon),
+  .studio-autopilot__save-work :deep(.v-btn__content > .v-icon) {
+    font-size: 20px;
+    height: 20px;
+    width: 20px;
+  }
+  .studio-autopilot__save-symbol {
+    transform: scale(0.85);
+  }
 }
 
 @container studio-chat-pane (max-width: 32rem) {
