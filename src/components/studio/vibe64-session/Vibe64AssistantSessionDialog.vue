@@ -1,9 +1,10 @@
 <template>
   <v-dialog
     :model-value="modelValue"
+    :persistent="submitting"
     max-width="38rem"
     scrollable
-    @update:model-value="emit('update:model-value', $event)"
+    @update:model-value="!$event && close()"
   >
     <v-card class="vibe64-assistant-dialog" rounded="xl">
       <v-card-title class="vibe64-assistant-dialog__title">

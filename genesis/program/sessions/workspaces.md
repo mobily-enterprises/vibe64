@@ -28,6 +28,8 @@ the canonical project and from other sessions.
 - `src/components/studio/vibe64-session/Vibe64WorkflowSelector.vue`
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
+- `src/composables/useVibe64SessionPanel.js`
+- `src/composables/useVibe64SessionRuntimeHost.js`
 - `src/components/studio/Vibe64SessionPanel.vue`
 - `src/components/studio/Vibe64UnavailableSessions.vue`
 - `src/lib/vibe64SessionInfo.js`
@@ -62,6 +64,14 @@ Session creation is available through that same action to the product operator.
 Its result reports the actual session identity and workspace preparation state;
 starting preparation does not claim that the session is ready. The ordinary
 source, resource, database-policy and assistant-access checks still apply.
+The creation dialog uses its existing pending state to prevent outside-click,
+Escape, Close and Cancel dismissal until creation succeeds or fails. Success
+closes the dialog; failure leaves the selection available for retry or dismissal.
+
+The session panel collects live activity from mounted session runtimes. Each
+runtime's toolbar preserves other sessions' activity flags while deriving its
+own flag from its live conversation. Background tabs therefore keep pulsing
+while their assistant is working and stop when that runtime reports completion.
 
 The session inspection tool reports actual native turn activity and phase,
 including its run identity and current routing status/mode. Main conversation

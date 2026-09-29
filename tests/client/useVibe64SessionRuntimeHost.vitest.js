@@ -223,7 +223,7 @@ describe("Vibe64 direct session runtime host", () => {
     expect(autopilotSource).toMatch(/agentActive\.value\s*\|\|\s*composerSending\.value/u);
   });
 
-  it("marks the selected toolbar session as thinking from live direct-session state", () => {
+  it("keeps other sessions' live activity when updating the selected toolbar session", () => {
     expect(runtimeHostToolbarSessions({
       activeAgentThinking: true,
       selectedSession: { sessionId: "session-a" },
@@ -234,8 +234,21 @@ describe("Vibe64 direct session runtime host", () => {
       ]
     })).toEqual([
       { agentThinking: true, sessionId: "session-a", sessionName: "Alpha" },
-      { agentThinking: false, sessionId: "session-b", sessionName: "Beta" }
+      { agentThinking: true, sessionId: "session-b", sessionName: "Beta" }
     ]);
+  });
+
+  it("clears the pulse when background work finishes without selecting that session", () => {
+    const background = { agentThinking: true, sessionId: "session-b" };
+    const input = {
+      selectedSessionId: "session-a",
+      selectedSession: { sessionId: "session-a" },
+      sessions: [{ agentThinking: true, sessionId: "session-a" }, background]
+    };
+    expect(runtimeHostToolbarSessions(input).map((session) => session.agentThinking)).toEqual([false, true]);
+
+    background.agentThinking = false;
+    expect(runtimeHostToolbarSessions(input).map((session) => session.agentThinking)).toEqual([false, false]);
   });
 
   it("builds schema-valid assistant message and interrupt payloads", () => {

@@ -1,4 +1,17 @@
-# Switch between open sessions
+# Create and switch sessions
+
+Use **New session** (+), or **Create session** when there are no open sessions,
+to open **Start an AI session**. Choose an available orchestrator, review any
+branch choice, then select **Create session** (or **Create branch & session**).
+While **Creating session…** is shown, the dialog stays open: clicking outside,
+pressing Escape, Close and Cancel cannot dismiss it. On success it closes and
+opens the new session. If creation fails, review the error and retry or dismiss
+the dialog. This works the same way on desktop and mobile.
+
+Colleague can explain the choices or create a session through its session
+creation action when you explicitly ask it to do so.
+
+## Switch between open sessions
 
 Select a session tab above the chat to open that session's conversation and work.
 The selected tab includes the Archive session control. Hover or keyboard focus
@@ -42,6 +55,10 @@ Colleague can explain these controls or navigate to another dashboard section
 through its existing navigation action when you ask it to.
 
 ## Understand assistant activity
+
+The dot beside a session tab pulses while that session reports active assistant
+work, including when you are viewing another session. It stops when that work
+finishes; you do not need to select the session to see the change.
 
 **Loading assistant…** means the initial assistant connection is being prepared,
 including after you select a different assistant. Checking an already healthy

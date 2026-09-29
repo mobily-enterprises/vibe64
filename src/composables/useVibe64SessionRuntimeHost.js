@@ -72,7 +72,7 @@ function runtimeHostToolbarSessions({
       ? selectedSession
       : session;
     const agentThinking = Boolean(
-      (sessionId === currentId && activeAgentThinking) ||
+      (sessionId === currentId ? activeAgentThinking : session.agentThinking) ||
       sessionRecordHasActiveAgentWork(source)
     );
     return Boolean(session?.agentThinking) === agentThinking

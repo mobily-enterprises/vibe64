@@ -128,6 +128,7 @@ reloading history, repeating assistant preparation, or rechecking known reposito
 state. Hidden chats continue receiving live updates. Initial loading, a lost
 connection, changed assistant configuration and genuine data changes still have
 their own checks; ordinary tab switching does not itself disable Send or Save/Update.
+Session tabs keep showing active assistant work while another session is selected.
 Tabs inspecting the same session share an already-running worktree inspection;
 completed results are not cached, and different projects stay independent.
 Clicking an already-selected dashboard tab keeps the conversation and dashboard
@@ -425,6 +426,8 @@ It opens from saved routing and connection state without live model discovery;
 uninitialized choices say “Recommended on creation” until exact models are selected.
 Creating the first chat explicitly fills missing defaults, so included OpenCode
 works without a credential-setup step. Reading those defaults does not save them.
+The new-session dialog cannot be dismissed while creation is running. It closes
+on success and allows retry or dismissal after a failure.
 Owners can open the selected orchestrator's routing directly over the chat,
 without visiting account settings. The form separates Senior/Junior from
 independent Router/Helper and Shared backup. It previews what owners and
