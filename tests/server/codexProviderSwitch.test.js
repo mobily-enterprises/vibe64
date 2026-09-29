@@ -137,16 +137,19 @@ test("native provider switches preserve history without restarting, and cold rec
   const settings = (modelProvider) => ({ modelProvider, model: "gpt-6-sol", cwd: root, approvalPolicy: "never", sandbox: "danger-full-access" });
   const { id: threadId } = await provider.startThread(settings("openai"));
   const { id: otherId } = await provider.startThread(settings("openai"));
-  async function completed(operation) {
+  function nextTurn(connection) {
     let unsubscribe;
-    const done = new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { unsubscribe?.(); reject(new Error("Native turn timed out.")); }, 10_000);
-      unsubscribe = client.subscribe((event) => {
+      unsubscribe = connection.subscribe((event) => {
         if (event.method === "turn/completed" && event.params.threadId === threadId) {
           clearTimeout(timer); unsubscribe(); resolve(event.params.turn);
         }
       });
     });
+  }
+  async function completed(operation) {
+    const done = nextTurn(client);
     await operation();
     assert.equal((await done).status, "completed");
   }
@@ -305,23 +308,11 @@ test("native provider switches preserve history without restarting, and cold rec
   // work must never be submitted again by the Vibe64 provider or adapter.
   const events = [];
   nextClient.subscribe((event) => events.push(event));
-  function nextTurn() {
-    let unsubscribe;
-    const result = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { unsubscribe?.(); reject(new Error("Compaction lifecycle timed out.")); }, 10_000);
-      unsubscribe = nextClient.subscribe((event) => {
-        if (event.method === "turn/completed" && event.params.threadId === threadId) {
-          clearTimeout(timer); unsubscribe(); resolve(event.params.turn);
-        }
-      });
-    });
-    return result;
-  }
   for (const destination of ["openai", "deepseek"]) {
     await coldObserver.resumeThread(threadId, settings(destination));
     const eventStart = events.length;
     heldRequest = { entered: Promise.withResolvers(), release: Promise.withResolvers() };
-    let finished = nextTurn();
+    let finished = nextTurn(nextClient);
     await nextClient.request("thread/compact/start", { threadId });
     await heldRequest.entered.promise;
     assert.ok(events.slice(eventStart).some((event) => event.method === "item/started" && event.params.item.type === "contextCompaction"));
@@ -341,7 +332,7 @@ test("native provider switches preserve history without restarting, and cold rec
 
     rejectContext = true;
     const beforeFailure = requests.length;
-    finished = nextTurn();
+    finished = nextTurn(nextClient);
     await coldObserver.sendTurn(threadId, [{ type: "text", text: "PENDING_WORK_ONCE" }], { model: "gpt-6-sol" });
     assert.equal((await finished).status, "failed");
     assert.equal(requests.length, beforeFailure + 1, "a rejected inference must not replay the turn");
@@ -351,7 +342,7 @@ test("native provider switches preserve history without restarting, and cold rec
 
     failCompaction = true;
     const beforeCompactionFailure = requests.length;
-    finished = nextTurn();
+    finished = nextTurn(nextClient);
     await nextClient.request("thread/compact/start", { threadId });
     assert.equal((await finished).status, "failed");
     failCompaction = false;
@@ -363,7 +354,7 @@ test("native provider switches preserve history without restarting, and cold rec
     const beforeStop = requests.length;
     const stopEvents = events.length;
     heldRequest = { entered: Promise.withResolvers(), release: Promise.withResolvers() };
-    finished = nextTurn();
+    finished = nextTurn(nextClient);
     await nextClient.request("thread/compact/start", { threadId });
     await heldRequest.entered.promise;
     const running = events.slice(stopEvents).find((event) => event.method === "turn/started" && event.params.threadId === threadId);

@@ -86,10 +86,11 @@ async function* readCodexHistoryRows(file, start, end, signal) {
     signal.throwIfAborted();
     const { bytesRead } = await file.read(chunk, 0, Math.min(chunk.length, end - offset), offset);
     if (!bytesRead) throw compactionHistoryError("the saved history changed during recovery. Retry the turn.");
+    const data = chunk.subarray(0, bytesRead);
     let from = 0;
     while (from < bytesRead) {
-      const newline = chunk.indexOf(10, from);
-      const complete = newline >= 0 && newline < bytesRead;
+      const newline = data.indexOf(10, from);
+      const complete = newline >= 0;
       const until = complete ? newline : bytesRead;
       size += until - from;
       if (size > MAX_REQUEST_BYTES) throw compactionHistoryError("a saved history record exceeds the recovery size limit.", 413);
@@ -166,8 +167,9 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
       if (boundary.count !== 1) throw compactionHistoryError("its exact saved compaction boundary could not be identified.");
       boundary.history = [];
       for await (const { row, offset } of readCodexHistoryRows(file, boundary.start, boundary.end, signal)) {
-        const items = row.type === "response_item" ? [row.payload]
-          : row.type === "compacted" && offset === boundary.start ? row.payload.replacement_history : [];
+        let items = [];
+        if (row.type === "response_item") items = [row.payload];
+        else if (row.type === "compacted" && offset === boundary.start) items = row.payload.replacement_history;
         for (const old of items || []) {
           if (old?.type === "compaction" || old?.type === "message" && ["developer", "system"].includes(old.role)) continue;
           recoveredBytes += Buffer.byteLength(JSON.stringify(old));
@@ -183,6 +185,8 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
     await file?.close();
   }
   const input = [];
+  // Count the original request plus each added item and its separating comma.
+  // These are transport bytes, not a token estimate for the destination model.
   let restoredBytes = Buffer.byteLength(JSON.stringify(body));
   for (const item of body.input) {
     input.push(item);
@@ -191,8 +195,6 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
     const readable = [];
     const images = [];
     for (const old of history) {
-      if (old?.type === "message" && ["developer", "system"].includes(old.role)) continue;
-      if (old?.type === "compaction") continue;
       if (!["message", "reasoning", "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output"].includes(old?.type)) {
         throw compactionHistoryError("the saved history contains an unsupported item.");
       }
@@ -226,12 +228,8 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
     if (restoredBytes > maxRequestBytes) throw compactionHistoryError("the recovered history exceeds the request size limit.", 413);
     input.push(supplement);
   }
-  const restored = { ...body, input };
-  // Bytes (especially base64 images) are not tokens. Bound the transport here;
-  // the provider owns token counting and rejects context-window overflow.
-  if (Buffer.byteLength(JSON.stringify(restored)) > maxRequestBytes) throw compactionHistoryError("the recovered history exceeds the request size limit.", 413);
   signal.throwIfAborted();
-  return restored;
+  return { ...body, input };
 }
 
 function forwardedHeaders(input) {
