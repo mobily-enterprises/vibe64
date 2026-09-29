@@ -321,6 +321,11 @@ function registerRoutes(
     buildInput: (request) => ({ ...request.query, ...sessionInput(request) }),
     summary: "Read one exact-revision page of Main's Auto work plan."
   });
+  routes.actionRoute("POST", "/sessions/:sessionId/work-plan/archive", {
+    actionId: "vibe64.terminals.work-plan.archive",
+    buildInput: (request) => withoutVibe64User(bodyWithSessionId(routes)(request)),
+    summary: "Archive the current plan at the reviewed revision, preserving it in history."
+  });
 
   routes.actionRoute("POST", "/sessions/:sessionId/agent-session", {
     actionId: "vibe64.terminals.agent-session.prepare", buildInput: sessionInput,

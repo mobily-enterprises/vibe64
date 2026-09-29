@@ -137,7 +137,11 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(changed.ok, true, JSON.stringify(changed));
   assert.equal(changed.result.chatMode, "junior");
   assert.equal(changed.result.routingMode, "senior", "saved preferences must remain separate from the previous request's mode");
-  assert.equal(changed.result.reviewEnabled, true);
+  assert.equal(changed.result.reviewEnabled, false, "direct Junior does not schedule Senior review");
+  assert.equal(changed.result.deslopEnabled, false);
+  const auto = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", review: false } });
+  assert.equal(auto.result.reviewEnabled, true, "Auto always reviews even with cleanup off");
+  assert.equal(auto.result.deslopEnabled, false);
   assert.equal(changed.result.workflowEngineId, "codex");
   assert.equal(changed.result.hasModelOverride, false);
   assert.equal(changed.result.modelId, "previous-model", "changing mode does not claim that the active model changed");

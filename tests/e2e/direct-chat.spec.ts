@@ -2114,7 +2114,7 @@ async function fulfillJson(route: Route, payload: unknown) {
   });
 }
 
-for (const width of [320, 390, 820, 1280]) {
+for (const width of [320, 390, 820, 1280, 2048]) {
   hintTest(`@colleague-mobile session Send remains usable beside Colleague at ${width}px`, async ({ page }, info) => {
     test.skip(process.env.VIBE64_E2E_COLLEAGUE_HOST !== "1", "Requires a composed host with Colleague mounted.");
     await page.setViewportSize({ width, height: 844 });
@@ -2134,15 +2134,12 @@ for (const width of [320, 390, 820, 1280]) {
     await expect(composer).toBeVisible();
     const launcher = page.getByRole("button", { name: "Open Colleague", exact: true });
     await expect(launcher).toBeVisible();
-    const compact = width <= 980;
     await composer.fill("A session message with Colleague minimized");
     await page.getByRole("button", { name: "Send message", exact: true }).click({ timeout: 10000 });
     await expect.poll(() => sent.length).toBe(1);
     expect(sent[0].message).toBe("A session message with Colleague minimized");
-    if (compact) {
-      await expect(page.getByTestId("jskit-shell-app-bar").getByRole("button", { name: "Open Colleague" })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Talk to Colleague", exact: true })).not.toBeVisible();
-    }
+    await expect(page.getByTestId("jskit-shell-app-bar").getByRole("button", { name: "Open Colleague" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Talk to Colleague", exact: true })).not.toBeVisible();
     await composer.fill("Keep the session draft");
     await launcher.focus();
     await page.keyboard.press("Enter");
@@ -2150,26 +2147,24 @@ for (const width of [320, 390, 820, 1280]) {
     await expect(colleagueDraft).toBeVisible();
     await colleagueDraft.fill("Keep the Colleague draft");
     await expect(page.getByRole("button", { name: "Talk to Colleague", exact: true })).toBeVisible();
-    if (compact) {
-      const dialog = page.getByRole("dialog", { name: "Colleague conversation", exact: true });
-      await expect(dialog).toBeVisible();
-      await page.screenshot({ path: info.outputPath(`colleague-${width}.png`), animations: "disabled" });
-      const box = await dialog.boundingBox();
-      expect(box!.x).toBe(0);
-      expect(box!.width).toBeLessThanOrEqual(width);
-      await page.setViewportSize({ width, height: 500 });
-      await expect(page.getByRole("button", { name: "Send to Colleague", exact: true })).toBeInViewport();
-      await expect(page.getByRole("button", { name: "Close Colleague", exact: true })).toBeInViewport();
-      await page.keyboard.press("Escape");
-      await expect(dialog).not.toBeVisible();
-      await expect(launcher).toBeFocused();
-    } else {
-      await page.getByRole("button", { name: "Minimize Colleague", exact: true }).click();
-    }
+    const dialog = page.getByRole("dialog", { name: "Colleague conversation", exact: true });
+    await expect(dialog).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`colleague-${width}.png`), animations: "disabled" });
+    const box = await dialog.locator(".vibe64-colleague").boundingBox();
+    expect(box!.x).toBe(width - Math.min(width, 460));
+    expect(box!.width).toBe(Math.min(width, 460));
+    expect(box!.y).toBe(0);
+    expect(box!.height).toBe(844);
+    await page.setViewportSize({ width, height: 500 });
+    await expect(page.getByRole("button", { name: "Send to Colleague", exact: true })).toBeInViewport();
+    await expect(page.getByRole("button", { name: "Close Colleague", exact: true })).toBeInViewport();
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(launcher).toBeFocused();
     await expect(composer).toHaveValue("Keep the session draft");
     await launcher.click();
     await expect(colleagueDraft).toHaveValue("Keep the Colleague draft");
-    await page.getByRole("button", { name: compact ? "Close Colleague" : "Minimize Colleague", exact: true }).click();
+    await page.getByRole("button", { name: "Close Colleague", exact: true }).click();
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect.poll(() => sent.length).toBe(2);
     expect(errors).toEqual([]);

@@ -329,3 +329,11 @@ retain their exact bytes and Claude readiness. New writes may set the optional
 `codexDisabled` flag when the selected Claude check succeeds and the independent
 Codex check fails. Absence means Codex is enabled. The script performs no
 conversion, provider call or backup; ordinary reads never rewrite credentials.
+
+## Mandatory Auto review
+
+New Auto requests always capture the Senior review handoff. The existing
+`assistant_routing.review` preference now controls only optional Deslop during
+that review; the persisted shape is unchanged. Existing request records retain
+their captured handoff decision and are not replayed or backfilled. This is a
+new-request policy change and requires no historical transformation.

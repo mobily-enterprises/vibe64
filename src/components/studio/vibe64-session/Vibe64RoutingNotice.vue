@@ -6,8 +6,8 @@
       <v-btn variant="text" min-height="48" :disabled="retrying" @click="$emit('retry')">
         {{ request.status.endsWith('_uncertain') ? 'Check delivery' : request.continuation === 'planning' ? 'Continue planning' : 'Retry review' }}
       </v-btn>
-      <v-btn v-if="['review_pending', 'planning_pending'].includes(request.status)" variant="text" min-height="48" @click="$emit('skip')">
-        {{ request.continuation === 'planning' ? 'Stop' : 'Skip review' }}
+      <v-btn v-if="request.status === 'planning_pending'" variant="text" min-height="48" @click="$emit('skip')">
+        Stop
       </v-btn>
     </div>
   </v-alert>

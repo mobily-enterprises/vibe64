@@ -430,6 +430,8 @@ test("capability requirements are checked on effective models without changing d
   const f = routingFixture();
   assert.equal(f.resolve("senior", { requirements: { capabilities: ["images"] } }).available, false);
   assert.equal(f.resolve("junior", { reviewEnabled: true, requirements: { review: ["images"] } }).available, false);
+  assert.equal(f.resolve("auto", { reviewEnabled: false, requirements: { review: ["images"] } }).available, false,
+    "Auto must validate the mandatory reviewer even when optional cleanup is disabled");
   const result = f.resolve("senior", { requirements: { capabilities: ["toolcall"] } });
   assert.equal(result.available, true, result.message);
   assert.equal(result.effectiveSelection.modelId, "big-pickle");

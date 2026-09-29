@@ -9,7 +9,7 @@ const ASSISTANT_MODES = Object.freeze([
   { id: "custom", label: "Custom", description: "Choose an orchestrator, model and thinking level for this chat." },
   { id: "senior", label: "Senior", description: "Talk directly to your most capable model. Ask questions or request changes." },
   { id: "junior", label: "Junior", description: "Talk directly to your everyday model. Ask questions or request changes." },
-  { id: "auto", label: "Auto", description: "Senior manages the plan; Junior implements it. Ask naturally in chat. Optional Senior review and Deslop." }
+  { id: "auto", label: "Auto", description: "Senior manages the plan; Junior implements it; Senior always reviews. Deslop is optional." }
 ]);
 const ASSISTANT_ROUTING_METADATA = "assistant_routing";
 const ASSISTANT_ROUTING_ROLES = Object.freeze(["senior", "junior", "helper", "router"]);
@@ -47,6 +47,7 @@ function assistantRoutingPreferences(value = {}) {
     throw routingError("Choose a supported workflow orchestrator.");
   }
   if (value.mode === "custom" && !value.override) throw routingError("Choose a custom model first.");
+  // The saved review preference controls optional Deslop; Auto review is mandatory.
   return { mode: value.mode, review: value.mode !== "custom" && value.review === true,
     ...(value.workflowEngineId ? { workflowEngineId: value.workflowEngineId } : {}),
     ...(value.override && value.mode !== "auto" ? { override: defineVibe64AssistantSelection(value.override) } : {}) };
@@ -160,7 +161,7 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
             : `Auto needs models for ${names}. Choose them in Model routing.` };
       }
       const input = { workflowEngineId, actor, configuration, catalogs, connectionAccess, validateModels };
-      const junior = resolveAssistantPurpose({ ...input, purpose: "junior", requirements, reviewEnabled });
+      const junior = resolveAssistantPurpose({ ...input, purpose: "junior", requirements, reviewEnabled: true });
       const router = resolveAssistantPurpose({ ...input, purpose: "request_routing" });
       const unavailable = [junior, router].find((decision) => !decision.available);
       if (unavailable) {
@@ -326,11 +327,10 @@ function assistantModePrompt(mode, message, { planInstructions = "", discussion 
       "Review the preceding coding work against the original request and accepted steering.",
       "Inspect actual files and relevant surrounding code. You may directly fix in-scope defects.",
       "Earlier Auto planning restrictions do not apply.",
-      "Then perform Deslop on the coding changes and your review fixes, following the project's Deslop guidance.",
-      "Keep that cleanup behavior-preserving, preserve unrelated work and staging, and report out-of-scope defects without fixing them.",
-      "Perform both parts yourself in this turn; do not delegate cleanup or start a separate Deslop turn.",
+      "Preserve unrelated work and staging, and report out-of-scope defects without fixing them.",
+      "Perform the review yourself in this turn. Cleanup is optional and only runs when requested in this review's instructions.",
       "If implementation is missing or coding stopped for a decision, report that and preserve the decision for the user; do not start the original implementation from scratch.",
-      "Run relevant checks after cleanup, then report findings, fixes, cleanup, actual checks and anything unverified.",
+      "Run relevant checks, then report findings, fixes, actual checks and anything unverified.",
       "Do not start another review, publish, or expand scope."
     ].join(" ")
   };

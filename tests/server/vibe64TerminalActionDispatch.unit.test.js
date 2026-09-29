@@ -46,6 +46,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       ["POST", "/sessions/:sessionId/agent-goal", "agent-goal.update", "updateAgentGoal", { action: "resume", threadId: "thread-1", createdAt: 123.456, objective: " Preserve exact whitespace. " }],
       ["GET", "/sessions/:sessionId/agent-plan-usage", "agent-plan-usage.read", "readAgentPlanUsage", {}],
       ["GET", "/sessions/:sessionId/work-plan", "work-plan.read", "readSessionWorkPlan", { offset: 0, limit: 1000 }],
+      ["POST", "/sessions/:sessionId/work-plan/archive", "work-plan.archive", "archiveSessionWorkPlan", { expectedRevision: "a".repeat(64) }],
       ["POST", "/sessions/:sessionId/agent-session", "agent-session.prepare", "ensureAgentSession", {}]
     ];
     for (const [prefix, suffix, read, close, write] of [
@@ -72,7 +73,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     });
     const app = testRouteApp();
     registerRoutes(app.http, { fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
-    assert.equal(actions.listDefinitions().length, 43);
+    assert.equal(actions.listDefinitions().length, 44);
     for (const [method, suffix, operation, serviceMethod, data] of cases) {
       const actionId = `vibe64.terminals.${operation}`;
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${suffix}` });

@@ -190,7 +190,8 @@ function configure() {
           <div class="px-4 pb-3">
             <p v-if="decisions[mode]?.backupReason === 'keep_workflow_together'" class="text-body-small mt-2">Senior and Junior use the shared backup together to keep this workflow in one orchestrator.</p>
             <template v-if="!temporary && mode === 'auto'">
-              <v-switch :model-value="review" :disabled="disabled || saving || connecting || !reviewAvailable || !review && decisions.review?.available === false" label="Automatic deslop by Senior" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
+              <p class="text-body-small">Senior always reviews Junior's completed work. Deslop is optional.</p>
+              <v-switch :model-value="review" :disabled="disabled || saving || connecting || !reviewAvailable" label="Deslop during Senior review" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
               <p v-if="reviewDescription" class="text-body-small">{{ reviewDescription }}</p>
             </template>
           </div>

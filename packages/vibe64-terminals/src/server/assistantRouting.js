@@ -401,7 +401,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (assistantRoutingStatusIsPending(state?.status) && state.messageId !== input.messageId) throw failure("Resolve or cancel the pending request before sending another.");
       if (state?.helper && state.messageId !== input.messageId) throw failure("Retry cleanup of the previous routing helper before sending another request.");
       if (state?.messageId !== input.messageId && state?.status === "sent" && state.review && state.resolvedMode === "junior") {
-        throw failure("The coding turn is preparing its review. Wait for it, or skip the review before sending another request.");
+        throw failure("The coding turn is preparing its Senior review. Wait for it to finish before sending another request.");
       }
       if (state?.messageId === input.messageId) {
         if (!allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and send a new one to Senior or Junior.");
@@ -433,7 +433,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         let resolvedMode = mode;
         if (explicitDeslop) resolvedMode = mode === "custom" ? "custom" : "senior";
         else if (mode === "auto") resolvedMode = "";
-        const review = mode === "auto" && !explicitDeslop && !options.purpose && preferences.review && !activeGoal(goal);
+        const review = mode === "auto" && !explicitDeslop && !options.purpose && !activeGoal(goal);
         const workflowEngineId = pinnedGoal?.workflowEngineId || preferences.workflowEngineId || selection.engineId;
         state = {
           messageId: input.messageId,
@@ -461,7 +461,15 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           submittedBy: context.vibe64User ? Object.fromEntries(["username", "id", "role", "email", "preferredName"]
             .filter((name) => context.vibe64User[name] !== undefined)
             .map((name) => [name, context.vibe64User[name]])) : null,
-          reviewMessage: "Automatic review and Deslop: check the preceding coding work against my request and steering. Fix in-scope issues, then Deslop those changes while preserving the intended behavior. Run relevant checks and explain the result."
+          reviewMessage: [
+            preferences.review ? "Automatic review and Deslop:" : "Automatic review:",
+            "Check the preceding coding work against my request, accepted steering and the active plan. Inspect the implementation and evidence, fix in-scope issues, and run relevant checks. Explicitly complete the plan when every requirement is verified; otherwise leave it active with specific unchecked gaps. Do not ask for permission merely to review or complete verified work.",
+            ...(preferences.review ? [
+              "Then perform Deslop on the coding changes and your review fixes, following the project's Deslop guidance. Keep that cleanup behavior-preserving and preserve unrelated work and staging.",
+              "Perform both parts yourself in this turn; do not delegate cleanup or start a separate Deslop turn. Run relevant checks after cleanup."
+            ] : []),
+            "Report findings, fixes, actual checks and anything unverified."
+          ].join(" ")
         };
         state.decision = await resolve(context, state);
         if (activeGoal(goal) && !pinnedGoal && !sameSelection(destinations(state.decision)[mode]?.effectiveSelection, selection)) {
@@ -635,7 +643,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       liveFollowupRequests.delete(keyFor(sessionId, context));
       state.status = "review_pending";
       delete state.attemptedMessageId;
-      if (needsRetry) state.error = "Coding finished while review scheduling was disconnected. Retry or skip this review.";
+      if (needsRetry) state.error = "Coding finished while review scheduling was disconnected. Retry the required Senior review.";
       await save(context, state);
       if (needsRetry) return;
       try { await deliver(sessionId, { ...context, vibe64User: state.submittedBy }, state, true); }
@@ -672,7 +680,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           state.status = continuationStatus(state, "pending");
           state.error = state.continuation === "planning"
             ? "Planning preparation was interrupted. Continue planning when ready."
-            : "Review preparation was interrupted. Retry or skip this review.";
+            : "Review preparation was interrupted. Retry the required Senior review.";
         } else {
           state.status = "failed";
           state.error = "Request preparation was interrupted before delivery. Retry this request or choose a mode.";

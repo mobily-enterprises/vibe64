@@ -216,6 +216,10 @@ const workPlanReadInputValidator = validator({
   limit: { type: "integer", min: 1, max: 16000, required: false },
   expectedRevision: { ...optionalText, minLength: 64, maxLength: 64 }
 });
+const workPlanArchiveInputValidator = validator({
+  sessionId: sessionIdField,
+  expectedRevision: { ...requiredText, minLength: 64, maxLength: 64 }
+});
 const outputStatusInputValidator = validator({
   sessionId: sessionIdField, publicHost: optionalText, publicProtocol: optionalText,
   outputTargetId: { ...optionalText, minLength: 1 },
@@ -252,6 +256,7 @@ function terminalControlActionInputValidator(global, control) {
 
 export {
   workPlanReadInputValidator,
+  workPlanArchiveInputValidator,
   emptyInputValidator,
   projectRuntimeInputValidator,
   sessionInputValidator,

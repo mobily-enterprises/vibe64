@@ -11,6 +11,7 @@ const sessionFields = {
   ].map((key) => [key, shortText])),
   ...Object.fromEntries(["modelId", "modelProviderId", "variantId", "agentId"].map((key) => [key, { ...shortText, maxLength: 512 }])),
   reviewEnabled: { type: "boolean", required: false },
+  deslopEnabled: { type: "boolean", required: false },
   hasModelOverride: { type: "boolean", required: false },
   turnActive: { type: "boolean", required: false },
   needsUserInput: { type: "boolean", required: false }
@@ -62,7 +63,8 @@ function sessionSummary(session) {
     ...Object.fromEntries(Object.entries(fields).flatMap(([key, value]) => (
       typeof value === "string" ? [[key, value.slice(0, sessionFields[key].maxLength)]] : []
     ))),
-    ...(preferences ? { reviewEnabled: preferences.review, hasModelOverride: Boolean(preferences.override) } : {}),
+    ...(preferences ? { reviewEnabled: preferences.mode === "auto", deslopEnabled: preferences.mode === "auto" && preferences.review,
+      hasModelOverride: Boolean(preferences.override) } : {}),
     ...(typeof turn?.active === "boolean" ? { turnActive: turn.active } : {}),
     ...(route ? { needsUserInput: route.reviewStatus === "skipped_question" } : {})
   };

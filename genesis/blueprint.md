@@ -70,9 +70,11 @@ these future workflow choices from running agents, session chat modes and its ow
 model. Account connection and credential entry remain in AI Accounts. Complete
 product-operation coverage remains in progress.
 
-On phones and narrow layouts, Colleague has one compact avatar button in the
-header. It opens a full-screen conversation with voice controls inside, leaving
-the coding session's message and Send controls clear when closed. Closing it
+On every screen size, Colleague has one compact avatar button in the header.
+It opens a 460-pixel-wide drawer on the right, using the available width on smaller
+screens. Model selection, microphone, speaker, Stop and Send/Steer use compact icon
+buttons inside the message box, matching the main chat toolbar and leaving
+the page's comment, message and Send controls clear when closed. Closing it
 preserves both conversations' drafts.
 Holding the header avatar records a voice message when the host supports speech.
 A bubble across the left two-thirds shows recognized words, leaving the right
@@ -1125,13 +1127,10 @@ it; expiry also ends the request without running tests. Reloading the page does
 not discard the wait, but losing the owning assistant does. Retry still
 checks current safety and never creates a duplicate test.
 
-Deslop is a deliberate cleanup that preserves behavior, not an automatic extra
-agent turn. After Save, Vibe64 may offer Deslop for the exact commit it just
-published. Accepting uses the ordinary visible project conversation; declining
-has no lasting effect. The offer uses the normal theme surface and a filled
-Deslop button so its label stays readable, including while unavailable during
-active work. People can also request Deslop for the agent's changes
-to the current task, including unsaved work, or explicitly select commits.
+Deslop is a deliberate cleanup that preserves behavior. People can request it
+in chat for the current task's changes, including unsaved work, or explicitly
+select commits. Auto can include it in the mandatory Senior review when the
+optional Deslop setting is enabled. Saving work does not show a cleanup offer.
 
 People can choose how cautiously the AI engineers a project. The choice follows
 the project's source, always keeps ordinary work simple and targeted, and makes
@@ -1401,9 +1400,12 @@ will be archived and that it remains accessible. Archiving does not imply
 completion. Reopening preserves the previous record and makes the selected plan
 active. Session retention owns these runtime files.
 
-A document icon at the bottom of chat is highlighted in muted yellow while a
-plan is active. It opens the current plan and Plan history even after completion
-or a change of chat mode. There are no Implement or Recover buttons: people ask
+A document icon in the existing chat composer toolbar, beside the usage percentage,
+is highlighted in muted yellow while a plan is active. It adds no separate row.
+It opens the current plan and an always-visible History control, even after
+completion or a change of chat mode. Archive plan preserves the exact current
+document in History without marking it completed; it waits for active work and
+review to finish. There are no Implement or Recover buttons: people ask
 in chat. The visible plan contains readable checklists and evidence. Junior
 checks completed work as it proceeds; Senior can uncheck unsupported claims and
 add missing acceptance checks within the agreed scope. Saved edits appear live
@@ -1411,8 +1413,8 @@ in open viewers without resetting their scroll position.
 
 Only Senior explicitly marks a plan completed after reviewing its requirements
 and evidence. Successful turns, review outcomes and checked boxes never complete
-it automatically. Optional Senior review can fix in-scope defects and Deslop the
-changes. Unfinished work remains active with specific remaining items; another
+it automatically. In Auto, Senior always reviews completed Junior work and can fix in-scope defects.
+Deslop is optional within that review; disabling cleanup cannot disable review. Unfinished work remains active with specific remaining items; another
 execution pass needs a user request. Ordinary discussion and Stop never reopen,
 archive or complete a plan. No automatic repeating completion-plan cycle exists.
 Direct Senior and Junior still work from the user's request; plan lifecycle

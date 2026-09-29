@@ -289,41 +289,6 @@
           </template>
         </Vibe64TemporaryActionTerminal>
 
-        <v-sheet
-          v-if="savedCommitDeslop"
-          border
-          class="studio-autopilot__deslop-offer"
-          color="surface"
-          rounded="lg"
-        >
-          <div class="studio-autopilot__deslop-copy">
-            <strong>Work saved</strong>
-            <span>Run a behavior-preserving cleanup of this commit?</span>
-          </div>
-          <v-btn
-            :disabled="savedCommitDeslopSending"
-            size="small"
-            type="button"
-            variant="text"
-            @click="dismissSavedCommitDeslop"
-          >
-            Not now
-          </v-btn>
-          <v-btn
-            :aria-busy="savedCommitDeslopSending ? 'true' : undefined"
-            class="studio-autopilot__deslop-action"
-            color="primary"
-            :disabled="savedCommitDeslopSending || agentActive || composerSending"
-            :prepend-icon="mdiBroom"
-            size="small"
-            type="button"
-            variant="flat"
-            @click="startSavedCommitDeslop"
-          >
-            {{ savedCommitDeslopSending ? "Starting…" : "Deslop" }}
-          </v-btn>
-        </v-sheet>
-
         <Vibe64TemporaryActionTerminal
           :active="workspaceSetupRunning || workspaceSetupRetrying"
           :dismissed="workspaceSetupDismissed"
@@ -434,7 +399,6 @@
             class="studio-autopilot__composer"
             @focusout="handleComposerRegionFocusOut"
           >
-            <Vibe64WorkPlan :session="props.session" :sessions-api-path="props.sessionsApiPath" :active="props.active && conversationLogVisible" />
             <Vibe64RoutingNotice
               :request="routingRequest"
               :mode="assistantRoutingFromMetadata(props.session?.metadata)?.mode || ''"
@@ -564,6 +528,7 @@
                     :session="props.session"
                     :sessions-api-path="props.sessionsApiPath"
                   />
+                  <Vibe64WorkPlan :session="props.session" :sessions-api-path="props.sessionsApiPath" :active="props.active && conversationLogVisible" :busy="agentActive" />
                   <Vibe64SessionAssistantMenu
                     v-model="composerSettingsOpen"
                     :target="composerSettingsButton"
@@ -915,7 +880,6 @@ import {
   mdiArrowLeft,
   mdiArrowTopRight,
   mdiAutorenew,
-  mdiBroom,
   mdiCircle,
   mdiConsoleNetworkOutline,
   mdiContentSaveOutline,
@@ -1171,7 +1135,6 @@ const {
   sourceToolLoading,
   dismissSaveWorkActivity,
   dismissNumberedQuestions,
-  dismissSavedCommitDeslop,
   dismissWorkspaceSetupActivity,
   confirmSaveWork,
   editOptimisticMessage,
@@ -1228,8 +1191,6 @@ const {
   saveWorkTitle,
   saveWorkRequiresUpdate,
   saveWorkUnsaved,
-  savedCommitDeslop,
-  savedCommitDeslopSending,
   selectSessionTool,
   sessionId,
   sessionGithubActor,
@@ -1240,7 +1201,6 @@ const {
   sourceEditorAskCodexAvailable,
   sourceEditorOpenRequest,
   structuredQuestionActive,
-  startSavedCommitDeslop,
   submitComposerMessage,
   systemBackAvailable,
   systemRestoreRequest,
@@ -1898,25 +1858,6 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__connection-recovery > .v-btn {
   flex: 0 0 auto;
-}
-
-.studio-autopilot__deslop-offer {
-  align-items: center;
-  display: grid;
-  gap: 0.35rem;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  padding: 0.45rem 0.5rem 0.45rem 0.75rem;
-}
-
-.studio-autopilot__deslop-copy {
-  display: grid;
-  font-size: 0.82rem;
-  line-height: 1.3;
-  min-width: 0;
-}
-
-.studio-autopilot__deslop-action {
-  min-inline-size: 5.75rem;
 }
 
 .studio-autopilot__composer {

@@ -246,9 +246,10 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `packages/vibe64-terminals/src/server/agentPlanCommand.js`
 - `packages/vibe64-accounts/src/server/assistantPlanUpgrade.js`
 - `src/components/studio/vibe64-session/Vibe64WorkPlan.vue`
+- `packages/vibe64-terminals/src/server/actions.js`
+- `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `tests/server/assistantPlanLifecycle.test.js`
 - `tests/client/vibe64WorkPlan.vitest.js`
-- `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
 - `packages/vibe64-runtime/src/server/codexHistoryAdapter.js`
@@ -411,7 +412,7 @@ users remains supported. Access responses omit the user record. Reads,
 Stop and cleanup remain separate from admission of new inference. Source
 explanations and Database Copilot use their own resolved Helper destination too.
 
-Main chat can save Custom, Senior, Junior or Auto plus an optional Auto review preference
+Main chat can save Custom, Senior, Junior or Auto plus an optional Auto Deslop preference
 in the existing conversation metadata. A role resolves to a live, available
 selection using its saved workflow, independently of the last native engine.
 The mode menu consumes the session's access decisions, including their loading,
@@ -481,7 +482,7 @@ fields directly, without repeating their values or explaining native handoff.
 The manager shares paginated catalogue assembly with Model routing and rejects mixed revisions. Apply saves the choice;
 Cancel changes nothing. Save failures remain visible with the draft for retry.
 
-One icon opens the mode choices, assigned models and review
+One icon opens the mode choices, assigned models and optional Deslop
 switch in Auto; these controls occupy no separate row above the composer. Its icon and
 accessible label reflect the selected mode. Owners open the shared Model routing
 form directly in an overlay, initially selecting this chat's orchestrator.
@@ -543,26 +544,34 @@ explicit Senior operation; unchecked requirements prevent it. Ending a coding or
 review turn only ends execution and cannot promote a plan's status.
 
 The viewer reads canonical current/history pages independently of the latest
-routing request or selected chat mode. The document icon uses warning tone for
+routing request or selected chat mode. The document icon sits in the existing
+composer toolbar beside the usage percentage, without a separate row. It uses warning tone for
 an active plan, neutral tone otherwise, and remains available for completed or
 archived plans. The full checklist renders with model-maintained checkboxes and
 Markdown evidence. work-plan-changed events refresh open viewers; stable content
 containers preserve scrolling. Complete pagination uses one revision throughout;
 a changed document cannot be presented as a mixture of revisions. Implement and
-Recover controls are removed. All lifecycle and execution requests use chat.
+Recover controls are removed. The viewer always exposes History, including its
+empty state. Archive plan invokes the authenticated work-plan.archive action at
+the displayed current revision, preserves the snapshot without completing it,
+and refuses while agent work or its routing handoff is pending. Other lifecycle
+and execution requests use chat.
 
 Discussion is read-only. Beginning a Senior turn never modifies or invalidates a
 plan. Junior preserves delivered work and ticks only evidenced requirements.
 Senior review may uncheck unsupported claims, add missing in-scope acceptance
-checks, fix defects and Deslop changes. It explicitly completes the plan or leaves
+checks and fix defects. Auto always schedules one Senior review after successful
+Junior execution, even when both roles use the same exact model selection.
+The saved review preference controls optional Deslop only;
+it cannot disable review. Direct Senior and Junior requests remain direct. Senior review explicitly completes the plan or leaves
 it active and explains remaining work. Review never automatically starts another
 implementation/planning cycle; further execution needs user intent. Existing
 review interruption, access, delivery-receipt and restart safeguards remain.
 
 Deslop is a task with permission to clean up code, not a separate selectable
 chat mode. It uses the configured Senior model in named modes and the exact
-selected model in Custom. A standalone `deslop` command or the saved
-commit Deslop action bypasses classification, including from explicit modes.
+selected model in Custom. A standalone `deslop` command bypasses classification,
+including from explicit modes. Saving a commit no longer offers a Deslop banner.
 Other cleanup-only wording in Auto uses the Router's Deslop decision. Deslop
 applies the project's cleanup guidance directly, preserves behavior and staging,
 does not create an implementation proposal, and never schedules another review.
@@ -1494,7 +1503,7 @@ new draft untouched. A rejected Steer restores its original text only when the
 composer is still empty and no newer submission exists; otherwise its failed entry keeps the Retry and Edit
 actions without replacing the newer draft. Retries retain the same message id.
 A durable user-message receipt with the exact submitted message id settles Send
-and the saved-commit Deslop banner even while the HTTP request remains pending.
+even while the HTTP request remains pending.
 Unrelated messages do not acknowledge delivery. Codex records that authored
 message from its provider receipt before subsequent answer notifications;
 expanded Genesis instructions remain out of visible history. The normal HTTP

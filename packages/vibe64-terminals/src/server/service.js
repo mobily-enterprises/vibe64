@@ -1,6 +1,6 @@
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
-import { readWorkPlanPage } from "./assistantWorkPlan.js";
+import { manageWorkPlan, readWorkPlanPage } from "./assistantWorkPlan.js";
 import { assertSessionRepositoryReview, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createClaudeSessionAgentProvider } from "./agent/providers/claudeSessionAgentProvider.js";
@@ -2961,6 +2961,19 @@ function createService({
         ok: true, sessionId,
         ...await readWorkPlanPage(await assistantSessionOptions(sessionId), input)
       }));
+    },
+
+    archiveSessionWorkPlan(sessionId, input = {}) {
+      return vibe64Result(() => runMainAgentWrite(sessionId, {}, async (context) => {
+        const request = JSON.parse(context.session.metadata.assistant_routing_request || "null");
+        if (sessionHasActiveAgentRun(context.session) || assistantRoutingStatusIsPending(request?.status) ||
+            ["sent", "reviewing", "planning"].includes(request?.status)) {
+          return { ok: false, error: "Wait for the assistant and its review to finish before archiving the plan." };
+        }
+        const result = await manageWorkPlan(context, { operation: "archive", expectedRevision: input.expectedRevision }, "user");
+        await publishAgentSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice } });
+        return { ok: true, sessionId, ...result };
+      }, { operation: "archive-work-plan" }));
     },
 
     async ensureAgentSession(sessionId, options = {}) {

@@ -503,8 +503,6 @@ function useVibe64AutopilotView(props, emit, {
   const saveWorkFailure = ref(null);
   const saveWorkAttempt = ref(null);
   const saveWorkSending = ref(false);
-  const savedCommitDeslop = ref("");
-  const savedCommitDeslopSending = ref(false);
   const selectedAnswerChoice = ref("");
   const shortActionDismissals = ref({
     saveWork: "",
@@ -1668,16 +1666,11 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkSending.value = true;
     saveWorkError.value = "";
     saveWorkFailure.value = null;
-    savedCommitDeslop.value = "";
     saveWorkConfirmOpen.value = false;
     try {
       const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value });
       if (!requestIsCurrent()) {
         return false;
-      }
-      const saveCommit = normalizedAgentTurnText(result?.saveCommit);
-      if (result?.reconciled === true && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/iu.test(saveCommit)) {
-        savedCommitDeslop.value = saveCommit;
       }
       saveWorkAttempt.value = null;
       return result;
@@ -1699,41 +1692,6 @@ function useVibe64AutopilotView(props, emit, {
     } finally {
       if (requestIsCurrent()) {
         saveWorkSending.value = false;
-      }
-    }
-  }
-
-  function dismissSavedCommitDeslop() {
-    savedCommitDeslop.value = "";
-  }
-
-  async function startSavedCommitDeslop() {
-    const saveCommit = savedCommitDeslop.value;
-    if (
-      !saveCommit ||
-      savedCommitDeslopSending.value ||
-      composerSending.value ||
-      agentActive.value ||
-      !assistantDirectAllowed.value
-    ) {
-      return false;
-    }
-    const sendingSessionId = sessionId.value;
-    const sendingProjectSlug = projectSlug.value;
-    savedCommitDeslopSending.value = true;
-    try {
-      const accepted = await sendChatPayload({
-        displayMessage: `Deslop saved commit ${saveCommit.slice(0, 12)}.`,
-        genesisTask: "deslop",
-        message: `Deslop commit ${saveCommit}.`
-      });
-      if (accepted) {
-        savedCommitDeslop.value = "";
-      }
-      return accepted;
-    } finally {
-      if (sessionId.value === sendingSessionId && projectSlug.value === sendingProjectSlug) {
-        savedCommitDeslopSending.value = false;
       }
     }
   }
@@ -2153,8 +2111,6 @@ function useVibe64AutopilotView(props, emit, {
     dismissedNumberedQuestionText.value = "";
     submittedQuestionText.value = "";
     selectedAnswerChoice.value = "";
-    savedCommitDeslop.value = "";
-    savedCommitDeslopSending.value = false;
     workspaceSetupRetryError.value = "";
     workspaceSetupFixTaskId.value = "";
     checkedUpdateRepairRuns.clear();
@@ -2255,7 +2211,6 @@ function useVibe64AutopilotView(props, emit, {
     sourceToolLoading,
     dismissSaveWorkActivity,
     dismissNumberedQuestions,
-    dismissSavedCommitDeslop,
     dismissWorkspaceSetupActivity,
     confirmSaveWork,
     editOptimisticMessage,
@@ -2314,8 +2269,6 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkTitle,
     saveWorkRequiresUpdate,
     saveWorkUnsaved,
-    savedCommitDeslop,
-    savedCommitDeslopSending,
     selectSessionTool,
     sessionId,
     sessionGithubActor,
@@ -2327,7 +2280,6 @@ function useVibe64AutopilotView(props, emit, {
     sourceEditorAskCodexAvailable,
     sourceEditorOpenRequest,
     structuredQuestionActive,
-    startSavedCommitDeslop,
     submitComposerMessage,
     systemBackAvailable,
     systemRestoreRequest,

@@ -742,7 +742,7 @@ function createSessionAgentManager({
     const purposes = [...Object.keys(ASSISTANT_PURPOSE_ROLES), "auto"];
     return Object.fromEntries(await Promise.all(purposes.map(async (purpose) => [purpose,
       await resolvePurpose({ purpose, workflowEngineId: input.workflowEngineId,
-        reviewEnabled: input.review === true && purpose === "auto",
+        reviewEnabled: purpose === "auto",
         ...(input.override && purpose === input.mode
           ? { override: { role: input.mode, selection: input.override } } : {})
       }, { ...options, configuration }, { facts, validateModels: false })

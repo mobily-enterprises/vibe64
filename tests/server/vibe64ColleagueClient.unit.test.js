@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import * as vue from "vue";
+import * as mdi from "@mdi/js";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { transform } from "esbuild";
 
@@ -66,10 +67,10 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" })) {
   const module = { exports: {} };
   const imports = {
     vue,
-    vuetify: { useDisplay: () => ({ width: vue.ref(390) }) },
+    "@mdi/js": mdi,
     "@/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher") },
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
-    "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {} },
+    "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantPromptInput: {} },
     "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages: () => [] },
     "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue": { default: {} }
   };

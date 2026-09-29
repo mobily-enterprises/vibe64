@@ -321,6 +321,29 @@ test("generated Junior cannot change the mode of an unfinished Senior goal", asy
   assert.equal(f.helperCalls(), 0);
 });
 
+for (const sameModel of [false, true]) {
+  test(`Auto reviews with Deslop disabled and ${sameModel ? "identical" : "different"} Junior/Senior models`, async (t) => {
+    const f = await fixture(t, { mode: "auto", review: false });
+    if (sameModel) await f.configuration.write({ codex: { ...f.assignments, senior: f.assignments.junior } }, 1);
+    await f.service.send("session-1", request, f.context);
+    assert.equal(f.state().review, true);
+    await f.service.afterTurn("session-1", completion(), f.context);
+    assert.equal(f.sends.length, 2);
+    if (sameModel) assert.deepEqual(f.sends[1].selection, f.sends[0].selection);
+    else assert.equal(f.sends[1].selection.modelId, f.assignments.senior.modelId);
+    assert.notEqual(f.sends[1].input.messageId, f.sends[0].input.messageId, "review is a separate admitted turn even on the same model");
+    assert.equal(f.state().status, "reviewing");
+    assert.match(f.sends[1].input.message, /Explicitly complete the plan when every requirement is verified/);
+    assert.doesNotMatch(f.sends[1].input.message, /perform Deslop|review and Deslop/i);
+    assert.equal((await readWorkPlan(f.context)).status, "active", "dispatching review cannot complete the document");
+    await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+    await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+    assert.equal(f.sends.length, 2, "only one Senior review is scheduled");
+    assert.equal(f.state().reviewStatus, "completed");
+    assert.equal((await readWorkPlan(f.context)).status, "active", "a successful review turn still requires explicit plan completion");
+  });
+}
+
 test("Auto uses a bounded helper then ordinary delivery and one Senior-model review with Deslop", async (t) => {
   const f = await fixture(t);
   assert.equal((await f.service.send("session-1", request, f.context)).delivered, true);
@@ -824,10 +847,10 @@ test("missing native turn evidence skips automatic review instead of guessing co
   assert.match(f.state().error, /could not be matched/);
 });
 
-test("a new request cannot overtake a pending review and Skip releases that boundary", async (t) => {
+test("a new request cannot overtake a pending review and explicit Stop cancels it", async (t) => {
   const f = await fixture(t, { mode: "auto", review: true });
   await f.service.send("session-1", request, f.context);
-  await assert.rejects(f.service.send("session-1", { ...request, messageId: "next" }, f.context), /preparing its review/);
+  await assert.rejects(f.service.send("session-1", { ...request, messageId: "next" }, f.context), /preparing its Senior review/);
   f.catalog.modelProviders[0].connected = false;
   await f.service.afterTurn("session-1", completion(), f.context);
   assert.equal(f.state().status, "review_pending");
@@ -1343,7 +1366,7 @@ for (const role of ["junior", "senior", "review"]) {
     if (role === "review") await f.service.afterTurn("session-1", completion("turn-2"), f.context);
     assert.equal(f.state().workPlan.status, "active");
     assert.equal((await readWorkPlan(f.context)).status, "active");
-    assert.equal(f.sends.length, role === "review" ? 2 : 1);
+    assert.equal(f.sends.length, role === "senior" ? 1 : 2);
   });
 }
 

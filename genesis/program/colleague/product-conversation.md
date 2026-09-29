@@ -81,12 +81,16 @@ display name (default Colleague). The service accepts a host-owned name resolver
 and includes its current value as data in each model turn. Changing the name
 updates labels and future replies without replacing native history or typed drafts.
 The drawer fits the available viewport width, including when a classic scrollbar
-is present. Its minimize, model and watch controls have 48-pixel touch targets.
-At the shell's narrow-layout breakpoint (980 pixels), a 48-pixel header button
-replaces the floating launcher and voice strip. It opens a full-screen Vuetify
-dialog with text and voice controls, focus containment and return to the launcher
-on close. The host shares the routed header target through its root; Teleport
-moves the existing panel without remounting the voice connection or clearing
+is present. Its close, model and watch controls have 48-pixel touch targets.
+At every screen size, a 48-pixel header button opens a full-height drawer on the
+right, 460 pixels wide or the available viewport width on smaller screens. Its
+Vuetify dialog provides text and voice controls, focus containment and return to the launcher
+on close. The model, microphone, speaker, Stop and Send/Steer controls share a compact icon
+toolbar inside the message box, using the main chat button styles. No separate
+status or voice footer reserves vertical space. No floating launcher or voice
+strip covers page controls when closed.
+The host shares the routed header target through its root; Teleport places the
+persistent panel in the dialog without remounting the voice connection or clearing
 drafts. While a header is unavailable, the compact launcher stays at the top edge.
 When the host supplies speech, holding this button for 350ms emits a recording
 gesture. Release finishes it; cancellation, lost capture or leaving the window

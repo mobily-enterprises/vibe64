@@ -1219,17 +1219,17 @@ describe("useVibe64AutopilotView direct chat", () => {
     const delivery = deferredResult();
     const sendAgentMessage = vi.fn(() => delivery.promise);
     const { props, view } = await createViewWithProps({ sendAgentMessage });
-    view.savedCommitDeslop.value = "04f8283622d6";
-    const sending = view.startSavedCommitDeslop();
+    view.composerDraft.value = "Deslop commit 04f8283622d6.";
+    const sending = view.submitComposerMessage();
     const messageId = sendAgentMessage.mock.calls[0][0].messageId;
     props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
-    props.conversationLog.turns = [{ user: { messageId: "another-message", text: "Deslop saved commit 04f8283622d6." } }];
+    props.conversationLog.turns = [{ user: { messageId: "another-message", text: "Deslop commit 04f8283622d6." } }];
     await nextTick();
     expect(view.composerSubmitLabel.value).toBe("Steer");
-    expect(view.savedCommitDeslopSending.value).toBe(true);
-    props.conversationLog.turns = [{ user: { messageId, text: "Deslop saved commit 04f8283622d6." } }];
+    expect(view.composerSending.value).toBe(true);
+    props.conversationLog.turns = [{ user: { messageId, text: "Deslop commit 04f8283622d6." } }];
     await expect(sending).resolves.toBe(true);
-    expect(view.savedCommitDeslopSending.value).toBe(false);
+    expect(view.composerSending.value).toBe(false);
     expect(view.agentStopEnabled.value).toBe(true);
     view.composerDraft.value = "Keep this draft.";
     expect(view.composerCanSubmit.value).toBe(true);
@@ -2229,7 +2229,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     ]);
   });
 
-  it("offers exact-commit Deslop after a reconciled native Save", async () => {
+  it("reconciles native Save without starting another agent request", async () => {
     const saveCommit = "a".repeat(40);
     const sendAgentMessage = vi.fn(async () => true);
     const saveSessionWork = vi.fn(async () => ({
@@ -2260,35 +2260,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(saveSessionWork).toHaveBeenCalledWith({ destinationReview: null });
     expect(sendAgentMessage).not.toHaveBeenCalled();
     expect(view.saveWorkConfirmOpen.value).toBe(false);
-    expect(view.savedCommitDeslop.value).toBe(saveCommit);
-
-    await expect(view.startSavedCommitDeslop()).resolves.toBe(true);
-    expect(sendAgentMessage).toHaveBeenCalledWith(expect.objectContaining({
-      displayMessage: "Deslop saved commit aaaaaaaaaaaa.",
-      genesisTask: "deslop",
-      message: `Deslop commit ${saveCommit}.`
-    }));
-    expect(view.savedCommitDeslop.value).toBe("");
-  });
-
-  it("does not offer Deslop until Save has reconciled the session", async () => {
-    const view = await createView({
-      saveSessionWork: vi.fn(async () => ({
-        ok: true,
-        reconciled: false,
-        saveCommit: "b".repeat(40),
-        status: "published_needs_reconcile"
-      })),
-      workState: {
-        unsaved: true,
-        updateAvailable: false,
-        updateStatusPending: false
-      }
-    });
-
-    view.requestSaveWork();
-    await view.confirmSaveWork();
-    expect(view.savedCommitDeslop.value).toBe("");
+    expect(view.saveWorkSending.value).toBe(false);
   });
 
   it("shows the Save action only in the active session chat", async () => {
@@ -2654,7 +2626,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     oldResponse.resolve({ ok: true, reconciled: true, saveCommit: "a".repeat(40) });
     await expect(oldRequest).resolves.toBe(false);
     expect(view.saveWorkSending.value).toBe(true);
-    expect(view.savedCommitDeslop.value).toBe("");
     newResponse.reject(new Error("Current request failed"));
     await expect(newRequest).resolves.toBe(false);
     expect(view.saveWorkSending.value).toBe(false);

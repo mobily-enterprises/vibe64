@@ -18,6 +18,7 @@ const conversationFields = {
   chatMode: shortText,
   workflowEngineId: shortText,
   reviewEnabled: { type: "boolean", required: false },
+  deslopEnabled: { type: "boolean", required: false },
   hasModelOverride: { type: "boolean", required: false },
   messagesTruncated: { type: "boolean", required: true },
   messages: { type: "array", items: messageSchema, required: true }
@@ -42,7 +43,8 @@ function summary(result = {}, { includeMessages = true } = {}) {
   catch { /* No verified temporary-chat preferences. */ }
   return {
     ...(preferences ? { chatMode: preferences.mode, workflowEngineId: preferences.workflowEngineId,
-      reviewEnabled: preferences.review, hasModelOverride: Boolean(preferences.override) } : {}),
+      reviewEnabled: preferences.mode === "auto", deslopEnabled: preferences.mode === "auto" && preferences.review,
+      hasModelOverride: Boolean(preferences.override) } : {}),
     ...Object.fromEntries(["conversationId", "title", "status", "runId", "error"].flatMap((key) => (
       typeof result[key] === "string" ? [[key, result[key].slice(0, 256)]] : []
     ))),
