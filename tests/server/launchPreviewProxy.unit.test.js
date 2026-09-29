@@ -340,6 +340,42 @@ test("launch preview proxy can expose previews through a Caddy-compatible Unix s
   });
 });
 
+test("HTTPS preview preserves secure cookies and redirects from a proxy-aware HTTP app", async () => {
+  const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-https-"));
+  await withTargetServer(async (target) => {
+    const publicOrigin = "https://v64preview-abcd1234--workspace.vibe64.dev";
+    const env = { VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir };
+    const registry = createLaunchPreviewProxyRegistry({ env });
+    try {
+      const preview = await registry.ensure({
+        previewPublicOrigin: publicOrigin,
+        sessionId: "secure-origin"
+      }, `${target.origin}/forwarded-redirect`);
+      const url = new URL(preview.href);
+      const response = await requestUnixSocket({
+        headers: {
+          Host: url.host,
+          Origin: publicOrigin,
+          "X-Forwarded-Proto": "http",
+          "X-Forwarded-Host": url.host
+        },
+        path: `${url.pathname}${url.search}`,
+        socketPath: previewPublicSocketPath(publicOrigin, env)
+      });
+      assert.equal(response.statusCode, 302);
+      assert.equal(response.headers.location, `${publicOrigin}/home`);
+      assert.ok(response.headers["set-cookie"].includes("target_session=example; HttpOnly; Secure"));
+      const forwarded = target.requests.at(-1);
+      assert.equal(forwarded.origin, target.origin.replace("http:", "https:"));
+      assert.equal(forwarded.forwardedProto, "https");
+      assert.equal(forwarded.forwardedHost, undefined);
+    } finally {
+      await registry.closeAll();
+      await rm(socketDir, { force: true, recursive: true });
+    }
+  });
+});
+
 test("launch preview proxy republishes a public socket removed outside its registry", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-republish-"));
   await withTargetServer(async (target) => {
@@ -1312,6 +1348,41 @@ test("launch preview proxy blocks target cookie-profile auth cookies from leakin
   });
 });
 
+test("preview HTTP and WebSockets translate only their own origin to the loopback app", async () => {
+  for (const transport of ["http", "websocket"]) {
+    const withServer = transport === "http" ? withTargetServer : withWebSocketTargetServer;
+    await withServer(async (target) => {
+      const registry = createLaunchPreviewProxyRegistry();
+      try {
+        const preview = await registry.ensure("origin-proof", `${target.origin}/api/ping`);
+        const origin = new URL(preview.href).origin;
+        for (const browserOrigin of [origin, `${origin}.foreign.invalid`, "https://foreign.invalid", "null", undefined]) {
+          const headers = {
+            "X-Forwarded-Proto": "https",
+            ...(browserOrigin === undefined ? {} : { Origin: browserOrigin })
+          };
+          if (transport === "http") {
+            const response = await fetch(preview.href, { headers });
+            assert.equal(response.status, 200);
+            await response.text();
+          } else {
+            const connection = await connectWebSocket(previewWebSocketHref(preview.href), { headers });
+            assert.equal(connection.ok, true);
+            assert.equal(await sendWebSocketMessage(connection.socket, "origin-proof"), "echo:origin-proof");
+            connection.socket.close();
+            await waitForWebSocketClose(connection.socket);
+          }
+          const forwarded = (target.requests || target.upgradeRequests).at(-1);
+          assert.equal(forwarded.origin, browserOrigin === origin ? target.origin : browserOrigin);
+          assert.equal(forwarded.forwardedProto, browserOrigin === origin ? "http" : "https");
+        }
+      } finally {
+        await registry.closeAll();
+      }
+    });
+  }
+});
+
 test("launch preview proxy forwards tokenized WebSocket upgrades without leaking token material", async () => {
   await withWebSocketTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
@@ -1591,6 +1662,9 @@ async function withTargetServer(callback) {
   const server = createServer(async (request, response) => {
     const requestRecord = {
       body: "",
+      origin: request.headers.origin,
+      forwardedProto: request.headers["x-forwarded-proto"],
+      forwardedHost: request.headers["x-forwarded-host"],
       cookie: request.headers.cookie || "",
       host: request.headers.host || "",
       ifModifiedSince: request.headers["if-modified-since"] || "",
@@ -1599,6 +1673,15 @@ async function withTargetServer(callback) {
       url: request.url || ""
     };
     requests.push(requestRecord);
+    if (request.url === "/forwarded-redirect") {
+      const protocol = request.headers["x-forwarded-proto"] || "http";
+      response.writeHead(302, {
+        Location: `${protocol}://${request.headers.host}/home`,
+        "Set-Cookie": `target_session=example; HttpOnly${protocol === "https" ? "; Secure" : ""}`
+      });
+      response.end();
+      return;
+    }
     if (request.url === "/api/ping") {
       response.writeHead(200, {
         "Content-Type": "application/json"
@@ -1720,6 +1803,8 @@ async function withWebSocketTargetServer(callback) {
   });
   server.on("upgrade", (request, socket, head) => {
     upgradeRequests.push({
+      origin: request.headers.origin,
+      forwardedProto: request.headers["x-forwarded-proto"],
       cookie: request.headers.cookie || "",
       url: request.url
     });

@@ -113,6 +113,7 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
   }
   nextHeaders["accept-encoding"] = "identity";
   nextHeaders.host = targetHost || targetUrl.host;
+  remapPreviewOrigin(nextHeaders, proxyOrigin);
   return nextHeaders;
 }
 
@@ -133,7 +134,20 @@ function proxyUpgradeHeaders(headers = {}, targetUrl, {
     delete nextHeaders.cookie;
   }
   nextHeaders.host = targetHost || targetUrl.host;
+  remapPreviewOrigin(nextHeaders, proxyOrigin);
   return nextHeaders;
+}
+
+function remapPreviewOrigin(headers, proxyOrigin) {
+  // Host addresses the loopback app. Translate only this preview's own browser
+  // origin to match it; foreign and opaque origins must still fail app checks.
+  if (proxyOrigin && headers.origin === proxyOrigin) {
+    // Retain the browser-facing scheme so proxy-aware apps keep secure cookies.
+    const protocol = new URL(proxyOrigin).protocol;
+    headers.origin = new URL(`${protocol}//${headers.host}`).origin;
+    headers["x-forwarded-proto"] = protocol.slice(0, -1);
+    delete headers["x-forwarded-host"];
+  }
 }
 
 function parseCookies(header = "") {
@@ -841,10 +855,12 @@ function proxiedLocation(location = "", {
   }
   try {
     const target = new URL(text, targetOrigin);
-    if (target.origin !== targetOrigin) {
+    const proxy = new URL(proxyOrigin);
+    const forwardedTarget = new URL(targetOrigin);
+    forwardedTarget.protocol = proxy.protocol;
+    if (target.origin !== targetOrigin && target.origin !== forwardedTarget.origin) {
       return text;
     }
-    const proxy = new URL(proxyOrigin);
     proxy.pathname = target.pathname;
     proxy.search = stripPreviewTokenQueryParam(target.search);
     proxy.hash = target.hash;
