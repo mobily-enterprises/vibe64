@@ -282,3 +282,11 @@ Output inspection still owns launch availability and its diagnostic reasons.
 A project without a web target hides unavailable browser-address controls and
 points to Run for terminal or downloadable outputs. No declared outputs remains
 a normal idle state that does not demand a web server.
+
+Preview translates the browser's exact own Origin to the loopback target host
+for HTTP and WebSocket requests while retaining the browser-facing scheme in
+Origin and forwarded protocol. Proxy-aware applications can therefore retain
+Secure cookies on HTTPS previews. Redirects from the target's ordinary origin or
+its forwarded-scheme origin stay on the preview origin. Foreign,
+opaque and absent origins are preserved so application origin checks still apply.
+This lets a previewed editor authenticate realtime connections through the proxy.
