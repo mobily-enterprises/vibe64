@@ -12,7 +12,8 @@
     "./server/launchPreviewProxy": "./src/server/launchPreviewProxy.js",
     "./server/projectExecutionEnv": "./src/server/projectExecutionEnv.js",
     "./server/nativeConversationBindings": "./src/server/nativeConversationRetirement.js",
-    "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js"
+    "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js",
+    "./shared/assistantWorkPlan": "./src/shared/assistantWorkPlan.js"
   },
   "jskit": {
     "kind": "runtime",

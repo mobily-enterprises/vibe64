@@ -5,6 +5,7 @@ import { upgradeAssistantRouting } from "@local/vibe64-accounts/server/assistant
 import { upgradeAssistantHelpers } from "@local/vibe64-accounts/server/assistantHelperUpgrade";
 import { upgradeAssistantRoles } from "@local/vibe64-accounts/server/assistantRoleUpgrade";
 import { upgradeCompletedDiscussionPlan } from "@local/vibe64-accounts/server/completedDiscussionPlanUpgrade";
+import { upgradeAssistantPlans } from "@local/vibe64-accounts/server/assistantPlanUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -22,6 +23,7 @@ try {
     upgradeAssistantRoles,
     upgradeAssistantHelpers,
     upgradeCompletedDiscussionPlan,
+    upgradeAssistantPlans,
     report: (level, message) => {
       const line = `[vibe64-upgrade] ${level.toUpperCase()}: ${message}`;
       if (level === "warning") console.error(line);

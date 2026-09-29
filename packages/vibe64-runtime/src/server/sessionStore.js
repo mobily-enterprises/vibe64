@@ -4983,7 +4983,7 @@ function createVibe64SessionStore({
 
   // The stopped-service upgrade owns backups and publication. This operation
   // only stages routing changes, using this store's native/archive layout.
-  async function prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform, transformTurnMetadata, transformHelperRecord }) {
+  async function prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform, transformTurnMetadata, transformHelperRecord, includePlans = false }) {
     const relativeScratch = path.relative(normalizedStateRoot, temporaryRoot || normalizedStateRoot);
     if (!path.isAbsolute(temporaryRoot || "") || typeof transform !== "function" ||
         !(relativeScratch === ".." || relativeScratch.startsWith(`..${path.sep}`))) {
@@ -5031,10 +5031,31 @@ function createVibe64SessionStore({
           conversations.push({ filePath, original, record });
         }
       }
+      const plans = [];
+      if (includePlans) {
+        for (const scope of [{ conversationId: "", root: sessionPaths.sessionRoot }, ...conversations.map(({ record, filePath }) => ({
+          conversationId: record.conversationId, root: path.dirname(filePath)
+        }))]) {
+          const oldPath = path.join(scope.root, "work-plan", "plan.md");
+          const filePath = path.join(scope.root, "plans", "current.md");
+          await checkedPath(path.dirname(oldPath), true);
+          await checkedPath(path.dirname(filePath), true);
+          const originalOld = await checkedPath(oldPath) ? await readRegularText(oldPath) : null;
+          const original = await checkedPath(filePath) ? await readRegularText(filePath) : null;
+          if (originalOld !== null || original !== null) plans.push({ ...scope, oldPath, filePath, originalOld, original });
+        }
+      }
       const next = await transform({ sessionId: sessionPaths.sessionId, metadata: { ...metadata },
-        conversations: conversations.map(({ record }) => structuredClone(record)) });
+        conversations: conversations.map(({ record }) => structuredClone(record)),
+        ...(includePlans ? { plans: plans.map(({ conversationId, originalOld, original }) => ({ conversationId, originalOld, original })) } : {}) });
       if (!isPlainObject(next)) throw new Error("Routing upgrade transform must return metadata/conversation patches.");
       const changes = [];
+      for (const plan of next.plans || []) {
+        const previous = plans.find(({ conversationId }) => conversationId === plan.conversationId);
+        if (!previous || typeof plan.text !== "string") throw new Error("Plan upgrade cannot create an unknown conversation's plan.");
+        if (previous.original !== plan.text) changes.push({ filePath: previous.filePath, original: previous.original, contents: plan.text });
+        if (previous.originalOld !== null) changes.push({ filePath: previous.oldPath, original: previous.originalOld, contents: null });
+      }
       for (const [name, value] of Object.entries(next.metadata || {})) {
         if (!["assistant_routing", "assistant_routing_request", "assistant_routing_goal"].includes(name) || typeof value !== "string") {
           throw new Error("Routing upgrade cannot change unrelated session metadata.");
@@ -5112,6 +5133,7 @@ function createVibe64SessionStore({
           const changes = await inspect(sessionPaths);
           if (!changes.length) return;
           for (const change of changes) {
+            if (change.contents === null) { await rm(change.filePath); continue; }
             await mkdir(path.dirname(change.filePath), { recursive: true, mode: 0o700 });
             await writeFile(change.filePath, change.contents, { mode: 0o600 });
           }

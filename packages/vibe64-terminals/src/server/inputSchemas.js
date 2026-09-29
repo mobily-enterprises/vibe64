@@ -211,6 +211,7 @@ const projectRuntimeInputValidator = validator({ reason: optionalText });
 const sessionInputValidator = validator({ sessionId: sessionIdField });
 const workPlanReadInputValidator = validator({
   sessionId: sessionIdField,
+  archiveId: { ...optionalText, minLength: 64, maxLength: 64 },
   offset: { type: "integer", min: 0, required: false },
   limit: { type: "integer", min: 1, max: 16000, required: false },
   expectedRevision: { ...optionalText, minLength: 64, maxLength: 64 }

@@ -2,7 +2,7 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { readWorkPlan, prepareWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
+import { readWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
 import { parseNumberedQuestionPrompt, parseAnswerChoicePrompt } from "@jskit-ai/assistant-core/shared/conversation";
 import { latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
 import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
@@ -164,7 +164,6 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           exchanges,
           plan: state.workPlan ? {
             status: state.workPlan.status, revision: state.workPlan.revision,
-            approved: state.workPlan.approvedRevision === state.workPlan.revision,
             outline: state.workPlan.text.slice(0, 6000)
           } : null,
           attachments: state.input.attachments || state.input.displayAttachments
@@ -291,22 +290,15 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     }
     if (!followup && state.mode === "auto" && role === "junior") {
       const plan = await readWorkPlan(context);
-      if (!plan || plan.status !== "ready" || plan.revision !== state.workPlan?.approvedRevision) {
-        throw failure("The plan changed before coding started. Return to planning and approve the updated plan.");
-      }
-    }
-    if (!followup && state.input.planRecoveryRevision) {
-      const plan = await readWorkPlan(context);
-      if (plan?.revision !== state.input.planRecoveryRevision) {
-        throw failure("The plan changed. Open View plan again before recovering it.");
+      if (!plan || plan.status !== "active" || plan.revision !== state.workPlan?.revision) {
+        throw failure("The active plan changed before execution started. Read it and send your execution request again.");
       }
     }
     const usesPlan = usesWorkPlan(state);
-    const file = usesPlan ? await prepareWorkPlan(context, role === "senior") : null;
     if (usesPlan && role === "senior" && state.workPlan) state.workPlan = await readWorkPlan(context);
     const message = assistantModePrompt(state.task || role, followup ? state.reviewMessage : state.input.message,
       { discussion: state.mode === "auto" && state.reason === "discussion",
-        planInstructions: file ? workPlanInstructions(file, role) : "" });
+        planInstructions: usesPlan ? workPlanInstructions(role) : "" });
     await prepareSelection(sessionId, selection, context);
     state.deliverySelection = selection;
     await save(context, state);
@@ -380,7 +372,6 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         }
         return;
       }
-      if (input.planRecoveryRevision && preferences?.mode !== "auto") throw failure("Recover plan is an Auto planning action.");
       if (!preferences) { direct = true; return; }
       const store = context.runtime.store;
       state = await read(store, sessionId);
@@ -398,7 +389,6 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         return;
       }
       const native = await agent.sessionState(sessionId, context);
-      if (input.planRecoveryRevision && native?.turn?.active) throw failure("Wait for the current turn to finish before recovering the plan.");
       // Steering keeps the running model and its instructions. It never goes
       // through the classifier, including while a review turn is running.
       if (native?.turn?.active) {
@@ -434,27 +424,14 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           throw failure("Finish or cancel the current goal before starting this Junior task.");
         }
         const mode = pinnedGoal?.mode || options.purpose || preferences.mode;
-        const approving = Boolean(input.planRevision);
-        const recoveringPlan = Boolean(input.planRecoveryRevision);
+        const hasPlanRevision = Boolean(input.planRevision);
         const plan = mode === "auto" ? await readWorkPlan(context) : null;
-        const previousPlan = state?.workPlan;
-        const previousApproval = previousPlan?.approvedRevision || state?.input?.planRevision;
-        const readyPlan = plan?.status === "ready" && previousPlan?.status === "ready" && plan.revision === previousPlan.revision;
-        if (recoveringPlan && (mode !== "auto" || approving || explicitDeslop)) {
-          throw failure("Recover plan is an Auto planning action; it cannot also approve implementation or request Deslop.");
-        }
-        if (recoveringPlan && (!plan || plan.revision !== input.planRecoveryRevision)) {
-          throw failure("The plan changed. Open View plan again before recovering it.");
-        }
-        if (approving && mode !== "auto") throw failure("Choose Auto to implement its working plan. Direct roles work from your message and conversation.");
-        if (approving && (activeGoal(goal) ||
-            !readyPlan || plan.revision !== input.planRevision)) {
-          throw failure("This plan is no longer ready to implement. Ask the planner to update it and review the new version.");
+        if (hasPlanRevision && mode !== "auto") throw failure("Choose Auto to implement its plan. Direct roles work from your message.");
+        if (hasPlanRevision && (!plan || plan.revision !== input.planRevision)) {
+          throw failure("The plan changed. Read the current plan before sending your request.");
         }
         let resolvedMode = mode;
         if (explicitDeslop) resolvedMode = mode === "custom" ? "custom" : "senior";
-        else if (recoveringPlan) resolvedMode = "senior";
-        else if (approving) resolvedMode = "junior";
         else if (mode === "auto") resolvedMode = "";
         const review = mode === "auto" && !explicitDeslop && !options.purpose && preferences.review && !activeGoal(goal);
         const workflowEngineId = pinnedGoal?.workflowEngineId || preferences.workflowEngineId || selection.engineId;
@@ -462,18 +439,13 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           messageId: input.messageId,
           input: Object.fromEntries(Object.entries(input).filter(([name]) => [
             "message", "displayMessage", "attachmentIds", "displayAttachments", "genesisTask",
-            "originId", "presentation", "promptLabel", "outputSchema", "planRevision", "planRecoveryRevision"
+            "originId", "presentation", "promptLabel", "outputSchema", "planRevision"
           ].includes(name))),
           mode,
           resolvedMode,
           ...(explicitDeslop ? { task: "deslop" } : {}),
           reason: explicitDeslop ? "deslop" : "",
-          workPlan: plan ? {
-            ...plan,
-            status: plan.revision === previousPlan?.revision ? previousPlan.status : plan.status === "ready" ? "drafting" : plan.status,
-            ...(approving || readyPlan && previousApproval === plan.revision
-              ? { approvedRevision: plan.revision } : {})
-          } : null,
+          workPlan: plan,
           schemaVersion: 4,
           workflowEngineId,
           observedSelection: selection,
@@ -521,12 +493,14 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           state.reason = decision.reason;
           throw failure(AUTO_MIXED_DESLOP_MESSAGE, "vibe64_assistant_split_request");
         }
-        // A classifier cannot invent approval or turn an unplanned request into Junior.
-        const approved = decision.mode === "junior" && decision.reason === "plan_approval" && state.workPlan?.status === "ready";
-        state.resolvedMode = approved ? "junior" : "senior";
-        state.reason = approved ? "plan_approval" : decision.mode === "junior" ? "planning" : decision.reason;
+        if (decision.reason === "mixed_request") {
+          state.reason = decision.reason;
+          throw failure("This request changes the plan and asks to execute it. Please send the planning changes and execution request separately.", "vibe64_assistant_split_request");
+        }
+        const executing = decision.mode === "junior" && decision.reason === "explicit_implementation" && state.workPlan?.status === "active";
+        state.resolvedMode = executing ? "junior" : "senior";
+        state.reason = executing ? "explicit_implementation" : decision.mode === "junior" ? "discussion" : decision.reason;
         if (decision.mode === "deslop") { state.task = "deslop"; state.review = false; }
-        if (approved) state.workPlan.approvedRevision = state.workPlan.revision;
       }
       if (task.cancelled) throw failure("Routing cancelled.");
       return await exclusive(sessionId, options, async (current) => {
@@ -572,7 +546,6 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (!state) return false;
       const preparingFollowup = ["review_pending", "planning_pending"].includes(state.status);
       state.stopped = true;
-      if (state.workPlan && state.attemptedMessageId && usesWorkPlan(state)) state.workPlan.status = "paused";
       state.review = false;
       if (preparingFollowup) {
         state.status = "done";
@@ -616,7 +589,6 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         await save(context, state);
       }
       if (state.turnId !== (run.providerTurnId || run.turnId)) return;
-      const role = ["reviewing", "planning"].includes(state.status) ? continuationRole(state) : state.resolvedMode;
       if (!allowAuto && state.mode === "auto") {
         liveFollowupRequests.delete(keyFor(sessionId, context));
         state.status = "done";
@@ -629,43 +601,12 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       catch (error) {
         state.status = "done";
         state.error = error.message;
-        if (state.workPlan) state.workPlan.status = "drafting";
         liveFollowupRequests.delete(keyFor(sessionId, context));
         await save(context, state); return;
       }
-      if (plan) {
-        let status = plan.status;
-        if (run.state !== "completed" || state.stopped) {
-          // Stopping the coder does not invalidate the proposal the user reviewed.
-          // Continuing still needs a new user request; changed plans stay paused.
-          const approvedPlanUnchanged = role === "junior" && plan.status === "ready" &&
-            plan.revision === state.workPlan?.approvedRevision;
-          if (!approvedPlanUnchanged) status = "paused";
-        }
-        else if (role !== "senior" && status !== "blocked") status = "implemented";
-        state.workPlan = { ...plan, status,
-          ...(status === "ready" && plan.revision === state.workPlan?.approvedRevision
-            ? { approvedRevision: plan.revision } : {}) };
-      }
-      if (run.state === "completed" && !state.stopped && ["junior", "review"].includes(role) && plan?.status === "blocked") {
-        const needsRetry = recovered && liveFollowupRequests.get(keyFor(sessionId, context)) !== state.messageId;
-        liveFollowupRequests.delete(keyFor(sessionId, context));
-        state.continuation = "planning";
-        state.reviewMessageId = randomUUID();
-        state.reviewMessage = "Back to planning: coding encountered a decision or changed assumption. Read the working plan and its progress/blockers, inspect existing edits, and revise the detailed plan. Explain the decision to me and wait for approval before coding resumes.";
-        state.status = "planning_pending";
-        delete state.attemptedMessageId;
-        delete state.error;
-        if (needsRetry) state.error = "Coding stopped for a planning decision while disconnected. Continue planning when ready.";
-        await save(context, state);
-        if (needsRetry) return;
-        try { await deliver(sessionId, context, state, true); }
-        catch (error) {
-          state.status = continuationStatus(state, state.attemptedMessageId ? "uncertain" : "pending");
-          state.error = error.message; await save(context, state);
-        }
-        return;
-      }
+      // Turn outcomes describe execution, never plan completion. Only an
+      // explicit Senior plan command changes the document's lifecycle.
+      if (usesPlan) state.workPlan = plan;
       if (state.status === "planning") {
         liveFollowupRequests.delete(keyFor(sessionId, context));
         state.status = "done";

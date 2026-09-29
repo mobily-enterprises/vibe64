@@ -7,6 +7,8 @@ import {
   rm
 } from "node:fs/promises";
 import path from "node:path";
+import { manageWorkPlan } from "./assistantWorkPlan.js";
+import { planCommandSource } from "./agentPlanCommand.js";
 
 import {
   normalizeText,
@@ -66,8 +68,8 @@ const VIBE64_WRAPPER_ENV = "VIBE64_WRAPPER";
 const VIBE64_AGENT_SESSION_RUN_COMMAND_ENV = "VIBE64_AGENT_SESSION_RUN_COMMAND_BASE64";
 const VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV = "VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH";
 const VIBE64_AGENT_SESSION_RUN_RESULT_ENV = "VIBE64_AGENT_SESSION_RUN_RESULT_PATH";
-// This capability only permits renaming the bound session. It deliberately does
-// not expose the shell-execution token stripped from managed child commands.
+// This capability permits session rename and role-checked plan commands. It
+// does not expose the shell-execution token stripped from managed child commands.
 const SESSION_RENAME_CONTROL_ENV = "VIBE64_SESSION_RENAME_CONTROL";
 
 const AGENT_SESSION_CONTROL_ENV_NAMES = new Set([
@@ -429,7 +431,8 @@ async function ensureAgentSessionCommandServer({
           }
         });
         const isRename = request.url === "/agent-session-command/rename";
-        const authorized = normalizeText(input.token) === (isRename ? renameToken : token) &&
+        const isPlan = request.url === "/agent-session-command/plan";
+        const authorized = normalizeText(input.token) === (isRename || isPlan ? renameToken : token) &&
           normalizeText(input.generationId) === generationId &&
           normalizeText(input.sessionId) === normalizeText(sessionId);
         if (!authorized) {
@@ -441,6 +444,11 @@ async function ensureAgentSessionCommandServer({
         }
         if (isRename) {
           const result = await commandService.renameSession(sessionId, input.name);
+          sendJsonCommandResponse(response, vibe64StatusCode(result), result);
+          return;
+        }
+        if (isPlan) {
+          const result = await commandService.managePlan(sessionId, input);
           sendJsonCommandResponse(response, vibe64StatusCode(result), result);
           return;
         }
@@ -618,6 +626,22 @@ function createAgentSessionCommandService({
       const sessionName = await store.writeSessionLabel(sessionId, name);
       await publishSessionChanged(sessionId, { reason: "session-renamed", payload: { clientRefresh: { includeList: true } } });
       return { ok: true, sessionId, sessionName };
+    });
+  }
+
+  async function managePlan(sessionId, input) {
+    return runInSessionProject(sessionId, async ({ store }) => {
+      const request = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
+      let role = "";
+      if (request?.reason !== "discussion" && request?.task !== "deslop") {
+        if (request?.status === "reviewing") role = "review";
+        else if (request?.status === "sent") role = request.resolvedMode;
+      }
+      const result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, input, role);
+      if (!["read", "history"].includes(input.operation)) {
+        await publishSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice || "" } });
+      }
+      return { ok: true, ...result };
     });
   }
 
@@ -822,6 +846,7 @@ function createAgentSessionCommandService({
     bindSession,
     closeAllForSession,
     renameSession,
+    managePlan,
     run
   });
 }
@@ -843,6 +868,7 @@ async function prepareAgentSessionCommand({
     wrapperHostDir: normalizedWrapperHostDir
   });
   await Promise.all([
+    writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-plan"), planCommandSource(SESSION_RENAME_CONTROL_ENV)),
     writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-session"), sessionRenameCommandSource()),
     writeExecutableFileIfChanged(
       wrapperHostPath(normalizedWrapperHostDir),

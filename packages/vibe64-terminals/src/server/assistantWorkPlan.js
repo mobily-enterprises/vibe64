@@ -1,42 +1,41 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { parseWorkPlanLines } from "../shared/assistantWorkPlan.js";
 
-const PLAN_SECTIONS = [
-  "Outcome and scope", "Findings", "Proposed changes", "Decisions",
-  "Implementation steps", "Verification", "Progress and blockers"
-];
 const PLAN_LIMIT = 256 * 1024;
+const mutations = new Map();
+const digest = (text) => createHash("sha256").update(text).digest("hex");
+
+function planError(message, code = "vibe64_work_plan_invalid") {
+  return Object.assign(new Error(message), { code, statusCode: 409 });
+}
 
 function workPlanPath(context) {
   const paths = context.runtime.store.paths(context.session.sessionId);
   const id = context.routingConversationId;
-  if (id && !/^[a-zA-Z0-9_-]{1,128}$/u.test(id)) throw new Error("Invalid plan conversation.");
-  return path.join(id ? path.join(paths.conversationsRoot, id) : paths.sessionRoot, "work-plan", "plan.md");
+  if (id && !/^[a-zA-Z0-9_-]{1,128}$/u.test(id)) throw planError("Invalid plan conversation.");
+  return path.join(id ? path.join(paths.conversationsRoot, id) : paths.sessionRoot, "plans", "current.md");
 }
 
-async function readWorkPlan(context) {
-  const file = workPlanPath(context);
+async function readPlanFile(file) {
   let handle;
   try {
-    const directory = await lstat(path.dirname(file));
-    if (!directory.isDirectory()) throw new Error("The work plan directory must not be a link.");
+    if (!(await lstat(path.dirname(file))).isDirectory()) throw planError("The plan directory must not be a link.");
     handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     const info = await handle.stat();
-    if (!info.isFile() || info.size > PLAN_LIMIT) throw new Error("The work plan must be a regular Markdown file smaller than 256 KiB.");
+    if (!info.isFile() || info.size > PLAN_LIMIT) throw planError("The plan must be a regular Markdown file smaller than 256 KiB.");
     const text = await handle.readFile("utf8");
-    if (Buffer.byteLength(text) > PLAN_LIMIT) throw new Error("The work plan is too large.");
-    const status = /^Status: (drafting|ready|blocked|implemented)\r?$/mu.exec(text)?.[1];
-    const normalizedText = text.replaceAll("\r\n", "\n");
-    const complete = PLAN_SECTIONS.every((heading) => {
-      const section = normalizedText.split(`## ${heading}\n`)[1]?.split(/\n## /u)[0]?.trim();
-      return Boolean(section);
-    });
+    if (Buffer.byteLength(text) > PLAN_LIMIT) throw planError("The plan is too large.");
+    const status = /^Status: (active|completed)\r?$/mu.exec(text)?.[1];
+    if (!status) throw planError("This plan needs the stopped-service state upgrade before it can be used.");
+    const items = parseWorkPlanLines(text).filter((item) => item.checked !== undefined);
     return {
-      text,
-      status: !status || (status === "ready" && !complete) ? "drafting" : status,
-      revision: createHash("sha256").update(text).digest("hex")
+      text, status, revision: digest(text),
+      title: /^# (.+)$/mu.exec(text)?.[1]?.trim() || "Untitled plan",
+      checked: items.filter((item) => item.checked).length,
+      total: items.length
     };
   } catch (error) {
     if (error.code === "ENOENT") return null;
@@ -46,93 +45,150 @@ async function readWorkPlan(context) {
   }
 }
 
-async function prepareWorkPlan(context, planning) {
-  const file = workPlanPath(context);
+async function readWorkPlan(context) { return readPlanFile(workPlanPath(context)); }
+
+function archivePath(context, id) {
+  if (!/^[a-f0-9]{64}$/u.test(id)) throw planError("Invalid archived plan identity.");
+  return path.join(path.dirname(workPlanPath(context)), "archive", id + ".md");
+}
+
+async function readWorkPlanHistory(context) {
+  try {
+    if (!(await lstat(path.dirname(workPlanPath(context)))).isDirectory()) throw planError("The plan directory must not be a link.");
+  } catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  const directory = path.join(path.dirname(workPlanPath(context)), "archive");
+  let entries;
+  try {
+    if (!(await lstat(directory)).isDirectory()) throw planError("Plan history must not be a link.");
+    entries = await readdir(directory);
+  } catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  const history = [];
+  for (const name of entries) {
+    if (!/^[a-f0-9]{64}\.md$/u.test(name)) continue;
+    const id = name.slice(0, -3);
+    const file = archivePath(context, id);
+    const plan = await readPlanFile(file);
+    if (!plan || plan.revision !== id) throw planError("An archived plan has changed. Restore its saved snapshot before continuing.");
+    const { text: _text, ...summary } = plan;
+    history.push({ ...summary, id, archivedAt: (await lstat(file)).mtime.toISOString() });
+  }
+  return history.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
+}
+
+async function readWorkPlanPage(context, { offset = 0, limit = 16000, expectedRevision = "", archiveId = "" } = {}) {
+  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 16000) throw planError("Invalid plan page bounds.");
+  if (offset > 0 && !expectedRevision) throw planError("Further plan pages require the revision from the first page.", "vibe64_work_plan_revision_required");
+  const current = await readWorkPlan(context);
+  const plan = archiveId ? await readPlanFile(archivePath(context, archiveId)) : current;
+  const history = offset === 0 ? await readWorkPlanHistory(context) : undefined;
+  const summary = current ? { title: current.title, status: current.status, revision: current.revision } : null;
+  if (!plan) return { available: false, current: summary, ...(history ? { history } : {}) };
+  if (archiveId && plan.revision !== archiveId) throw planError("The archived plan no longer matches its snapshot.");
+  if (expectedRevision && expectedRevision !== plan.revision) throw planError("The plan changed. Read it again from the beginning.", "vibe64_work_plan_changed");
+  const characters = Array.from(plan.text);
+  if (offset > characters.length) throw planError("The plan page begins after the end of the document.", "vibe64_work_plan_offset_invalid");
+  const nextOffset = Math.min(offset + limit, characters.length);
+  return { ...plan, available: true, archiveId, current: summary, ...(history ? { history } : {}), text: characters.slice(offset, nextOffset).join(""),
+    offset, nextOffset, totalCharacters: characters.length, hasMore: nextOffset < characters.length };
+}
+
+async function writePlan(file, text) {
   const directory = path.dirname(file);
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  if (!(await lstat(directory)).isDirectory()) throw new Error("The work plan directory must not be a link.");
-  const current = await readWorkPlan(context);
-  // A planning turn invalidates the old proposal before inference. A crash or
-  // an interrupted revision must never leave yesterday's Implement action live.
-  if (planning && current) {
-    const text = `Status: drafting\n${current.text.replace(/^Status: (drafting|ready|blocked|implemented)\r?$/mu, "").trimStart()}`;
-    const temporary = `${file}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporary, text, { mode: 0o600, flag: "wx" });
-      await rename(temporary, file);
-    } finally {
-      await rm(temporary, { force: true });
+  if (!(await lstat(directory)).isDirectory()) throw planError("The plan directory must not be a link.");
+  const temporary = file + "." + randomUUID() + ".tmp";
+  try {
+    await writeFile(temporary, text, { mode: 0o600, flag: "wx" });
+    await rename(temporary, file);
+  } finally { await rm(temporary, { force: true }); }
+}
+
+async function archiveCurrent(context, current) {
+  if (!current) return;
+  const file = archivePath(context, current.revision);
+  await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  if (!(await lstat(path.dirname(file))).isDirectory()) throw planError("Plan history must not be a link.");
+  const previous = await readPlanFile(file);
+  if (previous && previous.text !== current.text) throw planError("The archived plan conflicts with the current document.");
+  if (!previous) await writePlan(file, current.text);
+}
+
+// The helper derives role from the admitted turn, never from command payloads.
+async function manageWorkPlan(context, input, role) {
+  const file = workPlanPath(context);
+  const previous = mutations.get(file) || Promise.resolve();
+  const pending = previous.catch(() => {}).then(async () => {
+    const { operation, expectedRevision = "", archiveId = "", archiveCurrent: acknowledgeArchive = false } = input;
+    if (operation === "read") return readWorkPlanPage(context, input);
+    if (operation === "history") return { history: await readWorkPlanHistory(context) };
+    if (!["new", "write", "complete", "archive", "reopen"].includes(operation)) throw planError("Unknown plan operation.");
+    const canEdit = ["senior", "review"].includes(role) || (role === "junior" && operation === "write");
+    if (!canEdit) {
+      throw planError("Only Senior can create, reopen, archive or complete a plan. Junior can update its checklist and evidence.");
     }
+    const current = await readWorkPlan(context);
+    if (current && expectedRevision !== current.revision) throw planError("The plan changed. Read the current plan before editing it.", "vibe64_work_plan_changed");
+    if (!current && expectedRevision) throw planError("There is no current plan at that revision.", "vibe64_work_plan_changed");
+    if (["write", "complete", "archive"].includes(operation) && !current) throw planError("There is no current plan.");
+    if (operation === "write" && current.status !== "active") throw planError("The plan is completed. Senior must explicitly reopen it before changes.");
+    let next;
+    switch (operation) {
+      case "new":
+      case "write": {
+        const body = String(input.text || "").replace(/^Status: .*\r?\n?/gmu, "").trim();
+        if (!/^# .+/mu.test(body) || !parseWorkPlanLines(body).some((item) => item.checked !== undefined)) {
+          throw planError("A plan needs a title and Markdown checklists (- [ ] item). No other fixed structure is required.");
+        }
+        next = "Status: active\n" + body + "\n";
+        if (Buffer.byteLength(next) > PLAN_LIMIT) throw planError("The plan is too large.");
+        break;
+      }
+      case "complete":
+        if (!current.total || current.checked < current.total) {
+          throw planError("The plan still has unchecked requirements. Record their resolution before explicitly completing it.");
+        }
+        next = current.text.replace(/^Status: active\r?$/mu, "Status: completed");
+        break;
+      case "reopen": {
+        const saved = archiveId ? await readPlanFile(archivePath(context, archiveId)) : current;
+        if (!saved || (archiveId && saved.revision !== archiveId)) throw planError("The requested plan snapshot is unavailable.");
+        next = saved.text.replace(/^Status: completed\r?$/mu, "Status: active");
+        break;
+      }
+    }
+    const replacing = operation === "new" || (operation === "reopen" && Boolean(archiveId));
+    if (replacing && current && !acknowledgeArchive) {
+      throw planError("Tell the user that “" + current.title + "” will be archived and remain accessible, then repeat with archiveCurrent: true.");
+    }
+    // Save the exact record before replacement. Content identity makes retry safe.
+    if (current && (replacing || operation === "archive" || operation === "reopen")) await archiveCurrent(context, current);
+    if (operation === "archive") await rm(file);
+    else await writePlan(file, next);
+    const result = await readWorkPlanPage(context);
+    if (current && (replacing || operation === "archive")) {
+      result.notice = "Archived “" + current.title + "”. It remains available in Plan history.";
+    }
+    return result;
+  });
+  mutations.set(file, pending);
+  try {
+    return await pending;
+  } finally {
+    if (mutations.get(file) === pending) mutations.delete(file);
   }
-  return file;
 }
 
-async function readWorkPlanPage(context, { offset = 0, limit = 16000, expectedRevision = "" } = {}) {
-  if (offset > 0 && !expectedRevision) {
-    throw Object.assign(new Error("Further plan pages require the revision from the first page."), {
-      code: "vibe64_work_plan_revision_required", statusCode: 400
-    });
-  }
-  const plan = await readWorkPlan(context);
-  if (!plan) return { available: false };
-  if (expectedRevision && expectedRevision !== plan.revision) {
-    throw Object.assign(new Error("The work plan changed. Read it again from the beginning before approval."), {
-      code: "vibe64_work_plan_changed", statusCode: 409
-    });
-  }
-  const characters = Array.from(plan.text);
-  if (offset > characters.length) {
-    throw Object.assign(new Error("The plan page begins after the end of the document."), {
-      code: "vibe64_work_plan_offset_invalid", statusCode: 400
-    });
-  }
-  const nextOffset = Math.min(offset + limit, characters.length);
-  return { available: true, status: plan.status, revision: plan.revision,
-    text: characters.slice(offset, nextOffset).join(""), offset, nextOffset,
-    totalCharacters: characters.length, hasMore: nextOffset < characters.length };
-}
-
-function workPlanInstructions(file, role) {
+function workPlanInstructions(role) {
   const common = [
-    `The conversation's working plan is ${JSON.stringify(file)}, outside the project repository.`,
-    "Never commit or copy it into project source.",
-    "It is a detailed working document, not a permanent project document.",
-    'Use a line exactly "Status: drafting", "Status: ready", "Status: blocked", or "Status: implemented".',
-    `Keep these Markdown sections: ${PLAN_SECTIONS.map((name) => `"## ${name}"`).join(", ")}.`,
-    "Human instructions take precedence over the document.",
-    "In chat, refer to the View plan action; do not expose or link this internal filesystem path."
+    "The conversation has one current plan, active or completed, and preserved archived snapshots outside the project repository.",
+    "Use vibe64-helper plan --help, then vibe64-helper plan read or history to inspect it. Use the plan helper for ALL edits and lifecycle operations; never edit its storage files directly or copy them into the repository.",
+    "Plan commands take a JSON object on stdin. Writes require expectedRevision from the latest read. New/write take text containing a Markdown title and checklists (- [ ] / - [x]); other headings and structure are your choice.",
+    "Make the visible checklist understandable to the user. Track deliverables and acceptance requirements, with evidence and blockers next to the relevant items. Never tick an unverified claim. Update the checklist during work so the user can follow live progress.",
+    "Human instructions take precedence. Keep agreed scope and completed evidence; do not invent additional requirements. Discussion alone never changes plan status.",
+    "Refer to View plan and Plan history in chat, not internal paths. Read archived plans on demand instead of loading all history. A completed plan remains accessible. A finished turn never completes a plan."
   ].join(" ");
-  if (role === "senior") {
-    const planning = [
-      "You may create or update ONLY this plan file; do not edit application files or run state-changing project operations.",
-      "For every proposed implementation, inspect the actual project and write a VERY DETAILED plan: enumerate relevant occurrences and affected files/code locations, explain exact proposed changes and boundaries, record decisions and unresolved questions, ordered implementation steps, concrete acceptance criteria and verification, and completed work/blockers.",
-      "Write Outcome and scope for someone who is not a developer: briefly explain what they will be able to do, what will change, how they can check it, and any decision you need from them. Use plain language and short paragraphs or bullets. Keep file paths, implementation instructions, internal handoff rules and detailed engineering notes in the other sections. The plan viewer shows Outcome and scope first and normally collapses the technical sections.",
-      "Do not substitute a chat summary for the file.",
-      "Update the same document after steering or discoveries.",
-      "If the user asks to implement an existing plan but Auto sends this request to planning, read the existing plan and resolve its readiness here. Reuse the agreed scope and existing project plan; do not invent a replacement plan. If it is already complete and has no unresolved decisions, mark it ready without rewriting its content. Otherwise complete the missing planning work or explain the specific unresolved decision. Do not send the user to support, ask them to change agents, or merely report that planning instructions prevent coding. The next step is the Implement action once the plan is ready.",
-      "Mark ready only when the plan is complete and decisions are resolved, then summarize it for the human and ask whether to implement it.",
-      "Do not start or delegate coding.",
-      "Pure conversation does not require manufacturing a plan.",
-      "The user selected Auto; this request is currently in its planning stage. Do not claim they selected direct Senior chat."
-    ].join(" ");
-    return `${common}\n${planning}`;
-  }
-  const implementation = [
-    role === "review"
-      ? "Read the working plan before reviewing the implementation."
-      : "Read and implement the approved plan before changing application files.",
-    "Keep its Progress and blockers section current, including files changed and actual checks.",
-    "Do not silently revise its agreed scope or approach.",
-    "Ordinary implementation problems and failing tests are yours to resolve.",
-    "If steering or a discovery requires an unresolved product/architectural decision, contradicts requirements, or invalidates the approach, record the exact blocker and work already completed in the plan, set Status: blocked, explain briefly in chat, and END this turn without requesting a tool that waits for user input.",
-    "Vibe64 will return the work to the planner.",
-    "Do not discard existing edits.",
-    "On successful implementation set Status: implemented.",
-    role === "review"
-      ? "Review against the detailed plan and accepted steering. You may fix in-scope defects; an unresolved scope or design decision returns to planning."
-      : ""
-  ].join(" ");
-  return `${common}\n${implementation}`;
+  if (role === "junior") return common + " You implement the active plan. Read it first, preserve delivered work, tick completed items and record actual evidence using write. Leave incomplete or failed items unchecked and explain blockers. You cannot create, archive, reopen or complete the plan. Stop for changed scope or unresolved product decisions; do not start a planning/review loop yourself.";
+  return common + " You are Senior and own the plan's scope and lifecycle. Use new to start a distinct plan, write to revise the active canvas, reopen to resume a completed/current or archived plan, archive when requested, and complete ONLY when every required acceptance item is supported by evidence. Before new or reopening an archived plan replaces a current plan, tell the user which current plan will be archived and that it remains accessible; then pass archiveCurrent:true. Reopening retains the earlier snapshot. During review, uncheck unsupported claims and add missing checks required by the approved scope; fix in-scope defects and verify them. If anything remains unfinished, leave the plan active, explain it, and wait for a user request to continue. Do not silently restart execution, invent requirements, or ask the user to click Implement.";
 }
 
-export { readWorkPlan, readWorkPlanPage, prepareWorkPlan, workPlanPath, workPlanInstructions };
+export { readWorkPlan, readWorkPlanPage, readWorkPlanHistory, manageWorkPlan, workPlanPath, workPlanInstructions };

@@ -136,6 +136,8 @@ multiple labels explain GitHub's 1,000-match limit when needed. Entering an issu
 number, with or without #, finds that exact issue within the selected filters.
 Issue descriptions and comments display GitHub's formatted content and attached
 images, including private attachments available to the connected account.
+Coding agents retrieve GitHub-hosted ticket attachments through the authenticated
+managed GitHub CLI, using the connected account without extracting its credentials.
 Images fit the available pane width; editing preserves the original Markdown.
 People can read an issue and its paginated comments, add a comment, and close or reopen it when their
 GitHub permissions allow. People can create an issue with a title, Markdown
@@ -403,15 +405,14 @@ independent Router/Helper and Shared backup. It previews what owners and
 collaborators will use before Save; a foreign Backup keeps planning and coding
 together there, including when review is off. Missing assignments point to this
 setup; other users are directed to the owner. Each assistant application has its own saved models for
-the direct roles and Router. In Auto, Router recognizes planning, approval and
-Deslop requests. New work, discussion and unresolved decisions go to Senior;
-only approval of a ready plan starts Junior implementation.
+the direct roles and Router. In Auto, Router recognizes discussion, plan changes,
+execution and Deslop. New work and discussion go to Senior; explicit execution
+of the active plan goes to Junior.
 Routing progress appears with the message, without a duplicate banner above the
 composer. Interrupted-review notices disappear; errors and recovery actions remain.
 Routing is visible before delivery, and each routed exchange retains its mode
-and answering model. Only Auto’s planning stage restricts Senior to the working
-plan file. Junior implements the approved plan and returns material decisions
-to Senior. Direct Senior and Junior may both edit application files when asked.
+and answering model. Auto planning restricts Senior to plan management. Junior
+implements the active plan and records unresolved decisions for the user. Direct Senior and Junior may both edit application files when asked.
 Steering stays with the currently working assistant.
 
 In Auto, people can enable Senior review and Deslop. After a normally completed
@@ -1387,31 +1388,35 @@ and test the exact distributable before publishing it; release preparation does
 not remove their installed development tools. The installed editor includes the
 database drivers required by its Database view.
 
-Auto sends new work to the planner first. For implementation work, the planner
-investigates and writes a very detailed, temporary plan outside the project's Git
-history, covering findings, exact changes, decisions, steps and acceptance checks.
-Chat carries its human-readable summary and compact View plan/Implement actions.
-View plan starts with a plain-language explanation of what will change and how to
-check it. Technical instructions and implementation details are collapsed until
-the person chooses to read them.
-Once implemented, the plan leaves no buttons or status row in the chat. Ordinary
-follow-up questions neither create a plan nor reopen a completed one; an unfinished
-plan retains its status. A new planning request explicitly reopens the document.
-In Auto, coding starts only after approval of that version, through the button or
-a clear reply. Junior keeps progress and blockers in the document. A material
-decision returns work to Senior, preserving edits, and a revised plan needs
-approval again. Optional Senior review checks implementation against the plan.
-If coding fails or is stopped while the approved plan is unchanged, Auto keeps
-Implement available for an explicit retry. An existing draft is completed by the
-planner within Auto; people do not need to select another agent to get unstuck.
-Recover plan is available beside View plan when planning needs attention. It
-restores the path to implementation without changing agents or starting coding.
-Direct Senior and Junior use the request and conversation, without
-reading, updating or requiring that document; automatic review is unavailable.
-The View plan and Implement controls belong to Auto and disappear when selecting
-a direct role. Stop never starts another agent; interrupted handoffs wait for an
-explicit continuation after restart. Main conversations own their Auto plan
-until their normal lifecycle cleanup.
+Auto routes discussion and plan changes to Senior, and explicit requests to
+execute the active plan to Junior. A plan is an open canvas with only active or
+completed status. Requests that combine changing requirements and execution ask
+the person to separate those intents before either starts. Ambiguous task
+references are clarified instead of reviving an unrelated plan.
+
+Each Main conversation has one current plan outside the repository, plus accessible
+archived snapshots. Senior creates, changes, reopens and archives plans. Starting
+a distinct plan archives the current one, after telling the person which plan
+will be archived and that it remains accessible. Archiving does not imply
+completion. Reopening preserves the previous record and makes the selected plan
+active. Session retention owns these runtime files.
+
+A document icon at the bottom of chat is highlighted in muted yellow while a
+plan is active. It opens the current plan and Plan history even after completion
+or a change of chat mode. There are no Implement or Recover buttons: people ask
+in chat. The visible plan contains readable checklists and evidence. Junior
+checks completed work as it proceeds; Senior can uncheck unsupported claims and
+add missing acceptance checks within the agreed scope. Saved edits appear live
+in open viewers without resetting their scroll position.
+
+Only Senior explicitly marks a plan completed after reviewing its requirements
+and evidence. Successful turns, review outcomes and checked boxes never complete
+it automatically. Optional Senior review can fix in-scope defects and Deslop the
+changes. Unfinished work remains active with specific remaining items; another
+execution pass needs a user request. Ordinary discussion and Stop never reopen,
+archive or complete a plan. No automatic repeating completion-plan cycle exists.
+Direct Senior and Junior still work from the user's request; plan lifecycle
+commands remain restricted to Senior, while Junior can update progress.
 
 Deslop uses the configured Senior model to perform behavior-preserving cleanup
 directly, with permission to edit code. The command and saved-commit action go

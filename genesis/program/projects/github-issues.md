@@ -144,7 +144,13 @@ delivery failure is logged separately and cannot make a confirmed write retryabl
 an explicitly requested refresh still reports its own delivery failure.
 After changing GitHub issues, comments, labels or PRs, agents run
 `vibe64-helper github refresh`. Session guidance supplies this instruction alongside
-the existing managed Git commands. The command uses their authenticated Unix
+the existing managed Git commands. The shared Main and temporary conversation
+guidance also directs agents to fetch GitHub-hosted ticket, PR and comment
+attachments through authenticated managed `gh api`, using their original URLs.
+Agents save and inspect the downloaded files; an unauthenticated 404 is not proof
+that a private attachment is missing. They do not extract credentials or retry
+with an impersonated browser User-Agent. External links are outside this rule.
+The refresh command uses the managed commands' authenticated Unix
 socket, session generation, stored actor and project access checks. It accepts
 no repository or project override and performs no GitHub operation. The existing
 project-change event invalidates that project's issue lists, details, label

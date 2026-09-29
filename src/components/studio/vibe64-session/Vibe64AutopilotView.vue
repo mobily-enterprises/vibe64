@@ -434,14 +434,13 @@
             class="studio-autopilot__composer"
             @focusout="handleComposerRegionFocusOut"
           >
+            <Vibe64WorkPlan :session="props.session" :sessions-api-path="props.sessionsApiPath" :active="props.active && conversationLogVisible" />
             <Vibe64RoutingNotice
               :request="routingRequest"
               :mode="assistantRoutingFromMetadata(props.session?.metadata)?.mode || ''"
               :active="props.active && conversationLogVisible"
               :retrying="routingReviewRetrying"
               :busy="agentActive"
-              @implement="sendWorkingPlanAction('implement', $event)"
-              @recover="sendWorkingPlanAction('recover', $event)"
               @retry="retryAutomaticReview"
               @skip="props.interruptAgentTurn({ reason: 'skip-review' })"
             />
@@ -939,6 +938,7 @@ import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.v
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
+import Vibe64WorkPlan from "./Vibe64WorkPlan.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import { useModelRouting } from "@local/vibe64-accounts/client";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
@@ -1309,17 +1309,6 @@ async function retryAutomaticReview() {
   routingReviewRetrying.value = true;
   try { await props.sendAgentMessage({ messageId: routingRequest.value.messageId, message: routingRequest.value.input.message, reviewAction: "retry" }); }
   finally { routingReviewRetrying.value = false; }
-}
-async function sendWorkingPlanAction(action, revision) {
-  if (routingReviewRetrying.value || agentActive.value) return;
-  routingReviewRetrying.value = true;
-  try {
-    await props.sendAgentMessage({ messageId: crypto.randomUUID(), submissionKind: "send",
-      ...(action === "recover" ? {
-        planRecoveryRevision: revision,
-        message: "Recover this existing plan so I can continue in Auto. Keep the agreed scope, inspect its readiness, and mark it ready if complete. Otherwise finish the missing planning work or explain the specific unresolved decision. Do not start coding."
-      } : { planRevision: revision, message: "Implement the plan I have approved." }) });
-  } finally { routingReviewRetrying.value = false; }
 }
 const conversationAssistantLabel = computed(() => props.session?.assistantSelection
   ? vibe64AssistantSelectionLabel(props.session.assistantSelection) : "Assistant");

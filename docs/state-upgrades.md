@@ -263,16 +263,23 @@ writing, and resumes interrupted publication from its before/after manifest unde
 writers. Other installations are no-ops. The runtime fix prevents recurrence;
 ordinary reads do not perform historical repairs.
 
-Working plans are new conversation-owned artifacts, created only by explicit
-planning work. They do not transform existing history or metadata and require no
-historical backfill. The existing request record may carry a `workPlan` display
-snapshot and approved content revision plus a `continuation: "planning"` for a blocked
-coding handoff. Absence means there is no approvable plan, never inferred approval
-from old conversation text. Existing admitted requests retain their receipts;
-new Auto coding requires a current approved document. Main plans are stored under
-`work-plan/plan.md` inside the session runtime, and temporary plans under the
-existing conversation directory. Existing archive and explicit-close operations
-own these files together with their surrounding conversation state.
+20260929-plan-history moves existing work-plan/plan.md into plans/current.md
+inside each conversation runtime. Explicit implemented status becomes completed;
+drafting, ready, blocked and paused become active. The document is authoritative:
+a routing snapshot inferred from a successful turn never completes the plan.
+Body text and messages remain unchanged. Display snapshots are reconciled from
+the document, with old receipts and actor attribution preserved. Conflicting old
+and new documents or malformed status fail preflight with an actionable error.
+
+The upgrade uses the existing session inventory for active, closing, archived and
+prepared-renewal state and temporary conversations. Verified before/after backups
+live under upgrades/backups/20260929-plan-history; retries resume publication from
+the same manifest, including an interruption between moving the current file and
+removing the old path. Check is read-only; apply requires stopped writers. There
+is no request-time conversion. New writes use only active/completed and managed
+plan commands. New archive snapshots live in plans/archive and are retained by
+the existing conversation/session lifecycle. Historical plans without checklists
+remain readable; Senior reconciles their checklist on the next requested edit.
 
 A newly admitted cleanup request can carry `task: "deslop"` in that same request
 record, while its resolved model role stays Senior. Mixed Auto requests use the

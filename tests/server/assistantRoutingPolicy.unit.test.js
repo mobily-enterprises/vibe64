@@ -93,7 +93,7 @@ test("Senior permits only its working document while the scoped review instructi
   assert.match(assistantModePrompt("senior", text), /You may edit application files when requested/);
   const discussion = assistantModePrompt("senior", text, { discussion: true });
   assert.match(discussion, /Do not create or update a plan, change its status, edit application files/);
-  assert.match(discussion, /read an existing working plan for context/);
+  assert.match(discussion, /vibe64-helper plan read or history/);
   assert.doesNotMatch(discussion, /Auto's planning stage|You may edit application files|Do not read or update/);
   assert.ok(discussion.endsWith(text));
   assert.match(assistantModePrompt("junior", text, { planInstructions: "Approved Auto plan" }), /Stop for an unresolved architectural/);

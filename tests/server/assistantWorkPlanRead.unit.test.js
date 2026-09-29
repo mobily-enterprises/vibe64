@@ -19,16 +19,16 @@ test("plan service reads the actual session without AI and preserves private ren
     createSessionStore: async () => store, readCurrentProject: unused, readEnv: unused,
     runInProjectContext: unused, saveEnvUserValues: unused },
     codexTerminalController: { codexAppServerProviderFactory() { assert.fail("Reading a plan must not start AI."); } } });
-  assert.deepEqual(await service.readSessionWorkPlan(sessionId), { ok: true, sessionId, available: false });
+  assert.deepEqual(await service.readSessionWorkPlan(sessionId), { ok: true, sessionId, available: false, current: null, history: [] });
   const context = { runtime, session: await store.readSession(sessionId) };
   const file = workPlanPath(context);
   await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, "Status: drafting\nKeep whitespace 🙂\n  ");
+  await writeFile(file, "Status: active\nKeep whitespace 🙂\n  ");
   const first = await service.readSessionWorkPlan(sessionId, { limit: 10 });
   assert.equal(first.ok, true);
   assert.equal(first.available, true);
   const next = await service.readSessionWorkPlan(sessionId, { offset: first.nextOffset, expectedRevision: first.revision });
-  assert.equal(first.text + next.text, "Status: drafting\nKeep whitespace 🙂\n  ");
+  assert.equal(first.text + next.text, "Status: active\nKeep whitespace 🙂\n  ");
   assert.equal((await service.readSessionWorkPlan(sessionId, { offset: 1 })).code, "vibe64_work_plan_revision_required");
   await writeFile(store.paths(sessionId).statusPath, "renewal_pending\n");
   const hidden = await service.readSessionWorkPlan(sessionId);

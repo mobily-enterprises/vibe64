@@ -105,9 +105,9 @@ answer or lifecycle notification closes that batch, preserving event order witho
 queuing a disk write per token. Native reasoning item start/completion controls
 the animated ellipsis in “Assistant is working…”; ordinary waiting, tool use, lost observation
 and idle turns do not animate. Reconnection clears an unconfirmed old phase.
-An unchanged ready plan retains its recorded approval after interrupted coding.
-The Auto router receives that approval when a user asks to continue; it still
-classifies questions and changed scope normally, without forcing an agent.
+Interrupted coding leaves the explicit plan status intact. Auto classifies a
+request to continue against the current active plan; questions and scope changes
+remain distinct intents.
 
 Main chat shows “Compacting conversation context…” for native compaction in all
 three orchestrators: Codex's tracked compaction item, OpenCode's current unfinished
@@ -242,6 +242,12 @@ references consistent. A confirmed send clears only its accepted receipts.
 
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
 - `packages/vibe64-terminals/src/server/assistantWorkPlan.js`
+- `packages/vibe64-terminals/src/shared/assistantWorkPlan.js`
+- `packages/vibe64-terminals/src/server/agentPlanCommand.js`
+- `packages/vibe64-accounts/src/server/assistantPlanUpgrade.js`
+- `src/components/studio/vibe64-session/Vibe64WorkPlan.vue`
+- `tests/server/assistantPlanLifecycle.test.js`
+- `tests/client/vibe64WorkPlan.vitest.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
@@ -505,84 +511,53 @@ changes and native turn boundaries refresh access without refreshing on every
 streamed message. Missing assignments explain where
 to configure them or direct the user to the owner.
 
-Auto starts new implementation work with Senior, even when the user phrases it as
-an imperative. The Router classifies ordinary new requests by intent, including
-cleanup requests expressed without the word Deslop. The planner investigates and writes a very detailed working
-Markdown document outside project Git. Main chat owns
-`<sessionRoot>/work-plan/plan.md`. Temporary chats use direct roles only and
-have no working-plan lifecycle. Session archival retains the main plan with other runtime files;
-normal session retention owns expiry. No application source document is created.
-The file has a Status line (drafting, ready, blocked or implemented) and sections
-for outcome/scope, findings, proposed changes, decisions, implementation steps,
-verification, and progress/blockers. Ready requires every section to have content.
-The prompt requires concrete inspected files/occurrences, exact intended changes,
-resolved decisions and acceptance checks; structural validation cannot certify
-semantic completeness. Auto discussion uses the Router's existing discussion
-reason and answers read-only. It neither creates nor updates a plan. Existing
-plan status and approval survive discussion, including interrupted turns and
-reconnects. Independent Deslop also leaves the plan alone.
-During Auto planning, Senior may write only this designated document, not application files. Beginning
-another planning turn invalidates readiness before inference. The conversation
-keeps a display snapshot and its content revision in the existing routing request;
-the file is the working authority. View plan opens a compact Markdown dialog with
-Outcome and scope presented first as What this will do. The planner writes this
-section in plain language for a non-developer, including visible changes, how to
-check them and required decisions. All remaining content is under Technical
-details, collapsed on each opening. Existing documents retain all their content;
-missing summaries show a brief explanation rather than exposing the whole
-technical document by default. Code-block headings do not split the document.
-An implemented plan hides the entire plan row and dialog, including View plan
-and Recover plan. New planning can make the controls relevant again; ordinary
-follow-up questions cannot.
-Implement submits the displayed revision through ordinary Send, retaining the
-draft and existing access checks. Natural-language approval uses the Router;
-only unambiguous approval of a currently ready plan can select Junior. The runtime
-checks the ready file and approved revision again before changing model or sending.
-No file, an incomplete document, a new request, or a stale approval cannot start
-Auto coding. Planning completion never starts coding automatically.
-The `vibe64.terminals.work-plan.read` query exposes Main's working document through
-the same action for HTTP and Colleague. Pages preserve text, count Unicode
-characters and contain at most 16,000 characters. Later pages require the first
-page's content revision; a changed document requires restarting the read. This
-operation reads the canonical plan owner without starting AI or exposing a file
-path. Approval still uses ordinary Send and its exact-revision admission checks.
-Direct Senior and Junior answer questions or implement changes from the
-message and conversation, without reading, preparing, updating or requiring the
-temporary working plan. Senior has no planning-only restriction outside Auto.
-A saved review preference applies only to Auto; direct roles never schedule an
-automatic follow-up. An old plan cannot block them, appear as their plan snapshot
-or trigger a return to planning. The View plan and Implement controls are hidden
-outside Auto, and the server rejects plan approval submitted in a direct role.
-Approved-plan coding updates progress and verification without silently rewriting
-the agreed scope. A material blocker is recorded with Status: blocked, then the coder ends
-its turn. After confirmed normal completion, the coordinator returns to the
-captured Senior model with a visible Back to planning message, even with review off.
-The planner preserves partial edits, revises the same file and waits for approval.
-Ordinary implementation failures remain the coder's responsibility. Review uses
-the document and accepted steering and may also return a scope decision to Senior.
-The same Senior review turn fixes in-scope defects, then applies the project's
-Deslop guidance to the coding changes and review fixes, preserving intended
-behavior and staging. Verification follows cleanup. The visible review request
-and mode-menu description name both jobs; no separate cleanup turn is scheduled.
-Stop suppresses this continuation even if a late native event reports success;
-interrupted planning cannot leave an approvable plan. Recovered blockers after
-restart require Continue planning rather than running automatically. Delivery
-uncertainty checks the retained receipt before any retry. Both follow-up purposes
-reuse the existing routing owner and native delivery, not another agent runtime.
-An unsuccessful or stopped coding turn keeps the plan ready only when its ready
-file still exactly matches the approved revision. It never retries automatically;
-the person can use Implement or approve again within Auto. Changed or blocked
-documents and interrupted planning remain unready. If an existing draft reaches
-Senior with an implementation request, its instructions require resolving that
-document's readiness using the agreed scope, rather than referring the person to
-support or another agent. A ready result exposes the ordinary Implement action.
-Completed Auto requests with a drafting, paused or blocked plan offer Recover plan
-beside View plan and inside its dialog. It submits the displayed revision through
-ordinary Send and explicitly selects the workflow's planner without consulting
-the Router or changing chat mode. The server checks the revision, idle turn,
-access and goal constraints. Recovery retains the composer draft, never approves
-or starts coding, and preserves the existing plan's scope; readiness is followed
-by the ordinary Implement action. Repeated delivery uses the same receipt checks.
+Auto routes by intent: Senior discusses and manages the plan, Junior executes
+it. The Router rejects mixed requirement changes and execution with an unsent
+clarification. Checklist bookkeeping during execution is not a scope change.
+Completed or absent plans go to Senior for an explanation; new task references
+must not resurrect an unrelated plan. Natural-language execution always passes
+through Router. A captured content revision is checked before Junior delivery
+to prevent a changed document being executed during routing.
+
+Main chat owns <sessionRoot>/plans/current.md and plans/archive/<revision>.md.
+These are runtime artifacts outside source Git. Session archive, restore and
+retention own them with the surrounding conversation. Snapshots preserve both
+active and completed plans; archive placement is independent of completion.
+The current Markdown has Status: active or Status: completed, a title and
+checklists. No other heading structure is required. Its content digest protects
+concurrent edits and paginated reads; history lists titles, status and dates.
+The stopped-service 20260929-plan-history upgrade moves legacy work-plan/plan.md,
+converts explicit implemented status to completed and other statuses to active,
+and reconciles display snapshots from the actual document, never turn success.
+It preserves exact body text, takes backups and includes archived/closing sessions
+and temporary conversation artifacts. Ordinary reads never perform migration.
+
+The model uses vibe64-helper plan read/history/new/write/complete/archive/reopen,
+through the existing bound session command socket. The server derives Senior,
+Junior or review authority from the admitted turn, never a caller's claimed role.
+Junior can write checklist progress and evidence only. Senior owns lifecycle
+commands. Replacing the current plan requires an archive acknowledgement after
+telling the user which plan will be retained. Archive and reopen save the exact
+previous snapshot before publishing the new current document. Completion is an
+explicit Senior operation; unchecked requirements prevent it. Ending a coding or
+review turn only ends execution and cannot promote a plan's status.
+
+The viewer reads canonical current/history pages independently of the latest
+routing request or selected chat mode. The document icon uses warning tone for
+an active plan, neutral tone otherwise, and remains available for completed or
+archived plans. The full checklist renders with model-maintained checkboxes and
+Markdown evidence. work-plan-changed events refresh open viewers; stable content
+containers preserve scrolling. Complete pagination uses one revision throughout;
+a changed document cannot be presented as a mixture of revisions. Implement and
+Recover controls are removed. All lifecycle and execution requests use chat.
+
+Discussion is read-only. Beginning a Senior turn never modifies or invalidates a
+plan. Junior preserves delivered work and ticks only evidenced requirements.
+Senior review may uncheck unsupported claims, add missing in-scope acceptance
+checks, fix defects and Deslop changes. It explicitly completes the plan or leaves
+it active and explains remaining work. Review never automatically starts another
+implementation/planning cycle; further execution needs user intent. Existing
+review interruption, access, delivery-receipt and restart safeguards remain.
 
 Deslop is a task with permission to clean up code, not a separate selectable
 chat mode. It uses the configured Senior model in named modes and the exact
@@ -612,7 +587,7 @@ Auto captures Router and the effective Senior–Junior pair, the actor, connecti
 identities and configuration revision before invoking the existing tool-free
 classification workload in a separate non-project scope. Helper is not an Auto
 dependency. The classifier sees the submitted text, attachment labels and bounded
-recent visible exchanges plus the ready plan revision and bounded outline; it returns only a mode and reason. Its native reference
+recent visible exchanges plus the current plan status, revision and bounded outline; it returns only a mode and reason. Its native reference
 and any managed execution ID stay in the parent request until verified cleanup.
 Helper callbacks merge that reference under the ordinary lock without overwriting
 cancellation. A late native start is stopped before delivery; failed cleanup
