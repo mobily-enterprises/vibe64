@@ -68,19 +68,20 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
       return { ...actual, catalogRevision: "current" };
     },
     async resolveAssistantPurpose(input) {
-      if (input.purpose === "conversation_summary") {
+      if (["conversation_summary", "voice_turn"].includes(input.purpose)) {
         observations.helperCalls.push({ purpose: input });
-        return { available: observations.helperAvailable !== false, effectiveSelection: { ...selection, modelId: "cheap-helper" }, connectionIdentity: "member-helper" };
+        return { available: observations.helperAvailable !== false, message: observations.helperUnavailableReason || "", effectiveSelection: { ...selection, modelId: "cheap-helper" }, connectionIdentity: "member-helper" };
       }
       return { available: true, effectiveSelection: selection };
     },
     async resolveEphemeralAgentExecutionProfile(scope, input, options) {
-      assert.deepEqual(input, { profileId: "helper", workloadId: "conversation_summary" });
+      assert.equal(input.profileId, "helper");
+      assert.ok(["conversation_summary", "voice_turn"].includes(input.workloadId));
       assert.equal(options.assistantSelection.modelId, "cheap-helper");
       assert.equal(options.expectedConnectionIdentity, "member-helper");
       assert.deepEqual(scope.environment, {});
       assert.ok(scope.workdir.startsWith(path.join(root, "colleague")));
-      return { profileId: "helper", workloadId: "conversation_summary", providerId: "codex", revision: "helper-v1", model: "cheap-helper", thinking: "low",
+      return { profileId: "helper", workloadId: input.workloadId, providerId: "codex", revision: "helper-v1", model: "cheap-helper", thinking: "low",
         limits: { maxInputCharacters: 200000, maxOutputCharacters: 16000, timeoutMs: 120000 },
         policy: { environmentAccess: false, networkAccess: false, repositoryWrite: false, tools: "none" },
         request: { allowProviderModelFallback: false, reasoning: true, summary: false } };
@@ -122,6 +123,8 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     async readEphemeralAgentConversation() { return observations.readResult || { ok: true, status: observations.readStatus || "completed" }; }
   };
   const events = createEventRuntime();
+  observations.realtime = [];
+  events.register({ id: "test.colleague-replies", matches: event => event.entity === "colleague", handle: event => { observations.realtime.push(event); } });
   const service = createColleagueService({ actions, terminals, events, watchPollMs, watchDebounceMs: 1, systemRoot: root,
     accounts: { async readModelRoutingWorkflows() { return { ok: true, workflows: [{ available: true, engineId: "codex" }] }; } } });
   const operation = withVibe64ActionContext({
@@ -184,6 +187,12 @@ for (const engine of ["codex", "claude", "opencode"]) {
     } else emit({ type: "text", messageId: "answer", text: prefix });
     const first = await f.service.read({}, f.context);
     assert.equal(first.streamingReply.text, "Hello ");
+    await until(() => f.observations.realtime.some(event => event.realtime.payload.streamingReply?.text === "Hello "));
+    const event = f.observations.realtime.find(event => event.realtime.payload.streamingReply?.text === "Hello ");
+    assert.equal(event.realtime.audience, "actor_user");
+    assert.equal(event.actorId, "42");
+    assert.equal(event.realtime.payload.conversationId, first.conversationId, "streaming and polling retain the same rendered conversation");
+    assert.equal(event.realtime.payload.streamRevision, first.streamRevision);
     assert.equal(first.messages.filter((message) => message.role === "assistant").length, 0);
     assert.deepEqual((await f.service.read({ clientId: "another-browser" }, f.context)).streamingReply, first.streamingReply);
     if (engine === "opencode") emit({ type: "message.part.delta", partId: "answer", textDelta: "world" });
@@ -193,6 +202,7 @@ for (const engine of ["codex", "claude", "opencode"]) {
     assert.equal(saved.streamingReply, undefined);
     finish.resolve(reply("Hello world"));
     const final = await f.service.wait(f.context);
+    assert.equal(f.observations.realtime.find(event => event.realtime.payload.completedMessage)?.realtime.payload.conversationId, final.conversationId);
     assert.equal(final.streamingReply, null);
     assert.deepEqual(final.messages.filter((message) => message.role === "assistant").map((message) => message.text), ["Hello world"]);
     emit({ type: "text", text: "late" });
@@ -203,6 +213,7 @@ for (const engine of ["codex", "claude", "opencode"]) {
 for (const action of ["stop", "steer", "failure"]) {
   test(`Colleague clears unfinished replies on ${action} and ignores late events`, async (t) => {
     const finish = Promise.withResolvers();
+    void finish.promise.catch(() => {}); // Observe rejection even before the fake provider begins waiting.
     t.after(() => finish.resolve(reply("Stale answer")));
     const f = await fixture(t, [() => finish.promise, reply("Latest answer")]);
     await f.send("First question");
@@ -1533,4 +1544,88 @@ test("exact Database table navigation validates Data scope and preserves its ack
   assert.deepEqual(await pending, { ok: true, focus });
   f.observations.projectAllowed = false;
   await assert.rejects(execute(input), { statusCode: 403 });
+});
+
+
+test("live voice readiness validates the actor's Helper without starting a conversation or model turn", async (t) => {
+  const f = await fixture(t, []);
+  const check = () => f.actions.execute({ actionId: "vibe64.colleague.voice.readiness.read", input: {}, context: f.context });
+  assert.deepEqual(await check(), { ok: true });
+  assert.deepEqual(await check(), { ok: true });
+  assert.deepEqual(f.observations.helperCalls.map(call => call.purpose), [
+    { purpose: "voice_turn", workflowEngineId: "codex" }, { purpose: "voice_turn", workflowEngineId: "codex" }
+  ]);
+  assert.equal(f.observations.creates, 0);
+  assert.deepEqual(f.observations.starts, []);
+  assert.deepEqual(f.observations.mutations, []);
+  assert.deepEqual((await f.service.read({}, f.context)).messages, []);
+  f.observations.allow = false;
+  await assert.rejects(check, { statusCode: 401 });
+  assert.equal(f.observations.helperCalls.length, 2);
+});
+
+test("live voice readiness reports unsupported Helper routing and rechecks it on retry", async (t) => {
+  const f = await fixture(t, []);
+  const check = () => f.actions.execute({ actionId: "vibe64.colleague.voice.readiness.read", input: {}, context: f.context });
+  f.observations.helperAvailable = false;
+  f.observations.helperUnavailableReason = "This model cannot run restricted background requests.";
+  await assert.rejects(check, error => {
+    assert.equal(error.statusCode, 409);
+    assert.equal(error.code, "vibe64_colleague_helper_unavailable");
+    assert.match(error.message, /cannot run restricted.*AI Accounts.*Model routing/);
+    return true;
+  });
+  f.observations.helperAvailable = true;
+  assert.deepEqual(await check(), { ok: true });
+  assert.equal(f.observations.creates, 0);
+  assert.ok(f.observations.helperCalls.every(call => call.purpose));
+  await f.service.close();
+  await assert.rejects(check, /Colleague is stopping/);
+});
+
+test("spoken intent uses a bounded tool-free Helper and never admits partial words as a user instruction", async (t) => {
+  const f = await fixture(t, []);
+  f.observations.helperAnswer = JSON.stringify({ intent: "steer" });
+  const result = await f.actions.execute({ actionId: "vibe64.colleague.voice.classify",
+    input: { text: "I meant A with sugar", speaking: true, spokenText: "A is interesting" }, context: f.context });
+  assert.deepEqual(result, { ok: true, intent: "steer" });
+  assert.deepEqual((await f.service.read({}, f.context)).messages, []);
+  assert.deepEqual(f.observations.mutations, []);
+  assert.equal(f.observations.starts.length, 0);
+  assert.equal(f.observations.helperCalls.find(call => call.purpose).purpose.purpose, "voice_turn");
+  assert.ok(f.observations.helperCalls.some(call => call.cleanup));
+  f.observations.helperAnswer = JSON.stringify({ intent: "run-a-tool" });
+  await assert.rejects(() => f.service.classifyVoice({ text: "Open a project", speaking: false }, f.context), {
+    statusCode: 409, code: "vibe64_colleague_voice_unavailable"
+  });
+  assert.deepEqual(f.observations.mutations, []);
+});
+
+test("voice interpretation explains missing Helper routing and hides unexpected provider failures", async (t) => {
+  const f = await fixture(t, []);
+  const classify = () => f.actions.execute({ actionId: "vibe64.colleague.voice.classify",
+    input: { text: "I meant A with sugar", speaking: true }, context: f.context });
+  f.observations.helperAvailable = false;
+  await assert.rejects(classify, error => {
+    assert.equal(error.statusCode, 409);
+    assert.equal(error.code, "vibe64_colleague_helper_unavailable");
+    assert.match(error.message, /AI Accounts.*Model routing/);
+    return true;
+  });
+  assert.equal(f.observations.helperCalls.filter(call => call.scope).length, 0);
+  f.observations.helperUnavailableReason = "The selected model cannot run restricted background requests.";
+  await assert.rejects(classify, error => {
+    assert.match(error.message, /cannot run restricted background requests/);
+    assert.match(error.message, /AI Accounts.*Model routing/);
+    return true;
+  });
+  f.observations.helperAvailable = true;
+  f.observations.helperAnswer = "unexpected private provider output";
+  await assert.rejects(classify, error => {
+    assert.equal(error.statusCode, 409);
+    assert.match(error.message, /review.*before sending/);
+    assert.doesNotMatch(error.message, /private provider/);
+    return true;
+  });
+  assert.deepEqual((await f.service.read({}, f.context)).messages, []);
 });

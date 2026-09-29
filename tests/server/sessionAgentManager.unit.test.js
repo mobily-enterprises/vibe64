@@ -185,6 +185,47 @@ test("scoped routing discovers assigned engines and loads other catalogues only 
   assert.ok(f.calls.some(({ type, context, input }) => type === "catalog" && context.engineId === "opencode" && input.connectedOnly === "true"));
 });
 
+test("Helper routing choices and saved assignments include Pickle with current model validation", async () => {
+  const f = routingManagerFixture();
+  f.configuration.orchestrators.codex.helper = f.backup;
+  const view = await f.manager.inspectRoutingConfiguration(f.configuration, f.options);
+  const workflow = view.engines.find(({ engineId }) => engineId === "codex");
+  const pickle = workflow.roles.helper.choices.find(({ modelId }) => modelId === "big-pickle");
+  assert.equal(pickle.compatibilityError, "");
+  assert.equal(workflow.roles.helper.error, "");
+  assert.equal(workflow.preview.viewer.prompt_hint.available, true);
+  f.calls.length = 0;
+  const voice = await f.manager.resolveAssistantPurpose({ purpose: "voice_turn", workflowEngineId: "codex" }, f.options);
+  assert.equal(voice.available, true, voice.message);
+  assert.equal(voice.effectiveSelection.modelId, "big-pickle");
+  assert.deepEqual(voice.executionProfileRequest, { profileId: "helper", workloadId: "voice_turn" });
+  assert.equal(f.calls.some(({ type }) => type === "catalog"), true);
+});
+
+test("voice preflight rejects missing setup without discovery and validates the actor's effective Helper", async () => {
+  const f = routingManagerFixture();
+  const input = { purpose: "voice_turn", workflowEngineId: "codex" };
+  delete f.configuration.orchestrators.codex.helper;
+  const missing = await f.manager.resolveAssistantPurpose(input, f.options);
+  assert.equal(missing.available, false);
+  assert.match(missing.message, /Choose a Helper/);
+  assert.equal(f.calls.some(({ type }) => type === "catalog"), false);
+  f.configuration.orchestrators.codex.helper = f.helper;
+  f.facts.get(f.helper.modelId).ownerOnly = true;
+  const member = await f.manager.resolveAssistantPurpose(input, f.options);
+  assert.equal(member.available, true, member.message);
+  assert.equal(member.effectiveSelection.modelId, "big-pickle");
+  assert.equal(member.backupUsed, true);
+  const owner = await f.manager.resolveAssistantPurpose(input, { vibe64User: { role: "owner" } });
+  assert.equal(owner.available, true, owner.message);
+  assert.equal(owner.effectiveSelection.modelId, f.helper.modelId);
+  assert.equal(owner.backupUsed, false);
+  const removed = routingManagerFixture({ withoutModels: ["opencode"] });
+  const unavailable = await removed.manager.resolveAssistantPurpose(input, removed.options);
+  assert.equal(unavailable.available, false, "preflight cannot admit a removed model");
+  assert.equal(removed.calls.some(({ type }) => type === "catalog"), true);
+});
+
 test("workflow choices read saved pairs without model discovery and preserve collaborator backup decisions", async () => {
   const f = routingManagerFixture();
   f.configuration.orchestrators.opencode = { senior: f.backup, junior: f.helper };

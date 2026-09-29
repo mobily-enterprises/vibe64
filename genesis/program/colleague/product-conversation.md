@@ -68,12 +68,18 @@ an active, failed or different run retains the failure without resending work.
 
 Native text events update an in-memory reply projection. Only the decoded text
 of the expected reply envelope prefix is exposed; tool requests and reasoning
-stay private. Existing one-second client refreshes display it as one pending
-assistant message. Completed envelope validation still controls saved history
+stay private. Authenticated hosted clients receive actor-private JSKIT realtime projections
+coalesced over 25 ms, with epoch/revision checks against stale snapshots. Existing
+one-second HTTP refreshes and socket reconnect reconcile authoritative state.
+Local mode without an authenticated realtime actor retains that HTTP path.
+The chat displays one pending assistant message. Completed envelope validation still controls saved history
 and tool dispatch. Stop, steering, failures and superseded model steps discard
 the projection; reopening reads the latest projection without replaying actions.
-The host's voice slot receives canonical messages, so partial replies do not
-trigger duplicate or incomplete speech. No streamed fragments are persisted.
+The host's voice slot receives that projection and canonical completion with the
+same message identity, allowing phrase streaming without replaying the final
+answer. No streamed fragments are persisted. The host can supply a transient user
+transcript with its admission ID; the chat shows it as Pending until the canonical
+user message replaces it. Neither projection edits the typed draft.
 
 An accepted request captures its UI focus. Subsequent navigation does not silently
 redirect its operations. New steering can arrive while a model response is active;
@@ -196,6 +202,29 @@ execution and cleanup state are retained before work starts; failed cleanup must
 finish before another Helper can start. Stop Colleague aborts and cleans up that
 Helper too. Non-conversation watches remain to be added.
 Online owns global capture, playback and avatar behavior through the voice slot.
+The slot's `check` callback calls the actor-authorized voice.readiness.read query.
+It reuses the same Helper routing check as interpretation and returns only
+availability success or an actionable setup failure. It starts no native
+conversation or model turn and admits no user message.
+The global non-tool voice.classify action interprets a bounded spoken candidate,
+current speech and four recent user/assistant messages using the configured
+Helper. Its voice_turn profile has a ten-second deadline, strict bounded intent
+output and no tools or repository access. It shares existing serialized Helper
+lifecycle, cleanup and recovery with summaries, and never admits words or starts
+product operations. The host validates that the candidate remains current before
+ordinary message admission. New voice Helper attempts use the existing retained
+summaryHelper shape and workload identity; no historical state rewrite or lazy
+backfill is introduced.
+Unavailable Helper routing returns the routing policy's reason, including model
+incompatibility, with an actionable AI Accounts → Model routing instruction.
+Unexpected interpretation failures request manual recording review without
+exposing raw provider output or admitting a user instruction.
+The client emits the local message-submission identity synchronously before
+sending. Voice hosts use it to distinguish a fresh invitation from a delayed
+canonical acknowledgement after Stop speaking; it changes no stored history.
+Live reply events use the same Colleague scope identity as HTTP snapshots,
+rather than the native provider conversation identity. The shared transcript's
+scroll key and display cache therefore stay stable across the two transports.
 
 Assignments retain an actual user message and its original request, criteria,
 exact project/session/implementer identity, subsequent user amendments, turn

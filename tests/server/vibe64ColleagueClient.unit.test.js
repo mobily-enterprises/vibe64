@@ -37,6 +37,35 @@ test("Colleague recovers connection status and reports failed commands without c
   assert.equal(view.notices.length, 2, "unchanged retained failures are reported once, not every poll");
 });
 
+test("live voice readiness forwards cancellation without sending a message", async (t) => {
+  const requests = [];
+  const view = mount(t, async (url, options) => {
+    requests.push({ url, options });
+    return { ok: true, messages: [], status: "ready" };
+  });
+  await flush();
+  const controller = new AbortController();
+  assert.equal((await view.state.checkVoice({ signal: controller.signal })).ok, true);
+  const request = requests.find(request => request.url.endsWith("/voice/readiness"));
+  assert.equal(request.options.method, "GET");
+  assert.equal(request.options.signal, controller.signal);
+  assert.equal(request.options.body, undefined);
+  assert.equal(requests.some(request => request.url.endsWith("/messages")), false);
+});
+
+test("Colleague signals a local message submission before its delayed admission", async (t) => {
+  const admission = Promise.withResolvers();
+  const view = mount(t, async (url) => url.endsWith("/messages") ? admission.promise : { messages: [], status: "ready" });
+  await flush();
+  const sending = view.state.sendMessage("Please speak again", { messageId: "invitation" });
+  assert.deepEqual(view.events, [["message-submit", "invitation"]]);
+  await assert.rejects(view.state.sendMessage("A duplicate", { messageId: "other" }), /Another message/);
+  assert.equal(view.events.length, 1, "rejected overlapping sends do not invite speech");
+  admission.resolve({ messages: [{ id: "invitation", role: "user", text: "Please speak again" }], status: "working" });
+  await sending;
+  assert.equal(view.state.state.value.messages[0].id, "invitation");
+});
+
 test("Colleague updates one reply bubble while keeping unfinished text out of voice history", async (t) => {
   const response = { messages: [{ id: "user", role: "user", text: "Hi" }], status: "working", streamingReply: null };
   const view = mount(t, async () => structuredClone(response));
@@ -87,9 +116,14 @@ test("renaming updates conversation and composer labels without losing the draft
 function mount(t, request, props = vue.reactive({ name: "Colleague" })) {
   const notices = [];
   const events = [];
+  const realtime = new Map();
   const module = { exports: {} };
   const imports = {
     vue,
+    "@jskit-ai/realtime/client/composables/useRealtimeEvent": {
+      useRealtimeEvent: ({ event, onEvent }) => realtime.set(event, payload => onEvent({ payload })),
+      useRealtimeSocket: () => ({ on: (event, handler) => realtime.set(event, handler), off: event => realtime.delete(event) })
+    },
     "@mdi/js": mdi,
     "@/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher") },
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
@@ -116,7 +150,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" })) {
   } });
   app.mount({});
   t.after(() => { app.unmount(); if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow; });
-  return { state, notices, events };
+  return { state, notices, events, realtime };
 }
 
 test("avatar tap stays a tap; holding emits one recording gesture and suppresses its trailing click", async (t) => {
@@ -154,3 +188,48 @@ test("cancelled avatar holds stop once and do not complete a recording", async (
 });
 
 async function flush() { await new Promise(resolve => setImmediate(resolve)); await vue.nextTick(); }
+
+
+test("live replies precede polling, reject stale projections and reconcile completion once", async (t) => {
+  const response = { messages: [{ id: "u", role: "user", text: "Hi" }], status: "working",
+    streamEpoch: "runtime", streamRevision: 1, conversationId: "conversation" };
+  const view = mount(t, async () => structuredClone(response));
+  await flush();
+  const receive = view.realtime.get("vibe64.colleague.reply.changed");
+  const projection = { streamEpoch: "runtime", streamRevision: 3, conversationId: "conversation",
+    streamingReply: { id: "answer", text: "Enough to start speaking. ", role: "assistant", status: "inProgress" } };
+  receive(projection);
+  assert.equal(view.state.state.value.streamingReply.text, projection.streamingReply.text);
+  await view.state.refresh();
+  receive({ ...projection, streamRevision: 2, streamingReply: null });
+  assert.equal(view.state.state.value.streamingReply.text, projection.streamingReply.text, "a late HTTP response or event cannot rewind speech");
+  receive({ ...projection, streamRevision: 4, streamingReply: null,
+    completedMessage: { id: "answer", text: "Enough to start speaking. Finished.", role: "assistant" } });
+  await flush();
+  assert.equal(view.state.state.value.messages.filter(message => message.id === "answer").length, 1);
+  assert.equal(view.state.state.value.streamingReply, null);
+  receive(projection);
+  assert.equal(view.state.state.value.streamingReply, null, "late tokens cannot replay a completed reply");
+});
+
+
+test("live user transcription shares chat and is replaced once by its admitted message", async (t) => {
+  const props = vue.reactive({ name: "Colleague", voiceTranscript: null });
+  const response = { messages: [], status: "ready" };
+  const view = mount(t, async () => structuredClone(response), props);
+  await flush();
+  view.state.draft.value = "My independent typed draft";
+  props.voiceTranscript = { id: "voice-1", text: "I meant A" };
+  assert.equal(view.state.adapter.value.conversation.turns[0].user.text, "I meant A");
+  assert.equal(view.state.adapter.value.conversation.turns[0].optimistic.status, "pending");
+  props.voiceTranscript.text = "I meant A with sugar";
+  assert.equal(view.state.adapter.value.conversation.turns[0].user.text, "I meant A with sugar");
+  assert.equal(view.state.state.value.messages.length, 0, "partial words are not canonical history");
+  response.messages = [{ id: "voice-1", role: "user", text: props.voiceTranscript.text }];
+  await view.state.refresh();
+  assert.equal(view.state.adapter.value.conversation.turns.length, 1);
+  assert.equal(view.state.adapter.value.conversation.turns[0].optimistic, undefined);
+  props.voiceTranscript = null;
+  assert.equal(view.state.adapter.value.conversation.turns.length, 1);
+  assert.equal(view.state.draft.value, "My independent typed draft");
+});

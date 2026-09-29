@@ -212,7 +212,7 @@ test("OpenCode API-key verification sanitizes provider failures and removes cred
   await assert.rejects(access(privateRoot), { code: "ENOENT" });
 });
 
-test("OpenCode process environment is minimal and injects Vibe64's deny-all helper agent", () => {
+test("OpenCode process environment is minimal and keeps managed Helper tools behind approval", () => {
   const env = safeOpenCodeEnvironment({
     ANTHROPIC_API_KEY: "must-not-leak",
     DEEPSEEK_API_KEY: "must-not-leak",
@@ -269,7 +269,7 @@ test("OpenCode process environment is minimal and injects Vibe64's deny-all help
     description: "Vibe64 bounded helper turns without tools.",
     hidden: true,
     mode: "primary",
-    permission: { "*": "deny" }
+    permission: { "*": "ask" }
   });
   assert.deepEqual(config.permission, {
     doom_loop: "deny",
@@ -287,13 +287,14 @@ test("OpenCode process environment is minimal and injects Vibe64's deny-all help
 test("non-project OpenCode tools stay behind approval and require the execution guard", () => {
   const unguarded = JSON.parse(openCodeInlineConfig());
   assert.equal(unguarded.agent[OPENCODE_EPHEMERAL_AGENT_ID].permission["*"], "deny");
+  assert.equal(unguarded.agent[OPENCODE_HELPER_AGENT_ID].permission["*"], "deny");
   assert.equal(unguarded.plugin, undefined);
 
   const guarded = JSON.parse(openCodeInlineConfig({ sessionEnvironmentRegistry: "/private/sessions.json" }));
   assert.equal(guarded.agent[OPENCODE_EPHEMERAL_AGENT_ID].permission["*"], "ask");
   assert.equal(guarded.plugin.length, 1);
   assert.match(guarded.plugin[0], /opencodeSessionEnvironmentPlugin\.js$/u);
-  assert.equal(guarded.agent[OPENCODE_HELPER_AGENT_ID].permission["*"], "deny");
+  assert.equal(guarded.agent[OPENCODE_HELPER_AGENT_ID].permission["*"], "ask");
 });
 
 test("OpenCode forces Z.AI API and Coding Senior through distinct canonical billing routes", () => {

@@ -203,10 +203,14 @@ function openCodeInlineConfig({
       ...helperSubagents,
       ...(text(sessionEnvironmentRegistry) ? {
         // Preserve OpenCode's native tool definitions. The session plugin rejects
-        // every ephemeral tool call before execution; "deny" removes the tools
+        // unauthorized calls before execution; "deny" removes the tools
         // from the provider request and Zen rejects that request on its free tier.
         [OPENCODE_EPHEMERAL_AGENT_ID]: {
           ...OPENCODE_INLINE_CONFIG_BASE.agent[OPENCODE_EPHEMERAL_AGENT_ID],
+          permission: { "*": "ask" }
+        },
+        [OPENCODE_HELPER_AGENT_ID]: {
+          ...OPENCODE_INLINE_CONFIG_BASE.agent[OPENCODE_HELPER_AGENT_ID],
           permission: { "*": "ask" }
         }
       } : {})

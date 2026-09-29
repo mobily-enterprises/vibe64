@@ -701,10 +701,16 @@ function createSessionAgentManager({
       const fact = await readSelectionAccess(assignments.sharedBackup);
       if (canUseVibe64Assistant(fact, actor)) accessible.push(assignments.sharedBackup);
     }
+    const resolution = { purpose, workflowEngineId, actor, configuration,
+      connectionAccess, override, requirements, reviewEnabled };
+    // Access and missing roles need no native discovery.
+    // An eligible destination still requires the current catalogue before dispatch.
+    const preflight = resolveAssistantPurpose({ ...resolution, validateModels: false });
+    if (!preflight.available || !validateModels) return preflight;
     const catalogs = [];
     const readCatalog = (provider, input) => readFact(`catalog:${provider.id}:${JSON.stringify(input)}`,
       () => providerCapabilities(provider, input, { vibe64User: actor }));
-    const catalogEngines = validateModels ? new Set(accessible.map((selection) => selection.engineId)) : [];
+    const catalogEngines = new Set(accessible.map((selection) => selection.engineId));
     for (const engineId of catalogEngines) {
       const selectionsForEngine = accessible.filter((selection) => selection.engineId === engineId);
       const provider = providerFor({ engineId });
@@ -733,8 +739,7 @@ function createSessionAgentManager({
         for (const fact of connectionAccess) if (fact.engineId === engineId) fact.available = false;
       }
     }
-    return resolveAssistantPurpose({ purpose, workflowEngineId, actor, configuration, catalogs,
-      connectionAccess, override, requirements, reviewEnabled, validateModels });
+    return resolveAssistantPurpose({ ...resolution, catalogs });
   }
 
   async function inspectAssistantPurposes(input = {}, options = {}) {
@@ -886,7 +891,7 @@ function createSessionAgentManager({
       const setupConfiguration = { ...configuration,
         orchestrators: { ...configuration.orchestrators, [engineId]: setupAssignments } };
       const roles = Object.fromEntries(ASSISTANT_ROUTING_ASSIGNMENTS.map((role) => {
-        const purpose = role === "router" ? "request_routing" : role === "sharedBackup" ? "junior" : role;
+        const purpose = role === "router" ? "request_routing" : role === "helper" ? "prompt_hint" : role === "sharedBackup" ? "junior" : role;
         const candidates = ["senior", "junior"].includes(role) ? (engine ? [engine] : []) : catalogs;
         const choices = candidates.flatMap((catalog) => routingModelChoices(catalog, { purpose }).map((choice) => {
           const fact = access.get(routeKey(choice));

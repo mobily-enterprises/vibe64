@@ -187,7 +187,7 @@ function roleHint(role) {
   if (stale.value) return "Reload current choices to check access.";
   if (previewPending.value) return "Checking access…";
   if (previewError.value) return "Access could not be checked.";
-  const decision = decisions.value[role.id === "router" ? "request_routing" : role.id];
+  const decision = decisions.value[role.id === "router" ? "request_routing" : role.id === "helper" ? "prompt_hint" : role.id];
   const result = decision?.available
     ? `${selectionLabel(decision.effectiveSelection)}${decision.backupUsed ? " (shared backup)" : ""}`
     : decision?.message || "Unavailable";

@@ -72,6 +72,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     const state = {
       key, root, record,
       saving: Promise.resolve(), admission: Promise.resolve(), running: null,
+      streamEpoch: randomUUID(), streamRevision: 0,
       generation: 0, pendingMessages: [], connections: new Map(), requestContext: null, streamingReply: null,
       needsObservation: Boolean(saved?.runId || saved?.status === "working"), stopping: false, nextConnection: null,
       watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve()
@@ -110,6 +111,32 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     return operation;
   }
 
+  function publishReply(state, completedMessage = null) {
+    state.streamRevision += 1;
+    const user = authenticatedVibe64User(state.requestContext || {});
+    const actorId = String(user?.uid || "");
+    // Hosted conversations are private to their authenticated actor. Local mode
+    // retains HTTP reconciliation when it has no authenticated realtime audience.
+    if (!actorId || !events?.publish) return;
+    const publish = () => {
+      clearTimeout(state.replyTimer);
+      state.replyTimer = null;
+      void events.publish({
+        type: "entity.changed", source: "vibe64", entity: "colleague", operation: "updated",
+        entityId: state.record.scopeId, actorId, scope: { kind: "user", id: actorId },
+        realtime: { audience: "actor_user", event: "vibe64.colleague.reply.changed", payload: {
+          actorId, conversationId: state.record.scopeId,
+          streamEpoch: state.streamEpoch, streamRevision: state.streamRevision,
+          streamingReply: state.streamingReply?.text ? { ...state.streamingReply } : null,
+          completedMessage
+        } }
+      }).catch(() => {}); // A notification failure cannot fail or repeat a model turn.
+    };
+    if (state.streamingReply?.text && !completedMessage) {
+      if (!state.replyTimer) state.replyTimer = setTimeout(publish, 25);
+    } else publish();
+  }
+
   function scope(state) {
     const workdir = path.join(state.root, state.record.scopeId);
     return { id: state.record.scopeId, runtimeRoot: workdir, workdir, environment: {}, stableContext: instructions };
@@ -139,6 +166,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         id: message.messageId || `${turn.turnId}:${message.role}`, role: message.role, text: message.text, at: message.at
       }))),
       streamingReply: state.streamingReply?.text ? { ...state.streamingReply } : null,
+      streamEpoch: state.streamEpoch, streamRevision: state.streamRevision,
       pagination: page.pagination,
       watches: record.watches.map(publicWatch),
       assignments: (record.assignments || []).map((item) => assignmentSummary(item)),
@@ -261,7 +289,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       state.needsObservation = true;
       const streamingReply = {
         id: `${replyTurnId || randomUUID()}:assistant`, role: "assistant",
-        text: "", at: new Date().toISOString(), status: "inProgress"
+        text: "", at: new Date().toISOString(), status: "inProgress", streamId: randomUUID(), autonomous
       };
       state.streamingReply = streamingReply;
       let rawReply = "";
@@ -277,7 +305,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           messageId = nextId;
         }
         rawReply = (typeof textSnapshot === "string" ? textSnapshot : rawReply + delta).slice(0, COLLEAGUE_TOOL_PAYLOAD_LIMIT);
-        streamingReply.text = readPartialReply(rawReply);
+        const text = readPartialReply(rawReply);
+        if (text !== streamingReply.text) {
+          streamingReply.text = text;
+          publishReply(state);
+        }
       };
       const started = requireResult(await terminals.startEphemeralAgentConversationTurn(scope(state), {
         conversationId: state.record.conversationId, persistent: true,
@@ -304,7 +336,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         }
       }
       if (!isCurrent()) return;
-      state.streamingReply = null;
       if (activeStates.has(response.status)) throw failure("The provider has not finished this response. Your message is retained.");
       state.needsObservation = false;
       if (state.pendingMessages.length) {
@@ -320,6 +351,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       try {
         envelope = readEnvelope(response.rawText || response.text || response.message || response.messages?.filter((message) => message.role === "assistant").at(-1)?.text || "");
       } catch {
+        state.streamingReply = null;
+        publishReply(state);
         if (++invalidResponses > 2) throw failure("The model did not return a valid Colleague response. Your message is kept; try another model or retry.", "vibe64_colleague_response_invalid");
         feedback = "Your completed response did not match the required envelope. No tool was executed. Return exactly one valid JSON reply or tool envelope.";
         continue;
@@ -340,9 +373,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         if (state.pendingMessages.length) { feedback = "Continue with the user's new message."; continue; }
         state.record.status = "ready";
         state.record.error = "";
+        state.streamingReply = null;
         await persist(state);
+        publishReply(state, { id: `${replyTurnId}:assistant`, role: "assistant", text: envelope.text,
+          at: new Date().toISOString(), streamId: streamingReply.streamId, autonomous });
         return;
       }
+      state.streamingReply = null;
+      publishReply(state);
       const operation = { id: randomUUID(), toolName: envelope.toolName, arguments: envelope.arguments, status: "executing" };
       state.record.operation = operation;
       await persist(state);
@@ -368,6 +406,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         await persist(state);
       }).finally(() => {
         state.streamingReply = null;
+        publishReply(state);
         state.running = null;
         if (!closed && !state.stopping && state.record.status === "ready") {
           if (state.pendingMessages.length) startWorker(state, state.nextConnection);
@@ -509,6 +548,26 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         scheduleWatches(state, watchDebounceMs);
         return result;
       });
+    },
+    async checkVoice(_input, context) {
+      const state = await stateFor(context);
+      if (closed || state.stopping) throw failure("Colleague is stopping. Try again in a moment.");
+      await summaries.requireHelper(state, context, "voice_turn");
+      return { ok: true };
+    },
+    async classifyVoice(input, context) {
+      const state = await stateFor(context);
+      if (closed || state.stopping || state.summaryRunning) throw failure("Colleague's Helper is busy. Finish this voice message manually.");
+      state.requestContext = context;
+      state.summaryAbort = new AbortController();
+      state.summaryRunning = (async () => {
+        const recentConversation = (await snapshot(state)).messages.slice(-4).map(({ role, text }) => ({ role, text: text.slice(-1200) }));
+        return summaries.classifyVoice(state, { ...input, recentConversation }, context);
+      })().catch((cause) => {
+        if (cause?.code === "vibe64_colleague_helper_unavailable") throw cause;
+        throw failure("Colleague could not interpret this voice turn. Finish the recording and review it before sending.", "vibe64_colleague_voice_unavailable");
+      }).finally(() => { state.summaryRunning = null; state.summaryAbort = null; });
+      return state.summaryRunning;
     },
     async summarize(input, context) {
       const state = await stateFor(context);
@@ -681,6 +740,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         state.requestContext = context;
         state.pendingMessages.push({ messageId: input.messageId, text: input.message });
         state.streamingReply = null;
+        publishReply(state);
         state.record.error = "";
         await persist(state);
         const previous = state.connections.get(input.clientId) || {};
@@ -699,6 +759,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       await state.admission;
       state.generation += 1;
       state.streamingReply = null;
+      publishReply(state);
       state.summaryAbort?.abort();
       state.pendingMessages = [];
       for (const connection of state.connections.values()) connection.acknowledge?.({ ok: false, error: "Navigation was cancelled when Colleague stopped." });
@@ -728,6 +789,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       for (const pending of users.values()) {
         const state = await pending;
         clearTimeout(state.watchTimer);
+        clearTimeout(state.replyTimer);
         await state.watchAdmission;
         await state.polling;
         if (state.running || state.summaryRunning || state.record.summaryHelper) await this.stop({}, state.requestContext);

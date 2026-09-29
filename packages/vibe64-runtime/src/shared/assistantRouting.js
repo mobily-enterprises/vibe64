@@ -73,12 +73,9 @@ function routingModelChoices(engine, { purpose = "senior" } = {}) {
       if (!agent) return [];
       const curated = curatedCodexModel(model.id, provider.id);
       const isolated = Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).includes(purpose);
-      let compatibilityError = engine.engineId === "codex" && provider.id !== "openai" &&
+      const compatibilityError = engine.engineId === "codex" && provider.id !== "openai" &&
         !(curated?.modelProviderId === provider.id && (isolated || curated.codexHistoryRouting === true))
         ? `${model.label} is connected, but switching models in Codex has not been verified. Choose a supported routing model.` : "";
-      if (isolated && engine.engineId === "opencode" && provider.id === "opencode" && model.id === "big-pickle") {
-        compatibilityError = "Big Pickle supports chat, but its provider rejects restricted Router and background helper requests. Choose another model for this role.";
-      }
       return [{ agentId: agent.id, engineId: engine.engineId, modelProviderId: provider.id, modelId: model.id,
         variantId: agent.variantId || (model.variants.some(({ id }) => id === engine.defaults.variantId) ? engine.defaults.variantId : ""),
         catalogRevision: engine.revision, label: model.label, providerLabel: provider.label,

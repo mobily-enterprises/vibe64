@@ -15,8 +15,10 @@ no repository tools or engineering role. Its continuing conversation remains
 available before a session exists or when a session cannot open. Each signed-in
 person keeps their own Colleague history and model choice. The current text
 conversation supports an Online host's global voice controls and configured display name.
-Colleague displays reply text incrementally; only the completed answer enters
-saved history and voice playback. Stopping or steering clears unfinished text.
+Colleague displays reply text incrementally and a voice host can speak readable
+phrases before completion; only the completed answer enters saved history.
+The host can check live-turn Helper availability before recording, without
+sending an AI request. Stopping or steering clears unfinished text.
 Colleague can browse open and archived sessions beyond the first page, while
 reporting unavailable records separately and keeping historical sessions inactive.
 Changing that name keeps the conversation and model choice. People can ask it
@@ -89,7 +91,9 @@ the page's comment, message and Send controls clear when closed. Closing it
 preserves both conversations' drafts.
 Tab from a nonempty message focuses Send, or Steer while Colleague is working;
 Enter sends it. Voice status and live transcription appear above the message
-box without moving its controls.
+box without moving its controls. Recognized words also update a pending user
+message in the chat, replaced once on admission while preserving typed drafts.
+Hosts may speak safe phrases from live reply text before answer completion.
 Holding the header avatar records a voice message when the host supports speech.
 A bubble across the left two-thirds shows recognized words, leaving the right
 third clear of the hand holding the avatar. Release keeps it for review with
@@ -424,6 +428,8 @@ recommendations button. That button lists only changes from the current form's
 models and thinking choices, showing only the proposed values. When there are
 none, the form says No recommended changes. Apply to form accepts the list;
 Save routing saves the assignments. Cancelling the review leaves the form unchanged.
+Helper choices must support restricted background requests; chat-only models are
+disabled for that role and an incompatible saved choice explains the problem.
 An older Helper settings conflict has a separate Confirm Helper action. It names
 the need to confirm future background tasks and is resolved when routing is saved.
 Main session creation and renewal share a workflow picker that
@@ -1410,6 +1416,7 @@ focus or selection.
 People configure Router and Helper independently in Model routing. Hints,
 commit naming and other bounded helpers capture the actor's effective Helper
 choice, which may use another orchestrator, without retargeting the working chat.
+Included Big Pickle is eligible for Helper and Router as well as ordinary chat.
 Helper is available to background tasks, not as a chat mode. Its model and thinking
 are user-configured; task limits and tool restrictions still apply. Router keeps
 its own model and thinking. Existing Helper choices retain their preferences

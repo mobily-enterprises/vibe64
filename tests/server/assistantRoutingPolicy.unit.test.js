@@ -470,21 +470,20 @@ test("the pure resolver requires a trusted actor input; standalone null remains 
 });
 
 
-test("included Pickle remains usable for chat and Backup but cannot route or run restricted helpers", () => {
+test("included Pickle is eligible for chat, Backup, Router and bounded Helpers", () => {
   const f = routingFixture();
   const engine = f.input.catalogs[1];
   const recommended = recommendedRoutingAssignments(engine, { connectionAccess: f.input.connectionAccess });
   assert.equal(recommended.senior.modelId, "big-pickle");
   assert.equal(recommended.junior.modelId, "big-pickle");
   assert.equal(recommended.sharedBackup.modelId, "big-pickle");
-  assert.equal(recommended.router, null);
-  assert.equal(recommended.helper, null);
+  assert.equal(recommended.router.modelId, "big-pickle");
+  assert.equal(recommended.helper.modelId, "big-pickle");
   Object.assign(f.input.configuration.orchestrators.codex, { router: f.backup, helper: f.backup });
   assert.equal(f.resolve("helper").available, true);
-  for (const purpose of ["request_routing", "prompt_hint", "auto"]) {
+  for (const purpose of ["request_routing", "prompt_hint", "voice_turn", "auto"]) {
     const result = f.resolve(purpose, { actor: { role: "owner" } });
-    assert.equal(result.available, false);
-    assert.match(result.message, /provider rejects restricted/);
+    assert.equal(result.available, true, result.message);
   }
 });
 
@@ -524,7 +523,7 @@ test("Auto resolves its pair and Router through fallback without depending on He
     assert.equal(result.seniorJuniorPair[role].effectiveSelection.modelProviderId, "deepseek");
   }
   assignments.sharedBackup = f.backup;
-  const unsupported = f.resolve("auto");
-  assert.equal(unsupported.available, false);
-  assert.match(unsupported.message, /provider rejects restricted/);
+  const included = f.resolve("auto");
+  assert.equal(included.available, true, included.message);
+  assert.equal(included.router.modelId, "big-pickle");
 });

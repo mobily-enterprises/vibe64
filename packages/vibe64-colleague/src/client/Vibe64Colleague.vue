@@ -1,5 +1,6 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { mdiArrowTopRight, mdiClose, mdiSend, mdiStop, mdiTuneVariant } from "@mdi/js";
 import { VIBE64_COLLEAGUE_LAUNCHER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantPromptInput } from "@jskit-ai/assistant-core/client/conversation";
@@ -10,11 +11,12 @@ import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe6
 const props = defineProps({
   name: { type: String, default: "Colleague" },
   holdToTalk: Boolean,
+  voiceTranscript: { type: Object, default: null },
   request: { type: Function, required: true },
   navigate: { type: Function, default: null },
   focus: { type: Object, default: () => ({}) }
 });
-const emit = defineEmits(["voice-hold-start", "voice-hold-end", "voice-hold-cancel"]);
+const emit = defineEmits(["voice-hold-start", "voice-hold-end", "voice-hold-cancel", "message-submit"]);
 const holdingAvatar = ref(false);
 let avatarPressTimer;
 let avatarPointer = null;
@@ -109,6 +111,8 @@ async function requestColleague(suffix = "", options = {}) {
 }
 function apply(result, expectedRevision) {
   if (mounted && expectedRevision === revision) {
+    if (result.streamEpoch && result.streamEpoch === state.value.streamEpoch &&
+        result.streamRevision < state.value.streamRevision) return;
     state.value = result;
     void handleNavigation(result.navigation);
   }
@@ -125,6 +129,22 @@ async function handleNavigation(command) {
   } catch (error) { connectionError.value = error.message; }
   finally { navigating = null; }
 }
+const realtimeSocket = useRealtimeSocket();
+useRealtimeEvent({ event: "vibe64.colleague.reply.changed", onEvent({ payload }) {
+  if (!mounted || !payload?.streamEpoch || !Number.isSafeInteger(payload.streamRevision)) return;
+  if (state.value.streamEpoch && state.value.streamEpoch !== payload.streamEpoch) { void refresh(); return; }
+  if (payload.streamRevision <= (state.value.streamRevision || 0)) return;
+  const messages = [...(state.value.messages || [])];
+  if (payload.completedMessage && !messages.some((message) => message.id === payload.completedMessage.id)) {
+    messages.push(payload.completedMessage);
+  }
+  state.value = { ...state.value, conversationId: payload.conversationId,
+    streamEpoch: payload.streamEpoch, streamRevision: payload.streamRevision,
+    streamingReply: payload.streamingReply, messages,
+    ...(payload.streamingReply ? { status: "working" } : {}) };
+  if (!payload.streamingReply) void refresh();
+} });
+realtimeSocket.on("connect", refresh);
 function schedule() {
   clearTimeout(timer);
   if (mounted && (open.value || working.value || watches.value.length || assignments.value.length)) timer = setTimeout(refresh, open.value || working.value ? 1000 : 5000);
@@ -141,6 +161,7 @@ async function refresh() {
 async function sendMessage(message, options = {}) {
   if (sending.value) throw new Error("Another message is being sent. Your transcript is kept; retry in a moment.");
   sending.value = true;
+  emit("message-submit", options.messageId);
   const expectedRevision = ++revision;
   try {
     const result = await requestColleague("/messages", { method: "POST", body: { message, messageId: options.messageId, clientId, focus: options.focus } });
@@ -149,6 +170,8 @@ async function sendMessage(message, options = {}) {
     return result;
   } finally { sending.value = false; schedule(); }
 }
+async function classifyVoice(input) { return requestColleague("/voice/classify", { method: "POST", body: input }); }
+async function checkVoice({ signal } = {}) { return requestColleague("/voice/readiness", { method: "GET", signal }); }
 async function submit() {
   const message = draft.value.trim();
   if (!message || sending.value) return;
@@ -181,12 +204,22 @@ async function changeWatch(watchId, operation) {
     await refresh();
   } catch (error) { reportFailure(error); }
 }
+const visibleTurns = computed(() => {
+  const messages = state.value.messages || [];
+  const voice = props.voiceTranscript;
+  const pendingVoice = voice?.text && voice.id && !messages.some(message => message.id === voice.id)
+    ? { id: voice.id, text: voice.text, role: "user" } : null;
+  const turns = conversationTurnsFromMessages([
+    ...messages,
+    ...(working.value && state.value.streamingReply?.text ? [state.value.streamingReply] : []),
+    ...(pendingVoice ? [pendingVoice] : [])
+  ]);
+  if (pendingVoice) turns.at(-1).optimistic = { id: pendingVoice.id, status: "pending" };
+  return turns;
+});
 const adapter = computed(() => ({
   conversation: {
-    turns: conversationTurnsFromMessages([
-      ...(state.value.messages || []),
-      ...(working.value && state.value.streamingReply?.text ? [state.value.streamingReply] : [])
-    ]),
+    turns: visibleTurns.value,
     assistantLabel: props.name, systemLabel: "Vibe64",
     scrollKey: state.value.conversationId || "colleague", working: working.value,
     variant: "task", visible: open.value, userMessageFormat: "plain", progressPreviewLimit: 0,
@@ -219,6 +252,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   portraitObserver?.disconnect();
+  realtimeSocket.off("connect", refresh);
   mounted = false;
   clearTimeout(timer);
   cancelAvatarPress();
@@ -278,7 +312,7 @@ onBeforeUnmount(() => {
                       :aria-label="`Choose ${name} model`" :title="state.assistantSelection?.modelId || 'Choose model'"
                       :disabled="working || sending" @click="modelMenu = true"
                     />
-                    <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" :launcher="launcher?.$el" :preview="voicePreview" />
+                    <slot name="voice" :conversation="state" :submit="sendMessage" :classify="classifyVoice" :check="checkVoice" :minimized="!open" :launcher="launcher?.$el" :preview="voicePreview" />
                     <div class="vibe64-colleague__delivery">
                       <v-btn v-if="composer.canStop" :icon="mdiStop" size="small" variant="text" :aria-label="`Stop ${name}`" title="Stop assistant" @click="stop" />
                       <v-btn
@@ -353,7 +387,7 @@ onBeforeUnmount(() => {
 .vibe64-colleague__composer-actions, .vibe64-colleague__delivery { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .vibe64-colleague__composer-actions { width: 100%; flex-wrap: wrap; }
 .vibe64-colleague__delivery { margin-inline-start: auto; flex-shrink: 0; }
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 600px) {
   .vibe64-colleague__close { min-width: 48px; min-height: 48px; }
   .vibe64-colleague__composer-actions :deep(.v-btn) { min-width: 48px; min-height: 48px; }
 }

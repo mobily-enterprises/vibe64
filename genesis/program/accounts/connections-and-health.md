@@ -316,7 +316,9 @@ required. Live native OpenCode checks show that its free provider rejects the
 restricted, tool-free profile used by Router and background helpers. Pickle remains
 eligible for Senior, Junior and shared Backup, but is not
 recommended for Helper or Router; previews reject those helper purposes before
-sending. Another connected model is needed for Auto and background assistance.
+sending. Helper choices, assignment validation and its form hint use the
+restricted background workload policy, so chat-only models cannot appear usable
+for that role. Another connected model is needed for Auto and background assistance.
 New OpenCode keys are checked against the complete trusted provider
 catalogue and verified before replacing a working connection. The browser cannot
 supply a network route, verification model or access policy. Only redacted
@@ -559,5 +561,8 @@ then checks model-specific access in bounded batches. Catalogue assembly still
 verifies pagination progress and a single revision. The client reuses the same
 actor/project's configuration for 30 seconds when reopening the dialog;
 connection changes invalidate it and saves reload it. Dispatch always resolves
-current access and catalogue compatibility independently. Senior and Junior
+current access and catalogue compatibility independently. Missing roles and denied
+access fail before native catalogue discovery;
+eligible destinations still require the current catalogue before dispatch.
+Senior and Junior
 continue sharing the workflow orchestrator selected above the role fields.
