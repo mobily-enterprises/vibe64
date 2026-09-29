@@ -43,6 +43,7 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
+  VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV,
   VIBE64_PUBLIC_PROTOCOL_ENV,
   VIBE64_PUBLIC_USER_DOMAIN_ENV
 } from "@local/vibe64-core/server/launchPreviewProxyEnv";
@@ -3138,7 +3139,7 @@ function previewPublicOriginForLaunch({
   ];
   // Independently hosted editors may share a preview domain and cloned project
   // identities. Their host-supplied namespace keeps those routes independent.
-  const namespace = String(env?.VIBE64_PREVIEW_PUBLIC_NAMESPACE || "").trim();
+  const namespace = String(env?.[VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV] || "").trim();
   if (namespace) hashInput.push(`namespace:${namespace}`);
   const publicPort = publicDomainPort(baseDomain, protocol);
   if (publicPort) {

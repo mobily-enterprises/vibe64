@@ -9,6 +9,7 @@ import {
 } from "@local/vibe64-core/server/studioRoots";
 import {
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
+  VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV,
   VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
   VIBE64_PUBLIC_PROTOCOL_ENV,
   VIBE64_PUBLIC_USER_DOMAIN_ENV
@@ -26,6 +27,7 @@ import {
   createVibe64TerminalsFeature,
   terminalsProviderEnv
 } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsProvider.js";
+import { previewPublicOriginForLaunch } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-terminals-provider-"));
@@ -97,18 +99,29 @@ test("terminals provider overlays only live preview routing values", () => {
     SECRET_VALUE: "runtime-secret"
   }, {
     [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "previews.users.localhost:4000",
+    [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: "editor-one",
     [VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV]: "http",
     [VIBE64_PUBLIC_PROTOCOL_ENV]: "http",
     [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
     SECRET_VALUE: "live-secret"
   }), {
     [VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV]: "previews.users.localhost:4000",
+    [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: "editor-one",
     [VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV]: "http",
     [VIBE64_PUBLIC_PROTOCOL_ENV]: "http",
     [VIBE64_PUBLIC_USER_DOMAIN_ENV]: "users.localhost:4000",
     KEEP_ME: "runtime",
     SECRET_VALUE: "runtime-secret"
   });
+});
+
+test("live editor namespaces reach Preview routing through the runtime environment filter", () => {
+  const origin = (namespace) => previewPublicOriginForLaunch({
+    env: terminalsProviderEnv({}, { [VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV]: namespace }),
+    publicHost: "owner.users.example.test", sessionId: "same-cloned-session"
+  });
+  assert.notEqual(origin("first"), origin("second"));
+  assert.equal(origin("first"), origin("first"));
 });
 
 test("terminals feature creates the direct API from runtime env", async () => {

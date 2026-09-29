@@ -42,3 +42,6 @@ have separate Preview addresses. Use the current editor’s **Preview** controls
 an address from a discarded environment is no longer valid. No namespace or port
 field is required. Colleague uses the current Preview result rather than
 constructing an address.
+If two temporary editors show the same address, their host routing configuration
+needs correction. Restart the affected Previews after the host update; changing
+an application's listening port is not required.

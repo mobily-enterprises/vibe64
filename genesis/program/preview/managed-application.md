@@ -33,6 +33,9 @@ Close, Stop and collapsible task details retain their own existing behavior.
 
 ## Sources
 
+- `packages/vibe64-core/src/server/launchPreviewProxyEnv.js`
+- `packages/vibe64-terminals/src/server/Vibe64TerminalsProvider.js`
+- `tests/server/vibe64TerminalsProvider.unit.test.js`
 - `packages/current-app/src/server/actions.js`
 - `packages/current-app/src/server/inputSchemas.js`
 - `packages/current-app/src/server/registerRoutes.js`
@@ -306,3 +309,5 @@ supply `VIBE64_PREVIEW_PUBLIC_NAMESPACE`. The existing origin hash includes that
 namespace while preserving the normal workspace/domain shape. Unset preserves
 existing addresses. This is routing identity, not project Env or an access grant;
 the standard proxy still owns tokens and sockets.
+The terminal provider forwards this value with the other live routing settings,
+so the runtime environment filter cannot drop the editor identity.
