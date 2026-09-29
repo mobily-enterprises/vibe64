@@ -1435,6 +1435,9 @@ terminal, repository and project-understanding features. Maintainers can build
 and test the exact distributable before publishing it; release preparation does
 not remove their installed development tools. The installed editor includes the
 database drivers required by its Database view.
+The standalone editor can use coding tools installed on its launching shell
+path when running as the same local user. Hosted and cross-user commands retain
+their prepared host environment.
 
 Auto honors an explicit request for Senior or Junior. Otherwise Senior handles
 plan discussion and management, requested review and Deslop; Junior handles

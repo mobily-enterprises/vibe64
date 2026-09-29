@@ -45,6 +45,7 @@ function ptyHelperPayloadPath(root = "") {
 function terminalSessionInputForRequest(request = {}, {
   actor,
   baseEnv,
+  localPath,
   cwd,
   env
 } = {}) {
@@ -57,6 +58,7 @@ function terminalSessionInputForRequest(request = {}, {
       env: terminalEnvForRequest(request, {
         actor,
         baseEnv,
+        localPath,
         policyEnv: env
       })
     };
@@ -100,6 +102,7 @@ function terminalSessionInputForRequest(request = {}, {
 function terminalEnvForRequest(request = {}, {
   actor = {},
   baseEnv = {},
+  localPath = "",
   policyEnv = {}
 } = {}) {
   if (typeof request.envFactory !== "function") {
@@ -109,6 +112,7 @@ function terminalEnvForRequest(request = {}, {
     return resolveCommandEnv({
       actor,
       baseEnv,
+      localPath,
       request: {
         ...request,
         env: envRecord(request.envFactory(input)),
@@ -121,6 +125,7 @@ function terminalEnvForRequest(request = {}, {
 async function runPtyCommand(request = {}, {
   actor,
   baseEnv,
+  localPath,
   cwd,
   env
 } = {}) {
@@ -130,6 +135,7 @@ async function runPtyCommand(request = {}, {
     const sessionInput = terminalSessionInputForRequest(request, {
       actor,
       baseEnv: baseEnv || env,
+      localPath,
       cwd,
       env
     });

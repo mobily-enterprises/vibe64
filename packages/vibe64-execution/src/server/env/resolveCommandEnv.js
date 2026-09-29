@@ -115,6 +115,7 @@ function databaseEnvRecordsForPolicy(baseEnv = {}, request = {}) {
 function resolveCommandEnv({
   actor = {},
   baseEnv = process.env,
+  localPath = "",
   request = {}
 } = {}) {
   const declaredRuntimes = Array.isArray(request.runtimes)
@@ -149,7 +150,8 @@ function resolveCommandEnv({
       env: finalEnv,
       existingPath: [
         ...npmToolBinDirs({ env: finalEnv }),
-        finalEnv.PATH
+        finalEnv.PATH,
+        localPath
       ].filter(Boolean).join(":"),
       runtimes: request.runtimes,
       shimDirs: request.shimDirs || []

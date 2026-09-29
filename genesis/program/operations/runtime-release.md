@@ -32,6 +32,16 @@ Building a package leaves the development dependency installation intact.
 
 ## Public contract
 
+Standalone same-user commands retain the launching shell PATH after the runtime
+and project command paths, including dynamic terminal environments. This makes
+personally installed coding tools available when opening a local directory.
+Managed execution, managed workspace processes and commands crossing identities
+do not inherit that path. The execution gateway owns this distinction in
+`packages/vibe64-execution/src/server/runVibe64Command.js`; the environment
+resolver and PTY engine carry the selected path through command startup.
+`tests/server/vibe64ExecutionGateway.unit.test.js` exercises executable lookup
+in capture and dynamic PTY modes and the managed boundary.
+
 Runtime packages include an explicit state-upgrade command. Operators preflight
 pending numbered scripts with `--check`, stop writers, then use `--apply` before
 activating the candidate. The installation records each successful upgrade once,

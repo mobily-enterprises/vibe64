@@ -34,6 +34,10 @@ import {
   githubGitAuthScript
 } from "../../packages/vibe64-execution/src/server/env/githubGitAuthShell.js";
 
+import {
+  installVibe64ManagedExecutionProvider
+} from "../../packages/vibe64-execution/src/server/managedExecution.js";
+
 const execFileAsync = promisify(execFile);
 
 async function git(cwd, args, options = {}) {
@@ -62,9 +66,9 @@ async function existingDifferentUsername() {
   return "";
 }
 
-async function waitForFile(filePath, message = "Timed out waiting for file.") {
+async function waitForFile(filePath, message = "Timed out waiting for file.", timeoutMs = 1000) {
   const startedAt = Date.now();
-  while (Date.now() - startedAt < 1000) {
+  while (Date.now() - startedAt < timeoutMs) {
     try {
       return await readFile(filePath, "utf8");
     } catch {
@@ -128,14 +132,15 @@ test("capture cancellation drains the command and its child before returning", a
       import { spawn } from 'node:child_process';
       import { writeFileSync } from 'node:fs';
       const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)']);
-      writeFileSync(${JSON.stringify(marker)}, String(child.pid));
-      console.log('test command started');
+      process.stdout.write('test command started\\n', () => {
+        writeFileSync(${JSON.stringify(marker)}, String(child.pid));
+      });
       setInterval(() => {}, 1000);
     `],
     runtimes: [], signal: cancellation.signal, timeout: 10000
   });
   t.after(() => cancellation.abort());
-  const pid = Number(await waitForFile(marker));
+  const pid = Number(await waitForFile(marker, "Cancellation fixture did not start.", 5000));
   cancellation.abort();
   cancellation.abort();
   const result = await running;
@@ -550,6 +555,71 @@ test("execution gateway gives preview and terminal commands the same runtime PAT
   assert.equal(terminal.ok, true, terminal.output);
   assert.equal(preview.ok, true, preview.output);
   assert.equal(preview.stdout.trim(), terminal.stdout.trim());
+});
+
+test("standalone capture and dynamic PTY find tools on the launching shell PATH", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-local-tool-path-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  await writeExecutable(path.join(root, "local-editor-tool"), "#!/bin/sh\nprintf 'local-tool-found:%s\\n' \"$TERMINAL_ID\"\n");
+  const command = { command: "local-editor-tool", runtimes: [], baseEnv: { PATH: root } };
+  const capture = await runVibe64Command(command);
+  assert.equal(capture.ok, true, capture.output);
+  assert.match(capture.stdout, /local-tool-found:/u);
+
+  // Isolated assistants supply prepared paths without the launching shell PATH.
+  const previousPath = process.env.PATH;
+  process.env.PATH = root;
+  try {
+    const isolated = await runVibe64Command({
+      command: "local-editor-tool", runtimes: [], inheritProcessEnv: false,
+      baseEnv: { PATH: "/usr/bin:/bin" }
+    });
+    assert.equal(isolated.ok, true, isolated.output);
+    assert.match(isolated.stdout, /local-tool-found:/u);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+  }
+
+  const namespace = `local-tool-path-${Date.now()}`;
+  const terminal = await runVibe64Command({
+    ...command,
+    mode: "pty",
+    env: ({ id }) => ({ TERMINAL_ID: id }),
+    terminal: { namespace }
+  });
+  try {
+    assert.equal(terminal.ok, true, terminal.output);
+    const snapshot = await waitForTerminalOutput(terminal.id, namespace, "local-tool-found:");
+    assert.ok(snapshot.output.includes(`local-tool-found:${terminal.id}`), snapshot.output);
+  } finally {
+    if (terminal.id) await closeTerminalSession(terminal.id, { namespace });
+  }
+});
+
+test("managed execution does not inherit the launching shell PATH", async () => {
+  const customPath = "/tmp/standalone-only-tools";
+  const release = installVibe64ManagedExecutionProvider({
+    runCommand: async (_request, context) => ({ ok: true, path: context.env.PATH }),
+    stopExecution: async () => ({ ok: true })
+  });
+  try {
+    const result = await runVibe64Command({
+      command: "tool", runtimes: [], baseEnv: { PATH: customPath }
+    });
+    assert.equal(result.ok, true);
+    assert.ok(!result.path.split(":").includes(customPath));
+  } finally {
+    release();
+  }
+  const workspace = await runVibe64Command({
+    command: process.execPath,
+    args: ["-e", "console.log(process.env.PATH)"],
+    runtimes: [],
+    baseEnv: { PATH: customPath, VIBE64_WORKSPACE: "example" }
+  });
+  assert.equal(workspace.ok, true, workspace.output);
+  assert.ok(!workspace.stdout.trim().split(":").includes(customPath));
 });
 
 test("execution gateway preserves database env names without projecting aliases", async () => {

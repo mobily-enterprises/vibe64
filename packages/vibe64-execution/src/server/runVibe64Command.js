@@ -24,6 +24,7 @@ import {
 import {
   assertActorHomeEnv,
   assertManagedSourceFilesystemActor,
+  isManagedWorkspaceRuntime,
   processMatchesActor,
   realUserActorRequiresInstalledHelper
 } from "./policy/permissionPolicy.js";
@@ -41,6 +42,7 @@ import {
 async function runLocalVibe64Command(request, {
   actor,
   baseEnv,
+  localPath,
   cwd,
   env,
   requiresHelper
@@ -53,6 +55,7 @@ async function runLocalVibe64Command(request, {
     return runPtyCommand(request, {
       actor,
       baseEnv,
+      localPath,
       cwd,
       env
     });
@@ -122,9 +125,20 @@ async function runVibe64Command(input = {}) {
       ...value,
       VIBE64_EXECUTION_ID: request.execution.id
     });
+    const provider = vibe64ManagedExecutionProvider();
+    const managedRequired = vibe64ManagedExecutionRequired(baseEnv) ||
+      vibe64ManagedExecutionRequired(process.env);
+    const requiresHelper = realUserActorRequiresInstalledHelper(actor);
+    // A standalone editor uses the tools on its owner's shell PATH. Managed
+    // execution and commands crossing Unix identities keep their host policy.
+    const localPath = !provider && !managedRequired && !requiresHelper &&
+      !isManagedWorkspaceRuntime(baseEnv) && !isManagedWorkspaceRuntime(process.env) && processMatchesActor(actor)
+      ? [baseEnv.PATH, process.env.PATH].filter(Boolean).join(":")
+      : "";
     const env = executionEnv(resolveCommandEnv({
       actor,
       baseEnv,
+      localPath,
       request: request.releaseEnvironmentFile ? { ...request, project: {}, session: {} } : request
     }));
     assertActorHomeEnv(actor, env);
@@ -132,7 +146,6 @@ async function runVibe64Command(input = {}) {
       allowedRoots: request.allowedRoots
     });
     assertManagedSourceFilesystemActor(actor, request, cwd);
-    const requiresHelper = realUserActorRequiresInstalledHelper(actor);
     const resolveArgs = (input = {}) => typeof request.args === "function"
       ? request.args(input)
       : request.args;
@@ -140,6 +153,7 @@ async function runVibe64Command(input = {}) {
       ? resolveCommandEnv({
           actor,
           baseEnv,
+          localPath,
           request: {
             ...request,
             env: request.envFactory(input),
@@ -153,13 +167,13 @@ async function runVibe64Command(input = {}) {
       {
         actor,
         baseEnv,
+        localPath,
         cwd,
         env,
         requiresHelper,
         ...localContext
       }
     );
-    const provider = vibe64ManagedExecutionProvider();
     if (provider) {
       return await provider.runCommand(request, {
         actor,
@@ -175,10 +189,7 @@ async function runVibe64Command(input = {}) {
       return commandErrorResult("Release environment execution requires a managed host.",
         "vibe64_release_environment_unavailable", { execution: request.execution });
     }
-    if (
-      vibe64ManagedExecutionRequired(baseEnv) ||
-      vibe64ManagedExecutionRequired(process.env)
-    ) {
+    if (managedRequired) {
       return commandErrorResult(
         "Managed execution safety is unavailable. Vibe64 did not start this work.",
         "vibe64_managed_execution_provider_unavailable",
