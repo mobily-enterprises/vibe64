@@ -1290,8 +1290,16 @@ first Search path.
 When Codex uses a ChatGPT plan or Claude uses a subscription, authorized account users can see the remaining
 weekly allowance as a single percentage on the bottom chat row, with its
 label, known reset times, and the five-hour allowance in the hover/tap details. Allowance is account-wide, distinct
-from conversation context usage. API-key connections and unsupported assistants do
-not show a plan meter; unavailable readings never imply unused allowance.
+from conversation context usage. DeepSeek and GLM pay-as-you-go connections show the remaining account
+balance as a compact currency amount, such as $12.40, without a provider name or
+country prefix. GLM Coding Plan connections show their remaining quota percentage.
+Both work with Claude, Codex and OpenCode and follow the connection used by each
+Auto handoff. Readings are attempted at the beginning and end of each turn;
+they are informational, never block work, and do not poll between turns.
+Tap the value for provider details and its last check time. Unavailable readings
+hide the value and never imply zero or unused allowance. A provider may reject
+the balance lookup even when an API connection is configured. Other API-key
+connections, including GPT API keys, have no balance indicator.
 
 For Codex, the bottom chat row exposes goal controls with a flashing red light for a running goal and a steady
 muted warning light for a paused goal. Elapsed running time appears beside the light

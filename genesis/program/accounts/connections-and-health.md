@@ -83,6 +83,12 @@ have bounded Colleague presentations; other account actions remain excluded.
 
 ## Public contract
 
+The native provider connection store exposes its existing private `read(providerId)`
+to the terminal service for optional DeepSeek balance, GLM pay-as-you-go balance
+and GLM Coding Plan quota reads.
+This is a server-only credential lookup; account responses never include the key.
+Usage collection, normalization and display belong to the conversation subsystem.
+
 Native terminal and browser-lifecycle WebSockets require a browser Origin that
 matches the request host, port and HTTP(S) scheme, including the host's forwarded
 protocol. Authenticated hosted sockets cannot omit Origin; local command-line

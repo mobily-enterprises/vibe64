@@ -6,7 +6,7 @@ The numbered `20260928-completed-discussion-plan` upgrade restores the exact
 verified completed-plan incident that an earlier discussion turn reset. It
 requires matching request and content identities, backs up both owned records,
 and preserves all conversation text; normal reads never perform this repair.
-Goal read/update, plan allowance, session preparation/reconnection, attachment
+Goal read/update, plan allowance and provider balance, session preparation/reconnection, attachment
 read/upload/delete and terminal status/control use named actions shared by HTTP
 and automation. Actions validate required identities and supply the current
 authenticated actor and project context; provider goal revision checks and
@@ -322,6 +322,7 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `packages/vibe64-terminals/src/server/opencodeTerminal.js`
 - `tests/server/opencodeReasoningSummaries.unit.test.js`
 - `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/providerUsage.js`
 - `packages/vibe64-terminals/src/server/assistantChangeover.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
 - `packages/vibe64-terminals/src/server/sessionPromptHints.js`
@@ -874,7 +875,7 @@ CLI's experimental `get_usage` JSON control supplies current five-hour, weekly,
 and available model-specific windows. Missing or expired data is never presented
 as a refreshed allowance. Goal start/resume retains the assistant's access
 boundary; reads and pause/cancel remain available without inference admission.
-Plan allowance is owner-only. Passive goal and allowance lookup failures stay
+Native subscription allowance is owner-only. Passive goal and allowance lookup failures stay
 local to those controls and do not report an app-wide network outage.
 
 The shared command environment installs `vibe64-helper` beside the existing
@@ -1137,8 +1138,8 @@ Codex plan allowance uses `account/rateLimits/read` and
 Only normalized percentages, window durations and reset timestamps reach the
 account-access-checked session read endpoint. Account changes and connection
 replacement invalidate the in-memory reading; late reads cannot restore a
-previous account's values. API connections and unauthorized collaborators
-receive no allowance. Realtime session events carry invalidation only. The
+previous account's values. This native subscription path supplies no allowance
+for API connections or unauthorized collaborators. Realtime session events carry invalidation only. The
 active Codex chat indicator reads on mount and live invalidations, with a
 one-minute visible-page refresh and bounded provider reads. It never starts
 an assistant to obtain usage, stores no allowance in project history, and
@@ -1146,6 +1147,37 @@ shows only the percentage remaining for the seven-day window. Missing or
 expired weekly readings hide the number until Codex confirms current values.
 Hover/tap details include known weekly reset times and the five-hour allowance
 and reset time when supplied, without adding them to the visible percentage.
+
+DeepSeek and both GLM billing modes have a separate memory-only snapshot in
+`providerUsage.js`, exposed through the same access-checked session read.
+The shared service observes main-chat turn start and terminal events from
+Claude, Codex and OpenCode, including Auto handoffs. It starts optional queries
+without awaiting them; repeated activity for one turn is deduplicated. Codex
+publishes its durable starting claim before inference dispatch. DeepSeek uses
+`GET /user/balance`; Z.AI uses `GET /api/monitor/usage/quota/limit` and only coding
+quota windows, excluding tool quotas. Regular GLM pay-as-you-go uses the
+undocumented `GET /api/biz/account/query-customer-account-report` with bearer-key
+authentication. Only a successful application response with a finite numeric
+balance supplies its USD amount; HTTP 200 authentication failures, empty values
+and malformed amounts remain unavailable. This optional console endpoint can
+reject configured keys, so a successful live monetary reading is not guaranteed.
+Requests have a five-second timeout, no retry and no redirect.
+Failures make the reading unavailable without changing
+turn execution or admission.
+
+The existing native and OpenCode credential stores resolve the selected key.
+Snapshots are separated by credential store and provider, matched against the
+current key on read, and never return credentials. Only the latest request may
+replace a snapshot. Key usage follows the connection's ordinary access policy;
+shared-key users may read its shared account balance. Completion publishes a
+session invalidation, not a balance. The browser matches readings to the selected
+engine/provider and never polls these providers. Its compact indicator shows
+only the currency symbol and amount, or the weekly GLM percentage when supplied
+(otherwise the supplied coding window). The details show the provider, currency,
+check time and provider usage link. The native subscription Refresh control is
+not shown for turn-boundary snapshots. Missing or expired readings hide the value;
+zero is displayed only when supplied by the provider. GPT API keys have no
+snapshot implementation.
 
 
 Codex and OpenCode pass readable, single-quoted command text to the existing

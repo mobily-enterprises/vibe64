@@ -23,18 +23,20 @@ const actorKey = computed(() => unref(viewer)?.actorKey || "");
 const sessionId = computed(() => props.session?.sessionId || "");
 const sessionsPath = computed(() => String(readRefOrGetterValue(props.sessionsApiPath) || "").trim());
 const engineId = computed(() => props.session?.assistantSelection?.engineId || "");
+const modelProviderId = computed(() => props.session?.assistantSelection?.modelProviderId || "");
+const keyUsage = computed(() => ["deepseek", "zai", "zai-coding-plan"].includes(modelProviderId.value));
 const engineLabel = computed(() => engineId.value === "claude" ? "Claude" : "Codex");
 const claudeObjective = ref("");
 const claudeGoalOpen = ref(false);
 const goalEnabled = computed(() => props.active && Boolean(sessionId.value && sessionsPath.value && actorKey.value));
-const enabled = computed(() => goalEnabled.value && ["codex", "claude"].includes(engineId.value));
+const enabled = computed(() => goalEnabled.value && (["codex", "claude"].includes(engineId.value) || keyUsage.value));
 const scopeKey = computed(() => JSON.stringify([projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]));
 const connectionsRealtime = { events: [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT], matches: () => true };
 const path = computed(() => vibe64SessionPath(sessionsPath.value, sessionId.value, "/agent-plan-usage"));
 const usage = useEndpointResource({
   enabled,
   path,
-  queryKey: computed(() => ["vibe64-agent-plan-usage", engineId.value, projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]),
+  queryKey: computed(() => ["vibe64-agent-plan-usage", engineId.value, modelProviderId.value, projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]),
   realtime: connectionsRealtime,
   fallbackLoadError: "Plan allowance is unavailable.",
   queryOptions: {
@@ -45,14 +47,15 @@ const usage = useEndpointResource({
     retry: false,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
-    refetchInterval: 60_000,
+    refetchInterval: () => keyUsage.value ? false : 60_000,
     refetchIntervalInBackground: false
   }
 });
 useRealtimeEvent({
   enabled,
   event: VIBE64_SESSION_CHANGED_EVENT,
-  matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value && payload.sessionId === sessionId.value && payload.reason === `${engineId.value}-plan-usage`,
+  matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value && payload.sessionId === sessionId.value &&
+    ["agent-plan-usage", `${engineId.value}-plan-usage`].includes(payload.reason),
   onEvent: () => { if (!globalThis.document?.hidden) void usage.reload(); }
 });
 const goalPath = computed(() => vibe64SessionPath(sessionsPath.value, sessionId.value, "/agent-goal"));
@@ -136,25 +139,58 @@ async function changeGoal(action, input = {}) {
     }
   }
 }
-const weekly = computed(() => usage.data.value?.windows?.find((window) => window.windowDurationMins === 10080 && (engineId.value !== "claude" || window.id === "seven_day")) || null);
-const available = computed(() => enabled.value && !usage.loadError.value && usage.data.value?.status === "available" && weekly.value &&
-  (!weekly.value.resetsAt || weekly.value.resetsAt * 1000 > Date.now()));
-const summary = computed(() => available.value ? `${Math.floor(weekly.value.remainingPercent)}%` : "");
+const currentUsage = computed(() => {
+  const value = usage.data.value;
+  if (keyUsage.value && (value?.engineId !== engineId.value || value?.modelProviderId !== modelProviderId.value)) return null;
+  return value;
+});
+const weekly = computed(() => currentUsage.value?.windows?.find((window) => window.windowDurationMins === 10080 &&
+  (keyUsage.value || engineId.value !== "claude" || window.id === "seven_day")) || null);
+const allowance = computed(() => weekly.value || (keyUsage.value ? currentUsage.value?.windows?.[0] : null));
+const balance = computed(() => currentUsage.value?.balances?.[0] || null);
+const available = computed(() => {
+  if (!enabled.value || usage.loadError.value || currentUsage.value?.status !== "available") return false;
+  return balance.value || (allowance.value && (!allowance.value.resetsAt || allowance.value.resetsAt * 1000 > Date.now()));
+});
+function formatBalance(value) {
+  return new Intl.NumberFormat("en", {
+    style: "currency", currency: value.currency, currencyDisplay: "narrowSymbol", minimumFractionDigits: 2, maximumFractionDigits: 2
+  }).format(Number(value.amount));
+}
+const summary = computed(() => {
+  if (!available.value) return "";
+  if (balance.value) return formatBalance(balance.value);
+  return `${Math.floor(allowance.value.remainingPercent)}%`;
+});
+const usageLabel = computed(() => currentUsage.value?.providerLabel || engineLabel.value);
+const usageTitle = computed(() => `${usageLabel.value} ${balance.value ? "balance" : "plan allowance"}`);
+const summaryLabel = computed(() => balance.value ? `${usageLabel.value} balance remaining: ${summary.value}`
+  : `${weekly.value ? "Weekly " : ""}${usageLabel.value} allowance remaining: ${summary.value}`);
+const managementUrl = computed(() => currentUsage.value?.managementUrl ||
+  (engineId.value === "claude" ? "https://claude.ai/settings/usage" : "https://chatgpt.com/codex/settings/usage"));
 const details = computed(() => {
   if (!available.value) return "";
-  const lines = [`Weekly ${engineLabel.value} allowance remaining: ${summary.value}.`];
-  if (weekly.value.resetsAt) lines.push(`Weekly resets ${new Date(weekly.value.resetsAt * 1000).toLocaleString()}.`);
-  const shortTerm = usage.data.value.windows.find((window) => window.windowDurationMins === 300);
+  const snapshot = currentUsage.value;
+  if (balance.value) return [
+    ...snapshot.balances.map((value) => `${value.currency} balance remaining: ${formatBalance(value)}.`),
+    `Checked ${new Date(snapshot.checkedAt).toLocaleString()}.`,
+    "Account balance associated with this key. Shared across sessions. Updates at the start and end of a turn."
+  ].join("\n");
+  const lines = [`${summaryLabel.value}.`];
+  if (weekly.value?.resetsAt) lines.push(`Weekly resets ${new Date(weekly.value.resetsAt * 1000).toLocaleString()}.`);
+  const shortTerm = snapshot.windows.find((window) => window.windowDurationMins === 300);
   if (shortTerm) {
     const expired = shortTerm.resetsAt && shortTerm.resetsAt * 1000 <= Date.now();
     lines.push(expired ? "5h allowance: awaiting update." : `5h allowance remaining: ${Math.floor(shortTerm.remainingPercent)}%.`);
     if (shortTerm.resetsAt) lines.push(`5h resets ${new Date(shortTerm.resetsAt * 1000).toLocaleString()}.`);
   }
-  for (const window of usage.data.value.windows.filter((window) => window.id?.startsWith("seven_day_") &&
+  for (const window of snapshot.windows.filter((window) => window.id?.startsWith("seven_day_") &&
     (!window.resetsAt || window.resetsAt * 1000 > Date.now()))) {
     lines.push(`${window.id.slice(10).replaceAll("_", " ")}: ${Math.floor(window.remainingPercent)}% weekly remaining.`);
   }
   lines.push("Shared across sessions.");
+  if (keyUsage.value) lines.push(`Checked ${new Date(snapshot.checkedAt).toLocaleString()}.`,
+    "Updates at the start and end of a turn.");
   return lines.join("\n");
 });
 const goalState = computed(() => ({
@@ -232,16 +268,16 @@ const goalState = computed(() => ({
     <template #activator="{ props: menuProps }">
       <v-btn
         v-bind="menuProps" class="agent-plan-usage" size="small" variant="text"
-        :title="details" :aria-label="`Weekly ${engineLabel} allowance remaining: ${summary}`"
+        :title="details" :aria-label="summaryLabel"
       >
         {{ summary }}
       </v-btn>
     </template>
     <v-card max-width="340" class="pa-3">
-      <strong>{{ engineLabel }} plan allowance</strong>
+      <strong>{{ usageTitle }}</strong>
       <p class="agent-plan-usage__details text-body-small">{{ details }}</p>
-      <v-btn :href="engineId === 'claude' ? 'https://claude.ai/settings/usage' : 'https://chatgpt.com/codex/settings/usage'" target="_blank" rel="noopener noreferrer" size="small" variant="text">Usage details</v-btn>
-      <v-btn size="small" variant="text" @click="usage.reload()">Refresh</v-btn>
+      <v-btn :href="managementUrl" target="_blank" rel="noopener noreferrer" size="small" variant="text">Usage details</v-btn>
+      <v-btn v-if="!keyUsage" size="small" variant="text" @click="usage.reload()">Refresh</v-btn>
     </v-card>
   </v-menu>
 </template>

@@ -63,7 +63,7 @@ Deslop uses that workflow's Senior model for direct behavior-preserving cleanup.
 Foreign Helper and Backup chat turns reuse ordinary changeover.
 Temporary conversation discovery and explicit-close cleanup belong here too;
 these chats survive view removal and stay separate from main History.
-Goal, plan allowance, session connection, attachment and terminal control
+Goal, plan allowance, provider balance, session connection, attachment and terminal control
 operations share named action contracts across HTTP and automation. Their
 transport adapters retain multipart, streaming and socket framing. Colleague
 does not receive raw terminal tools.

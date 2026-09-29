@@ -1771,6 +1771,31 @@ test("plan allowance is private to authorized native plan users", async () => {
   }
 });
 
+test("provider balances follow connection access across engines without requiring a personal subscription", async () => {
+  for (const engineId of ["codex", "claude", "opencode"]) {
+    for (const ownerOnly of [true, false]) {
+      for (const role of ["owner", "user"]) {
+        const assistantSelection = { schema: "vibe64.assistant-selection.v1", engineId, modelProviderId: "deepseek",
+          modelId: "deepseek-chat", agentId: engineId, variantId: "", catalogRevision };
+        let reads = 0;
+        const manager = createSessionAgentManager({
+          readAssistantAccess: async () => ({ ownerOnly }),
+          readProviderUsage: async (current) => {
+            assert.deepEqual(current, assistantSelection);
+            reads++;
+            return { status: "available", balances: [{ currency: "USD", amount: "12.40" }], windows: [] };
+          },
+          providers: [{ id: engineId, transportId: `${engineId}_test`, readPlanUsage: () => assert.fail("Native plan read is unrelated to this key") }]
+        });
+        const result = await manager.readPlanUsage("session-1", { assistantSelection, vibe64User: { role } });
+        const allowed = !ownerOnly || role === "owner";
+        assert.equal(reads, allowed ? 1 : 0);
+        assert.equal(result.status, allowed ? "available" : "unsupported");
+      }
+    }
+  }
+});
+
 test("goal reads and stopping remain available while starting and resuming require model access", async () => {
   for (const engineId of ["codex", "claude", "opencode"]) {
     for (const role of ["owner", "user"]) {

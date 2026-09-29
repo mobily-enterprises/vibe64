@@ -7,6 +7,8 @@ import path from "node:path";
 import test from "node:test";
 import { Readable } from "node:stream";
 import { codexAppServerThreadSettings, codexAppServerTurnSettings } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
+import { createProviderUsage } from "../../packages/vibe64-terminals/src/server/providerUsage.js";
+import { createCodexProviderConnectionStore } from "../../packages/vibe64-core/src/server/codexProviderConnections.js";
 
 import {
   createCodexTerminalController
@@ -2980,6 +2982,30 @@ test("Codex integration continuation recovers native acceptance with a fresh ser
       await restarted?.close();
     }
   }, { throughTerminalService: true });
+});
+
+test("provider balance reads observe Codex claim and completion without holding up inference", async () => {
+  await withAgentMessageController(async ({ captures, controller, controllerOptions, sessionId, store }) => {
+    const session = await store.readSession(sessionId);
+    const selection = JSON.parse(session.metadata.assistant_selection);
+    await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify({ ...selection, modelProviderId: "deepseek", modelId: "deepseek-flash" }));
+    const connections = createCodexProviderConnectionStore({ systemRoot: controllerOptions.codexAppServerProviderOptions.systemRoot,
+      fetchImpl: async () => ({ ok: true, json: async () => ({ id: "verified", status: "completed", output: [], type: "message", content: [] }) }) });
+    await connections.change("deepseek", { apiKey: "test-key" });
+    const pending = [];
+    const usage = createProviderUsage({ resolveConnection: async () => ({ apiKey: "test-key" }), fetchImpl: () => {
+      const request = Promise.withResolvers(); pending.push(request); return request.promise;
+    } });
+    captures.onSessionChanged = (id, event) => usage.observe("test-project", id, event);
+    captures.onSendTurn = () => assert.equal(pending.length, 1, "balance query starts before inference dispatch");
+    const result = await controller.sendMessage(sessionId, { message: "Work", messageId: "balance-turn" });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(pending.length, 1, "accepted turn reuses the claim's identity");
+    completeAgentMessageHarnessTurn(captures, captures.provider, captures.provider.turnId, "Done.");
+    await waitForSessionValue(async () => pending.length, value => value === 2, "completion balance read");
+    assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).state, VIBE64_AGENT_RUN_STATE.COMPLETED);
+    for (const request of pending) request.resolve({ ok: false });
+  });
 });
 
 test("duplicate agent messages with the same message id call the provider once", async () => {

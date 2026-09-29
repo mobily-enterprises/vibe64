@@ -6150,7 +6150,9 @@ function createCodexTerminalController({
     const result = claimResult || mutationResult;
     if (result?.claimed) {
       await publishSessionChanged(normalizedSessionId, {
-        reason: "codex-app-server-turn-claimed"
+        reason: "codex-app-server-turn-claimed",
+        session: result.session,
+        payload: codexAppServerAgentRunRealtimePayload(codexAppServerAgentRun(result.session))
       });
     }
     return result;

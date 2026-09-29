@@ -12,6 +12,7 @@ import { assistantModePrompt, assistantRoutingFromMetadata, assistantRoutingStat
 import { createSessionConversations } from "./sessionConversations.js";
 import { readConversationRewindState, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, rewindLastConversationTurn, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
+import { createProviderUsage } from "./providerUsage.js";
 import {
   createSessionAgentManager
 } from "./agent/sessionAgentManager.js";
@@ -449,6 +450,11 @@ function createService({
     projectService
   });
   const publishAgentSessionChanged = async (sessionId, payload = {}) => {
+    if (!closing) {
+      providerUsage.observe(terminalProjectScopeKey(), sessionId, payload, () => {
+        if (!closing) return publishSessionChanged.agentTerminal?.(sessionId, { reason: "agent-plan-usage" });
+      });
+    }
     const publisher = publishSessionChanged.agentTerminal;
     if (typeof publisher === "function") {
       await publisher(sessionId, payload);
@@ -525,6 +531,11 @@ function createService({
   });
   const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
   const codexProviderConnections = createCodexProviderConnectionStore({ systemRoot: codexProviderOptions.systemRoot });
+  const providerUsage = createProviderUsage({
+    resolveConnection: (selection) => selection.engineId === "opencode"
+      ? assistantRuntime.resolveConnection(selection)
+      : codexProviderConnections.read(selection.modelProviderId)
+  });
   const codex = createCodexTerminalController({
     ...codexTerminalController,
     agentDatabaseCommand,
@@ -564,6 +575,7 @@ function createService({
   });
   const sessionAgent = createSessionAgentManager({
     attachments: sessionAttachments,
+    readProviderUsage: providerUsage.read,
     resolveAssistantUser: (user) => assistantRuntime.resolveAssistantUser(user),
     readRoutingConfiguration: () => createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read(),
     providers: [
@@ -1419,7 +1431,7 @@ function createService({
       { controller: agentSessionCommand, label: "agentSessionCommand" }
     ], {
       controllerOptions
-    }));
+    })).finally(() => providerUsage.forget(terminalProjectScopeKey(), sessionId));
   }
 
   function renewalTerminalAdmissionOwner(renewalId = "") {

@@ -78,6 +78,76 @@ async function openTemporaryAiWorkspace(page: Page) {
 }
 
 test.describe("direct chat", () => {
+  for (const engineId of ["codex", "claude", "opencode"]) {
+    hintTest(`@provider-usage shows compact balances and follows provider handoffs with ${engineId}`, async ({ page, hintRealtime }) => {
+      await mockDirectChat(page);
+      const selection = { engineId, modelProviderId: "deepseek", modelId: "deepseek-flash" };
+      const session = { ...directSession(), assistantSelection: selection };
+      session.agentSession.providerId = engineId;
+      let usage: Record<string, unknown> = { status: "available", ...selection, providerLabel: "DeepSeek",
+        balances: [{ currency: "USD", amount: "12.40" }], windows: [], checkedAt: Date.now(),
+        managementUrl: "https://platform.deepseek.com/top_up" };
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, route => fulfillJson(route, { ok: true, ...session.agentSession }));
+      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-plan-usage`, route => fulfillJson(route, { ok: true, ...usage }));
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
+      await expect(page.getByLabel("Message AI assistant")).toBeEnabled({ timeout: 30_000 });
+      const balance = page.getByRole("button", { name: "DeepSeek balance remaining: $12.40", exact: true });
+      for (const width of [390, 768, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expect(balance).toHaveText("$12.40");
+        const row = page.locator(".studio-autopilot__composer-actions:visible");
+        const centers = await row.locator("button:visible").evaluateAll(buttons => buttons.map(button => {
+          const { y, height } = button.getBoundingClientRect(); return y + height / 2;
+        }));
+        expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(2);
+        expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+        await balance.click();
+        await expect(page.getByText("DeepSeek balance", { exact: true })).toBeVisible();
+        await expect(page.getByText(/USD balance remaining: \$12.40\./)).toBeVisible();
+        await expect(page.getByRole("link", { name: "Usage details" })).toHaveAttribute("href", "https://platform.deepseek.com/top_up");
+        const details = page.locator(".v-overlay__content").filter({ has: page.getByText("DeepSeek balance", { exact: true }) });
+        await expect(details.getByRole("button", { name: "Refresh", exact: true })).toHaveCount(0);
+        if (engineId === "codex") await page.screenshot({ path: test.info().outputPath(`balance-${width}.png`) });
+        await page.keyboard.press("Escape");
+        await expect(balance).toBeFocused();
+      }
+      usage = { ...usage, balances: [{ currency: "USD", amount: "12.10" }] };
+      hintRealtime.sessionChanged("agent-plan-usage", { sessionId: SESSION_ID });
+      await expect(page.getByRole("button", { name: "DeepSeek balance remaining: $12.10", exact: true })).toBeVisible();
+      usage = { status: "unavailable", ...selection, windows: [] };
+      hintRealtime.sessionChanged("agent-plan-usage", { sessionId: SESSION_ID });
+      await expect(page.locator(".agent-plan-usage")).not.toBeVisible();
+      selection.modelProviderId = "zai-coding-plan";
+      selection.modelId = "glm-5.3";
+      usage = { status: "available", ...selection, providerLabel: "GLM", checkedAt: Date.now(),
+        windows: [{ id: "0", windowDurationMins: 10080, remainingPercent: 68 }], managementUrl: "https://z.ai/subscribe" };
+      hintRealtime.sessionChanged("session-assistant-selection-updated", { sessionId: SESSION_ID });
+      await page.setViewportSize({ width: 390, height: 844 });
+      const quota = page.getByRole("button", { name: "Weekly GLM allowance remaining: 68%", exact: true });
+      await expect(quota).toHaveText("68%");
+      await quota.click();
+      await expect(page.getByText("GLM plan allowance", { exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Usage details" })).toHaveAttribute("href", "https://z.ai/subscribe");
+      await page.keyboard.press("Escape");
+      selection.modelProviderId = "zai";
+      usage = { status: "available", ...selection, providerLabel: "GLM", checkedAt: Date.now(),
+        balances: [{ currency: "USD", amount: "8.20" }], windows: [], managementUrl: "https://z.ai/manage-apikey/billing" };
+      hintRealtime.sessionChanged("session-assistant-selection-updated", { sessionId: SESSION_ID });
+      const glmBalance = page.getByRole("button", { name: "GLM balance remaining: $8.20", exact: true });
+      for (const width of [390, 768, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expect(glmBalance).toHaveText("$8.20");
+        await expect(quota).not.toBeVisible();
+        await glmBalance.click();
+        await expect(page.getByText("GLM balance", { exact: true })).toBeVisible();
+        await expect(page.getByRole("link", { name: "Usage details" })).toHaveAttribute("href", "https://z.ai/manage-apikey/billing");
+        if (engineId === "codex") await page.screenshot({ path: test.info().outputPath(`glm-balance-${width}.png`) });
+        await page.keyboard.press("Escape");
+      }
+    });
+  }
+
   for (const width of [390, 1280]) {
     test(`@conversation-rewind confirms and retries the exact last turn at ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 844 });

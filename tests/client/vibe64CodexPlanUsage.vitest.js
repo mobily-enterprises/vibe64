@@ -26,7 +26,7 @@ vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
 }));
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
   useRealtimeEvent(options) {
-    const payload = { projectSlug: "fixture", sessionId: "one", reason: "codex-plan-usage" };
+    const payload = { projectSlug: "fixture", sessionId: "one", reason: "agent-plan-usage" };
     if (options.matches({ payload })) {
       mocks.realtime = options;
     }
@@ -110,6 +110,66 @@ it("shows only the weekly percentage with explanatory details", async () => {
   expect(mocks.realtime.matches({ payload: { projectSlug: "fixture", sessionId: "two", reason: "codex-plan-usage" } })).toBe(false);
   mocks.realtime.onEvent();
   expect(mocks.resource.reload).toHaveBeenCalledOnce();
+});
+
+it.each([
+  ["deepseek", "DeepSeek", "https://platform.deepseek.com/top_up"],
+  ["zai", "GLM", "https://z.ai/manage-apikey/billing"]
+])("shows only the currency amount for %s across all three orchestrators", async (modelProviderId, providerLabel, managementUrl) => {
+  for (const engineId of ["codex", "claude", "opencode"]) {
+    mocks.buttons = [];
+    const assistantSelection = { engineId, modelProviderId };
+    const html = await render({ ...assistantSelection, status: "available", kind: "balance",
+      balances: [{ currency: "USD", amount: "12.40" }], windows: [], providerLabel,
+      managementUrl, checkedAt: Date.now()
+    }, { session: { sessionId: "one", assistantSelection } });
+    expect(mocks.buttons.some(button => button.text.trim() === "$12.40")).toBe(true);
+    expect(html).not.toContain("US$");
+    expect(html).toContain("USD balance remaining: $12.40");
+    expect(html).toContain(`${providerLabel} balance`);
+    expect(html).toContain("Account balance associated with this key");
+    expect(html).toContain("Checked ");
+    expect(html).toContain(managementUrl);
+    expect(mocks.buttons.some(button => button.text.trim() === "Refresh")).toBe(false);
+    expect(mocks.options.queryOptions.refetchInterval()).toBe(false);
+    expect(mocks.options.enabled.value).toBe(true);
+    expect(mocks.realtime.matches({ payload: { projectSlug: "fixture", sessionId: "one", reason: "agent-plan-usage" } })).toBe(true);
+    mocks.realtime.onEvent();
+    expect(mocks.resource.reload).toHaveBeenCalledOnce();
+  }
+});
+
+it("uses the supplied balance currency and shows a confirmed zero", async () => {
+  const assistantSelection = { engineId: "codex", modelProviderId: "deepseek" };
+  const html = await render({ ...assistantSelection, status: "available", balances: [{ currency: "CNY", amount: "0" }],
+    windows: [], providerLabel: "DeepSeek", checkedAt: Date.now()
+  }, { session: { sessionId: "one", assistantSelection } });
+  expect(html).toContain("CNY balance remaining: ¥0.00");
+});
+
+it("shows GLM's weekly quota, or its supplied short window when no weekly quota is returned", async () => {
+  for (const engineId of ["codex", "claude", "opencode"]) {
+    const assistantSelection = { engineId, modelProviderId: "zai-coding-plan" };
+    const data = { ...assistantSelection, status: "available", providerLabel: "GLM", checkedAt: Date.now(),
+      windows: [{ id: "0", windowDurationMins: 300, remainingPercent: 40 }, { id: "1", windowDurationMins: 10080, remainingPercent: 68 }] };
+    const props = { session: { sessionId: "one", assistantSelection } };
+    expect(await render(data, props)).toContain("Weekly GLM allowance remaining: 68%");
+    expect(await render({ ...data, windows: data.windows.slice(0, 1) }, props)).toContain("GLM allowance remaining: 40%");
+  }
+});
+
+it("hides unavailable and mismatched provider readings during an Auto handoff", async () => {
+  const assistantSelection = { engineId: "codex", modelProviderId: "zai-coding-plan" };
+  const props = { session: { sessionId: "one", assistantSelection } };
+  for (const data of [
+    { status: "available", engineId: "codex", modelProviderId: "deepseek", balances: [{ currency: "USD", amount: "12.40" }] },
+    { status: "available", engineId: "opencode", modelProviderId: "zai-coding-plan", windows: [{ remainingPercent: 68 }] },
+    { ...assistantSelection, status: "unavailable", windows: [] }
+  ]) {
+    mocks.buttons = [];
+    await render(data, props);
+    expect(mocks.buttons.some(button => /%|\$/.test(button.text))).toBe(false);
+  }
 });
 it("resolves the reactive sessions path used by the live chat", async () => {
   const sessionsApiPath = ref("/api/app/fixture/vibe64/sessions");

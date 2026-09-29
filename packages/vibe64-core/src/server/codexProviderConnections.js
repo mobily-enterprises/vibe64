@@ -293,7 +293,7 @@ function createCodexProviderConnectionStore({
       if (changes.get(paths.connectionPath) === operation) changes.delete(paths.connectionPath);
     }
   }
-  return { change, list, runtimeOptions, threadConfig, claudeProviderSettings };
+  return { change, list, read, runtimeOptions, threadConfig, claudeProviderSettings };
 }
 
 export { codexProviderModelCatalog, codexProviderPaths, createCodexProviderConnectionStore };

@@ -238,6 +238,7 @@ function createSessionAgentManager({
   attachments = null,
   defaultProviderId = "codex",
   readAssistantAccess = async () => ({ ownerOnly: false }),
+  readProviderUsage = null,
   resolveAssistantUser = async (user) => user || currentProjectVibe64User() || null,
   readRoutingConfiguration = null,
   providers = []
@@ -1096,7 +1097,10 @@ function createSessionAgentManager({
     async readPlanUsage(sessionId, options = {}) {
       const provider = bindSession(sessionId, options);
       const access = await accessFor(provider, sessionId, options);
-      if (typeof provider.readPlanUsage !== "function" || !access.canUse || !access.ownerOnly) {
+      if (!access.canUse) return { status: "unsupported", windows: [] };
+      const usage = await readProviderUsage?.(sessionAssistantSelection(options));
+      if (usage) return usage;
+      if (typeof provider.readPlanUsage !== "function" || !access.ownerOnly) {
         return { status: "unsupported", windows: [] };
       }
       return provider.readPlanUsage({ sessionId, runtime: options.runtime, session: options.session });
