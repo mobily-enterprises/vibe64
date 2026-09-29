@@ -13,6 +13,9 @@ host provide managed system values separately.
 - `packages/vibe64-project/src/server/resourceEnvironment.js`
 - `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
+- `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js`
+- `packages/vibe64-terminals/src/server/opencodeTerminal.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `src/components/studio/EnvPanel.vue`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
@@ -23,6 +26,13 @@ host provide managed system values separately.
 The environment view distinguishes editable user values from host-owned system
 values, masks secrets, supports explicit add, replace, and confirmed removal,
 and applies values to session preparation, checks, launches, and agent work.
+Codex, Claude, and OpenCode session commands receive the resolved development
+environment. Managed browser workers and Playwright commands resolve it in their
+registered project's context at process startup, using the owning session source.
+This read does not provision resources or project environment files. A failed
+read prevents execution. Existing browser workers retain their startup values;
+closing the managed browser lets the next command start it with current values.
+Values remain process input rather than generated wrapper or browser metadata.
 Integration setup can prefill an Env key without supplying a value. Public
 values start empty and unmasked; secret entries start empty and masked.
 Navigation never saves a value automatically.

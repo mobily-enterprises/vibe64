@@ -507,6 +507,7 @@ function createService({
   const agentPreviewCommand = createAgentPreviewCommandService({
     launchTarget: outputTarget,
     logger,
+    projectService,
     publishSessionChanged: publishSessionChanged.outputTarget
   });
   const agentEnvCommand = createAgentEnvCommandService({

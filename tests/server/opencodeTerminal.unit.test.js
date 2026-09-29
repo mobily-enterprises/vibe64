@@ -2179,6 +2179,11 @@ test("sequential scoped OpenCode helpers reuse the service after removing their 
 
 test("OpenCode receives the same complete session command boundary as Codex", async (t) => {
   const harness = await controllerHarness({ withCommandBoundary: true });
+  harness.controllerOptions.projectService.projectInspectionEnvironment = async (input) => {
+    assert.equal(input.sessionId, "session-1");
+    assert.equal(input.target, "opencode");
+    return { REFERENCE_SECRET: "dummy-project-secret" };
+  };
   t.after(async () => {
     await harness.controller.closeAllForProject();
     await rm(harness.root, { force: true, recursive: true });
@@ -2209,6 +2214,7 @@ test("OpenCode receives the same complete session command boundary as Codex", as
     "utf8"
   ));
   assert.deepEqual(registry.sessions[0].env, {
+    REFERENCE_SECRET: "dummy-project-secret",
     VIBE64_AGENT_DATABASE_COMMAND_SOCKET: "/managed/database.sock",
     VIBE64_AGENT_ENV_COMMAND_SOCKET: "/managed/environment.sock",
     VIBE64_AGENT_PREVIEW_COMMAND_SOCKET: "/managed/preview.sock",

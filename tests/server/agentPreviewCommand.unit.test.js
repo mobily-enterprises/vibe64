@@ -10,6 +10,9 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
+import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
+import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
+import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 import {
   agentPreviewBrowserWorkerSource,
@@ -83,11 +86,13 @@ function processRunning(pid) {
 }
 
 function execWithInput(command, args, {
+  cwd,
   env = process.env,
   input = ""
 } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
+      cwd,
       env,
       stdio: ["pipe", "pipe", "pipe"]
     });
@@ -329,12 +334,17 @@ function createReadyPreviewCommandService({
   onEnsurePreview = null,
   selectPreviewIdentity = null,
   previewUrl,
+  projectService = {
+    runInProjectContext: (_slug, operation) => operation(),
+    projectInspectionEnvironment: async () => ({})
+  },
   runManagedCommand,
   stopManagedExecution,
   stopOwnedExecutions,
   terminalId = () => "launch-terminal"
 } = {}) {
   return createAgentPreviewCommandService({
+    projectService,
     launchTarget: {
       previewTestRunAdmission() { return null; },
       async ensurePreview() {
@@ -402,6 +412,7 @@ test("agent preview help distinguishes duplicate previews from explicit referenc
 
 test("managed preview browser eval validates stdin before starting browser control", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-browser-eval-input-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
   const sessionId = "browser-eval-input-session";
   let ensureCalls = 0;
   const commandService = createReadyPreviewCommandService({
@@ -411,8 +422,14 @@ test("managed preview browser eval validates stdin before starting browser contr
     previewUrl: "https://preview.example.test/"
   });
   try {
+    await createFakePlaywrightRuntime(runtimeRoot);
+    await writeFile(path.join(root, "package.json"), JSON.stringify({ devDependencies: { "@playwright/test": "1.50.1" } }));
+    await mkdir(path.join(root, "node_modules/@playwright/test"), { recursive: true });
+    await writeFile(path.join(root, "node_modules/@playwright/test/package.json"), '{"version":"1.50.1"}');
+    await writeFile(path.join(root, "node_modules/@playwright/test/cli.js"), "");
     const prepared = await prepareAgentPreviewCommand({
       commandService,
+      env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
       sessionId,
       wrapperHostDir: root
     });
@@ -434,7 +451,7 @@ test("managed preview browser eval validates stdin before starting browser contr
     assert.match(help.stdout, /Usage: vibe64-helper preview browser eval < playwright-code\.js/u);
     assert.match(help.stdout, /new URL\('\/your-path', preview\.url\)/u);
     assert.match(help.stdout, /direct application ports bypass Preview identity/u);
-    const playwrightHelp = await execWithInput(helper, ["playwright", "--help"], { env: commandEnv });
+    const playwrightHelp = await execWithInput(helper, ["playwright", "--help"], { cwd: root, env: commandEnv });
     assert.match(playwrightHelp.stdout, /Usage:\n {2}vibe64-helper playwright/u);
     await assert.rejects(
       execWithInput(prepared.hostWrapperPath, [
@@ -953,6 +970,78 @@ test("agent preview wrapper forwards command input over the private session sock
   }
 });
 
+test("managed browser and Playwright receive saved project secrets and reload them on restart", async () => {
+  await withTemporaryRoot(async (root) => {
+    const sessionId = "browser-project-env";
+    const runtimeRoot = path.join(root, "runtime-packs");
+    const worktreePath = sourcePath(root, sessionId);
+    const projectService = createProjectService({
+      env: {},
+      projectContext: createStudioProjectContext({
+        explicitTargetRoot: root,
+        explicitManagedSourceRoot: path.join(path.dirname(root), "managed-source"),
+        explicitSystemRoot: path.join(path.dirname(root), "system"),
+        home: path.dirname(root)
+      }),
+      inspectEnvironment: async () => ({ components: [], environmentDefaults: [], resources: [], files: [] })
+    });
+    await mkdir(worktreePath, { recursive: true });
+    const store = await projectService.createSessionStore();
+    await store.createSession({ sessionId, runtimeKind: "genesis", metadata: sourceMetadata(root, sessionId) });
+    const project = await projectService.readCurrentProject();
+    const commandService = createReadyPreviewCommandService({
+      previewUrl: "https://preview.example.test/",
+      projectService
+    });
+    try {
+      await createFakePlaywrightRuntime(runtimeRoot);
+      const prepared = await prepareAgentPreviewCommand({
+        commandService, project, sessionId, worktreePath,
+        env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
+        wrapperHostDir: path.join(root, "commands")
+      });
+      const env = { ...process.env, ...prepared.env, BROWSER_REFERENCE_SECRET: "wrong-caller-value" };
+      const digestCode = '(await import("node:crypto")).createHash("sha256").update(process.env.BROWSER_REFERENCE_SECRET || "").digest("hex")';
+      const cliPath = path.join(worktreePath, "node_modules/@playwright/test/cli.js");
+      await mkdir(path.dirname(cliPath), { recursive: true });
+      await writeFile(cliPath, `(async () => process.stdout.write(${digestCode}))();`);
+      for (const value of ["saved-dummy-secret", "rotated-dummy-secret"]) {
+        assert.equal((await projectService.saveEnvUserValues({
+          environment: "dev", values: { BROWSER_REFERENCE_SECRET: { value, secret: true } }
+        })).ok, true);
+        const result = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+          cwd: worktreePath,
+          env,
+          input: `return ${digestCode};`
+        })).stdout);
+        const expectedDigest = crypto.createHash("sha256").update(value).digest("hex");
+        assert.equal(result.result, expectedDigest);
+        const suite = await commandService.playwrightRun(sessionId, {
+          browserSocketPath: prepared.hostBrowserSocketPath,
+          managedNodePath: path.join(runtimeRoot, "node26/bin/node"),
+          workerScriptPath: prepared.hostBrowserWorkerPath,
+          cwd: worktreePath,
+          parentExecutionId: "browser-env-test",
+          runner: "node",
+          args: [cliPath],
+          playwrightEnv: {
+            PLAYWRIGHT_BASE_URL: "https://preview.example.test/",
+            PLAYWRIGHT_BROWSERS_PATH: path.join(runtimeRoot, "playwright/browsers")
+          }
+        });
+        assert.equal(suite.ok, true, suite.error);
+        assert.equal(suite.stdout, expectedDigest);
+        for (const file of [prepared.hostWrapperPath, prepared.hostBrowserWorkerPath, prepared.hostBrowserMetadataPath]) {
+          assert.ok(!(await readFile(file, "utf8")).includes(value));
+        }
+        await execFileAsync(prepared.hostWrapperPath, ["browser", "close"], { cwd: worktreePath, env });
+      }
+    } finally {
+      await commandService.closeAllForSession(sessionId);
+    }
+  });
+});
+
 test("managed preview browser surfaces capacity refusal without creating a worker", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-capacity-"));
   const runtimeRoot = path.join(root, "runtime-packs");
@@ -1006,6 +1095,29 @@ test("managed preview browser surfaces capacity refusal without creating a worke
       force: true,
       recursive: true
     });
+  }
+});
+
+test("managed browser does not start when its project environment cannot be read", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-browser-env-failure-"));
+  const sessionId = "browser-env-failure";
+  const commandService = createReadyPreviewCommandService({
+    previewUrl: "https://preview.example.test/",
+    projectService: {
+      runInProjectContext: (_slug, operation) => operation(),
+      async projectInspectionEnvironment() { throw new Error("Project environment unavailable."); }
+    },
+    async runManagedCommand() { assert.fail("A browser must not start with an unreadable environment."); }
+  });
+  try {
+    const prepared = await prepareAgentPreviewCommand({ commandService, sessionId, wrapperHostDir: root });
+    await assert.rejects(execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: { ...process.env, ...prepared.env }, input: "return true;"
+    }), /Project environment unavailable/u);
+    await assert.rejects(stat(prepared.hostBrowserMetadataPath), { code: "ENOENT" });
+  } finally {
+    await commandService.closeAllForSession(sessionId);
+    await rm(root, { force: true, recursive: true });
   }
 });
 

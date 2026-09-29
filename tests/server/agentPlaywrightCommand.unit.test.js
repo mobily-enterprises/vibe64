@@ -164,6 +164,10 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
     ].join("\n") + "\n"
   );
   const commandService = createAgentPreviewCommandService({
+    projectService: {
+      runInProjectContext: (_slug, operation) => operation(),
+      projectInspectionEnvironment: async () => ({})
+    },
     resourceProvider,
     publishSessionChanged,
     launchTarget: {

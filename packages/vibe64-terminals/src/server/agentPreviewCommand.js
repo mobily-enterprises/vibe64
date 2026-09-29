@@ -556,6 +556,7 @@ function logPreviewCommandResult(logger, result = {}, fields = {}) {
 function createAgentPreviewCommandService({
   launchTarget = null,
   logger = null,
+  projectService,
   readSessionUiState = readSessionUiSyncStateForSession,
   runManagedCommand = runVibe64Command,
   stopManagedExecution = stopVibe64Execution,
@@ -565,6 +566,19 @@ function createAgentPreviewCommandService({
 } = {}) {
   const browserWorkers = new Map();
   const browserTestRuns = new Map();
+
+  async function runBrowserCommand(request) {
+    const runtimeConfigEnv = await projectService.runInProjectContext(request.project.slug, () => (
+      projectService.projectInspectionEnvironment({
+        sessionId: request.session.sessionId,
+        target: "preview"
+      })
+    ));
+    return runManagedCommand({
+      ...request,
+      project: { ...request.project, runtimeConfigEnv }
+    });
+  }
 
   function testApprovalStatus(sessionId) {
     const pending = browserTestRuns.get(sessionId);
@@ -1058,7 +1072,7 @@ function createAgentPreviewCommandService({
         signal: options.signal,
         runCommand: async (request) => {
           if (pending && !input.targetId) pending.state = "running";
-          const commandResult = await runManagedCommand(request);
+          const commandResult = await runBrowserCommand(request);
           // The scoped wrapper may exit before its independently managed child.
           // Restoration must wait for every registered child to finish draining.
           const children = pending ? await Promise.all(pending.children) : [];
@@ -1096,7 +1110,7 @@ function createAgentPreviewCommandService({
     cancelTestApproval,
     browserStart: (sessionId, input) => startRegisteredBrowserWorker(sessionId, input, {
       browserWorkers,
-      runCommand: runManagedCommand,
+      runCommand: runBrowserCommand,
       stopExecution: stopManagedExecution,
       stopOwnedExecutions
     }),

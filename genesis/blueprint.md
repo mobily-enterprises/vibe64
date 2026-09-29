@@ -1036,6 +1036,9 @@ Identity selection within Preview preserves the current page.
 Assistant browser tools consistently identify the managed Preview address for
 navigation, keeping direct application addresses in diagnostics. A missing
 Preview address is reported as unavailable.
+Saved development Env values are available to coding agents, their managed
+browser, and browser test commands. Newly started processes read current values;
+credentials need not be copied into chat or source to inspect an authorized site.
 Agents can run a browser suite against a project's declared test Preview target.
 Vibe64 starts that target, waits for readiness, uses its application identity,
 and restores the previous Preview when the test command finishes. The project

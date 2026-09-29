@@ -48,6 +48,7 @@ import {
   openCodeConfiguredAssistantCapabilities
 } from "./agent/providers/opencodeAssistantCatalog.js";
 import { conversationActorMetadata } from "./conversationActor.js";
+import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import {
   prepareAgentSessionCommandEnvironment
 } from "./agentCommandEnvironment.js";
@@ -1204,7 +1205,10 @@ function createOpenCodeTerminalController({
       );
     }
     return {
-      env: record(prepared.env),
+      env: {
+        ...await loadProjectExecutionEnv({ projectService, session: context.session, target: "opencode" }),
+        ...record(prepared.env)
+      },
       shimDirs: prepared.shimDirs
     };
   }

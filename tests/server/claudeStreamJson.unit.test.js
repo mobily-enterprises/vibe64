@@ -193,6 +193,34 @@ async function fixture(t) {
   return { provider, providerOptions, behavior, context, processes, written, root, checkpoints, git };
 }
 
+test("Claude main and temporary chats receive project values with their managed commands", async (t) => {
+  const f = await fixture(t);
+  const provider = createClaudeSessionAgentProvider({
+    ...f.providerOptions,
+    codexGitCommand: {},
+    projectService: {
+      ...f.providerOptions.projectService,
+      async projectInspectionEnvironment(input) {
+        assert.equal(input.sessionId, "test");
+        assert.equal(input.target, "claude");
+        return { REFERENCE_SECRET: "dummy-project-secret" };
+      }
+    },
+    prepareCommandEnvironment: async () => ({ ok: true, env: { MANAGED_COMMAND: "ready" }, shimDirs: [] })
+  });
+  t.after(() => provider.closeProject());
+  await provider.sendMessage(f.context, { message: "First", messageId: "main-env" });
+  const temporary = await provider.createConversation(f.context);
+  await provider.startConversationTurn(f.context, {
+    conversationId: temporary.conversationId, message: "Temporary", messageId: "temporary-env"
+  });
+  for (const { options } of f.processes) {
+    assert.equal(options.env.REFERENCE_SECRET, "dummy-project-secret");
+    assert.equal(options.env.MANAGED_COMMAND, "ready");
+  }
+  assert.equal(f.processes.length, 2);
+});
+
 test("Claude main and temporary chats use the Genesis hook bridge without duplicated system guidance", async (t) => {
   const f = await fixture(t);
   t.after(() => f.provider.closeProject());

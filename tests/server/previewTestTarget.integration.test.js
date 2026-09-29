@@ -133,6 +133,7 @@ process.stdout.write(JSON.stringify({
     }
   };
   const projectService = {
+    runInProjectContext: (_slug, operation) => operation(),
     async createRuntime() { return runtime; },
     currentTargetRoot() { return sourceRoot; },
     currentServiceDataRoot() { return root; },
@@ -184,6 +185,7 @@ process.stdout.write(JSON.stringify({
   };
   const controller = createOutputTargetTerminalController({ projectService, runCommand, ...workflowHooks });
   const commandService = createAgentPreviewCommandService({
+    projectService,
     launchTarget: controller, runManagedCommand: runCommand,
     stopManagedExecution: stopDetachedExecution, readSessionUiState: () => null,
     resourceProvider: workflowHooks.resourceProvider,

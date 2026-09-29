@@ -24,6 +24,7 @@ import { STUDIO_MANAGED_CLAUDE_COMMAND } from "@local/studio-terminal-core/serve
 import { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeFlagSettings, claudeModelConfiguration, createClaudeCodeProcess } from "../../claudeCodeProcess.js";
 import { claudeHistoryPath, claudeMessageBlocks, readClaudeHistory, requireClaudeSessionId, retireClaudeConversationHistory, listClaudeConversationStorage } from "../../claudeConversationHistory.js";
 import { prepareAgentSessionCommandEnvironment } from "../../agentCommandEnvironment.js";
+import { loadProjectExecutionEnv } from "../../projectExecutionEnv.js";
 import { recordSessionGitCommandActor } from "../../sessionGitCommandActor.js";
 import { conversationActorMetadata } from "../../conversationActor.js";
 import {
@@ -458,7 +459,13 @@ function createClaudeSessionAgentProvider({
       sessionId: context.sessionId, worktreePath: context.workdir
     });
     if (prepared.ok !== true) throw error("Claude's session command environment could not be prepared.");
-    return prepared;
+    return {
+      ...prepared,
+      env: {
+        ...await loadProjectExecutionEnv({ projectService, session: context.session, target: "claude" }),
+        ...prepared.env
+      }
+    };
   }
 
   async function accountIdentity(context) {
