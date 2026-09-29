@@ -66,6 +66,11 @@ Close, Stop and collapsible task details retain their own existing behavior.
 
 ## Public contract
 
+The embedded Preview frame delegates microphone and autoplay to its application
+origin, alongside clipboard writing. Secure-context requirements and the browser's
+microphone permission still apply. This supports ordinary audio applications
+without granting devices automatically or disabling origin isolation.
+
 The `vibe64.current-app.read` action inspects declared outputs in the currently
 authorized project or selected session. It resolves fresh actor/project context
 for both HTTP and direct calls; discovery never falls back to a different project.

@@ -11,6 +11,13 @@ credentials. Its login and realtime connection run through the Preview address.
 HTTPS previews retain the HTTPS scheme for applications that use it to set
 secure login cookies and redirects.
 
+Preview lets the application request your microphone and play audio. Use its
+microphone control and allow access when your browser asks. Permission is still
+your choice; embedding an app does not grant it automatically. Use HTTPS for
+remote previews or localhost on your own machine. If you denied access, change
+the site's microphone permission in the browser and retry. Colleague can explain
+these steps but cannot grant browser permission or record on your behalf.
+
 **Reload preview** refreshes the embedded page. **Restart preview** starts the
 application again. If startup fails, inspect the message and **Show run output**
 before retrying. Hiding run output closes only the terminal view; it does not

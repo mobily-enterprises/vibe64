@@ -519,7 +519,7 @@
         v-if="previewUrl"
         :key="previewFrameRequestId"
         ref="previewFrame"
-        allow="clipboard-write"
+        allow="clipboard-write; microphone; autoplay"
         class="vibe64-launch-controls__preview-frame"
         :data-preview-frame-request-id="previewFrameRequestId"
         :src="previewUrl"
