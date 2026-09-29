@@ -195,7 +195,7 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
     const readable = [];
     const images = [];
     for (const old of history) {
-      if (!["message", "reasoning", "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output"].includes(old?.type)) {
+      if (!["message", "agent_message", "reasoning", "function_call", "function_call_output", "custom_tool_call", "custom_tool_call_output"].includes(old?.type)) {
         throw compactionHistoryError("the saved history contains an unsupported item.");
       }
       const { encrypted_content, id, ...record } = old;
@@ -207,6 +207,13 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
         if (!Array.isArray(parts)) throw compactionHistoryError("the saved history contains unsupported content.");
         record[field] = parts.map((part) => {
           if (["input_text", "output_text", "reasoning_text", "summary_text"].includes(part?.type) && typeof part.text === "string") return part;
+          // Native agent messages may mix readable text and OpenAI-only
+          // content. Keep their position and attribution without sending
+          // ciphertext to a foreign provider or pretending it is readable.
+          if (old.type === "agent_message" && field === "content" &&
+              part?.type === "encrypted_content" && typeof part.encrypted_content === "string" && part.encrypted_content) {
+            return { type: "input_text", text: "[Encrypted agent-message content is unavailable to this provider; retained in saved native history.]" };
+          }
           if (part?.type === "input_image" && typeof part.image_url === "string" && part.image_url) {
             if (!model.images) throw compactionHistoryError("the selected model does not support images in recovered history.");
             images.push(part);

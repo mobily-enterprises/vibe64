@@ -786,7 +786,11 @@ reconstruction cache. GLM's ordinary history passes through unchanged.
 
 Recovery labels original readable user/assistant messages, reasoning and tool
 records as historical context. It excludes old system/developer instructions and
-opaque reasoning. Image-capable destinations receive the original image parts,
+opaque reasoning. Native agent messages retain readable content, author,
+recipient and ordering. Their OpenAI-only encrypted content is represented by
+an explicit unavailable-content marker, without forwarding ciphertext or
+changing the saved record. Malformed or unknown agent content still rejects
+the request. Image-capable destinations receive the original image parts,
 with numbered references preserving their position in archived messages and tool
 results. Provider-owned file IDs, other unsupported attachments, missing or
 ambiguous boundaries, Undo/fork histories, unknown items and oversized histories

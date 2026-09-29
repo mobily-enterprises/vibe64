@@ -34,6 +34,13 @@ catalogue; opening another browser tab does not do that. Do not renew or delete
 the conversation merely to fix missing tools. Colleague can help identify the
 selected model and explain this recovery, but has no service-restart action.
 
+After a GPT-to-Junior handoff, Codex retains readable messages from its helper
+agents as historical context. OpenAI-only encrypted parts are explicitly marked
+as unavailable to the selected provider; the saved originals remain intact.
+If an error reports an unsupported saved item after an upgrade, report it to
+the operator before renewing: an adapter update may let the same conversation
+continue. Repeatedly sending the same prompt will not fix an unsupported item.
+
 When the error says the saved history cannot be recovered safely, use the
 previous model or **Renew session**. Review the renewal handover and its scope
 before confirming; renewal is a separate action, not a retry of the failed turn.

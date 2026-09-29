@@ -910,7 +910,10 @@ it. Handoffs to an image-capable model preserve screenshots from compacted
 history as images alongside their original conversation context. Handoffs do
 not add a summarization call. Long saved Codex transcripts remain eligible for
 recovery when their effective summarized history fits the request size bound.
-Translation enforces that bound after conversion. Native compaction must finish
+Translation enforces that bound after conversion. Readable messages from native
+helper agents survive a switch after compaction, with their attribution intact.
+Encrypted portions that another provider cannot read are explicitly marked as
+unavailable; their saved originals remain intact. Native compaction must finish
 before work continues; a provider context rejection remains an explicit failure,
 with saved history and existing edits retained. Vibe64 does not automatically
 replay a failed turn or promise that arbitrary history fits every model.

@@ -323,6 +323,40 @@ test("mixed Codex recovery keeps exact text and tool facts without changing nati
   assert.equal(fixture.calls.length, 2, "one upstream request per user request");
 });
 
+test("compacted native agent messages retain attribution, readable content and explicit opaque-content markers", async (t) => {
+  const fixture = await compactedFixture(t);
+  const encrypted = { type: "encrypted_content", encrypted_content: "OPENAI_ONLY_AGENT_CONTENT" };
+  const messages = [
+    { type: "agent_message", id: "agent-update", author: "/root/reviewer", recipient: "/root",
+      content: [{ type: "input_text", text: "Message Type: MESSAGE\nPayload:\n" }, encrypted] },
+    { type: "agent_message", id: "agent-final", author: "/root/reviewer", recipient: "/root",
+      content: [{ type: "input_text", text: "FINAL_REVIEW: preserve this exact text.\n  And spacing." }] }
+  ];
+  await fixture.save([fixture.records[0], ...messages.map((payload) => ({ type: "response_item", payload })), ...fixture.records.slice(1)]);
+  const native = await readFile(fixture.historyPath);
+  for (const [destination, model] of [["deepseek", "deepseek-flash"], ["zai-coding-plan", "glm-5.3"]]) {
+    const response = await fixture.send({ model, input: [fixture.compacted] }, destination);
+    assert.equal(await response.text(), "accepted");
+    const supplement = fixture.calls.at(-1).body.input[1].content[0].text;
+    const recovered = JSON.parse(supplement.slice(supplement.indexOf("\n") + 1));
+    assert.equal(recovered[0].type, "agent_message");
+    assert.equal(recovered[0].author, "/root/reviewer");
+    assert.equal(recovered[0].recipient, "/root");
+    assert.deepEqual(recovered[0].content[0], messages[0].content[0]);
+    assert.match(recovered[0].content[1].text, /Encrypted agent-message content is unavailable/);
+    assert.deepEqual(recovered[1].content, messages[1].content);
+    assert.doesNotMatch(supplement, /OPENAI_ONLY_AGENT_CONTENT/);
+  }
+  assert.deepEqual(await readFile(fixture.historyPath), native);
+  for (const content of [[{ ...encrypted, encrypted_content: null }], [{ type: "unknown_agent_content" }]]) {
+    await fixture.save([fixture.records[0], { type: "response_item", payload: { ...messages[0], content } }, ...fixture.records.slice(1)]);
+    const response = await fixture.send({ model: "deepseek-flash", input: [fixture.compacted] });
+    assert.equal(response.status, 422);
+    assert.match((await response.json()).error.message, /not supported/);
+  }
+  assert.equal(fixture.calls.length, 2, "malformed or unknown content never reaches the provider");
+});
+
 test("compacted screenshots stay visible and associated with their original messages and tool results", async (t) => {
   const fixture = await compactedFixture(t);
   const images = [
