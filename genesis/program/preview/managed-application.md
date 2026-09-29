@@ -295,3 +295,8 @@ Secure cookies on HTTPS previews. Redirects from the target's ordinary origin or
 its forwarded-scheme origin stay on the preview origin. Foreign,
 opaque and absent origins are preserved so application origin checks still apply.
 This lets a previewed editor authenticate realtime connections through the proxy.
+For a local proxy, the request's loopback Host on the proxy's own port is its
+browser-facing origin. Token bootstrap, application redirects and HTTP/WebSocket
+Origin translation retain that hostname when the local editor uses `localhost`
+instead of `127.0.0.1`. Hosted origins remain configured, and foreign hosts or
+different ports cannot override the proxy origin.

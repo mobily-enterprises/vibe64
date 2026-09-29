@@ -265,6 +265,49 @@ test("launch preview proxy uses the configured local port range", async () => {
   });
 });
 
+test("local preview keeps bootstrap and app redirects on the browser's loopback host", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure("loopback-alias", `${target.origin}/forwarded-redirect?mode=dev`);
+      const browserUrl = new URL(preview.href);
+      browserUrl.hostname = "localhost";
+      const bootstrap = await fetch(browserUrl, {
+        headers: { Accept: "text/html" },
+        redirect: "manual"
+      });
+      const cleanUrl = new URL(browserUrl);
+      cleanUrl.searchParams.delete(PREVIEW_PROXY_TOKEN_QUERY_PARAM);
+      assert.equal(bootstrap.status, 302);
+      assert.equal(bootstrap.headers.get("location"), cleanUrl.href);
+      const cookieName = previewTokenCookieName(browserUrl.origin);
+      const cookie = previewCookiePair(bootstrap.headers.get("set-cookie"), cookieName);
+      const redirect = await fetch(new URL("/forwarded-redirect", browserUrl), {
+        headers: { Cookie: cookie },
+        redirect: "manual"
+      });
+      assert.equal(redirect.status, 302);
+      assert.equal(redirect.headers.get("location"), `${browserUrl.origin}/home`);
+      const response = await fetch(redirect.headers.get("location"), {
+        headers: { Cookie: cookie }
+      });
+      assert.equal(response.status, 200);
+      assert.match(await response.text(), /Target home/u);
+
+      for (const host of ["foreign.invalid", "localhost:1", `foreign.invalid@${browserUrl.host}`]) {
+        const response = await fetch(preview.href, {
+          headers: { Accept: "text/html", Host: host },
+          redirect: "manual"
+        });
+        assert.equal(response.status, 302);
+        assert.equal(new URL(response.headers.get("location")).origin, new URL(preview.href).origin);
+      }
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
 test("launch preview proxy preserves the canonical target host when using an alternate connect URL", async () => {
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
@@ -1355,18 +1398,20 @@ test("preview HTTP and WebSockets translate only their own origin to the loopbac
       const registry = createLaunchPreviewProxyRegistry();
       try {
         const preview = await registry.ensure("origin-proof", `${target.origin}/api/ping`);
-        const origin = new URL(preview.href).origin;
+        const browserUrl = new URL(preview.href);
+        browserUrl.hostname = "localhost";
+        const origin = browserUrl.origin;
         for (const browserOrigin of [origin, `${origin}.foreign.invalid`, "https://foreign.invalid", "null", undefined]) {
           const headers = {
             "X-Forwarded-Proto": "https",
             ...(browserOrigin === undefined ? {} : { Origin: browserOrigin })
           };
           if (transport === "http") {
-            const response = await fetch(preview.href, { headers });
+            const response = await fetch(browserUrl, { headers });
             assert.equal(response.status, 200);
             await response.text();
           } else {
-            const connection = await connectWebSocket(previewWebSocketHref(preview.href), { headers });
+            const connection = await connectWebSocket(previewWebSocketHref(browserUrl.href), { headers });
             assert.equal(connection.ok, true);
             assert.equal(await sendWebSocketMessage(connection.socket, "origin-proof"), "echo:origin-proof");
             connection.socket.close();

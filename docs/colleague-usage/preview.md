@@ -10,6 +10,10 @@ If the previewed application shows its own login screen, enter that application'
 credentials. Its login and realtime connection run through the Preview address.
 HTTPS previews retain the HTTPS scheme for applications that use it to set
 secure login cookies and redirects.
+In the local editor, Preview keeps the editor's loopback hostname through login
+and page navigation, so opening the editor on `localhost` also works. If a tab
+shows an expired Preview access error after a restart, use **Reload preview**
+to obtain its current address.
 
 Preview lets the application request your microphone and play audio. Use its
 microphone control and allow access when your browser asks. Permission is still

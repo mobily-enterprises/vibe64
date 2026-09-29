@@ -2,6 +2,8 @@
 
 Applications in Preview can request the person's microphone and play audio
 through the browser's ordinary permission controls, on HTTPS or localhost.
+Local Preview preserves the editor's loopback hostname through application login
+and live connections.
 
 Vibe64 is the visual, managed shell around Genesis for people building software
 with an AI coding agent.

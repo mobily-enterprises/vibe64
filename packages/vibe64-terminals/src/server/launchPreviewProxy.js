@@ -735,6 +735,24 @@ function requestHeader(request, name = "") {
   return Array.isArray(value) ? value.join(", ") : String(value || "");
 }
 
+function requestPreviewOrigin(request, proxyOrigin) {
+  const proxyUrl = new URL(proxyOrigin);
+  if (!isLoopbackAddress(proxyUrl.hostname)) {
+    return proxyOrigin;
+  }
+  try {
+    const host = requestHeader(request, "host").toLowerCase();
+    const requestOrigin = new URL(`${proxyUrl.protocol}//${host}`);
+    return requestOrigin.host === host &&
+      isLoopbackAddress(requestOrigin.hostname) &&
+      requestOrigin.port === proxyUrl.port
+      ? requestOrigin.origin
+      : proxyOrigin;
+  } catch {
+    return proxyOrigin;
+  }
+}
+
 function requestIsBrowserDocumentNavigation(request) {
   const fetchDest = requestHeader(request, "sec-fetch-dest").toLowerCase();
   const fetchMode = requestHeader(request, "sec-fetch-mode").toLowerCase();
@@ -1673,7 +1691,7 @@ async function startLaunchPreviewProxy({
       consumeIdentityGrant,
       executePreviewIdentityCommand,
       previewAuth,
-      proxyOrigin,
+      proxyOrigin: requestPreviewOrigin(request, proxyOrigin),
       tracker,
       token,
       tokenScope,
@@ -1686,7 +1704,7 @@ async function startLaunchPreviewProxy({
     proxyPreviewUpgrade(request, socket, head, {
       connectOrigin,
       previewAuth,
-      proxyOrigin,
+      proxyOrigin: requestPreviewOrigin(request, proxyOrigin),
       tracker,
       tokenScope,
       tokenHash,
