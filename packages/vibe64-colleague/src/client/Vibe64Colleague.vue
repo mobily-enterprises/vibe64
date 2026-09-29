@@ -68,6 +68,7 @@ const feedback = useShellWebErrorRuntime();
 const modelMenu = ref(false);
 const modelButton = ref(null);
 const sendButton = ref(null);
+const voicePreview = ref(null);
 const clientId = crypto.randomUUID();
 const working = computed(() => state.value.status === "working");
 const watches = computed(() => (state.value.watches || []).filter((item) => !item.assignmentId && ["active", "pending", "paused"].includes(item.status)));
@@ -234,33 +235,38 @@ onBeforeUnmount(() => {
       <div class="vibe64-colleague__conversation">
         <AssistantConversationElement :adapter="adapter" :label="`${name} conversation`">
           <template #composer="{ adapter: { composer } }">
-            <AssistantPromptInput
-              v-model="draft" class="vibe64-colleague__composer" :aria-label="composer.ariaLabel" :placeholder="composer.placeholder"
-              :disabled="composer.disabled" :submit-enabled="composer.canSend" :rows="composer.rows" :density="composer.density"
-              tab-to-submit @submit="submit" @tab-to-submit="sendButton?.$el?.focus()"
-            >
-              <template #input-start>
-                <span v-if="connectionError" class="text-body-small" role="status" :title="connectionError">Reconnecting…</span>
-              </template>
-              <template #footer>
-                <div class="vibe64-colleague__composer-actions">
-                  <v-btn
-                    ref="modelButton" :icon="mdiTuneVariant" size="small" variant="text"
-                    :aria-label="`Choose ${name} model`" :title="state.assistantSelection?.modelId || 'Choose model'"
-                    :disabled="working || sending" @click="modelMenu = true"
-                  />
-                  <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" :launcher="launcher?.$el" />
-                  <div class="vibe64-colleague__delivery">
-                    <v-btn v-if="composer.canStop" :icon="mdiStop" size="small" variant="text" :aria-label="`Stop ${name}`" title="Stop assistant" @click="stop" />
+            <div class="vibe64-colleague__composer-region">
+              <div ref="voicePreview" class="vibe64-colleague__voice-preview" />
+              <!-- Keep the dialog from handling Tab again after the input focuses Send. -->
+              <AssistantPromptInput
+                v-model="draft" class="vibe64-colleague__composer" :aria-label="composer.ariaLabel" :placeholder="composer.placeholder"
+                :disabled="composer.disabled" :submit-enabled="composer.canSend" :rows="composer.rows" :density="composer.density"
+                tab-to-submit @submit="submit" @tab-to-submit="sendButton?.$el?.focus()"
+                @keydown.tab="$event.defaultPrevented && $event.stopPropagation()"
+              >
+                <template #input-start>
+                  <span v-if="connectionError" class="text-body-small" role="status" :title="connectionError">Reconnecting…</span>
+                </template>
+                <template #footer>
+                  <div class="vibe64-colleague__composer-actions">
                     <v-btn
-                      ref="sendButton" :icon="working ? mdiArrowTopRight : mdiSend" size="small" variant="flat" color="primary"
-                      :aria-label="composer.submitAriaLabel" :title="composer.submitLabel"
-                      :disabled="!composer.canSend" @click="submit"
+                      ref="modelButton" :icon="mdiTuneVariant" size="small" variant="text"
+                      :aria-label="`Choose ${name} model`" :title="state.assistantSelection?.modelId || 'Choose model'"
+                      :disabled="working || sending" @click="modelMenu = true"
                     />
+                    <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" :launcher="launcher?.$el" :preview="voicePreview" />
+                    <div class="vibe64-colleague__delivery">
+                      <v-btn v-if="composer.canStop" :icon="mdiStop" size="small" variant="text" :aria-label="`Stop ${name}`" title="Stop assistant" @click="stop" />
+                      <v-btn
+                        ref="sendButton" :icon="working ? mdiArrowTopRight : mdiSend" size="small" variant="flat" color="primary"
+                        :aria-label="composer.submitAriaLabel" :title="composer.submitLabel"
+                        :disabled="!composer.canSend" @click="submit"
+                      />
+                    </div>
                   </div>
-                </div>
-              </template>
-            </AssistantPromptInput>
+                </template>
+              </AssistantPromptInput>
+            </div>
           </template>
         </AssistantConversationElement>
       </div>
@@ -308,6 +314,8 @@ onBeforeUnmount(() => {
 .vibe64-colleague__conversation { flex: 1; min-height: 0; display: flex; padding: 12px; }
 .vibe64-colleague__conversation :deep(.assistant-conversation) { width: 100%; min-height: 0; }
 .vibe64-colleague__composer { flex: 0 0 auto; }
+.vibe64-colleague__composer-region { position: relative; flex: 0 0 auto; }
+.vibe64-colleague__voice-preview { position: absolute; inset-inline: 0; bottom: calc(100% + 8px); z-index: 1; }
 .vibe64-colleague__composer-actions, .vibe64-colleague__delivery { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .vibe64-colleague__composer-actions { width: 100%; flex-wrap: wrap; }
 .vibe64-colleague__delivery { margin-inline-start: auto; flex-shrink: 0; }

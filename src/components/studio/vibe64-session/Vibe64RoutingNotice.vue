@@ -35,7 +35,7 @@ const actionable = computed(() => {
 // replay an old notification; its outcome remains on the message in history.
 watch(() => [props.request?.messageId, props.request?.status], ([id, status], [previousId, previousStatus]) => {
   if (!props.active || !id || id !== previousId || status !== "done" || previousStatus === "done" ||
-      props.request.error || props.request.resolvedMode !== "junior" ||
+      props.request.error ||
       !["incomplete", "skipped_incomplete", "skipped_unconfirmed", "cancelled", "skipped_question"].includes(props.request.reviewStatus)) return;
   feedback.report({ source: "vibe64.chat.review", message: label.value, intent: "action-feedback",
     severity: "info", channel: "snackbar", dedupeKey: `vibe64.chat.review:${id}` });

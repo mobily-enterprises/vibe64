@@ -74,3 +74,26 @@ Explaining the workflow or offering help is not authorization to change a plan.
 Colleague's plan-reading action cannot archive, reopen, edit or execute it:
 those require the person's Archive or Make current control, or an explicit Main-chat request,
 sent through an already-authorized chat operation when available.
+
+## Choose who handles a request
+
+In **Auto**, name **Senior** or **Junior** in your message to choose either role
+for that request. For example, “Junior developer: say hello” needs no plan, and
+“Senior, implement the current plan” uses Senior for implementation.
+
+Without an explicit role, Senior handles plan discussion and management, review
+and Deslop. Junior handles other questions and work, including implementation
+without a plan. The router uses your new request, the last three visible messages
+and a short current-plan summary to understand follow-ups.
+
+Completed implementation in Auto always gets a separate **Senior review**, even
+when Senior implemented it or both roles use the same model. The **Deslop** switch
+adds behavior-preserving cleanup to that review. Ordinary answers, planning,
+requested reviews and cleanup do not start a repeating review cycle. Direct
+Senior, Junior and Custom modes retain their direct behavior without automatic
+review.
+
+Executing the current plan requires it to be Active. A missing or Completed plan
+is explained without reviving an old task. Independent work does not need a plan.
+Junior can update checklist progress; only Senior can manage its lifecycle and
+explicitly mark it Completed after verifying the evidence.

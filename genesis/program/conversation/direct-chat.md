@@ -459,7 +459,9 @@ to Auto. When native goal observation is unavailable, that switch still respects
 the saved goal; a confirmed completion or removal releases the restriction.
 Chat modes are `custom`, `senior`, `junior` and `auto`. Model assignments additionally
 include `helper` and `router`; neither is selectable as a direct chat mode.
-Configuration and request snapshots use schema 4. The numbered stopped-service
+Configuration and request snapshots use schema 4. The simplified classifier uses
+new reason values in ordinary new requests; existing saved roles, review decisions,
+receipts and history remain valid without rewriting or classifying past requests. The numbered stopped-service
 role upgrade renames owned routing fields in settings, sessions, temporary chats,
 renewal records and transcript attribution, including archived histories. It
 preserves model choices, native histories and message text; the live runtime has
@@ -497,7 +499,7 @@ Routing progress stays on the message bubble, without a duplicate composer banne
 Main chat uses the routing notice component: errors and review
 recovery actions remain visible, while a newly interrupted or skipped coding review
 uses the shell's brief notification. Restoring a chat does not replay old notices.
-Auto choosing Senior planning completes without reporting a skipped coding review.
+Discussion and planning complete without reporting a skipped implementation review.
 Saving a mode refreshes main-chat access immediately so Send reflects the new
 destination without waiting for a later session event. Main-chat availability
 uses the selected mode; steering checks the bound native
@@ -512,13 +514,22 @@ changes and native turn boundaries refresh access without refreshing on every
 streamed message. Missing assignments explain where
 to configure them or direct the user to the owner.
 
-Auto routes by intent: Senior discusses and manages the plan, Junior executes
-it. The Router rejects mixed requirement changes and execution with an unsent
-clarification. Checklist bookkeeping during execution is not a scope change.
-Completed or absent plans go to Senior for an explanation; new task references
-must not resurrect an unrelated plan. Natural-language execution always passes
-through Router. A captured content revision is checked before Junior delivery
-to prevent a changed document being executed during routing.
+Auto classifies role and task independently. An explicitly addressed Senior or
+Junior wins; otherwise plan discussion/management, review and Deslop default to
+Senior, and all other requests default to Junior. The helper receives the new
+message, the last three visible user/assistant messages in chronological order,
+and a bounded current-plan summary. Private thinking and tool output are excluded.
+The output contains only a role and task reason, never model or execution details.
+Clear `Senior:`/`Junior developer:` addresses are enforced at delivery even if
+the classifier suggests the other role; other explicit requests are interpreted
+by the classifier. Neither plan presence nor completion changes the chosen role.
+
+Only a request to execute the current plan checks its captured active revision
+before delivery, for either role. Missing or completed plans produce an actionable
+message without reopening anything. Standalone implementation clears the routing
+snapshot of an unrelated current plan and works directly from the request.
+Planning plus implementation is an implementation request, not an unsent split
+workflow; the selected role's plan lifecycle permissions still apply.
 
 Main chat owns <sessionRoot>/plans/current.md and plans/archive/<revision>.md.
 These are runtime artifacts outside source Git. Session archive, restore and
@@ -574,43 +585,37 @@ requests use chat. Task instructions are maintained in `docs/colleague-usage/pla
 Discussion is read-only. Beginning a Senior turn never modifies or invalidates a
 plan. Junior preserves delivered work and ticks only evidenced requirements.
 Senior review may uncheck unsupported claims, add missing in-scope acceptance
-checks and fix defects. Auto always schedules one Senior review after successful
-Junior execution, even when both roles use the same exact model selection.
+checks and fix defects. Auto schedules one Senior review after successful
+implementation by either role, even when the implementer and reviewer use the
+same exact model selection. Greetings, answers, planning, requested reviews and
+Deslop do not schedule another review. The existing receipt, cancellation,
+question, goal and disconnected-completion guards apply to both implementers.
 The saved review preference controls optional Deslop only;
 it cannot disable review. Direct Senior and Junior requests remain direct. Senior review explicitly completes the plan or leaves
 it active and explains remaining work. Review never automatically starts another
 implementation/planning cycle; further execution needs user intent. Existing
 review interruption, access, delivery-receipt and restart safeguards remain.
 
-Deslop is a task with permission to clean up code, not a separate selectable
-chat mode. It uses the configured Senior model in named modes and the exact
-selected model in Custom. A standalone `deslop` command bypasses classification,
-including from explicit modes. Saving a commit no longer offers a Deslop banner.
-Other cleanup-only wording in Auto uses the Router's Deslop decision. Deslop
-applies the project's cleanup guidance directly, preserves behavior and staging,
-does not create an implementation proposal, and never schedules another review.
-The conversation's mode preference remains unchanged. Dispatch validates the
-captured connection and tool capability; a Junior override cannot redirect
-cleanup. Custom retains its exact choice and never uses a shared backup. Named
-modes retain their existing actor access and shared-backup policy.
-Cleanup invalidates a previous ready implementation proposal before editing.
-The reply and status name Deslop and the answering model. A direct Deslop command
-cannot steer an active coder or change an unfinished goal; the user must first
-finish or stop the current turn, and finish or cancel a goal. Other steering
-retains its existing current-turn semantics and is not reclassified.
-Auto accepts feature work or Deslop in one request, never both. A mixed decision
-returns a fixed, polite explanation asking for separate requests. The original
-message stays unsent and editable using existing delivery recovery, without a
-duplicate banner, file changes, native dispatch or queued cleanup. A question
-about Deslop or ambiguous cleanup/redesign remains planning. Classifier output
-is a validated mode/reason pair, never a model, executable command or generated
-rejection message. Cancellation and receipt recovery use the ordinary coordinator.
+Deslop is a task with permission to clean up code, not a third role or selectable
+chat mode. A standalone `deslop` command uses the configured Senior model in named
+modes and the exact selected model in Custom, bypassing classification. Auto's
+semantic classifier defaults cleanup to Senior but honors an explicit Junior
+request. Saving a commit does not offer a Deslop banner. Cleanup applies the
+project's behavior-preserving guidance, preserves unrelated work and staging,
+and never schedules another review. Dispatch validates the chosen connection
+and tool capability through the normal role resolver. Preferences stay unchanged.
+A direct Deslop command cannot steer an active turn or change an unfinished goal.
+Other steering retains its current-turn semantics and is not reclassified.
+Combined implementation and cleanup remains an implementation request, receives
+Senior review and uses the optional automatic Deslop setting; it is not rejected
+as a special mixed routing state. Classifier output is a validated role/reason
+pair, never a model, executable command or generated rejection message.
 
 Auto captures Router and the effective Senior–Junior pair, the actor, connection
 identities and configuration revision before invoking the existing tool-free
 classification workload in a separate non-project scope. Helper is not an Auto
 dependency. The classifier sees the submitted text, attachment labels and bounded
-recent visible exchanges plus the current plan status, revision and bounded outline; it returns only a mode and reason. Its native reference
+three recent visible messages plus the current plan status, revision and bounded outline; it returns only a mode and reason. Its native reference
 and any managed execution ID stay in the parent request until verified cleanup.
 Helper callbacks merge that reference under the ordinary lock without overwriting
 cancellation. A late native start is stopped before delivery; failed cleanup

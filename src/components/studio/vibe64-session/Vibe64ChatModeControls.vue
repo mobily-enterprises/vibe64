@@ -60,7 +60,7 @@ function canConfigureMessage() {
 }
 
 const autoDescription = computed(() => decisions.value.auto?.available === false
-  ? decisions.value.auto.message : `Senior plans; Junior implements · Router: ${roleLabel("router")}`);
+  ? decisions.value.auto.message : `Senior for plans and reviews; Junior otherwise · Router: ${roleLabel("router")}`);
 const description = computed(() => {
   if (!mode.value) return props.session?.assistantSelection ? `Current model · ${vibe64AssistantSelectionLabel(props.session.assistantSelection)}` : "Choose an assistant";
   if (mode.value === "auto") return autoDescription.value;

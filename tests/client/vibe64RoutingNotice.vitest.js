@@ -36,7 +36,7 @@ it("keeps normal routing in the message bubble and reports review interruption o
   expect(feedback.report).toHaveBeenCalledTimes(1);
 });
 
-it("does not replay finished notices on restore, background completion or Senior completion", async () => {
+it("does not replay finished notices on restore, background completion or discussion completion", async () => {
   const request = { messageId: "old", status: "done", resolvedMode: "junior", reviewStatus: "cancelled" };
   const f = mount(request);
   await nextTick();
@@ -45,7 +45,7 @@ it("does not replay finished notices on restore, background completion or Senior
   await nextTick();
   f.props.value.request.status = "done";
   await nextTick();
-  f.props.value = { active: true, request: { ...request, messageId: "senior", status: "sent", resolvedMode: "senior" } };
+  f.props.value = { active: true, request: { ...request, messageId: "senior", status: "sent", resolvedMode: "senior", reviewStatus: undefined } };
   await nextTick();
   f.props.value.request.status = "done";
   await nextTick();

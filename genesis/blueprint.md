@@ -76,6 +76,9 @@ screens. Model selection, microphone, speaker, Stop and Send/Steer use compact i
 buttons inside the message box, matching the main chat toolbar and leaving
 the page's comment, message and Send controls clear when closed. Closing it
 preserves both conversations' drafts.
+Tab from a nonempty message focuses Send, or Steer while Colleague is working;
+Enter sends it. Voice status and live transcription appear above the message
+box without moving its controls.
 Holding the header avatar records a voice message when the host supports speech.
 A bubble across the left two-thirds shows recognized words, leaving the right
 third clear of the hand holding the avatar. Release keeps it for review with
@@ -1395,11 +1398,15 @@ and test the exact distributable before publishing it; release preparation does
 not remove their installed development tools. The installed editor includes the
 database drivers required by its Database view.
 
-Auto routes discussion and plan changes to Senior, and explicit requests to
-execute the active plan to Junior. A plan is an open canvas with only active or
-completed status. Requests that combine changing requirements and execution ask
-the person to separate those intents before either starts. Ambiguous task
-references are clarified instead of reviving an unrelated plan.
+Auto honors an explicit request for Senior or Junior. Otherwise Senior handles
+plan discussion and management, requested review and Deslop; Junior handles
+other requests, including ordinary questions and implementation without a plan.
+Role selection and task intent are independent. The router sees the new request,
+at most the last three visible messages, and a short current-plan summary.
+A plan is an open canvas with only active or completed status. Executing it
+requires an active current document; unrelated work needs no plan and never
+resurrects an archived or completed task. Combined requests are handled within
+the selected role's authority instead of imposing a separate planning workflow.
 
 Each Main conversation has one current plan outside the repository, plus accessible
 archived snapshots. Senior creates, changes, reopens and archives plans. Starting
@@ -1427,17 +1434,16 @@ in open viewers without resetting their scroll position.
 
 Only Senior explicitly marks a plan completed after reviewing its requirements
 and evidence. Successful turns, review outcomes and checked boxes never complete
-it automatically. In Auto, Senior always reviews completed Junior work and can fix in-scope defects.
+it automatically. In Auto, Senior always reviews completed implementation by either role and can fix in-scope defects, even when the same model implemented it.
 Deslop is optional within that review; disabling cleanup cannot disable review. Unfinished work remains active with specific remaining items; another
 execution pass needs a user request. Ordinary discussion and Stop never reopen,
 archive or complete a plan. No automatic repeating completion-plan cycle exists.
 Direct Senior and Junior still work from the user's request; plan lifecycle
 commands remain restricted to Senior, while Junior can update progress.
 
-Deslop uses the configured Senior model to perform behavior-preserving cleanup
-directly, with permission to edit code. The command and saved-commit action go
-straight there; Auto also recognizes equivalent cleanup wording. Cleanup does
-not launch another review or change the selected chat mode. In Auto, requests
-combining feature work and Deslop remain unsent with a polite explanation asking
-for separate requests; neither part starts and no cleanup is queued. The user
-can edit the message and send one request at a time.
+Deslop defaults to the configured Senior model, with permission to edit code for
+behavior-preserving cleanup. Auto honors an explicit request for Junior cleanup.
+The command and saved-commit action go straight to Senior. System-generated
+review and optional Deslop always use Senior. Review and cleanup never schedule
+another review, and neither changes the selected chat mode. Ordinary answers,
+planning and user-requested reviews do not trigger automatic follow-ups.

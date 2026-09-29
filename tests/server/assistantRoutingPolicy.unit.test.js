@@ -61,23 +61,23 @@ test("GLM API and Coding Plan remain distinct eligible routing choices despite s
 });
 
 test("short follow-ups receive their latest exchange and bounded older context", () => {
-  const prompt = assistantRoutingPrompt({ message: "Yes, implement it.", exchanges: [
-    { user: "OLD".repeat(10_000), assistant: "old context" },
-    { user: "Plan input validation", assistant: "Add the agreed required-field rule." }
+  const prompt = assistantRoutingPrompt({ message: "Yes, implement it.", messages: [
+    { role: "user", text: "OLD".repeat(10_000) },
+    { role: "assistant", text: "Add the agreed required-field rule." }
   ] });
   assert.match(prompt, /Yes, implement it/);
   assert.match(prompt, /agreed required-field/);
   assert.ok(!prompt.includes("OLD"));
   assert.throws(() => assistantRoutingPrompt({ message: "x".repeat(25_000) }), /too long/);
-  assert.throws(() => assistantRoutingPrompt({ message: "Yes", exchanges: [{ assistant: "x".repeat(25_000) }] }), /too long/);
+  assert.throws(() => assistantRoutingPrompt({ message: "Yes", messages: [{ role: "assistant", text: "x".repeat(25_000) }] }), /too long/);
 });
 
 test("the classifier cannot supply executable destinations or malformed decisions", () => {
   assert.deepEqual(parseRoutingDecision('{"mode":"junior","reason":"explicit_implementation"}'), { mode: "junior", reason: "explicit_implementation" });
-  assert.deepEqual(parseRoutingDecision('{"mode":"deslop","reason":"deslop"}'), { mode: "deslop", reason: "deslop" });
-  assert.deepEqual(parseRoutingDecision('{"mode":"senior","reason":"mixed_deslop_request"}'), { mode: "senior", reason: "mixed_deslop_request" });
+  assert.deepEqual(parseRoutingDecision('{"mode":"junior","reason":"deslop"}'), { mode: "junior", reason: "deslop" });
+  assert.deepEqual(parseRoutingDecision('{"mode":"senior","reason":"plan_implementation"}'), { mode: "senior", reason: "plan_implementation" });
   for (const output of ["junior", "null", '{"mode":"helper","reason":"unclear"}',
-    '{"mode":"deslop","reason":"planning"}', '{"mode":"junior","reason":"deslop"}',
+    '{"mode":"deslop","reason":"planning"}', '{"mode":"deslop","reason":"deslop"}',
     '{"mode":"junior","reason":"mixed_deslop_request"}',
     '{"mode":"junior","reason":"explicit_implementation","url":"https://example.invalid"}',
     ...["engineId", "modelId", "command"].map((key) => JSON.stringify({
@@ -87,16 +87,16 @@ test("the classifier cannot supply executable destinations or malformed decision
   }
 });
 
-test("Senior permits only its working document while the scoped review instruction allows fixes", () => {
+test("task intent sets permissions independently of the selected role", () => {
   const text = "The original human text.";
-  assert.match(assistantModePrompt("senior", text, { planInstructions: "Auto planning instructions" }), /Do not change application files/);
+  assert.match(assistantModePrompt("senior", text, { intent: "planning", planInstructions: "Auto planning instructions" }), /Do not change application files/);
   assert.match(assistantModePrompt("senior", text), /You may edit application files when requested/);
-  const discussion = assistantModePrompt("senior", text, { discussion: true });
+  const discussion = assistantModePrompt("senior", text, { intent: "discussion" });
   assert.match(discussion, /Do not create or update a plan, change its status, edit application files/);
   assert.match(discussion, /vibe64-helper plan read or history/);
   assert.doesNotMatch(discussion, /Auto's planning stage|You may edit application files|Do not read or update/);
   assert.ok(discussion.endsWith(text));
-  assert.match(assistantModePrompt("junior", text, { planInstructions: "Approved Auto plan" }), /Stop for an unresolved architectural/);
+  assert.match(assistantModePrompt("junior", text, { intent: "plan_implementation", planInstructions: "Approved Auto plan" }), /Stop for an unresolved architectural/);
   assert.match(assistantModePrompt("review", text), /may directly fix in-scope defects/);
   assert.ok(assistantModePrompt("review", text).endsWith(text));
   assert.match(assistantModePrompt("deslop", text), /You may edit code for behavior-preserving cleanup/);

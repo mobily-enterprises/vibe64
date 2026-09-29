@@ -89,6 +89,12 @@ on close. The model, microphone, speaker, Stop and Send/Steer controls share a c
 toolbar inside the message box, using the main chat button styles. No separate
 status or voice footer reserves vertical space. No floating launcher or voice
 strip covers page controls when closed.
+Tab from a sendable draft focuses Send/Steer and stops that handled keypress from
+also reaching the dialog focus trap. Enter activates the focused button; ordinary
+reverse Tab navigation remains available. The voice slot receives a `preview`
+element positioned above the composer, outside its layout flow, for the host's
+status and transcript. Appearing or growing voice content does not move the
+composer or its toolbar.
 The host shares the routed header target through its root; Teleport places the
 persistent panel in the dialog without remounting the voice connection or clearing
 drafts. While a header is unavailable, the compact launcher stays at the top edge.
