@@ -82,7 +82,8 @@ test("assistant capability routes forward configured and connected filters", asy
       assert.equal(action.input.engineId, "opencode");
       assert.equal(action.input.modelProviderId, "zai");
       assert.equal(action.input.unlocked, true);
-      assert.equal(action.input.vibe64User.username, "ada");
+      assert.equal(Object.hasOwn(action.input, "vibe64User"), false,
+        "the authenticated action context owns identity, never a body-supplied actor");
     });
   });
 });
