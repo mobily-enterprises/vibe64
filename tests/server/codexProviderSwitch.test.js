@@ -16,16 +16,49 @@ test("native provider switches preserve history without restarting, and cold rec
 }, async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-provider-switch-"));
   const requests = [];
+  let heldRequest = null;
+  let rejectContext = false;
+  let failCompaction = false;
   const server = createServer(async (request, response) => {
     let body = "";
     for await (const chunk of request) body += chunk;
     if (!request.url.endsWith("/responses")) { response.writeHead(404).end(); return; }
     const input = JSON.parse(body);
     requests.push({ route: request.url, authorization: request.headers.authorization, input });
+    if (heldRequest) {
+      heldRequest.entered.resolve();
+      await heldRequest.release.promise;
+    }
+    if (rejectContext) {
+      response.writeHead(400, { "content-type": "application/json" }).end(JSON.stringify({
+        error: { code: "context_length_exceeded", message: "Fixture context rejection" }
+      }));
+      return;
+    }
     if (request.url === "/openai/responses" && input.input.some((item) => item.type === "reasoning" && item.content?.length)) {
       response.writeHead(400).end(JSON.stringify({ error: { message: "reasoning.content must be empty" } })); return;
     }
     const foreignProvider = request.url.split("/")[1];
+    const metadata = JSON.parse(input.client_metadata?.["x-codex-turn-metadata"] || "{}");
+    if (failCompaction && foreignProvider !== "openai") {
+      response.writeHead(400, { "content-type": "application/json" }).end(JSON.stringify({
+        error: { code: "invalid_request_error", message: "Fixture compaction failure" }
+      }));
+      return;
+    }
+    if (!failCompaction && foreignProvider === "openai" && metadata.request_kind === "compaction") {
+      const item = { type: "compaction", encrypted_content: `fixture-summary-${requests.length}` };
+      const result = { id: `response-${requests.length}`, object: "response", status: "completed", output: [item],
+        usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } };
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      for (const event of [
+        { type: "response.created", response: { ...result, status: "in_progress", output: [] } },
+        { type: "response.output_item.done", output_index: 0, item },
+        { type: "response.completed", response: result }
+      ]) response.write(`data: ${JSON.stringify(event)}\n\n`);
+      response.end();
+      return;
+    }
     const reasoning = foreignProvider !== "openai" ? [{
       id: `reasoning-${requests.length}`, type: "reasoning", summary: [],
       encrypted_content: foreignProvider === "deepseek" ? "deepseek-opaque-state" : null,
@@ -60,6 +93,7 @@ test("native provider switches preserve history without restarting, and cold rec
   let nextChild;
   let nextClient;
   t.after(async () => {
+    heldRequest?.release.resolve();
     observer?.close(); client?.close(); nextClient?.close();
     for (const ownedChild of [child, nextChild].filter(Boolean)) {
       try { process.kill(-ownedChild.pid, "SIGTERM"); } catch (error) { if (error.code !== "ESRCH") throw error; }
@@ -92,7 +126,8 @@ test("native provider switches preserve history without restarting, and cold rec
     prepareThreadParams: async (params) => params.modelProvider === "openai" ? params : ({ ...params, config: { ...params.config,
       [`model_providers.${params.modelProvider}`]: { name: params.modelProvider,
         base_url: `http://127.0.0.1:${server.address().port}/${params.modelProvider}`, wire_api: "responses",
-        requires_openai_auth: false, supports_websockets: false, experimental_bearer_token: `fixture-secret-${params.modelProvider}` }
+        requires_openai_auth: false, supports_websockets: false, stream_max_retries: 0,
+        experimental_bearer_token: `fixture-secret-${params.modelProvider}` }
     } })
   });
   provider.runtime = { historyAdapterBaseUrl: adapter.baseUrl };
@@ -264,4 +299,83 @@ test("native provider switches preserve history without restarting, and cold rec
   assert.equal((await nextClient.request("thread/read", { threadId })).thread.modelProvider, "deepseek");
   assert.equal(requests.length, beforeColdRead, "cold recovery must not make an inference request");
   assert.ok(!coldCalls.includes("account/read"), "an external-provider recovery must not require an OpenAI account");
+
+  // Exercise the native lifecycle, not just the compact/start acknowledgement.
+  // Both directions must wait for a completed summary, and failed/interrupted
+  // work must never be submitted again by the Vibe64 provider or adapter.
+  const events = [];
+  nextClient.subscribe((event) => events.push(event));
+  function nextTurn() {
+    let unsubscribe;
+    const result = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { unsubscribe?.(); reject(new Error("Compaction lifecycle timed out.")); }, 10_000);
+      unsubscribe = nextClient.subscribe((event) => {
+        if (event.method === "turn/completed" && event.params.threadId === threadId) {
+          clearTimeout(timer); unsubscribe(); resolve(event.params.turn);
+        }
+      });
+    });
+    return result;
+  }
+  for (const destination of ["openai", "deepseek"]) {
+    await coldObserver.resumeThread(threadId, settings(destination));
+    const eventStart = events.length;
+    heldRequest = { entered: Promise.withResolvers(), release: Promise.withResolvers() };
+    let finished = nextTurn();
+    await nextClient.request("thread/compact/start", { threadId });
+    await heldRequest.entered.promise;
+    assert.ok(events.slice(eventStart).some((event) => event.method === "item/started" && event.params.item.type === "contextCompaction"));
+    assert.ok(!events.slice(eventStart).some((event) => event.method === "item/completed" && event.params.item.type === "contextCompaction"));
+    assert.equal((await nextClient.request("thread/read", { threadId })).thread.status.type, "active");
+    heldRequest.release.resolve();
+    const compactedTurn = await finished;
+    assert.equal(compactedTurn.status, "completed", JSON.stringify(compactedTurn.error));
+    heldRequest = null;
+    assert.ok(events.slice(eventStart).some((event) => event.method === "item/completed" && event.params.item.type === "contextCompaction"));
+    const nativePath = (await nextClient.request("thread/read", { threadId })).thread.path;
+    const saved = await readFile(nativePath, "utf8");
+    const summaries = saved.trim().split("\n").map((line) => JSON.parse(line)).filter((row) => row.type === "compacted");
+    assert.ok(summaries.length);
+    if (destination === "openai") assert.ok(summaries.at(-1).payload.replacement_history.some((item) => item.type === "compaction"));
+    else assert.match(summaries.at(-1).payload.message, /Fixture reply/);
+
+    rejectContext = true;
+    const beforeFailure = requests.length;
+    finished = nextTurn();
+    await coldObserver.sendTurn(threadId, [{ type: "text", text: "PENDING_WORK_ONCE" }], { model: "gpt-6-sol" });
+    assert.equal((await finished).status, "failed");
+    assert.equal(requests.length, beforeFailure + 1, "a rejected inference must not replay the turn");
+    rejectContext = false;
+    assert.match(await readFile(nativePath, "utf8"), /PENDING_WORK_ONCE/);
+    assert.equal(await readFile(path.join(root, "preserved.txt"), "utf8"), "routing-fixture");
+
+    failCompaction = true;
+    const beforeCompactionFailure = requests.length;
+    finished = nextTurn();
+    await nextClient.request("thread/compact/start", { threadId });
+    assert.equal((await finished).status, "failed");
+    failCompaction = false;
+    assert.equal(requests.length, beforeCompactionFailure + 1);
+    const failedHistory = await readFile(nativePath, "utf8");
+    assert.equal(failedHistory.trim().split("\n").filter((line) => JSON.parse(line).type === "compacted").length, summaries.length);
+    assert.match(failedHistory, /PENDING_WORK_ONCE/);
+
+    const beforeStop = requests.length;
+    const stopEvents = events.length;
+    heldRequest = { entered: Promise.withResolvers(), release: Promise.withResolvers() };
+    finished = nextTurn();
+    await nextClient.request("thread/compact/start", { threadId });
+    await heldRequest.entered.promise;
+    const running = events.slice(stopEvents).find((event) => event.method === "turn/started" && event.params.threadId === threadId);
+    assert.ok(running);
+    await nextClient.request("turn/interrupt", { threadId, turnId: running.params.turn.id });
+    assert.equal((await finished).status, "interrupted");
+    heldRequest.release.resolve();
+    heldRequest = null;
+    assert.equal(requests.length, beforeStop + 1);
+    const afterStop = await readFile(nativePath, "utf8");
+    assert.equal(afterStop.trim().split("\n").filter((line) => JSON.parse(line).type === "compacted").length, summaries.length);
+    assert.match(afterStop, /PENDING_WORK_ONCE/);
+    assert.equal(await readFile(path.join(root, "preserved.txt"), "utf8"), "routing-fixture");
+  }
 });

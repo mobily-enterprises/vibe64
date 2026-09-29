@@ -862,7 +862,12 @@ Compatibility pending. The Codex runtime preserves native history and translates
 recognized foreign reasoning into readable historical context when OpenAI needs
 it. Handoffs to an image-capable model preserve screenshots from compacted
 history as images alongside their original conversation context. Handoffs do
-not add a summarization call.
+not add a summarization call. Long saved Codex transcripts remain eligible for
+recovery when their effective summarized history fits the request size bound.
+Translation enforces that bound after conversion. Native compaction must finish
+before work continues; a provider context rejection remains an explicit failure,
+with saved history and existing edits retained. Vibe64 does not automatically
+replay a failed turn or promise that arbitrary history fits every model.
 Undo cannot cross a Codex provider switch.
 Helper work uses the actor's effective Helper model and its connection.
 The GPT models and thinking choices come from the connected Codex service,

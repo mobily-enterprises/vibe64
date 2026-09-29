@@ -708,9 +708,10 @@ adapter URL. That private path never reaches an upstream. Recovery verifies it
 inside the managed process's Codex home, checks the rollout's conversation ID,
 and matches the exact encrypted boundary. Existing native metadata reads provide
 the path; no second history store or background process is introduced. The
-adapter rereads a bounded snapshot when recovery is needed, so reconnects and
-process restarts do not depend on a reconstruction cache. GLM's ordinary history
-passes through unchanged.
+adapter scans a fixed-length snapshot in bounded chunks when recovery is needed,
+then reads only the latest readable replacement and subsequent items before each
+requested boundary. Reconnects and process restarts do not depend on a
+reconstruction cache. GLM's ordinary history passes through unchanged.
 
 Recovery labels original readable user/assistant messages, reasoning and tool
 records as historical context. It excludes old system/developer instructions and
@@ -719,10 +720,18 @@ with numbered references preserving their position in archived messages and tool
 results. Provider-owned file IDs, other unsupported attachments, missing or
 ambiguous boundaries, Undo/fork histories, unknown items and oversized histories
 stop the foreign request with an explanation. It never discards readable records
-to fit. Saved rollouts and recovered requests are bounded at 32 MiB; byte counts
-are not compared with token windows. The provider owns token counting and rejects
+to fit. Individual saved records and the recovered and finally translated
+requests are bounded at 32 MiB; the lifetime rollout may be larger. Recovery
+validates conversation identity, ambiguous boundaries and Undo across the entire
+snapshot, including records beyond the requested boundary. Byte counts are not
+compared with token windows. The provider owns token counting and rejects
 context-window overflow. Continue with the previous model or use a new
-conversation when recovery is unsupported.
+conversation when recovery is unsupported. There is no exact cross-provider
+token preflight or Vibe64 turn replay on rejection. Native compaction completion,
+failure and interruption remain Codex-owned; its start acknowledgement is not a
+completed summary. `codexProviderSwitch.test.js` exercises completion, rejection
+and interruption in both directions with the installed native Codex and mock
+upstreams, including retained pending work and files.
 
 The adapter bounds and decodes request bodies, forwards streamed HTTP responses,
 aborts upstream when native delivery disconnects, and adds no inference retry.

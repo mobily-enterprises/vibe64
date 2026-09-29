@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { request } from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -133,6 +133,48 @@ test("bad or oversized history fails visibly before upstream admission", async (
     assert.match((await response.json()).error.message, /history/i);
   }
   assert.equal(called, false);
+});
+
+test("the final translated request is bounded in both model-switch directions", async (t) => {
+  let attempts = 0;
+  const limit = 1024;
+  const adapter = await startCodexHistoryAdapter({ token: randomUUID(), maxRequestBytes: limit,
+    fetchImpl: async () => { attempts += 1; return new Response("unexpected"); } });
+  t.after(() => adapter.close());
+  for (const [destination, input] of [
+    ["chatgpt", [{ type: "reasoning", content: [{ type: "reasoning_text", text: "x".repeat(850) }] }]],
+    ["deepseek", [{ type: "custom_tool_call", call_id: "exec", name: "exec", input: "x".repeat(830) }]]
+  ]) {
+    const body = JSON.stringify({ input });
+    assert.ok(Buffer.byteLength(body) <= limit);
+    assert.ok(Buffer.byteLength(JSON.stringify(translateCodexHistory({ input }, destination))) > limit);
+    const response = await fetch(`${adapter.baseUrl}/${destination}/responses`, { method: "POST", body });
+    assert.equal(response.status, 413);
+    assert.match((await response.json()).error.message, /translated history exceeds/);
+  }
+  assert.equal(attempts, 0);
+});
+
+test("context rejection and ambiguous upstream failure never replay a request in either direction", async (t) => {
+  const attempts = [];
+  const rejection = JSON.stringify({ error: { code: "context_length_exceeded", message: "Context too large" } });
+  const adapter = await startCodexHistoryAdapter({ token: randomUUID(), fetchImpl: async (url, options) => {
+    attempts.push({ url, body: options.body });
+    if (JSON.parse(options.body).model === "connection-failed") throw new Error("delivery unknown");
+    return new Response(rejection, { status: 400, headers: { "content-type": "application/json" } });
+  } });
+  t.after(() => adapter.close());
+  for (const destination of ["deepseek", "chatgpt"]) {
+    for (const model of ["context-rejected", "connection-failed"]) {
+      const before = attempts.length;
+      const response = await fetch(`${adapter.baseUrl}/${destination}/responses`, { method: "POST",
+        body: JSON.stringify({ model, input: [{ type: "message", role: "user", content: "Implement it once." }] }) });
+      assert.equal(response.status, model === "context-rejected" ? 400 : 502);
+      if (model === "context-rejected") assert.equal(await response.text(), rejection);
+      else await response.text();
+      assert.equal(attempts.length, before + 1);
+    }
+  }
 });
 
 test("native disconnection aborts upstream once without retrying or buffering the stream", { timeout: 5000 }, async (t) => {
@@ -381,6 +423,35 @@ test("foreign recovery honors the latest readable native compaction before a lat
   assert.deepEqual(await readFile(fixture.historyPath), native);
 });
 
+test("a lifetime archive over 32 MiB recovers a small latest summary without modifying saved history", async (t) => {
+  const fixture = await compactedFixture(t, { maxRequestBytes: 4096 });
+  await fixture.save([fixture.records[0]]);
+  const old = JSON.stringify({ type: "response_item", payload: { type: "message", role: "assistant",
+    content: [{ type: "output_text", text: "SUPERSEDED_".repeat(105000) }] } }) + "\n";
+  for (let index = 0; index < 34; index += 1) await appendFile(fixture.historyPath, old);
+  const summary = { type: "message", role: "user", content: [{ type: "input_text", text: "LATEST_SUMMARY_🦘: finish the approved checks." }] };
+  await appendFile(fixture.historyPath, [
+    { type: "compacted", payload: { message: "Readable summary", replacement_history: [summary] } },
+    { type: "response_item", payload: { type: "function_call_output", call_id: "check", output: "RECENT_CHECK" } },
+    { type: "compacted", payload: { replacement_history: [fixture.compacted] } }
+  ].map((row) => JSON.stringify(row)).join("\n") + "\n");
+  const before = await stat(fixture.historyPath);
+  assert.ok(before.size > 32 * 1024 * 1024);
+  const response = await fixture.send({ model: "deepseek-flash", input: [fixture.compacted] });
+  assert.equal(await response.text(), "accepted");
+  const history = fixture.calls[0].body.input[1].content[0].text;
+  assert.match(history, /LATEST_SUMMARY_🦘/);
+  assert.match(history, /RECENT_CHECK/);
+  assert.doesNotMatch(history, /SUPERSEDED/);
+  const after = await stat(fixture.historyPath);
+  assert.equal(after.size, before.size);
+  assert.equal(after.mtimeMs, before.mtimeMs);
+  // Validation still covers records after the requested boundary.
+  await appendFile(fixture.historyPath, JSON.stringify(fixture.records[0]) + "\n");
+  assert.equal((await fixture.send({ model: "deepseek-flash", input: [fixture.compacted] })).status, 422);
+  assert.equal(fixture.calls.length, 1);
+});
+
 test("unsafe, unsupported or oversized compacted histories fail before any provider request", async (t) => {
   const fixture = await compactedFixture(t, { maxRequestBytes: 4096 });
   const body = { model: "deepseek-flash", input: [fixture.compacted] };
@@ -405,6 +476,12 @@ test("unsafe, unsupported or oversized compacted histories fail before any provi
   }
   await fixture.save(fixture.records, 'malformed saved record\n');
   await check(fixture.send(body), /could not be read completely/);
+  await fixture.save([...fixture.records, fixture.records.find((row) => row.type === "compacted")]);
+  await check(fixture.send(body), /exact saved compaction/);
+  await fixture.save([{ ...fixture.records[0], payload: { ...fixture.records[0].payload, forked_from_id: randomUUID() } }, ...fixture.records.slice(1)]);
+  await check(fixture.send(body), /identify one supported conversation/);
+  await fixture.save();
+  await check(fixture.send({ ...body, input: Array(8).fill(fixture.compacted) }), /request size limit/, 413);
   await fixture.save([fixture.records[0], { type: "response_item", payload: { type: "message", role: "user", content: "x".repeat(800_000) } }, ...fixture.records.slice(1)]);
   await check(fixture.send(body), /request size limit/, 413);
   await fixture.save();

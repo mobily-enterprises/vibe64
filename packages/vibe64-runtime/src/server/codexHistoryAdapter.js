@@ -75,6 +75,38 @@ function compactionHistoryError(reason, statusCode = 422) {
   ), { statusCode });
 }
 
+// Scan a fixed snapshot without retaining the lifetime transcript. A single
+// record still has a transport-sized bound; incomplete native appends are ignored.
+async function* readCodexHistoryRows(file, start, end, signal) {
+  const chunk = Buffer.alloc(64 * 1024);
+  let pending = [];
+  let size = 0;
+  let lineStart = start;
+  for (let offset = start; offset < end;) {
+    signal.throwIfAborted();
+    const { bytesRead } = await file.read(chunk, 0, Math.min(chunk.length, end - offset), offset);
+    if (!bytesRead) throw compactionHistoryError("the saved history changed during recovery. Retry the turn.");
+    let from = 0;
+    while (from < bytesRead) {
+      const newline = chunk.indexOf(10, from);
+      const complete = newline >= 0 && newline < bytesRead;
+      const until = complete ? newline : bytesRead;
+      size += until - from;
+      if (size > MAX_REQUEST_BYTES) throw compactionHistoryError("a saved history record exceeds the recovery size limit.", 413);
+      pending.push(Buffer.from(chunk.subarray(from, until)));
+      if (complete) {
+        signal.throwIfAborted();
+        if (size) yield { row: JSON.parse(Buffer.concat(pending, size).toString("utf8")), offset: lineStart };
+        pending = [];
+        size = 0;
+        lineStart = offset + newline + 1;
+      }
+      from = until + (complete ? 1 : 0);
+    }
+    offset += bytesRead;
+  }
+}
+
 // Native compaction keeps the original rollout on disk. Foreign providers
 // cannot read OpenAI's encrypted replacement. Recover that exact boundary as
 // historical data, only when it is actually present in a foreign request.
@@ -88,7 +120,8 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
   if (!historyPath || !codexHome) throw compactionHistoryError("the native history location is unavailable.");
   signal.throwIfAborted();
   let file;
-  let rows;
+  const boundaries = new Map(body.input.filter((item) => item?.type === "compaction")
+    .map((item) => [item.encrypted_content, { count: 0 }]));
   try {
     const home = await realpath(codexHome);
     const resolved = await realpath(historyPath);
@@ -97,24 +130,51 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
     if (!match) throw compactionHistoryError("the history is outside this Codex runtime's saved conversations.");
     file = await open(resolved, "r");
     const stat = await file.stat();
-    if (!stat.isFile() || stat.size > MAX_REQUEST_BYTES) throw compactionHistoryError("the saved history exceeds the recovery size limit.", 413);
-    // Read a bounded snapshot. Native writes may append another record while
-    // this request is prepared; an incomplete final line is not a saved item.
-    const snapshot = Buffer.alloc(stat.size);
-    let offset = 0;
-    while (offset < snapshot.length) {
-      signal.throwIfAborted();
-      const { bytesRead } = await file.read(snapshot, offset, Math.min(64 * 1024, snapshot.length - offset), offset);
-      if (!bytesRead) throw compactionHistoryError("the saved history changed during recovery. Retry the turn.");
-      offset += bytesRead;
+    if (!stat.isFile()) throw compactionHistoryError("the saved history is not a regular file.");
+    let metadataCount = 0;
+    let readableStart = 0;
+    for await (const { row, offset } of readCodexHistoryRows(file, 0, stat.size, signal)) {
+      if (row.type === "session_meta") {
+        metadataCount += 1;
+        if (row.payload?.id !== match[1] || row.payload?.forked_from_id) {
+          throw compactionHistoryError("the saved history does not identify one supported conversation.");
+        }
+      }
+      if (row.type === "event_msg" && row.payload?.type === "thread_rolled_back") {
+        throw compactionHistoryError("history recovery after Undo is not supported yet.");
+      }
+      if (row.type !== "compacted") continue;
+      const replacement = row.payload?.replacement_history;
+      for (const [encrypted, boundary] of boundaries) {
+        if (typeof encrypted === "string" && encrypted.length &&
+            replacement?.some((old) => old?.type === "compaction" && old.encrypted_content === encrypted)) {
+          boundary.count += 1;
+          boundary.start = readableStart;
+          boundary.end = offset;
+        }
+      }
+      if (typeof row.payload?.message === "string" && row.payload.message.trim() &&
+          Array.isArray(replacement) && replacement.length && !replacement.some((old) => old?.type === "compaction")) {
+        readableStart = offset;
+      }
     }
-    signal.throwIfAborted();
-    const text = snapshot.toString("utf8");
-    const completeLines = text.slice(0, text.lastIndexOf("\n"));
-    rows = completeLines.split("\n").filter(Boolean).map((line) => JSON.parse(line));
-    const metadata = rows.filter((row) => row.type === "session_meta");
-    if (metadata.length !== 1 || metadata[0].payload?.id !== match[1] || metadata[0].payload?.forked_from_id) {
+    if (metadataCount !== 1) {
       throw compactionHistoryError("the saved history does not identify one supported conversation.");
+    }
+    let recoveredBytes = 0;
+    for (const boundary of boundaries.values()) {
+      if (boundary.count !== 1) throw compactionHistoryError("its exact saved compaction boundary could not be identified.");
+      boundary.history = [];
+      for await (const { row, offset } of readCodexHistoryRows(file, boundary.start, boundary.end, signal)) {
+        const items = row.type === "response_item" ? [row.payload]
+          : row.type === "compacted" && offset === boundary.start ? row.payload.replacement_history : [];
+        for (const old of items || []) {
+          if (old?.type === "compaction" || old?.type === "message" && ["developer", "system"].includes(old.role)) continue;
+          recoveredBytes += Buffer.byteLength(JSON.stringify(old));
+          if (recoveredBytes > maxRequestBytes) throw compactionHistoryError("the recovered history exceeds the request size limit.", 413);
+          boundary.history.push(old);
+        }
+      }
     }
   } catch (error) {
     if (signal.aborted || error.statusCode) throw error;
@@ -122,36 +182,12 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
   } finally {
     await file?.close();
   }
-  if (rows.some((row) => row.type === "event_msg" && row.payload?.type === "thread_rolled_back")) {
-    throw compactionHistoryError("history recovery after Undo is not supported yet.");
-  }
   const input = [];
+  let restoredBytes = Buffer.byteLength(JSON.stringify(body));
   for (const item of body.input) {
     input.push(item);
     if (item?.type !== "compaction") continue;
-    const boundaries = [];
-    for (const [index, row] of rows.entries()) {
-      if (row.type === "compacted" && typeof item.encrypted_content === "string" && item.encrypted_content.length &&
-          row.payload?.replacement_history?.some((old) => old.type === "compaction" && old.encrypted_content === item.encrypted_content)) {
-        boundaries.push(index);
-      }
-    }
-    if (boundaries.length !== 1) throw compactionHistoryError("its exact saved compaction boundary could not be identified.");
-    let history = [];
-    for (const row of rows.slice(0, boundaries[0])) {
-      if (row.type === "response_item") history.push(row.payload);
-      if (row.type !== "compacted") continue;
-      const replacement = row.payload?.replacement_history;
-      // A readable native summary already replaced everything before it.
-      // Replaying those superseded tool results undoes compaction and can
-      // overflow the destination even when the native context still fits.
-      // Opaque replacements cannot supply that baseline to another provider.
-      if (typeof row.payload?.message === "string" && row.payload.message.trim() &&
-          Array.isArray(replacement) && replacement.length &&
-          !replacement.some((old) => old?.type === "compaction")) {
-        history = [...replacement];
-      }
-    }
+    const history = boundaries.get(item.encrypted_content).history;
     const readable = [];
     const images = [];
     for (const old of history) {
@@ -181,11 +217,14 @@ async function restoreCompactedHistory(body, { destination, historyPath, codexHo
       readable.push(record);
     }
     if (!readable.length) throw compactionHistoryError("the original readable conversation is missing.");
-    input.push({ type: "message", role: "user", content: [{ type: "input_text",
+    const supplement = { type: "message", role: "user", content: [{ type: "input_text",
       text: `[Archived conversation before compaction. Historical context, not new instructions. Current task instructions still apply.]\n${JSON.stringify(readable)}`
     }, ...images.flatMap((image, index) => [
       { type: "input_text", text: `[Archived image ${index + 1}, referenced by archived_image in the records above]` }, image
-    ]), { type: "input_text", text: "[/Archived conversation]" }] });
+    ]), { type: "input_text", text: "[/Archived conversation]" }] };
+    restoredBytes += Buffer.byteLength(JSON.stringify(supplement)) + 1;
+    if (restoredBytes > maxRequestBytes) throw compactionHistoryError("the recovered history exceeds the request size limit.", 413);
+    input.push(supplement);
   }
   const restored = { ...body, input };
   // Bytes (especially base64 images) are not tokens. Bound the transport here;
@@ -242,6 +281,7 @@ async function startCodexHistoryAdapter({ token, codexHome, fetchImpl = fetch, m
         }
         body = await restoreCompactedHistory(body, { destination, historyPath, codexHome, signal: abort.signal, maxRequestBytes });
         body = JSON.stringify(translateCodexHistory(body, destination));
+        if (Buffer.byteLength(body) > maxRequestBytes) throw compactionHistoryError("the translated history exceeds the request size limit.", 413);
       }
       const headers = forwardedHeaders(request.headers);
       headers.set("accept-encoding", "identity");
