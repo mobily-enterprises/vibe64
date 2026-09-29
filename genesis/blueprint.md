@@ -1402,15 +1402,21 @@ Each Main conversation has one current plan outside the repository, plus accessi
 archived snapshots. Senior creates, changes, reopens and archives plans. Starting
 a distinct plan archives the current one, after telling the person which plan
 will be archived and that it remains accessible. Archiving does not imply
-completion. Reopening preserves the previous record and makes the selected plan
-active. Session retention owns these runtime files.
+completion. Reopening an archived plan moves it back to current as active, with
+its checklist and evidence intact, and removes that entry from History. Reopening
+the current plan does not create a history duplicate. Session retention owns these runtime files.
 
 A document icon in the existing chat composer toolbar, beside the usage percentage,
 is highlighted in muted yellow while a plan is active. It adds no separate row.
-It opens the current plan and an always-visible History control, even after
-completion or a change of chat mode. Archive plan preserves the exact current
-document in History without marking it completed; it waits for active work and
-review to finish. There are no Implement or Recover buttons: people ask
+It opens a consistently sized dialog with labelled Current plan and History tabs;
+the selected tab is visibly highlighted. Both remain accessible after completion
+or a change of chat mode. Archived plans show their saved date, completion state
+and a persistent read-only label, with a direct way back to the history list.
+With no current plan, the document icon opens History directly. An opened archive
+then offers Make current, which moves it out of History and reopens it as active
+without starting AI. The server refuses to replace an existing current plan.
+Archive moves the exact current document to History without marking it completed;
+both controls wait for active work and review to finish. There are no Implement or Recover buttons: people ask
 in chat. The visible plan contains readable checklists and evidence. Junior
 checks completed work as it proceeds; Senior can uncheck unsupported claims and
 add missing acceptance checks within the agreed scope. Saved edits appear live

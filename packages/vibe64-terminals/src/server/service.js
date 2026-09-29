@@ -690,6 +690,24 @@ function createService({
     return exclusive.value;
   }
 
+  function changeSessionWorkPlan(sessionId, operation, input) {
+    const restoring = operation === "restore";
+    return vibe64Result(() => runMainAgentWrite(sessionId, {}, async (context) => {
+      const request = JSON.parse(context.session.metadata.assistant_routing_request || "null");
+      if (sessionHasActiveAgentRun(context.session) || assistantRoutingStatusIsPending(request?.status) ||
+          ["sent", "reviewing", "planning"].includes(request?.status)) {
+        return { ok: false, error: "Wait for the assistant and its review to finish before " +
+          (restoring ? "making a plan current." : "archiving the plan.") };
+      }
+      const result = await manageWorkPlan(context, restoring
+        ? { operation: "reopen", archiveId: input.archiveId }
+        : { operation: "archive", expectedRevision: input.expectedRevision }, "user");
+      if (restoring) result.notice = "The archived plan is now current and active. Ask in chat to continue its work.";
+      await publishAgentSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice } });
+      return { ok: true, sessionId, ...result };
+    }, { operation: operation + "-work-plan" }));
+  }
+
   async function authorizeGlobalCodexTerminal(options = {}) {
     await sessionAgent.requireAssistantAccessForEngine("codex", options);
   }
@@ -2964,16 +2982,11 @@ function createService({
     },
 
     archiveSessionWorkPlan(sessionId, input = {}) {
-      return vibe64Result(() => runMainAgentWrite(sessionId, {}, async (context) => {
-        const request = JSON.parse(context.session.metadata.assistant_routing_request || "null");
-        if (sessionHasActiveAgentRun(context.session) || assistantRoutingStatusIsPending(request?.status) ||
-            ["sent", "reviewing", "planning"].includes(request?.status)) {
-          return { ok: false, error: "Wait for the assistant and its review to finish before archiving the plan." };
-        }
-        const result = await manageWorkPlan(context, { operation: "archive", expectedRevision: input.expectedRevision }, "user");
-        await publishAgentSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice } });
-        return { ok: true, sessionId, ...result };
-      }, { operation: "archive-work-plan" }));
+      return changeSessionWorkPlan(sessionId, "archive", input);
+    },
+
+    restoreSessionWorkPlan(sessionId, input = {}) {
+      return changeSessionWorkPlan(sessionId, "restore", input);
     },
 
     async ensureAgentSession(sessionId, options = {}) {

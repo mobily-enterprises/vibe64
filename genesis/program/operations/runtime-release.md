@@ -41,6 +41,10 @@ reads and startup do not backfill old metadata. The first upgrade supplies a
 Vibe64-local login identity for existing Codex connections without changing
 native credentials or canonical project content. See `docs/state-upgrades.md`
 for authoring, operation and recovery.
+
+Task-oriented Colleague usage guides under `docs/colleague-usage/` ship with the
+matching application runtime. The builder copies only that documentation subtree;
+it does not publish unrelated project or internal architecture documentation.
 This mechanism also applies to persisted message-format changes. Each script
 currently owns discovery, backups and transformation through its `run` callback;
 the runner supplies the backup directory and records completion. It does not

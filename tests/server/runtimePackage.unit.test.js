@@ -57,7 +57,7 @@ test("runtime release relocates, runs native and browser services, and packs wit
   try {
     const appRoot = path.join(root, "source");
     await mkdir(appRoot);
-    for (const entry of ["app.json", "package.json", "server.js", "server", "bin", "config"]) {
+    for (const entry of ["app.json", "package.json", "server.js", "server", "bin", "config", "docs/colleague-usage"]) {
       await cp(path.join(sourceRoot, entry), path.join(appRoot, entry), { recursive: true });
     }
     await symlink(path.join(sourceRoot, "node_modules"), path.join(appRoot, "node_modules"));
@@ -128,6 +128,9 @@ test("runtime release relocates, runs native and browser services, and packs wit
     assert.ok(report.unpackedSize < 40 * 1024 * 1024, `Unexpected runtime package growth: ${report.unpackedSize}`);
     const paths = report.files.map(file => file.path);
     assert.ok(paths.includes("server.bundle.mjs"));
+    assert.ok(paths.includes("docs/colleague-usage/plans.md"));
+    assert.equal(await readFile(path.join(installed, "docs/colleague-usage/plans.md"), "utf8"),
+      await readFile(path.join(sourceRoot, "docs/colleague-usage/plans.md"), "utf8"));
     assert.ok(!paths.some(file => file.startsWith("packages/") || file.startsWith("server/") || /\.d\.ts$|\.map$/u.test(file)));
     assert.ok(!paths.some(file => file.startsWith("node_modules/node-pty/")));
     for (const name of manifest.bundleDependencies) {

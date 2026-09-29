@@ -1,15 +1,16 @@
 import { createRenderer, h, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ options: null, realtime: null, resource: null, request: vi.fn() }));
+const mocks = vi.hoisted(() => ({ options: null, realtime: null, resource: null, request: vi.fn(), report: vi.fn() }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({ useEndpointResource(options) { mocks.options = options; return mocks.resource; } }));
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent(options) { mocks.realtime = options; } }));
 vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => ({ request: mocks.request }) }));
+vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: mocks.report }) }));
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ({ value: "fixture" }) }));
 import WorkPlan from "../../src/components/studio/vibe64-session/Vibe64WorkPlan.vue";
 
 let app;
-afterEach(() => { app?.unmount(); mocks.request.mockReset(); });
+afterEach(() => { app?.unmount(); mocks.request.mockReset(); mocks.report.mockReset(); });
 function mount(data) {
   mocks.resource = { data: ref(data), loadError: ref(""), reload: vi.fn() };
   const props = ref({ active: true, session: { sessionId: "one" }, sessionsApiPath: "/api/projects/fixture/sessions" });
@@ -47,7 +48,12 @@ it("shows history with no current plan and keeps code examples separate from che
   const f = mount({ available: false, current: null, history: [{ id: "a".repeat(64), title: "Archived", status: "active", archivedAt: "2026-09-29T00:00:00Z" }] });
   expect(f.state().visible).toBe(true);
   expect(f.state().history[0].title).toBe("Archived");
+  f.state().view = "history";
+  expect(f.state().showHistory).toBe(true);
   f.state().archiveId = "a".repeat(64);
+  expect(f.state().showHistory).toBe(false);
+  expect(f.state().selectedArchive.title).toBe("Archived");
+  expect(f.state().selectedPlanReady).toBe(false);
   mocks.resource.data.value = { ...active, text: active.text + "\n```md\n- [ ] An example, not a requirement\n```", archiveId: "a".repeat(64), current: null };
   await nextTick();
   expect(f.state().sections.filter(row => row.checked !== undefined)).toHaveLength(1);
@@ -55,6 +61,7 @@ it("shows history with no current plan and keeps code examples separate from che
   f.props.value.session = { sessionId: "two" };
   await nextTick();
   expect(f.state().archiveId).toBe("");
+  expect(f.state().view).toBe("current");
   expect(f.state().open).toBe(false);
 });
 
@@ -62,26 +69,28 @@ it("archives the displayed current revision without starting AI and opens preser
   const revision = "c".repeat(64);
   const f = mount({ ...active, current: { status: "active", revision } });
   mocks.request.mockResolvedValueOnce({ ok: true, notice: "Archived Reporting. Available in Plan history." });
-  await f.state().archivePlan();
+  await f.state().changePlan("archive");
   expect(mocks.request).toHaveBeenCalledWith("/api/projects/fixture/sessions/one/work-plan/archive", {
     method: "POST", body: { expectedRevision: revision }
   });
   expect(mocks.resource.reload).toHaveBeenCalledOnce();
   expect(f.state().showHistory).toBe(true);
-  expect(f.state().archiving).toBe(false);
+  expect(f.state().pendingOperation).toBe("");
   expect(f.state().notice).toContain("Archived Reporting");
 });
 
 it("keeps the plan visible when archiving fails or the assistant is busy", async () => {
   const f = mount({ ...active, current: { status: "active", revision: "d".repeat(64) } });
   mocks.request.mockResolvedValueOnce({ ok: false, error: "The plan changed" });
-  await f.state().archivePlan();
-  expect(f.state().archiveError).toBe("The plan changed");
+  await f.state().changePlan("archive");
+  expect(mocks.report).toHaveBeenCalledWith(expect.objectContaining({
+    source: "vibe64.work-plan.archive", intent: "action-feedback", severity: "error", message: "The plan changed"
+  }));
   expect(f.state().showHistory).toBe(false);
   expect(f.state().visible).toBe(true);
   f.props.value.busy = true;
   await nextTick();
-  await f.state().archivePlan();
+  await f.state().changePlan("archive");
   expect(mocks.request).toHaveBeenCalledOnce();
 });
 
@@ -93,6 +102,27 @@ it("live notifications refresh only the matching session and show archive notice
   mocks.realtime.onEvent({ payload });
   expect(mocks.resource.reload).toHaveBeenCalledOnce();
   expect(f.state().notice).toContain("Archived Reporting");
+});
+
+it("makes an archive current only into an empty slot and leaves a failed restore visible", async () => {
+  const id = "a".repeat(64);
+  const f = mount({ ...active, archiveId: id, current: null, history: [{ id, title: "Archived", archivedAt: "2026-09-29T00:00:00Z" }] });
+  f.state().view = "history";
+  f.state().archiveId = id;
+  mocks.request.mockRejectedValueOnce(new Error("There is already a current plan"));
+  await f.state().changePlan("restore");
+  expect(f.state().archiveId).toBe(id);
+  expect(f.state().view).toBe("history");
+  expect(mocks.report).toHaveBeenCalledWith(expect.objectContaining({ source: "vibe64.work-plan.restore" }));
+  mocks.request.mockResolvedValueOnce({ ok: true });
+  await f.state().changePlan("restore");
+  expect(mocks.request).toHaveBeenLastCalledWith("/api/projects/fixture/sessions/one/work-plan/restore", { method: "POST", body: { archiveId: id } });
+  expect(f.state().archiveId).toBe("");
+  expect(f.state().view).toBe("current");
+  mocks.resource.data.value = { ...active, archiveId: id };
+  f.state().archiveId = id;
+  await f.state().changePlan("restore");
+  expect(mocks.request).toHaveBeenCalledTimes(2);
 });
 
 it("reads every page at one revision and targets the selected archive", async () => {

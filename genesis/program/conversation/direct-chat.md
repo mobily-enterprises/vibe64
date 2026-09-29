@@ -538,8 +538,11 @@ through the existing bound session command socket. The server derives Senior,
 Junior or review authority from the admitted turn, never a caller's claimed role.
 Junior can write checklist progress and evidence only. Senior owns lifecycle
 commands. Replacing the current plan requires an archive acknowledgement after
-telling the user which plan will be retained. Archive and reopen save the exact
-previous snapshot before publishing the new current document. Completion is an
+telling the user which plan will be retained. Archive moves the exact current
+record to History. Reopening an archive publishes its body as the active current
+plan, then removes the selected history entry; replacing another current plan
+archives that other plan first. Reopening the current plan creates no duplicate.
+Completion is an
 explicit Senior operation; unchecked requirements prevent it. Ending a coding or
 review turn only ends execution and cannot promote a plan's status.
 
@@ -551,11 +554,22 @@ archived plans. The full checklist renders with model-maintained checkboxes and
 Markdown evidence. work-plan-changed events refresh open viewers; stable content
 containers preserve scrolling. Complete pagination uses one revision throughout;
 a changed document cannot be presented as a mixture of revisions. Implement and
-Recover controls are removed. The viewer always exposes History, including its
-empty state. Archive plan invokes the authenticated work-plan.archive action at
+Recover controls are removed. Current plan and History are labelled Material tabs
+with a visible selection indicator. The dialog keeps the same viewport-bounded
+width and height across documents, loading, and empty or populated history;
+its content scrolls internally. History rows show title, archived date, completion
+state and checklist progress. An opened archive keeps a read-only context strip
+and Back to history action above the scrolling document. Loading uses a skeleton;
+action failures use shared feedback and preserve the displayed plan. Archive invokes the authenticated work-plan.archive action at
 the displayed current revision, preserves the snapshot without completing it,
-and refuses while agent work or its routing handoff is pending. Other lifecycle
-and execution requests use chat.
+and refuses while agent work or its routing handoff is pending. With no current
+plan the composer icon opens History directly. An opened archive then offers
+Make current, invoking work-plan.restore with the archive identity. The shared
+plan owner reopens it as active and moves it out of History, preserving its
+checklist and evidence; the viewer switches to Current plan. The server rejects
+an occupied current slot, including competing restores, and active work or
+pending review. Neither control starts AI. Other lifecycle and execution
+requests use chat. Task instructions are maintained in `docs/colleague-usage/plans.md`.
 
 Discussion is read-only. Beginning a Senior turn never modifies or invalidates a
 plan. Junior preserves delivered work and ticks only evidenced requirements.

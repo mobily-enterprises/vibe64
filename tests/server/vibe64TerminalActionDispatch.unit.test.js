@@ -47,6 +47,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       ["GET", "/sessions/:sessionId/agent-plan-usage", "agent-plan-usage.read", "readAgentPlanUsage", {}],
       ["GET", "/sessions/:sessionId/work-plan", "work-plan.read", "readSessionWorkPlan", { offset: 0, limit: 1000 }],
       ["POST", "/sessions/:sessionId/work-plan/archive", "work-plan.archive", "archiveSessionWorkPlan", { expectedRevision: "a".repeat(64) }],
+      ["POST", "/sessions/:sessionId/work-plan/restore", "work-plan.restore", "restoreSessionWorkPlan", { archiveId: "b".repeat(64) }],
       ["POST", "/sessions/:sessionId/agent-session", "agent-session.prepare", "ensureAgentSession", {}]
     ];
     for (const [prefix, suffix, read, close, write] of [
@@ -73,7 +74,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     });
     const app = testRouteApp();
     registerRoutes(app.http, { fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
-    assert.equal(actions.listDefinitions().length, 44);
+    assert.equal(actions.listDefinitions().length, 45);
     for (const [method, suffix, operation, serviceMethod, data] of cases) {
       const actionId = `vibe64.terminals.${operation}`;
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${suffix}` });
@@ -126,6 +127,9 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     }
     const count = calls.length;
     for (const [operation, input] of [
+      ["work-plan.restore", { sessionId: "session-1" }],
+      ["work-plan.restore", { sessionId: "session-1", archiveId: "../current" }],
+      ["work-plan.restore", { sessionId: "session-1", archiveId: "a".repeat(64), archiveCurrent: true }],
       ["agent-goal.update", { sessionId: "session-1" }], ["agent-goal.update", { sessionId: "session-1", action: "complete" }],
       ["agent-goal.update", { sessionId: "session-1", action: "set", tokenBudget: 0 }],
       ["agent-terminal.start", { sessionId: "session-1", size: { command: "whoami" } }],

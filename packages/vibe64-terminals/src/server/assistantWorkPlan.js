@@ -123,11 +123,14 @@ async function manageWorkPlan(context, input, role) {
     if (operation === "history") return { history: await readWorkPlanHistory(context) };
     if (!["new", "write", "complete", "archive", "reopen"].includes(operation)) throw planError("Unknown plan operation.");
     const canEdit = ["senior", "review"].includes(role) || (role === "junior" && operation === "write") ||
-      (role === "user" && operation === "archive");
+      (role === "user" && (operation === "archive" || (operation === "reopen" && Boolean(archiveId))));
     if (!canEdit) {
       throw planError("Only Senior can create, reopen, archive or complete a plan. Junior can update its checklist and evidence.");
     }
     const current = await readWorkPlan(context);
+    if (role === "user" && operation === "reopen" && current) {
+      throw planError("There is already a current plan. Archive it before making another plan current.");
+    }
     if (current && expectedRevision !== current.revision) throw planError("The plan changed. Read the current plan before editing it.", "vibe64_work_plan_changed");
     if (!current && expectedRevision) throw planError("There is no current plan at that revision.", "vibe64_work_plan_changed");
     if (["write", "complete", "archive"].includes(operation) && !current) throw planError("There is no current plan.");
@@ -162,9 +165,11 @@ async function manageWorkPlan(context, input, role) {
       throw planError("Tell the user that “" + current.title + "” will be archived and remain accessible, then repeat with archiveCurrent: true.");
     }
     // Save the exact record before replacement. Content identity makes retry safe.
-    if (current && (replacing || operation === "archive" || operation === "reopen")) await archiveCurrent(context, current);
+    if (current && (replacing || operation === "archive")) await archiveCurrent(context, current);
     if (operation === "archive") await rm(file);
     else await writePlan(file, next);
+    // Keep the original safe until the reopened current document is written.
+    if (operation === "reopen" && archiveId) await rm(archivePath(context, archiveId));
     const result = await readWorkPlanPage(context);
     if (current && (replacing || operation === "archive")) {
       result.notice = "Archived “" + current.title + "”. It remains available in Plan history.";
@@ -189,7 +194,7 @@ function workPlanInstructions(role) {
     "Refer to View plan and Plan history in chat, not internal paths. Read archived plans on demand instead of loading all history. A completed plan remains accessible. A finished turn never completes a plan."
   ].join(" ");
   if (role === "junior") return common + " You implement the active plan. Read it first, preserve delivered work, tick completed items and record actual evidence using write. Leave incomplete or failed items unchecked and explain blockers. You cannot create, archive, reopen or complete the plan. Senior will review this work automatically after your turn; do not ask the user to request that review or final completion. Stop for changed scope or unresolved product decisions; do not start a planning/review loop yourself.";
-  return common + " You are Senior and own the plan's scope and lifecycle. Use new to start a distinct plan, write to revise the active canvas, reopen to resume a completed/current or archived plan, archive when requested, and complete ONLY when every required acceptance item is supported by evidence. Before new or reopening an archived plan replaces a current plan, tell the user which current plan will be archived and that it remains accessible; then pass archiveCurrent:true. Reopening retains the earlier snapshot. During review, uncheck unsupported claims and add missing checks required by the approved scope; fix in-scope defects and verify them. If anything remains unfinished, leave the plan active, explain it, and wait for a user request to continue. Do not silently restart execution, invent requirements, or ask the user to click Implement.";
+  return common + " You are Senior and own the plan's scope and lifecycle. Use new to start a distinct plan, write to revise the active canvas, reopen to resume a completed/current or archived plan, archive when requested, and complete ONLY when every required acceptance item is supported by evidence. Before new or reopening an archived plan replaces a current plan, tell the user which current plan will be archived and that it remains accessible; then pass archiveCurrent:true. Reopening an archive moves it back to current as active, removing that entry from History while retaining its checklist and evidence. During review, uncheck unsupported claims and add missing checks required by the approved scope; fix in-scope defects and verify them. If anything remains unfinished, leave the plan active, explain it, and wait for a user request to continue. Do not silently restart execution, invent requirements, or ask the user to click Implement.";
 }
 
 export { readWorkPlan, readWorkPlanPage, readWorkPlanHistory, manageWorkPlan, workPlanPath, workPlanInstructions };

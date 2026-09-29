@@ -93,6 +93,8 @@ async function createRuntimePackage({ appRoot, releaseAppRoot, extraEntries = []
   for (const entry of ["LICENSE", "LICENSE.md", "LICENSE.txt", "README.md"]) {
     if (await exists(path.join(appRoot, entry))) await cp(path.join(appRoot, entry), path.join(releaseAppRoot, entry));
   }
+  const usageGuides = path.join(appRoot, "docs/colleague-usage");
+  if (await exists(usageGuides)) await cp(usageGuides, path.join(releaseAppRoot, "docs/colleague-usage"), { recursive: true });
   const serverEntry = minify ? "server.bundle.mjs" : "server.js";
   const server = await buildServerBundle({
     appRoot, outputPath: path.join(releaseAppRoot, serverEntry), minify,
@@ -211,7 +213,7 @@ async function createRuntimePackage({ appRoot, releaseAppRoot, extraEntries = []
     name: sourceManifest.name, version: sourceManifest.version || "0.0.0", private: sourceManifest.private,
     description: sourceManifest.description, type: "module", engines: sourceManifest.engines,
     bin: { vibe64: "bin/run.js" },
-    files: ["app.json", "bin", "config", "dist", serverEntry],
+    files: ["app.json", "bin", "config", "dist", "docs/colleague-usage", serverEntry],
     scripts: { start: "node bin/server.js --no-open" },
     dependencies: Object.fromEntries(Object.entries(dependencies).sort(([a], [b]) => a.localeCompare(b))),
     bundleDependencies: [...bundled].sort()

@@ -326,6 +326,11 @@ function registerRoutes(
     buildInput: (request) => withoutVibe64User(bodyWithSessionId(routes)(request)),
     summary: "Archive the current plan at the reviewed revision, preserving it in history."
   });
+  routes.actionRoute("POST", "/sessions/:sessionId/work-plan/restore", {
+    actionId: "vibe64.terminals.work-plan.restore",
+    buildInput: (request) => withoutVibe64User(bodyWithSessionId(routes)(request)),
+    summary: "Reopen an archived plan as active when there is no current plan."
+  });
 
   routes.actionRoute("POST", "/sessions/:sessionId/agent-session", {
     actionId: "vibe64.terminals.agent-session.prepare", buildInput: sessionInput,

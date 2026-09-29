@@ -46,9 +46,20 @@ test("plan service reads the actual session without AI and preserves private ren
   assert.equal(archived.history[0].status, "active", "archiving is not completion");
   assert.equal((await service.readSessionWorkPlan(sessionId, { archiveId: archived.history[0].id })).text,
     "Status: active\nKeep whitespace 🙂\n  ");
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ status: "review_pending" }));
+  assert.match((await service.restoreSessionWorkPlan(sessionId, { archiveId: first.revision })).error, /review to finish/);
+  assert.equal((await service.readSessionWorkPlan(sessionId)).current, null);
+  await store.writeMetadataValue(sessionId, "assistant_routing_request", JSON.stringify({ status: "done" }));
+  const restored = await service.restoreSessionWorkPlan(sessionId, { archiveId: first.revision });
+  assert.equal(restored.ok, true);
+  assert.equal(restored.status, "active");
+  assert.equal(restored.text, "Status: active\nKeep whitespace 🙂\n  ");
+  assert.deepEqual(restored.history, []);
+  assert.match((await service.restoreSessionWorkPlan(sessionId, { archiveId: first.revision })).error, /already a current plan/);
   await writeFile(store.paths(sessionId).statusPath, "renewal_pending\n");
   const hidden = await service.readSessionWorkPlan(sessionId);
   assert.equal(hidden.ok, false);
   assert.equal(hidden.code, "vibe64_session_renewal_private");
   assert.equal(hidden.text, undefined);
+  assert.equal((await service.restoreSessionWorkPlan(sessionId, { archiveId: first.revision })).code, "vibe64_session_renewal_private");
 });

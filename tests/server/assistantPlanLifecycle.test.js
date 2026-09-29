@@ -44,10 +44,10 @@ test("checklist progress is live but only Senior can explicitly complete or reop
   await f.change("write", "senior", { text: openText + "- [ ] Missing acceptance check\n" });
   assert.equal((await readWorkPlan(f.context)).checked, 0);
   assert.equal((await readWorkPlan(f.context)).total, 3);
-  assert.equal((await readWorkPlanPage(f.context, { archiveId: completed.revision })).text, completed.text);
+  assert.equal((await readWorkPlanHistory(f.context)).length, 0, "reopening the current plan does not duplicate it in History");
 });
 
-test("new plans require an archive announcement and preserve unfinished plans and every reopened snapshot", async t => {
+test("new plans require an archive announcement and reopening moves the selected archive back to current", async t => {
   const f = await fixture(t);
   await f.change("new", "senior", { text: openText });
   const first = await readWorkPlan(f.context);
@@ -59,12 +59,38 @@ test("new plans require an archive announcement and preserve unfinished plans an
   await assert.rejects(f.change("reopen", "senior", { archiveId: first.revision }), /Tell the user/);
   await f.change("reopen", "senior", { archiveId: first.revision, archiveCurrent: true });
   assert.equal((await readWorkPlan(f.context)).text, first.text);
-  assert.equal((await readWorkPlanHistory(f.context)).length, 2);
+  assert.equal((await readWorkPlanHistory(f.context)).length, 1);
+  assert.equal((await readWorkPlanPage(f.context, { archiveId: first.revision })).available, false);
   await f.change("archive");
   const empty = await readWorkPlanPage(f.context);
   assert.equal(empty.available, false);
   assert.equal(empty.history.length, 2, "identical snapshot retry does not create duplicates");
   assert.equal((await readWorkPlanPage(f.context, { archiveId: first.revision })).text, first.text);
+});
+
+test("Make current moves a completed archive to Active once, preserves evidence, and cannot replace a current plan", async t => {
+  const f = await fixture(t);
+  await f.change("new", "senior", { text: checkedText });
+  await f.change("complete");
+  const completed = await readWorkPlan(f.context);
+  await f.change("archive", "user");
+  await assert.rejects(f.change("reopen", "junior", { archiveId: completed.revision }), /Only Senior/);
+  await assert.rejects(f.change("reopen", "user", { archiveId: "f".repeat(64) }), /unavailable/);
+  assert.equal(await readWorkPlan(f.context), null);
+  const attempts = await Promise.allSettled([1, 2].map(() => manageWorkPlan(f.context,
+    { operation: "reopen", archiveId: completed.revision }, "user")));
+  assert.equal(attempts.filter(result => result.status === "fulfilled").length, 1);
+  assert.match(attempts.find(result => result.status === "rejected").reason.message, /already a current plan/);
+  const current = await readWorkPlan(f.context);
+  assert.equal(current.text, completed.text.replace("Status: completed", "Status: active"));
+  assert.equal(current.checked, completed.checked);
+  assert.equal((await readWorkPlanHistory(f.context)).length, 0);
+  await assert.rejects(f.change("reopen", "user", { archiveId: completed.revision, archiveCurrent: true }), /already a current plan/);
+  assert.deepEqual(await readWorkPlan(f.context), current);
+  await f.change("archive", "user");
+  const history = await readWorkPlanHistory(f.context);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].revision, current.revision);
 });
 
 test("concurrent updates cannot overwrite newer evidence and invalid plan writes leave the current record intact", async t => {
