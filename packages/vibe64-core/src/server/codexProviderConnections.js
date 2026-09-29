@@ -32,8 +32,16 @@ async function privateFile(filePath, contents) {
 }
 
 function codexProviderModelCatalog(provider) {
+  let models = provider?.models;
+  if (!models) {
+    const byId = new Map();
+    for (const entry of CURATED_CODEX_PROVIDERS) {
+      for (const model of entry.models) byId.set(model.id, model);
+    }
+    models = [...byId.values()];
+  }
   return {
-    models: provider.models.map((model, priority) => ({
+    models: models.map((model, priority) => ({
       slug: model.id,
       display_name: model.label,
       description: model.label,
@@ -171,13 +179,12 @@ function createCodexProviderConnectionStore({
   async function threadConfig(providerId) {
     const provider = curatedCodexProvider(providerId);
     if (!provider) return {};
-    const paths = await runtimeOptions(providerId);
+    await runtimeOptions(providerId);
     const connection = await read(providerId);
     if (!connection) throw new Error(`Reconnect ${provider.label} before continuing.`);
     // Private control-plane data. Never return this configuration through an
     // Accounts response or put it into the model's shell environment.
     return {
-      model_catalog_json: path.join(paths.codexHome, "models.json"),
       model_reasoning_summary: "none",
       web_search: provider.webSearch ? "live" : "disabled",
       [`model_providers.${providerId}`]: {
@@ -289,4 +296,4 @@ function createCodexProviderConnectionStore({
   return { change, list, runtimeOptions, threadConfig, claudeProviderSettings };
 }
 
-export { codexProviderPaths, createCodexProviderConnectionStore };
+export { codexProviderModelCatalog, codexProviderPaths, createCodexProviderConnectionStore };

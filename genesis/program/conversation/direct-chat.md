@@ -254,6 +254,7 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
 - `packages/vibe64-runtime/src/server/codexHistoryAdapter.js`
 - `packages/vibe64-runtime/src/server/codexAppServerProcess.js`
+- `packages/vibe64-runtime/src/server/codexModelCatalog.js`
 - `tests/server/codexHistoryAdapter.unit.test.js`
 - `tests/server/codexProviderSwitch.test.js`
 - `src/components/studio/vibe64-session/Vibe64ChatModeControls.vue`
@@ -702,6 +703,29 @@ and other conversations remain running. A command reported after interruption
 is stopped through the same path; an empty inventory during startup is not exit
 proof. Unconfirmed termination invokes the existing verified runtime-stop owner,
 and the turn's interrupted status cannot hide that failure.
+
+Before interactive Codex starts, the managed leader exports the installed CLI's
+raw model catalogue with `codex debug models` and adds every unique curated
+DeepSeek and GLM definition from the connection owner. Provider-only homes use
+`--bundled` for the native base, without requiring OpenAI credentials. The merged
+private runtime file is supplied as `model_catalog_json` at process startup:
+Codex's process-wide model manager cannot load catalogue overrides on thread
+resume. Thread configuration therefore supplies routing and credentials only.
+The snapshot retains native instructions, capabilities and future metadata
+fields, and adds curated patch tools and context windows before the first turn.
+The GPT picker excludes curated models even though the runtime knows them;
+provider connections still govern availability. Export failure, malformed or
+empty catalogues and duplicate native slugs stop startup without exposing raw
+CLI output. Runtime identity versioning retires processes using the old startup
+contract through existing verified cleanup; saved conversations are untouched.
+
+The native catalogue refreshes at managed-process startup, not while that
+process is running. This is an explicit consequence of Codex's static catalogue
+interface. New OpenAI metadata requires a managed-process restart; ordinary
+switches among already-loaded models reuse the same process and conversation.
+`codexModelCatalog.native.test.js` uses the installed CLI and controlled upstreams
+to execute patches with real model IDs, check provider keys and context windows,
+restore saved history, and load an updated native catalogue after restart.
 
 The managed execution leader starts a local history adapter before Codex and
 stops both together. Browser/backend observer reconnects do not own its lifetime.

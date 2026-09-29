@@ -63,6 +63,25 @@ test("Codex discovery failures stay visible and disconnected accounts do not dis
   assert.equal(disconnected.modelProviders[0].connected, false);
 });
 
+test("shared runtime metadata does not offer foreign models through the GPT connection", async () => {
+  const provider = createCodexSessionAgentProvider({
+    controller: { modelCatalog: async () => ({ data: ["gpt-6-sol", "deepseek-flash", "deepseek-v4-pro", "glm-5.3"]
+      .map((model) => catalogModel({ model })) }) },
+    listConnections: async () => [{ id: "deepseek", connected: true }]
+  });
+  const catalog = await provider.capabilities({});
+  const gpt = catalog.modelProviders.find((row) => row.id === "openai");
+  assert.deepEqual(gpt.models.map((model) => model.id), ["gpt-6-sol"]);
+  assert.equal(catalog.modelProviders.find((row) => row.id === "deepseek").connected, true);
+  assert.equal(catalog.modelProviders.find((row) => row.id === "zai").connected, false);
+  assert.throws(() => resolveVibe64AssistantSelection(catalog, {
+    modelProviderId: "openai", modelId: "deepseek-flash", agentId: "codex", variantId: "high"
+  }));
+  assert.equal(resolveVibe64AssistantSelection(catalog, {
+    modelProviderId: "deepseek", modelId: "deepseek-flash", agentId: "codex", variantId: "high"
+  }).modelId, "deepseek-flash");
+});
+
 test("Codex custom selections keep the picker revision across provider-specific validation", async () => {
   let model = "gpt-6-astra";
   let connected = true;

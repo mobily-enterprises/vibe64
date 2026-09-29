@@ -56,7 +56,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 18;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 19;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -2327,6 +2327,9 @@ async function startCodexAppServerProcess({
   });
   const baseEnv = {
     ...commandBaseEnv,
+    // A curated provider home contains a provider-only static catalogue. Use
+    // the binary's native definitions as the base for its shared runtime.
+    VIBE64_CODEX_MODEL_CATALOG_SOURCE: curatedCodexProvider(modelProviderId) ? "bundled" : "native",
     [CODEX_APP_SERVER_PROCESS_COMMAND_HASH_ENV]: commandHash,
     [CODEX_APP_SERVER_PROCESS_RUNTIME_TOKEN_ENV]: runtimeToken
   };

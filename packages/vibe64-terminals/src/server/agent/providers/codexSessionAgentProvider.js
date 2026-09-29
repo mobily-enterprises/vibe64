@@ -1,4 +1,4 @@
-import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { CURATED_CODEX_PROVIDERS, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { createHash } from "node:crypto";
 
 import {
@@ -48,7 +48,9 @@ function codexAssistantSettings(context = {}, input = {}) {
 }
 
 function codexAssistantCapabilities(connected = true, catalog = { data: [] }, connections = []) {
-  const rows = codexCatalogRows(catalog).filter((model) => model.hidden !== true);
+  // The native process knows all routable models. Account choices still belong
+  // to their own credential routes; knowing metadata does not grant access.
+  const rows = codexCatalogRows(catalog).filter((model) => model.hidden !== true && !curatedCodexModel(model.model));
   const models = rows.map((model) => ({
     id: normalizeText(model.model),
     label: normalizeText(model.displayName) || normalizeText(model.model),

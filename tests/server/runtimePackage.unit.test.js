@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -94,21 +94,35 @@ test("runtime release relocates, runs native and browser services, and packs wit
     const codexRuntime = path.join(root, "codex-runtime");
     await mkdir(codexRuntime);
     const descriptor = path.join(codexRuntime, "history-adapter.json");
+    const codexFixture = path.join(root, "codex-fixture.mjs");
+    await writeFile(codexFixture, `#!${process.execPath}
+      import assert from 'node:assert/strict';
+      import { readFileSync } from 'node:fs';
+      if (process.argv[2] === 'debug') {
+        console.log(JSON.stringify({ models: [{ slug: 'fixture-native' }] }));
+      } else {
+        const { baseUrl } = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+        assert.equal((await fetch(baseUrl + '/not-an-upstream')).status, 404);
+        const override = process.argv.find(arg => arg.startsWith('model_catalog_json='));
+        const catalogPath = JSON.parse(override.slice('model_catalog_json='.length));
+        const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+        assert.ok(catalog.models.some(model => model.slug === 'fixture-native'));
+        for (const slug of ['deepseek-flash', 'deepseek-v4-pro', 'glm-5.3']) {
+          assert.equal(catalog.models.find(model => model.slug === slug).apply_patch_tool_type, 'freeform');
+        }
+        console.log('packaged Codex child, model catalogue and history adapter ready');
+      }
+    `);
+    await chmod(codexFixture, 0o700);
     const codexProcess = await execute(process.execPath, [
       path.join(installed, "node_modules/@local/vibe64-runtime/src/server/codexAppServerProcess.js"),
-      codexRuntime, process.execPath, "--input-type=module", "-e", `
-        import assert from 'node:assert/strict';
-        import { readFileSync } from 'node:fs';
-        const { baseUrl } = JSON.parse(readFileSync(process.argv[1], 'utf8'));
-        assert.equal((await fetch(baseUrl + '/not-an-upstream')).status, 404);
-        console.log('packaged Codex child and history adapter ready');
-      `, descriptor
+      codexRuntime, codexFixture, descriptor
     ], {
       cwd: installed,
       env: { ...process.env, VIBE64_CODEX_APP_SERVER_RUNTIME_TOKEN: randomUUID() },
       timeout: 10000
     });
-    assert.match(codexProcess.stdout, /packaged Codex child and history adapter ready/u);
+    assert.match(codexProcess.stdout, /packaged Codex child, model catalogue and history adapter ready/u);
     await assert.rejects(readFile(descriptor), { code: "ENOENT" });
     const manifest = JSON.parse(await readFile(path.join(installed, "package.json"), "utf8"));
     assert.ok(manifest.dependencies["node-pty"]);
@@ -119,7 +133,8 @@ test("runtime release relocates, runs native and browser services, and packs wit
     }
     assert.ok(!manifest.bundleDependencies.includes("node-pty"));
     for (const dependency of ["three", "elkjs", "@mdi/js", "vite", "typescript", "openai", "stripe"]) {
-      assert.ok(!manifest.dependencies[dependency], `${dependency} must not be installed as a complete package`);
+      assert.ok(!manifest.dependencies[dependency] || manifest.bundleDependencies.includes(dependency),
+        `${dependency} must not be installed as a complete package`);
     }
     const packed = await execute("npm", ["pack", "--json", "--ignore-scripts", "--pack-destination", root], {
       cwd: installed, maxBuffer: 8 * 1024 * 1024
@@ -127,6 +142,8 @@ test("runtime release relocates, runs native and browser services, and packs wit
     const [report] = JSON.parse(packed.stdout);
     assert.ok(report.unpackedSize < 40 * 1024 * 1024, `Unexpected runtime package growth: ${report.unpackedSize}`);
     const paths = report.files.map(file => file.path);
+    assert.ok(!paths.some(file => file.startsWith("node_modules/openai/") && /\.(?:[cm]?js|[cm]?ts|map)$/u.test(file)),
+      "bundled OpenAI metadata must not bring a separate SDK implementation into the release");
     assert.ok(paths.includes("server.bundle.mjs"));
     assert.ok(paths.includes("docs/colleague-usage/plans.md"));
     assert.equal(await readFile(path.join(installed, "docs/colleague-usage/plans.md"), "utf8"),

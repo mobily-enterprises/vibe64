@@ -41,6 +41,9 @@ const DIRECT_EXECUTION_ALLOWLIST = new Map([
     "child_process import": { count: 1, reason: "Managed execution leader owns the history adapter and native Codex child." },
     "spawn call": { count: 1, reason: "Native Codex shares the managed leader's execution lifetime." }
   }],
+  ["packages/vibe64-runtime/src/server/codexModelCatalog.js", {
+    "child_process import": { count: 1, reason: "The managed Codex leader exports metadata within its existing execution, with bounded output, timeout and cancellation." }
+  }],
   ["packages/vibe64-terminals/src/server/claudeStdioBridge.js", {
     "child_process import": { count: 1, reason: "Managed execution bridge owns native Claude stdio." },
     "spawn call": { count: 1, reason: "Claude runs inside the bridge's existing managed execution scope." }

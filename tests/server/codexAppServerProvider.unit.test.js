@@ -1430,6 +1430,7 @@ test("codex app-server process and every descendant start with the managed works
     await writeFile(fakeCodexPath, [
       "#!/usr/bin/env node",
       'const { writeFileSync } = require("node:fs");',
+      'if (process.argv[2] === "debug") { console.log(JSON.stringify({ models: [{ slug: "fixture-native" }] })); process.exit(0); }',
       'const endpoint = process.argv[process.argv.indexOf("--listen") + 1] || "";',
       'if (endpoint.startsWith("unix://")) writeFileSync(endpoint.slice("unix://".length), "");',
       'writeFileSync(process.env.VIBE64_TEST_UMASK_PATH, process.umask().toString(8));',

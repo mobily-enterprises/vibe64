@@ -64,6 +64,8 @@ test("Z.AI Coding Plan keys use the verified Responses route and an isolated GLM
   assert.equal(catalog.models[0].shell_type, "shell_command");
   assert.equal(catalog.models[0].apply_patch_tool_type, "freeform");
   assert.equal((await f.store.runtimeOptions("zai-coding-plan")).runtimeInstanceId, "provider:zai-coding-plan");
+  assert.equal(Object.hasOwn(await f.store.threadConfig("zai-coding-plan"), "model_catalog_json"), false,
+    "thread routing must not pretend it can replace process-wide model metadata");
   assert.equal((await f.store.list()).find((row) => row.id === "deepseek").connected, false);
 });
 

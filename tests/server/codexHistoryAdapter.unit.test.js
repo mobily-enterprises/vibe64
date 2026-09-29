@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { request } from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -237,9 +237,12 @@ test("native OpenAI account selects its upstream without changing provider or ex
 test("managed process owns adapter lifetime and drains it with native shutdown", { timeout: 10000 }, async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-adapter-lifetime-"));
   const fixture = path.join(root, "native.mjs");
-  await writeFile(fixture, 'import {writeFileSync} from "node:fs"; writeFileSync(process.argv[2],String(process.pid)); setInterval(()=>{},1000);');
+  await writeFile(fixture, `#!${process.execPath}\nimport {writeFileSync} from "node:fs";
+    if (process.argv[2] === "debug") { console.log(JSON.stringify({models:[{slug:"fixture-native"}]})); process.exit(0); }
+    writeFileSync(process.argv[2],String(process.pid)); setInterval(()=>{},1000);`);
+  await chmod(fixture, 0o700);
   const processPath = fileURLToPath(import.meta.resolve("@local/vibe64-runtime/server/codexAppServerProcess"));
-  const child = spawn(process.execPath, [processPath, root, process.execPath, fixture, path.join(root, "native.pid")], {
+  const child = spawn(process.execPath, [processPath, root, fixture, path.join(root, "native.pid")], {
     env: { ...process.env, VIBE64_CODEX_APP_SERVER_RUNTIME_TOKEN: randomUUID() }, stdio: "ignore"
   });
   t.after(async () => { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); await rm(root, { recursive: true, force: true }); });
