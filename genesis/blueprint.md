@@ -1511,3 +1511,6 @@ The command and saved-commit action go straight to Senior. System-generated
 review and optional Deslop always use Senior. Review and cleanup never schedule
 another review, and neither changes the selected chat mode. Ordinary answers,
 planning and user-requested reviews do not trigger automatic follow-ups.
+
+Independently hosted editors sharing a Preview domain can have separate route
+namespaces, so cloned projects and sessions do not contend for one Preview address.

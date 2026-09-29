@@ -3136,6 +3136,10 @@ function previewPublicOriginForLaunch({
     terminalProjectScopeKey(),
     sessionId
   ];
+  // Independently hosted editors may share a preview domain and cloned project
+  // identities. Their host-supplied namespace keeps those routes independent.
+  const namespace = String(env?.VIBE64_PREVIEW_PUBLIC_NAMESPACE || "").trim();
+  if (namespace) hashInput.push(`namespace:${namespace}`);
   const publicPort = publicDomainPort(baseDomain, protocol);
   if (publicPort) {
     hashInput.push(`public-port:${publicPort}`);

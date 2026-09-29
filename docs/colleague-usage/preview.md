@@ -36,3 +36,9 @@ and start or stop it through existing authorized actions. It must inspect curren
 state before starting and verify readiness afterward. An application's login
 screen still requires the person's interaction or an explicitly authorized coding
 agent; Colleague does not receive passwords from usage knowledge.
+
+Independent temporary editors may contain the same example project/session yet
+have separate Preview addresses. Use the current editor’s **Preview** controls;
+an address from a discarded environment is no longer valid. No namespace or port
+field is required. Colleague uses the current Preview result rather than
+constructing an address.

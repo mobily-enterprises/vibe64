@@ -982,6 +982,16 @@ test("preview public origin follows the Studio HTTPS protocol by default", () =>
   assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}--pass\.vibe64\.dev$/u);
 });
 
+test("independent editor namespaces keep cloned session preview routes distinct", () => {
+  const options = { publicHost: "pass.users.vibe64.dev", sessionId: "same-cloned-session" };
+  const origin = (namespace) => previewPublicOriginForLaunch({ ...options,
+    env: { VIBE64_PREVIEW_PUBLIC_NAMESPACE: namespace } });
+  assert.equal(origin(""), previewPublicOriginForLaunch({ ...options, env: {} }));
+  assert.equal(origin("first"), origin("first"));
+  assert.notEqual(origin("first"), origin("second"));
+  assert.match(origin("first"), /^https:\/\/v64preview-[a-z0-9]{12}--pass\.vibe64\.dev$/u);
+});
+
 test("preview public origin uses hosted workspace configuration without a request host", () => {
   const env = {
     VIBE64_PREVIEW_PUBLIC_DOMAIN: "vibe64.dev",

@@ -300,3 +300,9 @@ browser-facing origin. Token bootstrap, application redirects and HTTP/WebSocket
 Origin translation retain that hostname when the local editor uses `localhost`
 instead of `127.0.0.1`. Hosted origins remain configured, and foreign hosts or
 different ports cannot override the proxy origin.
+
+When several independent editors share a public Preview domain, the host can
+supply `VIBE64_PREVIEW_PUBLIC_NAMESPACE`. The existing origin hash includes that
+namespace while preserving the normal workspace/domain shape. Unset preserves
+existing addresses. This is routing identity, not project Env or an access grant;
+the standard proxy still owns tokens and sockets.
