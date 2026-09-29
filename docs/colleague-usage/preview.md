@@ -15,6 +15,10 @@ secure login cookies and redirects.
 application again. If startup fails, inspect the message and **Show run output**
 before retrying. Hiding run output closes only the terminal view; it does not
 stop the application.
+Stopping or restarting a hosted Preview includes processes in its child groups,
+including a development container. Wait for cleanup to finish before starting
+another run. If cleanup fails, open **Resources** for the reported operation
+and retry only after its running work has been stopped.
 
 Colleague can inspect the selected output and its logs, explain required fields,
 and start or stop it through existing authorized actions. It must inspect current

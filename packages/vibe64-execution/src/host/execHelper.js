@@ -1152,16 +1152,10 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}) {
   const cgroupPath = controlGroup
     ? path.join("/sys/fs/cgroup", controlGroup.replace(/^\/+/, ""))
     : "";
-  let scopeEmpty = true;
-  if (cgroupPath && existsSync(cgroupPath)) {
-    try {
-      scopeEmpty = String(readFileSync(path.join(cgroupPath, "cgroup.procs"), "utf8") || "").trim() === "";
-    } catch (error) {
-      if (error?.code !== "ENOENT") {
-        throw error;
-      }
-    }
-  }
+  const counters = managedWorkflowCounters(cgroupPath);
+  // Delegated services can put every process in child groups. Only the
+  // hierarchical populated counter proves the whole execution empty.
+  const scopeEmpty = cgroupPath && existsSync(cgroupPath) ? counters.scopeEmpty : true;
   const recorded = executionId ? readManagedExecutionResult(owner, executionId) : {};
   // Prefer the runner's child-exit observation to the later wrapper exit.
   // systemd still supplies evidence if OOM killed the runner before its receipt.
@@ -1171,7 +1165,7 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}) {
   const exitObservedAt = Number.isFinite(exitTime) && exitTime > 0 && exitTime <= Date.now()
     ? new Date(exitTime).toISOString() : "";
   return {
-    resourceCounters: recorded.resourceCounters || managedWorkflowCounters(cgroupPath),
+    resourceCounters: recorded.resourceCounters || counters,
     activeState: String(values.ActiveState || (recorded.executionId ? "inactive" : "unknown")),
     controlGroup,
     cpuUsageNSec: maximumCounter(values.CPUUsageNSec, recorded.cpuUsageNSec),

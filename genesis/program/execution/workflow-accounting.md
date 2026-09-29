@@ -55,6 +55,10 @@ authenticated daemon identity and creates nested project/session/workflow
 accounting slices beneath that workspace's existing work slice. Child execution
 limits and all ancestor limits still apply. No shared database or provider
 service moves into these groups automatically.
+Execution inspection and stop use the same hierarchical `cgroup.events`
+population evidence as workflow accounting. An empty parent `cgroup.procs`
+cannot declare a delegated service complete while its child groups still run;
+unavailable population evidence remains unknown and cannot acknowledge cleanup.
 
 The helper creates transient systemd slices with bounded memory/tasks and
 readback verification. Creating the same active identity is idempotent only
