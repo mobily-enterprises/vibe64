@@ -534,8 +534,11 @@ streamed message. Missing assignments explain where
 to configure them or direct the user to the owner.
 
 Auto classifies role and task independently. An explicitly addressed Senior or
-Junior wins; otherwise plan discussion/management, review and Deslop default to
-Senior, and all other requests default to Junior. The helper receives the new
+Junior wins for every task, including plan implementation; otherwise plan
+discussion/management, review and Deslop default to Senior. Plan implementation
+and confirmations of open choices that allow it to proceed default to Junior,
+as do all other requests. Recording accepted choices or checklist progress does
+not change the implementation default. The helper receives the new
 message, the last three visible user/assistant messages in chronological order,
 and a bounded current-plan summary. Private thinking and tool output are excluded.
 The output contains only a role and task reason, never model or execution details.
@@ -547,8 +550,9 @@ Only a request to execute the current plan checks its captured active revision
 before delivery, for either role. Missing or completed plans produce an actionable
 message without reopening anything. Standalone implementation clears the routing
 snapshot of an unrelated current plan and works directly from the request.
-Planning plus implementation is an implementation request, not an unsent split
-workflow; the selected role's plan lifecycle permissions still apply.
+Planning plus implementation is an implementation request with the same Junior
+default unless the user requests a role; it is not an unsent split workflow.
+The selected role's plan lifecycle permissions still apply.
 
 Main chat owns <sessionRoot>/plans/current.md and plans/archive/<revision>.md.
 These are runtime artifacts outside source Git. Session archive, restore and
@@ -614,13 +618,15 @@ requests use chat. Task instructions are maintained in `docs/colleague-usage/pla
 Discussion is read-only. Beginning a Senior turn never modifies or invalidates a
 plan. Junior preserves delivered work and ticks only evidenced requirements.
 Senior review may uncheck unsupported claims, add missing in-scope acceptance
-checks and fix defects. Auto schedules one Senior review after successful
-implementation by either role, even when the implementer and reviewer use the
+checks and fix defects. Auto schedules one Senior review after reviewable
+implementation by either role when Router confirms continuation fits the user's
+latest intent, even when the implementer and reviewer use the
 same exact model selection. Greetings, answers, planning, requested reviews and
 Deslop do not schedule another review. The existing receipt, cancellation,
 question, goal and disconnected-completion guards apply to both implementers.
 The saved review preference controls optional Deslop only;
-it cannot disable review. Direct Senior and Junior requests remain direct. Senior review explicitly completes the plan or leaves
+it cannot disable review, but the user's instructions can defer or cancel the
+automatic handoff. Direct Senior and Junior requests remain direct. Senior review explicitly completes the plan or leaves
 it active and explains remaining work. Review never automatically starts another
 implementation/planning cycle; further execution needs user intent. Existing
 review interruption, access, delivery-receipt and restart safeguards remain.
@@ -681,7 +687,20 @@ accepted native turn is active. It cannot become an accidental steering request.
 after a server restart becomes visibly retryable. A new request cannot overtake
 an unresolved pending request. Active-turn steering bypasses classification.
 
-After the matching Junior turn completes normally, review uses one preallocated
+After the matching implementation turn completes normally, the captured Router
+uses the same bounded, tool-free helper lifecycle to decide whether to review or
+wait. It sees the original request and the last five visible user/assistant
+messages, including steering. Pause/wait requests, unanswered questions,
+unfinished implementation and unclear intent suppress the handoff; a later
+explicit resume can supersede a pause. Native completion alone is insufficient.
+The check runs outside the session lock, so Stop and shutdown can interrupt it.
+Delivery rechecks the latest message snapshot under the lock; changed context,
+oversized input, invalid output, unavailable Router or failed cleanup leave an
+unsent review pending for explicit Retry review or Stop. Waiting finishes this follow-up
+without resuming it on reload. Explicit Retry authorizes the pending review.
+No persisted history repair or state-format migration is needed.
+
+When approved, review uses one preallocated
 message identity and the snapshotted Senior selection. The visible automatic
 request permits scoped fixes. Structured waiting, failure, interruption, active
 goals and Stop suppress continuation; a reviewer never schedules another review.
@@ -690,8 +709,8 @@ reply using the same numbered-question and answer-choice parsers as the composer
 An unanswered structured question visibly skips review, preserves the question
 and coding model, and allows the user's answer as the next ordinary request.
 Review Retry applies the same check after restart.
-If a read sees completion before the idle event, the coordinator may review a
-Junior request it admitted in the current process. After a server restart, the
+If a read sees completion before the idle event, the coordinator may review an
+implementation request it admitted in the current process, after the Router check. After a server restart, the
 same recovered completion requires explicit Retry/Skip instead.
 Preparation failures retain Retry and Skip. Skipping an unstarted review clears
 its preparation error and finishes the completed coding request immediately,

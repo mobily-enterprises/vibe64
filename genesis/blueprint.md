@@ -456,8 +456,14 @@ and answering model. Auto planning restricts Senior to plan management. Junior
 implements the active plan and records unresolved decisions for the user. Direct Senior and Junior may both edit application files when asked.
 Steering stays with the currently working assistant.
 
-In Auto, people can enable Senior review and Deslop. After a normally completed
-Junior implementation turn, one visible follow-up asks the Senior model to inspect the implementation, fix
+In Auto, Senior review follows reviewable implementation by either role, with
+optional Deslop. Before starting that follow-up, Router reads the last five visible
+user and assistant messages and checks that proceeding fits the latest user intent.
+A pause or wait steer, unanswered question, unfinished implementation or unclear
+intent holds review and Deslop; a later explicit resume can supersede a pause.
+Ending a native turn alone never authorizes the handoff. A failed decision holds
+review for explicit Retry review or Stop, and Stop can cancel the Router check.
+When allowed, one visible follow-up asks the Senior model to inspect the implementation, fix
 in-scope defects and then Deslop the coding changes and its fixes in the same
 turn. Cleanup preserves the intended behavior and follows the project's Deslop
 guidance; relevant checks follow cleanup. Its findings state what was checked; completion is not a
@@ -1186,7 +1192,7 @@ checks current safety and never creates a duplicate test.
 
 Deslop is a deliberate cleanup that preserves behavior. People can request it
 in chat for the current task's changes, including unsaved work, or explicitly
-select commits. Auto can include it in the mandatory Senior review when the
+select commits. Auto can include it in the automatic Senior review when the
 optional Deslop setting is enabled. Saving work does not show a cleanup offer.
 
 People can choose how cautiously the AI engineers a project. The choice follows
@@ -1459,9 +1465,12 @@ The standalone editor can use coding tools installed on its launching shell
 path when running as the same local user. Hosted and cross-user commands retain
 their prepared host environment.
 
-Auto honors an explicit request for Senior or Junior. Otherwise Senior handles
-plan discussion and management, requested review and Deslop; Junior handles
-other requests, including ordinary questions and implementation without a plan.
+Auto honors an explicit request for Senior or Junior for every task, including
+plan execution. Otherwise Senior handles plan discussion and management,
+requested review and Deslop; Junior handles plan implementation, confirmations
+of open plan choices that allow implementation to proceed, and other requests,
+including ordinary questions and implementation without a plan. Recording
+accepted choices or checklist progress does not promote implementation to Senior.
 Role selection and task intent are independent. The router sees the new request,
 at most the last three visible messages, and a short current-plan summary.
 A plan is an open canvas with only active or completed status. Executing it
@@ -1501,8 +1510,11 @@ in open viewers without resetting their scroll position.
 
 Only Senior explicitly marks a plan completed after reviewing its requirements
 and evidence. Successful turns, review outcomes and checked boxes never complete
-it automatically. In Auto, Senior always reviews completed implementation by either role and can fix in-scope defects, even when the same model implemented it.
-Deslop is optional within that review; disabling cleanup cannot disable review. Unfinished work remains active with specific remaining items; another
+it automatically. In Auto, Senior reviews completed implementation by either role
+when Router confirms it should proceed, and can fix in-scope defects, even when
+the same model implemented it. Deslop is optional within that review; disabling
+cleanup cannot disable review, while the user's pause or cancellation takes
+precedence over automatic continuation. Unfinished work remains active with specific remaining items; another
 execution pass needs a user request. Ordinary discussion and Stop never reopen,
 archive or complete a plan. No automatic repeating completion-plan cycle exists.
 Direct Senior and Junior still work from the user's request; plan lifecycle

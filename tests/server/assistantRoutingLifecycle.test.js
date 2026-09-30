@@ -96,6 +96,11 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   const events = [];
   let helperCalls = 0;
   let cleanupCalls = 0;
+  const router = {
+    respond: async () => ({ ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' }),
+    review: async () => ({ ok: true, text: '{"decision":"review","reason":"ready"}' }),
+    reviewInputs: []
+  };
   const agent = {
     listCapabilities: async () => ({ engines: [catalog] }),
     requireAssistantAccessForSelection: async () => {},
@@ -109,16 +114,18 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
     createEphemeralConversation: async () => ({ ok: true, conversationId: "helper-1" }),
     startEphemeralConversationTurn: async (scope, input, options) => {
       helperCalls++;
-      assert.match(input.message, /agreed required-field/);
+      if (input.outputSchema.properties.decision) router.reviewInputs.push(input);
+      else assert.match(input.message, /agreed required-field/);
       assert.doesNotMatch(input.message, /PRIVATE THOUGHT/);
       assert.notEqual(scope.id, session.sessionId);
       assert.equal(options.session, undefined);
       assert.equal(options.runtime, undefined);
       assert.equal(JSON.parse(metadata.assistant_routing_request).helper.conversationId, "helper-1",
         "capture the native helper before submitting any inference");
-      return { ok: true, runId: "helper-turn-1" };
+      return { ok: true, runId: input.outputSchema.properties.decision ? "review-helper-turn" : "helper-turn-1" };
     },
-    waitForEphemeralConversationTurn: async () => ({ ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' }),
+    waitForEphemeralConversationTurn: async (...args) => args[1].runId === "review-helper-turn"
+      ? router.review(...args) : router.respond(...args),
     deleteEphemeralConversation: async () => { cleanupCalls++; return { ok: true }; },
     stopEphemeralConversation: async () => ({ ok: true }),
     inspectMessageAdmission: async () => ({ admission: "unknown" })
@@ -156,13 +163,124 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
       return { ok: true, delivered: true, threadId: "native-thread", turnId: `turn-${sends.length}` };
     } };
   const service = createAssistantRouting(routingOptions);
-  return { service, context, metadata, agent, sends, events, catalog, catalogs, connections, assignments, configuration,
+  return { service, context, metadata, agent, router, sends, events, catalog, catalogs, connections, assignments, configuration,
     restart: () => createAssistantRouting(routingOptions),
     helperCalls: () => helperCalls, cleanupCalls: () => cleanupCalls,
     failAdmission: () => { failAdmission = true; }, state: () => JSON.parse(metadata.assistant_routing_request || "null") };
 }
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
 const completion = (turnId = "turn-1", state = "completed") => ({ payload: { agentRun: { active: false, state, providerTurnId: turnId } } });
+
+test("a pause steer is included in the last five messages and suppresses automatic review and Deslop", async (t) => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  f.context.runtime.store.readConversationTail = async (_id, options) => {
+    if (options) assert.equal(options.userLimit, 5);
+    return [
+      { user: { text: "Execute the plan" }, messages: [{ role: "assistant", text: "Implementing the form." }] },
+      { user: { text: "Are you still working on it?" }, messages: [{ role: "assistant", text: "The code is ready; browser checks are blocked." }] },
+      { user: { text: "Wait I am trying to fix the browser" }, messages: [
+        { role: "thinking", text: "PRIVATE THOUGHT" },
+        { role: "assistant", text: "I'll pause here while you fix the browser. The plan remains active." }
+      ] }
+    ];
+  };
+  f.router.review = async () => ({ ok: true, text: '{"decision":"wait","reason":"user_wait"}' });
+  await f.service.afterTurn("session-1", completion(), f.context);
+  const prompt = f.router.reviewInputs[0].message;
+  const input = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1));
+  assert.equal(input.originalRequest, request.message);
+  assert.deepEqual(input.messages.map(({ text }) => text), [
+    "Implementing the form.", "Are you still working on it?", "The code is ready; browser checks are blocked.",
+    "Wait I am trying to fix the browser", "I'll pause here while you fix the browser. The plan remains active."
+  ]);
+  assert.equal(f.state().status, "done");
+  assert.equal(f.state().reviewStatus, "cancelled");
+  assert.equal(f.state().helper, null);
+  assert.equal(f.state().workPlan.status, "active");
+  await f.restart().afterTurn("session-1", completion(), f.context, { recovered: true });
+  assert.equal(f.sends.length, 1, "neither review nor Deslop is admitted after the pause");
+  assert.equal(f.helperCalls(), 2);
+});
+
+test("Router can allow review after a later explicit resume supersedes a pause", async (t) => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  f.context.runtime.store.readConversationTail = async () => [
+    { user: { text: "Wait while I fix the browser" }, messages: [{ role: "assistant", text: "Paused." }] },
+    { user: { text: "Browser is fixed. Continue and review the implementation." }, messages: [{ role: "assistant", text: "Implementation and browser checks are complete." }] }
+  ];
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.match(f.router.reviewInputs[0].message, /Continue and review the implementation/);
+  assert.equal(f.sends.length, 2);
+  assert.equal(f.sends[1].selection.modelId, f.assignments.senior.modelId);
+  assert.match(f.sends[1].input.message, /Automatic review and Deslop/);
+});
+
+for (const [reason, status] of [["question", "skipped_question"], ["incomplete", "skipped_incomplete"], ["unclear", "skipped_unconfirmed"]]) {
+  test(`Router defers automatic review for ${reason}`, async (t) => {
+    const f = await fixture(t);
+    await f.service.send("session-1", request, f.context);
+    f.router.review = async () => ({ ok: true, text: JSON.stringify({ decision: "wait", reason }) });
+    await f.service.afterTurn("session-1", completion(), f.context);
+    assert.equal(f.state().status, "done");
+    assert.equal(f.state().reviewStatus, status);
+    assert.equal(f.sends.length, 1);
+  });
+}
+
+for (const outcome of ["malformed", "unavailable", "oversized", "changed"]) {
+  test(`a ${outcome} review decision leaves an explicit retry without launching Senior`, async (t) => {
+    const f = await fixture(t);
+    await f.service.send("session-1", request, f.context);
+    f.router.review = async () => {
+      if (outcome === "unavailable") throw new Error("Router unavailable");
+      if (outcome === "changed") f.context.runtime.store.readConversationTail = async () => [{ user: { text: "Wait for me." }, messages: [] }];
+      return { ok: true, text: outcome === "malformed" ? "not json" : '{"decision":"review","reason":"ready"}' };
+    };
+    if (outcome === "oversized") f.context.runtime.store.readConversationTail = async () => [{ user: { text: "long".repeat(7000) }, messages: [] }];
+    await f.service.afterTurn("session-1", completion(), f.context);
+    assert.equal(f.state().status, "review_pending");
+    assert.match(f.state().error, /Router|too long|conversation changed/);
+    assert.equal(f.state().helper, null);
+    assert.equal(f.sends.length, 1);
+    assert.equal(f.router.reviewInputs.length, outcome === "oversized" ? 0 : 1);
+    if (outcome === "malformed") {
+      await f.service.send("session-1", { messageId: request.messageId, reviewAction: "retry" }, f.context);
+      assert.equal(f.sends.length, 2, "the person's explicit Retry authorizes the pending review");
+    }
+  });
+}
+
+for (const action of ["stop", "close"]) {
+  test(`${action} interrupts the review decision and suppresses a late ready answer`, { timeout: 5000 }, async (t) => {
+    const f = await fixture(t);
+    await f.service.send("session-1", request, f.context);
+    const started = Promise.withResolvers();
+    const finish = Promise.withResolvers();
+    f.router.review = async () => {
+      started.resolve();
+      await finish.promise;
+      return { ok: true, text: '{"decision":"review","reason":"ready"}' };
+    };
+    let stops = 0;
+    f.agent.stopEphemeralConversation = async () => { stops++; finish.resolve(); return { ok: true }; };
+    const following = f.service.afterTurn("session-1", completion(), f.context);
+    await started.promise;
+    assert.equal(assistantRoutingStatusLabel(f.state()), "Router is checking whether review should start…");
+    await f.service.afterTurn("session-1", completion(), f.context);
+    await assert.rejects(f.service.send("session-1", { messageId: request.messageId, reviewAction: "retry" }, f.context), /Wait for Router/);
+    if (action === "stop") await f.service.cancel("session-1", f.context, { waitForCleanup: true });
+    else await f.service.close();
+    await following;
+    assert.equal(stops, 1);
+    assert.equal(f.state().status, "done");
+    assert.equal(f.state().reviewStatus, "cancelled");
+    assert.equal(f.state().helper, null);
+    assert.equal(f.sends.length, 1);
+    assert.equal(f.router.reviewInputs.length, 1);
+  });
+}
 
 for (const mode of ["senior", "junior"]) {
   for (const planState of ["absent", "active", "unreadable"]) {
@@ -237,7 +355,7 @@ for (const mode of ["senior", "junior"]) {
 
 test("Auto choosing Senior does not report that coding stopped or a review was skipped", async (t) => {
   const f = await fixture(t);
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
   await f.service.send("session-1", request, f.context);
   await f.service.afterTurn("session-1", completion(), f.context);
   assert.equal(f.state().status, "done");
@@ -257,7 +375,7 @@ for (const planStatus of ["absent", "active", "completed"]) {
         await writeFile(workPlanPath(f.context), planDocument(planStatus));
       }
       const before = await readWorkPlan(f.context);
-      f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
+      f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
       await f.service.send("session-1", { ...request, message: "Is this finished?" }, f.context);
       if (outcome === "stopped") await f.service.cancel("session-1", f.context);
       await f.restart().afterTurn("session-1", completion("turn-1", outcome === "stopped" ? "completed" : outcome), f.context, { recovered: true });
@@ -272,11 +390,11 @@ test("new planning leaves a completed document intact until Senior explicitly re
   const f = await fixture(t);
   await writeFile(workPlanPath(f.context), planDocument("completed"));
   f.metadata.assistant_routing_request = JSON.stringify({ status: "done", workPlan: await readWorkPlan(f.context) });
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
   await f.service.send("session-1", { ...request, message: "How does this work?" }, f.context);
   await f.service.afterTurn("session-1", completion(), f.context);
   assert.equal((await readWorkPlan(f.context)).status, "completed");
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
   await f.service.send("session-1", { ...request, messageId: "new-plan", message: "Plan an additional feature." }, f.context);
   assert.equal(f.state().workPlan.status, "completed");
   assert.equal((await readWorkPlan(f.context)).status, "completed");
@@ -286,7 +404,7 @@ test("new planning leaves a completed document intact until Senior explicitly re
 for (const mode of ["senior", "auto"]) {
   test(`${mode} plan creation receives the saved-plan contract without changing a plan on admission`, async (t) => {
     const f = await fixture(t, { mode, review: false }, { readyPlan: false });
-    f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+    f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
     const message = "Make a plan to complete issue 53.";
     await f.service.send("session-1", { ...request, message }, f.context);
     const prompt = f.sends[0].input.message;
@@ -418,7 +536,7 @@ for (const mode of ["senior", "junior"]) {
     assert.ok(access.connectionIdentity);
     f.connections.set("codex:openai", access);
     f.context.vibe64User = { role: "member", username: "collaborator" };
-    f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true,
+    f.router.respond = async () => ({ ok: true,
       text: JSON.stringify({ mode, reason: mode === "senior" ? "planning" : "plan_implementation" }) });
 
     await f.service.send("session-1", request, f.context);
@@ -441,7 +559,7 @@ for (const mode of ["senior", "junior"]) {
 
 test("interrupted Router results retain the provider error and never dispatch partial decisions", async (t) => {
   const f = await fixture(t);
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, status: "interrupted",
+  f.router.respond = async () => ({ ok: true, status: "interrupted",
     text: '{"mode":"junior","reason":"plan_implementation"}', error: "Claude output exceeded its size limit." });
   await assert.rejects(f.service.send("session-1", request, f.context), /Claude output exceeded its size limit/u);
   assert.equal(f.state().status, "failed");
@@ -453,8 +571,8 @@ test("interrupted Router results retain the provider error and never dispatch pa
 
 test("changing routing settings while classifying does not retarget this request", async (t) => {
   const f = await fixture(t);
-  const classify = f.agent.waitForEphemeralConversationTurn;
-  f.agent.waitForEphemeralConversationTurn = async (...args) => {
+  const classify = f.router.respond;
+  f.router.respond = async (...args) => {
     await f.configuration.write({ codex: { ...f.assignments, junior: f.assignments.senior } }, 1);
     return classify(...args);
   };
@@ -482,7 +600,7 @@ for (const question of [
     await f.restart().afterTurn("session-1", completion(), f.context, { recovered: true });
     assert.equal(f.sends.length, 1);
 
-    f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+    f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
     await f.service.send("session-1", { ...request, messageId: "answer-1", message: "Keep it in this browser." }, f.context);
     turns.push({ user: { text: "Keep it in this browser." }, messages: [{ role: "assistant", text: "Implemented and checked." }] });
     await f.service.afterTurn("session-1", completion("turn-2"), f.context);
@@ -533,7 +651,7 @@ test("successful direct and automatic sends never publish uncertain delivery", a
     const sending = states.find((state) => state.status === "sending" && state.attemptedMessageId);
     assert.equal(sending.attemptedMessageId, request.messageId);
     assert.match(assistantRoutingStatusLabel(sending), /awaiting receipt/);
-    assert.equal(f.helperCalls(), mode === "auto" ? 1 : 0);
+    assert.equal(f.helperCalls(), mode === "auto" ? 2 : 0);
   }
 });
 
@@ -603,7 +721,7 @@ test("Stop cancels routing while helper cleanup finishes and prevents delivery",
   const f = await fixture(t);
   const started = Promise.withResolvers();
   const finish = Promise.withResolvers();
-  f.agent.waitForEphemeralConversationTurn = async () => {
+  f.router.respond = async () => {
     started.resolve();
     await finish.promise;
     return { ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' };
@@ -660,7 +778,7 @@ test("Stop reports a clean routing cancellation instead of the provider's AbortE
   } });
   const started = Promise.withResolvers();
   const finish = Promise.withResolvers();
-  f.agent.waitForEphemeralConversationTurn = async () => {
+  f.router.respond = async () => {
     started.resolve();
     await finish.promise;
     throw new DOMException("This operation was aborted", "AbortError");
@@ -681,7 +799,7 @@ test("Stop still reports a helper cleanup failure and retains the helper for ret
   const f = await fixture(t);
   const started = Promise.withResolvers();
   const finish = Promise.withResolvers();
-  f.agent.waitForEphemeralConversationTurn = async () => {
+  f.router.respond = async () => {
     started.resolve();
     await finish.promise;
     throw new DOMException("This operation was aborted", "AbortError");
@@ -705,7 +823,7 @@ test("shutdown cancels routing and waits for helper cleanup before native provid
   const finish = Promise.withResolvers();
   const cleaning = Promise.withResolvers();
   const releaseCleanup = Promise.withResolvers();
-  f.agent.waitForEphemeralConversationTurn = async () => {
+  f.router.respond = async () => {
     started.resolve();
     await finish.promise;
     return { ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' };
@@ -741,7 +859,7 @@ test("shutdown reports unconfirmed Router cleanup instead of claiming completion
   assert.equal(typeof f.service.close, "function");
   const started = Promise.withResolvers();
   const finish = Promise.withResolvers();
-  f.agent.waitForEphemeralConversationTurn = async () => {
+  f.router.respond = async () => {
     started.resolve();
     await finish.promise;
     return { ok: false };
@@ -906,8 +1024,8 @@ test("an uncertain review checks its existing native receipt and never starts a 
 
 test("an orchestrator change during classification refuses delivery", async (t) => {
   const f = await fixture(t);
-  const classify = f.agent.waitForEphemeralConversationTurn;
-  f.agent.waitForEphemeralConversationTurn = async (...args) => {
+  const classify = f.router.respond;
+  f.router.respond = async (...args) => {
     const result = await classify(...args);
     f.metadata.assistant_selection = JSON.stringify({ ...f.assignments.senior, engineId: "claude" });
     return result;
@@ -1053,7 +1171,7 @@ for (const key of ["engineId", "modelId", "command"]) {
   test(`Router-supplied ${key} is rejected before delivery and its helper is removed`, async (t) => {
     const f = await fixture(t);
     const originalSelection = f.metadata.assistant_selection;
-    f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: JSON.stringify({
+    f.router.respond = async () => ({ ok: true, text: JSON.stringify({
       mode: "junior", reason: "explicit_implementation", [key]: "untrusted-router-value"
     }) });
     await assert.rejects(f.service.send("session-1", request, f.context), /Routing returned an invalid decision/);
@@ -1172,7 +1290,7 @@ test("revoking the submitting member blocks review even when an owner retries it
 
 test("replacing a captured connection while Router works refuses delivery", async (t) => {
   const f = await fixture(t);
-  f.agent.waitForEphemeralConversationTurn = async () => {
+  f.router.respond = async () => {
     f.connections.set("codex:deepseek", { connectionIdentity: "codex:deepseek:replacement" });
     return { ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' };
   };
@@ -1320,13 +1438,17 @@ test("a migrated uncertain request can inspect admission without authorizing fre
   assert.equal(f.state().admissionRequired, true);
 });
 
-test("review does not depend on the completed Router's connection remaining available", async (t) => {
+test("an unavailable Router holds automatic review but the person can explicitly retry it", async (t) => {
   const f = await fixture(t);
   const router = sharedOpenCode(f, "deepseek", "deepseek-chat");
   await f.configuration.write({ codex: { ...f.assignments, router } }, 1);
   await f.service.send("session-1", request, f.context);
   f.connections.set("opencode:deepseek", { available: false, current: null, history: [] });
   await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.state().status, "review_pending");
+  assert.equal(f.router.reviewInputs.length, 0);
+  await f.service.send("session-1", { messageId: request.messageId, reviewAction: "retry" }, f.context);
   assert.equal(f.sends.length, 2);
   assert.equal(f.sends[1].selection.modelId, "gpt-6-astra");
 });
@@ -1353,7 +1475,7 @@ test("an uncertain request inspects its receipt while native work is still activ
 
 test("new Auto implementation needs no plan and receives Senior review", async (t) => {
   const f = await fixture(t, { mode: "auto", review: true }, { readyPlan: false });
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"junior","reason":"explicit_implementation"}' });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"junior","reason":"explicit_implementation"}' });
   await f.service.send("session-1", { ...request, message: "Change ALL washers to bathers." }, f.context);
   assert.equal(f.state().resolvedMode, "junior");
   assert.equal(f.helperCalls(), 1);
@@ -1367,13 +1489,13 @@ test("new Auto implementation needs no plan and receives Senior review", async (
 
 test("Auto routes execution through Router and only Senior explicitly completes the plan", async t => {
   const f = await fixture(t, { mode: "auto", review: true }, { readyPlan: false });
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
   await f.service.send("session-1", { ...request, message: "Plan validation." }, f.context);
   await manageWorkPlan(f.context, { operation: "new", text: "# Validation\n- [ ] Reject empty name" }, "senior");
   await f.service.afterTurn("session-1", completion(), f.context);
   assert.equal(f.state().workPlan.status, "active");
   assert.equal(f.sends.length, 1);
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' });
   await f.service.send("session-1", { ...request, messageId: "execute", message: "Complete it then." }, f.context);
   assert.equal(f.helperCalls(), 2);
   let plan = await readWorkPlan(f.context);
@@ -1392,7 +1514,7 @@ test("Auto routes execution through Router and only Senior explicitly completes 
 for (const role of ["junior", "senior", "review"]) {
   test(`ending ${role} successfully cannot complete an active plan`, async t => {
     const f = await fixture(t, { mode: "auto", review: role === "review" });
-    if (role === "senior") f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+    if (role === "senior") f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
     await f.service.send("session-1", request, f.context);
     await f.service.afterTurn("session-1", completion(), f.context);
     if (role === "review") await f.service.afterTurn("session-1", completion("turn-2"), f.context);
@@ -1417,7 +1539,7 @@ for (const state of ["completed", "absent"]) {
 
 test("Senior can update requirements and implement in one request, then receives separate review", async t => {
   const f = await fixture(t);
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"plan_implementation"}' });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"plan_implementation"}' });
   await f.service.send("session-1", { ...request, message: "Senior, add the missing acceptance case to the plan and implement it." }, f.context);
   assert.equal(f.sends[0].selection.modelId, "gpt-6-astra");
   assert.match(f.sends[0].input.message, /including any explicitly requested planning changes/);
@@ -1443,7 +1565,7 @@ for (const outcome of ["failed", "interrupted", "stopped"]) {
 
 test("plan changes during routing prevent execution of a different document", async t => {
   const f = await fixture(t);
-  f.agent.waitForEphemeralConversationTurn = async () => {
+  f.router.respond = async () => {
     await writeFile(workPlanPath(f.context), planDocument() + "\nChanged scope.\n");
     return { ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' };
   };
@@ -1501,7 +1623,7 @@ test("the Deslop button uses the configured planner despite a conversation's Jun
 
 test("semantic cleanup classification goes straight to Astra without approval or another review", async (t) => {
   const f = await fixture(t, { mode: "auto", review: true }, { readyPlan: false });
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"deslop"}' });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"deslop"}' });
   await f.service.send("session-1", { ...request, message: "Simplify your latest changes without changing behavior." }, f.context);
   assert.equal(f.helperCalls(), 1);
   assert.equal(f.cleanupCalls(), 1);
@@ -1515,7 +1637,7 @@ test("semantic cleanup classification goes straight to Astra without approval or
 
 test("implementation plus requested cleanup stays implementation and receives one Senior review", async t => {
   const f = await fixture(t);
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"junior","reason":"explicit_implementation"}' });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"junior","reason":"explicit_implementation"}' });
   await f.service.send("session-1", { ...request, message: "Implement the feature and deslop afterwards." }, f.context);
   assert.equal(f.sends[0].selection.modelId, "deepseek-flash");
   assert.equal(f.state().task, undefined);
@@ -1612,7 +1734,7 @@ for (const role of ["senior", "junior"]) {
         await writeFile(workPlanPath(f.context), planDocument(planStatus));
       }
       const before = await readWorkPlan(f.context);
-      f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true,
+      f.router.respond = async () => ({ ok: true,
         text: JSON.stringify({ mode: role === "junior" ? "senior" : "junior", reason: "discussion" }) });
       await f.service.send("session-1", { ...request, message: `${role} developer: say "hello"` }, f.context);
       assert.equal(f.state().resolvedMode, role, "an explicit address overrides the classifier's suggested role");
@@ -1626,7 +1748,7 @@ for (const role of ["senior", "junior"]) {
   for (const reason of ["review", "deslop"]) {
     test(`explicit ${role} ${reason} does not schedule a follow-up`, async t => {
       const f = await fixture(t, undefined, { readyPlan: false });
-      f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: JSON.stringify({ mode: "senior", reason }) });
+      f.router.respond = async () => ({ ok: true, text: JSON.stringify({ mode: "senior", reason }) });
       await f.service.send("session-1", { ...request, message: `${role}, ${reason} your changes` }, f.context);
       assert.equal(f.state().resolvedMode, role);
       assert.equal(f.sends[0].selection.modelId, f.assignments[role].modelId);
@@ -1661,7 +1783,7 @@ test("standalone Senior implementation leaves an unrelated completed plan out of
   const f = await fixture(t);
   await writeFile(workPlanPath(f.context), planDocument("completed"));
   const before = await readWorkPlan(f.context);
-  f.agent.waitForEphemeralConversationTurn = async () => ({ ok: true, text: '{"mode":"senior","reason":"explicit_implementation"}' });
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"explicit_implementation"}' });
   await f.service.send("session-1", { ...request, message: "Senior, create hello.txt" }, f.context);
   assert.equal(f.state().workPlan, null);
   await f.service.afterTurn("session-1", completion(), f.context);

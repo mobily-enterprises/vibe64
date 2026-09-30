@@ -2667,14 +2667,14 @@ function createVibe64SessionStore({
     });
   }
 
-  async function readConversationTail(sessionId) {
+  async function readConversationTail(sessionId, { userLimit = 2 } = {}) {
     return withReadableSessionPaths(sessionId, async (paths) => {
       const turns = [];
       let users = 0;
       for (const id of (await conversationTurnIds(paths)).reverse()) {
         const turn = await readConversationTurn(paths, id);
         turns.unshift(turn);
-        if (turn.user && ++users === 2) break;
+        if (turn.user && ++users >= userLimit) break;
       }
       return turns;
     });

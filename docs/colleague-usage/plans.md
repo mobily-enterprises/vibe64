@@ -98,14 +98,30 @@ In **Auto**, name **Senior** or **Junior** in your message to choose either role
 for that request. For example, “Junior developer: say hello” needs no plan, and
 “Senior, implement the current plan” uses Senior for implementation.
 
-Without an explicit role, Senior handles plan discussion and management, review
-and Deslop. Junior handles other questions and work, including implementation
-without a plan. The router uses your new request, the last three visible messages
-and a short current-plan summary to understand follow-ups.
+Without an explicit role, Senior handles discussing, writing and improving plans,
+review and Deslop. Junior implements an existing plan: say “Execute the plan” or
+ask it to continue implementation. Answering the plan's open questions so coding
+can proceed also defaults to Junior; recording accepted choices or checklist
+progress does not change that default. An explicit Senior or Junior request
+always takes precedence. Junior also handles other questions and work, including
+implementation without a plan. The router uses your new request, the last three
+visible messages and a short current-plan summary to understand follow-ups.
 
-Completed implementation in Auto always gets a separate **Senior review**, even
-when Senior implemented it or both roles use the same model. The **Deslop** switch
-adds behavior-preserving cleanup to that review. Ordinary answers, planning,
+Before automatic **Senior review**, Router reads the last five visible user and
+assistant messages and checks whether proceeding fits your latest instructions.
+For example, steering with “Wait while I fix the browser” holds both review and
+Deslop, even if the assistant ends its turn. Unanswered questions, unfinished work
+and unclear intent also hold the handoff. Tell chat to continue or request review
+when you are ready. A later instruction to proceed can supersede an earlier pause.
+
+When work is ready and your instructions allow it, Auto starts one separate
+Senior review, even when Senior implemented it or both roles use the same model.
+The **Deslop** switch adds behavior-preserving cleanup to that review. While the
+decision runs, the status says **Router is checking whether review should start…**.
+If Router fails, review stays pending; use **Retry review** when you want that review or
+the composer's **Stop** button to cancel it. Stop also interrupts the Router check.
+This works the same way on desktop and mobile.
+Ordinary answers, planning,
 requested reviews and cleanup do not start a repeating review cycle. Direct
 Senior, Junior and Custom modes retain their direct behavior without automatic
 review.

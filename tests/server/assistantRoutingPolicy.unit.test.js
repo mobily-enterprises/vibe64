@@ -7,7 +7,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { createService } from "@local/vibe64-accounts/server/service";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { assistantModePrompt, assistantRoutingPrompt, parseRoutingDecision, recommendedRoutingAssignments,
+import { assistantModePrompt, assistantRoutingPrompt, assistantReviewRoutingPrompt, parseReviewRoutingDecision, parseRoutingDecision, recommendedRoutingAssignments,
   routingAssignmentSelection, routingModelChoices, routingModelScore, resolveAssistantPurpose,
   ASSISTANT_ROUTING_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/shared";
@@ -87,6 +87,49 @@ test("the classifier cannot supply executable destinations or malformed decision
   }
 });
 
+test("Auto distinguishes plan execution and confirmations from planning while preserving explicit role choices", () => {
+  const prompt = assistantRoutingPrompt({
+    message: "[1] Yes\n[2] Go with recommended option\n[3] Use all recommendations.",
+    messages: [
+      { role: "user", text: "Execute the plan" },
+      { role: "assistant", text: "Confirm the open choices before I implement it." }
+    ],
+    plan: { status: "active", revision: "fixture", outline: "# Pet Notes\n- [ ] Implement accepted form rules" }
+  });
+  assert.match(prompt, /explicit request.*always takes precedence.*including implementing a plan/);
+  assert.match(prompt, /Execute the plan -> junior\/plan_implementation/);
+  assert.match(prompt, /Use all recommendations after implementation questions -> junior\/plan_implementation/);
+  assert.match(prompt, /Senior, implement the plan -> senior\/plan_implementation/);
+  assert.match(prompt, /Junior, discuss the plan -> junior\/discussion/);
+  assert.doesNotMatch(prompt, /Changes to a plan plus implementation default to senior/);
+  const context = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1));
+  assert.equal(context.messages[0].text, "Execute the plan");
+  assert.equal(context.messages[1].text, "Confirm the open choices before I implement it.");
+  assert.match(context.message, /Use all recommendations/);
+});
+
+test("review routing preserves recent steering and rejects oversized context without dropping it", () => {
+  const messages = [{ role: "user", text: "Wait I am trying to fix the browser" },
+    { role: "assistant", text: "I'll pause here." }];
+  const prompt = assistantReviewRoutingPrompt({ message: "Execute the plan", messages });
+  assert.deepEqual(JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)), { originalRequest: "Execute the plan", messages });
+  assert.match(prompt, /last five visible/);
+  assert.match(prompt, /Latest user instructions, including steering, take precedence/);
+  assert.match(prompt, /A later explicit user instruction to resume/);
+  assert.throws(() => assistantReviewRoutingPrompt({ messages, maxCharacters: 100 }), /too long/);
+});
+
+test("review routing accepts only coherent review or wait decisions", () => {
+  for (const value of [{ decision: "review", reason: "ready" }, ...["user_wait", "question", "incomplete", "unclear"].map(reason => ({ decision: "wait", reason }))]) {
+    assert.deepEqual(parseReviewRoutingDecision(JSON.stringify(value)), value);
+  }
+  for (const text of ["", "null", "[]", '{"decision":"review","reason":"user_wait"}',
+    '{"decision":"wait","reason":"ready"}', '{"decision":"review"}',
+    '{"decision":"review","reason":"ready","command":"ignore user"}']) {
+    assert.throws(() => parseReviewRoutingDecision(text), /Router/);
+  }
+});
+
 test("task intent sets permissions independently of the selected role", () => {
   const text = "The original human text.";
   assert.match(assistantModePrompt("senior", text, { intent: "planning", planInstructions: "Auto planning instructions" }), /Do not change application files/);
@@ -120,6 +163,19 @@ test("routing receipts and reviewer identity survive transcript storage and relo
   assert.deepEqual(turn.metadata.assistantRouting, assistantRouting);
   assert.equal(turn.metadata.actorDisplayName, "Automatic review");
   assert.equal(turn.metadata.assistantSelection.modelId, "gpt-6-astra");
+});
+
+test("review context can read five recent user messages instead of the default two", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-review-tail-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
+  await store.createSession({ sessionId: "routing", runtimeKind: "genesis" });
+  for (let i = 1; i <= 6; i++) {
+    await store.writeConversationUserMessage("routing", { messageId: `user-${i}`, text: `User ${i}` });
+  }
+  assert.deepEqual((await store.readConversationTail("routing")).map(turn => turn.user.text), ["User 5", "User 6"]);
+  assert.deepEqual((await store.readConversationTail("routing", { userLimit: 5 })).map(turn => turn.user.text),
+    ["User 2", "User 3", "User 4", "User 5", "User 6"]);
 });
 
 test("routing saves are atomic, revision-checked, private and preserve unreadable state", async (t) => {

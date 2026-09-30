@@ -9,7 +9,7 @@ import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS
   serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
   ROUTING_REASONS, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingFromMetadata,
-  assistantRoutingPrompt, parseRoutingDecision
+  assistantRoutingPrompt, parseRoutingDecision, assistantReviewRoutingPrompt, parseReviewRoutingDecision
 } from "@local/vibe64-runtime/shared/assistantRouting";
 
 const STATE_KEY = "assistant_routing_request";
@@ -26,6 +26,13 @@ const OUTPUT_SCHEMA = {
     reason: { type: "string", enum: [...ROUTING_REASONS] }
   }
 };
+const REVIEW_OUTPUT_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["decision", "reason"],
+  properties: {
+    decision: { type: "string", enum: ["review", "wait"] },
+    reason: { type: "string", enum: ["ready", "user_wait", "question", "incomplete", "unclear"] }
+  }
+};
 const continuationStatus = (state, phase) => `${state.continuation === "planning" ? "planning" : "review"}_${phase}`;
 const continuationRole = (state) => state.continuation === "planning" ? "senior" : "review";
 const usesWorkPlan = (state) => state.mode === "auto" && state.task !== "deslop" && state.reason !== "discussion" &&
@@ -40,6 +47,13 @@ function failure(message, code = "vibe64_assistant_routing_unavailable") {
 }
 function read(store, sessionId) {
   return store.readMetadataValue(sessionId, STATE_KEY).then((value) => value ? JSON.parse(value) : null);
+}
+async function recentVisibleMessages(store, sessionId, limit) {
+  const turns = await store.readConversationTail(sessionId, { userLimit: limit });
+  return turns.flatMap((turn) => [
+    ...(turn.user ? [{ role: "user", text: turn.user.text }] : []),
+    ...(turn.messages || []).filter(({ role }) => role === "assistant").map(({ text }) => ({ role: "assistant", text }))
+  ]).slice(-limit);
 }
 function withSelection(context, selection) {
   return {
@@ -97,7 +111,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     await rm(root, { recursive: true, force: true });
   }
 
-  async function classify(sessionId, context, state, task, options) {
+  async function classify(sessionId, context, state, task, options, followup = false) {
     // Parent metadata owns the reference. Each write merges only this helper's
     // fields under the normal lock, so a late native callback cannot undo Stop.
     async function retainHelper(helper) {
@@ -147,11 +161,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (task.cancelled) throw failure("Routing cancelled.");
       await mkdir(scope.workdir, { recursive: true });
       await mkdir(scope.runtimeRoot, { recursive: true });
-      const turns = await context.runtime.store.readConversationTail(sessionId);
-      const messages = turns.flatMap((turn) => [
-        ...(turn.user ? [{ role: "user", text: turn.user.text }] : []),
-        ...(turn.messages || []).filter(({ role }) => role === "assistant").map(({ text }) => ({ role: "assistant", text }))
-      ]).slice(-3);
+      const messages = await recentVisibleMessages(context.runtime.store, sessionId, followup ? 5 : 3);
+      if (followup) task.reviewMessages = messages;
       await validateDecision(context, state);
       const executionProfile = await agent.resolveEphemeralExecutionProfile(scope, PROFILE, helperContext);
       helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
@@ -163,9 +174,10 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       await retainHelper(helper);
       if (task.cancelled) throw failure("Routing cancelled.");
       const started = await agent.startEphemeralConversationTurn(scope, {
-        conversationId: helper.conversationId, executionProfile, outputSchema: OUTPUT_SCHEMA,
-        messageId: state.messageId, promptLabel: "Choose role and task",
-        message: assistantRoutingPrompt({
+        conversationId: helper.conversationId, executionProfile, outputSchema: followup ? REVIEW_OUTPUT_SCHEMA : OUTPUT_SCHEMA,
+        messageId: followup ? state.reviewMessageId : state.messageId,
+        promptLabel: followup ? "Check whether review should start" : "Choose role and task",
+        message: followup ? assistantReviewRoutingPrompt({ message: state.input.message, messages }) : assistantRoutingPrompt({
           message: state.input.message,
           messages,
           plan: state.workPlan ? {
@@ -192,7 +204,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (result?.ok !== true || (result.status && result.status !== "completed")) {
         throw failure(result?.error || "Routing could not finish. Retry or choose a mode.");
       }
-      decision = parseRoutingDecision(result.rawText || result.text);
+      decision = (followup ? parseReviewRoutingDecision : parseRoutingDecision)(result.rawText || result.text);
     } catch (error) { generationError = error; }
     try {
       await interrupt;
@@ -382,6 +394,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       } : null);
       if (!allowAuto && preferences?.mode === "auto") throw failure("Auto is available in Main chat only. Choose Senior or Junior.");
       if (input.reviewAction === "retry") {
+        if (running.has(key)) throw failure("Wait for Router to finish checking whether review should start, or stop it.");
         state = await read(context.runtime.store, sessionId);
         if (state?.messageId !== input.messageId || !["review_pending", "review_uncertain", "planning_pending", "planning_uncertain"].includes(state.status)) throw failure("There is no pending review or planning handoff to retry.");
         try {
@@ -601,8 +614,14 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   async function afterTurn(sessionId, payload, options, { recovered = false } = {}) {
     const run = payload?.payload?.agentRun;
     if (!run || run.active) return;
-    return exclusive(sessionId, options, async (context) => {
-      const state = await read(context.runtime.store, sessionId);
+    let context;
+    let state;
+    let task;
+    let key;
+    await exclusive(sessionId, options, async (current) => {
+      context = current; key = keyFor(sessionId, context);
+      if (closing || running.has(key)) return;
+      state = await read(context.runtime.store, sessionId);
       if (!state || !["sent", "reviewing", "planning"].includes(state.status)) return;
       if (!state.turnId) {
         const receipt = await agent.inspectMessageAdmission(sessionId, {
@@ -669,13 +688,54 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (needsRetry) state.error = "Coding finished while review scheduling was disconnected. Retry the required Senior review.";
       await save(context, state);
       if (needsRetry) return;
-      try { await deliver(sessionId, { ...context, vibe64User: state.submittedBy }, state, true); }
-      catch (error) {
-        state.status = continuationStatus(state, state.attemptedMessageId ? "uncertain" : "pending");
-        state.error = error.message;
-        await save(context, state);
-      }
+      task = { cancelled: false, finished: Promise.withResolvers() };
+      task.close = async () => {
+        await cancel(sessionId, options, { waitForCleanup: true });
+        const persisted = await read(context.runtime.store, sessionId);
+        if (persisted?.messageId === state.messageId && persisted.helper) {
+          throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
+        }
+      };
+      running.set(key, task);
     });
+    if (!task) return;
+    try {
+      const decision = await classify(sessionId, context, state, task, options, true);
+      await exclusive(sessionId, options, async (current) => {
+        const persisted = await read(current.runtime.store, sessionId);
+        if (task.cancelled || persisted?.stopped || persisted?.messageId !== state.messageId || persisted.status !== "review_pending") return;
+        state = persisted;
+        const messages = await recentVisibleMessages(current.runtime.store, sessionId, 5);
+        if (JSON.stringify(messages) !== JSON.stringify(task.reviewMessages)) {
+          throw failure("The conversation changed while Router was checking review. Request review explicitly when ready.");
+        }
+        if (decision.decision === "wait") {
+          state.status = "done";
+          state.reviewStatus = decision.reason === "user_wait" ? "cancelled"
+            : decision.reason === "question" ? "skipped_question"
+              : decision.reason === "incomplete" ? "skipped_incomplete" : "skipped_unconfirmed";
+          delete state.error;
+          await save(current, state);
+          return;
+        }
+        await deliver(sessionId, { ...current, vibe64User: state.submittedBy }, state, true);
+      });
+    } catch (error) {
+      await exclusive(sessionId, options, async (current) => {
+        const persisted = await read(current.runtime.store, sessionId);
+        if (persisted?.messageId !== state.messageId) return;
+        if (task.cancelled || persisted.stopped || persisted.status === "done") {
+          if (persisted.helper) { persisted.error = error.message; await save(current, persisted); }
+          return;
+        }
+        persisted.status = continuationStatus(persisted, persisted.attemptedMessageId ? "uncertain" : "pending");
+        persisted.error = error.message;
+        await save(current, persisted);
+      });
+    } finally {
+      running.delete(key);
+      task.finished.resolve();
+    }
   }
 
   async function reconcile(sessionId, options) {
