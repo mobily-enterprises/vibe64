@@ -46,8 +46,10 @@ describe("routed chat delivery presentation", () => {
   it("lets confirmed delivery replace stale errors before and after history loads", async () => {
     const delivery = createAssistantMessageDelivery();
     await delivery.send({ message: "Hello" }, { messageId: request.messageId, deliver: async () => false });
-    expect(chatTurnsWithRouting(delivery.turns([]), { ...request, status: "sent" })[0].optimistic)
-      .toMatchObject({ status: "accepted", error: "" });
+    for (const status of ["sent", "implementation_pending", "implementation_sending", "implementation_uncertain"]) {
+      expect(chatTurnsWithRouting(delivery.turns([]), { ...request, status })[0].optimistic)
+        .toMatchObject({ status: "accepted", error: "" });
+    }
     const receipt = { turnId: "turn-1", user: { messageId: request.messageId, text: "Hello" } };
     const turns = chatTurnsWithRouting(delivery.turns([receipt]), { ...request, status: "uncertain", error: "Lost response." });
     expect(turns).toEqual([receipt]);

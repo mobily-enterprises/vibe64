@@ -57,7 +57,7 @@ It also owns switching the main conversation between engines, preserving native
 identities and adding missed or corrected history to the next ordinary Send.
 It owns workflow chat modes, actor-aware destination resolution, isolated request
 classification and delivery, per-turn attribution, cancellation, Router-gated
-Senior review of Auto implementation and optional Deslop that respect current user intent, current checklist plans, explicit Senior completion and
+bounded implementation continuation, Senior review and optional Deslop in Auto that respect current user intent, current checklist plans, explicit Senior completion and
 archived/reopened plan snapshots outside source. Senior and Junior retain one effective orchestrator per actor.
 Deslop uses that workflow's Senior model for direct behavior-preserving cleanup.
 Foreign Helper and Backup chat turns reuse ordinary changeover.

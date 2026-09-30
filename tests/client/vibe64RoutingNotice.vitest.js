@@ -56,7 +56,7 @@ it("does not replay finished notices on restore, background completion or discus
 it("keeps delivery failures in their bubble and review recovery controls in the notice", async () => {
   const f = mount({ messageId: "one", status: "failed", error: "Reconnect the AI" });
   expect(f.state().actionable).toBe(false);
-  for (const status of ["review_pending", "review_uncertain"]) {
+  for (const status of ["review_pending", "review_uncertain", "implementation_pending", "implementation_uncertain"]) {
     f.props.value.request = { messageId: "one", status };
     await nextTick();
     expect(f.state().actionable).toBe(true);
@@ -89,4 +89,26 @@ it("shows recovery controls for a stopped planning handoff", () => {
   const f = mount({ status: "planning_pending", continuation: "planning", resolvedMode: "junior", assignments: { senior: { engineId: "codex", modelId: "gpt-6-astra" } } });
   expect(f.state().actionable).toBe(true);
   expect(f.state().label).toBe("Back to planning · Codex (gpt-6-astra not recorded)");
+});
+
+
+it("shows continuation evidence and preserves an incomplete outcome across restore without a duplicate toast", async () => {
+  const outcome = { decision: "continue", explanation: "Import is still authorised and unfinished.", nextStep: "Implement import validation." };
+  const f = mount({ messageId: "auto-work", status: "sent", resolvedMode: "junior", continuation: "implementation", outcome });
+  expect(f.state().actionable).toBe(true);
+  expect(f.state().showOutcome).toBe(true);
+  expect(f.state().label).toContain("Continuing implementation");
+  f.props.value.request = { ...f.props.value.request, status: "done", reviewStatus: "skipped_incomplete",
+    outcome: { decision: "wait", reason: "blocked", explanation: "A required account is unavailable.", nextStep: "" } };
+  await nextTick();
+  expect(f.state().label).toBe("Implementation incomplete.");
+  expect(f.state().actionable).toBe(true);
+  expect(feedback.report).not.toHaveBeenCalled();
+  const saved = f.props.value.request;
+  app.unmount();
+  const restored = mount(saved);
+  expect(restored.state().showOutcome).toBe(true);
+  restored.props.value.request = { ...saved, stopped: true, reviewStatus: "cancelled" };
+  await nextTick();
+  expect(restored.state().showOutcome).toBe(false);
 });

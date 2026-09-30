@@ -687,18 +687,39 @@ accepted native turn is active. It cannot become an accidental steering request.
 after a server restart becomes visibly retryable. A new request cannot overtake
 an unresolved pending request. Active-turn steering bypasses classification.
 
-After the matching implementation turn completes normally, the captured Router
-uses the same bounded, tool-free helper lifecycle to decide whether to review or
-wait. It sees the original request and the last five visible user/assistant
-messages, including steering. Pause/wait requests, unanswered questions,
-unfinished implementation and unclear intent suppress the handoff; a later
-explicit resume can supersede a pause. Native completion alone is insufficient.
-The check runs outside the session lock, so Stop and shutdown can interrupt it.
-Delivery rechecks the latest message snapshot under the lock; changed context,
-oversized input, invalid output, unavailable Router or failed cleanup leave an
-unsent review pending for explicit Retry review or Stop. Waiting finishes this follow-up
-without resuming it on reload. Explicit Retry authorizes the pending review.
-No persisted history repair or state-format migration is needed.
+After a matching implementation turn completes normally, the captured Router
+uses the existing tool-free helper to choose continue, review or wait. Its input
+includes the original request, accepted steering retained on new Auto requests,
+the full current plan, the last five visible replies, the native outcome and the
+previous decision. Its strict output includes a bounded explanation, next step
+and reported progress. The routing workload accepts up to 128,000 input characters
+so a substantial plan fits; oversized input is rejected without truncating intent.
+Router classifies reported evidence, never verifies code or marks a plan complete.
+Messages with an application actor or a follow-up parent request are marked as
+automatic evidence; they cannot supersede accepted human steering.
+
+An approved continuation uses the selected implementation role, original actor,
+ordinary admission and a fresh durable message ID. The existing follow-up owner
+handles pending/sending/uncertain implementation states and receipt-only recovery.
+The original request identity remains the parent through all continuations.
+Current plan revision and recent messages are rechecked before admission.
+Accepted steering bypasses classification and is retained only after confirmed
+ordinary delivery. Stop, native waiting, active goals, failures, changed access
+and unconfirmed observations cannot launch more work. An independent portion may
+continue while a question blocks another portion. Two consecutive turns without
+reported progress or eight automatic continuations leave a visible incomplete
+outcome requiring a new user request; a review never schedules another review.
+
+The notice presents the outcome, explanation and next step through the existing
+chat surface. Pending implementation has Continue implementation or Check delivery;
+Router failure still offers explicit Retry review or Stop. A recovered completion
+never automatically launches another turn after restart. Classification runs
+outside the session lock and Stop can suppress its late answer. Conversation or
+plan changes, malformed decisions, oversized input and cleanup failures retain
+unsent recovery instead of sending from stale evidence.
+The additive 20260930-auto-implementation-continuation release boundary changes
+no existing records: only new explicit Auto requests receive autoExecution state.
+Historical requests retain their review contract without gaining continuation.
 
 When approved, review uses one preallocated
 message identity and the snapshotted Senior selection. The visible automatic

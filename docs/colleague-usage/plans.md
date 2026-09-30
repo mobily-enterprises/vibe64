@@ -107,20 +107,44 @@ always takes precedence. Junior also handles other questions and work, including
 implementation without a plan. The router uses your new request, the last three
 visible messages and a short current-plan summary to understand follow-ups.
 
-Before automatic **Senior review**, Router reads the last five visible user and
-assistant messages and checks whether proceeding fits your latest instructions.
-For example, steering with “Wait while I fix the browser” holds both review and
-Deslop, even if the assistant ends its turn. Unanswered questions, unfinished work
-and unclear intent also hold the handoff. Tell chat to continue or request review
-when you are ready. A later instruction to proceed can supersede an earlier pause.
+After an Auto implementation turn, Router checks the original request, accepted
+steering, the full current plan, the latest five visible messages and the execution
+outcome. The status says **Router is deciding whether to continue, review or wait…**.
+It chooses one outcome:
 
-When work is ready and your instructions allow it, Auto starts one separate
-Senior review, even when Senior implemented it or both roles use the same model.
-The **Deslop** switch adds behavior-preserving cleanup to that review. While the
-decision runs, the status says **Router is checking whether review should start…**.
-If Router fails, review stays pending; use **Retry review** when you want that review or
-the composer's **Stop** button to cancel it. Stop also interrupts the Router check.
-This works the same way on desktop and mobile.
+- **Continue implementation** when authorised work remains and needs no user
+  decision. This keeps the selected coding role, usually Junior, and starts from
+  completed work. A decision affecting one part can leave independent work eligible.
+- **Senior review** when implementation is ready. Review checks the evidence;
+  Router's decision and checkbox counts do not prove that a plan is completed.
+- **Wait** for your pause, a necessary answer, missing access or resources, unclear
+  intent, or stalled work. The notice says **Implementation incomplete**, **Waiting
+  for your answer**, or **Paused at your request**, with the reason. A later explicit
+  instruction to proceed can supersede a pause; asking for an update cannot.
+
+The notice shows Router's explanation and, when continuing, the next step. These
+are AI judgments about recorded evidence, not independent verification. Auto stops
+after two consecutive turns without reported progress, or eight automatic
+implementation continuations. Review the remaining work and send a new request
+if you want it to proceed. These bounds apply per new request.
+
+The composer's **Stop** cancels pending work and interrupts Router. Failed or
+interrupted execution does not automatically continue. After a restart, recovered
+completion needs an explicit **Retry review**. An already prepared implementation
+handoff offers **Continue implementation**; uncertain delivery offers **Check
+delivery**, which checks its existing receipt without sending again. If the plan
+or conversation changed, stop the handoff and send a fresh request. Direct
+Senior, Junior and Custom modes do not automatically continue.
+
+When ready, Auto starts one separate Senior review, even when Senior implemented
+it or both roles use the same model. The **Deslop** switch adds behavior-preserving
+cleanup to that review. A failed Router decision leaves **Retry review** for an
+explicit review request, or use **Stop** to cancel it. The same controls and
+notices appear on desktop and mobile. Colleague's conversation watches treat
+unfinished waiting outcomes as needing attention. Colleague can explain the outcome and offer
+to send a requested continuation through the existing chat operation; an
+explanation or offer alone does not authorise another turn.
+
 Ordinary answers, planning,
 requested reviews and cleanup do not start a repeating review cycle. Direct
 Senior, Junior and Custom modes retain their direct behavior without automatic

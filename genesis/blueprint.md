@@ -464,13 +464,19 @@ and answering model. Auto planning restricts Senior to plan management. Junior
 implements the active plan and records unresolved decisions for the user. Direct Senior and Junior may both edit application files when asked.
 Steering stays with the currently working assistant.
 
-In Auto, Senior review follows reviewable implementation by either role, with
-optional Deslop. Before starting that follow-up, Router reads the last five visible
-user and assistant messages and checks that proceeding fits the latest user intent.
-A pause or wait steer, unanswered question, unfinished implementation or unclear
-intent holds review and Deslop; a later explicit resume can supersede a pause.
-Ending a native turn alone never authorizes the handoff. A failed decision holds
-review for explicit Retry review or Stop, and Stop can cancel the Router check.
+In Auto, Router checks each normally finished implementation turn against the
+original request, accepted steering, full current plan and recent visible replies.
+It can continue authorised independent work on the selected coding role, hand
+reviewable work to Senior, or wait for a necessary decision, resource, permission
+or explicit pause. Its explanation and next step remain visible. A partial result
+is presented as implementation incomplete, not plan completion. Two consecutive
+turns without reported progress or eight automatic continuations stop for a new
+user request. Router judges recorded evidence; Senior verifies the actual work.
+Stop, native questions, failed execution and changed access remain authoritative.
+Existing requests gain no continuation authority during upgrade or reload.
+A failed decision holds review for explicit Retry review or Stop. Pending
+implementation recovery offers Continue implementation or Check delivery without
+duplicate sends; changed plans or conversation require a fresh request.
 When allowed, one visible follow-up asks the Senior model to inspect the implementation, fix
 in-scope defects and then Deslop the coding changes and its fixes in the same
 turn. Cleanup preserves the intended behavior and follows the project's Deslop

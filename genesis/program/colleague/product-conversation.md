@@ -167,6 +167,9 @@ finished turns and explicit attention states; failures are reported for every
 condition. An existing completed answer is reported immediately. Quiet output
 does not imply that an agent is blocked. One-shot watches retire after delivery;
 ongoing watches compare run, message and status cursors to suppress duplicates.
+Auto implementation handoffs count as working until admitted or interrupted.
+Uncertain continuation delivery and settled incomplete outcomes need attention;
+the coding model's partial final reply does not clear that waiting state.
 Hosts can register an authorized reader for a named workspace conversation source.
 Those watches use the same scheduler, cursors, budget, cancellation and notification
 flow without a project/session. Only the owning host action supplies that source;

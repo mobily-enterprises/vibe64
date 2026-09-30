@@ -27,14 +27,23 @@ const OUTPUT_SCHEMA = {
   }
 };
 const REVIEW_OUTPUT_SCHEMA = {
-  type: "object", additionalProperties: false, required: ["decision", "reason"],
+  type: "object", additionalProperties: false, required: ["decision", "reason", "explanation", "nextStep", "progress"],
   properties: {
-    decision: { type: "string", enum: ["review", "wait"] },
-    reason: { type: "string", enum: ["ready", "user_wait", "question", "incomplete", "unclear"] }
+    decision: { type: "string", enum: ["continue", "review", "wait"] },
+    reason: { type: "string", enum: ["remaining_work", "ready", "user_wait", "question", "blocked", "no_progress", "unclear"] },
+    explanation: { type: "string", minLength: 1, maxLength: 600 },
+    nextStep: { type: "string", maxLength: 600 },
+    progress: { type: "boolean" }
   }
 };
-const continuationStatus = (state, phase) => `${state.continuation === "planning" ? "planning" : "review"}_${phase}`;
-const continuationRole = (state) => state.continuation === "planning" ? "senior" : "review";
+const continuationStatus = (state, phase) => `${state.continuation || "review"}_${phase}`;
+function continuationRole(state) {
+  if (state.continuation === "implementation") return state.resolvedMode;
+  return state.continuation === "planning" ? "senior" : "review";
+}
+const continuationMessage = (state) => state.continuation === "implementation" ? state.implementationMessage
+  : { messageId: state.reviewMessageId, message: state.reviewMessage };
+const MAX_IMPLEMENTATION_CONTINUATIONS = 8;
 const usesWorkPlan = (state) => state.mode === "auto" && state.task !== "deslop" && state.reason !== "discussion" &&
   (state.reason === "planning" || Boolean(state.workPlan));
 const activeGoal = (goal) => goal && !["complete", "completed"].includes(goal.status);
@@ -51,7 +60,8 @@ function read(store, sessionId) {
 async function recentVisibleMessages(store, sessionId, limit) {
   const turns = await store.readConversationTail(sessionId, { userLimit: limit });
   return turns.flatMap((turn) => [
-    ...(turn.user ? [{ role: "user", text: turn.user.text }] : []),
+    ...(turn.user ? [{ role: "user", text: turn.user.text,
+      ...(turn.metadata?.actorId === "app" || turn.metadata?.assistantRouting?.parentMessageId ? { automatic: true } : {}) }] : []),
     ...(turn.messages || []).filter(({ role }) => role === "assistant").map(({ text }) => ({ role: "assistant", text }))
   ]).slice(-limit);
 }
@@ -176,8 +186,10 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       const started = await agent.startEphemeralConversationTurn(scope, {
         conversationId: helper.conversationId, executionProfile, outputSchema: followup ? REVIEW_OUTPUT_SCHEMA : OUTPUT_SCHEMA,
         messageId: followup ? state.reviewMessageId : state.messageId,
-        promptLabel: followup ? "Check whether review should start" : "Choose role and task",
-        message: followup ? assistantReviewRoutingPrompt({ message: state.input.message, messages }) : assistantRoutingPrompt({
+        promptLabel: followup ? "Decide whether to continue, review or wait" : "Choose role and task",
+        message: followup ? assistantReviewRoutingPrompt({ message: state.input.message, messages,
+          plan: state.workPlan, execution: task.execution, autoExecution: state.autoExecution || null,
+          previousOutcome: state.outcome || null }) : assistantRoutingPrompt({
           message: state.input.message,
           messages,
           plan: state.workPlan ? {
@@ -270,11 +282,14 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const store = context.runtime.store;
     context = { ...context, vibe64User: state.submittedBy };
     const role = followup ? continuationRole(state) : state.resolvedMode;
-    const modelRole = followup ? "senior" : state.resolvedMode;
-    const followupLabel = state.continuation === "planning" ? "Back to planning" : "Automatic review";
-    const deliveredStatus = followup ? (role === "senior" ? "planning" : "reviewing") : "sent";
+    const implementing = followup && state.continuation === "implementation";
+    const modelRole = followup && !implementing ? "senior" : state.resolvedMode;
+    const followupLabel = implementing ? "Continue implementation" : state.continuation === "planning" ? "Back to planning" : "Automatic review";
+    const deliveredStatus = followup && !implementing ? (role === "senior" ? "planning" : "reviewing") : "sent";
     const selection = state.assignments[modelRole];
-    const messageId = followup ? state.reviewMessageId : state.messageId;
+    const input = followup ? continuationMessage(state) : state.input;
+    const messageId = followup ? input.messageId : state.messageId;
+    const displayMessage = input.displayMessage || input.message;
     const selectedContext = withSelection(context, selection);
     selectedContext.expectedConnectionIdentity = destinations(state.decision || {})[modelRole]?.connectionIdentity;
     const uncertain = state.status === (followup ? continuationStatus(state, "uncertain") : "uncertain");
@@ -282,7 +297,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       const receipt = await agent.inspectMessageAdmission(sessionId, { messageId, threadId: state.threadId }, selectedContext);
       if (receipt?.admission !== "accepted") throw failure("Delivery is uncertain. Retry to check the receipt; this will not send a duplicate.", "vibe64_assistant_routing_delivery_uncertain");
       await store.writeConversationUserMessage(sessionId, {
-        messageId, text: followup ? state.reviewMessage : state.input.displayMessage || state.input.message,
+        messageId, text: displayMessage,
         attachments: followup ? [] : state.input.displayAttachments,
         turnMetadata: { assistantSelection: selection, assistantRouting: attribution(state, followup),
           ...(followup ? { actorId: "app", actorDisplayName: followupLabel } : {}) }
@@ -294,7 +309,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       return { ok: true, delivered: true, messageId, threadId: state.threadId };
     }
     if (followup && state.mode !== "auto") throw failure("Automatic follow-ups require Auto. Cancel this follow-up and send a new request in your chosen role.");
-    if (followup && state.continuation !== "planning" && await skipReviewForQuestion(sessionId, context, state)) return { ok: true, skipped: true };
+    if (state.stopped) throw failure("This request was stopped. Send a new request to continue.");
+    if (followup && !implementing && state.continuation !== "planning" && await skipReviewForQuestion(sessionId, context, state)) return { ok: true, skipped: true };
     await validateDecision(context, state, followup);
     const currentSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const expected = followup ? state.assignments[state.resolvedMode] : state.observedSelection;
@@ -311,7 +327,16 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       return { ok: true, skipped: true };
     }
     if (followup && (native?.pendingRequests?.length || native?.turn?.waitingForInput)) {
-      throw failure("Answer the pending question or approval before retrying review.");
+      throw failure("Answer the pending question or approval before continuing.");
+    }
+    if (implementing) {
+      const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
+      const messages = await recentVisibleMessages(store, sessionId, 5);
+      if ((plan?.revision || null) !== state.implementationMessage.planRevision ||
+          JSON.stringify(messages) !== JSON.stringify(state.implementationMessage.messages) ||
+          usesWorkPlan(state) && plan?.status !== "active") {
+        throw failure("The conversation or plan changed before continuation. Stop this handoff and send a new request.");
+      }
     }
     if (!followup && state.mode === "auto" &&
         (state.reason === "plan_implementation" || state.reason === "explicit_implementation" && state.workPlan)) {
@@ -327,8 +352,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const usesPlan = usesWorkPlan(state);
     if (usesPlan && role === "senior" && state.workPlan) state.workPlan = await readWorkPlan(context);
     const includePlanInstructions = usesPlan || (state.task !== "deslop" && ["senior", "junior"].includes(state.mode));
-    const message = assistantModePrompt(role, followup ? state.reviewMessage : state.input.message,
-      { intent: followup ? "review" : state.task || (state.mode === "auto" ? state.reason : ""),
+    const message = assistantModePrompt(role, input.message,
+      { intent: followup && !implementing ? "review" : state.task || (state.mode === "auto" ? state.reason : ""),
         planInstructions: includePlanInstructions ? workPlanInstructions(role) : "" });
     await prepareSelection(sessionId, selection, context);
     state.deliverySelection = selection;
@@ -337,7 +362,6 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     await store.writeMetadataValue(sessionId, VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection(selection));
     state.status = followup ? continuationStatus(state, "sending") : "sending";
     await save(context, state);
-    const displayMessage = followup ? state.reviewMessage : state.input.displayMessage || state.input.message;
     const result = await dispatch(sessionId, {
       ...(followup ? {} : state.input), messageId, message, displayMessage,
       ...(state.task === "deslop" ? { genesisTask: "deslop" } : {}),
@@ -358,14 +382,14 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.");
     state.status = deliveredStatus;
     state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";
-    if (followup) state.reviewStatus = "running";
+    if (followup && !implementing) state.reviewStatus = "running";
     if (needsReview(state)) liveFollowupRequests.set(keyFor(sessionId, context), state.messageId);
     delete state.error;
     await save(context, state);
     return { ...result, assistantRoutingRequest: state };
   }
   function attribution(state, followup) {
-    const modelRole = followup ? "senior" : state.resolvedMode;
+    const modelRole = followup && state.continuation !== "implementation" ? "senior" : state.resolvedMode;
     const destination = destinations(state.decision || {})[modelRole];
     let resolvedMode = state.resolvedMode;
     if (followup) resolvedMode = continuationRole(state);
@@ -396,7 +420,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (input.reviewAction === "retry") {
         if (running.has(key)) throw failure("Wait for Router to finish checking whether review should start, or stop it.");
         state = await read(context.runtime.store, sessionId);
-        if (state?.messageId !== input.messageId || !["review_pending", "review_uncertain", "planning_pending", "planning_uncertain"].includes(state.status)) throw failure("There is no pending review or planning handoff to retry.");
+        if (state?.messageId !== input.messageId || !["review_pending", "review_uncertain", "planning_pending", "planning_uncertain", "implementation_pending", "implementation_uncertain"].includes(state.status)) throw failure("There is no pending follow-up to retry.");
         try {
           await admitMigratedRequest(context, state);
           direct = await deliver(sessionId, context, state, true);
@@ -432,6 +456,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         }
         if (explicitDeslop) throw failure("Deslop uses the Senior model in its own turn. Finish or stop the current turn, then send Deslop again.");
         if (input.submissionKind === "send") throw failure("The assistant started another turn. Review it before sending.");
+        if (state?.autoExecution && needsReview(state)) task.steeringRequestId = state.messageId;
         direct = true; return;
       }
       if (input.submissionKind === "steer") throw failure("That turn has finished. Send this as a new request.");
@@ -498,6 +523,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           status: resolvedMode ? "sending" : "routing",
           createdAt: new Date().toISOString(),
           review,
+          ...(mode === "auto" && !explicitDeslop ? { autoExecution: { continuations: 0, stalledTurns: 0, steering: [] } } : {}),
           reviewMessageId: review ? randomUUID() : "",
           submittedBy: context.vibe64User ? Object.fromEntries(["username", "id", "role", "email", "preferredName"]
             .filter((name) => context.vibe64User[name] !== undefined)
@@ -533,7 +559,18 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       };
       running.set(key, task);
     });
-    if (direct === true) return exclusive(sessionId, options, (current) => dispatch(sessionId, input, current));
+    if (direct === true) return exclusive(sessionId, options, async (current) => {
+      const result = await dispatch(sessionId, input, current);
+      if (result?.delivered === true && task.steeringRequestId) {
+        const persisted = await read(current.runtime.store, sessionId);
+        if (persisted?.messageId === task.steeringRequestId &&
+            !persisted.autoExecution.steering.some(({ messageId }) => messageId === input.messageId)) {
+          persisted.autoExecution.steering.push({ messageId: input.messageId, text: input.displayMessage || input.message });
+          await save(current, persisted);
+        }
+      }
+      return result;
+    });
     if (direct) return direct;
     try {
       if (!state.resolvedMode) {
@@ -588,7 +625,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       liveFollowupRequests.delete(keyFor(sessionId, context));
       if (task) { task.cancelled = true; stop = task.stop; finished = task.finished.promise; }
       if (!state) return false;
-      const preparingFollowup = ["review_pending", "planning_pending"].includes(state.status);
+      const preparingFollowup = ["review_pending", "planning_pending", "implementation_pending"].includes(state.status);
       state.stopped = true;
       state.review = false;
       if (preparingFollowup) {
@@ -625,7 +662,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (!state || !["sent", "reviewing", "planning"].includes(state.status)) return;
       if (!state.turnId) {
         const receipt = await agent.inspectMessageAdmission(sessionId, {
-          messageId: ["reviewing", "planning"].includes(state.status) ? state.reviewMessageId : state.messageId,
+          messageId: ["reviewing", "planning"].includes(state.status) || state.continuation === "implementation"
+            ? continuationMessage(state).messageId : state.messageId,
           threadId: state.threadId
         }, context);
         if (receipt?.admission === "accepted") state.turnId = receipt.turnId || "";
@@ -673,22 +711,29 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (!needsReview(state) || run.state !== "completed") {
         liveFollowupRequests.delete(keyFor(sessionId, context));
         state.status = "done";
-        if (needsReview(state)) state.reviewStatus = "skipped_incomplete";
+        if (needsReview(state)) {
+          state.reviewStatus = "skipped_incomplete";
+          state.outcome = { decision: "wait", reason: "blocked", explanation: `Implementation ${run.state || "stopped"}. Send a new request when ready to resume.`, nextStep: "", progress: false };
+        }
         await save(context, state); return;
       }
       const native = await agent.sessionState(sessionId, context);
       if (native?.turn?.active || native?.pendingRequests?.length || native?.turn?.waitingForInput) return;
-      if (await skipReviewForQuestion(sessionId, context, state)) return;
+      // Old requests retain their original handoff contract. New Auto requests
+      // let Router distinguish a blocking question from independent work.
+      if (!state.autoExecution && await skipReviewForQuestion(sessionId, context, state)) return;
       // Polling may observe completion before the native idle notification. Only
       // turns admitted by this coordinator may continue without an explicit retry.
       const needsRetry = recovered && liveFollowupRequests.get(keyFor(sessionId, context)) !== state.messageId;
       liveFollowupRequests.delete(keyFor(sessionId, context));
+      delete state.continuation;
       state.status = "review_pending";
       delete state.attemptedMessageId;
       if (needsRetry) state.error = "Coding finished while review scheduling was disconnected. Retry the required Senior review.";
       await save(context, state);
       if (needsRetry) return;
-      task = { cancelled: false, finished: Promise.withResolvers() };
+      task = { cancelled: false, finished: Promise.withResolvers(),
+        execution: { state: run.state, turnId: run.providerTurnId || run.turnId } };
       task.close = async () => {
         await cancel(sessionId, options, { waitForCleanup: true });
         const persisted = await read(context.runtime.store, sessionId);
@@ -709,11 +754,40 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         if (JSON.stringify(messages) !== JSON.stringify(task.reviewMessages)) {
           throw failure("The conversation changed while Router was checking review. Request review explicitly when ready.");
         }
-        if (decision.decision === "wait") {
+        const plan = usesWorkPlan(state) ? await readWorkPlan(current) : null;
+        if ((plan?.revision || null) !== (state.workPlan?.revision || null)) {
+          throw failure("The plan changed while Router was checking the outcome. Stop this handoff and send a new request.");
+        }
+        state.outcome = decision;
+        if (decision.decision === "continue") {
+          const autoExecution = state.autoExecution;
+          if (autoExecution) autoExecution.stalledTurns = decision.progress ? 0 : autoExecution.stalledTurns + 1;
+          let blocked = "";
+          if (!autoExecution) blocked = "This earlier request has no automatic continuation. Send a new request to continue.";
+          else if (usesWorkPlan(state) && plan?.status !== "active") blocked = "The implementation plan is no longer active. Review it before requesting more work.";
+          else if (autoExecution.stalledTurns >= 2) blocked = "Implementation has made no reported progress across two consecutive turns. Review the blocker and send a new request.";
+          else if (autoExecution.continuations >= MAX_IMPLEMENTATION_CONTINUATIONS) blocked = "Auto has continued implementation eight times. Review its progress and send a new request to continue.";
+          if (blocked) state.outcome = { decision: "wait", reason: "blocked", explanation: blocked, nextStep: "", progress: false };
+          else {
+            autoExecution.continuations++;
+            state.continuation = "implementation";
+            state.implementationMessage = { messageId: randomUUID(), planRevision: plan?.revision || null, messages,
+              displayMessage: `Continue implementation. ${decision.explanation}\n\nNext step: ${decision.nextStep}`,
+              message: ["Continue the authorised implementation from its current state. Preserve completed work and accepted steering; do not restart or reduce the scope.",
+                `Original request: ${state.input.message}`,
+                `Accepted steering: ${JSON.stringify(autoExecution.steering)}`,
+                `Router's suggested next step (verify against the request and current plan): ${decision.nextStep}`,
+                "Read the current plan when involved. Continue independent work while identifying any genuinely blocked portion. Report implementation as incomplete if work remains; Senior review follows when ready."].join("\n\n") };
+            state.status = "implementation_pending";
+            delete state.reviewStatus;
+            await save(current, state);
+          }
+        }
+        if (state.outcome.decision === "wait") {
           state.status = "done";
-          state.reviewStatus = decision.reason === "user_wait" ? "cancelled"
-            : decision.reason === "question" ? "skipped_question"
-              : decision.reason === "incomplete" ? "skipped_incomplete" : "skipped_unconfirmed";
+          state.reviewStatus = state.outcome.reason === "user_wait" ? "cancelled"
+            : state.outcome.reason === "question" ? "skipped_question"
+              : state.outcome.reason === "unclear" ? "skipped_unconfirmed" : "skipped_incomplete";
           delete state.error;
           await save(current, state);
           return;
@@ -754,14 +828,14 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         delete state.error;
         await save(context, state);
       }
-      if (["routing", "sending", "review_sending", "planning_sending"].includes(state.status)) {
-        const followup = ["review_sending", "planning_sending"].includes(state.status);
+      if (["routing", "sending", "review_sending", "planning_sending", "implementation_sending"].includes(state.status)) {
+        const followup = ["review_sending", "planning_sending", "implementation_sending"].includes(state.status);
         if (state.attemptedMessageId) {
           state.status = followup ? continuationStatus(state, "uncertain") : "uncertain";
           state.error = "Delivery was interrupted. Check its receipt before continuing.";
         } else if (followup) {
           state.status = continuationStatus(state, "pending");
-          state.error = state.continuation === "planning"
+          state.error = state.continuation === "implementation" ? "Continuation preparation was interrupted. Continue implementation when ready." : state.continuation === "planning"
             ? "Planning preparation was interrupted. Continue planning when ready."
             : "Review preparation was interrupted. Retry the required Senior review.";
         } else {

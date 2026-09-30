@@ -98,7 +98,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   let cleanupCalls = 0;
   const router = {
     respond: async () => ({ ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' }),
-    review: async () => ({ ok: true, text: '{"decision":"review","reason":"ready"}' }),
+    review: async () => ({ ok: true, text: '{"decision":"review","reason":"ready","explanation":"Implementation is ready for review.","nextStep":"","progress":true}' }),
     reviewInputs: []
   };
   const agent = {
@@ -185,7 +185,7 @@ test("a pause steer is included in the last five messages and suppresses automat
       ] }
     ];
   };
-  f.router.review = async () => ({ ok: true, text: '{"decision":"wait","reason":"user_wait"}' });
+  f.router.review = async () => ({ ok: true, text: '{"decision":"wait","reason":"user_wait","explanation":"Waiting for the requested input.","nextStep":"","progress":true}' });
   await f.service.afterTurn("session-1", completion(), f.context);
   const prompt = f.router.reviewInputs[0].message;
   const input = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1));
@@ -217,11 +217,11 @@ test("Router can allow review after a later explicit resume supersedes a pause",
   assert.match(f.sends[1].input.message, /Automatic review and Deslop/);
 });
 
-for (const [reason, status] of [["question", "skipped_question"], ["incomplete", "skipped_incomplete"], ["unclear", "skipped_unconfirmed"]]) {
+for (const [reason, status] of [["question", "skipped_question"], ["blocked", "skipped_incomplete"], ["no_progress", "skipped_incomplete"], ["unclear", "skipped_unconfirmed"]]) {
   test(`Router defers automatic review for ${reason}`, async (t) => {
     const f = await fixture(t);
     await f.service.send("session-1", request, f.context);
-    f.router.review = async () => ({ ok: true, text: JSON.stringify({ decision: "wait", reason }) });
+    f.router.review = async () => ({ ok: true, text: JSON.stringify({ decision: "wait", reason, explanation: "A required decision or resource is missing.", nextStep: "", progress: false }) });
     await f.service.afterTurn("session-1", completion(), f.context);
     assert.equal(f.state().status, "done");
     assert.equal(f.state().reviewStatus, status);
@@ -236,9 +236,9 @@ for (const outcome of ["malformed", "unavailable", "oversized", "changed"]) {
     f.router.review = async () => {
       if (outcome === "unavailable") throw new Error("Router unavailable");
       if (outcome === "changed") f.context.runtime.store.readConversationTail = async () => [{ user: { text: "Wait for me." }, messages: [] }];
-      return { ok: true, text: outcome === "malformed" ? "not json" : '{"decision":"review","reason":"ready"}' };
+      return { ok: true, text: outcome === "malformed" ? "not json" : '{"decision":"review","reason":"ready","explanation":"Implementation is ready for review.","nextStep":"","progress":true}' };
     };
-    if (outcome === "oversized") f.context.runtime.store.readConversationTail = async () => [{ user: { text: "long".repeat(7000) }, messages: [] }];
+    if (outcome === "oversized") f.context.runtime.store.readConversationTail = async () => [{ user: { text: "long".repeat(33000) }, messages: [] }];
     await f.service.afterTurn("session-1", completion(), f.context);
     assert.equal(f.state().status, "review_pending");
     assert.match(f.state().error, /Router|too long|conversation changed/);
@@ -261,13 +261,13 @@ for (const action of ["stop", "close"]) {
     f.router.review = async () => {
       started.resolve();
       await finish.promise;
-      return { ok: true, text: '{"decision":"review","reason":"ready"}' };
+      return { ok: true, text: '{"decision":"review","reason":"ready","explanation":"Implementation is ready for review.","nextStep":"","progress":true}' };
     };
     let stops = 0;
     f.agent.stopEphemeralConversation = async () => { stops++; finish.resolve(); return { ok: true }; };
     const following = f.service.afterTurn("session-1", completion(), f.context);
     await started.promise;
-    assert.equal(assistantRoutingStatusLabel(f.state()), "Router is checking whether review should start…");
+    assert.equal(assistantRoutingStatusLabel(f.state()), "Router is deciding whether to continue, review or wait…");
     await f.service.afterTurn("session-1", completion(), f.context);
     await assert.rejects(f.service.send("session-1", { messageId: request.messageId, reviewAction: "retry" }, f.context), /Wait for Router/);
     if (action === "stop") await f.service.cancel("session-1", f.context, { waitForCleanup: true });
@@ -594,7 +594,7 @@ for (const question of [
     assert.equal(f.sends.length, 1);
     assert.equal(f.state().status, "done");
     assert.equal(f.state().reviewStatus, "skipped_question");
-    assert.equal(f.events.some((event) => event.payload.assistantRoutingRequest.status.startsWith("review")), false);
+    assert.equal(f.events.some((event) => ["review_sending", "reviewing"].includes(event.payload.assistantRoutingRequest.status)), false);
     assert.equal(f.metadata.assistant_selection, codingSelection);
     assert.equal(turns[0].messages[0].text, question);
     await f.restart().afterTurn("session-1", completion(), f.context, { recovered: true });
@@ -607,7 +607,7 @@ for (const question of [
     assert.equal(f.sends.length, 2, "the answer returns to Senior planning before more implementation");
     assert.equal(f.sends[1].selection.modelId, "gpt-6-astra");
     assert.equal(f.state().resolvedMode, "senior");
-    assert.equal(f.helperCalls(), 2);
+    assert.equal(f.helperCalls(), 3);
   });
 }
 
@@ -946,7 +946,7 @@ test("Stop at a recovered Junior-to-review boundary prevents Retry and late comp
   const lateCompletion = restarted.afterTurn("session-1", completion(), f.context);
   assert.equal(await stopping, true);
   await lateCompletion;
-  await assert.rejects(restarted.send("session-1", { ...request, reviewAction: "retry" }, f.context), /no pending review/i);
+  await assert.rejects(restarted.send("session-1", { ...request, reviewAction: "retry" }, f.context), /no pending follow-up/i);
   await f.restart().reconcile("session-1", f.context);
   assert.equal(f.state().status, "done");
   assert.equal(f.state().reviewStatus, "cancelled");
@@ -1809,4 +1809,171 @@ test("Router gets only the last three visible messages, preserving their order a
     return { ok: true, runId: "helper-turn-1" };
   };
   await f.service.send("session-1", request, f.context);
+});
+
+
+function continueOutcome({ progress = true, nextStep = "Implement document import and cross-module matrix use." } = {}) {
+  return { ok: true, text: JSON.stringify({ decision: "continue", reason: "remaining_work",
+    explanation: "The setup editor is implemented, but authorised import and module work remains.", nextStep, progress }) };
+}
+
+test("execute, accepted steering and a partial final continue the same coding role before Senior review", async t => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  f.agent.sessionState = async () => ({ turn: { active: true } });
+  await f.service.send("session-1", { messageId: "steering-1", message: "Execute the whole plan using Junior.", submissionKind: "steer" }, f.context);
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  f.context.runtime.store.readConversationTail = async () => [{ user: { text: "update?" }, messages: [
+    { role: "assistant", text: "Done: setup implemented. Import and module integration remain unfinished; 11 of 72 checked." }
+  ] }];
+  f.router.review = async () => continueOutcome();
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.sends.length, 3);
+  const continued = f.sends[2];
+  assert.equal(continued.selection.modelId, f.assignments.junior.modelId);
+  assert.match(continued.input.message, /Execute the whole plan using Junior/);
+  assert.match(continued.input.message, /Implement document import/);
+  assert.match(continued.input.message, /Vibe64 role: Junior/);
+  assert.doesNotMatch(continued.input.message, /Review the preceding coding work/);
+  assert.equal(continued.input.turnMetadata.actorLabel, "Continue implementation");
+  assert.equal(continued.input.turnMetadata.assistantRouting.parentMessageId, request.messageId);
+  assert.equal(f.state().autoExecution.continuations, 1);
+  assert.match(continued.input.displayMessage, /^Continue implementation\./);
+  assert.doesNotMatch(continued.input.displayMessage, /Accepted steering:|Original request:|steering-1/);
+  const context = JSON.parse(f.router.reviewInputs[0].message.split("\n").slice(1).join("\n"));
+  assert.equal(context.execution.state, "completed");
+  assert.equal(context.autoExecution.steering[0].messageId, "steering-1");
+  assert.equal(context.plan.text, (await readWorkPlan(f.context)).text);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.sends.length, 3, "a duplicate old completion cannot continue twice");
+  f.context.runtime.store.readConversationTail = async () => [{
+    metadata: { assistantRouting: continued.input.turnMetadata.assistantRouting },
+    user: { text: continued.input.displayMessage },
+    messages: [{ role: "assistant", text: "Implementation and verification are ready for Senior review." }]
+  }];
+  f.router.review = async () => ({ ok: true, text: JSON.stringify({ decision: "review", reason: "ready",
+    explanation: "All authorised implementation is ready for review.", nextStep: "", progress: true }) });
+  await f.service.afterTurn("session-1", completion("turn-3"), f.context);
+  assert.equal(f.sends.length, 4);
+  assert.equal(f.sends[3].selection.modelId, f.assignments.senior.modelId);
+  assert.equal(f.state().status, "reviewing");
+  const reviewContext = JSON.parse(f.router.reviewInputs[1].message.split("\n").slice(1).join("\n"));
+  assert.equal(reviewContext.messages[0].automatic, true, "automatic follow-ups cannot become human authority");
+  assert.equal(reviewContext.autoExecution.steering[0].text, "Execute the whole plan using Junior.");
+  await f.service.afterTurn("session-1", completion("turn-4"), f.context);
+  assert.equal(f.state().reviewStatus, "completed");
+  assert.equal((await readWorkPlan(f.context)).status, "active", "only Senior's explicit plan command completes it");
+});
+
+test("continuation preserves an explicitly selected Senior implementation role", async t => {
+  const f = await fixture(t);
+  f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"plan_implementation"}' });
+  await f.service.send("session-1", request, f.context);
+  f.router.review = async () => continueOutcome();
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.sends[1].selection.modelId, f.assignments.senior.modelId);
+  assert.match(f.sends[1].input.message, /Vibe64 role: Senior/);
+  assert.equal(f.state().status, "sent");
+});
+
+test("Router receives a complete long plan including its final blocker without truncation", async t => {
+  const f = await fixture(t);
+  await writeFile(workPlanPath(f.context), planDocument() + "\nEvidence: " + "x".repeat(60_000) + "\n- [ ] LAST REQUIREMENT needs an explicit decision\n");
+  await f.service.send("session-1", request, f.context);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  const input = f.router.reviewInputs[0];
+  assert.match(input.message, /LAST REQUIREMENT/);
+  assert.ok(input.message.length > 60_000);
+  assert.ok(input.message.length < input.executionProfile.limits.maxInputCharacters);
+});
+
+test("a question on one part can leave independent work eligible for continuation", async t => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  f.context.runtime.store.readConversationTail = async () => [{ messages: [
+    { role: "assistant", text: "[1] Should psychosocial use individual risks? Import validation is independent and unfinished." }
+  ] }];
+  f.router.review = async () => continueOutcome({ nextStep: "Finish independent import validation; preserve the psychosocial question." });
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.sends.length, 2);
+  assert.match(f.sends[1].input.message, /preserve the psychosocial question/);
+});
+
+for (const scenario of ["stop", "failure", "native question", "goal", "access removed", "plan changed", "conversation changed", "legacy request"]) {
+  test(`continuation respects ${scenario}`, async t => {
+    const f = await fixture(t);
+    await f.service.send("session-1", request, f.context);
+    f.router.review = async () => {
+      if (scenario === "stop") await f.service.cancel("session-1", f.context);
+      if (scenario === "access removed") f.connections.set("codex:deepseek", { available: false });
+      if (scenario === "plan changed") await writeFile(workPlanPath(f.context), planDocument() + "\n- [ ] Newly changed scope\n");
+      if (scenario === "conversation changed") f.context.runtime.store.readConversationTail = async () => [{ user: { text: "Stop, do not continue." } }];
+      return continueOutcome();
+    };
+    if (scenario === "native question") f.agent.sessionState = async () => ({ turn: { active: false, waitingForInput: true } });
+    if (scenario === "goal") f.agent.readGoal = async () => ({ goal: { status: "active" } });
+    if (scenario === "legacy request") {
+      const state = f.state(); delete state.autoExecution;
+      f.metadata.assistant_routing_request = JSON.stringify(state);
+    }
+    await f.service.afterTurn("session-1", completion("turn-1", scenario === "failure" ? "failed" : "completed"), f.context);
+    assert.equal(f.sends.length, 1);
+    if (scenario === "legacy request") {
+      assert.equal(f.state().autoExecution, undefined);
+      assert.match(f.state().outcome.explanation, /earlier request/);
+    }
+    if (scenario === "failure") assert.match(f.state().outcome.explanation, /failed/);
+  });
+}
+
+test("two consecutive turns with no reported progress stop automatic continuation", async t => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  f.router.review = async () => continueOutcome({ progress: false });
+  await f.service.afterTurn("session-1", completion(), f.context);
+  await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+  assert.equal(f.sends.length, 2);
+  assert.equal(f.state().status, "done");
+  assert.match(f.state().outcome.explanation, /no reported progress/);
+});
+
+test("reported progress cannot cause unlimited automatic continuation", async t => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  f.router.review = async () => continueOutcome();
+  for (let turn = 1; turn <= 9; turn++) await f.service.afterTurn("session-1", completion(`turn-${turn}`), f.context);
+  assert.equal(f.sends.length, 9);
+  assert.equal(f.state().status, "done");
+  assert.match(f.state().outcome.explanation, /eight times/);
+});
+
+test("uncertain continuation checks the same receipt after restart without resending", async t => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  f.router.review = async () => continueOutcome();
+  f.failAdmission();
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.state().status, "implementation_uncertain");
+  const id = f.state().implementationMessage.messageId;
+  const restarted = f.restart();
+  f.agent.inspectMessageAdmission = async (_session, input) => {
+    assert.equal(input.messageId, id);
+    return { admission: "accepted", turnId: "turn-2" };
+  };
+  await restarted.send("session-1", { messageId: request.messageId, reviewAction: "retry" }, f.context);
+  assert.equal(f.sends.length, 2);
+  assert.equal(f.state().status, "sent");
+  assert.equal(f.state().turnId, "turn-2");
+  assert.equal(f.state().autoExecution.continuations, 1);
+});
+
+test("a recovered completed continuation cannot automatically start another turn", async t => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  f.router.review = async () => continueOutcome();
+  await f.service.afterTurn("session-1", completion(), f.context);
+  await f.restart().afterTurn("session-1", completion("turn-2"), f.context, { recovered: true });
+  assert.equal(f.sends.length, 2);
+  assert.equal(f.state().status, "review_pending");
+  assert.match(f.state().error, /disconnected/);
 });

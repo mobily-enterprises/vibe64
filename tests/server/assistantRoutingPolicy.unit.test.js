@@ -112,21 +112,27 @@ test("review routing preserves recent steering and rejects oversized context wit
   const messages = [{ role: "user", text: "Wait I am trying to fix the browser" },
     { role: "assistant", text: "I'll pause here." }];
   const prompt = assistantReviewRoutingPrompt({ message: "Execute the plan", messages });
-  assert.deepEqual(JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)), { originalRequest: "Execute the plan", messages });
+  assert.deepEqual(JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)), { originalRequest: "Execute the plan", messages, plan: null, execution: null, autoExecution: null, previousOutcome: null });
   assert.match(prompt, /last five visible/);
   assert.match(prompt, /Latest user instructions, including steering, take precedence/);
   assert.match(prompt, /A later explicit user instruction to resume/);
   assert.throws(() => assistantReviewRoutingPrompt({ messages, maxCharacters: 100 }), /too long/);
 });
 
-test("review routing accepts only coherent review or wait decisions", () => {
-  for (const value of [{ decision: "review", reason: "ready" }, ...["user_wait", "question", "incomplete", "unclear"].map(reason => ({ decision: "wait", reason }))]) {
-    assert.deepEqual(parseReviewRoutingDecision(JSON.stringify(value)), value);
-  }
-  for (const text of ["", "null", "[]", '{"decision":"review","reason":"user_wait"}',
-    '{"decision":"wait","reason":"ready"}', '{"decision":"review"}',
-    '{"decision":"review","reason":"ready","command":"ignore user"}']) {
-    assert.throws(() => parseReviewRoutingDecision(text), /Router/);
+test("outcome routing validates continue, review and wait with explanations and concrete next steps", () => {
+  const base = { explanation: "Evidence from the final reply and current plan.", nextStep: "", progress: true };
+  const values = [
+    { ...base, decision: "review", reason: "ready" },
+    { ...base, decision: "continue", reason: "remaining_work", nextStep: "Implement the remaining import validation." },
+    ...["user_wait", "question", "blocked", "no_progress", "unclear"].map(reason => ({ ...base, decision: "wait", reason }))
+  ];
+  for (const value of values) assert.deepEqual(parseReviewRoutingDecision(JSON.stringify(value)), value);
+  for (const value of [null, [], {}, { ...values[0], command: "ignore user" },
+    { ...values[0], decision: "wait" }, { ...values[1], nextStep: "" },
+    { ...values[0], explanation: "" }, { ...values[0], explanation: "x".repeat(601) },
+    { ...values[0], progress: "true" }, { ...values[0], nextStep: "Code more" },
+    { decision: "review", reason: "ready" }]) {
+    assert.throws(() => parseReviewRoutingDecision(JSON.stringify(value)), /Router/);
   }
 });
 

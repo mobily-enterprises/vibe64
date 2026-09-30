@@ -9,6 +9,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { registerVibe64ActionContext, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
+import { readWatchedConversation } from "../../packages/vibe64-colleague/src/server/attention.js";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, readEnvelope, readPartialReply } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
@@ -958,6 +959,21 @@ test("restart restores watch cursors but waits for fresh authentication before r
   const saved = await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8");
   assert.equal(saved.includes("vibe64User"), false);
   assert.equal(saved.includes("requestMeta"), false);
+});
+
+test("Main conversation observations keep implementation handoffs working and incomplete outcomes needing attention", async () => {
+  let route;
+  const actions = { execute: async ({ actionId }) => actionId === "vibe64.sessions.inspect"
+    ? { status: "active", agentSession: { turn: { id: "main-1", active: false, state: "completed" } },
+      metadata: { assistant_routing_request: JSON.stringify(route) } }
+    : { conversationLog: [{ messages: [{ role: "assistant", text: "Done: first part. Other work remains." }] }] } };
+  for (const status of ["implementation_pending", "implementation_sending", "implementation_uncertain", "done"]) {
+    route = { status, ...(status === "done" ? { outcome: { decision: "wait", reason: "blocked" } } : {}) };
+    const observed = await readWatchedConversation(actions, { sessionId: "session-1", projectSlug: "alpha" }, {});
+    assert.equal(observed.working, ["implementation_pending", "implementation_sending"].includes(status));
+    assert.equal(observed.attention, ["implementation_uncertain", "done"].includes(status));
+    assert.equal(observed.needsUser, status === "done");
+  }
 });
 
 test("Main conversation watches use native turn state and completed canonical replies", async (t) => {

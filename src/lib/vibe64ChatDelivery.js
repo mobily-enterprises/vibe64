@@ -20,7 +20,8 @@ function chatTurnsWithRouting(turns, request, checking = false) {
   const message = routedChatMessage(request);
   if (!message) {
     if (!["sent", "done", "review_pending", "review_sending", "review_uncertain", "reviewing",
-      "planning_pending", "planning_sending", "planning_uncertain", "planning"].includes(request.status)) return turns;
+      "planning_pending", "planning_sending", "planning_uncertain", "planning",
+      "implementation_pending", "implementation_sending", "implementation_uncertain"].includes(request.status)) return turns;
     return turns.map((turn) => matches(turn) && turn.optimistic
       ? { ...turn, optimistic: { ...turn.optimistic, status: "accepted", error: "" } } : turn);
   }

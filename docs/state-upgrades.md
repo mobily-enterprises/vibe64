@@ -337,3 +337,17 @@ New Auto requests always capture the Senior review handoff. The existing
 that review; the persisted shape is unchanged. Existing request records retain
 their captured handoff decision and are not replayed or backfilled. This is a
 new-request policy change and requires no historical transformation.
+
+
+## Auto implementation continuation
+
+`20260930-auto-implementation-continuation` records the additive release boundary
+for new Auto requests' `autoExecution`, outcome and implementation-message fields
+and pending/sending/uncertain continuation states. Only a new explicit request
+creates this authority and its bounded counters. Existing requests, archives,
+plans and native histories retain their exact bytes; absence means no automatic
+implementation continuation. No historical conversion or lazy backfill occurs.
+The script has read-only check/apply behavior and requires no backup because it
+mutates no application files. The runner records the ordinary ordered ledger
+entry, preventing older candidates from accepting this newer release boundary.
+Retries are no-ops. Delivery and cleanup use the existing request/receipt owners.
