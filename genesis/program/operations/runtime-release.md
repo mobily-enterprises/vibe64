@@ -55,6 +55,9 @@ for authoring, operation and recovery.
 Task-oriented Colleague usage guides under `docs/colleague-usage/` ship with the
 matching application runtime. The builder copies only that documentation subtree;
 it does not publish unrelated project or internal architecture documentation.
+The relocated runtime proof discovers a topic and reads its complete guide through
+the real authenticated actions, checking it against the packaged Markdown.
+
 This mechanism also applies to persisted message-format changes. Each script
 currently owns discovery, backups and transformation through its `run` callback;
 the runner supplies the backup directory and records completion. It does not

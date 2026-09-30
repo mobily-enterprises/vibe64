@@ -272,6 +272,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const prompt = JSON.stringify({
         assistantName: await resolveName(),
         replyStyle,
+        // A persistent native process can retain its original system instructions
+        // across a release. Send the current guide-read policy on every turn too.
+        usageKnowledge: "For a how-to answer, read this release's complete usage guide for this request. Earlier guide copies and topic summaries do not establish the current controls or steps.",
         focus: connection.focus, userMessages: messages,
         observations, readOnly, autonomous,
         assignments: (state.record.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status) || observedAssignmentIds.includes(item.assignmentId))

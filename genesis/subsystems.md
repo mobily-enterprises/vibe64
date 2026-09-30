@@ -275,6 +275,10 @@ reply and user-transcript projections reconcile to the canonical chat. Assignmen
 turn allowances, authorized communication links, dependency waits and evidence;
 existing conversation owners still execute work. It also
 owns acknowledged project/session and global Management navigation commands.
+It owns bounded discovery and lookup of the release's task-oriented usage guides,
+used to explain UI steps and offer authorized assistance. Hosts compose their
+additional guides into the same released documentation; other subsystems retain
+their operation authority and human-completion requirements.
 The Integrations panel owns its actual slot selection and publishes bounded view
 state for Colleague's acknowledged navigation and captured request focus.
 The existing project layout owner supplies actual pane visibility and reveal

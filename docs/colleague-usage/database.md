@@ -1,0 +1,30 @@
+# Browse a project's Database
+
+Open **Database** in the selected session's Dashboard. You need project access and
+a configured database. On mobile, reveal the project and use **Dashboard section**;
+**Back to dashboard** returns without requiring the database to finish loading.
+
+Select **Overview**, **ERD** or **Data**. The selection stays in the URL across
+navigation and reload. In Data, choose a listed table to inspect it. Returning to
+a mounted table preserves its own draft and results; leaving or reloading the
+workspace does not preserve an unsaved SQL draft. A loading or unavailable database
+is not an empty successful query.
+
+Queries and deliberate edits use Database's existing controls, unlock rules and
+confirmations. Check the exact selected database and table before changing data.
+Cancellation targets the active query; a cancellation receipt does not prove the
+query has stopped or that earlier changes were rolled back. Schema refresh updates
+inspection metadata and does not itself run a migration.
+
+If loading fails, use the offered Retry or ask a coding agent to investigate the
+configuration. Missing resources require ordinary application preparation. Do not
+assume that another session uses the same database: hosted project policy can use
+shared project data or separate session databases.
+
+Colleague can explain these views, inspect authorized status, refresh schema
+metadata, open a specific view or exact table, and request cancellation of the
+identified active query when asked. It acknowledges actual view/table selection;
+that is not proof a query succeeded. It does not receive rows or write SQL itself.
+Ask it to send database investigation or a requested change to a coding conversation
+and report the evidence. Data-changing work retains its existing confirmation
+requirements; a how-to question alone authorizes no query or mutation.

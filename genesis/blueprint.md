@@ -17,6 +17,12 @@ person keeps their own Colleague history and model choice. The current text
 conversation supports an Online host's global voice controls and configured display name.
 Colleague displays reply text incrementally and a voice host can speak readable
 phrases before completion; only the completed answer enters saved history.
+Colleague can explain how to use the application from task guides shipped with
+that release. It finds and reads only relevant topics, adapts instructions to
+the person's actual view and permissions, and offers to perform supported tasks.
+How-to questions and offers make no changes. An accepted offer or direct request
+uses the normal operations and confirmations; provider consent, secret entry and
+browser permission remain the person's actions. Guides give no repository access.
 The host can check live-turn Helper availability before recording, without
 sending an AI request. Stopping or steering clears unfinished text.
 Colleague can browse open and archived sessions beyond the first page, while

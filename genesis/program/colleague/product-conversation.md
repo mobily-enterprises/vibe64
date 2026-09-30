@@ -29,6 +29,8 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `packages/vibe64-colleague/src/server/assignments.js`
 - `packages/vibe64-colleague/src/server/conversationSummary.js`
 - `packages/vibe64-colleague/src/server/protocol.js`
+- `packages/vibe64-colleague/src/server/usageKnowledge.js`
+- `docs/colleague-usage/colleague.md`
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `src/components/Vibe64ColleagueLauncherTarget.vue`
@@ -42,7 +44,23 @@ active work, role, goal and access checks remain in the existing routing owner.
 
 ## Public contract
 
+Each native turn reminds Colleague to read the current full guide for how-to
+answers, including when a persistent provider retains older system instructions.
+
 The server exposes state, focus, message admission, stop and context operations.
+Its query actions `vibe64.colleague.usage.topics.read` and
+`vibe64.colleague.usage.guide.read` discover and read task guides shipped under
+the application root's `docs/colleague-usage/`. The topic index is searchable and
+paged, and returns bounded metadata without guide bodies. A guide read returns
+one complete document of at most 16,000 Unicode characters. Topic IDs cannot
+choose arbitrary files or follow file links. Lookup needs authenticated access
+but no selected project; it opens no session and starts no inference.
+Colleague reads the relevant guide before naming exact controls, explains useful
+steps and offers supported execution. How-to questions and offers remain
+informational; accepted offers and direct requests retain native target,
+permission and confirmation rules. Guides cannot authorize actions or provide
+source, shell or screenshot tools. Missing documentation is reported without
+inventing UI. Hosts ship their guides through the same application directory.
 A host authenticates the person at the shared action boundary; public local mode
 uses its local identity. Separate people have separate state. New conversations
 use a private empty native scope and an accessible configured Senior model. They

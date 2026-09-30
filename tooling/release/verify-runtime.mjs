@@ -45,6 +45,12 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
     const module = await import(pathToFileURL(path.join(appRoot, serverEntry)).href);
     server = await module.createServer({ runtimeMode: "local", targetRoot: project, systemRoot: path.join(root, "state"), logLevel: "silent" });
     assert.equal((await server.inject("/api/health")).statusCode, 200);
+    const usageTopics = await server.inject("/api/vibe64/colleague/usage/topics?query=plan");
+    assert.equal(usageTopics.statusCode, 200);
+    assert.ok(usageTopics.json().topics.some(topic => topic.topicId === "plans"));
+    const planGuide = await server.inject("/api/vibe64/colleague/usage/guide?topicId=plans");
+    assert.equal(planGuide.statusCode, 200);
+    assert.equal(planGuide.json().text, await readFile(path.join(appRoot, "docs/colleague-usage/plans.md"), "utf8"));
     const html = await server.inject("/app");
     assert.equal(html.statusCode, 200);
     const asset = html.body.match(/src="([^"]+\.js)"/u)?.[1];
@@ -89,7 +95,7 @@ async function verifyRuntime(appRoot, { serverEntry = "server.bundle.mjs" } = {}
       });
     });
     assert.equal((await fetch(`${address}/api/health`)).status, 200);
-    console.log("Runtime proof passed: database drivers, server, frontend asset, realtime handshake, native PTY, Genesis catalog and index, packaged CLI startup.");
+    console.log("Runtime proof passed: database drivers, server, release usage guides, frontend asset, realtime handshake, native PTY, Genesis catalog and index, packaged CLI startup.");
   } finally {
     if (cliProcess && cliProcess.exitCode === null) {
       cliProcess.kill("SIGTERM");

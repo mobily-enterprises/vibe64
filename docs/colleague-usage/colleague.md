@@ -6,6 +6,14 @@ keeps your draft and conversation. Colleague replies briefly by default, usually
 one or two short sentences. Ask for a detailed explanation when you want more.
 A greeting gets a greeting; project/page details appear only when relevant.
 
+Ask “How do I …?” to get the relevant steps and an offer of supported help.
+Colleague reads task guides shipped with this app version, uses your actual view
+and permissions, and identifies steps you must complete yourself. A how-to question
+or its offer makes no changes. Accept the offer or directly request the task to
+use its existing operations and confirmations. “Show me where” opens a supported
+view without changing its settings. Missing documentation or an unavailable
+operation must be explained rather than replaced with invented buttons.
+
 The larger face stays at the top right while messages scroll, with a smaller
 size on mobile. Messages scroll below it at a stable width. Close is
 the compact X at the top left; there is no separate name/project heading. The

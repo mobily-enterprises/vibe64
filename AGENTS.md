@@ -41,6 +41,19 @@ Important boundaries:
 
 Keep those scopes separate even though they share the word "deploy."
 
+## Colleague Usage Documentation
+
+Every application change must update its affected task guides under
+`docs/colleague-usage/` in the same change, including controls, navigation,
+permissions, prerequisites, outcomes and recovery. Create missing topics and
+verify the instructions against the actual UI and actions. Ship them with the
+matching release; Blueprint, Program and schemas do not replace usage guides.
+Shared editor guides belong here; hosts own their additional guides. Colleague
+must explain useful steps and offer supported assistance, executing only after
+an accepted offer or direct request under the existing permissions/confirmations.
+Identify human-only steps explicitly. Usage knowledge grants no source, shell
+or screenshot access.
+
 ## Persisted State Upgrades
 
 For a persisted application-data or metadata format change (including message
