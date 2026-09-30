@@ -370,6 +370,8 @@ switches coding tools while keeping the selected mode and conversation. It uses
 the destination's saved model assignments. An unavailable destination or failed
 handover keeps the previous choice; active work and unfinished goals must finish
 before switching. Custom continues to choose an exact AI independently.
+A switch into Codex prepares its conversation for model routing before it opens,
+even when the session already has an OpenCode or Claude conversation.
 The Orchestrator menu lists only coding tools with at least one connected model;
 visibility does not require saved Senior or Junior assignments.
 While the assistant starts or reconnects, the chat-mode menu shows connection

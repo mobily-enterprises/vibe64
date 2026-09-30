@@ -26,6 +26,19 @@ and GLM. Choose the model through these controls; no extra instruction in each
 message is needed to enable its tools or context window. Each provider still
 requires its own connection in **AI Accounts**.
 
+Switching from OpenCode or Claude to Codex prepares the new conversation for
+model routing before opening it. Earlier replies keep their original AI labels;
+check the current chat mode control for the assistant that will receive **Send**.
+Changing the selection does not send a message.
+
+If an already-created conversation reports that it is stored in a **separate
+provider home**, retrying the message cannot repair its storage. Open **Session
+actions → Renew session** and follow the reviewed handover flow. Save or discard
+source changes first. Renewal keeps the old session until the handover reaches
+the new conversation. Do not delete the guest or its account connections to fix
+this error. Colleague can explain these steps and offer to prepare a renewal;
+confirmation remains a separate operation after the handover is reviewed.
+
 If Codex reports that an expected editing tool is unavailable, stop the work
 and review any edits already made before continuing. Report the model and the
 error to the workspace operator, who can check the installed Codex version and

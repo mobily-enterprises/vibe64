@@ -2823,7 +2823,7 @@ test("assistant selection can recover from an unavailable current choice before 
   assert.deepEqual(metadataWrites, []);
 });
 
-test("assistant selection checks destination access and requires shutdown only when changing engines", async () => {
+test("assistant selection checks destination access and prepares routing before publishing the new selection", async () => {
   for (const target of ["opencode", "deepseek", "zai-coding-plan"]) {
     const changesEngine = target === "opencode";
     for (const failure of changesEngine ? ["active", "goal", "shutdown", ""] : ["active", "goal", ""]) {
@@ -2846,11 +2846,12 @@ test("assistant selection checks destination access and requires shutdown only w
         async requireAssistantAccess() { throw new Error("Do not authorize the disconnected old account"); },
         async requireAssistantSelectionAccess(value) { assert.equal(value.modelProviderId, next.modelProviderId); operations.push("access"); },
         async agentSessionState() { operations.push("state"); return { turn: { active: failure === "active" }, goal: failure === "goal" ? { status: "paused" } : null }; },
-        async prepareAssistantChangeover(id, context) {
+        async prepareRoutingSelection(id, selection, context) {
           assert.equal(id, session.sessionId);
           assert.equal(context.session, session);
-          operations.push("shutdown");
-          return failure === "shutdown" ? { ok: false, code: "stop-failed" } : { ok: true };
+          assert.deepEqual(selection, next);
+          operations.push("prepare");
+          if (failure === "shutdown") throw Object.assign(new Error("Stop failed."), { code: "stop-failed" });
         }
       } });
       const result = await service.updateAssistantSelection(session.sessionId, {
@@ -2861,12 +2862,12 @@ test("assistant selection checks destination access and requires shutdown only w
         assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
         assert.ok(!operations.includes("write"));
         assert.equal(events.length, 0);
-        if (failure === "active") assert.ok(!operations.includes("shutdown"));
+        if (failure === "active") assert.ok(!operations.includes("prepare"));
       } else {
         assert.notEqual(result.ok, false, JSON.stringify(result));
         assert.equal(JSON.parse(session.metadata.assistant_selection).modelProviderId, next.modelProviderId);
         assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "custom", review: false, workflowEngineId: next.engineId, override: next });
-        assert.deepEqual(operations, ["access", "state", ...(changesEngine ? ["shutdown"] : []), "write", "write"]);
+        assert.deepEqual(operations, ["access", "state", "prepare", "write", "write"]);
         assert.equal(events.length, 1);
         assert.equal(events[0].realtime.audience, "all_clients");
         assert.equal(events[0].realtime.event, "vibe64.session.changed");
@@ -3654,11 +3655,12 @@ test("named chat modes switch workflow through authorized native handover and pr
         },
         async agentSessionState() { return { turn: { active: failure === "active" } }; },
         async readAgentGoal() { return { status: "unavailable" }; },
-        async prepareAssistantChangeover(id, context) {
+        async prepareRoutingSelection(id, selection, context) {
           assert.equal(id, session.sessionId);
           assert.equal(context.session.metadata.assistant_selection, original.assistant_selection);
-          operations.push("shutdown");
-          return failure === "shutdown" ? { ok: false, code: "stop-failed" } : { ok: true };
+          assert.deepEqual(selection, next);
+          operations.push("prepare");
+          if (failure === "shutdown") throw Object.assign(new Error("Stop failed."), { code: "stop-failed" });
         }
       } });
       const result = await service.updateAssistantSelection(session.sessionId, {
@@ -3668,12 +3670,12 @@ test("named chat modes switch workflow through authorized native handover and pr
         assert.equal(result.ok, false, `${mode}: ${failure}`);
         assert.deepEqual(session.metadata, original);
         assert.ok(!operations.includes("write"));
-        if (failure !== "shutdown") assert.ok(!operations.includes("shutdown"));
+        if (failure !== "shutdown") assert.ok(!operations.includes("prepare"));
       } else {
         assert.notEqual(result.ok, false, JSON.stringify(result));
         assert.deepEqual(JSON.parse(session.metadata.assistant_selection), next);
         assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode, review: mode === "auto", workflowEngineId: "claude" });
-        assert.deepEqual(operations, ["resolve", "access", ...(failure === "same-native-backup" ? [] : ["shutdown"]), "write", "write"]);
+        assert.deepEqual(operations, ["resolve", "access", "prepare", "write", "write"]);
       }
     }
   }

@@ -1715,12 +1715,7 @@ function createService({
               routingRequest?.status === "sent" && routingRequest.review && routingRequest.resolvedMode === "junior") {
             throw new Error("Finish or cancel the pending request and review before changing assistants.");
           }
-          if (current.engineId !== next.engineId) {
-            const changeover = await terminals.prepareAssistantChangeover(sessionId, {
-              runtime, session, vibe64User
-            });
-            if (changeover?.ok === false) return changeover;
-          }
+          await terminals.prepareRoutingSelection(sessionId, next, { runtime, session, vibe64User });
           await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences || {
             mode: "custom", review: false, workflowEngineId: next.engineId, override: next
           }));

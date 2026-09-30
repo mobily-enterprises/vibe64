@@ -2082,7 +2082,10 @@ Legacy Codex conversations may retain separate provider homes and native thread
 ids. Routing refuses those unsupported homes before changing their saved storage
 location and offers Renew; it never adopts them by rewriting their home to OpenAI.
 New routed conversations pin one home and resume the same native thread
-across qualified provider choices, as described above. Application changeover
+across qualified provider choices, as described above. Explicit assistant changes
+prepare that home through the routing owner before publishing the selection.
+Initialization distinguishes the previous engine's identity from a Codex identity;
+an existing OpenCode or Claude conversation cannot skip Codex preparation. Application changeover
 continues to use transcript selection snapshots and per-application receipts.
 Changing the selection alone sends nothing and is rejected while a turn is active.
 

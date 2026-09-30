@@ -3032,7 +3032,8 @@ function createService({
       try {
         const context = await assistantSessionOptions(sessionId, options);
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
-        if (selection.engineId === "codex" && !context.session.metadata.agent_identity_conversation_id) {
+        if (selection.engineId === "codex" && (context.session.metadata.agent_identity_provider !== "codex" ||
+            !context.session.metadata.agent_identity_conversation_id)) {
           await codex.prepareModelRouting(sessionId, selection, context);
         }
         const result = await sessionAgent.ensureSession(sessionId, context);
@@ -3133,6 +3134,7 @@ function createService({
     // Called inside the selection writer's existing session lock. Closing a
     // controller stops observation/execution, never deletes native history.
     prepareAssistantChangeover,
+    prepareRoutingSelection,
 
     globalCodexTerminalState() {
       return codex.globalTerminalState();

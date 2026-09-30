@@ -2271,6 +2271,31 @@ test("Codex reasoning activity follows native item boundaries, clears on tool us
   });
 });
 
+test("Codex initialization pins its routing home even when a previous engine has a conversation", async () => {
+  await withAgentMessageController(async ({ captures, controllerOptions, sessionId, store, terminalService }) => {
+    const session = await store.readSession(sessionId);
+    const selection = { ...JSON.parse(session.metadata.assistant_selection), modelProviderId: "deepseek", modelId: "deepseek-flash" };
+    const connections = createCodexProviderConnectionStore({ systemRoot: controllerOptions.codexAppServerProviderOptions.systemRoot,
+      fetchImpl: async () => ({ ok: true, json: async () => ({ id: "verified", status: "completed", output: [], type: "message", content: [] }) }) });
+    await connections.change("deepseek", { apiKey: "test-key" });
+    for (const [name, value] of Object.entries({
+      assistant_selection: JSON.stringify(selection), agent_identity_provider: "opencode",
+      agent_identity_conversation_id: "previous-opencode-thread", opencode_conversation_id: "previous-opencode-thread"
+    })) await store.writeMetadataValue(sessionId, name, value);
+
+    const prepared = await terminalService.ensureAgentSession(sessionId);
+    assert.equal(prepared.ok, true, JSON.stringify(prepared));
+    const ready = await store.readSession(sessionId);
+    assert.equal(ready.metadata.codex_routing_home_provider, "openai");
+    assert.equal(ready.metadata.opencode_conversation_id, "previous-opencode-thread");
+    assert.equal(captures.providerOptions.at(-1).toolHomeSource, controllerOptions.codexToolHomeSource);
+    assert.equal(captures.turns.length, 0, "Preparing a new assistant must not send a message.");
+    await terminalService.prepareRoutingSelection(sessionId, selection, { runtime: { store }, session: ready });
+    assert.equal((await store.readSession(sessionId)).metadata.agent_identity_conversation_id,
+      ready.metadata.agent_identity_conversation_id, "Routing must retain the prepared native conversation.");
+  }, { throughTerminalService: true });
+});
+
 test("assistant verification shares a stalled status read while attachments remain usable", { timeout: 15_000 }, async () => {
   await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
     assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
