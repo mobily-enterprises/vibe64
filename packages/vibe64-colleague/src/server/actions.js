@@ -73,12 +73,6 @@ function createColleagueActions(colleague) {
       message: { type: "string", noTrim: false, minLength: 1, maxLength: 24000, required: true },
       assistantSelection: { type: "object", additionalProperties: true, required: false }
     }, (input, context) => colleague.send(input, context)),
-    definition("voice.readiness.read", {}, (input, context) => colleague.checkVoice(input, context)),
-    definition("voice.classify", {
-      text: { ...text, minLength: 1, maxLength: 4000, required: true },
-      speaking: { type: "boolean", required: true },
-      spokenText: { ...text, maxLength: 2000 }
-    }, (input, context) => colleague.classifyVoice(input, context)),
     definition("turn.stop", {}, (input, context) => colleague.stop(input, context)),
     definition("model.select", {
       assistantSelection: { type: "object", additionalProperties: true, required: true }

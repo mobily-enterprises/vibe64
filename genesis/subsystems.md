@@ -269,7 +269,8 @@ the host retains its conversation, permissions, diagnosis and repair operations.
 Owns each person's independent conversation for discussing ideas and operating
 Vibe64 across projects, including tool exchange, focused targets, retained
 operation outcomes, conversation watches, bounded implementation assignments
-and bounded Helper summaries/voice intent decisions. Transient actor-private
+and bounded Helper summaries. Spoken requests use ordinary message admission;
+the host owns local turn detection and speech controls. Transient actor-private
 reply and user-transcript projections reconcile to the canonical chat. Assignment records retain user intent, exact participants,
 turn allowances, authorized communication links, dependency waits and evidence;
 existing conversation owners still execute work. It also

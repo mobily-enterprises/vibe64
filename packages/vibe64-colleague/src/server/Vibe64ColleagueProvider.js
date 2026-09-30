@@ -16,8 +16,7 @@ const Vibe64ColleagueProvider = defineFeature({
     });
     routes.actionRoute("GET", "", { actionId: "vibe64.colleague.state.read", buildInput: routes.requestQuery, summary: "Read your Colleague conversation." });
     routes.actionRoute("GET", "/models", { actionId: "vibe64.assistants.capabilities.list", buildInput: routes.requestQuery, summary: "Read the existing actor-aware model catalogue for Colleague." });
-    routes.actionRoute("GET", "/voice/readiness", { actionId: "vibe64.colleague.voice.readiness.read", buildInput: routes.requestQuery, summary: "Check live voice Helper availability without starting an AI turn." });
-    for (const [route, operation] of [["/voice/classify", "voice.classify"], ["/messages", "message.send"], ["/focus", "focus.update"], ["/stop", "turn.stop"], ["/model", "model.select"], ["/watches/cancel", "watch.cancel"], ["/watches/resume", "watch.resume"], ["/navigation/ack", "navigation.acknowledge"]]) {
+    for (const [route, operation] of [["/messages", "message.send"], ["/focus", "focus.update"], ["/stop", "turn.stop"], ["/model", "model.select"], ["/watches/cancel", "watch.cancel"], ["/watches/resume", "watch.resume"], ["/navigation/ack", "navigation.acknowledge"]]) {
       routes.actionRoute("POST", route, {
         actionId: `vibe64.colleague.${operation}`, buildInput: routes.requestBody, summary: `Colleague ${operation}.`
       });

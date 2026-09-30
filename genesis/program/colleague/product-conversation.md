@@ -101,24 +101,25 @@ At every screen size, a 48-pixel header button opens a full-height drawer on the
 right, 460 pixels wide or the available viewport width on smaller screens. Its
 104-pixel portrait stays pinned at the top right (84 pixels on mobile); Close is
 at the top left and the former name/project heading is removed. The portrait
-and composer do not scroll. A float inside the existing transcript scroller
-reserves the portrait's visible corner; its shape follows the scroll offset,
-so text uses the full message width below that corner. The component observes
-its conversation and portrait size, and refreshes the inset after state updates
-and scrolling. Its local flow styles retain the shared transcript's rendering,
-scroll following and message actions without introducing another scroll owner.
-The observer is disconnected on unmount. Hosts without an avatar reserve no space.
+and composer do not scroll. The portrait and Close share a fixed header row above
+the transcript. Messages retain the shared transcript's ordinary width and layout;
+no scroll listener, measured float or shape-outside changes their wrapping.
+Hosts without an avatar reserve only the Close button's height.
+Colleague's model instructions, repeated in each application turn so retained
+native conversations receive current style guidance, default to one or two brief sentences, with detail
+when requested. Greetings get greetings. Focus remains operational context rather
+than unsolicited page recaps, no-change lists or generic readiness offers.
 The Vuetify dialog provides text and voice controls, focus containment and return to the launcher
 on close. The model, microphone, speaker, Stop and Send/Steer controls share a compact icon
 toolbar inside the message box, using the main chat button styles. No separate
-status or voice footer reserves vertical space. No floating launcher or voice
+permanent voice footer reserves vertical space. No floating launcher or voice
 strip covers page controls when closed.
 Tab from a sendable draft focuses Send/Steer and stops that handled keypress from
 also reaching the dialog focus trap. Enter activates the focused button; ordinary
 reverse Tab navigation remains available. The voice slot receives a `preview`
-element positioned above the composer, outside its layout flow, for the host's
-status and transcript. Appearing or growing voice content does not move the
-composer or its toolbar.
+element in normal layout flow above the composer for compact status and recording
+controls. The host's recognized words appear in the pending user chat bubble;
+voice controls cannot overlay messages or assistant activity.
 The host shares the routed header target through its root; Teleport places the
 persistent panel in the dialog without remounting the voice connection or clearing
 drafts. While a header is unavailable, the compact launcher stays at the top edge.
@@ -202,23 +203,12 @@ execution and cleanup state are retained before work starts; failed cleanup must
 finish before another Helper can start. Stop Colleague aborts and cleans up that
 Helper too. Non-conversation watches remain to be added.
 Online owns global capture, playback and avatar behavior through the voice slot.
-The slot's `check` callback calls the actor-authorized voice.readiness.read query.
-It reuses the same Helper routing check as interpretation and returns only
-availability success or an actionable setup failure. It starts no native
-conversation or model turn and admits no user message.
-The global non-tool voice.classify action interprets a bounded spoken candidate,
-current speech and four recent user/assistant messages using the configured
-Helper. Its voice_turn profile has a ten-second deadline, strict bounded intent
-output and no tools or repository access. It shares existing serialized Helper
-lifecycle, cleanup and recovery with summaries, and never admits words or starts
-product operations. The host validates that the candidate remains current before
-ordinary message admission. New voice Helper attempts use the existing retained
-summaryHelper shape and workload identity; no historical state rewrite or lazy
-backfill is introduced.
-Unavailable Helper routing returns the routing policy's reason, including model
-incompatibility, with an actionable AI Accounts → Model routing instruction.
-Unexpected interpretation failures request manual recording review without
-exposing raw provider output or admitting a user instruction.
+The slot supplies ordinary message submission; live voice has no separate
+readiness/classification API or Helper inference. The host confirms local
+recognizer revisions before admission. Spoken questions and corrections use the
+selected Colleague model, tools and the same identity/focus/retry contract as
+typed messages. Conversation summaries retain their existing Helper lifecycle,
+including cleanup of retained historical executions.
 The client emits the local message-submission identity synchronously before
 sending. Voice hosts use it to distinguish a fresh invitation from a delayed
 canonical acknowledgement after Stop speaking; it changes no stored history.

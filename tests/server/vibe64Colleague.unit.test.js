@@ -68,7 +68,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
       return { ...actual, catalogRevision: "current" };
     },
     async resolveAssistantPurpose(input) {
-      if (["conversation_summary", "voice_turn"].includes(input.purpose)) {
+      if (input.purpose === "conversation_summary") {
         observations.helperCalls.push({ purpose: input });
         return { available: observations.helperAvailable !== false, message: observations.helperUnavailableReason || "", effectiveSelection: { ...selection, modelId: "cheap-helper" }, connectionIdentity: "member-helper" };
       }
@@ -76,7 +76,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     },
     async resolveEphemeralAgentExecutionProfile(scope, input, options) {
       assert.equal(input.profileId, "helper");
-      assert.ok(["conversation_summary", "voice_turn"].includes(input.workloadId));
+      assert.equal(input.workloadId, "conversation_summary");
       assert.equal(options.assistantSelection.modelId, "cheap-helper");
       assert.equal(options.expectedConnectionIdentity, "member-helper");
       assert.deepEqual(scope.environment, {});
@@ -1547,85 +1547,16 @@ test("exact Database table navigation validates Data scope and preserves its ack
 });
 
 
-test("live voice readiness validates the actor's Helper without starting a conversation or model turn", async (t) => {
-  const f = await fixture(t, []);
-  const check = () => f.actions.execute({ actionId: "vibe64.colleague.voice.readiness.read", input: {}, context: f.context });
-  assert.deepEqual(await check(), { ok: true });
-  assert.deepEqual(await check(), { ok: true });
-  assert.deepEqual(f.observations.helperCalls.map(call => call.purpose), [
-    { purpose: "voice_turn", workflowEngineId: "codex" }, { purpose: "voice_turn", workflowEngineId: "codex" }
-  ]);
-  assert.equal(f.observations.creates, 0);
-  assert.deepEqual(f.observations.starts, []);
-  assert.deepEqual(f.observations.mutations, []);
-  assert.deepEqual((await f.service.read({}, f.context)).messages, []);
-  f.observations.allow = false;
-  await assert.rejects(check, { statusCode: 401 });
-  assert.equal(f.observations.helperCalls.length, 2);
-});
-
-test("live voice readiness reports unsupported Helper routing and rechecks it on retry", async (t) => {
-  const f = await fixture(t, []);
-  const check = () => f.actions.execute({ actionId: "vibe64.colleague.voice.readiness.read", input: {}, context: f.context });
+test("voice messages use normal Colleague admission and tools when Helper is unavailable", async (t) => {
+  const f = await fixture(t, [reply("Sugar will make it sweeter."), call("allowed"), reply("Done")]);
   f.observations.helperAvailable = false;
-  f.observations.helperUnavailableReason = "This model cannot run restricted background requests.";
-  await assert.rejects(check, error => {
-    assert.equal(error.statusCode, 409);
-    assert.equal(error.code, "vibe64_colleague_helper_unavailable");
-    assert.match(error.message, /cannot run restricted.*AI Accounts.*Model routing/);
-    return true;
-  });
-  f.observations.helperAvailable = true;
-  assert.deepEqual(await check(), { ok: true });
-  assert.equal(f.observations.creates, 0);
-  assert.ok(f.observations.helperCalls.every(call => call.purpose));
-  await f.service.close();
-  await assert.rejects(check, /Colleague is stopping/);
-});
-
-test("spoken intent uses a bounded tool-free Helper and never admits partial words as a user instruction", async (t) => {
-  const f = await fixture(t, []);
-  f.observations.helperAnswer = JSON.stringify({ intent: "steer" });
-  const result = await f.actions.execute({ actionId: "vibe64.colleague.voice.classify",
-    input: { text: "I meant A with sugar", speaking: true, spokenText: "A is interesting" }, context: f.context });
-  assert.deepEqual(result, { ok: true, intent: "steer" });
-  assert.deepEqual((await f.service.read({}, f.context)).messages, []);
-  assert.deepEqual(f.observations.mutations, []);
-  assert.equal(f.observations.starts.length, 0);
-  assert.equal(f.observations.helperCalls.find(call => call.purpose).purpose.purpose, "voice_turn");
-  assert.ok(f.observations.helperCalls.some(call => call.cleanup));
-  f.observations.helperAnswer = JSON.stringify({ intent: "run-a-tool" });
-  await assert.rejects(() => f.service.classifyVoice({ text: "Open a project", speaking: false }, f.context), {
-    statusCode: 409, code: "vibe64_colleague_voice_unavailable"
-  });
-  assert.deepEqual(f.observations.mutations, []);
-});
-
-test("voice interpretation explains missing Helper routing and hides unexpected provider failures", async (t) => {
-  const f = await fixture(t, []);
-  const classify = () => f.actions.execute({ actionId: "vibe64.colleague.voice.classify",
-    input: { text: "I meant A with sugar", speaking: true }, context: f.context });
-  f.observations.helperAvailable = false;
-  await assert.rejects(classify, error => {
-    assert.equal(error.statusCode, 409);
-    assert.equal(error.code, "vibe64_colleague_helper_unavailable");
-    assert.match(error.message, /AI Accounts.*Model routing/);
-    return true;
-  });
-  assert.equal(f.observations.helperCalls.filter(call => call.scope).length, 0);
-  f.observations.helperUnavailableReason = "The selected model cannot run restricted background requests.";
-  await assert.rejects(classify, error => {
-    assert.match(error.message, /cannot run restricted background requests/);
-    assert.match(error.message, /AI Accounts.*Model routing/);
-    return true;
-  });
-  f.observations.helperAvailable = true;
-  f.observations.helperAnswer = "unexpected private provider output";
-  await assert.rejects(classify, error => {
-    assert.equal(error.statusCode, 409);
-    assert.match(error.message, /review.*before sending/);
-    assert.doesNotMatch(error.message, /private provider/);
-    return true;
-  });
-  assert.deepEqual((await f.service.read({}, f.context)).messages, []);
+  await f.send("What about sugar?", "voice-question");
+  let result = await f.service.wait(f.context);
+  assert.equal(f.observations.starts.length, 1, "only the answering model runs");
+  assert.equal(result.messages.at(-1).text, "Sugar will make it sweeter.");
+  await f.send("Do it", "voice-operation");
+  result = await f.service.wait(f.context);
+  assert.deepEqual(f.observations.mutations, ["allowed"]);
+  assert.equal(result.messages.at(-1).text, "Done");
+  assert.deepEqual(f.observations.helperCalls, []);
 });

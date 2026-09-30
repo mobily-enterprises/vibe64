@@ -37,20 +37,22 @@ test("Colleague recovers connection status and reports failed commands without c
   assert.equal(view.notices.length, 2, "unchanged retained failures are reported once, not every poll");
 });
 
-test("live voice readiness forwards cancellation without sending a message", async (t) => {
+test("voice admission sends directly to Colleague and preserves its identity and focus", async (t) => {
   const requests = [];
   const view = mount(t, async (url, options) => {
     requests.push({ url, options });
     return { ok: true, messages: [], status: "ready" };
   });
   await flush();
-  const controller = new AbortController();
-  assert.equal((await view.state.checkVoice({ signal: controller.signal })).ok, true);
-  const request = requests.find(request => request.url.endsWith("/voice/readiness"));
-  assert.equal(request.options.method, "GET");
-  assert.equal(request.options.signal, controller.signal);
-  assert.equal(request.options.body, undefined);
-  assert.equal(requests.some(request => request.url.endsWith("/messages")), false);
+  const focus = { projectSlug: "tea" };
+  await view.state.sendMessage("What about sugar?", { messageId: "voice-question", focus });
+  const commands = requests.filter(request => request.options.method === "POST");
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0].url, "/api/vibe64/colleague/messages");
+  assert.equal(commands[0].options.body.message, "What about sugar?");
+  assert.equal(commands[0].options.body.messageId, "voice-question");
+  assert.deepEqual(commands[0].options.body.focus, focus);
+  assert.equal(requests.some(request => request.url.includes("/voice/")), false);
 });
 
 test("Colleague signals a local message submission before its delayed admission", async (t) => {

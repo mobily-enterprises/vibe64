@@ -71,8 +71,6 @@ const modelMenu = ref(false);
 const modelButton = ref(null);
 const sendButton = ref(null);
 const voicePreview = ref(null);
-const portrait = ref(null);
-const conversation = ref(null);
 const clientId = crypto.randomUUID();
 const working = computed(() => state.value.status === "working");
 const watches = computed(() => (state.value.watches || []).filter((item) => !item.assignmentId && ["active", "pending", "paused"].includes(item.status)));
@@ -83,20 +81,6 @@ let revision = 0;
 let pendingMessage = null;
 let navigating = null;
 let navigationReceipt = null;
-
-// The portrait stays outside the scroller. Its float reserves only the visible
-// top-right corner, so text below it can use the full conversation width.
-function updatePortraitSpace() {
-  const body = conversation.value?.querySelector(".assistant-transcript__body");
-  if (!open.value || !body || !portrait.value) return;
-  const bounds = body.getBoundingClientRect();
-  const face = portrait.value.getBoundingClientRect();
-  body.style.setProperty("--portrait-width", `${Math.max(0, bounds.right - face.left + 12)}px`);
-  body.style.setProperty("--portrait-height", `${Math.max(0, face.bottom - bounds.top + 12)}px`);
-  body.style.setProperty("--portrait-scroll", `${body.scrollTop}px`);
-}
-let portraitObserver;
-watch([open, state], updatePortraitSpace, { flush: "post" });
 
 function reportFailure(error) {
   const message = String(error?.message || error || "Colleague could not complete this request.");
@@ -170,8 +154,6 @@ async function sendMessage(message, options = {}) {
     return result;
   } finally { sending.value = false; schedule(); }
 }
-async function classifyVoice(input) { return requestColleague("/voice/classify", { method: "POST", body: input }); }
-async function checkVoice({ signal } = {}) { return requestColleague("/voice/readiness", { method: "GET", signal }); }
 async function submit() {
   const message = draft.value.trim();
   if (!message || sending.value) return;
@@ -240,18 +222,12 @@ watch(() => props.focus, (focus) => {
   void requestColleague("/focus", { method: "POST", body: { clientId, focus } }).catch((error) => { connectionError.value = error.message; });
 }, { deep: true });
 onMounted(() => {
-  if (conversation.value) {
-    portraitObserver = new ResizeObserver(updatePortraitSpace);
-    portraitObserver.observe(conversation.value);
-    if (portrait.value) portraitObserver.observe(portrait.value);
-  }
   void refresh();
   window.addEventListener("focus", refresh);
   window.addEventListener("blur", cancelAvatarPress);
   window.addEventListener("pagehide", cancelAvatarPress);
 });
 onBeforeUnmount(() => {
-  portraitObserver?.disconnect();
   realtimeSocket.off("connect", refresh);
   mounted = false;
   clearTimeout(timer);
@@ -285,12 +261,14 @@ onBeforeUnmount(() => {
   </v-dialog>
   <Teleport :to="panelTarget || 'body'" :disabled="!panelTarget">
     <aside v-show="open" class="vibe64-colleague" :aria-label="name">
-      <v-btn
-        class="vibe64-colleague__close" :icon="mdiClose" size="small" variant="text"
-        :aria-label="`Close ${name}`" :title="`Close ${name}`" @click="open = false"
-      />
-      <span v-if="$slots.avatar" ref="portrait" class="vibe64-colleague__avatar" aria-hidden="true"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
-      <div ref="conversation" class="vibe64-colleague__conversation" @scroll.capture.passive="updatePortraitSpace">
+      <div class="vibe64-colleague__header">
+        <v-btn
+          class="vibe64-colleague__close" :icon="mdiClose" size="small" variant="text"
+          :aria-label="`Close ${name}`" :title="`Close ${name}`" @click="open = false"
+        />
+        <span v-if="$slots.avatar" class="vibe64-colleague__avatar" aria-hidden="true"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
+      </div>
+      <div class="vibe64-colleague__conversation">
         <AssistantConversationElement :adapter="adapter" :label="`${name} conversation`">
           <template #composer="{ adapter: { composer } }">
             <div class="vibe64-colleague__composer-region">
@@ -312,7 +290,7 @@ onBeforeUnmount(() => {
                       :aria-label="`Choose ${name} model`" :title="state.assistantSelection?.modelId || 'Choose model'"
                       :disabled="working || sending" @click="modelMenu = true"
                     />
-                    <slot name="voice" :conversation="state" :submit="sendMessage" :classify="classifyVoice" :check="checkVoice" :minimized="!open" :launcher="launcher?.$el" :preview="voicePreview" />
+                    <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" :launcher="launcher?.$el" :preview="voicePreview" />
                     <div class="vibe64-colleague__delivery">
                       <v-btn v-if="composer.canStop" :icon="mdiStop" size="small" variant="text" :aria-label="`Stop ${name}`" title="Stop assistant" @click="stop" />
                       <v-btn
@@ -362,19 +340,12 @@ onBeforeUnmount(() => {
 .vibe64-colleague { --portrait-size: 104px; position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
 .vibe64-colleague strong { font-size: 15px; font-weight: 650; letter-spacing: .015em; }
 .vibe64-colleague small { display: block; font-size: 12px; opacity: .75; }
-.vibe64-colleague__avatar { position: absolute; top: calc(env(safe-area-inset-top) + 8px); right: 20px; z-index: 2; display: block; width: var(--portrait-size); height: var(--portrait-size); pointer-events: none; }
+.vibe64-colleague__header { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; padding: 8px 20px 0 4px; }
+.vibe64-colleague__avatar { display: block; flex-shrink: 0; width: var(--portrait-size); height: var(--portrait-size); pointer-events: none; }
 .vibe64-colleague__avatar :deep(svg) { width: 100%; height: 100%; }
-.vibe64-colleague__close { position: absolute; top: calc(env(safe-area-inset-top) + 4px); left: 4px; z-index: 3; }
-.vibe64-colleague__conversation { flex: 1; min-height: 0; display: flex; padding: 48px 12px 12px; }
+.vibe64-colleague__close { flex-shrink: 0; }
+.vibe64-colleague__conversation { flex: 1; min-height: 0; display: flex; padding: 12px; }
 .vibe64-colleague__conversation :deep(.assistant-conversation) { width: 100%; min-height: 0; }
-.vibe64-colleague__conversation :deep(.assistant-transcript__body) { display: block; }
-.vibe64-colleague__conversation :deep(.assistant-transcript__body::before) { content: ""; float: right; width: var(--portrait-width, 0px); height: calc(var(--portrait-scroll, 0px) + var(--portrait-height, 0px)); shape-outside: inset(var(--portrait-scroll, 0px) 0 0); pointer-events: none; }
-.vibe64-colleague__conversation :deep(.assistant-transcript__turn) { display: contents; }
-.vibe64-colleague__conversation :deep(.assistant-transcript__message-row) { display: block; overflow: visible; margin-block: 0 16px; }
-.vibe64-colleague__conversation :deep(.assistant-transcript__message),
-.vibe64-colleague__conversation :deep(.studio-long-text-review__blocks),
-.vibe64-colleague__conversation :deep(.assistant-transcript__welcome) { display: block; overflow: visible; }
-.vibe64-colleague__conversation :deep(.assistant-transcript__message--user) { width: auto; }
 .vibe64-colleague__conversation :deep(.assistant-transcript__avatar--user) { display: none; }
 .vibe64-colleague__conversation :deep(.assistant-transcript__assistant-header) { margin-bottom: 6px; }
 .vibe64-colleague__conversation :deep(.studio-long-text-review__blocks > * + *) { margin-top: 0.6rem; }
@@ -383,7 +354,7 @@ onBeforeUnmount(() => {
 }
 .vibe64-colleague__composer { flex: 0 0 auto; }
 .vibe64-colleague__composer-region { position: relative; flex: 0 0 auto; }
-.vibe64-colleague__voice-preview { position: absolute; inset-inline: 0; bottom: calc(100% + 8px); z-index: 1; }
+.vibe64-colleague__voice-preview { min-width: 0; }
 .vibe64-colleague__composer-actions, .vibe64-colleague__delivery { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .vibe64-colleague__composer-actions { width: 100%; flex-wrap: wrap; }
 .vibe64-colleague__delivery { margin-inline-start: auto; flex-shrink: 0; }

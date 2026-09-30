@@ -81,18 +81,24 @@ product-operation coverage remains in progress.
 
 On every screen size, Colleague has one compact avatar button in the header.
 It opens a 460-pixel-wide drawer on the right, using the available width on smaller
-screens. A larger face stays pinned at the top right, smaller on mobile, while
-conversation text wraps around it and returns to the wider space below. A compact
+screens. A larger face stays pinned at the top right, smaller on mobile, in a
+fixed row above the messages. Text keeps the same width while scrolling. A compact
 Close button sits at the top left, without a separate name/project header. Only
 the messages scroll; the face and message box remain in place.
 Model selection, microphone, speaker, Stop and Send/Steer use compact icon
 buttons inside the message box, matching the main chat toolbar and leaving
 the page's comment, message and Send controls clear when closed. Closing it
 preserves both conversations' drafts.
+Colleague gives brief, direct replies by default and expands when asked for detail.
+It uses current project/page context silently, without unsolicited status recaps
+or lists of actions it did not take.
+Hosted live voice sends recognized questions directly to Colleague's selected
+model and normal tools, without a separate Helper interpretation call. The host
+owns pause detection, microphone controls and immediate speech stopping.
 Tab from a nonempty message focuses Send, or Steer while Colleague is working;
-Enter sends it. Voice status and live transcription appear above the message
-box without moving its controls. Recognized words also update a pending user
-message in the chat, replaced once on admission while preserving typed drafts.
+Enter sends it. Recognized words grow in a pending user chat bubble, replaced
+once on admission while preserving typed drafts. Compact voice status and
+recording controls sit above the message box without covering chat or assistant activity.
 Hosts may speak safe phrases from live reply text before answer completion.
 Holding the header avatar records a voice message when the host supports speech.
 A bubble across the left two-thirds shows recognized words, leaving the right

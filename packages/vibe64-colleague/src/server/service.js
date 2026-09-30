@@ -4,7 +4,7 @@ import path from "node:path";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createConversationTranscript, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, outputSchema, readEnvelope, readPartialReply } from "./protocol.js";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, outputSchema, readEnvelope, readPartialReply, replyStyle } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
@@ -271,6 +271,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       }
       const prompt = JSON.stringify({
         assistantName: await resolveName(),
+        replyStyle,
         focus: connection.focus, userMessages: messages,
         observations, readOnly, autonomous,
         assignments: (state.record.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status) || observedAssignmentIds.includes(item.assignmentId))
@@ -548,26 +549,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         scheduleWatches(state, watchDebounceMs);
         return result;
       });
-    },
-    async checkVoice(_input, context) {
-      const state = await stateFor(context);
-      if (closed || state.stopping) throw failure("Colleague is stopping. Try again in a moment.");
-      await summaries.requireHelper(state, context, "voice_turn");
-      return { ok: true };
-    },
-    async classifyVoice(input, context) {
-      const state = await stateFor(context);
-      if (closed || state.stopping || state.summaryRunning) throw failure("Colleague's Helper is busy. Finish this voice message manually.");
-      state.requestContext = context;
-      state.summaryAbort = new AbortController();
-      state.summaryRunning = (async () => {
-        const recentConversation = (await snapshot(state)).messages.slice(-4).map(({ role, text }) => ({ role, text: text.slice(-1200) }));
-        return summaries.classifyVoice(state, { ...input, recentConversation }, context);
-      })().catch((cause) => {
-        if (cause?.code === "vibe64_colleague_helper_unavailable") throw cause;
-        throw failure("Colleague could not interpret this voice turn. Finish the recording and review it before sending.", "vibe64_colleague_voice_unavailable");
-      }).finally(() => { state.summaryRunning = null; state.summaryAbort = null; });
-      return state.summaryRunning;
     },
     async summarize(input, context) {
       const state = await stateFor(context);
