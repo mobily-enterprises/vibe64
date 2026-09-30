@@ -87,6 +87,20 @@ Colleague can explain these steps and, when its plan-reading action is available
 for the session, offer to read the plan or summarize outstanding checks. It can
 read an archive by its history identity without starting a coding turn. It must
 finish all pages before claiming to have reviewed the complete document.
+You can also ask **“Show me this session's plan”**, or name another accessible
+project and session. Colleague opens that session's Main chat and the same
+**Plan and history** dialog. It selects **Current plan** when one exists,
+otherwise **History**, just like the document icon. Ask to show **History** or
+**Current plan** explicitly to choose that tab. On mobile it reveals chat before
+opening the dialog. Select **Close plan** to return to that session's chat.
+
+Colleague confirms opening only after your connected browser displays the dialog.
+If there is no plan or history, the session is unavailable, access is denied or
+loading fails, it reports that problem. Reconnect or use the normal **Retry**
+control before asking again. An unsuccessful Colleague request does not prove
+the session has no plan; the native plan icon remains an independent way to
+check. Opening the viewer reads the plan; it never creates,
+edits, approves, archives, reopens or executes one and starts no coding turn.
 Explaining the workflow or offering help is not authorization to change a plan.
 Colleague's plan-reading action cannot archive, reopen, edit or execute it:
 those require the person's Archive or Make current control, or an explicit Main-chat request,

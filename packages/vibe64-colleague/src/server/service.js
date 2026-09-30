@@ -4,7 +4,7 @@ import path from "node:path";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createConversationTranscript, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, outputSchema, readEnvelope, readPartialReply, replyStyle } from "./protocol.js";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, discoveryInstructions, instructions, outputSchema, readEnvelope, readPartialReply, replyStyle } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
@@ -272,6 +272,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const prompt = JSON.stringify({
         assistantName: await resolveName(),
         replyStyle,
+        toolUsage: discoveryInstructions,
         // A persistent native process can retain its original system instructions
         // across a release. Send the current guide-read policy on every turn too.
         usageKnowledge: "For a how-to answer, read this release's complete usage guide for this request. Earlier guide copies and topic summaries do not establish the current controls or steps.",
@@ -664,6 +665,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     },
     async navigate(input, context) {
       const state = await stateFor(context);
+      if (input.planView && (!input.sessionId || input.pane || input.conversationId)) {
+        return { ok: false, error: "Choose the exact session's Main chat, without another pane or conversation, to open its plan viewer." };
+      }
       if (input.databaseTable && (input.databaseView !== "data" || input.pane !== "database" || !input.sessionId)) {
         return { ok: false, error: "Choose the exact session and Database Data view before selecting a table." };
       }
@@ -687,6 +691,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         ...(input.integrationEnvironment ? { integrationEnvironment: input.integrationEnvironment } : {}),
         ...(input.databaseView ? { databaseView: input.databaseView } : {}),
         ...(input.databaseTable ? { databaseTable: input.databaseTable } : {}),
+        ...(input.planView ? { planView: input.planView } : {}),
         sessionId: input.sessionId || "", conversationId: input.conversationId || "", status: "pending" };
       connection.navigation = command;
       return new Promise((resolve) => {

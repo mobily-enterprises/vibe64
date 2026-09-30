@@ -261,6 +261,7 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `tests/server/assistantPlanLifecycle.test.js`
 - `tests/client/vibe64WorkPlan.vitest.js`
+- `tests/server/vibe64WorkPlanClient.test.js`
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
 - `packages/vibe64-runtime/src/server/codexHistoryAdapter.js`
@@ -597,7 +598,12 @@ an active plan, neutral tone otherwise, and remains available for completed or
 archived plans. The full checklist renders with model-maintained checkboxes and
 Markdown evidence. work-plan-changed events refresh open viewers; stable content
 containers preserve scrolling. Complete pagination uses one revision throughout;
-a changed document cannot be presented as a mixture of revisions. Implement and
+a changed document cannot be presented as a mixture of revisions.
+Colleague's plan-viewer navigation invokes the same local opening owner. It
+refreshes the normal authorized resource, rejects missing data or changed actor
+and session identity, and publishes the actual open tab for browser acknowledgement.
+The opener uses the button's default selection or the requested Current/History
+tab, with no lifecycle mutation or coding request. Implement and
 Recover controls are removed. Current plan and History are labelled Material tabs
 with a visible selection indicator. The dialog keeps the same viewport-bounded
 width and height across documents, loading, and empty or populated history;

@@ -23,6 +23,10 @@ the person's actual view and permissions, and offers to perform supported tasks.
 How-to questions and offers make no changes. An accepted offer or direct request
 uses the normal operations and confirmations; provider consent, secret entry and
 browser permission remain the person's actions. Guides give no repository access.
+On request, Colleague can open the exact session's existing Plan and history
+dialog, with Current plan or History selected, and waits for the browser to
+confirm its display. Opening reads the plan and starts no coding work or plan
+change. Missing plans, access failures and changed sessions are reported.
 The host can check live-turn Helper availability before recording, without
 sending an AI request. Stopping or steering clears unfinished text.
 Colleague can browse open and archived sessions beyond the first page, while

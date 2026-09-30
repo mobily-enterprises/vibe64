@@ -1193,6 +1193,23 @@ test("catalogue discovery retains its loaded contract across native model exchan
   assert.equal(JSON.parse(JSON.parse(f.observations.starts[2].input.message).feedback).result.ok, true);
 });
 
+test("a flat discovery call is rejected without mutation and can be corrected through the loaded contract", async (t) => {
+  const tool = (toolName, args) => JSON.stringify({ kind: "tool", text: "", toolName, arguments: JSON.stringify(args) });
+  const f = await fixture(t, [
+    tool("assistant_action_contract", { actionId: "vibe64.test.operate" }),
+    tool("assistant_action_execute", { value: "malformed" }),
+    tool("assistant_action_execute", { actionId: "vibe64.test.operate", input: { value: "corrected" } }),
+    reply("The corrected request succeeded.")
+  ], { discovery: true });
+  await f.send("Use the requested operation.");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.deepEqual(f.observations.mutations, ["corrected"]);
+  const feedback = JSON.parse(JSON.parse(f.observations.starts[2].input.message).feedback);
+  assert.equal(feedback.result.ok, false);
+  assert.equal(feedback.result.error.code, "assistant_action_unknown");
+});
+
 test("Colleague model changes use current access, retain written history and seed a new native conversation", async (t) => {
   const f = await fixture(t, [reply("We discussed a grocery list."), reply("I still have that discussion.")]);
   await f.send("Let's discuss a grocery list.");
@@ -1418,6 +1435,64 @@ test("project navigation carries bounded panes and exact conversation targets, w
   assert.deepEqual(await pending, { ok: false, error: "The selected conversation changed before it opened." });
   f.observations.projectAllowed = false;
   await assert.rejects(execute(input), { statusCode: 403 });
+});
+
+test("plan viewer navigation requires exact Main chat and acknowledges the actual native tab", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const execute = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
+  const input = { projectSlug: "alpha", sessionId: "session-1", planView: "default" };
+  for (const invalid of [{ sessionId: "" }, { pane: "preview" }, { conversationId: "temporary-1" }]) {
+    assert.equal((await execute({ ...input, ...invalid })).ok, false);
+    assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
+  }
+  for (const planView of ["", "approve", {}]) {
+    await assert.rejects(execute({ ...input, planView }), { code: "ACTION_VALIDATION_FAILED" });
+  }
+  for (const [requested, displayed] of [["default", "current"], ["default", "history"], ["current", "current"], ["history", "history"]]) {
+    const pending = execute({ ...input, planView: requested });
+    let state;
+    for (let index = 0; index < 20; index += 1) {
+      state = await f.service.read({ clientId: "tab-a" }, f.context);
+      if (state.navigation?.status === "pending") break;
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.equal(state.navigation.planView, requested);
+    assert.equal(state.navigation.sessionId, "session-1");
+    const focus = { projectSlug: "alpha", sessionId: "session-1", planView: displayed, pane: "chat" };
+    await f.actions.execute({ actionId: "vibe64.colleague.navigation.acknowledge", context: f.context,
+      input: { clientId: "tab-a", commandId: state.navigation.id, ok: true, focus } });
+    assert.deepEqual(await pending, { ok: true, focus });
+    assert.deepEqual(await f.actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context }), { ok: true, focus });
+  }
+  assert.deepEqual(f.observations.starts, []);
+  assert.deepEqual(f.observations.sent, []);
+  assert.deepEqual(f.observations.mutations, []);
+  f.observations.projectAllowed = false;
+  await assert.rejects(execute(input), { statusCode: 403 });
+});
+
+test("failed or disconnected plan-viewer navigation cannot report success", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const input = { projectSlug: "alpha", sessionId: "session-1", planView: "default" };
+  const execute = () => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
+  assert.deepEqual(await execute(), { ok: false, error: "The initiating browser is no longer connected." });
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  for (const error of ["This session has no current plan or plan history.", "Access denied", "The selected session changed before its plan opened.", "The plan could not be loaded."]) {
+    const pending = execute();
+    let state;
+    for (let index = 0; index < 20; index += 1) {
+      state = await f.service.read({ clientId: "tab-a" }, f.context);
+      if (state.navigation?.status === "pending") break;
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id, ok: false, error }, f.context);
+    assert.deepEqual(await pending, { ok: false, error });
+  }
+  assert.deepEqual(f.observations.starts, []);
+  assert.deepEqual(f.observations.mutations, []);
 });
 
 test("global Management navigation works without project access and cannot accept arbitrary destinations", async (t) => {

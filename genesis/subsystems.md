@@ -275,6 +275,9 @@ reply and user-transcript projections reconcile to the canonical chat. Assignmen
 turn allowances, authorized communication links, dependency waits and evidence;
 existing conversation owners still execute work. It also
 owns acknowledged project/session and global Management navigation commands.
+Plan-viewer requests reuse that navigation contract. Conversation owns the native
+viewer and its read-only opener; the host reveals Main chat and acknowledges its
+actual open tab. Colleague receives no second plan state or lifecycle authority.
 It owns bounded discovery and lookup of the release's task-oriented usage guides,
 used to explain UI steps and offer authorized assistance. Hosts compose their
 additional guides into the same released documentation; other subsystems retain

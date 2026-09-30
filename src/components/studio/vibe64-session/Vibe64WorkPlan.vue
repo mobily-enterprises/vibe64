@@ -1,5 +1,5 @@
 <script setup>
-import { computed, inject, ref, unref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, ref, unref, watch, watchEffect } from "vue";
 import { mdiArchiveArrowDownOutline, mdiArchiveOutline, mdiArrowLeft, mdiCheckCircleOutline, mdiChevronRight, mdiClose, mdiFileDocumentOutline, mdiHistory, mdiRestore } from "@mdi/js";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { LongTextPreviewBlocks } from "@jskit-ai/assistant-core/client/conversation";
@@ -11,7 +11,7 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { VIBE64_SESSION_CHANGED_EVENT, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PLAN_KEY } from "@/lib/vibe64AssistantHost.js";
 
 const props = defineProps({ active: Boolean, busy: Boolean, session: { type: Object, default: null },
   sessionsApiPath: { type: [Function, Object, String], default: "" } });
@@ -71,6 +71,46 @@ const selectedPlanReady = computed(() => Boolean(plan.value) && (plan.value.arch
 const canChangePlan = computed(() => !props.busy && !pendingOperation.value && selectedPlanReady.value);
 const currentActive = computed(() => plan.value?.current?.status === "active");
 const label = computed(() => currentActive.value ? "View active plan" : "View plan and history");
+function showPlan(requestedView = "default") {
+  archiveId.value = "";
+  view.value = requestedView === "default" ? (plan.value?.current ? "current" : "history") : requestedView;
+  open.value = true;
+}
+
+const colleaguePlan = inject(VIBE64_COLLEAGUE_PLAN_KEY, null);
+const planViewer = {
+  get projectSlug() { return projectSlug.value; },
+  get sessionId() { return sessionId.value; },
+  get ready() { return enabled.value && Boolean(plan.value) && !resource.isFetching.value; },
+  get error() { return resource.loadError.value; },
+  get open() { return enabled.value && open.value; },
+  get view() { return view.value; },
+  async openPlan(requestedView = "default", isCurrent = () => true) {
+    const target = endpoint.value;
+    const actor = actorKey.value;
+    if (!enabled.value || !isCurrent()) throw new Error("This session's plan viewer is no longer available.");
+    archiveId.value = "";
+    await resource.reload();
+    if (!enabled.value || !isCurrent() || target !== endpoint.value || actor !== actorKey.value) {
+      throw new Error("The selected session changed before its plan opened.");
+    }
+    if (resource.loadError.value) throw new Error(resource.loadError.value);
+    if (!plan.value?.current && !plan.value?.history?.length) throw new Error("This session has no current plan or plan history.");
+    showPlan(requestedView);
+    await nextTick();
+    if (!planViewer.open || !isCurrent() || target !== endpoint.value || actor !== actorKey.value) {
+      throw new Error("The plan viewer closed or its session changed before it opened.");
+    }
+  }
+};
+watchEffect(() => {
+  if (!colleaguePlan) return;
+  if (enabled.value) colleaguePlan.value = planViewer;
+  else if (colleaguePlan.value === planViewer) colleaguePlan.value = null;
+});
+onBeforeUnmount(() => {
+  if (colleaguePlan?.value === planViewer) colleaguePlan.value = null;
+});
 async function changePlan(operation) {
   if (!canChangePlan.value) return;
   const restoring = operation === "restore";
@@ -134,7 +174,7 @@ watch(() => props.active, (active) => {
   <div v-if="visible" class="work-plan-control">
     <v-btn
       :icon="mdiFileDocumentOutline" :variant="currentActive ? 'tonal' : 'text'" :color="currentActive ? 'warning' : undefined"
-      :aria-label="label" :title="label" size="small" @click="archiveId = ''; view = plan?.current ? 'current' : 'history'; open = true"
+      :aria-label="label" :title="label" size="small" @click="showPlan()"
     />
     <span v-if="notice" class="d-sr-only" role="status">{{ notice }}</span>
   </div>

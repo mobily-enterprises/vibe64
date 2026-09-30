@@ -34,6 +34,7 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `src/components/Vibe64ColleagueLauncherTarget.vue`
+- `src/lib/vibe64AssistantHost.js`
 - `src/components/StudioAppShellLayout.vue`
 - `src/components/ShellLayout.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue`
@@ -310,6 +311,18 @@ supplied, omitting the temporary conversation selects Main; keeping a temporary
 chat selected requires its ID. The host acknowledges the actual route and loaded
 conversation. This capability opens existing views without giving Colleague
 repository contents, a terminal or screen access.
+The same action accepts an optional planView (default, current or history) for
+an exact session's Main chat, without another pane or temporary conversation.
+The native Plan and history owner reads fresh authorized data and opens its own
+dialog. Default follows the button's current-or-history choice. Acknowledgement
+reports the actual current/history tab only while that matching dialog is open.
+Missing plans, load failures or changed selections return failure; opening
+neither mutates a plan nor starts a coding turn.
+The native prompt also repeats the discovery call format on each exchange:
+contract lookup identifies the action, and execution supplies actionId plus
+nested input. A rejected malformed call is not evidence that an advertised
+action is absent. JSKIT still validates and executes the unchanged request;
+Colleague adds no argument repair or alternative dispatch path.
 For Integrations, an optional exact integration ID requires the Integrations
 pane and either a development session or the production environment. The browser
 selects that slot through the existing panel owner, even when the same URL is

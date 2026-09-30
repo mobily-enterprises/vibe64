@@ -1,4 +1,4 @@
-import { createRenderer, h, nextTick, ref, ssrContextKey } from "vue";
+import { createRenderer, h, nextTick, ref, shallowRef, ssrContextKey } from "vue";
 import { afterEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ options: null, realtime: null, resource: null, request: vi.fn(), report: vi.fn() }));
@@ -8,18 +8,24 @@ vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: (
 vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: mocks.report }) }));
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ({ value: "fixture" }) }));
 import WorkPlan from "../../src/components/studio/vibe64-session/Vibe64WorkPlan.vue";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PLAN_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
 let app;
 afterEach(() => { app?.unmount(); mocks.request.mockReset(); mocks.report.mockReset(); });
 function mount(data) {
-  mocks.resource = { data: ref(data), loadError: ref(""), reload: vi.fn() };
+  mocks.resource = { data: ref(data), loadError: ref(""), isFetching: ref(false), reload: vi.fn() };
   const props = ref({ active: true, session: { sessionId: "one" }, sessionsApiPath: "/api/projects/fixture/sessions" });
+  const actor = ref({ actorKey: "local" });
+  const colleague = shallowRef(null);
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   const notice = ref();
-  app = renderer.createApp({ render: () => h({ ...WorkPlan, render: () => null }, { ...props.value, ref: notice }) });
+  const component = { ...WorkPlan, render: () => null };
+  app = renderer.createApp({ render: () => h(component, { ...props.value, ref: notice }) });
   app.provide(ssrContextKey, { modules: new Set() });
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, actor);
+  app.provide(VIBE64_COLLEAGUE_PLAN_KEY, colleague);
   app.mount({});
-  return { props, state: () => notice.value.$.setupState };
+  return { props, actor, colleague, state: () => notice.value.$.setupState };
 }
 const active = { available: true, status: "active", current: { status: "active" }, history: [],
   checked: 0, total: 1, text: "Status: active\n# Reporting\n- [ ] Prove privacy\n\nEvidence will appear here." };
@@ -137,4 +143,83 @@ it("reads every page at one revision and targets the selected archive", async ()
   mocks.request.mockResolvedValueOnce({ revision: "b".repeat(64), text: "Old", hasMore: true, nextOffset: 3 })
     .mockRejectedValueOnce(new Error("The plan changed"));
   await expect(mocks.options.queryOptions.queryFn({ signal: new AbortController().signal })).rejects.toThrow("plan changed");
+});
+
+
+it.each([
+  [active, "current"],
+  [{ current: null, history: [{ id: "a".repeat(64), title: "Archived" }] }, "history"]
+])("opens through Colleague with the plan button's default and no mutation (%s)", async (data, expectedView) => {
+  const f = mount(data);
+  const viewer = f.colleague.value;
+  expect(viewer.projectSlug).toBe("fixture");
+  expect(viewer.sessionId).toBe("one");
+  f.state().showPlan();
+  expect(f.state().view).toBe(expectedView);
+  f.state().open = false;
+  await viewer.openPlan();
+  expect(viewer.open).toBe(true);
+  expect(viewer.view).toBe(expectedView);
+  expect(mocks.resource.reload).toHaveBeenCalledOnce();
+  expect(mocks.request).not.toHaveBeenCalled();
+  f.state().open = false;
+  await nextTick();
+  expect(viewer.open).toBe(false);
+});
+
+it("selects the requested native tab and leaves an archived document through the normal read", async () => {
+  const f = mount({ ...active, history: [{ id: "a".repeat(64), title: "Archived" }] });
+  f.state().archiveId = "a".repeat(64);
+  await f.colleague.value.openPlan("history");
+  expect(f.state().archiveId).toBe("");
+  expect(f.state().showHistory).toBe(true);
+  await f.colleague.value.openPlan("current");
+  expect(f.state().view).toBe("current");
+  expect(mocks.request).not.toHaveBeenCalled();
+});
+
+it.each([
+  [{ current: null, history: [] }, "", "no current plan or plan history"],
+  [active, "Access denied", "Access denied"],
+  [active, "The plan could not be loaded", "could not be loaded"]
+])("does not open an unavailable plan (%s)", async (data, error, expectedError) => {
+  const f = mount(data);
+  mocks.resource.loadError.value = error;
+  await expect(f.colleague.value.openPlan()).rejects.toThrow(expectedError);
+  expect(f.state().open).toBe(false);
+  expect(mocks.request).not.toHaveBeenCalled();
+});
+
+it.each(["session", "actor", "inactive", "superseded"])("rejects a %s change during its fresh read", async (change) => {
+  const f = mount(active);
+  let finish;
+  mocks.resource.reload.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  let current = true;
+  const pending = f.colleague.value.openPlan("default", () => current);
+  if (change === "session") f.props.value.session = { sessionId: "two" };
+  if (change === "actor") f.actor.value = { actorKey: "other" };
+  if (change === "inactive") f.props.value.active = false;
+  if (change === "superseded") current = false;
+  await nextTick();
+  finish();
+  await expect(pending).rejects.toThrow("changed before its plan opened");
+  expect(f.state().open).toBe(false);
+  expect(mocks.request).not.toHaveBeenCalled();
+});
+
+it("publishes only its active lifetime and does not clear a replacement owner on unmount", async () => {
+  const f = mount(active);
+  const viewer = f.colleague.value;
+  f.props.value.active = false;
+  await nextTick();
+  expect(f.colleague.value).toBe(null);
+  expect(viewer.open).toBe(false);
+  f.props.value.active = true;
+  await nextTick();
+  expect(f.colleague.value).toBe(viewer);
+  const replacement = {};
+  f.colleague.value = replacement;
+  app.unmount();
+  app = null;
+  expect(f.colleague.value).toBe(replacement);
 });
