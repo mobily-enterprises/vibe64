@@ -70,7 +70,7 @@ async function save({ remove = false, useSavedKey = false } = {}) {
 <template>
   <section :aria-label="`${engineLabel} providers`" class="native-providers">
     <ModelRoutingForm
-      v-if="routingProposal" :engine-id="engineId" :connection-id="providerId" :connection-label="provider?.label || providerId" :connection-engines="connectedEngines" :setup-error="routingSetupError"
+      v-if="routingProposal" :engine-id="engineId" :connection-id="providerId" :connection-label="provider?.label || providerId" :setup-error="routingSetupError"
       @busy="emit('busy', $event)" @close="routingProposal = false; emit('close')"
       @saved="routingProposal = false; emit('changed'); emit('close')"
     />

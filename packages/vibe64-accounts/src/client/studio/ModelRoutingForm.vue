@@ -10,15 +10,17 @@ import { useModelRouting } from "../composables/useModelRouting.js";
 import { ACCOUNTS_ENDPOINT } from "../lib/accountsGateApi.js";
 
 const props = defineProps({ connectionId: { type: String, default: "" }, connectionLabel: { type: String, default: "" },
-  connectionEngines: { type: Array, default: () => [] }, setupError: { type: String, default: "" },
-  engineId: { type: String, default: "" }, focusRole: { type: String, default: "" }, readonly: Boolean });
+  setupError: { type: String, default: "" },
+  engineId: { type: String, required: true }, focusRole: { type: String, default: "" }, readonly: Boolean });
 const emit = defineEmits(["close", "saved", "busy"]);
 const { smAndDown } = useDisplay();
-const selectedEngine = ref(props.engineId);
-const { resource, engines, scopeKey, loadError: resourceError } = useModelRouting({ engineId: computed(() => props.connectionId ? "" : props.engineId) });
+const selectedEngine = computed(() => props.engineId);
+const customizing = ref(false);
+const proposalMode = computed(() => Boolean(props.connectionId) && !customizing.value);
+const { resource, engines, scopeKey, loadError: resourceError } = useModelRouting({ engineId: selectedEngine });
 const otherModelsRequested = ref(false);
 const otherModels = useModelRouting({ engineId: selectedEngine, includeOtherModels: true,
-  enabled: computed(() => otherModelsRequested.value && !props.connectionId) });
+  enabled: computed(() => otherModelsRequested.value && !proposalMode.value) });
 const refreshError = ref("");
 const loadError = computed(() => resourceError.value || refreshError.value);
 const draft = ref({});
@@ -26,7 +28,6 @@ const baseRevision = ref(null);
 const recommendationReview = ref(null);
 watch(selectedEngine, () => { recommendationReview.value = null; }, { flush: "sync" });
 const proposals = ref([]);
-const customizing = ref(false);
 const saving = ref(false);
 const fieldErrors = ref({});
 const reviewedHelpers = ref([]);
@@ -41,12 +42,10 @@ let hydratedDraft = "";
 const draftSnapshot = () => JSON.stringify({ draft: draft.value, proposals: proposals.value,
   reviewedHelpers: reviewedHelpers.value, customizing: customizing.value });
 const canEdit = computed(() => !props.readonly && resource.data.value?.canConfigure === true);
-const proposalMode = computed(() => Boolean(props.connectionId) && !customizing.value);
 const modelEngines = computed(() => otherModelsRequested.value && otherModels.resource.data.value?.revision === baseRevision.value
   ? otherModels.engines.value : engines.value);
 const engine = computed(() => modelEngines.value.find(({ engineId }) => engineId === selectedEngine.value));
 const engineLabel = computed(() => VIBE64_AGENT_PROVIDERS.find(({ id }) => id === selectedEngine.value)?.label || selectedEngine.value);
-const connectedEngines = computed(() => engines.value.filter((item) => item.connected));
 const roleFields = ref({});
 watch([engine, () => props.focusRole], async () => {
   if (!props.focusRole) return;
@@ -72,25 +71,24 @@ const recommendedChanges = computed(() => !engine.value ? [] : roles.flatMap(({ 
   if (previous && previous.agentId !== proposed.agentId) changes.push(`${proposed.agentId} agent`);
   return [{ role: id, label, proposed, description: changes.join(" · ") }];
 }));
-const suggestedChanges = computed(() => connectedEngines.value
-  .filter((item) => item.roles.senior.recommendation && item.roles.junior.recommendation)
-  .flatMap((item) => ASSISTANT_ROUTING_ASSIGNMENTS.flatMap((role) => {
-  const { assignment, recommendation } = item.roles[role];
+const suggestedChanges = computed(() => !engine.value?.connected || !engine.value.roles.senior.recommendation || !engine.value.roles.junior.recommendation
+  ? [] : ASSISTANT_ROUTING_ASSIGNMENTS.flatMap((role) => {
+  const { assignment, recommendation } = engine.value.roles[role];
   if (!recommendation || recommendation.modelProviderId !== props.connectionId ||
-      props.connectionEngines.length && !props.connectionEngines.includes(recommendation.engineId) || sameChoice(assignment, recommendation)) return [];
-  return [{ id: `${item.engineId}:${role}`, engineId: item.engineId,
+      recommendation.engineId !== selectedEngine.value || sameChoice(assignment, recommendation)) return [];
+  return [{ id: `${selectedEngine.value}:${role}`, engineId: selectedEngine.value,
     role, label: roles.find(({ id }) => id === role).label, previous: assignment, proposed: recommendation }];
-})));
+}));
 function payload() {
   const orchestrators = JSON.parse(JSON.stringify(draft.value));
   if (proposalMode.value) for (const proposal of suggestedChanges.value) {
     if (proposals.value.includes(proposal.id)) orchestrators[proposal.engineId][proposal.role] = proposal.proposed;
   }
-  const inScope = Object.entries(orchestrators).filter(([engineId]) => proposalMode.value || engineId === selectedEngine.value);
+  const inScope = Object.entries(orchestrators).filter(([engineId]) => engineId === selectedEngine.value);
   const changes = Object.fromEntries(inScope.map(([engineId, assignments]) => [engineId,
     Object.fromEntries(Object.entries(assignments).filter(([role, selection]) => !sameChoice(selection, savedAssignments[engineId]?.[role])))
   ]).filter(([, assignments]) => Object.keys(assignments).length));
-  return { revision: baseRevision.value, ...(!proposalMode.value ? { engineId: selectedEngine.value } : {}),
+  return { revision: baseRevision.value, engineId: selectedEngine.value,
     orchestrators: changes, reviewedHelperWorkflows: reviewedHelpers.value.filter((id) => id === selectedEngine.value) };
 }
 function hydrate(data) {
@@ -102,10 +100,8 @@ function hydrate(data) {
   reviewedHelpers.value = [];
   fieldErrors.value = {};
   savedAssignments = JSON.parse(JSON.stringify(draft.value));
-  if (!props.engineId && !data.engines.some(({ engineId }) => engineId === selectedEngine.value)) selectedEngine.value = data.engines.find((item) => item.connected)?.engineId || "";
-  savedPayload = JSON.stringify({ revision: data.revision, ...(!proposalMode.value ? { engineId: selectedEngine.value } : {}), orchestrators: {}, reviewedHelperWorkflows: [] });
+  savedPayload = JSON.stringify({ revision: data.revision, engineId: selectedEngine.value, orchestrators: {}, reviewedHelperWorkflows: [] });
   proposals.value = suggestedChanges.value.filter(({ previous }) => !previous || previous.selectionSource === "recommended").map(({ id }) => id);
-  if (proposalMode.value && suggestedChanges.value.length) selectedEngine.value = suggestedChanges.value[0].engineId;
   preview.value = data;
   hydratedDraft = draftSnapshot();
 }
@@ -210,10 +206,9 @@ function useRecommendations() {
   }
   recommendationReview.value = null;
 }
-function customize(engineId = selectedEngine.value) {
-  const assignments = payload().orchestrators[engineId];
-  if (assignments) Object.assign(draft.value[engineId], assignments);
-  selectedEngine.value = engineId;
+function customize() {
+  const assignments = payload().orchestrators[selectedEngine.value];
+  if (assignments) Object.assign(draft.value[selectedEngine.value], assignments);
   customizing.value = true;
 }
 const command = useCommand({
@@ -228,7 +223,7 @@ const command = useCommand({
   placementSource: "vibe64.accounts.model-routing", surfaceId: "app", writeMethod: "PATCH"
 });
 async function save() {
-  if (saving.value || stale.value || !canEdit.value || previewPending.value || !proposalMode.value && !engine.value?.connected) return;
+  if (saving.value || stale.value || !canEdit.value || previewPending.value || !engine.value?.connected) return;
   saving.value = true;
   try { const result = await command.run(); if (result?.ok === true) { await resource.reload(); emit("saved"); } }
   catch { /* Shared command feedback reports errors; keep this draft and its field errors. */ }
@@ -250,21 +245,19 @@ async function reload() {
       <v-alert v-if="setupError" type="warning" variant="tonal" class="mb-4">Your AI is connected, but its routing defaults could not be saved. {{ setupError }} Review the choices below to finish setup.</v-alert>
       <v-skeleton-loader v-if="resource.isInitialLoading.value || baseRevision === null && !loadError" type="list-item-two-line@5, actions" />
       <v-alert v-else-if="loadError" type="error" variant="tonal">{{ loadError }} <v-btn variant="text" @click="reload">Retry</v-btn></v-alert>
-      <v-alert v-else-if="!proposalMode && engine?.error && !engine.connected" type="error" variant="tonal">{{ engine.error }} <v-btn variant="text" @click="reload">Retry</v-btn></v-alert>
-      <template v-else-if="proposalMode ? connectedEngines.length : engine?.connected">
+      <v-alert v-else-if="engine?.error && !engine.connected" type="error" variant="tonal">{{ engine.error }} <v-btn variant="text" @click="reload">Retry</v-btn></v-alert>
+      <template v-else-if="engine?.connected">
         <v-alert v-if="stale" type="warning" variant="tonal" class="mb-4">Routing changed in another tab. Your draft is retained. <v-btn variant="text" @click="reload">Reload current choices</v-btn></v-alert>
         <template v-if="proposalMode">
-          <template v-for="workflow in connectedEngines.filter(item => suggestedChanges.some(change => change.engineId === item.engineId))" :key="workflow.engineId">
-            <p class="text-title-medium mt-4">{{ workflow.label }}</p>
-            <p v-if="!suggestedChanges.some(change => change.engineId === workflow.engineId && change.role === 'senior')" class="text-body-small">Senior stays {{ selectionLabel(workflow.roles.senior.assignment) }}.</p>
-            <v-checkbox v-for="proposal in suggestedChanges.filter(item => item.engineId === workflow.engineId)" :key="proposal.id" v-model="proposals" :value="proposal.id" :disabled="saving || !canEdit" hide-details>
+          <p class="text-title-medium mt-4">{{ engineLabel }}</p>
+          <template v-if="suggestedChanges.length">
+            <p v-if="!suggestedChanges.some(change => change.role === 'senior')" class="text-body-small">Senior stays {{ selectionLabel(engine.roles.senior.assignment) }}.</p>
+            <v-checkbox v-for="proposal in suggestedChanges" :key="proposal.id" v-model="proposals" :value="proposal.id" :disabled="saving || !canEdit" hide-details>
               <template #label><span class="text-body-medium"><strong>{{ proposal.label }}</strong><br>Current: {{ selectionLabel(proposal.previous) }}<br>Suggested: {{ selectionLabel(proposal.proposed) }} · {{ choiceFor(proposal.proposed, proposal.role)?.accessLabel }}<br><span v-if="proposal.previous?.selectionSource === 'explicit'" class="text-body-small">You chose the current model. Select this change to replace it.</span></span></template>
             </v-checkbox>
           </template>
           <p v-if="!suggestedChanges.length" class="text-body-medium">No model changes are suggested.</p>
-          <template v-if="canEdit">
-            <v-btn v-for="workflow in connectedEngines" :key="workflow.engineId" variant="text" class="my-3" @click="customize(workflow.engineId)">Configure {{ workflow.label }} routing</v-btn>
-          </template>
+          <v-btn v-if="canEdit" variant="text" class="my-3" :disabled="saving" @click="customize">Configure {{ engineLabel }} routing</v-btn>
         </template>
         <template v-if="!proposalMode">
           <v-alert v-if="engine?.error" type="warning" variant="tonal" class="mb-4">{{ engine.error }}</v-alert>
@@ -279,7 +272,7 @@ async function reload() {
             <div class="model-routing__role mb-4" :class="{ 'model-routing__role--compact': smAndDown }">
               <v-autocomplete
                 :ref="field => roleFields[role.id] = field" :model-value="choiceId(draft[selectedEngine]?.[role.id])" :items="items(role.id)" item-title="label" item-value="id" :label="role.label" variant="outlined" :disabled="saving || !canEdit" :hint="roleHint(role)" persistent-hint :error-messages="roleError(role.id)"
-                :loading="otherModelsRequested && !props.connectionId && role.crossOrchestrator && otherModels.resource.isInitialLoading.value"
+                :loading="otherModelsRequested && role.crossOrchestrator && otherModels.resource.isInitialLoading.value"
                 @update:menu="open => { if (open && role.crossOrchestrator) otherModelsRequested = true; }"
                 @update:model-value="choose(role.id, $event)"
               />

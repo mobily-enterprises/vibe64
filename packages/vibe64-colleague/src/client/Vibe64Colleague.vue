@@ -59,6 +59,9 @@ function avatarClick(event) {
   suppressAvatarClick = false;
 }
 const open = ref(false);
+const viewMode = ref("text");
+const voicePanel = ref(null);
+function openVoice() { viewMode.value = "voice"; open.value = true; }
 const launcherTarget = inject(VIBE64_COLLEAGUE_LAUNCHER_KEY, null);
 const launcher = ref(null);
 const panelTarget = ref(null);
@@ -253,22 +256,29 @@ onBeforeUnmount(() => {
   </Teleport>
   <v-dialog
     v-model="open" :activator="launcher?.$el" class="vibe64-colleague__drawer"
-    width="460" max-width="100%" height="100%" max-height="100%" transition="slide-x-reverse-transition"
+    width="560" max-width="100%" height="100%" max-height="100%" transition="dialog-transition"
     :content-props="{ style: { margin: 0 } }"
-    eager :aria-label="`${name} conversation`" :aria-hidden="!open"
+    eager persistent no-click-animation :aria-label="`${name} conversation`" :aria-hidden="!open" @keydown.esc.stop="open = false"
   >
     <div ref="panelTarget" class="vibe64-colleague__panel" />
   </v-dialog>
   <Teleport :to="panelTarget || 'body'" :disabled="!panelTarget">
     <aside v-show="open" class="vibe64-colleague" :aria-label="name">
       <div class="vibe64-colleague__header">
+        <span v-if="$slots.avatar" class="vibe64-colleague__avatar" aria-hidden="true"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
+        <span class="text-title-large">{{ name }}</span>
+        <v-spacer />
         <v-btn
           class="vibe64-colleague__close" :icon="mdiClose" size="small" variant="text"
           :aria-label="`Close ${name}`" :title="`Close ${name}`" @click="open = false"
         />
-        <span v-if="$slots.avatar" class="vibe64-colleague__avatar" aria-hidden="true"><slot name="avatar" :state="working ? 'thinking' : 'idle'" /></span>
       </div>
-      <div class="vibe64-colleague__conversation">
+      <v-tabs v-if="$slots.voice" v-model="viewMode" grow aria-label="Conversation view" class="vibe64-colleague__view-tabs">
+        <v-tab value="text" :id="`${clientId}-text-tab`" :aria-controls="`${clientId}-text-panel`">Text chat</v-tab>
+        <v-tab value="voice" :id="`${clientId}-voice-tab`" :aria-controls="`${clientId}-voice-panel`">Voice chat</v-tab>
+      </v-tabs>
+      <div ref="voicePanel" v-show="viewMode === 'voice'" :id="`${clientId}-voice-panel`" role="tabpanel" :aria-labelledby="`${clientId}-voice-tab`" class="vibe64-colleague__voice-panel" />
+      <div v-show="viewMode === 'text'" :id="`${clientId}-text-panel`" role="tabpanel" :aria-labelledby="$slots.voice ? `${clientId}-text-tab` : undefined" class="vibe64-colleague__conversation">
         <AssistantConversationElement :adapter="adapter" :label="`${name} conversation`">
           <template #composer="{ adapter: { composer } }">
             <div class="vibe64-colleague__composer-region">
@@ -290,7 +300,7 @@ onBeforeUnmount(() => {
                       :aria-label="`Choose ${name} model`" :title="state.assistantSelection?.modelId || 'Choose model'"
                       :disabled="working || sending" @click="modelMenu = true"
                     />
-                    <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" :launcher="launcher?.$el" :preview="voicePreview" />
+                    <slot name="voice" :conversation="state" :submit="sendMessage" :minimized="!open" :launcher="launcher?.$el" :preview="voicePreview" :panel="voicePanel" :open-voice="openVoice" />
                     <div class="vibe64-colleague__delivery">
                       <v-btn v-if="composer.canStop" :icon="mdiStop" size="small" variant="text" :aria-label="`Stop ${name}`" title="Stop assistant" @click="stop" />
                       <v-btn
@@ -306,7 +316,7 @@ onBeforeUnmount(() => {
           </template>
         </AssistantConversationElement>
       </div>
-      <details v-if="watches.length" class="vibe64-colleague__watches">
+      <details v-show="viewMode === 'text'" v-if="watches.length" class="vibe64-colleague__watches">
         <summary>{{ watches.length }} conversation {{ watches.length === 1 ? 'watch' : 'watches' }}</summary>
         <ul>
           <li v-for="item in watches" :key="item.watchId">
@@ -316,7 +326,7 @@ onBeforeUnmount(() => {
           </li>
         </ul>
       </details>
-      <details v-if="assignments.length" class="vibe64-colleague__watches">
+      <details v-show="viewMode === 'text'" v-if="assignments.length" class="vibe64-colleague__watches">
         <summary>{{ assignments.length }} ongoing {{ assignments.length === 1 ? 'assignment' : 'assignments' }}</summary>
         <ul>
           <li v-for="item in assignments" :key="item.assignmentId">
@@ -336,22 +346,21 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.vibe64-colleague__drawer { justify-content: flex-end; }
-.vibe64-colleague { --portrait-size: 104px; position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
+.vibe64-colleague__drawer { justify-content: center; }
+.vibe64-colleague { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
 .vibe64-colleague strong { font-size: 15px; font-weight: 650; letter-spacing: .015em; }
 .vibe64-colleague small { display: block; font-size: 12px; opacity: .75; }
-.vibe64-colleague__header { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; padding: 8px 20px 0 4px; }
-.vibe64-colleague__avatar { display: block; flex-shrink: 0; width: var(--portrait-size); height: var(--portrait-size); pointer-events: none; }
+.vibe64-colleague__header { display: flex; flex: 0 0 auto; align-items: center; gap: 12px; padding: 8px 12px; }
+.vibe64-colleague__avatar { display: block; flex-shrink: 0; width: 48px; height: 48px; pointer-events: none; }
 .vibe64-colleague__avatar :deep(svg) { width: 100%; height: 100%; }
 .vibe64-colleague__close { flex-shrink: 0; }
+.vibe64-colleague__view-tabs { flex: 0 0 auto; }
+.vibe64-colleague__voice-panel { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 .vibe64-colleague__conversation { flex: 1; min-height: 0; display: flex; padding: 12px; }
 .vibe64-colleague__conversation :deep(.assistant-conversation) { width: 100%; min-height: 0; }
 .vibe64-colleague__conversation :deep(.assistant-transcript__avatar--user) { display: none; }
 .vibe64-colleague__conversation :deep(.assistant-transcript__assistant-header) { margin-bottom: 6px; }
 .vibe64-colleague__conversation :deep(.studio-long-text-review__blocks > * + *) { margin-top: 0.6rem; }
-@media (max-width: 600px) {
-  .vibe64-colleague { --portrait-size: 84px; }
-}
 .vibe64-colleague__composer { flex: 0 0 auto; }
 .vibe64-colleague__composer-region { position: relative; flex: 0 0 auto; }
 .vibe64-colleague__voice-preview { min-width: 0; }

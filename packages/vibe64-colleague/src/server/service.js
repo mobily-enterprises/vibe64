@@ -4,7 +4,7 @@ import path from "node:path";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createConversationTranscript, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, discoveryInstructions, instructions, outputSchema, readEnvelope, readPartialReply, replyStyle } from "./protocol.js";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, discoveryInstructions, instructions, outputSchema, progressInstructions, readEnvelope, readPartialReply, replyStyle } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
@@ -216,12 +216,16 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     let context = actionContext(state, connection);
     let activeCatalog, toolSet, tools, toolProject;
     let feedback = "";
+    let progress = null;
+    let progressAlreadySaid = "";
     let invalidResponses = 0;
     await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context });
     await prepare(state, connection.assistantSelection);
     for (let step = 0; step < 24 && isCurrent(); step += 1) {
       if (state.pendingMessages.length) {
         autonomous = false;
+        progress = null;
+        progressAlreadySaid = "";
         connection = state.nextConnection;
         context = actionContext(state, connection);
       }
@@ -273,6 +277,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         assistantName: await resolveName(),
         replyStyle,
         toolUsage: discoveryInstructions,
+        progressInstructions, progressAlreadySaid,
         // A persistent native process can retain its original system instructions
         // across a release. Send the current guide-read policy on every turn too.
         usageKnowledge: "For a how-to answer, read this release's complete usage guide for this request. Earlier guide copies and topic summaries do not establish the current controls or steps.",
@@ -292,15 +297,28 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         feedback, tools
       });
       state.needsObservation = true;
-      const streamingReply = {
-        id: `${replyTurnId || randomUUID()}:assistant`, role: "assistant",
-        text: "", at: new Date().toISOString(), status: "inProgress", streamId: randomUUID(), autonomous
+      const replyId = `${replyTurnId || randomUUID()}:assistant`;
+      const streamId = randomUUID();
+      const streamingReply = progress ? { ...progress } : {
+        id: replyId, role: "assistant",
+        text: "", at: new Date().toISOString(), status: "inProgress", streamId, autonomous
       };
       state.streamingReply = streamingReply;
       let rawReply = "";
       let messageId = "";
+      let nativeToolAttempt = false;
       const onEvent = (event) => {
         if (!isCurrent() || state.streamingReply !== streamingReply || state.pendingMessages.length) return;
+        // Claude can reject an application tool invoked directly in its native
+        // runtime. That is a protocol mistake, not an application outage.
+        if (event.type === "provider-event" && event.providerId === "claude" && event.event?.type === "assistant" &&
+            event.event.message?.content?.some((block) => block.type === "tool_use" &&
+              tools.some((tool) => tool.function.name === block.name))) {
+          nativeToolAttempt = true;
+          streamingReply.text = "";
+          publishReply(state);
+        }
+        if (nativeToolAttempt) return;
         const delta = event.type === "text" ? event.text : event.textDelta;
         const textSnapshot = event.partType === "text" ? event.textSnapshot : undefined;
         if (typeof delta !== "string" && typeof textSnapshot !== "string") return;
@@ -311,7 +329,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         }
         rawReply = (typeof textSnapshot === "string" ? textSnapshot : rawReply + delta).slice(0, COLLEAGUE_TOOL_PAYLOAD_LIMIT);
         const text = readPartialReply(rawReply);
-        if (text !== streamingReply.text) {
+        if (!text && progress && streamingReply.id === progress.id) return;
+        if (text !== streamingReply.text || text && streamingReply.id !== replyId) {
+          progress = null;
+          streamingReply.id = replyId;
+          streamingReply.status = "inProgress";
+          streamingReply.streamId = streamId;
           streamingReply.text = text;
           publishReply(state);
         }
@@ -355,11 +378,16 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       let envelope;
       try {
         envelope = readEnvelope(response.rawText || response.text || response.message || response.messages?.filter((message) => message.role === "assistant").at(-1)?.text || "");
+        if (nativeToolAttempt && envelope.kind === "reply") throw new Error("Application tools must use the response envelope.");
       } catch {
-        state.streamingReply = null;
+        state.streamingReply = progress;
         publishReply(state);
-        if (++invalidResponses > 2) throw failure("The model did not return a valid Colleague response. Your message is kept; try another model or retry.", "vibe64_colleague_response_invalid");
-        feedback = "Your completed response did not match the required envelope. No tool was executed. Return exactly one valid JSON reply or tool envelope.";
+        if (++invalidResponses > 2) throw failure(nativeToolAttempt
+          ? "The model could not send its tool request through Colleague. No application action ran in that response. Your message is kept; retry or choose another model."
+          : "The model did not return a valid Colleague response. Your message is kept; try another model or retry.", "vibe64_colleague_response_invalid");
+        feedback = nativeToolAttempt
+          ? "You called a Vibe64 application tool as a native runtime tool. No application action ran in that response. Do not report that the application tools are unavailable. Return the intended kind=tool envelope through StructuredOutput or completed JSON, following toolUsage; Vibe64 will execute it and provide the result."
+          : "Your completed response did not match the required envelope. No tool was executed. Return exactly one valid JSON reply or tool envelope.";
         continue;
       }
       if (envelope.kind === "reply") {
@@ -381,15 +409,20 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         state.streamingReply = null;
         await persist(state);
         publishReply(state, { id: `${replyTurnId}:assistant`, role: "assistant", text: envelope.text,
-          at: new Date().toISOString(), streamId: streamingReply.streamId, autonomous });
+          at: new Date().toISOString(), streamId, autonomous });
         return;
       }
-      state.streamingReply = null;
-      publishReply(state);
       const operation = { id: randomUUID(), toolName: envelope.toolName, arguments: envelope.arguments, status: "executing" };
       state.record.operation = operation;
       await persist(state);
       if (!isCurrent()) { operation.status = "cancelled"; await persist(state); return; }
+      if (!autonomous && !progressAlreadySaid) {
+        progressAlreadySaid = envelope.text?.trim() || "Let me check that.";
+        progress = { id: `${replyTurnId}:progress`, role: "assistant", text: progressAlreadySaid,
+          at: new Date().toISOString(), status: "completed", streamId: randomUUID(), autonomous: false };
+      }
+      state.streamingReply = progress;
+      publishReply(state);
       const result = await activeCatalog.executeToolCall({ toolName: envelope.toolName, argumentsText: envelope.arguments, context, toolSet });
       operation.result = result;
       operation.status = !result.ok && result.error?.status >= 500 ? "unknown" : "completed";

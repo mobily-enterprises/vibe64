@@ -148,12 +148,17 @@ The retired optional `temporaryChatRole` field is ignored in older settings;
 reads do not rewrite those files. New explicit routing saves omit it. Existing
 conversation records need no format change or historical conversion.
 
-After connecting an account, the form shows only optional suggested changes,
-grouped by workflow with separate Current and Suggested model lines and the
-suggested connection's access scope. Keep current routing leaves the connection
-available. Apply saves only selected changes. Per-orchestrator Configure routing
-actions open that workflow's editor; the connection-result view has no workflow selector or audience
-preview. Native login completion names Codex login or Claude login explicitly.
+After connecting an account, the form retains the orchestrator selected during
+setup. It shows only that workflow's optional suggestions through the connected
+provider and selected orchestrator, with separate Current and Suggested model
+lines and access scope. A shared native key being ready for another orchestrator
+does not expand this scope. Keep current routing leaves the connection available.
+Apply saves only selected changes within the named orchestrator; reads, previews
+and saves all carry that scope. One Configure routing action opens the same
+workflow's editor, including when no changes are suggested. Cross-orchestrator
+model choices load on demand when customizing Helper, Router or Shared backup.
+The connection-result view has no workflow selector or audience preview. Native
+login completion names Codex login or Claude login explicitly.
 
 Accounts delegates saved and unsaved previews to the central terminal runtime,
 using the same connection facts and purpose resolver as Send. Each assignment

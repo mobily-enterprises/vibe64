@@ -1,23 +1,19 @@
 # Talk with Colleague
 
-Open Colleague with its avatar button in the page header. It opens a drawer on
-the right; on a small screen it uses the available width. Closing the drawer
-keeps your draft and conversation. Colleague replies briefly by default, usually
-one or two short sentences. Ask for a detailed explanation when you want more.
-A greeting gets a greeting; project/page details appear only when relevant.
+Open Colleague with its avatar button in the page header. It opens one centered
+panel, using the available width on a small screen. Its header shows the name,
+small avatar and **Close Colleague** X. Close or Escape hides the panel while
+keeping your draft and conversation. Outside clicks do not close it.
+Colleague replies briefly by default, usually one or two short sentences.
+Ask for a detailed explanation when you want more. A greeting gets a greeting;
+project/page details appear only when relevant.
 
-Ask “How do I …?” to get the relevant steps and an offer of supported help.
-Colleague reads task guides shipped with this app version, uses your actual view
-and permissions, and identifies steps you must complete yourself. A how-to question
-or its offer makes no changes. Accept the offer or directly request the task to
-use its existing operations and confirmations. “Show me where” opens a supported
-view without changing its settings. Missing documentation or an unavailable
-operation must be explained rather than replaced with invented buttons.
-
-The larger face stays at the top right while messages scroll, with a smaller
-size on mobile. Messages scroll below it at a stable width. Close is
-the compact X at the top left; there is no separate name/project heading. The
-face and message box stay in place while you read earlier messages.
+When the host supplies voice, **Text chat** and **Voice chat** tabs switch between
+messages and the host's voice controls inside this same panel. Text chat opens
+first. Switching tabs preserves history and your typed draft. Closing and
+reopening restores the selected tab; it does not itself stop active voice.
+Use the host's voice controls to start or end audio. In Text chat, the header and
+message box stay in place while earlier messages scroll.
 
 Type in the message box, then click Send. With a nonempty draft, Tab moves
 directly from the text field to Send and Enter sends the message. While Colleague
@@ -33,6 +29,23 @@ answer is still growing. Stop or new
 steering clears the unfinished reply. Reopening the drawer while it is working
 shows the current reply again. Tool requests are not displayed as chat text.
 
+When a question needs a lookup or another product action, Colleague gives one
+short progress sentence, such as “Let me check your projects,” as it starts the
+first tool request. This describes what it is about to do, not a successful result.
+If the model supplies no sentence, it says “Let me check that.” The update stays
+visible while checks continue and is replaced by the answer; only the final
+answer is saved. A voice-enabled host can speak this complete sentence immediately,
+without waiting for the final answer. Further tool steps stay quiet. Stop or new
+steering clears old progress. Greetings and direct answers need no extra announcement.
+
+You can ask “Which projects do I have?” from any page, including AI Accounts;
+no open project is required. Colleague checks the projects available to you.
+If its model sends a lookup incorrectly, Colleague asks it to correct the request
+before presenting an answer. Repeated mistakes show “The model could not send its
+tool request through Colleague.” Your message is kept: retry the question, or
+choose another model with the message box's model picker once the turn stops.
+This error does not mean your projects are missing or your account disconnected.
+
 When the host supplies voice, the microphone and read-aloud controls also appear
 inside the message box. Recognized words update one Pending user message in
 the chat; acceptance replaces it with the saved message without duplicating it
@@ -42,13 +55,8 @@ recording controls sit above the message box without covering the conversation
 or the assistant's working status. Microphone permission and recording require
 your interaction; Colleague can explain the controls but cannot grant permission
 or press them for you.
-In Online, **Start live conversation** enables local listening and read-aloud.
-Questions go directly to Colleague's selected model with its normal tools; a
-separate **Helper** assignment is not required for live voice. A short pause
-submits the recognized words. Local hesitation/noise filters are conservative;
-for deliberate long pauses use **Talk to Colleague** with **Send recording**, or
-hold the avatar and review before sending. Corrections use the same conversation
-as typed messages. **Stop Colleague speaking** silences playback; microphone
-Mute changes only the microphone icon and pauses capture independently; it
-keeps unfinished words available to continue when you unmute. Failed sends keep their words for **Retry**
-or **Dismiss**. These controls work on desktop and mobile.
+The host's **Voice chat** view provides its ongoing voice controls and mode
+choices. Questions use Colleague's selected model and normal tools. Switching
+back to **Text chat** keeps the same conversation; starting/stopping audio is
+handled by the host's labelled controls. Consult the host's voice guide for
+microphone permissions, recording modes and speech recovery.

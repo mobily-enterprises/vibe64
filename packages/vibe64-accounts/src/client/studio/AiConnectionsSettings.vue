@@ -1342,7 +1342,7 @@ defineExpose({ openProvider });
     >
       <v-card :rounded="smAndDown ? 0 : 'xl'">
         <v-card-text class="vibe64-codex-setup__body">
-          <ModelRoutingForm v-if="nativeRoutingReady" :engine-id="nativeSetupProviderId" :connection-id="nativeSetupProviderId === 'codex' ? 'openai' : 'anthropic'" :connection-engines="[nativeSetupProviderId]" :connection-label="nativeSetupProviderId === 'codex' ? 'Codex login' : 'Claude login'" :setup-error="nativeRoutingSetupError" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
+          <ModelRoutingForm v-if="nativeRoutingReady" :engine-id="nativeSetupProviderId" :connection-id="nativeSetupProviderId === 'codex' ? 'openai' : 'anthropic'" :connection-label="nativeSetupProviderId === 'codex' ? 'Codex login' : 'Claude login'" :setup-error="nativeRoutingSetupError" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
           <NativeProviderConnections
             v-else
             v-model="nativeModelProviderId"
@@ -1412,7 +1412,7 @@ defineExpose({ openProvider });
         </v-card-title>
 
         <v-card-text v-if="editorRoutingPending">
-          <ModelRoutingForm :connection-id="editorProviderId" :connection-label="editorLabel" :connection-engines="['opencode']" :setup-error="editorRoutingSetupError" @busy="routingSaving = $event" @close="finishConnectionRouting" @saved="finishConnectionRouting" />
+          <ModelRoutingForm engine-id="opencode" :connection-id="editorProviderId" :connection-label="editorLabel" :setup-error="editorRoutingSetupError" @busy="routingSaving = $event" @close="finishConnectionRouting" @saved="finishConnectionRouting" />
         </v-card-text>
         <v-card-text v-else-if="catalogPreparationError" class="vibe64-provider-editor__body">
           <v-alert

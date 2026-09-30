@@ -11,10 +11,18 @@ authorization code. You perform provider consent and secret entry. Wait for the
 saved connected state, and use **Refresh** or **Check saved key** when offered.
 Do not reconnect or resend a key solely because a status request was interrupted.
 
-Open the connection's **Configure routing** control to choose its supported
+After connecting, the **[provider] connected** screen names the orchestrator you
+selected. For example, connecting DeepSeek through Codex shows only Codex's
+optional suggestions and **Configure Codex routing**, even if the key also works
+with Claude Code. Review **Current** and **Suggested**, select the changes you
+want, then use **Apply [number] changes**. **Keep current routing** leaves the
+connection ready without applying those suggestions. If no changes are suggested,
+use **Done** or the same orchestrator's Configure routing button.
+
+Open the orchestrator's **Configure routing** control to choose its supported
 **Senior**, **Junior**, **Helper** and **Router** destinations and thinking choices.
-The displayed routing form can also offer **Configure [workflow] routing**,
-**Review recommendations**, **Confirm Helper** and **Save routing**. Follow any
+The displayed routing form can also offer **Review recommendations**,
+**Confirm Helper** and **Save routing**. Follow any
 required review, then Save routing. On mobile, scroll the same dialog to its controls.
 Disabled models are unavailable or incompatible; they must not be invented.
 

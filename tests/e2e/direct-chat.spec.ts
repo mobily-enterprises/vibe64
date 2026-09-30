@@ -2892,6 +2892,102 @@ for (const width of [390, 820, 1280]) {
 }
 
 
+for (const width of [390, 820, 1280]) {
+  test(`@connection-routing DeepSeek keeps Codex suggestions with all orchestrators connected at ${width}px`, async ({ page }, info) => {
+    const server = await assistantStatusServer();
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    try {
+      await page.setViewportSize({ width, height: 900 });
+      await mockDirectChat(page);
+      await routeApiEndpoint(page, "/vibe64/accounts", route => fulfillJson(route, { ok: true, ready: true, accounts: [
+        { id: "codex", label: "Codex", connected: true, status: "connected" },
+        { id: "claude", label: "Claude", connected: true, status: "connected" }
+      ] }));
+      const providers: any[] = [];
+      await routeApiEndpoint(page, "/vibe64/accounts/codex-providers", route => {
+        if (route.request().method() === "PATCH") {
+          expect(route.request().postDataJSON()).toMatchObject({ modelProviderId: "deepseek", engineId: "codex", apiKey: "fixture-key" });
+          providers.push({ id: "deepseek", status: "connected", connected: true, claudeReady: true });
+        }
+        return fulfillJson(route, { ok: true, providers, routing: { ok: true } });
+      });
+      await routeApiEndpoint(page, "/vibe64/accounts/ai-connections", route => fulfillJson(route, { ok: true, providers: [], connections: [
+        { id: "opencode", label: "OpenCode Zen", connected: true, builtIn: true, removable: false }
+      ] }));
+      const senior = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra",
+        catalogRevision: ASSISTANT_CATALOG.engines[0].revision, selectionSource: "explicit" };
+      const deepseek = { ...senior, modelProviderId: "deepseek", modelId: "deepseek-flash", selectionSource: "recommended" };
+      const assignments: Record<string, any> = { senior, junior: senior, helper: null, router: null, sharedBackup: null };
+      const patches: any[] = [];
+      const reads: string[] = [];
+      const routing = (roles = assignments) => ({ ok: true, revision: 1 + patches.length, canConfigure: true, engines: [{
+        engineId: "codex", label: "Codex", connected: true,
+        roles: Object.fromEntries(Object.entries(roles).map(([role, assignment]) => [role, {
+          assignment, recommendation: role === "senior" ? senior : deepseek,
+          choices: [senior, deepseek].map(selection => ({ ...selection, available: true, variants: [], providerLabel: selection.modelProviderId, accessLabel: "Workspace use" }))
+        }])), preview: { collaborator: {} }
+      }] });
+      await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => {
+        if (route.request().method() === "PATCH") {
+          const body = route.request().postDataJSON();
+          expect(body.engineId).toBe("codex");
+          expect(Object.keys(body.orchestrators)).toEqual(["codex"]);
+          patches.push(body);
+          Object.assign(assignments, body.orchestrators.codex);
+        } else {
+          const engineId = new URL(route.request().url()).searchParams.get("engineId");
+          expect(engineId).toBe("codex");
+          reads.push(engineId!);
+        }
+        return fulfillJson(route, routing());
+      });
+      await routeApiEndpoint(page, "/vibe64/accounts/model-routing/preview", route => {
+        const body = route.request().postDataJSON();
+        expect(body.engineId).toBe("codex");
+        expect(Object.keys(body.orchestrators)).toEqual(["codex"]);
+        return fulfillJson(route, routing({ ...assignments, ...body.orchestrators.codex }));
+      });
+      await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+      await page.getByRole("button", { name: "Account settings", exact: true }).click();
+      await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
+      await page.getByRole("button", { name: "Add connection", exact: true }).click();
+      await page.getByRole("button", { name: "Choose Codex", exact: true }).click();
+      await page.getByText("DeepSeek", { exact: true }).click();
+      await page.getByLabel("API key", { exact: true }).fill("fixture-key");
+      await page.getByRole("button", { name: "Check and connect", exact: true }).click();
+      const form = page.getByRole("region", { name: "Model routing", exact: true });
+      await expect(form.getByText("DeepSeek connected", { exact: true })).toBeVisible();
+      await expect(form.getByText("Codex", { exact: true })).toBeVisible();
+      await expect(form.getByText(/Suggested: Codex \(deepseek-flash/)).toHaveCount(4);
+      await expect(form.getByRole("button", { name: /^Configure .* routing$/ })).toHaveCount(1);
+      await expect(form.getByRole("button", { name: "Configure Codex routing", exact: true })).toBeVisible();
+      await expect(form.getByText(/Claude Code|OpenCode/)).toHaveCount(0);
+      await expect(form.getByRole("button", { name: "Apply 3 changes", exact: true })).toBeEnabled();
+      await page.screenshot({ path: info.outputPath(`deepseek-codex-${width}.png`), animations: "disabled" });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      if (width === 1280) {
+        await form.getByRole("button", { name: "Configure Codex routing", exact: true }).click();
+        await expect(form.getByText("Codex routing", { exact: true })).toBeVisible();
+        await expect(form.getByRole("combobox", { name: "Helper", exact: true })).toHaveValue("Codex (deepseek-flash high)");
+        await form.getByRole("button", { name: "Cancel", exact: true }).click();
+      } else if (width === 820) {
+        await form.getByRole("button", { name: "Apply 3 changes", exact: true }).click();
+        await expect.poll(() => patches.length).toBe(1);
+        expect(Object.keys(patches[0].orchestrators.codex)).toEqual(["helper", "router", "sharedBackup"]);
+      } else await form.getByRole("button", { name: "Keep current routing", exact: true }).click();
+      await expect(form).toBeHidden();
+      expect(reads.length).toBeGreaterThan(0);
+      if (width !== 820) expect(patches).toEqual([]);
+      expect(providers[0]).toMatchObject({ connected: true, claudeReady: true });
+      expect(errors).toEqual([]);
+    } finally {
+      await page.close();
+      await server.close();
+    }
+  });
+}
+
 test("@helper-hydration delayed history opens at the failed request and reports its error once", async ({ page }, info) => {
   const server = await assistantStatusServer();
   const errors: string[] = [];

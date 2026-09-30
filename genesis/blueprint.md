@@ -17,6 +17,15 @@ person keeps their own Colleague history and model choice. The current text
 conversation supports an Online host's global voice controls and configured display name.
 Colleague displays reply text incrementally and a voice host can speak readable
 phrases before completion; only the completed answer enters saved history.
+Before a tool-based answer, Colleague gives one brief, natural progress sentence
+as the first check or action starts. A voice host can speak it before the final
+answer, so the person hears useful feedback during the wait. It describes intent,
+not completion, and further tool steps do not repeat it. This temporary update
+is replaced by the answer and is not added to saved history.
+If its model addresses an application tool through the wrong native channel,
+Colleague requests a correction before accepting the answer. Repeated mistakes
+show a specific request error and keep the person's message for retry, rather than
+reporting that project lookup or other application tools are unavailable.
 Colleague can explain how to use the application from task guides shipped with
 that release. It finds and reads only relevant topics, adapts instructions to
 the person's actual view and permissions, and offers to perform supported tasks.
@@ -95,11 +104,13 @@ model. Account connection and credential entry remain in AI Accounts. Complete
 product-operation coverage remains in progress.
 
 On every screen size, Colleague has one compact avatar button in the header.
-It opens a 460-pixel-wide drawer on the right, using the available width on smaller
-screens. A larger face stays pinned at the top right, smaller on mobile, in a
-fixed row above the messages. Text keeps the same width while scrolling. A compact
-Close button sits at the top left, without a separate name/project header. Only
-the messages scroll; the face and message box remain in place.
+It opens one centered 560-pixel-wide panel, using the available width on smaller
+screens. A compact header shows the name, avatar and Close button. When a host
+supplies voice, Text chat and Voice chat tabs switch views in this same panel;
+text opens first, and reopening preserves the chosen view. Switching views keeps
+the draft and conversation. The host's voice session is independent of the view.
+Outside clicks do not hide the panel; Close or Escape does. Only messages scroll
+in Text chat; the header, tabs and message box remain in place.
 Model selection, microphone, speaker, Stop and Send/Steer use compact icon
 buttons inside the message box, matching the main chat toolbar and leaving
 the page's comment, message and Send controls clear when closed. Closing it
@@ -853,7 +864,9 @@ configuration. Account settings offers Codex with GPT, DeepSeek and GLM, Claude
 Code with Claude, DeepSeek and GLM, and OpenCode's provider catalogue. OpenCode Big Pickle is included without
 sign-in. Connections are grouped by orchestrator, with each configured provider
 listed under every orchestrator it supports. Manage opens that exact pair with
-no provider selector. Add connection offers only orchestrators with missing
+no provider selector. After connecting, optional routing suggestions and the
+Configure routing button stay with the orchestrator selected for setup, even
+when the same key also works with another orchestrator. Add connection offers only orchestrators with missing
 connection options, then only their unconfigured providers. Expired or failed
 configured connections remain under Manage for reconnection. When every
 available connection is configured, Add connection is disabled. Shared-key removal explains

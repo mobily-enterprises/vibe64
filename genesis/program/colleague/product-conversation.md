@@ -71,6 +71,26 @@ The shared project context accepts deleting projects only when the operation
 declares that lifecycle scope; callers cannot grant it through input fields.
 Only completed, validated model envelopes can request a tool. Malformed replies
 have a bounded correction opportunity and never execute embedded prose.
+Each native turn explicitly distinguishes application operations from native
+runtime tools, with a tool-envelope example and the StructuredOutput carrier when
+provided by the runtime. Claude provider events expose attempted direct calls to
+advertised application tools. Those calls never dispatch an application action;
+Colleague suppresses their reply projection and rejects a final reply in favor of
+a bounded protocol correction. A valid tool envelope can still dispatch exactly
+once. Repeated mistakes produce a specific handoff error instead of saving or
+speaking a false application outage. Only application feedback establishes whether
+an operation succeeded or failed; retained native history receives current guidance.
+The first interactive tool envelope can carry a natural progress sentence of
+at most 280 characters in `text`. Current guidance is repeated in each native
+turn for retained provider conversations; subsequent prompts include the already
+announced sentence. After completed-envelope validation and receipt persistence,
+dispatch publishes this sentence (or “Let me check that.”) as a complete transient
+assistant projection with its own per-request ID. It remains visible through
+tool/model waits until reply text arrives, without exposing arguments or reasoning.
+Further tool steps cannot announce again. New user steering resets that allowance;
+autonomous observations never announce tools. Stop/failure clears the projection.
+Only the final answer enters the unchanged transcript format. The voice host can
+finish the short progress utterance independently of the still-running model work.
 
 The feature stores canonical JSKIT transcript data, native conversation identity,
 model selection and its most recent operation receipt under private application
@@ -86,7 +106,7 @@ reads the exact retained native run once and accepts an already completed answer
 an active, failed or different run retains the failure without resending work.
 
 Native text events update an in-memory reply projection. Only the decoded text
-of the expected reply envelope prefix is exposed; tool requests and reasoning
+of the expected reply envelope prefix is exposed; partial tool requests and reasoning
 stay private. Authenticated hosted clients receive actor-private JSKIT realtime projections
 coalesced over 25 ms, with epoch/revision checks against stale snapshots. Existing
 one-second HTTP refreshes and socket reconnect reconcile authoritative state.
@@ -114,31 +134,28 @@ The host supplies the existing avatar, optional persistent voice controls and
 display name (default Colleague). The service accepts a host-owned name resolver
 and includes its current value as data in each model turn. Changing the name
 updates labels and future replies without replacing native history or typed drafts.
-The drawer fits the available viewport width, including when a classic scrollbar
-is present. Its close, model and watch controls have 48-pixel touch targets.
-At every screen size, a 48-pixel header button opens a full-height drawer on the
-right, 460 pixels wide or the available viewport width on smaller screens. Its
-104-pixel portrait stays pinned at the top right (84 pixels on mobile); Close is
-at the top left and the former name/project heading is removed. The portrait
-and composer do not scroll. The portrait and Close share a fixed header row above
-the transcript. Messages retain the shared transcript's ordinary width and layout;
-no scroll listener, measured float or shape-outside changes their wrapping.
-Hosts without an avatar reserve only the Close button's height.
+The centered full-height panel is 560 pixels wide or the available viewport width
+on small screens. A compact header shows a 48-pixel avatar, name and Close button.
+One persistent Vuetify dialog owns focus and visibility; outside clicks leave it
+open, while Close/Escape hides it and returns focus to the launcher.
+Hosts supplying the voice slot get Text chat and Voice chat tabs, with text as
+the initial view. Native tab keyboard behavior switches the view. Both content
+owners stay mounted with inactive content hidden, retaining draft, transcript and
+voice lifetimes. The selected tab survives closing/reopening during the page's
+lifetime. The small header avatar does not change message wrapping.
 Colleague's model instructions, repeated in each application turn so retained
 native conversations receive current style guidance, default to one or two brief sentences, with detail
 when requested. Greetings get greetings. Focus remains operational context rather
 than unsolicited page recaps, no-change lists or generic readiness offers.
-The Vuetify dialog provides text and voice controls, focus containment and return to the launcher
-on close. The model, microphone, speaker, Stop and Send/Steer controls share a compact icon
-toolbar inside the message box, using the main chat button styles. No separate
-permanent voice footer reserves vertical space. No floating launcher or voice
-strip covers page controls when closed.
-Tab from a sendable draft focuses Send/Steer and stops that handled keypress from
-also reaching the dialog focus trap. Enter activates the focused button; ordinary
-reverse Tab navigation remains available. The voice slot receives a `preview`
-element in normal layout flow above the composer for compact status and recording
-controls. The host's recognized words appear in the pending user chat bubble;
-voice controls cannot overlay messages or assistant activity.
+The model, microphone, speaker, Stop and Send/Steer controls share the Text chat
+composer's icon toolbar. Tab from a sendable draft focuses Send/Steer and stops
+that handled keypress from also reaching the dialog focus trap. Enter activates
+the focused button; ordinary reverse Tab navigation remains available.
+The persistent voice slot receives the `preview` element above the composer for
+brief status/recording feedback, the `panel` target for full Voice chat controls,
+`minimized` visibility, and an `openVoice` callback. That callback selects Voice
+chat and opens the same dialog; hosts do not need their own expanded voice modal.
+The shared component does not start/stop audio when changing views or closing.
 The host shares the routed header target through its root; Teleport places the
 persistent panel in the dialog without remounting the voice connection or clearing
 drafts. While a header is unavailable, the compact launcher stays at the top edge.

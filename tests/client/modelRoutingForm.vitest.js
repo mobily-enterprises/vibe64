@@ -1,9 +1,12 @@
 import { computed, createRenderer, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ resource: null, scopeKey: null, request: vi.fn(), command: null }));
+const mocks = vi.hoisted(() => ({ resource: null, scopeKey: null, request: vi.fn(), command: null, routingOptions: [] }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useModelRouting.js", () => ({
-  useModelRouting: () => ({ resource: mocks.resource, scopeKey: mocks.scopeKey, engines: computed(() => mocks.resource.data.value?.engines || []), loadError: ref("") })
+  useModelRouting: (options) => {
+    mocks.routingOptions.push(options);
+    return { resource: mocks.resource, scopeKey: mocks.scopeKey, engines: computed(() => mocks.resource.data.value?.engines || []), loadError: ref("") };
+  }
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
   useCommand(options) { mocks.command = options; return { run: vi.fn() }; }
@@ -33,7 +36,7 @@ function resourceData() {
 let app;
 function mount(props = {}) {
   const renderer = createRenderer({ createComment: (text) => ({ text }), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  app = renderer.createApp({ ...ModelRoutingForm, render: () => null }, props);
+  app = renderer.createApp({ ...ModelRoutingForm, render: () => null }, { engineId: "codex", ...props });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
   return app._instance.setupState;
@@ -43,6 +46,7 @@ beforeEach(() => {
   mocks.scopeKey = ref("owner:first");
   mocks.resource = { data: ref(resourceData()), isInitialLoading: ref(false), loadError: ref(""), reload: vi.fn(async () => {}) };
   mocks.request.mockReset();
+  mocks.routingOptions = [];
 });
 afterEach(() => { app?.unmount(); vi.useRealTimers(); });
 
@@ -88,9 +92,9 @@ it("reviews only changes to the current draft before applying recommendations to
 it("invalidates recommendation reviews when routing reloads or workflow ownership changes", async () => {
   const state = mount();
   state.reviewRecommendations();
-  state.selectedEngine = "other";
+  app._instance.props.engineId = "other";
   expect(state.recommendationReview).toBeNull();
-  state.selectedEngine = "codex";
+  app._instance.props.engineId = "codex";
   state.reviewRecommendations();
   mocks.resource.data.value = { ...resourceData(), revision: 4 };
   await nextTick();
@@ -114,7 +118,7 @@ it("refreshes post-connection choices, proposes each role separately, and keeps 
   mocks.resource.data.value.engines.push(unavailable);
   const refreshed = Promise.withResolvers();
   mocks.resource.reload.mockImplementation(async () => refreshed.promise);
-  const state = mount({ connectionId: "deepseek", connectionEngines: ["codex", "claude"] });
+  const state = mount({ connectionId: "deepseek" });
   expect(state.baseRevision).toBe(null);
   expect(mocks.resource.reload).toHaveBeenCalledOnce();
   refreshed.resolve();
@@ -168,7 +172,7 @@ it("members receive the saved viewer result without calling the owner draft endp
 });
 
 it("accepts late setup defaults while untouched and preserves changed proposal checkboxes", async () => {
-  const state = mount({ connectionId: "deepseek", connectionEngines: ["codex"] });
+  const state = mount({ connectionId: "deepseek" });
   await vi.advanceTimersByTimeAsync(0);
   const connected = resourceData();
   connected.revision = 4;
@@ -271,8 +275,47 @@ it("keeps the requested orchestrator when its connection disappears", async () =
   mocks.resource.data.value.engines[0].connected = false;
   const state = mount({ engineId: "claude" });
   expect(state.selectedEngine).toBe("claude");
-  expect(state.connectedEngines).toEqual([]);
   expect(state.engine).toBeUndefined();
   await state.save();
   expect(mocks.resource.reload).not.toHaveBeenCalled();
+});
+
+it.each(["codex", "claude", "opencode"])("keeps %s connection suggestions, previews and saves in the selected orchestrator", async (engineId) => {
+  mocks.resource.data.value.engines = ["opencode", "claude", "codex"].map(id => ({
+    ...resourceData().engines[0], engineId: id, label: id,
+    roles: Object.fromEntries(["senior", "junior", "helper", "router", "sharedBackup"].map(role => [role, {
+      assignment: null, recommendation: selection(id, "deepseek", "deepseek-flash"), choices: []
+    }]))
+  }));
+  const state = mount({ engineId, connectionId: "deepseek" });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.routingOptions[0].engineId.value).toBe(engineId);
+  expect(state.selectedEngine).toBe(engineId);
+  expect(state.suggestedChanges).toHaveLength(5);
+  expect(state.suggestedChanges.every(change => change.engineId === engineId && change.proposed.engineId === engineId)).toBe(true);
+  const payload = mocks.command.buildRawPayload();
+  expect(payload.engineId).toBe(engineId);
+  expect(Object.keys(payload.orchestrators)).toEqual([engineId]);
+  await vi.advanceTimersByTimeAsync(250);
+  expect(mocks.request.mock.calls[0][1].body).toEqual(payload);
+  state.customize();
+  expect(state.selectedEngine).toBe(engineId);
+  expect(state.proposalMode).toBe(false);
+  state.otherModelsRequested = true;
+  expect(mocks.routingOptions[1].enabled.value).toBe(true);
+  expect(mocks.command.buildRawPayload()).toEqual(payload);
+});
+
+it("does not substitute another orchestrator when the selected connection has no suggestions", async () => {
+  const other = structuredClone(resourceData().engines[0]);
+  other.engineId = "opencode";
+  mocks.resource.data.value.engines.unshift(other);
+  for (const role of Object.values(mocks.resource.data.value.engines[1].roles)) role.recommendation = foreign;
+  const state = mount({ engineId: "codex", connectionId: "deepseek" });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.selectedEngine).toBe("codex");
+  expect(state.suggestedChanges).toEqual([]);
+  expect(mocks.command.buildRawPayload()).toEqual({ revision: 3, engineId: "codex", orchestrators: {}, reviewedHelperWorkflows: [] });
+  await vi.advanceTimersByTimeAsync(300);
+  expect(mocks.request).not.toHaveBeenCalled();
 });

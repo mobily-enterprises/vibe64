@@ -132,7 +132,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     id: "vibe64.test.operate", kind: "command", idempotency: "none",
     input: { schema: createSchema({ value: { type: "string", required: true } }), mode: "create" },
     output: { schema: createSchema({ ok: { type: "boolean", required: true } }), mode: "replace" },
-    async execute(input) { observations.mutations.push(input.value); if (observations.failure) throw observations.failure; return { ok: true }; }
+    async execute(input) { observations.mutations.push(input.value); await observations.onOperation?.(input); if (observations.failure) throw observations.failure; return { ok: true }; }
   }, { projectScoped: false });
   const extras = discovery ? Array.from({ length: 33 }, (_, i) => ({ ...operation, kind: discoveryQueries ? "query" : "command", id: `vibe64.test.extra-${i}` })) : [];
   if (watching) extras.push(...createTerminalActions({ terminals }).filter(({ id }) => id === "vibe64.terminals.temporary-conversation.read" ||
@@ -238,6 +238,54 @@ for (const action of ["stop", "steer", "failure"]) {
     assert.equal(result.status, action === "stop" ? "interrupted" : action === "failure" ? "failed" : "ready");
   });
 }
+
+test("Colleague shows one completed progress sentence during tools, then replaces it with the answer", async (t) => {
+  const operation = Promise.withResolvers();
+  const finish = Promise.withResolvers();
+  t.after(() => { operation.resolve(); finish.resolve(reply("Checked.")); });
+  const progress = "Let me check your projects.";
+  const tool = (value, text) => JSON.stringify({ ...JSON.parse(call(value)), text });
+  const f = await fixture(t, [tool("first", progress), tool("second", "Checking again."), () => finish.promise]);
+  f.observations.onOperation = ({ value }) => value === "first" ? operation.promise : undefined;
+  await f.send("Which projects are open?");
+  await until(() => f.observations.mutations.length === 1);
+  const checking = await f.service.read({}, f.context);
+  assert.equal(checking.status, "working");
+  assert.equal(checking.operation.status, "executing");
+  assert.equal(checking.streamingReply.text, progress);
+  assert.equal(checking.streamingReply.status, "completed", "speech can finish the short acknowledgement without waiting for the answer");
+  assert.equal(checking.messages.filter(message => message.role === "assistant").length, 0);
+  const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  assert.equal(JSON.stringify(saved).includes(progress), false, "progress is transient, not another history format");
+  const prompt = JSON.parse(f.observations.starts[0].input.message);
+  assert.match(prompt.progressInstructions, /first tool request/);
+  assert.equal(prompt.progressAlreadySaid, "");
+  operation.resolve();
+  await until(() => f.observations.starts.length === 3);
+  assert.equal(JSON.parse(f.observations.starts[2].input.message).progressAlreadySaid, progress);
+  assert.equal((await f.service.read({}, f.context)).streamingReply.id, checking.streamingReply.id);
+  assert.equal((await f.service.read({}, f.context)).streamingReply.text, progress);
+  f.observations.starts[2].options.onEvent({ type: "text", text: '{"kind":"reply","text":"One project' });
+  const answering = await f.service.read({}, f.context);
+  assert.notEqual(answering.streamingReply.id, checking.streamingReply.id);
+  assert.equal(answering.streamingReply.text, "One project");
+  finish.resolve(reply("One project is open."));
+  const final = await f.service.wait(f.context);
+  assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);
+});
+
+test("tool progress is bounded, has a fallback, and cannot turn a partial envelope into an action", async (t) => {
+  assert.throws(() => readEnvelope(JSON.stringify({ ...JSON.parse(call("never")), text: "x".repeat(281) })), /progress text/);
+  const finish = Promise.withResolvers();
+  t.after(() => finish.resolve(reply("Done.")));
+  const f = await fixture(t, [call("first"), () => finish.promise]);
+  await f.send("Check it");
+  await until(() => f.observations.starts.length === 2);
+  assert.equal((await f.service.read({}, f.context)).streamingReply.text, "Let me check that.");
+  f.observations.onStop = () => finish.resolve(reply("Done."));
+  await f.service.stop({}, f.context);
+  assert.equal((await f.service.read({}, f.context)).streamingReply, null);
+});
 
 test("Colleague never displays or executes a partial tool request", async (t) => {
   const finish = Promise.withResolvers();
@@ -976,6 +1024,20 @@ test("Main conversation observations keep implementation handoffs working and in
   }
 });
 
+test("autonomous watch tools do not speak interactive progress", async (t) => {
+  const finish = Promise.withResolvers();
+  t.after(() => finish.resolve(reply("The watched work finished.")));
+  const f = await fixture(t, [JSON.stringify({ kind: "tool", text: "Let me check your projects.", toolName: "vibe64_colleague_context_read", arguments: "{}" }), () => finish.promise], { watching: true });
+  await watchAction(f, "watch.create", { ...watchInput, conversationId: "", condition: "finished" });
+  f.observations.session.agentSession.turn = { id: "main-1", active: false, state: "completed" };
+  f.observations.log = [{ messages: [{ role: "assistant", messageId: "main-answer", text: "Finished." }] }];
+  await changed(f);
+  await until(() => f.observations.starts.length === 2);
+  assert.equal(JSON.parse(f.observations.starts[1].input.message).autonomous, true);
+  assert.equal((await f.service.read({}, f.context)).streamingReply, null);
+  assert.equal(f.observations.realtime.some(event => event.realtime.payload.streamingReply?.id.endsWith(":progress")), false);
+});
+
 test("Main conversation watches use native turn state and completed canonical replies", async (t) => {
   const f = await fixture(t, [reply("Main has finished.")], { watching: true });
   await watchAction(f, "watch.create", { ...watchInput, conversationId: "", condition: "finished" });
@@ -1177,6 +1239,88 @@ test("Colleague holds a private, retained conversation with real catalogue execu
   await restored.send("What happened?", "user-2");
   await restored.service.wait(restored.context);
   assert.equal(restored.observations.creates, 0, "Reuse the saved native conversation");
+});
+
+test("native Claude application-tool attempts are corrected before their false outage reply is shown", async (t) => {
+  const tool = (toolName, args) => JSON.stringify({ kind: "tool", text: "", toolName, arguments: JSON.stringify(args) });
+  const falseReply = "My lookup tools aren't responding.";
+  const f = await fixture(t, [
+    () => {
+      const { onEvent } = f.observations.starts.at(-1).options;
+      onEvent({ type: "provider-event", providerId: "claude", event: { type: "assistant", message: { content: [
+        { type: "tool_use", name: "assistant_action_search", input: { query: "operate" } }
+      ] } } });
+      onEvent({ type: "text", text: reply(falseReply) });
+      return reply(falseReply);
+    },
+    tool("assistant_action_contract", { actionId: "vibe64.test.operate" }),
+    tool("assistant_action_execute", { actionId: "vibe64.test.operate", input: { value: "verified" } }),
+    reply("The operation succeeded.")
+  ], { discovery: true });
+  await f.send("Use the requested operation.");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.deepEqual(f.observations.mutations, ["verified"]);
+  assert.equal(final.messages.at(-1).text, "The operation succeeded.");
+  assert.equal(JSON.stringify(f.observations.realtime).includes(falseReply), false);
+  assert.equal(final.messages.some(({ text }) => text === falseReply), false);
+  const corrected = JSON.parse(f.observations.starts[1].input.message);
+  assert.equal(corrected.previousOperation, null, "native attempts never dispatch application actions");
+  assert.match(corrected.feedback, /called a Vibe64 application tool as a native runtime tool/);
+  for (const { input } of f.observations.starts) {
+    const { toolUsage } = JSON.parse(input.message);
+    assert.match(toolUsage, /StructuredOutput/);
+    const example = toolUsage.match(/to find projects return (.+?)\. If/)[1];
+    const envelope = readEnvelope(example);
+    assert.equal(envelope.kind, "tool");
+    assert.equal(envelope.toolName, "assistant_action_search");
+    assert.deepEqual(JSON.parse(envelope.arguments), { query: "projects" });
+  }
+});
+
+test("repeated native tool mistakes stop with a specific error without saving the false answer", async (t) => {
+  const nativeReply = () => {
+    f.observations.starts.at(-1).options.onEvent({ type: "provider-event", providerId: "claude", event: {
+      type: "assistant", message: { content: [{ type: "tool_use", name: "vibe64_test_operate", input: { value: "never" } }] }
+    } });
+    return reply("The application is unavailable.");
+  };
+  const f = await fixture(t, [nativeReply, nativeReply, nativeReply]);
+  await f.send("Use the requested operation.");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "failed");
+  assert.match(final.error, /could not send its tool request through Colleague/);
+  assert.deepEqual(f.observations.mutations, []);
+  assert.equal(f.observations.starts.length, 3);
+  assert.equal(final.operation, null);
+  assert.deepEqual(final.messages.map(({ role }) => role), ["user"]);
+});
+
+test("a valid tool envelope after a native mistake executes once without another correction", async (t) => {
+  const f = await fixture(t, [() => {
+    f.observations.starts.at(-1).options.onEvent({ type: "provider-event", providerId: "claude", event: {
+      type: "assistant", message: { content: [{ type: "tool_use", name: "vibe64_test_operate", input: { value: "ignored" } }] }
+    } });
+    return call("corrected");
+  }, reply("Done.")]);
+  await f.send("Use the requested operation.");
+  assert.equal((await f.service.wait(f.context)).status, "ready");
+  assert.deepEqual(f.observations.mutations, ["corrected"]);
+  assert.equal(f.observations.starts.length, 2);
+});
+
+test("Claude StructuredOutput remains a valid native carrier for a Colleague reply", async (t) => {
+  const f = await fixture(t, [() => {
+    f.observations.starts.at(-1).options.onEvent({ type: "provider-event", providerId: "claude", event: {
+      type: "assistant", message: { content: [{ type: "tool_use", name: "StructuredOutput", input: JSON.parse(reply("Hello.")) }] }
+    } });
+    return reply("Hello.");
+  }]);
+  await f.send("Hello.");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.equal(final.messages.at(-1).text, "Hello.");
+  assert.equal(f.observations.starts.length, 1);
 });
 
 test("catalogue discovery retains its loaded contract across native model exchanges", async (t) => {
