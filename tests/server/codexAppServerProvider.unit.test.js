@@ -315,24 +315,25 @@ function managedCodexAppServerArgs(call = {}) {
 }
 
 function assertInteractiveCodexAppServerArgs(args = [], tail = []) {
-  assert.deepEqual(args.slice(0, 8), [
+  assert.deepEqual(args.slice(0, 3), tail.slice(-3));
+  args = args.slice(3);
+  assert.deepEqual(args.slice(0, 7), [
     "-c",
     'approval_policy="never"',
     "-c",
     'sandbox_mode="danger-full-access"',
-    "--dangerously-bypass-hook-trust",
     "-c",
     "features.hooks=true",
     "-c"
   ]);
   assert.match(
-    args[8],
+    args[7],
     /^hooks\.PreToolUse=\[\{matcher="\^Bash\$",hooks=\[\{type="command",command=.*agentSessionCommandHook\.js.*timeout=30\}\]\}\]$/u
   );
-  assert.deepEqual(args.slice(9), [
+  assert.deepEqual(args.slice(8), [
     "-c",
     STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
-    ...tail
+    ...tail.slice(0, -3)
   ]);
 }
 
@@ -2357,7 +2358,7 @@ test("codex provider starts distinct app-server processes for distinct runtime i
     assert.notEqual(firstRuntimeDir, secondRuntimeDir);
     assert.equal(commandCalls.length, 2);
     commandCalls.forEach(managedCodexAppServerArgs);
-    assert.deepEqual(commandCalls.map((entry) => entry.args.at(-1)), [
+    assert.deepEqual(commandCalls.map((entry) => managedCodexAppServerArgs(entry)[2]), [
       unixEndpointForRuntime(firstRuntimeDir),
       unixEndpointForRuntime(secondRuntimeDir)
     ]);

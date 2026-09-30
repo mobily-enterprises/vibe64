@@ -1177,7 +1177,7 @@ test("codex app-server bridge reuses an already-available runtime when ensuring 
   assert.equal(ensureRuntimeCalls, 0);
 });
 
-test("codex app-server bridge activates exact project hooks for each new thread", async () => {
+test("codex app-server bridge activates exact project and managed command hooks for each new thread", async () => {
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
@@ -1200,6 +1200,11 @@ test("codex app-server bridge activates exact project hooks for each new thread"
             enabled: true,
             key: "/repo/worktree/.codex/hooks.json:user_prompt_submit:0:0",
             source: "project"
+          }, {
+            currentHash: "sha256:session-command",
+            enabled: true,
+            key: "/<session-flags>/config.toml:pre_tool_use:0:0",
+            source: "sessionFlags"
           }, {
             currentHash: "sha256:ignored-plugin",
             enabled: true,
@@ -1248,11 +1253,12 @@ test("codex app-server bridge activates exact project hooks for each new thread"
       config: {
         model_reasoning_effort: "xhigh",
         model_reasoning_summary: "concise",
-        hooks: {
-          state: {
-            "/repo/worktree/.codex/hooks.json:user_prompt_submit:0:0": {
-              trusted_hash: "sha256:genesis-begin"
-            }
+        "hooks.state": {
+          "/repo/worktree/.codex/hooks.json:user_prompt_submit:0:0": {
+            trusted_hash: "sha256:genesis-begin"
+          },
+          "/<session-flags>/config.toml:pre_tool_use:0:0": {
+            trusted_hash: "sha256:session-command"
           }
         }
       },
@@ -1426,11 +1432,9 @@ test("codex app-server bridge refreshes project hook trust when resuming a threa
   assert.deepEqual(providerCalls[1].params.config, {
     model_reasoning_effort: "xhigh",
     model_reasoning_summary: "concise",
-    hooks: {
-      state: {
-        "/repo/worktree/.codex/hooks.json:stop:0:0": {
-          trusted_hash: "sha256:current-stop-hook"
-        }
+    "hooks.state": {
+      "/repo/worktree/.codex/hooks.json:stop:0:0": {
+        trusted_hash: "sha256:current-stop-hook"
       }
     }
   });
@@ -1473,14 +1477,12 @@ test("visible Codex terminals persist trust for the project hooks they already r
   );
 
   assert.deepEqual(config, {
-    hooks: {
-      state: {
-        "/repo/worktree/.codex/hooks.json:session_start:0:0": {
-          trusted_hash: "sha256:session-start"
-        },
-        "/repo/worktree/.codex/hooks.json:user_prompt_submit:0:0": {
-          trusted_hash: "sha256:user-prompt"
-        }
+    "hooks.state": {
+      "/repo/worktree/.codex/hooks.json:session_start:0:0": {
+        trusted_hash: "sha256:session-start"
+      },
+      "/repo/worktree/.codex/hooks.json:user_prompt_submit:0:0": {
+        trusted_hash: "sha256:user-prompt"
       }
     }
   });
@@ -1489,7 +1491,7 @@ test("visible Codex terminals persist trust for the project hooks they already r
     method: "listHooks"
   }, {
     method: "writeHookTrustState",
-    state: config.hooks.state
+    state: config["hooks.state"]
   }]);
 });
 

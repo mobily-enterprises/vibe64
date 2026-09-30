@@ -739,7 +739,9 @@ async function codexAppServerProjectHookTrustConfig(provider, cwd = "", {
   const record = (Array.isArray(result?.data) ? result.data : [])
     .find((item) => normalizeWorkdir(item?.cwd) === normalizedCwd);
   const trustedHooks = (Array.isArray(record?.hooks) ? record.hooks : [])
-    .filter((hook) => hook?.enabled === true && hook?.source === "project")
+    // Session flags contain Vibe64's own command hook. Trust its exact hash
+    // alongside project hooks; unrelated account and plugin hooks stay separate.
+    .filter((hook) => hook?.enabled === true && ["project", "sessionFlags"].includes(hook?.source))
     .map((hook) => ({
       currentHash: normalizeAgentText(hook?.currentHash),
       key: normalizeAgentText(hook?.key),
@@ -762,11 +764,9 @@ async function codexAppServerProjectHookTrustConfig(provider, cwd = "", {
   ) {
     await provider.writeHookTrustState(state);
   }
-  return {
-    hooks: {
-      state
-    }
-  };
+  // Native overrides replace the value at each key. Replacing the whole hooks
+  // table would erase the PreToolUse hook installed through session flags.
+  return { "hooks.state": state };
 }
 
 function codexAppServerTurnSettings({

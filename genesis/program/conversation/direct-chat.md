@@ -1184,6 +1184,15 @@ zero is displayed only when supplied by the provider. GPT API keys have no
 snapshot implementation.
 
 
+Codex places every configuration override after `app-server`, including the
+model catalogue appended by its process wrapper. Mixed placement can discard
+startup overrides (OpenAI Codex issue #39012), leaving the command hook absent.
+The thread configuration trusts the exact hashes of enabled project and managed
+session-flag hooks through `hooks.state`; overriding the whole `hooks` table
+would remove the startup `PreToolUse` definition. A native regression checks
+that code-mode shell execution reaches the session wrapper and inherits its
+execution owner, which managed browser testing requires.
+
 Codex and OpenCode pass readable, single-quoted command text to the existing
 session command wrapper. Shell quoting preserves literal quotes, substitutions,
 multiline text, and whitespace until managed execution. The wrapper encodes the

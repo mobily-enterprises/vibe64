@@ -60,3 +60,17 @@ sessions’ running tools too. A failed Close reports cleanup failure. Do not cl
 resources were released until Close succeeds. Colleague can explain the result
 and use the existing authorized project-close action; it does not execute shell
 commands or invent application-specific teardown steps.
+
+## Browser checks from chat
+
+Ask the coding agent in chat to test the running application in a browser and
+specify the flow to check. The agent uses the session's managed browser tools;
+you do not need to provide an execution ID or change application code to enable
+them. Application login may still require your credentials or interaction.
+
+If the agent reports “Browser testing requires a live assistant execution owner,”
+the browser test did not start. This is an assistant runtime problem. After the
+host runtime has been fixed and restarted, send a new chat message asking the
+agent to retry the check. Colleague can explain this recovery and inspect Preview
+state through its existing actions; it does not receive shell or browser-test
+access from this guide.

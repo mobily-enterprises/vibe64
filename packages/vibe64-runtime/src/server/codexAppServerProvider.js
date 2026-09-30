@@ -2293,13 +2293,17 @@ async function startCodexAppServerProcess({
     force: true
   });
   const codexArgs = [
+    // Keep every override after app-server: a trailing -c (including the model
+    // catalogue) otherwise drops the earlier ones. See openai/codex#39012.
+    "app-server",
+    "--listen",
+    endpoint,
     // App-server uses config overrides, not the top-level sandbox bypass flag.
     ...(helper ? [] : [
       "-c",
       'approval_policy="never"',
       "-c",
       'sandbox_mode="danger-full-access"',
-      "--dangerously-bypass-hook-trust",
       "-c",
       "features.hooks=true",
       "-c",
@@ -2312,10 +2316,7 @@ async function startCodexAppServerProcess({
           "-c",
           projectTrustOverride
         ]
-      : []),
-    "app-server",
-    "--listen",
-    endpoint
+      : [])
   ];
   const runtimeToken = randomUUID();
   const commandHash = codexAppServerProcessCommandHash({
