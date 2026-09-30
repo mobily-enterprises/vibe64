@@ -149,6 +149,79 @@ test("conflicting creates, stale saves, and missing versions preserve the existi
   }
 });
 
+test("requested configuration changes preserve other slots, extensions and registration fields under the native revision lock", async (t) => {
+  const { service, source, calls, environmentCalls } = await fixture(t);
+  const input = { sessionId: "one" };
+  const original = configuration();
+  original.integrations.custom = { provider: "application-provider", accountMode: "shared", scopes: [],
+    authentication: { method: "api-key", secretRef: "env:CUSTOM_KEY" }, settings: { resource: "keep" } };
+  original.integrations.calendar.assistantPolicy = { enabled: true, defaultPermission: "ask", actions: {} };
+  let result = await service.saveIntegrations({ ...input, baseHash: null, configuration: original });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  result = await service.saveIntegrations({ ...input, baseHash: result.baseHash, changes: {
+    integrations: {
+      calendar: { displayName: "Requested name", assistantPolicy: { enabled: false } },
+      mail: { provider: "resend", accountMode: "shared", scopes: [],
+        authentication: { method: "api-key", secretRef: "env:RESEND_API_KEY" } }
+    }, registrations: { google: { clientSecretRef: "env:ROTATED_GOOGLE_SECRET" } }
+  } });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.configuration.integrations.calendar.displayName, "Requested name");
+  assert.deepEqual(result.configuration.integrations.calendar.assistantPolicy,
+    { enabled: false, defaultPermission: "ask", actions: {} });
+  assert.deepEqual(result.configuration.integrations.calendar.extensions, original.integrations.calendar.extensions);
+  assert.deepEqual(result.configuration.extensions, original.extensions);
+  assert.deepEqual(result.configuration.integrations.custom, original.integrations.custom);
+  assert.equal(result.configuration.registrations.google.clientId, original.registrations.google.clientId);
+  assert.equal(result.configuration.registrations.google.callbackUrlRef, original.registrations.google.callbackUrlRef);
+  assert.equal(result.configuration.registrations.google.clientSecretRef, "env:ROTATED_GOOGLE_SECRET");
+  const contents = await readFile(path.join(source, "integrations.json"), "utf8");
+  for (const change of [
+    { baseHash: null, changes: { integrations: { mail: null } } },
+    { baseHash: "a".repeat(64), changes: { integrations: { mail: null } } },
+    { baseHash: result.baseHash, changes: {} },
+    { baseHash: result.baseHash, changes: { registrations: { google: null } } },
+    { baseHash: result.baseHash, changes: { integrations: { mail: { authentication: { secretRef: "raw-key" } } } } },
+    { baseHash: result.baseHash, changes: { integrations: { mail: { provider: "not-installed" } } } },
+    { baseHash: result.baseHash, configuration: original, changes: { integrations: { mail: null } } }
+  ]) {
+    const failed = await service.saveIntegrations({ ...input, ...change });
+    assert.equal(failed.ok, false, JSON.stringify(change));
+    assert.equal(await readFile(path.join(source, "integrations.json"), "utf8"), contents);
+  }
+  result = await service.saveIntegrations({ ...input, baseHash: result.baseHash,
+    changes: { integrations: { mail: null } } });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(Object.hasOwn(result.configuration.integrations, "mail"), false);
+  assert.deepEqual(result.configuration.integrations.custom, original.integrations.custom);
+  assert.deepEqual(calls, [], "configuration changes never run provider setup");
+  assert.deepEqual(environmentCalls, [], "configuration changes never resolve stored credentials");
+});
+
+test("configuration changes validate final provider settings and create through the same source guards", async (t) => {
+  const { service, source } = await fixture(t);
+  const changes = { integrations: { mail: { provider: "mailgun", accountMode: "shared", scopes: [],
+    authentication: { method: "api-key", secretRef: "env:MAILGUN_KEY" }, settings: { region: "elsewhere" } } } };
+  let result = await service.saveIntegrations({ sessionId: "one", baseHash: null, changes });
+  assert.equal(result.ok, false);
+  assert.ok(result.fieldErrors["integrations.mail.settings.region"]);
+  await assert.rejects(readFile(path.join(source, "integrations.json")), { code: "ENOENT" });
+  changes.integrations.mail.settings = {};
+  result = await service.saveIntegrations({ sessionId: "one", baseHash: null, changes });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.configuration.integrations.mail.settings, { region: "us" });
+  assert.deepEqual(result.configuration.registrations, {});
+  const locked = await fixture(t, { locked: true });
+  result = await locked.service.saveIntegrations({ sessionId: "one", baseHash: null, changes });
+  assert.equal(result.statusCode, 409);
+  await assert.rejects(readFile(path.join(locked.source, "integrations.json")), { code: "ENOENT" });
+  const before = await readFile(path.join(source, "integrations.json"), "utf8");
+  result = await service.saveIntegrations({ sessionId: "one", baseHash: null,
+    changes: { integrations: { constructor: null } } });
+  assert.equal(result.ok, false);
+  assert.equal(await readFile(path.join(source, "integrations.json"), "utf8"), before);
+});
+
 test("invalid values and raw credentials never create a file; malformed files are not replaced", async (t) => {
   const { service, source } = await fixture(t);
   const invalid = configuration();

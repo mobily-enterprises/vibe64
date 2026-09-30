@@ -31,7 +31,22 @@ Creating a paused campaign does not authorize launching it or spending money.
 
 Colleague can explain the relevant provider's steps, inspect safe metadata and
 status, open the exact integration and environment, and perform supported requested
-connection/payment operations through their normal guards. It must disclose an
-unavailable configuration or registration operation and hand off to the visible
-controls. You complete secret entry, provider consent and any required spending
+connection/payment operations through their normal guards. It can add, edit or
+remove specifically requested Development slots and saved registration fields.
+For example: “Add a shared Resend integration named mail using
+env:RESEND_API_KEY; save configuration only.” Supply the actual provider choices
+and required fields; Colleague must ask for anything missing. For an existing
+slot, it changes only requested fields and preserves other slots, registrations
+and application extensions. Saved registration edits do not create a client at
+the provider. Provider registration/discovery still uses its visible controls.
+You complete secret entry, provider consent and any required spending
 declarations. Asking how to connect does not authorize connecting or disconnecting.
+
+Configuration changes use the current saved revision. If somebody changes the
+file before the write, Colleague must read it again and review the intended change.
+Its results show saved slot metadata and the revision, without returning settings
+or credentials. If you have an unsaved Integrations draft, an outside change marks
+the form as changed elsewhere and preserves your draft; deliberately discard and
+reload or reconcile it before saving. A source operation can temporarily block
+saving; retry explicitly once it finishes. Saving configuration alone does not
+connect a provider, run the app, perform a session Save or publish the project.

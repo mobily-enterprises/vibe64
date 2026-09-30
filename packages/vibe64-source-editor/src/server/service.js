@@ -1257,14 +1257,29 @@ function createService({
 
     async saveIntegrations(input = {}) {
       return runSourceEditorOperation(async () => {
-        const configuration = validateIntegrationConfiguration(input.configuration, {
-          providers: [googleCalendarDefinition, ...connectorDefinitions], allowUnknownProviders: true
-        });
-        if (configuration.extensions?.payments) validatePaymentConfiguration(configuration);
+        if (Object.hasOwn(input, "configuration") === Object.hasOwn(input, "changes")) {
+          throw sourceEditorError("Supply configuration or requested changes, not both.", "vibe64_integration_changes_invalid", {}, 422);
+        }
         if (input.baseHash !== null && !/^[a-f0-9]{64}$/u.test(String(input.baseHash || ""))) {
           throw sourceEditorError("Reload the integration configuration before saving.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);
         }
         return runSourceEditorWriteExclusive(input, async (context) => {
+          const providers = [googleCalendarDefinition, ...connectorDefinitions];
+          let candidate = input.configuration;
+          if (input.changes) {
+            const current = await readApplicationIntegrations(context);
+            if (current.baseHash !== input.baseHash) {
+              throw sourceEditorError("Integration configuration changed. Reload it before saving.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);
+            }
+            candidate = applyIntegrationConfigurationChanges(current.configuration, input.changes);
+            for (const [id, change] of Object.entries(input.changes.integrations || {})) {
+              if (change !== null && !providers.some((provider) => provider.id === candidate.integrations[id]?.provider)) {
+                throw sourceEditorError("Choose a provider available in Integrations.", "vibe64_integration_provider_unavailable", {}, 422);
+              }
+            }
+          }
+          const configuration = validateIntegrationConfiguration(candidate, { providers, allowUnknownProviders: true });
+          if (configuration.extensions?.payments) validatePaymentConfiguration(configuration);
           const change = { ...input, path: "integrations.json", text: `${JSON.stringify(configuration, null, 2)}\n` };
           const file = input.baseHash === null
             ? await createSourceEditorFile(context, change)
@@ -1593,6 +1608,24 @@ function createService({
       return searchIndex.close();
     }
   });
+}
+
+function applyIntegrationConfigurationChanges(configuration, changes) {
+  const records = ["integrations", "registrations"].flatMap((key) => Object.keys(changes[key] || {}));
+  if (!records.length || records.length > 50 || records.some((id) => !/^[a-z][a-z0-9-]*$/u.test(id) || ["constructor", "prototype"].includes(id))) {
+    throw sourceEditorError("Supply between 1 and 50 named integration or registration changes.", "vibe64_integration_changes_invalid", {}, 422);
+  }
+  // JSON merge-patch semantics: omissions preserve values, null removes, arrays
+  // replace. Work on a detached copy; final provider validation precedes writing.
+  const merge = (target, patch) => {
+    let result = target && typeof target === "object" && !Array.isArray(target) ? { ...target } : {};
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null) delete result[key];
+      else result = { ...result, [key]: typeof value === "object" && !Array.isArray(value) ? merge(result[key], value) : value };
+    }
+    return result;
+  };
+  return merge(configuration, changes);
 }
 
 function streamSourceEditorFileChanges(context, file, stream, fileObserver) {

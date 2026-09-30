@@ -26,8 +26,10 @@ from saved project work, and inspect one exact file change at a time.
 - `packages/vibe64-source-editor/src/server/registerRoutes.js`
 - `packages/vibe64-source-editor/src/server/actions.js`
 - `packages/vibe64-source-editor/src/server/integrationAssistantContracts.js`
+- `packages/vibe64-source-editor/src/server/integrationConfigurationInput.js`
 - `packages/vibe64-source-editor/src/server/integrationSetupInput.js`
 - `tests/server/vibe64IntegrationActionTools.unit.test.js`
+- `tests/server/vibe64IntegrationsService.unit.test.js`
 - `tests/server/vibe64SourceEditorRoutes.unit.test.js`
 - `src/composables/useVibe64StarredFiles.js`
 - `src/components/studio/vibe64-session/Vibe64StarredFilesMenu.vue`
@@ -76,8 +78,24 @@ name and description, returning at most 20 names/descriptions and a next offset.
 It still checks the selected session but requires neither valid configuration nor
 Env preparation or external provider calls. These results describe configuration
 and available choices, never connection or implementation readiness. The full
-configuration HTTP read retains its existing behavior. Configuration editing and
-OAuth client registration are not yet exposed to Colleague.
+configuration HTTP read retains its existing behavior. Its Development metadata
+also supplies the exact `baseHash` for configuration changes.
+
+`integrations.save` owns the complete framework configuration schema and an
+alternative `changes` contract for named integration/registration edits. Exactly
+one must be supplied. The changes contract derives field types and indirect
+credential constraints from the installed JSKIT schema, without create-time
+defaults or application extensions. Omitted records/fields remain unchanged;
+null removes, objects merge and arrays replace. The existing source-write lock
+holds the fresh revision read, merge, provider/payment validation and file write.
+Only installed providers can be edited through changes; unrelated custom-provider
+records and extensions survive. Removing a registration still fails if the final
+configuration references it. Successful actions publish the existing file-change
+event, so a clean form refreshes and an unsaved form retains its draft and marks
+the revision conflict. Colleague uses changes, not reconstruction from metadata;
+its response contains only the new revision and bounded slots. It never resolves
+Env credentials, runs setup or claims a saved configuration is connected or ready.
+OAuth client registration is not yet exposed to Colleague.
 
 Colleague also discovers the existing `integrations.setup` command action. Its
 input lists the native operation names and structured chat-request/Ads selection
@@ -111,8 +129,9 @@ exact account/environment/review before publication, explicit real-spending
 approval before Ads launch and the person's tracking/billing confirmations.
 Source selection and payment environment are distinct. Uncertain provider writes
 must be inspected before retry; disconnect does not stop advertising or revoke
-provider-side permissions. Source configuration edits remain with the ordinary
-form or coding agents while their separate Colleague mutation work is pending.
+provider-side permissions. Application extensions remain with the ordinary form
+or coding agents. Named Development slot and registration changes share the
+canonical save action.
 
 Files presents Repo, Drop Zone and Session as icon-labelled areas, separate from
 folder navigation. Repo retains source editing, stars, explanations and selected

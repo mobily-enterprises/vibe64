@@ -23,6 +23,8 @@ async function withIntegrationTools(run) {
       async readIntegrations(input) { record(input); return state.failure || { ok: true, configuration: state.configuration, baseHash: "a".repeat(64), sourceRoot: "/private/source" }; },
       async readIntegrationProviders(input) { record(input); return { ok: true, total: 1, nextOffset: null,
         providers: [{ id: "resend", name: "Resend", description: "Email", descriptionTruncated: false }] }; },
+      async saveIntegrations(input) { record(input); return state.failure || { ok: true,
+        configuration: state.configuration, baseHash: "b".repeat(64), fileChange: { path: "integrations.json" } }; },
       async runIntegrationSetup(input) {
         const request = createIntegrationSetupRequest(input);
         record(input);
@@ -50,14 +52,14 @@ async function withIntegrationTools(run) {
 test("integration tools expose metadata through the same authorized session action without source or credentials", async () => {
   await withIntegrationTools(async ({ actions, calls, execute, slug, state, toolSet }) => {
     assert.deepEqual(toolSet.tools.map(({ actionId }) => actionId).sort(), [
-      "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.setup"
+      "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.save", "vibe64.source-editor.integrations.setup"
     ]);
     const response = await execute("integrations.read");
     assert.equal(response.ok, true, JSON.stringify(response));
-    assert.deepEqual(response.result, { ok: true, total: 1, truncated: false, integrations: [
+    assert.deepEqual(response.result, { ok: true, baseHash: "a".repeat(64), total: 1, truncated: false, integrations: [
       { id: "mail", provider: "resend", displayName: "Team mail", accountMode: "shared", authenticationMethod: "api-key", scopeCount: 0 }
     ] });
-    assert.equal(/private|PRIVATE_KEY|baseHash|sourceRoot/.test(JSON.stringify(response)), false);
+    assert.equal(/private|PRIVATE_KEY|sourceRoot/.test(JSON.stringify(response)), false);
     const read = await actions.execute({ actionId: "vibe64.source-editor.integrations.read", input: { projectSlug: slug, sessionId: "session-a" }, context: { channel: "api", surface: "app" } });
     assert.equal(read.configuration, state.configuration, "the ordinary UI retains the complete configuration");
     assert.equal(calls.every(({ input, context }) => input.vibe64User === state.actor && input.sessionId === "session-a" && context.slug === slug), true);
@@ -78,12 +80,38 @@ test("integration metadata marks large or unrepresentable slot lists incomplete 
     assert.equal(result.truncated, true);
     state.configuration.integrations = { ["a".repeat(201)]: entry };
     result = (await execute("integrations.read")).result;
-    assert.deepEqual(result, { ok: true, integrations: [], total: 1, truncated: true });
+    assert.deepEqual(result, { ok: true, baseHash: "a".repeat(64), integrations: [], total: 1, truncated: true });
     state.configuration.integrations = {};
-    assert.deepEqual((await execute("integrations.read")).result, { ok: true, integrations: [], total: 0, truncated: false });
+    assert.deepEqual((await execute("integrations.read")).result, { ok: true, baseHash: "a".repeat(64), integrations: [], total: 0, truncated: false });
     state.failure = { ok: false, code: "configuration_invalid", error: "Reload configuration.", fieldErrors: { token: "private-detail" } };
     result = (await execute("integrations.read")).result;
     assert.deepEqual(result, { ok: false, code: "configuration_invalid", error: "Reload configuration." });
+  });
+});
+
+test("configuration changes export native reference constraints and return revision metadata without saved values", async () => {
+  await withIntegrationTools(async ({ calls, execute, state }) => {
+    const changes = { integrations: { mail: { authentication: { secretRef: "env:ROTATED_MAIL_KEY" } } },
+      registrations: { app: { clientSecretRef: "env:NEW_SECRET", callbackUrlRef: "env:NEW_CALLBACK" } } };
+    const response = await execute("integrations.save", { baseHash: "a".repeat(64), changes });
+    assert.equal(response.ok, true, JSON.stringify(response));
+    assert.deepEqual(calls.at(-1).input.changes, changes);
+    assert.equal(response.result.baseHash, "b".repeat(64));
+    assert.equal(/private|PRIVATE_KEY|ROTATED_MAIL_KEY|NEW_SECRET|NEW_CALLBACK|configuration|fileChange/.test(JSON.stringify(response.result)), false);
+    const before = calls.length;
+    for (const invalid of [
+      { baseHash: "stale", changes }, { changes },
+      { baseHash: null, changes: { integrations: { mail: { authentication: { secretRef: "raw-secret" } } } } },
+      { baseHash: null, changes: { registrations: { app: { clientSecretRef: "https://secret.example" } } } },
+      { baseHash: null, changes: { registrations: { app: { callbackUrlRef: "https://callback.example" } } } },
+      { baseHash: null, changes: { integrations: { mail: { extensions: { command: "unsupported" } } } } },
+      { baseHash: null, changes: { extensions: {} } },
+      { baseHash: null, changes, sourceRoot: "/another/source" }
+    ]) assert.equal((await execute("integrations.save", invalid)).ok, false, JSON.stringify(invalid));
+    assert.equal(calls.length, before, "invalid configuration input never reaches the service");
+    state.allowed = false;
+    assert.equal((await execute("integrations.save", { baseHash: "a".repeat(64), changes })).ok, false);
+    assert.equal(calls.length, before, "revoked project authority also prevents mutation");
   });
 });
 

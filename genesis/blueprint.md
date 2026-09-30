@@ -53,7 +53,12 @@ for secret entry or stored-value inspection. Host-owned values remain protected.
 An Env change does not restart the app or prove it runs. Colleague can list a
 session's configured integration slots and search the editor's available services.
 It receives metadata, not saved settings or credentials, and distinguishes
-configuration from working connections. Through an application's declared
+configuration from working connections. It can save requested Development slot
+and registration changes against the current revision, preserving other slots,
+fields and application extensions. Credential values stay behind references;
+provider validation still applies. Configuration removal is distinct from
+disconnecting, registering a provider client, session Save and publication.
+Through an application's declared
 development setup command it can check connections, start requested connection
 or verification work, cancel pending consent and disconnect an app connection.
 The person completes browser consent in Integrations. Colleague can open the exact

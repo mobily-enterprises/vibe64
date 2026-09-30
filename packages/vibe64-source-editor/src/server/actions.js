@@ -1,7 +1,9 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
+import { integrationsSchema } from "@jskit-ai/connectors-core/shared/configuration";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { integrationReadTool, integrationSetupTool } from "./integrationAssistantContracts.js";
 import { integrationSetupInputSchema } from "./integrationSetupInput.js";
+import { integrationConfigurationChangesSchema } from "./integrationConfigurationInput.js";
 
 const text = { type: "string", noTrim: true, required: false };
 const requiredText = { ...text, minLength: 1, required: true };
@@ -52,7 +54,12 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged = async ()
       search: { ...text, maxLength: 200 }, offset: { type: "integer", min: 0, required: false }
     }, (input) => sourceEditor.readIntegrationProviders(input), { ...query, assistant: integrationReadTool("integrations.providers.read") }),
     action("integrations.n8n.discover", { serverUrl: requiredText }, (input) => sourceEditor.discoverN8nIntegration(input), query),
-    action("integrations.save", integration, (input) => sourceEditor.saveIntegrations(input), { changed: (input) => input.baseHash === null ? "created" : "saved" }),
+    action("integrations.save", { ...integration,
+      baseHash: { ...reviewId, nullable: true, required: true },
+      configuration: { type: "object", schema: integrationsSchema, required: false },
+      changes: { type: "object", schema: integrationConfigurationChangesSchema, required: false }
+    }, (input) => sourceEditor.saveIntegrations(input), { changed: (input) => input.baseHash === null ? "created" : "saved",
+      assistant: integrationReadTool("integrations.save") }),
     action("integrations.oauth-client.register", { ...integration, integrationId: identity, callbackUrl: requiredText },
       (input) => sourceEditor.registerOAuthIntegration(input), { changed: (input) => input.baseHash === null ? "created" : "saved" }),
     action("integrations.setup", {
