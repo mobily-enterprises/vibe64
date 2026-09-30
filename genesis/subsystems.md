@@ -126,7 +126,9 @@ Owns workspace preparation, execution resource estimates and workflow accounting
 
 ## `preview` Application preview
 
-Owns running project applications and their preview identities.
+Owns running project applications, their preview identities and declared
+project services shared across sessions. Project Close drains those services
+through the existing execution owner after stopping individual outputs.
 Output lifecycle, status, logs and result access share canonical terminal
 actions with current actor/project authority and existing service admission.
 Colleague uses bounded output status and terminal lifecycle presentations of

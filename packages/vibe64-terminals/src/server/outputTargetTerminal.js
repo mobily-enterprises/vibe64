@@ -2025,6 +2025,7 @@ async function resolveLaunchPreviewStatus({
 
 function createOutputTargetTerminalController({
   ensureWorkspacePrepared = null,
+  ensureProjectServices = async () => {},
   env = process.env,
   projectService,
   publishSessionChanged = async () => null,
@@ -2720,6 +2721,7 @@ function createOutputTargetTerminalController({
               error: spec.message || "Output target terminal cannot start."
             };
           }
+          await ensureProjectServices(context);
           const commandPreview = commandInvocation(spec);
 
           const namespace = outputTargetTerminalNamespace(sessionId);

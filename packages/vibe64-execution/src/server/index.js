@@ -55,6 +55,7 @@ export {
   VIBE64_MANAGED_EXECUTION_REQUIRED_ENV,
   finishVibe64Workflow,
   installVibe64ManagedExecutionProvider,
+  inspectVibe64Service,
   setVibe64WorkflowPhase,
   startVibe64Workflow,
   stopVibe64Execution,

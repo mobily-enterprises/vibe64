@@ -21,6 +21,11 @@ import {
   vibe64OutputsInspection
 } from "./outputs.js";
 import {
+  VIBE64_PROJECT_SERVICES_SECTION,
+  parseVibe64ProjectServicesLines,
+  vibe64ProjectServicesInspection
+} from "./projectServices.js";
+import {
   VIBE64_WORKSPACE_SETUP_CONTRACT,
   VIBE64_WORKSPACE_SETUP_SECTION,
   parseVibe64WorkspaceSetupLines,
@@ -362,6 +367,10 @@ async function inspectVibe64IntegrationSetup(options = {}) {
   return vibe64IntegrationSetupInspection({ section });
 }
 
+async function inspectVibe64ProjectServices(options = {}) {
+  return vibe64ProjectServicesInspection(await inspectGenesisStackSection(VIBE64_PROJECT_SERVICES_SECTION, options));
+}
+
 async function inspectVibe64WorkspaceSetup(options = {}) {
   const [section, resourceSection, outputsSection] = await Promise.all([
     inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options),
@@ -448,6 +457,8 @@ async function renderGenesisPrompt({
 }
 
 export {
+  inspectVibe64ProjectServices,
+  parseVibe64ProjectServicesLines,
   VIBE64_INTEGRATION_SETUP_CONTRACT,
   VIBE64_INTEGRATION_SETUP_SECTION,
   inspectVibe64IntegrationSetup,

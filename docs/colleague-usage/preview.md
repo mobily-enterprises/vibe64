@@ -27,7 +27,7 @@ application again. If startup fails, inspect the message and **Show run output**
 before retrying. Hiding run output closes only the terminal view; it does not
 stop the application.
 Stopping or restarting a hosted Preview includes processes in its child groups,
-including a development container. Wait for cleanup to finish before starting
+that are owned by that output. Wait for cleanup to finish before starting
 another run. If cleanup fails, open **Resources** for the reported operation
 and retry only after its running work has been stopped.
 
@@ -45,3 +45,18 @@ constructing an address.
 If two temporary editors show the same address, their host routing configuration
 needs correction. Restart the affected Previews after the host update; changing
 an application's listening port is not required.
+
+Some projects declare shared development services. Starting an output starts them
+once for the project; subsequent sessions share them. Stopping an individual
+Preview leaves these services available. Where your host provides project **Close**,
+use it to stop all project work, including shared services. In a local directory
+editor, shut down the editor normally. Hiding Preview, navigating away or closing a
+browser tab does not perform project Close. Ordinary inactivity shutdown also
+stops them. Shared services remain subject to hosted resource limits while idle.
+
+If another branch changes a running service declaration, startup asks you to Close
+and reopen the project. Save work as needed before doing so; this stops the other
+sessions’ running tools too. A failed Close reports cleanup failure. Do not claim
+resources were released until Close succeeds. Colleague can explain the result
+and use the existing authorized project-close action; it does not execute shell
+commands or invent application-specific teardown steps.

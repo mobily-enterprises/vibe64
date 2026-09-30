@@ -196,7 +196,14 @@ async function stopDetachedExecution(executionId = "", {
   };
 }
 
+function inspectDetachedExecution(executionId) {
+  const execution = detachedExecutions.get(executionId);
+  const running = Boolean(execution && !execution.scopeEmpty && processGroupExists(execution.pid));
+  return { ok: true, scopeEmpty: !running, activeState: running ? "active" : "inactive" };
+}
+
 export {
+  inspectDetachedExecution,
   drainProcessGroup,
   processGroupExists,
   runDetachedCommand,

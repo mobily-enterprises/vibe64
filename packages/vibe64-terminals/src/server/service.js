@@ -1,3 +1,4 @@
+import { createProjectServices } from "./projectServices.js";
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 import { manageWorkPlan, readWorkPlanPage } from "./assistantWorkPlan.js";
@@ -429,6 +430,7 @@ function createService({
     throw new TypeError("createService requires vibe64.project.");
   }
   const projectRuntimeOpenOperations = new Map();
+  const projectServices = createProjectServices();
   let assistantRouting;
   let sessionConversations;
   const turnCompletions = new Set();
@@ -499,6 +501,7 @@ function createService({
     projectService
   });
   const outputTarget = createOutputTargetTerminalController({
+    ensureProjectServices: projectServices.ensure,
     env,
     ensureWorkspacePrepared: async (sessionId, context = {}) => {
       if (await workspaceSetup.isPrepared(context)) {
@@ -1849,6 +1852,11 @@ function createService({
       if (outputTargetClose.status === "rejected") {
         failures.push(outputTargetClose.reason);
       }
+      try {
+        await projectServices.closeAll();
+      } catch (error) {
+        failures.push(error);
+      }
       if (failures.length > 0) {
         throw new AggregateError(failures, "Vibe64 terminal shutdown did not complete successfully.");
       }
@@ -1861,6 +1869,7 @@ function createService({
     async openProjectRuntime(input = {}) {
       const context = projectRuntimeContext();
       const reason = String(input?.reason || "project-open").trim() || "project-open";
+      projectServices.opened(context);
       const key = context.projectRuntimeRoot;
       const previous = projectRuntimeOpenOperations.get(key) || Promise.resolve();
       // Tabs share a runtime. Serialize opens so they observe one transition,
@@ -2318,6 +2327,7 @@ function createService({
       const projectScope = context.projectSlug ? `project:${context.projectSlug}` : terminalProjectScopeKey();
       const projectContextRoot = context.projectContextRoot;
       const reason = String(input?.reason || "project-close").trim() || "project-close";
+      projectServices.beginClose(context);
       const failed = [];
       let agentProviderRuntimesStopped = 0;
       let projectCwdTerminalClosed = 0;
@@ -2387,6 +2397,11 @@ function createService({
         );
         projectCwdTerminalClosed = Number(cwdResult.closed || 0);
         projectCwdNamespaceCount = Number(cwdResult.namespaceCount || 0);
+        try {
+          await projectServices.close(context);
+        } catch (error) {
+          failed.push({ controller: "project-services", error: error.message });
+        }
         const result = {
           agentProviderRuntimesStopped,
           failed,

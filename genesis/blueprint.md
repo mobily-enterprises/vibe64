@@ -1517,3 +1517,9 @@ planning and user-requested reviews do not trigger automatic follow-ups.
 
 Independently hosted editors sharing a Preview domain can have separate route
 namespaces, so cloned projects and sessions do not contend for one Preview address.
+
+Projects can declare foreground development services shared across sessions.
+Starting an output starts those services once. Stopping one Preview leaves them
+available; project Close and inactivity shutdown stop all project work, including
+shared services. Failed cleanup is reported before a project can be considered
+closed. Idle services continue to consume and be charged for their resources.

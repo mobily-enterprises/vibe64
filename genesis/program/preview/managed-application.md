@@ -33,6 +33,10 @@ Close, Stop and collapsible task details retain their own existing behavior.
 
 ## Sources
 
+- `packages/vibe64-genesis/src/server/projectServices.js`
+- `packages/vibe64-terminals/src/server/projectServices.js`
+- `tests/server/projectServices.unit.test.js`
+
 - `packages/vibe64-core/src/server/launchPreviewProxyEnv.js`
 - `packages/vibe64-terminals/src/server/Vibe64TerminalsProvider.js`
 - `tests/server/vibe64TerminalsProvider.unit.test.js`
@@ -311,3 +315,20 @@ existing addresses. This is routing identity, not project Env or an access grant
 the standard proxy still owns tokens and sockets.
 The terminal provider forwards this value with the other live routing settings,
 so the runtime environment filter cannot drop the editor identity.
+
+## Project services
+
+The optional `Project services` section is interpreted only by public Vibe64’s
+Genesis boundary. Exact foreground commands, declared runtimes and workdirs run
+through the existing execution gateway before an output starts. Per-project
+serialization shares one owner across sessions; changed declarations cannot
+replace a running service silently. No service starts from status inspection or
+merely opening a session.
+
+Preview Stop drains only the output. Project Close first stops session work, then
+all project-owned services, and clears its open state only after successful cleanup.
+Dormant close and project deletion use that same owner. Managed exact-owner stop
+can clean a predecessor server’s service without its original source directory.
+Standalone services use their executor-owned process handles. Orderly editor
+shutdown drains owned services. Service SIGTERM handlers own external cleanup;
+commands must not detach untracked workers.

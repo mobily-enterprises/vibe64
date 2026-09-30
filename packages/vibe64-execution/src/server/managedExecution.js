@@ -2,6 +2,7 @@ import {
   stopCaptureExecution
 } from "./engines/capture.js";
 import {
+  inspectDetachedExecution,
   stopDetachedExecution
 } from "./engines/detached.js";
 import {
@@ -86,6 +87,11 @@ function vibe64CapacityRejectedResult(execution = {}, {
   });
 }
 
+async function inspectVibe64Service(executionId) {
+  if (installedProvider) return installedProvider.inspectExecution(executionId);
+  return inspectDetachedExecution(executionId);
+}
+
 async function stopVibe64Execution(executionId = "", options = {}) {
   const normalizedExecutionId = String(executionId || "").trim();
   if (!normalizedExecutionId) {
@@ -121,6 +127,7 @@ async function stopVibe64OwnedExecutions(selector = {}, options = {}) {
 }
 
 export {
+  inspectVibe64Service,
   finishVibe64Workflow,
   VIBE64_MANAGED_EXECUTION_REQUIRED_ENV,
   installVibe64ManagedExecutionProvider,

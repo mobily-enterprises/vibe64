@@ -233,6 +233,32 @@ process. Outputs remain pending until the current setup recipe has succeeded;
 a Stack with no setup recipe is simply unconfigured rather than failed.
 Component conflicts are reported instead of interleaving competing commands.
 
+Projects may also declare foreground services shared by their sessions:
+
+```markdown
+## Project services
+
+- Start `worker` with `nodejs` in `tools`: `npm` `run` `worker`
+```
+
+The optional section accepts unique lowercase service IDs, one or more runtimes,
+an optional project-relative workdir (default `.`), and exact argv. Use
+`- Nothing.` for an explicitly empty section. Commands run through the ordinary
+execution gateway before an output starts, under the project's saved development
+environment. They remain separate from an individual output's process tree and
+resource allowance. The service must stay in the foreground and handle SIGTERM
+by releasing its owned resources; spawning untracked background work is not a
+supported lifecycle. Output readiness remains the application's responsibility.
+
+Concurrent sessions share the service owner. A running service declaration cannot
+be changed by another branch: Close and reopen the project to adopt it. Archiving
+the source session does not terminate the service; its runtime assets must remain
+usable independently of that source directory. Project Close, inactivity shutdown
+and orderly editor shutdown stop the services and wait for process-exit proof.
+A hosted editor can also find and stop an exact owner from an earlier server
+process. Failed cleanup remains an error and the project is not reported closed.
+Reading project or Preview status never starts these services.
+
 An output target can declare named text parameters. Its executable remains fixed;
 `{parameter:id}` can appear in Prepare, Build, or Run arguments. For example:
 
