@@ -17,5 +17,5 @@ function setTarget(element) {
 </template>
 
 <style scoped>
-.vibe64-colleague-launcher-target { display: flex; flex: 0 0 48px; width: 48px; height: 48px; }
+.vibe64-colleague-launcher-target { display: flex; flex: 0 0 auto; min-width: 48px; height: 48px; }
 </style>

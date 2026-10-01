@@ -103,33 +103,32 @@ these future workflow choices from running agents, session chat modes and its ow
 model. Account connection and credential entry remain in AI Accounts. Complete
 product-operation coverage remains in progress.
 
-On every screen size, Colleague has one compact avatar button in the header.
-It opens one centered 560-pixel-wide panel, using the available width on smaller
-screens. A compact header shows the name, avatar and Close button. When a host
-supplies voice, Text chat and Voice chat tabs switch views in this same panel;
-text opens first, and reopening preserves the chosen view. Switching views keeps
-the draft and conversation. The host's voice session is independent of the view.
-Outside clicks do not hide the panel; Close or Escape does. Only messages scroll
-in Text chat; the header, tabs and message box remain in place.
-Model selection, microphone, speaker, Stop and Send/Steer use compact icon
-buttons inside the message box, matching the main chat toolbar and leaving
-the page's comment, message and Send controls clear when closed. Closing it
-preserves both conversations' drafts.
-Colleague gives brief, direct replies by default and expands when asked for detail.
-It uses current project/page context silently, without unsolicited status recaps
-or lists of actions it did not take.
-Hosted live voice sends recognized questions directly to Colleague's selected
-model and normal tools, without a separate Helper interpretation call. The host
-owns pause detection, microphone controls and immediate speech stopping.
-Tab from a nonempty message focuses Send, or Steer while Colleague is working;
-Enter sends it. Recognized words grow in a pending user chat bubble, replaced
-once on admission while preserving typed drafts. Compact voice status and
-recording controls sit above the message box without covering chat or assistant activity.
-Hosts may speak safe phrases from live reply text before answer completion.
-Holding the header avatar records a voice message when the host supports speech.
-A bubble across the left two-thirds shows recognized words, leaving the right
-third clear of the hand holding the avatar. Release keeps it for review with
-explicit Send and Discard controls.
+On every screen size, Colleague opens Talk first from its header avatar. Talk/Text
+controls at the top switch to its written conversation without losing a draft or
+ending active audio. Both views share one JSKIT dialog frame and tab geometry;
+mobile uses full screen. Opening Talk does not start recording. Tap Talk for
+hands-free or hold for push-to-talk. Minimize retains audio and marks the header
+avatar, including active listening; its adjacent Stop voice button ends audio.
+X or Escape stops voice while preserving the typed draft and saved history. Written messages scroll while the header and
+composer remain available. Model selection, Stop and Send/Steer share the composer
+toolbar. Colleague gives brief replies and expands when asked. A project agent
+keeps its text view and has a visible Talk button in the chat header.
+Tab from a nonempty message focuses Send/Steer; Enter sends it.
+
+Colleague and the project's Main agent share one voice window. Push-to-talk and
+hands-free work for both, including listening while an answer speaks. Voice uses
+the selected conversation's ordinary model, tools and permissions, with no extra
+interpretation call. Live words and answers appear as captions. A recording keeps
+its original destination and identity; the typed draft stays separate. Review keeps
+words until Send or Discard. Holding the Colleague avatar starts a reviewed recording.
+
+The voice window belongs to the application rather than the selected chat screen.
+Minimizing and navigation preserve its target. An explicit target change releases
+the previous audio and requires unfinished words to be completed or discarded.
+Stop speaking stops audio; Stop agent work stops the target's work. Installed male
+and female voices can be selected through the Voice settings cog for future spoken
+replies without changing the
+reasoning model. Access loss or leaving the application releases the microphone.
 
 Maintainers can develop Vibe64 inside another editor's preview. The development
 preview runs a complete editor with its own runtime state and an independent
@@ -535,8 +534,8 @@ Host-provided conversations enter chat only when explicitly opened through the
 host's own navigation. Their tab disappears when returning to another chat;
 ordinary chat controls do not retain a permanent shortcut, including headers
 shown during archiving or after the last session closes.
-Main chat's optional companion controls detach while a temporary or host-provided
-conversation is selected. Pending voice input cannot send into hidden Main chat.
+Main's voice launcher is available on its own chat. An already-open voice session
+retains its explicit Main target when a temporary or host-provided view is selected.
 On narrow screens, swiping left shows the selected Preview or Dashboard and
 swiping right returns to chat. The header supports either gesture, including
 above an embedded preview; ordinary chat and dashboard areas support them too.

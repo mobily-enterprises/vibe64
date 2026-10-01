@@ -1,3 +1,4 @@
+import { vibe64RealtimeOriginPayload } from "./vibe64BrowserTabOrigin.js";
 import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
@@ -18,6 +19,19 @@ const VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT = "vibe64.source-editor.sync.error";
 const VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT = "vibe64.source-editor.sync.ready";
 const DEFAULT_MAX_OPEN_SESSIONS = 3;
 const SELECTED_SESSION_STORAGE_KEY = "vibe64:selected-session-id";
+
+function agentTurnControlPayloadFromContext(context = {}) {
+  const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
+  const {
+    agentSettings: _agentSettings,
+    sessionId: _sessionId,
+    ...body
+  } = source;
+  return vibe64RealtimeOriginPayload({
+    ...body,
+    ...agentSettingsInputFromContext(source)
+  });
+}
 
 function selectedSessionStorageKey(projectSlug) {
   return vibe64ProjectScopedStorageKey(SELECTED_SESSION_STORAGE_KEY, projectSlug);
@@ -396,6 +410,7 @@ function agentSettingsInputFromContext(context = {}) {
 }
 
 export {
+  agentTurnControlPayloadFromContext,
   VIBE64_ASSISTANTS_API_SUFFIX,
   VIBE64_ARCHIVED_SESSIONS_API_SUFFIX,
   VIBE64_ASSISTANT_MODEL_ACCESS_API_SUFFIX,

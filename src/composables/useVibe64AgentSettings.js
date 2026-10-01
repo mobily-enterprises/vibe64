@@ -1,5 +1,6 @@
-import { computed, ref, watch } from "vue";
+import { computed, ref, toValue, watch } from "vue";
 import {
+  VIBE64_DEFAULT_AGENT_PROVIDER_ID,
   defaultVibe64AgentSettings,
   normalizeVibe64AgentSettings
 } from "@local/vibe64-runtime/shared";
@@ -28,8 +29,8 @@ function agentSettingsStorageKey(baseKey = "", projectSlug = "", email = "") {
     : projectKey;
 }
 
-function useVibe64AgentSettings() {
-  const projectSlug = useVibe64ProjectSlug();
+function useVibe64AgentSettings({ projectSlug: projectSlugInput } = {}) {
+  const projectSlug = projectSlugInput === undefined ? useVibe64ProjectSlug() : computed(() => toValue(projectSlugInput));
   const storageKey = computed(() => agentSettingsStorageKey(
     AGENT_SETTINGS_STORAGE_KEY,
     projectSlug.value,
@@ -60,7 +61,13 @@ function useVibe64AgentSettings() {
     deep: true
   });
 
+  const requestSettings = computed(() => {
+    const value = settings.value;
+    return value.providerId !== VIBE64_DEFAULT_AGENT_PROVIDER_ID || value.model || value.thinking ? value : null;
+  });
+
   return {
+    requestSettings,
     settings,
     update
   };

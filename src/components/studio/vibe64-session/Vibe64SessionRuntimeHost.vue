@@ -13,6 +13,7 @@
       :create-session-teleport-target="props.createSessionTeleportTarget"
       :cancel-agent-message="cancelAgentMessage"
       :conversation-log="conversationLog"
+      :conversation-runtime="conversationRuntime"
       :github-actor-teleport-target="props.githubActorTeleportTarget"
       :interrupt-agent-turn="interruptAgentTurn"
       :page="guardedPage"
@@ -167,6 +168,7 @@ const {
   cancelAgentMessage,
   codexTerminalCanStart,
   conversationLog,
+  conversationRuntime,
   dialogs,
   emitChatAttention,
   emitProjectAttention,

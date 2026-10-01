@@ -1,21 +1,26 @@
 # Talk with Colleague
 
-Open Colleague with its avatar button in the page header. It opens one centered
-panel, using the available width on a small screen. Its header shows the name,
-small avatar and **Close Colleague** X. Close or Escape hides the panel while
-keeping your draft and conversation. Outside clicks do not close it.
+Open Colleague with its avatar button in the page header. **Talk** opens first;
+choose **Text** at the top for written chat. Both use the same conversation and
+preserve your typed draft. Opening Talk does not start the microphone: choose
+tap **Talk** for hands-free, or hold it and release for push-to-talk.
+Connection setup is automatic.
 Colleague replies briefly by default, usually one or two short sentences.
 Ask for a detailed explanation when you want more. A greeting gets a greeting;
 project/page details appear only when relevant.
 
-When the host supplies voice, **Text chat** and **Voice chat** tabs switch between
-messages and the host's voice controls inside this same panel. Text chat opens
-first. Switching tabs preserves history and your typed draft. Closing and
-reopening restores the selected tab; it does not itself stop active voice.
-Use the host's voice controls to start or end audio. In Text chat, the header and
-message box stay in place while earlier messages scroll.
+**Talk / Text** stays in the same place in both views, without a slide animation.
+Both views use the same size and fill the screen on mobile. Text has no portrait
+and uses the available height for messages. Selecting Text or minimizing keeps
+voice active. The top-right **Minimize conversation** minus hides the view;
+clicking the visible header avatar also minimizes. **Close** X stops voice, as do
+Escape and outside clicks away from the avatar. Draft and history stay.
+While minimized, a badge on the header avatar shows voice; a microphone and ring
+mean it is listening. Tap the avatar to reopen, or its adjacent **Stop voice chat**
+button to stop audio without reopening or stopping the agent's work.
+See [Voice chat](voice-chat.md) for recording, sound, target switching and recovery.
 
-Type in the message box, then click Send. With a nonempty draft, Tab moves
+In Text, type in the message box, then click Send. With a nonempty draft, Tab moves
 directly from the text field to Send and Enter sends the message. While Colleague
 is working, the same shortcut uses Steer to add instructions. Stop stops its
 current turn. These controls and the model picker sit inside the message box.
@@ -54,17 +59,8 @@ tool request through Colleague.” Your message is kept: retry the question, or
 choose another model with the message box's model picker once the turn stops.
 This error does not mean your projects are missing or your account disconnected.
 
-When the host supplies voice, the microphone and read-aloud controls also appear
-inside the message box. Recognized words update one Pending user message in
-the chat; acceptance replaces it with the saved message without duplicating it
-or changing your typed draft. Unsent or discarded words are not saved history.
-Live words grow in that chat bubble as you speak. Compact voice status and
-recording controls sit above the message box without covering the conversation
-or the assistant's working status. Microphone permission and recording require
-your interaction; Colleague can explain the controls but cannot grant permission
-or press them for you.
-The host's **Voice chat** view provides its ongoing voice controls and mode
-choices. Questions use Colleague's selected model and normal tools. Switching
-back to **Text chat** keeps the same conversation; starting/stopping audio is
-handled by the host's labelled controls. Consult the host's voice guide for
-microphone permissions, recording modes and speech recovery.
+Recognized words can appear as a Pending user message in chat; acceptance replaces
+it with the saved message once. Unsent or discarded words are not saved history.
+Review and recording controls live in the shared voice window. Microphone permission
+and recording require your interaction; Colleague can explain the steps but cannot
+grant permission or press them for you.

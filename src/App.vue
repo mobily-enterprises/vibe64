@@ -1,4 +1,5 @@
 <script setup>
+import { Vibe64VoiceHost } from "@local/vibe64-voice/client";
 import { RouterView } from "vue-router";
 import ShellErrorHost from "@jskit-ai/shell-web/client/components/ShellErrorHost";
 import { useVibe64InAppLinks } from "./composables/useVibe64InAppLinks.js";
@@ -8,7 +9,7 @@ useVibe64InAppLinks();
 
 <template>
   <v-app>
-    <RouterView />
+    <Vibe64VoiceHost><RouterView /></Vibe64VoiceHost>
     <ShellErrorHost />
   </v-app>
 </template>

@@ -1,0 +1,47 @@
+{
+  "name": "@local/vibe64-voice",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vibe64 conversation bindings and authorized speech connections.",
+  "exports": {
+    "./client": "./src/client/index.js",
+    "./server": "./src/server/Vibe64VoiceProvider.js"
+  },
+  "jskit": {
+    "kind": "runtime",
+    "capabilities": {
+      "provides": [
+        "vibe64.voice"
+      ],
+      "requires": [
+        "vibe64.colleague",
+        "vibe64.project",
+        "vibe64.sessions",
+        "runtime.env",
+        "runtime.fastify"
+      ]
+    },
+    "runtime": {
+      "server": {
+        "providers": [
+          {
+            "entrypoint": "src/server/Vibe64VoiceProvider.js",
+            "export": "Vibe64VoiceProvider"
+          }
+        ]
+      },
+      "client": {
+        "providers": []
+      }
+    }
+  },
+  "dependencies": {
+    "@jskit-ai/assistant-voice": "0.1.0",
+    "@jskit-ai/kernel": "0.1.221",
+    "@local/vibe64-core": "0.1.0",
+    "@mdi/js": "^7.4.47",
+    "vue": "^3.5.13",
+    "vuetify": "^4.0.0"
+  }
+}

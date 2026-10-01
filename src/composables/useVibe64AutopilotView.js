@@ -6,16 +6,13 @@ import {
   VIBE64_DEFAULT_AGENT_PROVIDER_ID
 } from "@local/vibe64-runtime/shared";
 import {
-  useVibe64AgentSettings
-} from "@/composables/useVibe64AgentSettings.js";
-import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
   chatMessagePayload,
   createChatMessageId
 } from "@/lib/vibe64ChatMessage.js";
-import { createAssistantMessageDelivery, unmatchedOptimisticMessages } from "@jskit-ai/assistant-core/client/conversation-delivery";
+import { unmatchedOptimisticMessages } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import {
   numberedQuestionSubmissionText,
@@ -129,6 +126,7 @@ const vibe64AutopilotViewProps = {
     default: async () => false,
     type: Function
   },
+  conversationRuntime: { required: true, type: Object },
   conversationLog: {
     default: () => ({}),
     type: Object
@@ -363,8 +361,7 @@ function useVibe64AutopilotView(props, emit, {
   assistantCanUseNative = null,
   assistantProgressLabel = null,
   onAttachmentsAccepted = null,
-  requestTemporaryAi = null,
-  sendMainChatMessage = null
+  requestTemporaryAi = null
 } = {}) {
   const route = useRoute();
   const router = useRouter();
@@ -374,20 +371,13 @@ function useVibe64AutopilotView(props, emit, {
     loader: () => import("@/components/studio/Vibe64OutputControls.vue"),
     minHeight: "10rem"
   });
-  const agentSettings = useVibe64AgentSettings();
+  const agentSettings = computed(() => props.conversationRuntime.agentSettings);
   const preferredName = inject(VIBE64_WELCOME_NAME_KEY, () => {
     const accounts = useVibe64Accounts();
     return computed(() => accounts.status.value?.personalProfile?.preferredName);
   }, true);
-  const currentAgentSettings = computed(() => agentSettings.settings.value);
-  const requestAgentSettings = computed(() => {
-    const settings = currentAgentSettings.value || {};
-    return String(settings.providerId || "") !== VIBE64_DEFAULT_AGENT_PROVIDER_ID ||
-      String(settings.model || "") ||
-      String(settings.thinking || "")
-      ? settings
-      : null;
-  });
+  const currentAgentSettings = computed(() => agentSettings.value.settings.value);
+  const requestAgentSettings = computed(() => agentSettings.value.requestSettings.value);
   const sessionId = computed(() => normalizedAgentTurnText(props.session?.sessionId));
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   const actorKey = computed(() => unref(viewer)?.actorKey || "");
@@ -433,9 +423,9 @@ function useVibe64AutopilotView(props, emit, {
   const composerDraft = ref("");
   const composerAttachments = ref([]);
   const composerRetrySubmission = ref(null);
-  const messageDelivery = createAssistantMessageDelivery();
+  const messageDelivery = computed(() => props.conversationRuntime.delivery);
   const discardingMessageIds = new Set();
-  const composerSending = computed(() => messageDelivery.state.sending);
+  const composerSending = computed(() => messageDelivery.value.state.sending);
   const composerSubmissionKind = ref("");
   const routingRequest = computed(() => {
     try { return JSON.parse(props.session?.metadata?.assistant_routing_request || "null"); } catch { return null; }
@@ -443,9 +433,11 @@ function useVibe64AutopilotView(props, emit, {
   const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status));
   const routingStatusLabel = computed(() => assistantRoutingStatusLabel(routingRequest.value));
   let composerStorageKey = "";
+  let composerDeliveryOwner;
   let restoringComposer = false;
   function restoreComposerState() {
     restoringComposer = true;
+    composerDeliveryOwner = messageDelivery.value;
     composerStorageKey = actorKey.value && projectSlug.value && sessionId.value
       ? `vibe64:chat-composer:v1:${composerKey.value}` : "";
     try {
@@ -457,25 +449,26 @@ function useVibe64AutopilotView(props, emit, {
       const messages = Array.isArray(saved?.messages) ? saved.messages.filter((message) =>
         typeof message?.id === "string" && typeof message.text === "string" &&
         typeof message.payload?.message === "string") : [];
-      messageDelivery.state.messages = unmatchedOptimisticMessages(props.conversationLog?.turns, messages)
-        .map((message) => ({ ...message, status: "failed", error: message.error ||
+      const restoredMessages = messages.filter(message => !messageDelivery.value.find(message.id))
+        .map(message => ({ ...message, status: "failed", error: message.error ||
           "Delivery was not confirmed before this page closed. Check the conversation before retrying." }));
+      messageDelivery.value.state.messages = unmatchedOptimisticMessages(props.conversationLog?.turns,
+        [...messageDelivery.value.state.messages, ...restoredMessages]);
     } catch {
       // Unavailable browser storage must not prevent sending a message.
       composerDraft.value = "";
       composerAttachments.value = [];
-      messageDelivery.state.messages = [];
     } finally {
       restoringComposer = false;
     }
     persistComposerState();
   }
   function persistComposerState() {
-    if (restoringComposer || !composerStorageKey || typeof window === "undefined") return;
+    if (restoringComposer || composerDeliveryOwner !== messageDelivery.value || !composerStorageKey || typeof window === "undefined") return;
     try {
       const saved = { draft: composerDraft.value,
         attachments: composerAttachments.value.filter((attachment) => attachment?.attachmentId),
-        messages: messageDelivery.state.messages };
+        messages: messageDelivery.value.state.messages };
       if (saved.draft || saved.attachments.length || saved.messages.length) {
         window.sessionStorage?.setItem(composerStorageKey, JSON.stringify(saved));
       }
@@ -485,15 +478,15 @@ function useVibe64AutopilotView(props, emit, {
     }
   }
   restoreComposerState();
-  watch([composerDraft, composerAttachments, () => messageDelivery.state.messages], persistComposerState, { deep: true, flush: "sync" });
+  watch([composerDraft, composerAttachments, () => messageDelivery.value.state.messages], persistComposerState, { deep: true, flush: "sync" });
   function restoreCancelledMessage(messageId) {
-    const message = messageDelivery.find(messageId);
+    const message = messageDelivery.value.find(messageId);
     if (!message || discardingMessageIds.has(messageId) ||
         !unmatchedOptimisticMessages(props.conversationLog?.turns, [message]).length) return;
     const text = message.payload.draftSnapshot || message.text;
     const draft = composerDraft.value;
     composerDraft.value = !draft || draft.startsWith(text) ? draft || text : `${text}\n\n${draft}`;
-    messageDelivery.remove(messageId);
+    messageDelivery.value.remove(messageId);
   }
   const conversationFollowLatestKey = ref(0);
   const interrupting = ref(false);
@@ -1129,39 +1122,11 @@ function useVibe64AutopilotView(props, emit, {
     const sendingProjectSlug = projectSlug.value;
     const sendingActorKey = actorKey.value;
     composerSubmissionKind.value = submissionKind === "steer" ? "steer" : "send";
-    let acknowledgeMessage;
-    const receipt = new Promise((resolve) => { acknowledgeMessage = resolve; });
-    const stopWatchingReceipt = watch(
-      [sessionId, projectSlug, actorKey, () => props.conversationLog?.turns],
-      ([currentSessionId, currentProjectSlug, currentActorKey, turns]) => {
-        if (currentSessionId !== sendingSessionId || currentProjectSlug !== sendingProjectSlug || currentActorKey !== sendingActorKey) {
-          acknowledgeMessage(false);
-        } else if (Array.isArray(turns) && turns.some((turn) => turn?.user?.messageId === messageId)) {
-          acknowledgeMessage({ ok: true });
-        }
-      },
-      { immediate: true }
-    );
     try {
-      const sendMessage = typeof sendMainChatMessage === "function"
-        ? sendMainChatMessage
-        : props.sendAgentMessage;
-      const response = await messageDelivery.send({
+      const response = await props.conversationRuntime.send({
         ...payload,
-        submissionKind,
         agentSettings: Object.hasOwn(payload, "agentSettings") ? payload.agentSettings : requestAgentSettings.value || null
-      }, {
-        messageId,
-        queue: submissionKind === "steer",
-        isCurrent: () => sessionId.value === sendingSessionId && projectSlug.value === sendingProjectSlug && actorKey.value === sendingActorKey,
-        deliver: ({ agentSettings, ...submission }) => Promise.race([
-          sendMessage({
-            ...submission,
-            ...(agentSettings ? { agentSettings } : {})
-          }),
-          receipt
-        ])
-      });
+      }, { messageId, submissionKind });
       if (sessionId.value !== sendingSessionId || projectSlug.value !== sendingProjectSlug || actorKey.value !== sendingActorKey) {
         return false;
       }
@@ -1188,7 +1153,6 @@ function useVibe64AutopilotView(props, emit, {
       }
       return false;
     } finally {
-      stopWatchingReceipt();
       if (sessionId.value === sendingSessionId && projectSlug.value === sendingProjectSlug && actorKey.value === sendingActorKey && !composerSending.value) {
         composerSubmissionKind.value = "";
       }
@@ -1274,7 +1238,7 @@ function useVibe64AutopilotView(props, emit, {
 
   function optimisticMessageById(messageId = "") {
     const request = routingRequest.value;
-    const local = messageDelivery.find(messageId);
+    const local = messageDelivery.value.find(messageId);
     return (request?.messageId === messageId && routedChatMessage(request, local)) || local;
   }
 
@@ -1298,7 +1262,7 @@ function useVibe64AutopilotView(props, emit, {
     if (composerRetrySubmission.value?.messageId === messageId) {
       settleComposerRetry(composerRetrySubmission.value);
     }
-    messageDelivery.remove(messageId);
+    messageDelivery.value.remove(messageId);
     return true;
   }
 
@@ -1322,7 +1286,7 @@ function useVibe64AutopilotView(props, emit, {
     const retry = composerRetrySubmission.value?.messageId === messageId
       ? composerRetrySubmission.value
       : null;
-    messageDelivery.remove(messageId);
+    messageDelivery.value.remove(messageId);
     const accepted = await sendChatPayload(message.payload, {
       messageId,
       submissionKind: retry?.submissionKind || (agentSteerable.value ? "steer" : "send")
@@ -1736,7 +1700,7 @@ function useVibe64AutopilotView(props, emit, {
     // Hydrate history before appending a restored unsent request to its tail.
     if (props.conversationLog?.initializing) return [];
     return chatTurnsWithRouting(
-      messageDelivery.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []),
+      messageDelivery.value.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []),
       routingRequest.value,
       composerSending.value
     );
@@ -2057,7 +2021,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   function updateAgentSetting(parameterId = "", value = "") {
-    agentSettings.update({
+    agentSettings.value.update({
       [String(parameterId || "")]: String(value || "")
     });
   }
@@ -2108,7 +2072,6 @@ function useVibe64AutopilotView(props, emit, {
     composerDraft.value = "";
     composerAttachments.value = [];
     composerRetrySubmission.value = null;
-    messageDelivery.reset();
     restoreComposerState();
     questionAnswers.value = {};
     dismissedNumberedQuestionText.value = "";
@@ -2126,7 +2089,7 @@ function useVibe64AutopilotView(props, emit, {
     workspaceSetupRetryError.value = "";
   });
 
-  watch([routingRequest, () => messageDelivery.state.messages], ([request]) => {
+  watch([routingRequest, () => messageDelivery.value.state.messages], ([request]) => {
     if (request?.status === "cancelled" && !request.helper && !request.attemptedMessageId) {
       restoreCancelledMessage(request.messageId);
     }
@@ -2144,14 +2107,10 @@ function useVibe64AutopilotView(props, emit, {
   });
 
   watch(() => props.conversationLog?.turns, (turns) => {
-    if (!messageDelivery.state.messages.length) {
-      return;
-    }
     const retry = composerRetrySubmission.value;
     if (retry && !unmatchedOptimisticMessages(turns, [retry.optimistic]).length) {
       settleComposerRetry(retry);
     }
-    messageDelivery.reconcile(turns);
   });
 
   watch(() => Boolean(

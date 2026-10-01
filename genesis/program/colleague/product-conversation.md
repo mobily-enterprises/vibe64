@@ -122,7 +122,7 @@ Local mode without an authenticated realtime actor retains that HTTP path.
 The chat displays one pending assistant message. Completed envelope validation still controls saved history
 and tool dispatch. Stop, steering, failures and superseded model steps discard
 the projection; reopening reads the latest projection without replaying actions.
-The host's voice slot receives that projection and canonical completion with the
+The shared voice binding receives that projection and canonical completion with the
 same message identity, allowing phrase streaming without replaying the final
 answer. No streamed fragments are persisted. The host can supply a transient user
 transcript with its admission ID; the chat shows it as Pending until the canonical
@@ -138,42 +138,34 @@ merely opening a different project does not change an earlier request's target.
 
 The host can mount the reusable text drawer outside routed project content.
 Its shared chat element accepts messages and steering while a turn is active.
-The host supplies the existing avatar, optional persistent voice controls and
+The host supplies the existing avatar, application voice configuration and
 display name (default Colleague). The service accepts a host-owned name resolver
 and includes its current value as data in each model turn. Changing the name
 updates labels and future replies without replacing native history or typed drafts.
-The centered full-height panel is 560 pixels wide or the available viewport width
-on small screens. A compact header shows a 48-pixel avatar, name and Close button.
-One persistent Vuetify dialog owns focus and visibility; outside clicks leave it
-open, while Close/Escape hides it and returns focus to the launcher.
-Hosts supplying the voice slot get Text chat and Voice chat tabs, with text as
-the initial view. Native tab keyboard behavior switches the view. Both content
-owners stay mounted with inactive content hidden, retaining draft, transcript and
-voice lifetimes. The selected tab survives closing/reopening during the page's
-lifetime. The small header avatar does not change message wrapping.
-Colleague's persistent system instructions default to one or two brief sentences, with detail
-when requested. Greetings get greetings. Focus remains operational context rather
-than unsolicited page recaps, no-change lists or generic readiness offers.
-The model, microphone, speaker, Stop and Send/Steer controls share the Text chat
-composer's icon toolbar. Tab from a sendable draft focuses Send/Steer and stops
-that handled keypress from also reaching the dialog focus trap. Enter activates
-the focused button; ordinary reverse Tab navigation remains available.
-The persistent voice slot receives the `preview` element above the composer for
-brief status/recording feedback, the `panel` target for full Voice chat controls,
-`minimized` visibility, and an `openVoice` callback. That callback selects Voice
-chat and opens the same dialog; hosts do not need their own expanded voice modal.
-The shared component does not start/stop audio when changing views or closing.
-The host shares the routed header target through its root; Teleport places the
-persistent panel in the dialog without remounting the voice connection or clearing
-drafts. While a header is unavailable, the compact launcher stays at the top edge.
-When the host supplies speech, holding this button for 350ms emits a recording
-gesture. Release finishes it; cancellation, lost capture or leaving the window
-cancels it. Its trailing click cannot also open the conversation. The voice slot
-receives the launcher element to anchor the host's transcript review bubble.
-The `@colleague-mobile` browser cases run against a composed host with
-`VIBE64_E2E_COLLEAGUE_HOST=1` and `PLAYWRIGHT_BASE_URL` set. They click the real
-session Send control before and after opening Colleague, preserve both drafts,
-and cover compact, tablet, desktop and reduced-height layouts.
+JSKIT's ConversationDialog owns the shared 620-pixel desktop frame, mobile
+full-screen layout, fixed header and 48-pixel icon tabs. Talk/Text switch without
+animation. Minimize and Close occupy the same positions in both views. The Text
+view omits a portrait and uses the remaining height for transcript and composer.
+Opening Colleague shows Talk first through public Vibe64's root voice host.
+Text minimizes voice without ending its audio session. Tap Talk starts hands-free;
+a hold records push-to-talk and release sends, with automatic connection setup.
+The enlarged portrait and controls stay fixed while compact captions scroll. The cog holds voice
+selection. The minus minimizes; X/Escape closes and releases audio, discarding
+unsent speech. The header avatar owns the minimized-session badge and reopening
+of the existing target, with a microphone cue while listening and an adjacent
+Stop voice button. Clicking that avatar while Talk or Text is open minimizes
+without ending audio, including a click received by the dialog backdrop. The
+shared dialog disables the separate backdrop fade as well as the content
+transition. Opening voice hides Text while preserving its draft and state.
+The host supplies artwork and display preferences, not another voice slot
+or controller. A 350ms hold on the launcher opens the same voice session and records
+for explicit review; release finishes, and lost capture cancels. The trailing click
+cannot also open the text panel. Keyboard hold and pointer ownership are handled
+by the shared launcher. Public Vibe64 supplies live state, captured focus, stable
+message identity, canonical admission and cancellation to the binding.
+Colleague's persistent instructions still request brief replies, with detail when
+asked. Model, Stop and Send/Steer share the text toolbar. Tab from a
+sendable draft focuses Send/Steer without propagating to the dialog focus trap.
 Voice submissions use the same message-ID admission as text, carry their
 recording's original focus, and never alter the typed draft. Colleague's API stays global when the
 selected project changes. Opening a view sends a command only to the initiating
@@ -248,12 +240,11 @@ failures return explicitly labeled bounded excerpts instead. Helper identity,
 execution and cleanup state are retained before work starts; failed cleanup must
 finish before another Helper can start. Stop Colleague aborts and cleans up that
 Helper too. Non-conversation watches remain to be added.
-Online owns global capture, playback and avatar behavior through the voice slot.
-The slot supplies ordinary message submission; live voice has no separate
-readiness/classification API or Helper inference. The host confirms local
-recognizer revisions before admission. Spoken questions and corrections use the
-selected Colleague model, tools and the same identity/focus/retry contract as
-typed messages. Conversation summaries retain their existing Helper lifecycle,
+JSKIT owns capture, playback, local recognizer decisions and speech controls.
+Public Vibe64's Colleague binding uses ordinary message admission; there is no
+separate readiness/classification API or Helper inference. Spoken questions and
+corrections retain the selected model, tools and identity/focus/retry contract.
+Conversation summaries retain their existing Helper lifecycle,
 including cleanup of retained historical executions.
 The client emits the local message-submission identity synchronously before
 sending. Voice hosts use it to distinguish a fresh invitation from a delayed

@@ -205,7 +205,7 @@ function stackResourceRecords(resources = [], environment = {}) {
         owner: "user",
         requiredFor: [RUNTIME_CONFIG_PHASES.SERVER],
         scope: RUNTIME_CONFIG_SCOPES.DEV,
-        secret: ["password", "url"].includes(semantic) ? true : undefined,
+        secret: ["password", "url", "accessTokenFile"].includes(semantic) ? true : undefined,
         source: `genesis-stack:${declaration.component}:${declaration.resource.id}`,
         value: ""
       });
@@ -495,7 +495,7 @@ function createService({
           : String(error?.message || "")
       };
     }
-    const developmentDatabase = resourceEnvironmentProvider && source.sessionId && declaration.resources.length > 0
+    const developmentDatabase = resourceEnvironmentProvider && source.sessionId
       ? await currentDevelopmentDatabaseConfiguration()
       : null;
     const environmentForResources = provisionResources

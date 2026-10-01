@@ -36,11 +36,16 @@ function assistantAccessText(value = "") {
 
 function useVibe64AssistantAccess({
   active = true,
+  projectSlug: projectSlugInput,
+  viewer: viewerInput,
   sessionId = "",
   sessionsApiPath = ""
 } = {}) {
-  const projectSlug = useVibe64ProjectSlug();
-  const viewer = hasInjectionContext() ? inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" }) : { actorKey: "local" };
+  const projectSlug = projectSlugInput === undefined ? useVibe64ProjectSlug()
+    : computed(() => readRefOrGetterValue(projectSlugInput));
+  const viewer = viewerInput === undefined
+    ? (hasInjectionContext() ? inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" }) : { actorKey: "local" })
+    : viewerInput;
   const actorKey = computed(() => unref(viewer)?.actorKey || "");
   const currentSessionId = computed(() => assistantAccessText(
     readRefOrGetterValue(sessionId)

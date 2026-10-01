@@ -57,11 +57,13 @@ function refetchMountedSessionResource(resource) {
 
 function useVibe64MountedSessionData({
   active = false,
+  projectSlug: projectSlugInput,
   sessionId,
   sessionsApiPath,
   summarySession = null
 } = {}) {
-  const projectSlug = useVibe64ProjectSlug();
+  const projectSlug = projectSlugInput === undefined ? useVibe64ProjectSlug()
+    : computed(() => readRefOrGetterValue(projectSlugInput));
   const detailRecord = ref(null);
   const agentTurnOverlay = ref(null);
   const agentConnectionStatus = ref("initializing");

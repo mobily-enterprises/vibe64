@@ -3,8 +3,7 @@ import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealt
 import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
-import { useVibe64ConversationLog } from "@/composables/useVibe64ConversationLog.js";
-import { useVibe64MountedSessionData } from "@/composables/useVibe64MountedSessionData.js";
+import { useVibe64ConversationRuntime } from "@/composables/useVibe64ConversationRuntime.js";
 import { useVibe64SessionRenewal } from "@/composables/useVibe64SessionRenewal.js";
 import { sessionRecordHasActiveAgentWork } from "@/lib/vibe64MountedSessionState.js";
 import {
@@ -14,7 +13,7 @@ import {
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
 import {
-  agentSettingsInputFromContext,
+  agentTurnControlPayloadFromContext,
   vibe64SessionPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import { vibe64ApiError, vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
@@ -35,19 +34,6 @@ async function focusRuntimeSessionChat(sessionId = "", root = globalThis.documen
   const target = runtime?.querySelector?.(".studio-autopilot__chat-panel");
   target?.focus?.({ preventScroll: true });
   return Boolean(target);
-}
-
-function agentTurnControlPayloadFromContext(context = {}) {
-  const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
-  const {
-    agentSettings: _agentSettings,
-    sessionId: _sessionId,
-    ...body
-  } = source;
-  return vibe64RealtimeOriginPayload({
-    ...body,
-    ...agentSettingsInputFromContext(source)
-  });
 }
 
 function proxySessionDialogs(dialogs = {}) {
@@ -180,12 +166,21 @@ function useVibe64SessionRuntimeHost(props, emit) {
     const sessions = unref(props.sessionData.sessions) || [];
     return sessions.find((session) => session.sessionId === selectedSessionId.value) || null;
   });
-  const mounted = useVibe64MountedSessionData({
+  const conversationRuntime = useVibe64ConversationRuntime({
     active: computed(() => Boolean(props.active)),
+    projectSlug: computed(() => props.projectContext?.slug || ""),
     sessionId: selectedSessionId,
     sessionsApiPath: props.sessionData.sessionsApiPath,
     summarySession: selectedListSession
   });
+  const mounted = {
+    session: computed(() => conversationRuntime.value.mounted.session.value),
+    detailState: computed(() => conversationRuntime.value.mounted.detailState.value),
+    agentConnectionError: computed(() => conversationRuntime.value.mounted.agentConnectionError.value),
+    agentConnectionStatus: computed(() => conversationRuntime.value.mounted.agentConnectionStatus.value),
+    refresh: options => conversationRuntime.value.mounted.refresh(options),
+    retryAgentConnection: (...args) => conversationRuntime.value.mounted.retryAgentConnection(...args)
+  };
   const selectedSession = mounted.session;
   const selectedSessionArchived = computed(() => isArchivedVibe64Session(selectedSession.value || {}));
   const selectedSessionTitle = computed(() => (
@@ -341,10 +336,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     archive: props.sessionData.archive,
     renewal: renewalModel
   });
-  const conversationLog = proxyRefs(useVibe64ConversationLog({
-    active: computed(() => Boolean(selectedSessionId.value)),
-    session: selectedSession
-  }));
+  const conversationLog = computed(() => conversationRuntime.value.conversationLog);
   const selection = proxyRefs({
     isArchived: selectedSessionArchived,
     selectedSession,
@@ -401,8 +393,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     () => selectedSession.value?.agentSession?.turn?.active
   ], () => interruptFeedback.success());
 
-  const pendingMessageControllers = new Map();
-
   async function interruptAgentTurn(input = "user_interrupt") {
     const sessionId = selectedSessionId.value;
     if (!sessionId) {
@@ -414,14 +404,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     const turnId = selectedSession.value?.agentSession?.turn?.id;
     interruptFeedback.success();
     try {
-      const result = await getHttpWebClient().request(
-        vibe64SessionPath(
-          readRefOrGetterValue(props.sessionData.sessionsApiPath),
-          sessionId,
-          "/agent-turn/interrupt"
-        ),
-        { body: agentTurnControlPayloadFromContext({ ...control, sessionId }), method: "POST" }
-      );
+      const result = await conversationRuntime.value.interrupt(control);
       if (result?.ok === false) {
         throw vibe64ApiError(result, "Assistant turn could not be interrupted.");
       }
@@ -438,50 +421,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }
 
   function sendAgentMessage(input = {}) {
-    const sessionId = selectedSessionId.value;
-    if (!sessionId) {
-      return Promise.resolve(false);
-    }
-    const payload = input && typeof input === "object" && !Array.isArray(input)
-      ? input
-      : { message: String(input || "") };
-    const body = agentTurnControlPayloadFromContext({ ...payload, sessionId });
-    const messageId = String(body.messageId || "").trim();
-    const controller = new AbortController();
-    if (messageId) {
-      pendingMessageControllers.set(messageId, controller);
-    }
-    // A delivered message may be confirmed by realtime before its HTTP response.
-    // Do not make the next message wait for that already-accepted request.
-    const request = (async () => {
-      try {
-        const signal = agentMessageAcceptanceSignal(controller);
-        const result = await getHttpWebClient().request(
-          vibe64SessionPath(
-            readRefOrGetterValue(props.sessionData.sessionsApiPath),
-            sessionId,
-            "/agent-message"
-          ),
-          { body, method: "POST", signal }
-        );
-        if (result?.ok === false) {
-          throw vibe64ApiError(result, "Message could not be sent.");
-        }
-        void refreshSessionData({ reason: "agent-message-accepted" }).catch(() => null);
-        return true;
-      } catch (error) {
-        void refreshSessionData().catch(() => null);
-        if (controller.signal.aborted) {
-          return false;
-        }
-        throw error;
-      } finally {
-        if (messageId && pendingMessageControllers.get(messageId) === controller) {
-          pendingMessageControllers.delete(messageId);
-        }
-      }
-    })();
-    return request;
+    return conversationRuntime.value.sendAgentMessage(input);
   }
 
   async function retryWorkspaceSetup() {
@@ -563,14 +503,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }
 
   async function cancelAgentMessage(messageId = "") {
-    const normalizedId = String(messageId || "").trim();
-    const controller = pendingMessageControllers.get(normalizedId);
-    if (!controller) {
-      return false;
-    }
-    controller.abort();
-    pendingMessageControllers.delete(normalizedId);
-    return true;
+    return conversationRuntime.value.cancelMessage(String(messageId || "").trim());
   }
 
   function setAutopilotBusy(busy = false) {
@@ -668,10 +601,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     interruptFeedback.success();
     workStateActive = false;
     workStateRefreshQueue.dispose();
-    for (const controller of pendingMessageControllers.values()) {
-      controller.abort();
-    }
-    pendingMessageControllers.clear();
   });
 
   return {
@@ -686,6 +615,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
       props.active && selectedSession.value?.sessionId === selectedSessionId.value
     )),
     conversationLog,
+    conversationRuntime,
     dialogs,
     emitChatAttention,
     emitProjectAttention,

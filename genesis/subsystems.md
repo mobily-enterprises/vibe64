@@ -50,7 +50,8 @@ existing owner and format.
 
 ## `conversation` Agent conversation
 
-Owns direct conversations and temporary assistance with connected coding agents.
+Owns direct conversations and temporary assistance with connected coding agents,
+including retained text/voice admission and bindings to the shared JSKIT voice host.
 Consumes JSKIT conversation presentation, provider primitives, transcript policy
 and its Codex, Claude and OpenCode instruction lifecycle adapters. JSKIT owns
 prompt installation, reconfiguration and restoration policy. Vibe64 supplies
@@ -75,6 +76,7 @@ does not receive raw terminal tools.
 ### Program
 
 - `genesis/program/conversation/direct-chat.md`
+- `genesis/program/conversation/voice-chat.md`
 - `genesis/program/conversation/temporary-assistance.md`
 
 ### Data owned
@@ -276,7 +278,7 @@ Owns each person's independent conversation for discussing ideas and operating
 Vibe64 across projects, including tool exchange, focused targets, retained
 operation outcomes, conversation watches, bounded implementation assignments
 and bounded Helper summaries. Spoken requests use ordinary message admission;
-the host owns local turn detection and speech controls. Transient actor-private
+JSKIT owns local turn detection and speech controls through the shared root host. Transient actor-private
 reply and user-transcript projections reconcile to the canonical chat. Assignment records retain user intent, exact participants,
 turn allowances, authorized communication links, dependency waits and evidence;
 existing conversation owners still execute work. It also

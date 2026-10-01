@@ -18,7 +18,7 @@ const DATABASE_CONNECTION_SEMANTICS = new Set([
   "url",
   "username"
 ]);
-const SECRET_RESOURCE_SEMANTICS = new Set(["password", "url"]);
+const SECRET_RESOURCE_SEMANTICS = new Set(["password", "url", "accessTokenFile"]);
 const FORBIDDEN_RESOURCE_ENVIRONMENT_NAMES = new Set(["NODE_OPTIONS"]);
 const RESOURCE_PROVIDER_RESULT_KEYS = new Set([
   "contract",
@@ -83,6 +83,23 @@ function assertSafeResourceEnvironmentName(name = "") {
   }
 }
 
+function validateVoiceResource(resource, bindings, values) {
+  if (resource.kind !== "voice") return;
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(resource.id || "")) {
+    throw resourceEnvironmentError("A voice resource id must use letters, numbers, underscores or hyphens.");
+  }
+  if (Object.keys(bindings || {}).sort().join(",") !== "accessTokenFile,endpoint" || Object.keys(resource.optionalBindings || {}).length) {
+    throw resourceEnvironmentError("A voice resource requires endpoint and accessTokenFile bindings.", "vibe64_voice_resource_bindings_invalid");
+  }
+  if (!values) return;
+  let endpoint;
+  try { endpoint = new URL(values.endpoint); } catch { /* Report the same safe setup error below. */ }
+  if (!endpoint || !["ws:", "wss:"].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.hash ||
+      !path.isAbsolute(values.accessTokenFile || "") || /[\0\r\n]/u.test(values.accessTokenFile)) {
+    throw resourceEnvironmentError("Voice requires a ws:// or wss:// endpoint without credentials and an absolute accessTokenFile path.", "vibe64_voice_resource_values_invalid");
+  }
+}
+
 function preferredAlternative(resource = {}) {
   const alternatives = Array.isArray(resource.environmentAlternatives)
     ? resource.environmentAlternatives
@@ -94,6 +111,7 @@ function preferredAlternative(resource = {}) {
       "vibe64_resource_bindings_required"
     );
   }
+  validateVoiceResource(resource, preferred[0].bindings);
   return preferred[0];
 }
 
@@ -118,6 +136,7 @@ function satisfiedAlternative(resource = {}, environment = {}) {
     if (bindings && Object.entries(bindings).every(([semantic, name]) => (
       bindingValuePresent(environment, semantic, name, allowEmpty)
     ))) {
+      validateVoiceResource(resource, bindings, Object.fromEntries(Object.entries(bindings).map(([semantic, name]) => [semantic, environment[name]])));
       return alternative;
     }
   }
@@ -290,6 +309,7 @@ function normalizeResourceEnvironment(resources = [], provided = {}, {
       );
     }
     const alternative = preferredAlternative(declaration.resource);
+    validateVoiceResource(declaration.resource, alternative.bindings, values);
     const allowEmpty = Array.isArray(alternative.allowEmpty) ? alternative.allowEmpty : [];
     const bindings = {
       ...alternative.bindings,

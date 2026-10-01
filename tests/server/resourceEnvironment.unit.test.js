@@ -258,3 +258,23 @@ test("managed mapping rejects undeclared semantics and a shared reader credentia
     { code: "vibe64_resource_environment_semantic_undeclared" }
   );
 });
+
+test("speech resources map explicit endpoint and credential-file semantics and redact the credential path", () => {
+  const declaration = { component: "speech", resource: { id: "voice", kind: "voice", optionalBindings: {}, environmentAlternatives: [
+    { preferred: true, bindings: { endpoint: "SPEECH_ENDPOINT", accessTokenFile: "SPEECH_TOKEN_FILE" }, allowEmpty: [] }
+  ] } };
+  const values = { endpoint: "wss://voice.example/v1/voice", accessTokenFile: "/run/app/voice.token" };
+  const provided = (value = values) => ({ contract: "vibe64.resource-environment.v2", resourceValues: [
+    { declaration: { component: "speech", id: "voice", kind: "voice" }, values: value }
+  ] });
+  const normalized = normalizeResourceEnvironment([declaration], provided());
+  assert.deepEqual(normalized.environment, { SPEECH_ENDPOINT: values.endpoint, SPEECH_TOKEN_FILE: values.accessTokenFile });
+  assert.deepEqual([...normalized.secretKeys], ["SPEECH_TOKEN_FILE"]);
+  assert.equal(normalized.databaseToolEnvironment, null);
+  for (const bad of [
+    { endpoint: "https://voice.example/v1/voice" }, { endpoint: "wss://user:secret@voice.example" },
+    { accessTokenFile: "relative.token" }, { accessTokenFile: "inline-secret" }, { accessTokenFile: "/run/app/one\ntwo" }
+  ]) assert.throws(() => normalizeResourceEnvironment([declaration], provided({ ...values, ...bad })), { code: "vibe64_voice_resource_values_invalid" });
+  declaration.resource.environmentAlternatives[0].bindings = { endpoint: "SPEECH_ENDPOINT", token: "INLINE_SECRET" };
+  assert.throws(() => normalizeResourceEnvironment([declaration], provided({ endpoint: values.endpoint, token: "secret" })), { code: "vibe64_voice_resource_bindings_invalid" });
+});

@@ -1,6 +1,8 @@
 import { createApp, effectScope, nextTick, reactive, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { attachConversationRuntime } from "./helpers/conversationRuntimeFixture.js";
+
 import { sessionRepositoryWorkState } from "../../src/composables/useVibe64SessionPanel.js";
 import { createVibe64SessionRepositoryStatusQueue } from "../../src/composables/useVibe64SessionRepositoryStatusRegistry.js";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
@@ -23,19 +25,6 @@ vi.mock("@/composables/useVibe64ProjectScope.js", async () => {
   const { ref } = await import("vue");
   return {
     useVibe64ProjectSlug: () => ref("chat-test")
-  };
-});
-vi.mock("@/composables/useVibe64AgentSettings.js", async () => {
-  const { ref } = await import("vue");
-  return {
-    useVibe64AgentSettings: () => ({
-      settings: ref({
-        model: "",
-        providerId: "codex",
-        thinking: ""
-      }),
-      update: vi.fn()
-    })
   };
 });
 vi.mock("@/lib/vibe64AsyncComponent.js", () => ({
@@ -107,7 +96,10 @@ async function createViewWithProps(overrides = {}, options = {}) {
     emit,
     props,
     scope,
-    view: app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, emit, viewOptions)))
+    view: app.runWithContext(() => scope.run(() => {
+      attachConversationRuntime(props, options.viewer);
+      return useVibe64AutopilotView(props, emit, viewOptions);
+    }))
   };
 }
 

@@ -400,12 +400,15 @@ function conversationLogCompletedTurnKey(session = {}) {
 
 function useVibe64ConversationLog({
   active = true,
+  projectSlug: projectSlugInput,
+  sessionsApiPath: sessionsApiPathInput,
   session
 } = {}) {
   const paths = usePaths();
   const httpClient = getHttpWebClient();
   const queryClient = useQueryClient();
-  const projectSlug = useVibe64ProjectSlug();
+  const projectSlug = projectSlugInput === undefined ? useVibe64ProjectSlug()
+    : computed(() => readRefOrGetterValue(projectSlugInput));
   const currentSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(currentSession.value?.sessionId || "").trim());
   const olderPages = ref([]);
@@ -417,7 +420,7 @@ function useVibe64ConversationLog({
     readRefOrGetterValue(active) !== false &&
     sessionId.value
   ));
-  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+  const sessionsApiPath = computed(() => readRefOrGetterValue(sessionsApiPathInput) || paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
   const queryKey = computed(() => [

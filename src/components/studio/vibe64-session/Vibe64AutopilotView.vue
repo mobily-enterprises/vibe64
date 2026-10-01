@@ -342,7 +342,6 @@
       </div>
 
       <Vibe64ConversationLog
-        ref="conversationElement"
         :working="agentStopVisible"
         :integration-action-pending="props.conversationLog?.integrationActionPending"
         :integration-connections="props.conversationLog?.integrationConnections"
@@ -521,7 +520,6 @@
                       </v-btn>
                     </v-card>
                   </v-menu>
-                  <div ref="composerToolsTarget" class="studio-autopilot__composer-tools" />
                   <Vibe64StarredFilesMenu :bookmarks="fileBookmarks" @open-file="openSourceEditorFile" />
                   <Vibe64AgentPlanUsage
                     :active="props.active && !props.sessionSelectionArchived"
@@ -545,6 +543,7 @@
                       :icon="mdiStop" size="small" variant="text" class="studio-autopilot__composer-action"
                       @click="requestAgentInterrupt"
                     />
+                    <Vibe64ProjectVoiceLauncher v-if="props.active && !props.sessionSelectionArchived" :runtime="props.conversationRuntime" />
                     <v-btn
                       ref="composerSendButton" :aria-label="composerSubmitAriaLabel"
                       :title="composerSubmitTitle" :disabled="!composerCanSubmit || !attachmentState.canSubmit"
@@ -861,6 +860,7 @@
 </template>
 
 <script setup>
+import { Vibe64ProjectVoiceLauncher } from "@local/vibe64-voice/client";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
@@ -869,7 +869,6 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import {
-  createAssistantTextSubmission,
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
 import { VIBE64_ASSISTANT_HOST_KEY } from "@/lib/vibe64AssistantHost.js";
@@ -935,9 +934,6 @@ import {
 import {
   useVibe64SessionTypingPresence
 } from "@/composables/useVibe64SessionTypingPresence.js";
-import {
-  useVibe64AssistantAccess
-} from "@/composables/useVibe64AssistantAccess.js";
 import {
   VIBE64_SESSION_CHANGED_EVENT, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID, vibe64SessionPath
 } from "@/lib/vibe64SessionRequestConfig.js";
@@ -1063,29 +1059,17 @@ const { resource: modelRoutingResource } = useModelRouting({
   enabled: computed(() => !props.sessionSelectionArchived && Boolean(selectedAssistantSessionId.value))
 });
 const assistantCanConfigureRouting = computed(() => modelRoutingResource.data.value?.canConfigure === true);
-const {
-  accessError: assistantAccessError,
-  canUseChat: assistantCanUseAiState,
-  canRouteChat: assistantCanRouteChat,
-  canUseNative: assistantCanUseNative,
-  canUsePurpose: assistantCanUsePurpose,
-  purposes: assistantPurposes,
-  scopeKey: assistantAccessScopeKey,
-  initialAccessLoading: assistantAccessLoading,
-  reload: reloadAssistantAccess,
-  restrictionMessage: assistantRestrictionMessage
-} = useVibe64AssistantAccess({
-  active: computed(() => !props.sessionSelectionArchived),
-  sessionId: selectedAssistantSessionId,
-  sessionsApiPath: computed(() => readRefOrGetterValue(props.sessionsApiPath))
-});
+const assistantAccessError = computed(() => props.conversationRuntime.access.accessError.value);
+const assistantCanUseAiState = computed(() => props.conversationRuntime.access.canUseChat.value);
+const assistantCanRouteChat = computed(() => props.conversationRuntime.access.canRouteChat.value);
+const assistantCanUseNative = computed(() => props.conversationRuntime.access.canUseNative.value);
+const assistantPurposes = computed(() => props.conversationRuntime.access.purposes.value);
+const assistantAccessScopeKey = computed(() => props.conversationRuntime.access.scopeKey.value);
+const assistantAccessLoading = computed(() => props.conversationRuntime.access.initialAccessLoading.value);
+const assistantRestrictionMessage = computed(() => props.conversationRuntime.access.restrictionMessage.value);
+const assistantCanUsePurpose = purpose => props.conversationRuntime.access.canUsePurpose(purpose);
+const reloadAssistantAccess = () => props.conversationRuntime.access.reload();
 
-async function sendMainChatMessage(input = {}) {
-  if (assistantCanUseAiState.value) {
-    return props.sendAgentMessage(input);
-  }
-  throw new Error(assistantRestrictionMessage.value);
-}
 
 const {
   Vibe64OutputControls,
@@ -1234,8 +1218,7 @@ const {
   assistantCanUseNative,
   assistantProgressLabel: openCodeProgressLabel,
   onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds }),
-  requestTemporaryAi: startTemporaryAiTask,
-  sendMainChatMessage
+  requestTemporaryAi: startTemporaryAiTask
 });
 const fileBookmarks = useVibe64StarredFiles({
   projectSlug,
@@ -1645,33 +1628,10 @@ function requestSessionRenewal(returnFocusTarget = null) {
 
 // The selected app layer is shared with host-owned companions; retained sessions cannot claim it.
 const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
-const composerToolsTarget = ref(null);
-const conversationElement = ref(null);
-let assistantLayerMounted = true;
 const assistantLayerSelected = computed(() => props.active && !props.sessionSelectionArchived && !temporaryAiWorkspace.value?.visible);
 const assistantLayer = reactive({
   get sessionId() { return sessionId.value; },
-  get turns() { return chatTurns.value; },
-  get loading() { return Boolean(props.conversationLog?.loading); },
-  get turnActive() { return agentActive.value; },
-  get submitting() { return composerSending.value; },
-  get toolsTarget() { return composerToolsTarget.value; },
-  get conversationTarget() { return conversationElement.value?.$el || null; },
-  submitText: createAssistantTextSubmission({
-    getState: () => ({
-      id: sessionId.value,
-      draft: composerDraft.value,
-      active: assistantLayerMounted && assistantLayerSelected.value,
-      canSend: composerCanSubmit.value,
-      turnActive: agentActive.value
-    }),
-    setDraft: (value) => {
-      composerDraft.value = value;
-      composerInput.value?.focus?.();
-    },
-    submit: sendComposerMessage,
-    afterDraftChange: nextTick
-  })
+
 });
 watchEffect(() => {
   if (!assistantHost) {
@@ -1684,7 +1644,6 @@ watchEffect(() => {
   }
 }, { flush: "sync" });
 onBeforeUnmount(() => {
-  assistantLayerMounted = false;
   if (assistantHost?.value === assistantLayer) {
     assistantHost.value = null;
   }

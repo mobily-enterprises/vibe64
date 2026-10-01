@@ -1,3 +1,4 @@
+import { attachConversationRuntime } from "./helpers/conversationRuntimeFixture.js";
 import { readFileSync } from "node:fs";
 import { createApp, effectScope, nextTick, reactive, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,19 +19,6 @@ vi.mock("@/composables/useVibe64ProjectScope.js", async () => {
   const { ref } = await import("vue");
   return {
     useVibe64ProjectSlug: () => ref("chat-test")
-  };
-});
-vi.mock("@/composables/useVibe64AgentSettings.js", async () => {
-  const { ref } = await import("vue");
-  return {
-    useVibe64AgentSettings: () => ({
-      settings: ref({
-        model: "",
-        providerId: "codex",
-        thinking: ""
-      }),
-      update: vi.fn()
-    })
   };
 });
 vi.mock("@/lib/vibe64AsyncComponent.js", () => ({
@@ -99,7 +87,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "unsent", mode: "auto", status: "failed",
       input: { message: "Keep my request" }, error: "Routing failed" });
     const { useVibe64AutopilotView } = await import("../../src/composables/useVibe64AutopilotView.js");
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
     expect(view.chatTurns.value).toEqual([]);
     props.conversationLog.turns = [{ turnId: "first", user: { messageId: "first", text: "Earlier message" }, messages: [] }];
     props.conversationLog.initializing = false;
@@ -119,7 +107,7 @@ describe("useVibe64AutopilotView route hydration", () => {
       { at: "2026-09-26T13:29:03.800Z", message: "Session work was saved." }
     ] } };
     const { useVibe64AutopilotView } = await import("../../src/composables/useVibe64AutopilotView.js");
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
     expect(view.saveWorkOutput.value).toBe([
       "2026-09-26T13:28:47.406Z  Writing a concise name for this work.",
       "2026-09-26T13:29:03.800Z  Session work was saved."
@@ -133,7 +121,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(viewProps(), vi.fn())));
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(viewProps()), vi.fn())));
     if (!direct) {
       route.path = "/app/project/chat-test/dashboard/changes";
       await nextTick();
@@ -166,7 +154,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
     const autopilot = readFileSync(new URL(
       "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
     ), "utf8");
@@ -218,7 +206,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
 
     expect(view.sessionSourceRoot.value).toBe("/tmp/sessions/active/session-1/source");
     for (const tool of ["editor", "database", "system", "ai-terminal"]) {
@@ -256,7 +244,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
     const requestSaveWork = view.dashboardSessionContext.value.requestSaveWork;
 
     expect(view.dashboardSessionContext.value.active).toBe(true);
@@ -286,7 +274,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, emit)));
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), emit)));
 
     expect(view.sessionSourceRoot.value).toBe("");
     expect(view.rightPaneTab.value).not.toBe("editor");
@@ -350,7 +338,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
 
     expect(view.sessionSourceRoot.value).toBe("");
     expect(view.rightPaneTabMounted("editor")).toBe(false);
@@ -390,7 +378,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
 
     expect(view.sourceToolLoading.value).toBe(true);
     expect(view.dashboardShellVisible.value).toBe(false);
@@ -435,7 +423,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
-    const viewA = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(propsA, emitA)));
+    const viewA = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(propsA), emitA)));
     expect(viewA.sourceToolLoading.value).toBe(true);
     expect(emitA).toHaveBeenCalledWith("project-attention");
     const pendingSelectionA = viewA.rightPaneTab.value;
@@ -455,7 +443,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     };
     // The second retained host has its own scope but uses the same live route/router.
     const scopeB = scope.run(() => effectScope());
-    const viewB = app.runWithContext(() => scopeB.run(() => useVibe64AutopilotView(propsB, vi.fn())));
+    const viewB = app.runWithContext(() => scopeB.run(() => useVibe64AutopilotView(attachConversationRuntime(propsB), vi.fn())));
     await nextTick();
     expect(viewB.rightPaneTabMounted("editor")).toBe(true);
     expect(viewB.sessionId.value).toBe("session-2");
@@ -514,7 +502,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn())));
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
 
     expect(view.rightPaneTab.value).toBe("database");
 
@@ -536,7 +524,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
-    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(props, vi.fn(), {
+    const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn(), {
       assistantAccessLoading: accessLoading,
       assistantCanUseAi: canUseAi
     })));
