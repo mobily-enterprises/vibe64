@@ -62,6 +62,8 @@ function isGlobalApiPathname(pathname = "") {
     pathname.startsWith("/api/vibe64/projects/") ||
     pathname === "/api/vibe64/colleague" ||
     pathname.startsWith("/api/vibe64/colleague/") ||
+    pathname === "/api/vibe64/voice" ||
+    pathname.startsWith("/api/vibe64/voice/") ||
     pathname === "/api/vibe64/launcher" ||
     pathname.startsWith("/api/vibe64/launcher/") ||
     pathname === "/api/vibe64/github" ||

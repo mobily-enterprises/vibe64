@@ -19,8 +19,12 @@ runtime while retaining its own identity, authorization and conversation history
 
 An application root mounts one Vibe64VoiceHost. It consumes JSKIT's controller,
 modal, audio lifecycle and speech proxy; it creates no parallel speech machinery.
-The optional host preferences supply name/artwork and one-off talking/review
-choices. Installed service voices are advertised to the modal and selected there.
+The optional host preferences supply artwork and a saved voice ID; the binding
+supplies its label. A host may replace the settings slot with its own authorized
+preference control. Reactive voice changes reach subsequent replies through the
+JSKIT binding without replacing the conversation.
+Historical host talking/review preferences are not passed to the runtime.
+Installed service voices are advertised to the modal and selected there.
 The Main conversation's headset launcher sits immediately before Send in the
 composer's delivery controls. It opens the same host for that project agent;
 the session header has no voice launcher.
@@ -34,8 +38,9 @@ prevents the saved replacement from being narrated twice. Available state become
 false on access, account or archive changes; the voice controller releases it.
 Voice retains no independent chat history and never changes the typed draft.
 JSKIT's hands-free Pause finalizes the current utterance before muting, including
-the microphone's buffered tail. It submits through this same binding, or retains
-the words for review when configured. Resuming uses a fresh recording identity.
+the microphone's buffered tail. It submits through this same binding. Explicit
+avatar-hold recordings and interrupted submissions retain words for review.
+Resuming uses a fresh recording identity.
 
 Colleague supplies its existing per-user state and authorized submission/cancel
 operations, with the request's captured UI focus. The root controller serializes
@@ -49,6 +54,12 @@ VIBE64_VOICE_ACCESS_TOKEN_FILE; both stay server-side. A trusted browser origin
 and fresh target authorization are required before opening the upstream speech
 connection. Project routes resolve request context and require a successful exact
 session inspection; Colleague uses its ordinary authenticated state action without
-a project. An unavailable service fails voice without adding inference privileges.
+a project. The read-only `/api/vibe64/voice/voices` route uses that same state
+authorization and JSKIT's authenticated service catalogue reader without opening
+an audio connection. An unavailable service fails voice without adding inference privileges.
 JSKIT bounds frames, queues and connection recovery. The host owns speech-service
 provisioning and credentials; Vibe64 does not download models on a browser request.
+
+JSKIT owns the caption scrolling: each whole card accepts wheel, touch and
+keyboard scrolling. Automatic following pauses when the reader scrolls up;
+returning to the bottom resumes it. Card height is bounded inside the fixed dialog.

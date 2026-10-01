@@ -13,7 +13,11 @@ provide(VIBE64_VOICE_KEY, {
       get state() { return conversation.state; },
       get available() { return conversation.available; },
       get label() { return conversation.label; },
-      get defaults() { return { ...conversation.defaults, talkMode: props.preferences.talkMode, reviewBeforeSend: props.preferences.sendMode === "edit" }; },
+      get defaults() {
+        return { ...conversation.defaults, ...(props.preferences.voice ? {
+          voiceId: props.preferences.voice === "current" ? "" : props.preferences.voice
+        } : {}) };
+      },
       avatar: props.preferences.avatar
     } });
   }
@@ -24,6 +28,7 @@ onScopeDispose(() => { void controller.dispose(); });
   <slot />
   <VoiceConversationHost :controller="controller" :activator="launcher">
     <template #reopen />
+    <template v-if="$slots.settings" #settings="settings"><slot name="settings" v-bind="settings" /></template>
     <template v-if="$slots.avatar" #avatar="visual"><slot name="avatar" v-bind="visual" /></template>
   </VoiceConversationHost>
 </template>

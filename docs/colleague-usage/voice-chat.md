@@ -12,16 +12,22 @@ title identifies the destination. Opening it does not start recording.
 
 Use the single **Talk** button. Tap it to listen hands-free and send after a
 pause. Tap **Pause** to finish the current utterance and pause the microphone;
-the completed words are sent, or kept for review if enabled. Tapping **Talk**
+the completed words are sent automatically. Tapping **Talk**
 again starts a fresh recording. Hold **Talk** for push-to-talk,
 then release to send. Space or Enter has the same tap/hold behavior while the
 button has focus. Connection setup happens automatically. Allow microphone
 access when prompted and wait for **Listening to you** before speaking.
 Releasing before the microphone is ready cancels that recording.
 
+Both caption boxes scroll independently: use the wheel over either box, swipe
+inside it, or focus it and use the arrow keys. Scrolling up pauses automatic
+following while more text arrives; return to the bottom to follow again. The
+portrait and call controls stay fixed.
+
 The **You** caption shows recognized words; the answer caption shows the current
-reply, including when sound is off. Your typed draft stays separate. When review
-is enabled, edit **Review your message**, then choose **Send** or **Discard**.
+reply, including when sound is off. Your typed draft stays separate. If a recording
+requires review after interruption or failure, edit **Review your message**, then
+choose **Send** or **Discard**.
 Holding the Colleague launcher opens a separate recording for review, requiring
 explicit **Send**. You can listen while the assistant replies.
 
@@ -42,7 +48,10 @@ Closing discards unsent speech; your typed draft and saved messages remain.
 
 Open the **Voice settings** cog in the window header, then choose **Speaking
 voice**. Opening settings loads the installed choices without recording. The
-change applies to the next spoken reply and lasts for the current voice session.
+change applies to the next spoken reply. In standalone Vibe64 it lasts for the
+current voice session; a host with saved speech preferences can replace this
+selector and retain the choice across sessions. Vibe64 Online saves it workspace-wide
+through the same control as Management → Speech and Colleague.
 Choices and defaults come from the installed model pack and may include male and
 female voices. If only one voice is installed it is shown but cannot be changed.
 Server model setup is an operator task.

@@ -1,5 +1,5 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
-import { registerVoiceProxyRoute, resolveVoiceProxyConfig } from "@jskit-ai/assistant-voice/server";
+import { registerVoiceProxyRoute, resolveVoiceProxyConfig, readVoiceCatalogue } from "@jskit-ai/assistant-voice/server";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { isTrustedStudioWebSocketRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { resolveProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
@@ -11,6 +11,11 @@ const Vibe64VoiceProvider = defineFeature({
   setup({ env, fastify, sessions }, { actionCatalogue }) {
     const config = { ...process.env, ...env };
     const proxyConfig = resolveVoiceProxyConfig({ endpoint: config.VIBE64_VOICE_ENDPOINT, accessTokenFile: config.VIBE64_VOICE_ACCESS_TOKEN_FILE });
+    fastify.get("/api/vibe64/voice/voices", async request => {
+      await actionCatalogue.execute({ actionId: "vibe64.colleague.state.read", input: {},
+        context: { channel: "api", surface: "app", requestMeta: { request } } });
+      return readVoiceCatalogue(proxyConfig);
+    });
     function authorizeOrigin(request) {
       if (!isTrustedStudioWebSocketRequest(request)) throw Object.assign(new Error("Sign in to use voice."), { code: "voice_auth_required", statusCode: 403 });
     }
