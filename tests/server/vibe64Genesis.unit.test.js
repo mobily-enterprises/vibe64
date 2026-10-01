@@ -12,6 +12,7 @@ import {
   addGenesisStack,
   assertGenesisPromptTask,
   vibe64HostContextResolverPath,
+  vibe64ConversationInstructions,
   genesisCommandShimDirectory,
   genesisPackageBinDirectory,
   genesisPromptRequest,
@@ -292,7 +293,8 @@ async function sessionHook({ projectRoot, conversationKind, session }) {
       GENESIS_HOST_CONTEXT_RESOLVER_DATA: JSON.stringify({ registryPath: registry.registryPath }),
       GENESIS_HOST_CONTEXT_INPUT: JSON.stringify({ session_id: "test-session" })
     } });
-    return stdout;
+    assert.equal(stdout, "", "the managed Genesis hook yields to the native system lane");
+    return vibe64ConversationInstructions({ workdir: projectRoot, promptContext: { scope: "session", conversationKind, session } });
   } finally { await registry.close(); }
 }
 
@@ -402,6 +404,12 @@ test("the host resolver maps one provider session to the normalized Vibe64 drive
       providerSessionId: "missing-provider-session",
       scope: "turn"
     }), null);
+    const request = { data: { registryPath }, providerSessionId: "provider-session-1", scope: "session" };
+    await assert.rejects(vibe64DriverInputFromRegistry(request, { workdir: path.join(projectRoot, "another-project") }), /different project directory/);
+    assert.deepEqual(await vibe64DriverInputFromRegistry({ ...request, providerSessionId: "native-child", parentSessionIds: [request.providerSessionId] }, { workdir: projectRoot }), promptContext);
+    await assert.rejects(vibe64DriverInputFromRegistry({ ...request, parentSessionIds: "invalid" }), /Invalid native conversation ancestry/);
+    await writeFile(registryPath, "{}");
+    await assert.rejects(vibe64DriverInputFromRegistry(request), /ownership registry is invalid/);
   });
 });
 

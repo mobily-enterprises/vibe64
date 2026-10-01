@@ -107,6 +107,10 @@ optionally filtered by `choiceSearch` and advanced through `choiceOffset` and
 Choice variants are limited to 100 with their full count; identifiers are exact
 and selecting a choice still requires native validation.
 
+The session Custom picker requests `allConnectedModels` through the capability
+HTTP route. The session agent manager collects each connected provider's model
+pages, retaining catalogue revision checks and ordinary access validation.
+
 Preview and Save take the same structured workflow/role selection contract.
 A null assignment explicitly disables the role; omitted assignments are preserved.
 They keep the service's owner policy, revision guard, route/access validation,

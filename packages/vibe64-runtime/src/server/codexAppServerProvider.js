@@ -1,3 +1,4 @@
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { CodexAppServerJsonRpcClient, socketPathFromCodexAppServerEndpoint } from "@jskit-ai/assistant-core/server/codex-client";
 import { createHash, randomUUID } from "node:crypto";
@@ -2692,6 +2693,35 @@ function shellQuote(value = "") {
   return `'${text.replaceAll("'", "'\"'\"'")}'`;
 }
 
+function codexControlProbeCommand(keys, marker) {
+  const source = [
+    "const {createHash}=require('node:crypto');",
+    `const keys=${JSON.stringify(keys)};`,
+    `process.stdout.write(${JSON.stringify(marker)}+createHash('sha256').update(JSON.stringify(keys.map(key=>[key,process.env[key]]))).digest('hex'))`
+  ].join("");
+  return `${shellQuote(process.execPath)} -e ${shellQuote(source)}`;
+}
+
+function isCompletedCodexControlProbe(turn) {
+  if (turn?.status !== "completed" || turn.items?.length !== 1) return false;
+  const [item] = turn.items;
+  if (item.type !== "commandExecution" || item.source !== "userShell" || item.exitCode !== 0) return false;
+  const marker = item.aggregatedOutput?.trim().match(/^(VIBE64_CONTROL_CHECK_[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}:)[0-9a-f]{64}$/u)?.[1];
+  if (!marker || typeof item.command !== "string") return false;
+  // Native history may render the command inside its login-shell invocation.
+  // Require the exact fixed script and quoting; a marker alone is not evidence.
+  const wrapped = item.command.match(/^\/(?:usr\/)?bin\/(?:bash|sh|zsh) -l?c (".*")$/u)?.[1];
+  try {
+    const command = wrapped ? JSON.parse(wrapped) : item.command;
+    const keyList = command.match(/const keys=(\[(?:"[A-Za-z_][A-Za-z0-9_]*"(?:,"[A-Za-z_][A-Za-z0-9_]*")*)?\]);/u)?.[1];
+    if (!keyList) return false;
+    const expected = codexControlProbeCommand(JSON.parse(keyList), marker);
+    return command === expected && (!wrapped || wrapped === JSON.stringify(expected));
+  } catch {
+    return false;
+  }
+}
+
 function codexCliResumeCommand({
   codexCommand = "",
   endpoint = "",
@@ -2869,10 +2899,37 @@ class CodexAppServerAgentProvider {
     this.runtimeStopOwner = null;
     this.runtimePromise = null;
     this.serverRequestHandler = null;
-    this.threadEnvironments = new Map();
-    this.threadEnvironmentTasks = new Map();
-    this.goalChanges = new Map();
-    this.threadEnvironmentGeneration = 0;
+    this.conversationRuntime = createConversationRuntime({
+      engine: "codex",
+      readInstructions: (params, threadId) => this.options.readInstructions?.(params, threadId),
+      client: () => this.activeClient(),
+      runtime: () => this.runtime,
+      runRequest: (run, reason) => this.runRequest(run, reason),
+      timeoutMs: options.threadControlTimeoutMs,
+      environment: options.threadEnv,
+      prepareEnvironment: (environment) => this.options.prepareThreadEnvironment(environment),
+      prepareParameters: (params) => this.options.prepareThreadParams?.(params),
+      prepareResume: (id, params, context) => this.options.prepareThreadResumeParams?.(id, params, context),
+      beforeResume: (id) => this.options.beforeResumeThread?.(id),
+      prepareHistory: (params, client, context) => this.withHistoryAdapter(params, client, context),
+      threadParameters: codexAppServerThreadRequestParams,
+      verifyEnvironment: (...args) => this.#verifyThreadEnvironment(...args),
+      onRecoveryFailure: (id) => {
+        const probe = this.threadControlProbes.get(id);
+        if (probe && !probe.verified) {
+          this.threadControlProbes.delete(id);
+          for (const pending of probe.pending) this.publishNotification(pending);
+        }
+      },
+      log: (event, fields, { threadId, environment }) => logOperationalEvent(this.options.logger,
+        event === "recovery_failed" ? "warn" : "info", {
+          component: "vibe64.codex_controls", event: `vibe64.codex_controls.${event}`,
+          threadId, sessionId: environment.VIBE64_AGENT_SESSION_COMMAND_SESSION_ID || "",
+          generations: Object.fromEntries(Object.entries(environment).filter(([key, value]) =>
+            key.endsWith("_COMMAND_GENERATION") && /^[0-9a-f-]{36}$/iu.test(value))),
+          connectionGeneration: this.connectionGeneration, ...fields
+        }, "Codex managed controls changed.")
+    });
     this.threadControlProbes = new Map();
     this.commandExecutions = new Map();
     this.interruptedTurns = new Set();
@@ -3554,13 +3611,15 @@ class CodexAppServerAgentProvider {
   }
 
   async startThread({ hostContext, ...params } = {}) {
+    params = await this.conversationRuntime.prepareInstructions({ ...params, hostContext });
+    delete params.hostContext;
     params = await this.options.prepareThreadParams?.(params) || params;
     const client = await this.activeClient();
     params = await this.withHistoryAdapter(params, client);
     const environment = this.options.prepareThreadEnvironment
       ? await this.options.prepareThreadEnvironment(this.options.threadEnv || {})
       : this.options.threadEnv;
-    const requestParams = codexAppServerThreadRequestParams(params, environment);
+    const requestParams = this.conversationRuntime.threadParameters(params, environment);
     if (params.ephemeral !== true) requestParams.historyMode = "paginated";
     const response = await this.runRequest(
       () => client.request("thread/start", requestParams),
@@ -3587,7 +3646,7 @@ class CodexAppServerAgentProvider {
       }, "codex-app-server-thread-initialize-history");
     }
     if (this.options.prepareThreadEnvironment && response?.thread?.id) {
-      this.threadEnvironments.set(response.thread.id, {
+      this.conversationRuntime.registerThread(response.thread.id, {
         client, executionId: normalizeAgentText(this.runtime?.executionId),
         params: requestParams, managed: !Object.hasOwn(params.config || {}, "shell_environment_policy")
       });
@@ -3604,6 +3663,8 @@ class CodexAppServerAgentProvider {
 
   async resumeThread(threadId = "", { hostContext, ...params } = {}) {
     if (hostContext) await this.options.bindThreadContext(threadId, hostContext, params);
+    params = await this.conversationRuntime.prepareInstructions({ ...params, hostContext }, threadId);
+    delete params.hostContext;
     params = await this.options.prepareThreadParams?.(params) || params;
     await this.options.beforeResumeThread?.(threadId);
     const client = await this.activeClient();
@@ -3665,206 +3726,27 @@ class CodexAppServerAgentProvider {
     } };
   }
 
-  // A loaded native thread can ignore shell_environment_policy on resume.
-  // Detaching alone is insufficient when another subscriber retains it: prove
-  // the effective managed environment before recording a new binding.
   async withThreadEnvironment(threadId, params, operation) {
-    const previous = this.threadEnvironmentTasks.get(threadId) || Promise.resolve();
-    const task = previous.catch(() => null).then(() => this.runRequest(async () => {
-      const client = await this.activeClient();
-      const generation = this.threadEnvironmentGeneration;
-      const signal = AbortSignal.timeout(this.options.threadControlTimeoutMs || 10_000);
-      const assertRecoveryOpen = () => {
-        signal.throwIfAborted();
-        if (generation !== this.threadEnvironmentGeneration) {
-          throw new Error("The assistant connection closed during recovery.");
-        }
-      };
-      const request = (method, input) => {
-        assertRecoveryOpen();
-        return client.request(method, input, { signal });
-      };
-      const bound = this.threadEnvironments.get(threadId);
-      if (bound?.managed === false || Object.hasOwn(params?.config || {}, "shell_environment_policy")) {
-        return operation(codexAppServerThreadRequestParams({ ...bound?.params, ...params }, {}));
-      }
-      const environment = await this.options.prepareThreadEnvironment(
-        bound?.params?.config?.shell_environment_policy?.set || this.options.threadEnv || {}
-      );
-      const previousConfig = { ...bound?.params?.config };
-      if (params.modelProvider) {
-        for (const key of Object.keys(previousConfig)) {
-          if (key === "model_providers" || key === "model_catalog_json" || key === "web_search" || key === "openai_base_url" || key.startsWith("model_providers.")) delete previousConfig[key];
-        }
-      }
-      let requestParams = {
-        ...bound?.params,
-        ...params,
-        config: {
-          ...previousConfig,
-          ...params?.config,
-          shell_environment_policy: { inherit: "none", set: environment }
-        }
-      };
-      let nativeModelProvider = "";
-      let nativeHistoryPath = "";
-      const readStatus = async () => {
-        const { thread } = await request("thread/read", { threadId, includeTurns: false });
-        if (thread?.historyMode !== "paginated") {
-          throw Object.assign(new Error("This conversation uses an unsupported Codex history format. Renew the session to keep your files and saved chat and start a fresh conversation. You can write the handover yourself."), {
-            code: "vibe64_codex_history_unsupported"
-          });
-        }
-        nativeModelProvider = thread?.modelProvider || "";
-        nativeHistoryPath = thread?.path || "";
-        return typeof thread?.status === "string" ? thread.status : thread?.status?.type;
-      };
-      const nativeStatus = await readStatus();
-      if (!bound && !requestParams.modelProvider && nativeModelProvider) {
-        // A restored observer has no saved request parameters. Recover the
-        // native thread's provider configuration before resuming its controls.
-        requestParams = { ...requestParams, modelProvider: nativeModelProvider };
-        requestParams = await this.options.prepareThreadParams?.(requestParams) || requestParams;
-      }
-      requestParams = await this.withHistoryAdapter(requestParams, client, { signal, historyPath: nativeHistoryPath });
-      const providerChanged = Boolean(requestParams.modelProvider && nativeModelProvider &&
-        requestParams.modelProvider !== nativeModelProvider);
-      if (providerChanged) {
-        const { goal } = await request("thread/goal/get", { threadId });
-        if (!["idle", "notLoaded"].includes(nativeStatus) || goal && !["complete", "completed"].includes(goal.status)) {
-          throw Object.assign(new Error("Stop the current turn and finish or clear its goal before changing model providers."), {
-            code: "vibe64_codex_provider_switch_busy"
-          });
-        }
-      }
-      const executionId = normalizeAgentText(this.runtime?.executionId);
-      // Refresh project hook trust only for a cold thread in a replacement
-      // process. A new socket or a changed command environment is not evidence
-      // that the provider process died.
-      if (nativeStatus === "notLoaded" && executionId && bound?.executionId !== executionId) {
-        requestParams = await this.options.prepareThreadResumeParams?.(threadId, requestParams, {
-          runtime: this.runtime,
-          processChanged: Boolean(bound?.executionId)
-        }) || requestParams;
-      }
-      const bindingMatches = !providerChanged && bound?.client === client &&
-        bound.params.config.openai_base_url === requestParams.config.openai_base_url &&
-        JSON.stringify(bound.params.config.model_providers) === JSON.stringify(requestParams.config.model_providers) &&
-        Object.keys(requestParams.config).filter((key) => key.startsWith("model_providers.")).every((key) =>
-          JSON.stringify(bound.params.config[key]) === JSON.stringify(requestParams.config[key])) &&
-        JSON.stringify(bound.params.config.shell_environment_policy) === JSON.stringify(requestParams.config.shell_environment_policy);
-      let pausedGoal = null;
-      let resumed = null;
-      const goalChange = this.goalChanges.get(threadId);
-      const isSamePausedGoal = (goal, original) => goal?.status === "paused" &&
-        goal.createdAt === original.createdAt && goal.objective === original.objective;
-      const log = (event, fields = {}) => logOperationalEvent(this.options.logger, event === "recovery_failed" ? "warn" : "info", {
-        component: "vibe64.codex_controls", event: `vibe64.codex_controls.${event}`,
-        threadId, sessionId: environment.VIBE64_AGENT_SESSION_COMMAND_SESSION_ID || "",
-        generations: Object.fromEntries(Object.entries(environment).filter(([key, value]) =>
-          key.endsWith("_COMMAND_GENERATION") && /^[0-9a-f-]{36}$/iu.test(value))),
-        connectionGeneration: this.connectionGeneration, ...fields
-      }, "Codex managed controls changed.");
-      try {
-        if (!bindingMatches || nativeStatus === "notLoaded") {
-          log("reload_started", { reason: bound ? "control-environment-changed" : "unverified-thread-binding", nativeStatus });
-          if (nativeStatus !== "notLoaded") {
-            const { goal } = await request("thread/goal/get", { threadId });
-            if (goal?.status === "active") {
-              const result = await request("thread/goal/set", { threadId, status: "paused" });
-              pausedGoal = result.goal;
-              if (!isSamePausedGoal(pausedGoal, goal)) {
-                throw new Error("Codex did not confirm that the same goal stopped scheduling work.");
-              }
-            }
-            if (await readStatus() !== "idle") {
-              const page = await request("thread/turns/list", { threadId, limit: 1, sortDirection: "desc", itemsView: "summary" });
-              const turnId = page.data?.[0]?.id;
-              if (!turnId) throw new Error("Codex's running turn could not be identified for control recovery.");
-              await request("turn/interrupt", { threadId, turnId });
-              while (await readStatus() !== "idle") {
-                signal.throwIfAborted();
-                await new Promise((resolve) => setTimeout(resolve, 25));
-              }
-            }
-            if (pausedGoal) {
-              const { goal } = await request("thread/goal/get", { threadId });
-              pausedGoal = isSamePausedGoal(goal, pausedGoal) ? goal : null;
-            }
-            const detached = await request("thread/unsubscribe", { threadId });
-            if (!["unsubscribed", "notSubscribed", "notLoaded"].includes(detached?.status)) {
-              throw new Error("Codex did not confirm detachment before control recovery.");
-            }
-          }
-          this.threadEnvironments.delete(threadId);
-          await this.options.beforeResumeThread?.(threadId);
-          resumed = await request("thread/resume", { excludeTurns: true, ...requestParams, threadId });
-          if (requestParams.modelProvider && resumed.modelProvider !== requestParams.modelProvider) {
-            throw Object.assign(new Error("Another native subscriber retained the previous model provider. Close the native assistant terminal and retry."), {
-              code: "vibe64_codex_provider_binding_retained"
-            });
-          }
-          if (!["idle", "active"].includes(await readStatus())) throw new Error("Codex did not confirm the thread loaded.");
-          if (nativeStatus !== "notLoaded") {
-            await this.#verifyThreadEnvironment(threadId, environment, request, signal);
-          }
-          const checked = await this.options.prepareThreadEnvironment(environment);
-          if (JSON.stringify(checked) !== JSON.stringify(environment)) {
-            throw new Error("Managed controls changed again during thread recovery.");
-          }
-          this.threadEnvironments.set(threadId, { client, executionId, params: requestParams, managed: true });
-          log("ready");
-        }
-      } catch (cause) {
-        const probe = this.threadControlProbes.get(threadId);
-        if (probe && !probe.verified) {
-          this.threadControlProbes.delete(threadId);
-          for (const pending of probe.pending) this.publishNotification(pending);
-        }
-        this.threadEnvironments.delete(threadId);
-        log("recovery_failed", { code: cause?.code || "", reason: cause.message });
-        throw Object.assign(new Error(["vibe64_agent_control_binding_retained", "vibe64_codex_provider_binding_retained"].includes(cause?.code)
-          ? `${cause.message} Your conversation and work are preserved.`
-          : "The assistant connection could not be verified. Your conversation and files are preserved. Retry the connection, or renew the session to continue in a fresh conversation.", { cause }), {
-          code: "vibe64_agent_control_recovery_failed", retryable: true
-        });
-      }
-      // Never retry the caller's operation: its outcome may already be durable.
-      assertRecoveryOpen();
-      const result = await operation(requestParams, resumed);
-      if (pausedGoal && this.goalChanges.get(threadId) === goalChange) {
-        const { goal } = await request("thread/goal/get", { threadId });
-        if (isSamePausedGoal(goal, pausedGoal) && goal.updatedAt === pausedGoal.updatedAt) {
-          await request("thread/goal/set", { threadId, status: "active" });
-        }
-      }
-      return result;
-    }, "codex-app-server-thread-controls"));
-    this.threadEnvironmentTasks.set(threadId, task);
     try {
-      return await task;
-    } finally {
-      if (this.threadEnvironmentTasks.get(threadId) === task) this.threadEnvironmentTasks.delete(threadId);
+      return await this.conversationRuntime.withThreadContext(threadId, params, operation);
+    } catch (error) {
+      if (error.code?.startsWith("assistant_")) error.code = `vibe64_${error.code.slice(10)}`;
+      throw error;
     }
   }
 
-  async #verifyThreadEnvironment(threadId, environment, request, signal) {
-    const keys = Object.keys(environment).filter((key) => key.startsWith("VIBE64_")).sort();
+  async #verifyThreadEnvironment(threadId, environment, request, signal, { requiredKeys = [] } = {}) {
+    const keys = Object.keys(environment).filter((key) => key.startsWith("VIBE64_") || requiredKeys.includes(key)).sort();
     if (!keys.length) return;
 
     const marker = `VIBE64_CONTROL_CHECK_${randomUUID()}:`;
     const probe = { marker, pending: [], verified: false, turnId: "" };
     this.threadControlProbes.set(threadId, probe);
     const expected = createHash("sha256").update(JSON.stringify(keys.map((key) => [key, environment[key]]))).digest("hex");
-    const source = [
-      "const {createHash}=require('node:crypto');",
-      `const keys=${JSON.stringify(keys)};`,
-      `process.stdout.write(${JSON.stringify(marker)}+createHash('sha256').update(JSON.stringify(keys.map(key=>[key,process.env[key]]))).digest('hex'))`
-    ].join("");
     // This bounded native shell check uses no model and prints only a digest,
     // never credentials or environment values.
     await request("thread/shellCommand", {
-      threadId, command: `${shellQuote(process.execPath)} -e ${shellQuote(source)}`, timeoutMs: 2000
+      threadId, command: codexControlProbeCommand(keys, marker), timeoutMs: 2000
     });
     while (true) {
       signal.throwIfAborted();
@@ -3873,8 +3755,8 @@ class CodexAppServerAgentProvider {
       if (probe.completed && probe.result) {
         if (probe.result.type !== "commandExecution" || probe.result.exitCode !== 0 ||
             probe.result.aggregatedOutput?.trim() !== `${marker}${expected}`) {
-          throw Object.assign(new Error("Another native subscriber retained the previous tool environment. Close the native assistant terminal and retry Resume."), {
-            code: "vibe64_agent_control_binding_retained"
+          throw Object.assign(new Error("Another native subscriber retained the previous assistant settings. Close the native assistant terminal and retry Resume."), {
+            code: "assistant_agent_control_binding_retained"
           });
         }
         return;
@@ -3892,7 +3774,16 @@ class CodexAppServerAgentProvider {
     const client = await this.activeClient();
     const { thread } = await client.request("thread/read", { threadId, includeTurns: false });
     if (thread.historyMode !== "paginated") throw new Error("This older Codex conversation does not support Undo.");
-    const readTurns = () => this.listThreadTurns(threadId, { limit: 2, sortDirection: "desc", itemsView: "full" });
+    const readTurns = async () => {
+      const data = [];
+      let cursor;
+      do {
+        const page = await this.listThreadTurns(threadId, { limit: 2, sortDirection: "desc", itemsView: "full", cursor });
+        data.push(...page.data.filter((turn) => !isCompletedCodexControlProbe(turn)));
+        cursor = page.nextCursor;
+      } while (data.length < 2 && cursor);
+      return { data: data.slice(0, 2) };
+    };
     const turns = (await readTurns()).data.toReversed();
     const last = turns.at(-1);
     const previous = turns.at(-2);
@@ -3938,7 +3829,7 @@ class CodexAppServerAgentProvider {
         (tokenBudget !== undefined && (!Number.isSafeInteger(tokenBudget) || tokenBudget <= 0))) {
       throw new TypeError("A Codex goal requires an objective and an optional positive token budget.");
     }
-    this.goalChanges.set(threadId, (this.goalChanges.get(threadId) || 0) + 1);
+    this.conversationRuntime.goalChanged(threadId);
     const operation = async () => {
       const client = await this.activeClient();
       return client.request("thread/goal/set", {
@@ -3955,7 +3846,7 @@ class CodexAppServerAgentProvider {
     if (!["active", "paused"].includes(status)) {
       throw new TypeError("Invalid Codex goal status.");
     }
-    this.goalChanges.set(threadId, (this.goalChanges.get(threadId) || 0) + 1);
+    this.conversationRuntime.goalChanged(threadId);
     const operation = async () => {
       const client = await this.activeClient();
       return client.request("thread/goal/set", { threadId: normalizeAgentText(threadId), status });
@@ -3966,7 +3857,7 @@ class CodexAppServerAgentProvider {
   }
 
   async clearGoal(threadId = "") {
-    this.goalChanges.set(threadId, (this.goalChanges.get(threadId) || 0) + 1);
+    this.conversationRuntime.goalChanged(threadId);
     const client = await this.activeClient();
     return this.runRequest(
       () => client.request("thread/goal/clear", { threadId: normalizeAgentText(threadId) }),
@@ -4463,9 +4354,8 @@ class CodexAppServerAgentProvider {
   }
 
   close() {
-    this.threadEnvironmentGeneration += 1;
     this.options.onClose?.();
-    this.threadEnvironments.clear();
+    this.conversationRuntime.close();
     this.threadControlProbes.clear();
     this.commandExecutions.clear();
     this.interruptedTurns.clear();

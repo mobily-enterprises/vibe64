@@ -5130,8 +5130,8 @@ test("an active chat keeps one composed session context while authored turns sta
       true
     );
     assert.equal(
-      providers[0].startedThreads[0].developerInstructions,
-      ""
+      providers[0].startedThreads[0].systemPrompt,
+      undefined
     );
     assert.equal(providers[0].options.threadEnv.GENESIS_SESSION_CONTEXT_INSTALLED, undefined);
     assert.equal(providers[0].startedThreads[0].hostContext.conversationKind, "main");
@@ -5210,8 +5210,8 @@ test("an active chat keeps one composed session context while authored turns sta
     assert.equal(providers[1].closed, 0);
     assert.equal(providers[1].options.threadEnv.PROVIDER_OWNERSHIP_VERSION, "two");
     assert.equal(
-      providers[1].resumedThreads[0].settings.developerInstructions,
-      ""
+      providers[1].resumedThreads[0].settings.systemPrompt,
+      undefined
     );
     assert.deepEqual(providers[1].sentTurns[0].input, ["Start the next turn."]);
     assert.equal(Object.hasOwn(providers[1].sentTurns[0].settings, "additionalContext"), false);
@@ -5445,8 +5445,8 @@ test("temporary conversations receive task session context without turn enrichme
     assert.equal(turn.ok, true, JSON.stringify(turn));
 
     assert.equal(
-      captures.threads[0].developerInstructions,
-      ""
+      captures.threads[0].systemPrompt,
+      undefined
     );
     assert.equal(captures.threads[0].hostContext.conversationKind, "temporary");
     assert.deepEqual(captures.turns[0].input, ["Fix the focused issue."]);
@@ -5473,7 +5473,7 @@ test("Codex cold recovery restores the temporary hook binding before native resu
     const params = await options.prepareThreadResumeParams(conversation.conversationId, {}, {
       runtime: { executionId: "replacement-process", reused: false }, processChanged: true
     });
-    assert.equal(params.developerInstructions, "");
+    assert.equal(params.systemPrompt, undefined);
     assert.equal(params.cwd, session.metadata.source_path);
     const input = await vibe64DriverInputFromRegistry({
       data: JSON.parse(options.terminalEnv.GENESIS_HOST_CONTEXT_RESOLVER_DATA),
@@ -5521,7 +5521,7 @@ test("non-project ephemeral conversations disable Codex tools and network on a s
       message: "Explain the trusted snapshot only."
     }, options);
     assert.equal(turn.ok, true, JSON.stringify(turn));
-    assert.equal(captures.threads[0].developerInstructions, assistantScope.stableContext);
+    assert.equal(captures.threads[0].systemPrompt, assistantScope.stableContext);
     assert.equal(captures.threads[0].sandbox, "read-only");
     assert.deepEqual(captures.threads[0].dynamicTools, []);
     assert.deepEqual(captures.threads[0].environments, []);

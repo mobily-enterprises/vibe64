@@ -45,8 +45,16 @@ active work, role, goal and access checks remain in the existing routing owner.
 
 ## Public contract
 
-Each native turn reminds Colleague to read the current full guide for how-to
-answers, including when a persistent provider retains older system instructions.
+Current system instructions require the full guide for each how-to request.
+Static reply, discovery and progress rules and the bounded available-tool schemas
+live in the provider's system context, not in each user/tool continuation. A
+changed catalogue updates that context before the next native turn. Runtime
+adapters delegate installation and refresh to the shared JSKIT conversation
+runtime. Claude resumes the same native history with a new process when supplied
+instructions change; Codex installs an explicit developer-context revision and
+current compaction configuration; OpenCode replaces its system contribution.
+Restricted execution remains in force across updates. Ordinary tool continuations
+reuse the current installation.
 
 The server exposes state, focus, message admission, stop and context operations.
 Its query actions `vibe64.colleague.usage.topics.read` and
@@ -71,7 +79,7 @@ The shared project context accepts deleting projects only when the operation
 declares that lifecycle scope; callers cannot grant it through input fields.
 Only completed, validated model envelopes can request a tool. Malformed replies
 have a bounded correction opportunity and never execute embedded prose.
-Each native turn explicitly distinguishes application operations from native
+System instructions explicitly distinguish application operations from native
 runtime tools, with a tool-envelope example and the StructuredOutput carrier when
 provided by the runtime. Claude provider events expose attempted direct calls to
 advertised application tools. Those calls never dispatch an application action;
@@ -81,8 +89,8 @@ once. Repeated mistakes produce a specific handoff error instead of saving or
 speaking a false application outage. Only application feedback establishes whether
 an operation succeeded or failed; retained native history receives current guidance.
 The first interactive tool envelope can carry a natural progress sentence of
-at most 280 characters in `text`. Current guidance is repeated in each native
-turn for retained provider conversations; subsequent prompts include the already
+at most 280 characters in `text`. Guidance stays in system context;
+subsequent prompts include the already
 announced sentence. After completed-envelope validation and receipt persistence,
 dispatch publishes this sentence (or “Let me check that.”) as a complete transient
 assistant projection with its own per-request ID. It remains visible through
@@ -143,8 +151,7 @@ the initial view. Native tab keyboard behavior switches the view. Both content
 owners stay mounted with inactive content hidden, retaining draft, transcript and
 voice lifetimes. The selected tab survives closing/reopening during the page's
 lifetime. The small header avatar does not change message wrapping.
-Colleague's model instructions, repeated in each application turn so retained
-native conversations receive current style guidance, default to one or two brief sentences, with detail
+Colleague's persistent system instructions default to one or two brief sentences, with detail
 when requested. Greetings get greetings. Focus remains operational context rather
 than unsolicited page recaps, no-change lists or generic readiness offers.
 The model, microphone, speaker, Stop and Send/Steer controls share the Text chat

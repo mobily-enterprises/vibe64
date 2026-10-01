@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import test from "node:test";
 
 import { createVibe64HostContextRegistry } from "../../packages/vibe64-genesis/src/server/hostContextRegistry.js";
@@ -40,6 +40,35 @@ test("Genesis context registration validates inputs and releases its disposable 
   }
   await assert.rejects(access(registry.registryPath), { code: "ENOENT" });
   await assert.rejects(registry.register("closed", context("main")), /registry is closed/u);
+});
+
+test("main chat preserves unchanged ownership and records changed capabilities", async (t) => {
+  const registry = await createVibe64HostContextRegistry();
+  t.after(() => registry.close());
+  await registry.register("native-main", context("main"), "/workspace");
+  const first = await stat(registry.registryPath);
+  await registry.register("native-main", context("main"), "/workspace");
+  assert.equal((await stat(registry.registryPath)).ino, first.ino, "ordinary resume does not rewrite the binding");
+  const changed = context("main");
+  changed.session.managedPreview = false;
+  await registry.register("native-main", changed, "/workspace");
+  assert.deepEqual(await vibe64DriverInputFromRegistry({
+    data: { registryPath: registry.registryPath }, scope: "session", providerSessionId: "native-main"
+  }), changed);
+});
+
+test("failed ownership writes retain the durable binding and can be retried", async (t) => {
+  const registry = await createVibe64HostContextRegistry();
+  t.after(() => registry.close());
+  await registry.register("native-main", context("main"), "/workspace");
+  const temporary = registry.registryPath.replace(/sessions\.json$/u, "sessions.tmp");
+  await mkdir(temporary);
+  await assert.rejects(registry.register("native-main", context("temporary"), "/workspace"));
+  assert.deepEqual(registry.get("native-main").promptContext, context("main"));
+  assert.deepEqual(JSON.parse(await readFile(registry.registryPath, "utf8")).sessions[0].promptContext, context("main"));
+  await rm(temporary, { recursive: true });
+  await registry.register("native-main", context("temporary"), "/workspace");
+  assert.deepEqual(registry.get("native-main").promptContext, context("temporary"));
 });
 
 test("Genesis context survives a controller restart at the same native runtime path", async (t) => {

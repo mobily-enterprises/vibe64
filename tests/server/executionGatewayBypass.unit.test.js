@@ -48,6 +48,10 @@ const DIRECT_EXECUTION_ALLOWLIST = new Map([
     "child_process import": { count: 1, reason: "Managed execution bridge owns native Claude stdio." },
     "spawn call": { count: 1, reason: "Claude runs inside the bridge's existing managed execution scope." }
   }],
+  ["packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js", {
+    "child_process import": { count: 1, reason: "The native OpenCode plugin reads Genesis instructions inside its existing managed execution scope." },
+    "execFile call": { count: 1, reason: "A fixed Node composer inherits the managed process group, with bounded output and a timeout; it does not run user commands." }
+  }],
   ["packages/vibe64-database-tools/src/server/sqliteClient.js", {
     "child_process import": { count: 1, reason: "SQLite connections isolate synchronous native code from the server event loop." },
     "fork call": { count: 1, reason: "A fixed IPC worker allows cancellation of native SQLite queries." }
@@ -153,7 +157,7 @@ function assertAllowedMatches(actual = [], allowlist = new Map()) {
   }
 }
 
-test("direct process creation stays limited to managed leaders and the SQLite worker", async () => {
+test("direct process creation stays limited to managed execution scopes and the SQLite worker", async () => {
   const files = await listJavaScriptFiles(PACKAGES_ROOT);
   const actual = [];
   for (const filePath of files) {

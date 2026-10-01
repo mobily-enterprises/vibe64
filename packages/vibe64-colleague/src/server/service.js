@@ -4,7 +4,7 @@ import path from "node:path";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createConversationTranscript, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, discoveryInstructions, instructions, outputSchema, progressInstructions, readEnvelope, readPartialReply, replyStyle } from "./protocol.js";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, outputSchema, readEnvelope, readPartialReply } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
@@ -139,7 +139,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
 
   function scope(state) {
     const workdir = path.join(state.root, state.record.scopeId);
-    return { id: state.record.scopeId, runtimeRoot: workdir, workdir, environment: {}, stableContext: instructions };
+    return { id: state.record.scopeId, runtimeRoot: workdir, workdir, environment: {}, stableContext: state.systemPrompt || instructions };
   }
   function providerOptions(state) {
     return { assistantSelection: state.record.assistantSelection, vibe64User: authenticatedVibe64User(state.requestContext) };
@@ -272,15 +272,13 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         toolProject = context.projectSlug;
         toolSet = activeCatalog.resolveToolSet(context);
         tools = toolSet.tools.map(activeCatalog.toOpenAiToolSchema);
+        // Provider adapters install changes in the system lane. Discovery stays
+        // bounded; ordinary tool continuations carry only request/result data.
+        state.systemPrompt = `${instructions}\n\nAvailable application tools:\n${JSON.stringify(tools)}`;
       }
       const prompt = JSON.stringify({
         assistantName: await resolveName(),
-        replyStyle,
-        toolUsage: discoveryInstructions,
-        progressInstructions, progressAlreadySaid,
-        // A persistent native process can retain its original system instructions
-        // across a release. Send the current guide-read policy on every turn too.
-        usageKnowledge: "For a how-to answer, read this release's complete usage guide for this request. Earlier guide copies and topic summaries do not establish the current controls or steps.",
+        progressAlreadySaid,
         focus: connection.focus, userMessages: messages,
         observations, readOnly, autonomous,
         assignments: (state.record.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status) || observedAssignmentIds.includes(item.assignmentId))
@@ -294,7 +292,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           .filter((message) => !messages.some((pending) => pending.messageId === message.id))
           .map(({ role, text }) => ({ role, text: text.slice(0, 2000) })) } : {}),
         previousOperation: state.record.operation,
-        feedback, tools
+        feedback
       });
       state.needsObservation = true;
       const replyId = `${replyTurnId || randomUUID()}:assistant`;

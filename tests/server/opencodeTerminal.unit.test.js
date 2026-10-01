@@ -8,6 +8,7 @@ import { genesisCommandShimDirectory } from "@local/vibe64-genesis/server";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
+  VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
   serializeVibe64AssistantSelection
 } from "../../packages/vibe64-runtime/src/shared/index.js";
 import {
@@ -2130,7 +2131,8 @@ test("non-project ephemeral conversations use OpenCode's guarded host agent with
 });
 
 test("scoped OpenCode helpers retain bounded policy and cleanup without rebinding main chat", async (t) => {
-  const harness = await controllerHarness({ helperResponse: "x".repeat(600) });
+  const limit = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS.request_routing.maxOutputCharacters;
+  const harness = await controllerHarness({ helperResponse: "x".repeat(limit + 1) });
   t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
   await harness.controller.ensureSession("session-1");
   const before = structuredClone(harness.session);

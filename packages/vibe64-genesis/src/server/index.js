@@ -266,6 +266,16 @@ async function runGenesisOperation(operation, options = {}, catalogOptions = {})
   return withTrustedGitRepository(projectRoot, () => operation(withVibe64StackCatalog(options, catalogOptions)));
 }
 
+// Applications own the prompt; the conversation runtime owns its native delivery.
+async function vibe64ConversationInstructions({ workdir, promptContext }) {
+  const contribution = vibe64Driver(promptContext);
+  if (promptContext.scope === "ephemeral") return contribution;
+  const result = await runGenesisOperation(genesisCompiler.projectSessionContext, {
+    projectRoot: workdir, hostDriver: vibe64Driver, hostDriverInput: promptContext
+  });
+  return result.output;
+}
+
 async function exactGenesisInspection(inspector, contract, options = {}) {
   const result = await runGenesisOperation(inspector, options);
   if (result?.contract !== contract) {
@@ -514,6 +524,7 @@ export {
   setGenesisEngineeringProfile,
   syncGenesisAgentIntegrations,
   syncGenesisSkills,
+  vibe64ConversationInstructions,
   vibe64Driver,
   vibe64HostContextResolverPath,
   vibe64HostContextEnvironment,

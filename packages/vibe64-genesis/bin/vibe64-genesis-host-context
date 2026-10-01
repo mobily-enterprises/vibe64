@@ -1,12 +1,22 @@
 #!/usr/bin/env node
-import { vibe64Driver, vibe64DriverInputFromRegistry } from "../src/server/promptContext.js";
+import { createConversationHookBridge } from "@jskit-ai/assistant-core/server/conversation";
+import { vibe64DriverInputFromRegistry } from "../src/server/promptContext.js";
 
 let source = "";
 for await (const chunk of process.stdin) {
   source += chunk;
+  if (Buffer.byteLength(source) > 256 * 1024) throw new Error("Conversation instruction input exceeds 256 KiB.");
 }
 const request = JSON.parse(source);
-const input = await vibe64DriverInputFromRegistry(request);
-if (input) {
-  process.stdout.write(vibe64Driver(input));
+if (process.argv[2] === "--instructions") {
+  const { vibe64ConversationInstructions } = await import("../src/server/index.js");
+  process.stdout.write(await vibe64ConversationInstructions(request));
+} else {
+  const deliver = createConversationHookBridge({
+    resolveConversation: async (input) => {
+      const binding = await vibe64DriverInputFromRegistry(input, { workdir: process.cwd() });
+      return binding ? { delivery: "native" } : null;
+    }
+  });
+  process.stdout.write(JSON.stringify(await deliver(request)));
 }

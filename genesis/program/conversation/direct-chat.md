@@ -2,6 +2,28 @@
 
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
+JSKIT's conversation runtime owns native instruction installation and refresh
+for Codex, Claude and OpenCode, shared by main chat and Colleague. Vibe64 supplies
+Genesis-composed project guidance or an application's current instructions, plus
+authorized configuration and owned execution resources. Genesis's generated
+hooks yield only for a bound managed conversation; independent CLI conversations
+in the same project retain standalone Genesis delivery.
+Codex instruction changes update native configuration and add an explicit
+developer-context revision before new work; compaction rebuilds from the current
+configuration. The native environment proof also verifies its instruction revision.
+Claude applies compatible model settings or restarts the same native history
+when its prompt changes. JSKIT disables native prompt snapshot reuse so a resumed
+Claude process can actually apply the changed prompt. OpenCode uses the shared
+system transform and compaction invalidation. Project guidance is read before
+each inference; only supplied content with a complete revision can be cached.
+Vibe64's native OpenCode plugin reads Genesis through a fixed Node composer
+inside OpenCode's managed process group, with bounded output and a timeout.
+The compiler stays outside OpenCode's plugin process; a failed read prevents
+inference rather than delivering cached project guidance.
+Ordinary user messages and tool continuations carry no prompt copy.
+The implementation is in `@jskit-ai/assistant-core/server/conversation`;
+`tests/server/codexManagedControls.test.js` verifies actual native model requests,
+compaction, retained subscribers and unchanged history without an external model.
 The numbered `20260928-completed-discussion-plan` upgrade restores the exact
 verified completed-plan incident that an earlier discussion turn reset. It
 requires matching request and content identities, backs up both owned records,
@@ -172,6 +194,11 @@ rejected before mutation. OpenCode deletes the exact tail message IDs in reverse
 order through its conversation-only endpoint. Each provider checks the saved
 boundary on retry, so a lost reply cannot remove another exchange. Older
 non-paginated Codex threads reject Undo before mutation.
+Codex's completed, fixed read-only settings checks do not form user-turn
+boundaries. Undo reads past those checks across native history pages, including
+after a provider restart, and still rejects intervening user work or an
+unfinished check. Recognition requires the complete command and successful
+digest output; an unrelated command carrying the same marker is not skipped.
 
 The filesystem adapter retains undone message files and their IDs, excluding
 the listed rows in `conversation-log/rewound.json` from active history. This
@@ -1599,12 +1626,14 @@ conversation into the new provider thread, and then delivers that message once.
 An active turn and unrelated invalid provider requests remain failures rather
 than being reinterpreted as missing history.
 
-Genesis owns the ordinary project integrations for all three agents. Codex and
-Claude Code use their generated SessionStart hooks; OpenCode uses the generated
-system-context plugin. These are the same integrations as standalone CLI use.
-They compose project, Engineering, Collaboration and skill guidance with one
-optional host contribution. Vibe64 supplies only main/temporary identity and
-managed-operation capabilities through its existing Genesis resolver bridge.
+Genesis owns project guidance composition and the standalone integrations for
+all three agents: Codex and Claude Code SessionStart hooks and the OpenCode
+system-context plugin. Those integrations remain installed for independent CLI
+conversations. For a registered managed conversation, the host resolver returns
+an explicit delivery result with empty text, yielding to JSKIT's native delivery.
+Vibe64 supplies Genesis-composed project guidance, main/temporary identity and
+managed-operation capabilities to that runtime. A resolver failure or invalid
+ownership record fails instead of silently selecting standalone delivery.
 Senior/Junior routing, Auto planning, coding and review/deslop remain Vibe64's
 turn-level orchestration. The integration does not change those workflows.
 
@@ -1615,14 +1644,19 @@ at a stable path outside source and survives controller reconnection. It contain
 host context and exact worktree paths, never credentials or authored messages.
 Codex's shared process receives the resolver environment; hooks do not inherit
 per-thread shell environment. Claude receives it on both JSON and native-terminal
-launches. Neither provider composes or caches a second system/developer guide.
+launches. Each managed conversation has one delivery owner; Genesis contributes
+content through Vibe64's composition boundary.
 
-SessionStart refreshes guidance on native startup, resume and compaction. The
-Codex hook has no additional-context truncation limit, so it preserves the entire
-bounded Genesis output. Native history may retain previous lifecycle hook output;
-Vibe64 does not rewrite that history or inject another copy beside the hook.
-An existing conversation's former direct instructions are cleared from future
-thread configuration on resume; its recorded history remains intact.
+JSKIT installs Codex developer instructions and verifies their effective native
+configuration. Changed instructions or an unknown installation also receive a
+developer-context revision before new work; native compaction rebuilds from the
+current configuration. Claude reuses compatible processes or restarts against
+the same history with current prompt arguments and native prompt snapshot reuse
+disabled. OpenCode's system transform reads project guidance before each
+inference and invalidates cached supplied prompts on compaction. Ordinary user
+messages and tool continuations receive no repeated static instructions, and
+existing native history remains intact. Standalone Genesis hooks continue to
+refresh their own guidance at native lifecycle events.
 
 The Vibe64 Genesis executable grants Git trust only to a registered native
 session's exact worktree when invoked there. Codex and Claude supply their native
@@ -1638,17 +1672,18 @@ three generated integrations under the existing source-write admission, alongsid
 skills. Goal start/resume uses this same preparation. Claude inspection defers a
 new native process until work is submitted, so startup reads the prepared hooks;
 it still reconciles already-owned processes without synchronizing source.
-It does not migrate authored project contracts. Updated guidance takes
-effect at the next native context lifecycle; a loaded OpenCode plugin is replaced
-on the next provider instance load. Non-project helpers keep their bounded task
-instructions and do not load project hooks.
+It does not migrate authored project contracts. Managed Codex and Claude read
+current project guidance during their next conversation preparation; OpenCode
+reads it before each inference. Updating an already-loaded OpenCode plugin's code
+still requires the next provider instance load. Non-project helpers keep their
+bounded task instructions and do not load project hooks.
 
 Non-project, tool-free conversations have no Genesis project plugin. OpenCode's
 host plugin therefore installs their validated, host-supplied context directly
 in the system lane, replacing coding-agent defaults for that exact native
 conversation only. It reads the current context on each model request so a
-refreshed host snapshot takes effect without adding a user message. Ordinary
-project conversations keep their existing Genesis prompt lifecycle.
+refreshed host snapshot takes effect without adding a user message. Managed
+project conversations use the same JSKIT transform with Genesis-composed guidance.
 
 Every real human turn keeps the person's authored text unchanged. Vibe64 adds
 no turn context: no name, actor id, policy identifier, tone, response length,

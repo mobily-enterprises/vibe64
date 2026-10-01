@@ -145,6 +145,7 @@ test("native account logout and credential restoration drain old processes and c
   t.diagnostic(version.stdout.trim());
   let threadId = "";
   let previousSignature = "";
+  const submittedTurnIds = [];
   for (const [index, key] of ["fixture-account-a", "fixture-account-b", "fixture-account-a"].entries()) {
     if (index > 0) {
       const loggedOut = await accounts.logout({ accountId: "codex" });
@@ -191,16 +192,36 @@ test("native account logout and credential restoration drain old processes and c
       });
     });
     const sent = await provider.sendTurn(threadId, [`Reply HANDOVER_OK_${index + 1}`], {
-      cwd: source, model: "gpt-5.6-luna", approvalPolicy: "never", sandboxPolicy: { type: "readOnly" }
+      cwd: source, model: "gpt-5.6-luna", approvalPolicy: "never", sandboxPolicy: { type: "readOnly" },
+      clientUserMessageId: `handover-${index}`
     });
     const turn = await completed;
     assert.equal(turn.id, sent.id);
     assert.equal(turn.status, "completed", JSON.stringify(turn));
+    submittedTurnIds.push(sent.id);
     assert.equal(requests.at(-1), `Bearer ${key}`);
     assert.equal(requests.length, index + 1, "no duplicate delivery during handover");
     const history = await provider.listThreadTurns(threadId, { limit: 10, itemsView: "full" });
-    assert.equal(history.data.length, index + 1);
+    // Instruction revisions can add context-only records. Every submitted turn
+    // must survive exactly once; the request count above rules out model replay.
+    assert.deepEqual(history.data.filter(({ id }) => submittedTurnIds.includes(id)).map(({ id }) => id).sort(),
+      [...submittedTurnIds].sort());
     assert.match(JSON.stringify(history.data[0].items), /HANDOVER_OK/u);
+    if (index > 0) {
+      const undo = await provider.rewindConversation(threadId, {
+        messageId: `handover-${index}`, previousMessageId: `handover-${index - 1}`
+      });
+      assert.equal(undo.checkpoint.turnId, sent.id);
+      assert.equal(undo.checkpoint.previousTurnId, submittedTurnIds[index - 1]);
+      if (index === 2) {
+        assert.equal((await provider.rewindConversation(threadId, undo)).ok, true);
+        assert.equal((await provider.rewindConversation(threadId, undo)).ok, true, "Undo retry must not remove another turn");
+        assert.equal(requests.length, 3, "Undo does not call the model");
+        const remaining = await provider.listThreadTurns(threadId, { limit: 10, itemsView: "full" });
+        assert.deepEqual(remaining.data.filter(({ id }) => submittedTurnIds.includes(id)).map(({ id }) => id).sort(),
+          submittedTurnIds.slice(0, 2).sort());
+      }
+    }
   }
   const stopped = await controller.invalidateAppServerRuntimes({ reason: "server-shutdown" });
   assert.equal(stopped.ok, true, JSON.stringify(stopped));

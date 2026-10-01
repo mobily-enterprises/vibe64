@@ -717,11 +717,14 @@ or excessive size, explain why the handoff cannot proceed rather than silently
 dropping context. The saved conversation remains intact.
 The first project message carries the relevant Genesis task prompt; later
 messages and active-turn steering stay concise instead of rebuilding it. The
-project's durable operating guide is loaded through the same Genesis-owned
-hooks or plugin used by the standalone Codex, Claude Code and OpenCode tools.
-Vibe64 adds only its managed-session context through the Genesis bridge.
-Guidance refreshes on the agent's native startup, resume and compaction
-lifecycle without becoming a visible message or extra agent turn.
+project's durable operating guide is composed by Genesis and supplied with
+Vibe64's managed-session instructions to JSKIT's shared conversation runtime.
+That runtime installs and maintains instructions for Codex, Claude and OpenCode
+without copying them into ordinary messages or creating extra assistant turns.
+Standalone CLI conversations retain Genesis's generated hooks and plugin. Both
+kinds of conversation can share unchanged project hooks because delivery belongs
+to each native conversation. Explicit instruction changes apply before new work;
+compaction and reconnection preserve the current supplied instructions.
 Senior/Junior selection, Auto planning and coding, and automatic review/deslop
 remain Vibe64 turn orchestration; Genesis does not route those turns. For a new project, the opening conversation first establishes
 what the person wants to make, who it is for, and the first useful outcome, then

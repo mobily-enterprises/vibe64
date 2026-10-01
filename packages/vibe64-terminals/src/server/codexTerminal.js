@@ -40,6 +40,7 @@ import {
 import {
   vibe64HostContextEnvironment,
   vibe64HostContextRegistry,
+  vibe64ConversationInstructions,
   withGenesisCommandShim
 } from "@local/vibe64-genesis/server";
 import {
@@ -2036,6 +2037,17 @@ function createCodexTerminalController({
       ...options,
       terminalEnv: { ...options.terminalEnv, ...await vibe64HostContextEnvironment(runtimeRoot) },
       logger,
+      readInstructions: async (params, threadId) => {
+        // Scoped consumers supply the current prompt on start/resume. Reading
+        // the provider's construction options here would restore an old prompt
+        // during an unrelated control check after their catalogue changes.
+        if (options.assistantScope) return undefined;
+        const registry = await vibe64HostContextRegistry(runtimeRoot);
+        const binding = params.hostContext
+          ? { promptContext: params.hostContext, workdir: params.cwd }
+          : registry.get(threadId);
+        return binding ? vibe64ConversationInstructions(binding) : undefined;
+      },
       bindThreadContext: async (threadId, hostContext, params) => {
         const registry = await vibe64HostContextRegistry(runtimeRoot);
         await registry.register(threadId, hostContext, params.cwd);
@@ -2060,17 +2072,12 @@ function createCodexTerminalController({
         return { ...params, modelProvider, config: { ...params.config, ...await providerConnections.threadConfig(modelProvider) } };
       },
       onClose() { unsubscribeControls?.(); },
-      prepareThreadResumeParams: (threadId, params, { runtime: providerRuntime, processChanged }) =>
+      prepareThreadResumeParams: (threadId, params) =>
         runWithCodexAppServerProjectContext(projectContext, async () => {
           assertCodexAppServerControllerOpen();
           if (options.assistantScope) return params;
           const runtime = await createRuntimeForSession();
           const session = await readProviderSession(runtime);
-          const previousExecutionId = normalizeText(session.metadata?.agent_transport_execution_id);
-          const savedProcessChanged = Boolean(previousExecutionId &&
-            previousExecutionId !== normalizeText(providerRuntime?.executionId));
-          const processReplaced = processChanged || providerRuntime?.reused === false || savedProcessChanged;
-          if (!processReplaced) return params;
           if (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
             throw new Error("The assistant session is closing.");
           }
@@ -2084,8 +2091,7 @@ function createCodexTerminalController({
           const settings = codexAppServerThreadSettings({
             agentSettings: codexAgentSettingsFromSession(session),
             config: await codexAppServerProjectHookTrustConfig(provider, workdir),
-            cwd: workdir,
-            developerInstructions: ""
+            cwd: workdir
           });
           return {
             ...settings,
@@ -10475,7 +10481,7 @@ function createCodexTerminalController({
           agentSettings: context.agentSettings,
           config: context.isolationConfig,
           cwd: context.workdir,
-          developerInstructions: context.assistantScope.stableContext
+          systemPrompt: context.assistantScope.stableContext
         }),
         dynamicTools: [],
         environments: [],
@@ -11396,7 +11402,7 @@ function createCodexTerminalController({
       if (executionProfile && input.ephemeral !== true) throw new Error("Scoped helpers require an ephemeral conversation.");
       const thread = executionProfile
         ? (await startCodexAppServerHelperThread({ provider: context.provider, executionProfile,
-            developerInstructions: context.assistantScope.stableContext, ephemeral: true })).thread
+            systemPrompt: context.assistantScope.stableContext, ephemeral: true })).thread
         : await context.provider.startThread({ ...await codexAppServerConversationThreadSettings(context),
             ...(input.ephemeral === true ? { ephemeral: true } : {}) });
       const conversationId = normalizeText(thread.id || thread.response?.thread?.id);
@@ -11504,7 +11510,7 @@ function createCodexTerminalController({
       }
       if (!conversationState || input.persistent === true) {
         if (executionProfile) await resumeCodexAppServerHelperThread({ provider: context.provider,
-          threadId: conversationId, executionProfile, developerInstructions: context.assistantScope.stableContext });
+          threadId: conversationId, executionProfile, systemPrompt: context.assistantScope.stableContext });
         else await context.provider.resumeThread(conversationId, await codexAppServerConversationThreadSettings(context));
       }
       let watcher = null;

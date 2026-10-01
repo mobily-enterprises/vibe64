@@ -239,6 +239,25 @@ for (const action of ["stop", "steer", "failure"]) {
   });
 }
 
+test("Colleague keeps stable instructions and tool schemas out of ordinary turns", async (t) => {
+  const f = await fixture(t, [call("first"), call("second"), reply("Checked.")]);
+  await f.send("Check both projects");
+  await f.service.wait(f.context);
+  assert.equal(f.observations.starts.length, 3);
+  const contexts = f.observations.starts.map(({ scope }) => scope.stableContext);
+  assert.equal(new Set(contexts).size, 1);
+  assert.match(contexts[0], /Available application tools:/);
+  assert.match(contexts[0], /vibe64_test_operate/);
+  assert.match(contexts[0], /StructuredOutput/);
+  for (const { input } of f.observations.starts) {
+    const message = JSON.parse(input.message);
+    for (const field of ["tools", "toolUsage", "progressInstructions", "replyStyle", "usageKnowledge"]) {
+      assert.equal(Object.hasOwn(message, field), false, `${field} belongs in the system instructions`);
+    }
+  }
+  assert.deepEqual(f.observations.mutations, ["first", "second"]);
+});
+
 test("Colleague shows one completed progress sentence during tools, then replaces it with the answer", async (t) => {
   const operation = Promise.withResolvers();
   const finish = Promise.withResolvers();
@@ -258,7 +277,8 @@ test("Colleague shows one completed progress sentence during tools, then replace
   const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
   assert.equal(JSON.stringify(saved).includes(progress), false, "progress is transient, not another history format");
   const prompt = JSON.parse(f.observations.starts[0].input.message);
-  assert.match(prompt.progressInstructions, /first tool request/);
+  assert.match(f.observations.starts[0].scope.stableContext, /first tool request/);
+  assert.equal(prompt.progressInstructions, undefined);
   assert.equal(prompt.progressAlreadySaid, "");
   operation.resolve();
   await until(() => f.observations.starts.length === 3);
@@ -1036,6 +1056,8 @@ test("autonomous watch tools do not speak interactive progress", async (t) => {
   assert.equal(JSON.parse(f.observations.starts[1].input.message).autonomous, true);
   assert.equal((await f.service.read({}, f.context)).streamingReply, null);
   assert.equal(f.observations.realtime.some(event => event.realtime.payload.streamingReply?.id.endsWith(":progress")), false);
+  finish.resolve(reply("The watched work finished."));
+  await f.service.wait(f.context);
 });
 
 test("Main conversation watches use native turn state and completed canonical replies", async (t) => {
@@ -1267,8 +1289,9 @@ test("native Claude application-tool attempts are corrected before their false o
   const corrected = JSON.parse(f.observations.starts[1].input.message);
   assert.equal(corrected.previousOperation, null, "native attempts never dispatch application actions");
   assert.match(corrected.feedback, /called a Vibe64 application tool as a native runtime tool/);
-  for (const { input } of f.observations.starts) {
-    const { toolUsage } = JSON.parse(input.message);
+  for (const { input, scope } of f.observations.starts) {
+    const toolUsage = scope.stableContext;
+    assert.equal(JSON.parse(input.message).toolUsage, undefined);
     assert.match(toolUsage, /StructuredOutput/);
     const example = toolUsage.match(/to find projects return (.+?)\. If/)[1];
     const envelope = readEnvelope(example);

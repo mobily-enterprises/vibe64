@@ -4754,3 +4754,62 @@ test("Codex rewind checks the exact native turn before retrying a lost revert re
   assert.equal(reverts, 2);
   assert.deepEqual(thread.turns.map(({ id }) => id), ["first"]);
 });
+
+test("Codex rewind skips only completed settings probes across native history pages and a provider restart", async () => {
+  const marker = "VIBE64_CONTROL_CHECK_69ce4ec9-95c6-442e-9267-3bcfe1df1042:";
+  const source = "const {createHash}=require('node:crypto');const keys=[\"VIBE64_RUNTIME_NAMESPACE\"];" +
+    `process.stdout.write(${JSON.stringify(marker)}+createHash('sha256').update(JSON.stringify(keys.map(key=>[key,process.env[key]]))).digest('hex'))`;
+  const command = `${process.execPath} -e '${source.replaceAll("'", "'\"'\"'")}'`;
+  const probe = (id) => ({ id, status: "completed", items: [{ type: "commandExecution", source: "userShell",
+    command: `/bin/bash -lc ${JSON.stringify(command)}`, exitCode: 0, aggregatedOutput: `${marker}${"a".repeat(64)}` }] });
+  const turn = (id) => ({ id, status: "completed", items: [{ type: "userMessage", clientId: id }] });
+  const turns = [turn("first"), probe("check-before"), turn("second"), probe("check-after")];
+  let reverts = 0;
+  const provider = new CodexAppServerAgentProvider();
+  assert.equal(provider.threadControlProbes.size, 0, "history recognition must survive a provider restart");
+  provider.client = { isOpen: () => true, async request(method, params) {
+    if (method === "thread/read") return { thread: { id: "thread", historyMode: "paginated", status: { type: "idle" } } };
+    if (method === "thread/goal/get") return { goal: null };
+    if (method === "thread/turns/list") {
+      const offset = Number(params.cursor || 0);
+      return { data: turns.toReversed().slice(offset, offset + params.limit),
+        nextCursor: offset + params.limit < turns.length ? String(offset + params.limit) : null };
+    }
+    assert.equal(method, "thread/revert");
+    reverts += 1;
+    turns.splice(turns.findIndex(({ id }) => id === params.beforeTurnId));
+    return { thread: { id: "thread" } };
+  } };
+  provider.runRequest = (operation) => operation();
+  const plan = await provider.rewindConversation("thread", { messageId: "second", previousMessageId: "first" });
+  assert.deepEqual(plan.checkpoint, { threadId: "thread", turnId: "second", previousTurnId: "first" });
+  for (const mutate of [
+    (item) => { item.command += "; touch changed"; },
+    (item) => { item.command = `echo ${item.aggregatedOutput}`; },
+    (item) => { item.command = item.command.replace("process.stdout.write", "process.stderr.write"); },
+    (item) => { item.aggregatedOutput += "\nother output"; },
+    (item) => { item.exitCode = 1; },
+    (item) => { item.source = "agent"; }
+  ]) {
+    const intervening = probe("intervening");
+    mutate(intervening.items[0]);
+    turns.push(intervening);
+    await assert.rejects(provider.rewindConversation("thread", plan), /last turn changed/);
+    turns.pop();
+  }
+  const busy = probe("busy");
+  busy.status = "inProgress";
+  turns.push(busy);
+  await assert.rejects(provider.rewindConversation("thread", plan), /Stop Codex/);
+  turns.pop();
+  const mixed = probe("mixed");
+  mixed.items.push({ type: "userMessage", clientId: "third" });
+  turns.push(mixed);
+  await assert.rejects(provider.rewindConversation("thread", plan), /last turn changed/);
+  turns.pop();
+  assert.equal(reverts, 0);
+  assert.equal((await provider.rewindConversation("thread", plan)).ok, true);
+  assert.equal((await provider.rewindConversation("thread", plan)).ok, true, "retry checks the same chat boundary");
+  assert.equal(reverts, 1);
+  assert.deepEqual(turns.map(({ id }) => id), ["first", "check-before"]);
+});

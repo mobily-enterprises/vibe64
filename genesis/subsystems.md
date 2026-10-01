@@ -51,8 +51,12 @@ existing owner and format.
 ## `conversation` Agent conversation
 
 Owns direct conversations and temporary assistance with connected coding agents.
-Consumes JSKIT conversation presentation, provider primitives and transcript
-policy; Vibe64 owns the adapters, filesystem history, access and execution.
+Consumes JSKIT conversation presentation, provider primitives, transcript policy
+and its Codex, Claude and OpenCode instruction lifecycle adapters. JSKIT owns
+prompt installation, reconfiguration and restoration policy. Vibe64 supplies
+prompt content, provider configuration, filesystem history, access and owned
+execution services. Genesis composes project instructions and retains standalone
+delivery, yielding per native conversation to the managed runtime.
 It also owns switching the main conversation between engines, preserving native
 identities and adding missed or corrected history to the next ordinary Send.
 It owns workflow chat modes, actor-aware destination resolution, isolated request
@@ -290,8 +294,8 @@ The existing project layout owner supplies actual pane visibility and reveal
 operations; the integration owner refreshes status through its current command.
 Code subscribes to session events and reconciles watched conversations through
 their existing authorized actions.
-It consumes existing native conversation and JSKIT transcript
-and action catalogues. Coding work and ordinary product operations retain their
+It consumes existing native conversation, the JSKIT instruction lifecycle runtime,
+transcript policy and action catalogues. Coding work and ordinary product operations retain their
 existing subsystem owners. State is private application filesystem data.
 
 ### Program

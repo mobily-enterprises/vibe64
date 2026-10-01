@@ -245,12 +245,12 @@ function contextTurnProviderParts(providerCalls) {
 test("codex app-server bridge uses the current Vibe64 Codex execution settings", () => {
   assert.deepEqual(codexAppServerThreadSettings({
     cwd: "/runtime/projects/repo-test/sessions/active/session/source",
-    developerInstructions: "Vibe64 briefing"
+    systemPrompt: "Vibe64 briefing"
   }), {
     approvalPolicy: "never",
     config: { model_reasoning_effort: "xhigh", model_reasoning_summary: "concise" },
     cwd: "/runtime/projects/repo-test/sessions/active/session/source",
-    developerInstructions: "Vibe64 briefing",
+    systemPrompt: "Vibe64 briefing",
     model: VIBE64_CODEX_DEFAULT_MODEL,
     sandbox: "danger-full-access"
   });
@@ -353,7 +353,7 @@ test("Codex helper settings are Luna-low, bounded, tool-free, and never fall bac
   });
   const executionProfile = sourceExplanationHelperProfile();
   const prepared = await prepareCodexAppServerHelperThreadStartSettings({
-    developerInstructions: "Explain only the bounded excerpt in the prompt.",
+    systemPrompt: "Explain only the bounded excerpt in the prompt.",
     executionProfile,
     provider
   });
@@ -370,7 +370,7 @@ test("Codex helper settings are Luna-low, bounded, tool-free, and never fall bac
     baseInstructions: "Complete only the bounded structured task in the user input. Return one response matching the supplied JSON schema. Do not use tools, environments, network access, or repository writes.",
     config: prepared.enforcement.config,
     cwd: HELPER_EXECUTION_CWD,
-    developerInstructions: "Explain only the bounded excerpt in the prompt.",
+    systemPrompt: "Explain only the bounded excerpt in the prompt.",
     dynamicTools: [],
     environments: [],
     model: "gpt-5.6-luna",
@@ -763,7 +763,7 @@ test("Codex helper inventories MCP servers independently of a large unrelated na
   };
   const prepared = await prepareCodexAppServerHelperThreadStartSettings({
     executionProfile: sourceExplanationHelperProfile(), provider,
-    developerInstructions: "Classify the bounded request."
+    systemPrompt: "Classify the bounded request."
   });
   assert.deepEqual(prepared.enforcement.mcpServerNames, ["example"]);
   assert.equal(prepared.settings.config.mcp_servers.example.enabled, false);
@@ -818,7 +818,7 @@ test("Codex helper bounds config, hook, and instruction inventories without expo
   }
 
   await assert.rejects(prepareCodexAppServerHelperThreadStartSettings({
-    developerInstructions: "x".repeat(8193),
+    systemPrompt: "x".repeat(8193),
     executionProfile: sourceExplanationHelperProfile(),
     provider: helperInventoryProvider()
   }), (error) => {
@@ -1041,7 +1041,7 @@ test("Codex helper safely reapplies isolation when resuming a controller-owned t
   };
 
   const result = await resumeCodexAppServerHelperThread({
-    developerInstructions: "Continue only this source explanation.",
+    systemPrompt: "Continue only this source explanation.",
     executionProfile: sourceExplanationHelperProfile(),
     provider,
     threadId: "registered-helper-thread"
@@ -1132,7 +1132,7 @@ test("codex app-server bridge starts a missing session thread and stores identit
   assert.equal(providerCalls.length, 1);
   assert.equal(providerCalls[0].method, "startThread");
   assert.equal(providerCalls[0].params.cwd, "/repo/worktree");
-  assert.equal(providerCalls[0].params.developerInstructions, "");
+  assert.equal(providerCalls[0].params.systemPrompt, undefined);
   assert.deepEqual(providerCalls[0].params.hostContext, { scope: "session", conversationKind: "main" });
   assert.equal(Object.hasOwn(providerCalls[0].params, "dynamicTools"), false);
   assert.equal(metadataValue(runtime, "agent_identity_provider"), "codex");
@@ -1263,7 +1263,6 @@ test("codex app-server bridge activates exact project and managed command hooks 
         }
       },
       cwd: "/repo/worktree",
-      developerInstructions: null,
       model: VIBE64_CODEX_DEFAULT_MODEL,
       sandbox: "danger-full-access",
       sessionStartSource: "startup",
@@ -1317,8 +1316,7 @@ test("codex app-server bridge resumes an existing session thread", async () => {
         approvalPolicy: "never",
         config: { model_reasoning_effort: "xhigh", model_reasoning_summary: "concise" },
         cwd: "/repo/worktree",
-        developerInstructions: null,
-        model: VIBE64_CODEX_DEFAULT_MODEL,
+          model: VIBE64_CODEX_DEFAULT_MODEL,
         sandbox: "danger-full-access"
       },
       threadId: "thread-existing"
@@ -1813,7 +1811,7 @@ test("session renewal resumes and reads only the exact persisted main thread wit
     "readThread"
   ]);
   assert.equal(calls[1][2].model, "gpt-5.6-sol");
-  assert.equal(calls[1][2].developerInstructions, "");
+  assert.equal(calls[1][2].systemPrompt, undefined);
   assert.deepEqual(calls[1][2].hostContext, { scope: "session", conversationKind: "main" });
   assert.equal(Object.hasOwn(calls[1][2], "allowProviderModelFallback"), false);
 });

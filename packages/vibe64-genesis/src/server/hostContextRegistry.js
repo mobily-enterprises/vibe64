@@ -11,7 +11,7 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
   const directory = runtimeDirectory || await mkdtemp(path.join(os.tmpdir(), "vibe64-genesis-context-"));
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const registryPath = path.join(directory, "sessions.json");
-  const sessions = new Map();
+  let sessions = new Map();
   try {
     const saved = JSON.parse(await readFile(registryPath, "utf8"));
     for (const entry of saved.sessions) {
@@ -24,27 +24,35 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
   let pending = Promise.resolve();
   let closed = false;
 
-  async function save() {
-    const write = pending.catch(() => {}).then(async () => {
-      const temporary = path.join(directory, "sessions.tmp");
-      await writeFile(temporary, JSON.stringify({ sessions: [...sessions.values()] }), { mode: 0o600 });
-      await rename(temporary, registryPath);
-    });
-    pending = write;
-    await write;
+  async function save(next) {
+    const temporary = path.join(directory, "sessions.tmp");
+    await writeFile(temporary, JSON.stringify({ sessions: [...next.values()] }), { mode: 0o600 });
+    await rename(temporary, registryPath);
   }
 
-  await save();
+  await save(sessions);
   return {
     registryPath,
+    get(providerSessionId) { return structuredClone(sessions.get(providerSessionId)); },
     async register(providerSessionId, promptContext, workdir = "") {
       if (closed) throw new Error("The Genesis host context registry is closed.");
       if (typeof providerSessionId !== "string" || !providerSessionId.trim()) {
         throw new TypeError("Genesis host context requires a native conversation ID.");
       }
-      vibe64Driver(promptContext);
-      sessions.set(providerSessionId, { upstreamSessionId: providerSessionId, workdir, promptContext: structuredClone(promptContext) });
-      await save();
+      const context = structuredClone(promptContext);
+      vibe64Driver(context);
+      const entry = { upstreamSessionId: providerSessionId, workdir, promptContext: context };
+      // This records delivery ownership, not prompt installation. Publish a
+      // binding only after hooks can read the same durable entry.
+      const write = pending.catch(() => {}).then(async () => {
+        if (JSON.stringify(sessions.get(providerSessionId)) === JSON.stringify(entry)) return;
+        const next = new Map(sessions);
+        next.set(providerSessionId, entry);
+        await save(next);
+        sessions = next;
+      });
+      pending = write;
+      await write;
     },
     async close() {
       closed = true;

@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { initializeGenesisProject } from "../../packages/vibe64-genesis/src/server/index.js";
 
 import {
   Vibe64SessionEnvironment
@@ -59,8 +60,7 @@ test("tool-free non-project conversations receive their own current system conte
   });
   const scope = { scope: "ephemeral", stableContext: "You have no tools or shell. Trusted host snapshot: active." };
   const sessions = [{ upstreamSessionId: "private-conversation", promptContext: scope }, {
-    upstreamSessionId: "project-conversation",
-    promptContext: { scope: "session" }
+    upstreamSessionId: "project-conversation"
   }];
   await writeFile(registryPath, JSON.stringify({ sessions }));
   process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY = registryPath;
@@ -253,7 +253,7 @@ test("native child helpers inherit only their registered parent's account, comma
     await rm(root, { recursive: true, force: true });
   });
   const sessions = [{
-    upstreamSessionId: "shared-parent", modelProviderId: "deepseek", helperModelId: "chosen-helper",
+    workdir: root, upstreamSessionId: "shared-parent", modelProviderId: "deepseek", helperModelId: "chosen-helper",
     promptContext: { scope: "session", conversationKind: "main", session: {
       managedGit: true, managedPreview: false, managedEnvironment: false, managedDatabaseRefresh: false
     } },
@@ -264,6 +264,8 @@ test("native child helpers inherit only their registered parent's account, comma
   }];
   await writeFile(registryPath, JSON.stringify({ sessions }));
   process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY = registryPath;
+  await promisify(execFile)("git", ["init", "--quiet"], { cwd: root });
+  await initializeGenesisProject({ projectRoot: root });
   const parents = { child: "shared-parent", grandchild: "child", "owner-child": "owner-parent", loop: "loop" };
   let reads = 0;
   const plugin = await Vibe64SessionEnvironment({ client: { session: {
@@ -296,9 +298,26 @@ test("native child helpers inherit only their registered parent's account, comma
   await plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "vibe64-helper-deepseek", task_id: "grandchild" } });
   const inherited = { system: ["Project guidance"] };
   await plugin["experimental.chat.system.transform"]({ sessionID: "grandchild" }, inherited);
+  const guidancePath = path.join(root, "genesis/engineering.md");
+  const guidance = await readFile(guidancePath, "utf8");
+  await writeFile(guidancePath, guidance.replace(/(## Project requirements\s*)[\s\S]*/u,
+    "$1- REFRESH_CHECK_742: retain current application guidance.\n"));
   await plugin["experimental.chat.system.transform"]({ sessionID: "grandchild" }, inherited);
   assert.equal(inherited.system.length, 2);
   assert.match(inherited.system[1], /managed `git` and `gh` commands/u);
+  assert.match(inherited.system[1], /REFRESH_CHECK_742/u);
+  const currentInstructions = inherited.system[1];
+  sessions[0].workdir = path.join(root, "missing-project");
+  await writeFile(registryPath, JSON.stringify({ sessions }));
+  await assert.rejects(
+    plugin["experimental.chat.system.transform"]({ sessionID: "grandchild" }, inherited),
+    /Project instructions could not be loaded/u
+  );
+  assert.equal(inherited.system[1], currentInstructions);
+  sessions[0].workdir = root;
+  await writeFile(registryPath, JSON.stringify({ sessions }));
+  await plugin["experimental.chat.system.transform"]({ sessionID: "grandchild" }, inherited);
+  assert.equal(inherited.system[1], currentInstructions);
   await assert.rejects(plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "vibe64-helper-deepseek", task_id: "owner-child" } }), /does not belong/u);
   await assert.rejects(plugin["tool.execute.before"]({ sessionID: "shared-parent", tool: "task" }, { args: { subagent_type: "general", task_id: "owner-child" } }), /does not belong/u);
   await assert.rejects(plugin["chat.params"]({ sessionID: "grandchild", agent: "general", model: { providerID: "zai-coding-plan", id: "glm-5-flash" } }, {}), /selected AI account/u);

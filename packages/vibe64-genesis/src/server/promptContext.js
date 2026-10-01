@@ -149,10 +149,11 @@ function vibe64Driver(input = {}) {
 }
 
 async function vibe64DriverInputFromRegistry(request = {}, {
-  readRegistry = readFile
+  readRegistry = readFile,
+  workdir = ""
 } = {}) {
   const value = record(request, "Vibe64 host resolver request");
-  exactFields(value, ["data", "providerSessionId", "scope"], "Vibe64 host resolver request");
+  exactFields(value, ["data", "providerSessionId", "parentSessionIds", "scope"], "Vibe64 host resolver request");
   if (!["session", "turn"].includes(value.scope)) {
     throw new TypeError("The Vibe64 host resolver scope must be session or turn.");
   }
@@ -166,14 +167,21 @@ async function vibe64DriverInputFromRegistry(request = {}, {
     throw new TypeError("Vibe64 host resolver data requires an absolute registryPath.");
   }
   const source = JSON.parse(await readRegistry(registryPath, "utf8"));
-  const sessions = Array.isArray(source?.sessions) ? source.sessions : [];
+  if (!Array.isArray(source?.sessions)) throw new TypeError("The conversation ownership registry is invalid.");
+  const sessions = source.sessions;
   const providerSessionId = text(value.providerSessionId);
-  const selected = sessions.find((entry) => (
-    providerSessionId && text(entry?.upstreamSessionId) === providerSessionId
-  ));
+  if (value.parentSessionIds !== undefined && (!Array.isArray(value.parentSessionIds) ||
+      value.parentSessionIds.length > 32 || value.parentSessionIds.some(id => typeof id !== "string" || !id.trim()))) {
+    throw new TypeError("Invalid native conversation ancestry.");
+  }
+  const ids = [providerSessionId, ...(value.parentSessionIds || [])].filter(Boolean);
+  const selected = ids.map(id => sessions.find(entry => text(entry?.upstreamSessionId) === id)).find(Boolean);
   const context = selected?.promptContext;
   if (!context) {
     return null;
+  }
+  if (workdir && selected.workdir && path.resolve(workdir) !== path.resolve(selected.workdir)) {
+    throw new Error("The managed conversation belongs to a different project directory.");
   }
   return normalizedDriverInput(context);
 }

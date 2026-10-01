@@ -42,3 +42,9 @@ Accounts and save supported routing changes when the owner explicitly asks. It
 offers assistance without changing anything for a how-to question. Connection,
 consent and model-access operations that are not exposed to it must be completed
 in the actual account UI; it should recheck status after the person finishes.
+
+For one main conversation, open its chat mode menu and choose **Custom**. Select
+**Orchestrator**, then **Model** and **Thinking**, and press **Apply**. The model
+list includes the available models from each connected provider for that
+orchestrator, including a connected GLM Coding Plan under OpenCode. **Configure
+more AIs** opens account setup if the required provider is not connected.

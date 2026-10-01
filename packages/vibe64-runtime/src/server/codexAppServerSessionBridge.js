@@ -688,7 +688,7 @@ function codexAppServerThreadSettings({
   agentSettings = {},
   config = null,
   cwd = "",
-  developerInstructions = null,
+  systemPrompt = null,
   hostContext = null,
   model = ""
 } = {}) {
@@ -709,9 +709,7 @@ function codexAppServerThreadSettings({
       ...(config && typeof config === "object" && !Array.isArray(config) ? config : {})
     },
     cwd: normalizedCwd,
-    developerInstructions: hostContext ? "" : (
-      typeof developerInstructions === "string" ? normalizeAgentText(developerInstructions) : null
-    ),
+    ...(typeof systemPrompt === "string" && systemPrompt.trim() ? { systemPrompt: normalizeAgentText(systemPrompt) } : {}),
     ...(hostContext ? { hostContext } : {}),
     model: normalizeAgentText(model) || effectiveSettings.model,
     ...(effectiveSettings.modelProviderId ? { modelProvider: effectiveSettings.modelProviderId } : {}),
@@ -801,7 +799,7 @@ function codexAppServerTurnSettings({
 function codexAppServerHelperThreadSettings({
   config = null,
   cwd = "",
-  developerInstructions = "",
+  systemPrompt = "",
   executionProfile = null
 } = {}) {
   const normalizedCwd = normalizeWorkdir(cwd);
@@ -816,8 +814,8 @@ function codexAppServerHelperThreadSettings({
     );
   }
   const profile = codexAppServerHelperProfile(executionProfile);
-  const normalizedDeveloperInstructions = normalizeAgentText(developerInstructions);
-  if (normalizedDeveloperInstructions.length > CODEX_APP_SERVER_HELPER_DEVELOPER_INSTRUCTIONS_MAX_LENGTH) {
+  const normalizedSystemPrompt = normalizeAgentText(systemPrompt);
+  if (normalizedSystemPrompt.length > CODEX_APP_SERVER_HELPER_DEVELOPER_INSTRUCTIONS_MAX_LENGTH) {
     throw new Vibe64AgentExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.UNBOUNDED,
       "Codex helper developer instructions exceed their request limit.",
@@ -832,7 +830,7 @@ function codexAppServerHelperThreadSettings({
     baseInstructions: CODEX_APP_SERVER_HELPER_BASE_INSTRUCTIONS,
     config,
     cwd: normalizedCwd,
-    developerInstructions: normalizedDeveloperInstructions || null,
+    systemPrompt: normalizedSystemPrompt || null,
     dynamicTools: [],
     environments: [],
     model: profile.model,
@@ -857,7 +855,7 @@ function codexAppServerHelperThreadResumeSettings(options = {}) {
     baseInstructions: settings.baseInstructions,
     config: settings.config,
     cwd: settings.cwd,
-    developerInstructions: settings.developerInstructions,
+    systemPrompt: settings.systemPrompt,
     model: settings.model,
     runtimeWorkspaceRoots: settings.runtimeWorkspaceRoots,
     sandbox: settings.sandbox
@@ -896,7 +894,7 @@ function codexAppServerHelperTurnSettings({
 }
 
 async function prepareCodexAppServerHelperThreadStartSettings({
-  developerInstructions = "",
+  systemPrompt = "",
   ephemeral = false,
   executionProfile = null,
   provider = null
@@ -912,7 +910,7 @@ async function prepareCodexAppServerHelperThreadStartSettings({
     settings: { ...codexAppServerHelperThreadStartSettings({
       config: enforcement.config,
       cwd: enforcement.executionCwd,
-      developerInstructions,
+      systemPrompt,
       executionProfile: profile
     }), ...(ephemeral ? { ephemeral: true } : {}) }
   });
@@ -1003,7 +1001,7 @@ async function startCodexAppServerHelperThread(options = {}) {
 }
 
 async function resumeCodexAppServerHelperThread({
-  developerInstructions = "",
+  systemPrompt = "",
   executionProfile = null,
   provider = null,
   threadId = ""
@@ -1032,7 +1030,7 @@ async function resumeCodexAppServerHelperThread({
     codexAppServerHelperThreadResumeSettings({
       config: enforcement.config,
       cwd: enforcement.executionCwd,
-      developerInstructions,
+      systemPrompt,
       executionProfile: profile
     })
   );

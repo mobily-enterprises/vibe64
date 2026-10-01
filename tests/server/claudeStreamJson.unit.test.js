@@ -221,7 +221,7 @@ test("Claude main and temporary chats receive project values with their managed 
   assert.equal(f.processes.length, 2);
 });
 
-test("Claude main and temporary chats use the Genesis hook bridge without duplicated system guidance", async (t) => {
+test("Claude main and temporary chats install composed system guidance and yield their Genesis hooks", async (t) => {
   const f = await fixture(t);
   t.after(() => f.provider.closeProject());
   await f.provider.sendMessage(f.context, { message: "First", messageId: "main-guidance" });
@@ -231,8 +231,9 @@ test("Claude main and temporary chats use the Genesis hook bridge without duplic
   });
   for (const [index, kind] of ["main", "temporary"].entries()) {
     const options = f.processes[index].options;
-    assert.equal(options.systemPrompt, undefined);
-    assert.equal(options.appendSystemPrompt, undefined);
+    assert.equal(options.instructionArguments[0], "--append-system-prompt");
+    assert.match(options.instructionArguments[1], /Genesis/);
+    assert.match(options.instructionArguments[1], /VIBE64 CONVERSATION CONTEXT/);
     assert.ok(options.env.GENESIS_HOST_CONTEXT_RESOLVER.endsWith("vibe64-genesis-host-context"));
     assert.equal(options.env.GENESIS_TURN_CONTEXT_ENABLED, "0");
     const input = await vibe64DriverInputFromRegistry({
@@ -990,7 +991,7 @@ test("persistent Claude waits beyond three minutes but retains completion, Stop 
   for (const outcome of ["complete", "stop", "deadline", "helper"]) {
     const abort = new AbortController();
     const context = { assistantSelection: f.context.assistantSelection, signal: abort.signal, sessionId: "persistent_wait",
-      assistantScope: { id: "persistent_wait", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "wait-runtime") } };
+      assistantScope: { id: "persistent_wait", stableContext: "Answer the supplied request.", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "wait-runtime") } };
     const executionProfile = outcome === "helper"
       ? await f.provider.resolveExecutionProfile(context, { profileId: "helper", workloadId: "request_routing" }) : undefined;
     const { conversationId } = await f.provider.createConversation(context, { persistent: true, executionProfile });
@@ -1073,6 +1074,49 @@ test("Claude shared API access requires native verification and reports connecti
   assert.equal(f.processes.length, 0, "access facts and external catalogues do not start an inference process");
 });
 
+test("Claude refreshes changed system instructions while preserving the native conversation", async (t) => {
+  const f = await fixture(t);
+  const context = { assistantSelection: f.context.assistantSelection, sessionId: "colleague_prompt",
+    assistantScope: { id: "colleague_prompt", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "colleague-runtime"),
+      stableContext: "Original product instructions." } };
+  f.behavior.afterSend = async (native) => native.options.onEvent({ type: "result", subtype: "success", result: "Done" });
+  const { conversationId } = await f.provider.createConversation(context, { persistent: true });
+  const send = (id) => f.provider.startConversationTurn(context, { conversationId, persistent: true, message: "Check projects", messageId: id });
+  await send("first");
+  await send("unchanged");
+  assert.equal(f.processes.length, 1, "ordinary turns retain the same instruction installation");
+  context.assistantScope.stableContext = "Current product instructions and updated tools.";
+  await send("changed");
+  assert.equal(f.processes.length, 2);
+  assert.equal(f.processes[0].stopped, true);
+  assert.equal(f.processes[1].options.sessionId, conversationId);
+  assert.equal(f.processes[1].options.resume, true);
+  assert.equal(f.processes[1].options.instructionArguments[1], context.assistantScope.stableContext);
+  assert.equal(f.processes[1].lastInput.message, "Check projects", "instructions never enter user text");
+  await send("unchanged-again");
+  assert.equal(f.processes.length, 2);
+});
+
+test("rejecting an instruction change during work preserves the current steering binding", async (t) => {
+  const f = await fixture(t);
+  const context = { assistantSelection: f.context.assistantSelection, sessionId: "colleague_prompt_busy",
+    assistantScope: { id: "colleague_prompt_busy", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "colleague-runtime"),
+      stableContext: "Current instructions." } };
+  const { conversationId } = await f.provider.createConversation(context, { persistent: true });
+  await f.provider.startConversationTurn(context, { conversationId, persistent: true, message: "Start", messageId: "busy-first" });
+  context.assistantScope.stableContext = "Changed instructions.";
+  await assert.rejects(f.provider.startConversationTurn(context, {
+    conversationId, persistent: true, message: "Change", messageId: "busy-change", steer: true
+  }), /Stop the current Claude turn/);
+  context.assistantScope.stableContext = "Current instructions.";
+  await f.provider.startConversationTurn(context, {
+    conversationId, persistent: true, message: "Read first", messageId: "busy-steer", steer: true
+  });
+  assert.equal(f.processes.length, 1);
+  assert.equal(f.processes[0].lastInput.message, "Read first");
+  await f.provider.stopConversation(context, { conversationId });
+});
+
 test("retained scoped Claude conversations survive restart without touching a development session", async (t) => {
   const f = await fixture(t);
   const original = structuredClone(f.context.session);
@@ -1123,7 +1167,7 @@ test("scoped Claude helpers use the resolved model and can stop while main chat 
   assert.equal(helper.options.toolFree, true);
   assert.equal(helper.options.model, executionProfile.model);
   assert.equal(helper.options.effort, context.assistantSelection.variantId);
-  assert.equal(helper.options.systemPrompt, context.assistantScope.stableContext);
+  assert.equal(helper.options.instructionArguments[1], context.assistantScope.stableContext);
   assert.equal(helper.options.appendSystemPrompt, undefined);
   await f.provider.stopConversation(context, { conversationId });
   assert.equal(helper.stopped, true);
@@ -1143,7 +1187,7 @@ test("Claude router reasoning does not consume the structured answer limit", asy
   const { conversationId } = await f.provider.createConversation(context, { ephemeral: true, executionProfile });
   await f.provider.startConversationTurn(context, { conversationId, executionProfile, message: "Classify", messageId: "router-output" });
   const event = f.processes.at(-1).options.onEvent;
-  const thinking = "Reasoning summary. ".repeat(120);
+  const thinking = "Reasoning summary. ".repeat(Math.ceil(executionProfile.limits.maxOutputCharacters / 19) + 1);
   assert.ok(thinking.length > executionProfile.limits.maxOutputCharacters);
   await event({ type: "stream_event", event: { type: "message_start", message: { id: "router-answer" } } });
   await event({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "" } } });

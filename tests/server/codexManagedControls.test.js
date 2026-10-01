@@ -129,7 +129,7 @@ test("an unconfirmed detach leaves the goal stopped and never claims readiness",
   await assert.rejects(h.provider.resumeThread("thread-1"), { code: "vibe64_agent_control_recovery_failed" });
   assert.equal(h.goal.status, "paused");
   assert.equal(h.calls.filter((call) => call.method === "thread/resume").length, 0);
-  assert.equal(h.provider.threadEnvironments.size, 0);
+  assert.equal(h.provider.conversationRuntime.bindingCount, 0);
 });
 
 test("restricted helpers retain their explicitly empty environment", async () => {
@@ -217,10 +217,10 @@ for (const valid of [true, false]) {
     };
     if (valid) {
       await h.provider.ensureThreadControls("thread-1");
-      assert.equal(h.provider.threadEnvironments.size, 1);
+      assert.equal(h.provider.conversationRuntime.bindingCount, 1);
     } else {
       await assert.rejects(h.provider.ensureThreadControls("thread-1"), { code: "vibe64_agent_control_recovery_failed" });
-      assert.equal(h.provider.threadEnvironments.size, 0);
+      assert.equal(h.provider.conversationRuntime.bindingCount, 0);
     }
     assert.deepEqual(forwarded, []);
     assert.equal(h.provider.isControlProbeTurn("thread-1", "probe-turn"), true);
@@ -232,7 +232,7 @@ for (const valid of [true, false]) {
 test("unsupported Codex history requires renewal without attempting native recovery", async () => {
   const h = harness({ historyMode: "legacy" });
   await assert.rejects(h.provider.resumeThread("thread-1"), { code: "vibe64_codex_history_unsupported" });
-  assert.equal(h.provider.threadEnvironments.size, 0);
+  assert.equal(h.provider.conversationRuntime.bindingCount, 0);
   assert.deepEqual(h.calls.map(({ method }) => method), ["thread/read"]);
 });
 
@@ -240,12 +240,27 @@ test("native Codex paginated reload applies changed controls and preserves histo
   skip: spawnSync("codex", ["--version"], { timeout: 5000 }).status !== 0 ? "Codex CLI is not installed" : false, timeout: 30_000 }, async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-native-controls-"));
   let modelRequests = 0;
+  const modelInputs = [];
+  let completeResponses = false;
   const model = createServer(async (request, response) => {
-    for await (const chunk of request) void chunk;
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
     if (!request.url.endsWith("/responses")) { response.writeHead(404).end(); return; }
+    modelInputs.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
     modelRequests += 1;
     response.writeHead(200, { "content-type": "text/event-stream" });
-    response.flushHeaders();
+    if (!completeResponses) { response.flushHeaders(); return; }
+    const item = { id: `message-${modelRequests}`, type: "message", role: "assistant", status: "completed",
+      content: [{ type: "output_text", text: "The conversation and its files are preserved.", annotations: [] }] };
+    const result = { id: `response-${modelRequests}`, object: "response", status: "completed", output: [item],
+      usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } };
+    for (const event of [
+      { type: "response.created", response: { ...result, status: "in_progress", output: [] } },
+      { type: "response.output_item.added", output_index: 0, item: { ...item, status: "in_progress", content: [] } },
+      { type: "response.output_item.done", output_index: 0, item },
+      { type: "response.completed", response: result }
+    ]) response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    response.end();
   });
   await new Promise((resolve) => model.listen(0, "127.0.0.1", resolve));
   await writeFile(path.join(root, "config.toml"), [
@@ -257,15 +272,15 @@ test("native Codex paginated reload applies changed controls and preserves histo
   const socketPath = path.join(root, "app-server.sock");
   const child = spawn("codex", ["app-server", "--listen", `unix://${socketPath}`, "-c", "features.remote_control=false"], {
     env: { PATH: process.env.PATH, HOME: process.env.HOME, CODEX_HOME: root, LANG: "C.UTF-8" },
-    stdio: ["ignore", "ignore", "pipe"]
+    detached: true, stdio: ["ignore", "ignore", "pipe"]
   });
   const clients = [];
   const events = new Set();
   child.stderr.resume();
   t.after(async () => {
     clients.forEach((client) => client.close());
-    child.kill();
-    await new Promise((resolve) => child.exitCode !== null ? resolve() : child.once("exit", resolve));
+    try { process.kill(-child.pid, "SIGTERM"); } catch (error) { if (error.code !== "ESRCH") throw error; }
+    await new Promise((resolve) => child.exitCode !== null || child.signalCode !== null ? resolve() : child.once("exit", resolve));
     model.closeAllConnections();
     await new Promise((resolve) => model.close(resolve));
     await rm(root, { recursive: true, force: true });
@@ -286,9 +301,17 @@ test("native Codex paginated reload applies changed controls and preserves histo
     return client;
   };
   const client = await connect();
+  let instructionUpdates = 0;
+  const nativeRequest = client.request.bind(client);
+  client.request = (method, params, options) => {
+    if (method === "thread/inject_items") instructionUpdates += 1;
+    return nativeRequest(method, params, options);
+  };
   client.subscribe((event) => { for (const listener of events) listener(event); });
   let environment = { PATH: "/usr/bin:/bin", VIBE64_TEST_CONTROL_GENERATION: "A" };
-  const provider = new CodexAppServerAgentProvider({ threadEnv: environment, prepareThreadEnvironment: async () => environment });
+  let instructions = "CALENDAR_INSTRUCTIONS_A";
+  const provider = new CodexAppServerAgentProvider({ threadEnv: environment, prepareThreadEnvironment: async () => environment,
+    readInstructions: () => instructions });
   provider.client = client;
   provider.activeClient = async () => client;
   const forwarded = [];
@@ -326,7 +349,7 @@ test("native Codex paginated reload applies changed controls and preserves histo
   const observer = await connect();
   await observer.request("thread/resume", { threadId });
   await assert.rejects(provider.resumeThread(threadId, { cwd: root }), { code: "vibe64_agent_control_recovery_failed" });
-  assert.equal(provider.threadEnvironments.size, 0);
+  assert.equal(provider.conversationRuntime.bindingCount, 0);
   assert.match(await shellMarker(), /GENERATION=A/);
   await observer.request("thread/unsubscribe", { threadId });
   observer.close();
@@ -343,6 +366,15 @@ test("native Codex paginated reload applies changed controls and preserves histo
   assert.equal(currentGoal.status, "paused");
   assert.equal(currentGoal.tokenBudget, goal.tokenBudget);
   assert.equal(await readFile(path.join(root, "preserved.txt"), "utf8"), "partial implementation");
+  const retained = await connect();
+  await retained.request("thread/resume", { threadId });
+  instructions = "UNINSTALLED_INSTRUCTIONS";
+  await assert.rejects(provider.resumeThread(threadId, { cwd: root }), { code: "vibe64_agent_control_recovery_failed" });
+  assert.equal(instructionUpdates, 0, "a retained prompt configuration cannot authorize a revision or new work");
+  instructions = "CALENDAR_INSTRUCTIONS_A";
+  await retained.request("thread/unsubscribe", { threadId });
+  retained.close();
+  await provider.resumeThread(threadId, { cwd: root });
   const waitForRequests = async (count) => {
     const deadline = Date.now() + 5000;
     while (modelRequests < count) {
@@ -353,14 +385,40 @@ test("native Codex paginated reload applies changed controls and preserves histo
   const requestsBeforeGoal = modelRequests;
   await provider.setGoalStatus(threadId, "active");
   await waitForRequests(requestsBeforeGoal + 1);
+  assert.equal(JSON.stringify(modelInputs.at(-1)).split("CALENDAR_INSTRUCTIONS_A").length - 1, 1);
+  instructions = "CALENDAR_INSTRUCTIONS_B";
   environment = { ...environment, VIBE64_TEST_CONTROL_GENERATION: "C" };
   await provider.ensureThreadControls(threadId);
   await waitForRequests(requestsBeforeGoal + 2);
   assert.equal(modelRequests, requestsBeforeGoal + 2);
+  assert.equal(JSON.stringify(modelInputs.at(-1)).split("CALENDAR_INSTRUCTIONS_B").length - 1, 1);
+  const updatedContext = modelInputs.at(-1).input.filter(item => item.role === "developer");
+  assert.match(JSON.stringify(updatedContext.at(-1)), /replace earlier application instructions/);
+  assert.match(JSON.stringify(updatedContext.at(-1)), /CALENDAR_INSTRUCTIONS_B/);
+  await provider.ensureThreadControls(threadId);
+  assert.equal(instructionUpdates, 1, "unchanged controls do not add another instruction revision");
   const resumedGoal = (await provider.readGoal(threadId)).goal;
   assert.equal(resumedGoal.createdAt, goal.createdAt);
   assert.equal(resumedGoal.status, "active");
   assert.equal(resumedGoal.objective, goal.objective);
   await provider.stopThreadForObservationLoss(threadId, "");
   assert.match(await shellMarker(), /GENERATION=C/);
+  completeResponses = true;
+  let compactListener;
+  const compacted = new Promise((resolve) => {
+    compactListener = (event) => {
+      if (event.params?.threadId !== threadId) return;
+      if (event.method === "thread/compacted" ||
+          event.method === "item/completed" && event.params.item?.type === "contextCompaction") resolve();
+    };
+    events.add(compactListener);
+  });
+  await client.request("thread/compact/start", { threadId });
+  await compacted;
+  events.delete(compactListener);
+  const beforeCompactedTurn = modelRequests;
+  await provider.sendTurn(threadId, [{ type: "text", text: "Continue after compaction." }]);
+  await waitForRequests(beforeCompactedTurn + 1);
+  assert.equal(JSON.stringify(modelInputs.at(-1)).split("CALENDAR_INSTRUCTIONS_B").length - 1, 1);
+  assert.equal(JSON.stringify(modelInputs.at(-1)).includes("CALENDAR_INSTRUCTIONS_A"), false);
 });

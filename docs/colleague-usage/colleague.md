@@ -20,6 +20,14 @@ directly from the text field to Send and Enter sends the message. While Colleagu
 is working, the same shortcut uses Steer to add instructions. Stop stops its
 current turn. These controls and the model picker sit inside the message box.
 The model picker is unavailable during a turn or while sending.
+Colleague keeps its operating instructions across follow-up questions and tool
+checks. You do not need to repeat them or restart the conversation when its
+available product tools change. Current permissions still apply to each action.
+The same instructions remain available after the assistant compacts its context
+or reconnects. If a connection check fails, inspect the reported status before
+retrying an action; Colleague does not automatically repeat an uncertain tool
+operation. If the error asks you to close an attached native assistant terminal,
+close it before resuming the conversation.
 
 Reply text appears progressively while Colleague is answering. Hosted clients
 receive live updates with periodic refresh as recovery. Only the completed answer

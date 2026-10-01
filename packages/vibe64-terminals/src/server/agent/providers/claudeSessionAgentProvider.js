@@ -4,6 +4,7 @@ import { checkpointSessionTurn } from "../../sessionTurnCheckpoint.js";
 import { requireCompletedNativeConversationReplacement } from "../../assistantChangeover.js";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createHash, randomUUID } from "node:crypto";
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import path from "node:path";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { VIBE64_AGENT_RUN_STATE as RUN } from "@local/vibe64-runtime/server";
@@ -12,7 +13,7 @@ import {
   VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileResolution,
   vibe64AgentExecutionProfileAuditSnapshot, vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
-import { vibe64HostContextEnvironment, vibe64HostContextRegistry, withGenesisCommandShim } from "@local/vibe64-genesis/server";
+import { vibe64ConversationInstructions, vibe64HostContextEnvironment, vibe64HostContextRegistry, withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import { appCredentialContext, runVibe64Command, stopVibe64Execution } from "@local/vibe64-execution/server";
 import {
   closeTerminalSession, closeTerminalSessionsForNamespace, listTerminalSessions, readTerminalSession,
@@ -100,7 +101,6 @@ function createClaudeSessionAgentProvider({
 } = {}) {
   const providerConnections = createCodexProviderConnectionStore({ systemRoot });
   const entries = new Map();
-  const starts = new Map();
   const accountProcessStops = new Set();
   let catalog;
   let catalogStart;
@@ -426,6 +426,13 @@ function createClaudeSessionAgentProvider({
         id: state.turnId, active: [RUN.STARTING, RUN.ACTIVE, RUN.FINALIZING].includes(state.state),
         state: state.state, startedAt: now(), updatedAt: now()
       } : null };
+    entry.instructions = createConversationRuntime({
+      engine: "claude",
+      getProcess: () => entry.stopping ? null : entry.process,
+      isActive: () => Boolean(entry.turn?.active),
+      startProcess: (input) => startConversationProcess(entry, input),
+      stopProcess: (reason) => entry.process || entry.executionId ? stopEntry(entry, reason) : Promise.resolve()
+    });
     entries.set(key, entry);
     await save(entry);
     return entry;
@@ -435,10 +442,8 @@ function createClaudeSessionAgentProvider({
     return readClaudeHistory({ configRoot, workdir: entry.nativeWorkdir, conversationId: entry.id });
   }
 
-  async function sessionGuidanceEnvironment(entry) {
-    const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
-    const registry = await vibe64HostContextRegistry(runtimeRoot);
-    await registry.register(entry.id, {
+  function sessionGuidance(entry) {
+    return {
       scope: "session",
       conversationKind: entry.main ? "main" : "temporary",
       session: {
@@ -447,7 +452,13 @@ function createClaudeSessionAgentProvider({
         managedDatabaseRefresh: Boolean(agentDatabaseCommand),
         managedPreview: Boolean(agentPreviewCommand)
       }
-    }, entry.context.workdir);
+    };
+  }
+
+  async function sessionGuidanceEnvironment(entry) {
+    const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
+    const registry = await vibe64HostContextRegistry(runtimeRoot);
+    await registry.register(entry.id, sessionGuidance(entry), entry.context.workdir);
     return vibe64HostContextEnvironment(runtimeRoot);
   }
 
@@ -532,68 +543,50 @@ function createClaudeSessionAgentProvider({
     const flagSettings = claudeFlagSettings({ toolFree: Boolean(profile || entry.context.assistantScope),
       effort: profile ? profile.thinking : selection.variantId, providerEnv: configuration.env });
     const identity = JSON.stringify([selection, profile, input.outputSchema, entry.accountIdentity]);
-    if (entry.process && !entry.stopping && entry.identity === identity) return entry.process;
-    if (entry.process && !entry.stopping && entry.turn?.active) throw error("Stop the current Claude turn before changing its settings.");
-    if (starts.has(entry.key)) return starts.get(entry.key);
-    const start = (async () => {
-      if (entry.process && !entry.stopping && !profile && !entry.profile &&
-          entry.outputSchemaIdentity === JSON.stringify(input.outputSchema)) {
-        try {
-          await entry.process.client.request({ subtype: "apply_flag_settings", settings: flagSettings });
-          await entry.process.client.request({ subtype: "set_model", model: configuration.model });
-          entry.identity = identity;
-          return entry.process;
-        } catch (failure) {
-          await stopEntry(entry, failure.message);
-          throw failure;
-        }
-      }
-      if (entry.process || entry.executionId) await stopEntry(entry, "Claude's previous process was stopped before reconnecting.");
-      const ctx = entry.context;
-      let prepared = { env: ctx.assistantScope?.environment || {}, shimDirs: [] };
-      if (!ctx.assistantScope && !profile && codexGitCommand) {
-        prepared = await prepareSessionEnvironment(ctx);
-      }
-      entry.nativeWorkdir = profile || ctx.assistantScope ? credentialHome.home : ctx.workdir;
-      const history = await readHistory(entry);
-      entry.sent ||= history.exists;
-      entry.stopping = false;
-      entry.profile = profile;
-      entry.identity = identity;
-      entry.outputSchemaIdentity = JSON.stringify(input.outputSchema);
-      const guidanceEnvironment = !profile && !ctx.assistantScope ? await sessionGuidanceEnvironment(entry) : {};
-      entry.process = await createProcess({ command, commandRunner, stopExecution, credentialHome,
-        env: { ...env, ...prepared.env, ...guidanceEnvironment },
-        shimDirs: !profile && !ctx.assistantScope ? withGenesisCommandShim(prepared.shimDirs) : prepared.shimDirs,
-        workdir: entry.nativeWorkdir,
-        sessionId: entry.id, resume: entry.sent, model: external ? "" : configuration.model,
-        effort: profile ? profile.thinking : selection.variantId,
-        toolFree: Boolean(profile || ctx.assistantScope), outputSchema: input.outputSchema,
-        systemPrompt: ctx.assistantScope?.stableContext,
-        execution: { ownerId: entry.id, sessionId: ctx.sessionId },
-        onStarted: async (executionId) => {
-          entry.executionId = executionId;
-          await save(entry);
-          if (ctx.assistantScope) await ctx.onEvent?.({ type: "helper-execution", conversationId: entry.id, executionId });
-        },
-        onEvent: (frame) => receive(entry, frame),
-        onFailure: async (failure) => {
-          entry.observationError = failure.message;
-          await stopEntry(entry, failure.message);
-        }
-      });
-      try {
-        await entry.process.client.request({ subtype: "apply_flag_settings", settings: flagSettings });
-        await entry.process.client.request({ subtype: "set_model", model: configuration.model });
-      } catch (failure) {
+    const systemPrompt = entry.context.assistantScope?.stableContext || (profile
+      ? "Complete only the supplied task."
+      : await vibe64ConversationInstructions({ workdir: entry.context.workdir, promptContext: sessionGuidance(entry) }));
+    return entry.instructions.prepare({
+      systemPrompt, contextIdentity: identity, settings: flagSettings, model: configuration.model,
+      instructionMode: entry.context.assistantScope || profile ? "replace" : "append",
+      liveUpdateIdentity: profile ? undefined : JSON.stringify(input.outputSchema ?? null),
+      profile, external, outputSchema: input.outputSchema, selection
+    });
+  }
+
+  async function startConversationProcess(entry, { instructionArguments, model, profile, external, outputSchema, selection }) {
+    const ctx = entry.context;
+    let prepared = { env: ctx.assistantScope?.environment || {}, shimDirs: [] };
+    if (!ctx.assistantScope && !profile && codexGitCommand) {
+      prepared = await prepareSessionEnvironment(ctx);
+    }
+    entry.nativeWorkdir = profile || ctx.assistantScope ? credentialHome.home : ctx.workdir;
+    const history = await readHistory(entry);
+    entry.sent ||= history.exists;
+    entry.stopping = false;
+    entry.profile = profile;
+    const guidanceEnvironment = !profile && !ctx.assistantScope ? await sessionGuidanceEnvironment(entry) : {};
+    entry.process = await createProcess({ command, commandRunner, stopExecution, credentialHome,
+      env: { ...env, ...prepared.env, ...guidanceEnvironment },
+      shimDirs: !profile && !ctx.assistantScope ? withGenesisCommandShim(prepared.shimDirs) : prepared.shimDirs,
+      workdir: entry.nativeWorkdir,
+      sessionId: entry.id, resume: entry.sent, model: external ? "" : model,
+      effort: profile ? profile.thinking : selection.variantId,
+      toolFree: Boolean(profile || ctx.assistantScope), outputSchema,
+      instructionArguments,
+      execution: { ownerId: entry.id, sessionId: ctx.sessionId },
+      onStarted: async (executionId) => {
+        entry.executionId = executionId;
+        await save(entry);
+        if (ctx.assistantScope) await ctx.onEvent?.({ type: "helper-execution", conversationId: entry.id, executionId });
+      },
+      onEvent: (frame) => receive(entry, frame),
+      onFailure: async (failure) => {
+        entry.observationError = failure.message;
         await stopEntry(entry, failure.message);
-        throw failure;
       }
-      await save(entry);
-      return entry.process;
-    })().finally(() => starts.delete(entry.key));
-    starts.set(entry.key, start);
-    return start;
+    });
+    return entry.process;
   }
 
   async function send(entry, input = {}, { renewal = false } = {}) {
@@ -1079,7 +1072,7 @@ function createClaudeSessionAgentProvider({
       closingSessions.add(ctx.key);
       try {
         await restoreSessionEntries(ctx);
-        await Promise.all([...starts].filter(([key]) => key.startsWith(`${ctx.key}\0`)).map(([, start]) => start.catch(() => {})));
+        await Promise.allSettled([...entries.values()].filter((entry) => entry.context.key === ctx.key).map((entry) => entry.instructions.whenIdle()));
         const proofs = [];
         for (const entry of entries.values()) if (entry.context.key === ctx.key) proofs.push(await stopEntry(entry));
         const terminal = await closeTerminalSessionsForNamespace(claudeTerminalNamespace(ctx.sessionId));
@@ -1158,6 +1151,9 @@ function createClaudeSessionAgentProvider({
       const configuration = claudeModelConfiguration(ctx.selection, external);
       return commandRunner({ actor: "app", command,
         args: claudeCodeArguments({ terminal: true, sessionId: entry.id, resume: entry.sent,
+          instructionArguments: entry.instructions.instructionArguments({
+            systemPrompt: await vibe64ConversationInstructions({ workdir: ctx.workdir, promptContext: sessionGuidance(entry) })
+          }),
           model: configuration.model, effort: ctx.selection.variantId }),
         baseEnv: { ...env, ...prepared.env, ...guidanceEnvironment, ...configuration.env, DISABLE_AUTOUPDATER: "1" }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,
         allowedRoots: [ctx.workdir], envPolicy: "auth", purpose: "assistant", mode: "pty",
