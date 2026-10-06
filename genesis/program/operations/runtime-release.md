@@ -3,6 +3,8 @@
 Maintainers distribute Vibe64 as built frontend assets, a bundled server and
 its helper commands, required package data, and native runtime dependencies.
 Building a package leaves the development dependency installation intact.
+The launcher resolves the teaching CLI through its workspace package export,
+so the same command works without a source checkout in the relocated runtime.
 
 ## Sources
 

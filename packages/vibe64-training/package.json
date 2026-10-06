@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Vibe64 teaching content validation and deterministic lesson bundles.",
   "exports": {
+    "./server/cli": "./src/server/cli.js",
     "./server/content": "./src/server/content.js"
   },
   "dependencies": {

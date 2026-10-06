@@ -385,7 +385,7 @@ async function runLauncher({
 
 if (isDirectCliExecution()) {
   const command = process.argv[2] === "training"
-    ? import("../packages/vibe64-training/src/server/cli.js").then(({ runTrainingCli }) => runTrainingCli(process.argv.slice(3)))
+    ? import("@local/vibe64-training/server/cli").then(({ runTrainingCli }) => runTrainingCli(process.argv.slice(3)))
     : runLauncher();
   command.then((exitCode) => {
     process.exitCode = exitCode;

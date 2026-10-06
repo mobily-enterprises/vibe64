@@ -168,6 +168,8 @@ test("runtime release relocates, runs native and browser services, and packs wit
     const installed = path.join(root, "relocated");
     await rename(staged, installed);
     await verifyRuntime(installed);
+    await assert.rejects(execute(process.execPath, [path.join(installed, "bin/run.js"), "training"]),
+      error => error.code === 1 && /Usage: vibe64 training validate/u.test(error.stderr));
     await execute(process.execPath, [path.join(installed, "bin/sqlite-proof.js"), path.join(root, "proof.sqlite")]);
     await assert.rejects(execute(process.execPath, [
       path.join(installed, "node_modules/@local/vibe64-execution/src/host/execHelper.js")
