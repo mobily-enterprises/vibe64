@@ -48,6 +48,12 @@ Code** or **Start OpenCode**, depending on the session's agent. The terminal
 continues that session's native conversation. **Close terminal** stops its
 interactive terminal; starting it again resumes the saved conversation.
 
+Click inside the terminal before typing or pasting. Text and Enter are delivered
+in the order you entered them, even while the server checks terminal access.
+If an input error appears, inspect the terminal before entering the command again;
+the error does not mean that earlier input was discarded or rolled back.
+Colleague can explain the error, but terminal commands remain your interaction.
+
 A resumed Codex terminal keeps the shared server's saved permissions. Codex may
 still show its own OpenAI sign-in screen when Main chat uses an external model:
 its terminal checks the shared server's account before opening the conversation.

@@ -98,51 +98,56 @@ function registerTerminalWebSocketRoute(
         const toolId = String(routeParams.toolId || "");
         const jobId = String(routeParams.jobId || "");
 
-        socket.on("message", async (rawMessage) => {
-          try {
-            await withProjectContext(async () => {
-              const message = JSON.parse(rawMessage.toString());
-              if (message?.type === "input") {
-                const response = await write(service, {
-                  data: message.data,
-                  jobId,
-                  request,
-                  sessionId,
-                  terminalSessionId,
-                  toolId
-                });
-                if (response?.ok === false) {
-                  sendSocketJson(socket, {
-                    error: response.error || "Terminal input failed.",
-                    type: "error"
+        // PTY writes may await authorization or execution; preserve wire order.
+        let messageQueue = Promise.resolve();
+        socket.on("message", (rawMessage) => {
+          messageQueue = messageQueue.then(async () => {
+            try {
+              await withProjectContext(async () => {
+                const message = JSON.parse(rawMessage.toString());
+                if (message?.type === "input") {
+                  const response = await write(service, {
+                    data: message.data,
+                    jobId,
+                    request,
+                    sessionId,
+                    terminalSessionId,
+                    toolId
                   });
+                  if (response?.ok === false) {
+                    sendSocketJson(socket, {
+                      error: response.error || "Terminal input failed.",
+                      type: "error"
+                    });
+                  }
+                  return;
                 }
-                return;
-              }
-              if (message?.type === "resize") {
-                const response = await resize?.(service, {
-                  cols: message.cols,
-                  jobId,
-                  request,
-                  rows: message.rows,
-                  sessionId,
-                  terminalSessionId,
-                  toolId
-                });
-                if (response?.ok === false) {
-                  sendSocketJson(socket, {
-                    error: response.error || "Terminal resize failed.",
-                    type: "resize.error"
+                if (message?.type === "resize") {
+                  const response = await resize?.(service, {
+                    cols: message.cols,
+                    jobId,
+                    request,
+                    rows: message.rows,
+                    sessionId,
+                    terminalSessionId,
+                    toolId
                   });
+                  if (response?.ok === false) {
+                    sendSocketJson(socket, {
+                      error: response.error || "Terminal resize failed.",
+                      type: "resize.error"
+                    });
+                  }
                 }
-              }
-            });
-          } catch (error) {
-            sendSocketJson(socket, {
-              error: String(error?.message || error || "Terminal socket message failed."),
-              type: "error"
-            });
-          }
+              });
+            } catch (error) {
+              sendSocketJson(socket, {
+                error: String(error?.message || error || "Terminal socket message failed."),
+                type: "error"
+              });
+            }
+          });
+          return messageQueue;
         });
 
         socket.on("close", closeSubscription);

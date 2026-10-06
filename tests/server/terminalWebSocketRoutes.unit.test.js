@@ -314,3 +314,61 @@ test("terminal websocket guard requires authenticated same-origin requests for h
     }
   }
 });
+
+test("terminal websocket preserves rapid input order across delayed writes and a failed write", async () => {
+  let handler;
+  let releaseFirst;
+  let firstStarted;
+  const started = new Promise(resolve => { firstStarted = resolve; });
+  const blocked = new Promise(resolve => { releaseFirst = resolve; });
+  const received = [];
+  const written = [];
+  const service = {};
+  registerTerminalWebSocketRoute({
+    get(_path, _options, routeHandler) { handler = routeHandler; }
+  }, {
+    projectScoped: false,
+    routePath: "/terminal/ws",
+    service,
+    subscribe() { return { unsubscribe() {} }; },
+    async write(resolvedService, { data, sessionId, terminalSessionId, request }) {
+      assert.equal(resolvedService, service);
+      assert.equal(sessionId, "session-1");
+      assert.equal(terminalSessionId, "terminal-1");
+      assert.equal(request.vibe64User.email, "owner@example.com");
+      received.push(data);
+      if (data === "K") {
+        firstStarted();
+        await blocked;
+      }
+      if (data === "!") throw new Error("Input rejected.");
+      written.push(data);
+      return { ok: true };
+    }
+  });
+  const socket = testSocket();
+  handler(socket, {
+    protocol: "https",
+    headers: { host: "example.com", origin: "https://example.com" },
+    ip: "10.0.0.8",
+    params: { sessionId: "session-1", terminalSessionId: "terminal-1" },
+    vibe64User: { email: "owner@example.com" }
+  });
+  await waitForSocketMessages(socket, 1);
+  const input = data => socket.handlers.message(Buffer.from(JSON.stringify({ type: "input", data })));
+  const first = input("K");
+  await started;
+  const rest = [input("O"), input("."), input("\r")];
+  try {
+    await delay(0);
+    assert.deepEqual(received, ["K"], "later keystrokes must wait for the first write");
+  } finally {
+    releaseFirst();
+    await Promise.all([first, ...rest]);
+  }
+  assert.equal(written.join(""), "KO.\r", "Enter must not overtake pending input");
+  await Promise.all([input("!"), input("next")]);
+  assert.deepEqual(written, ["K", "O", ".", "\r", "next"]);
+  assert.deepEqual(socket.sent.at(-1), { error: "Input rejected.", type: "error" });
+  socket.handlers.close();
+});

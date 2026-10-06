@@ -2458,6 +2458,11 @@ started with; input rechecks the current viewer's access and connection identity
 without loading full chat history. A changed connection requires closing and
 reopening the terminal. Shared Backup never receives raw terminal input. Reading,
 resizing and closing remain available after AI access is lost.
+The shared terminal WebSocket route serializes each connection's incoming
+messages through its existing authorized write/resize operations. An asynchronous
+access check cannot let later characters or Enter overtake earlier input. Errors
+retain their existing visible response and do not discard the connection's later
+messages; this transport owns no native conversation or account state.
 The running OpenCode terminal accepts picker, dropped and pasted files through
 the shared attachment queue. Its server handoff resolves upload IDs into retained
 session files, grants that native conversation access to their directories, and
