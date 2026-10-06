@@ -16,6 +16,8 @@ import { createTerminalActions } from "../../packages/vibe64-terminals/src/serve
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 
+const fixtureResources = new WeakMap();
+
 const modelFrame = (delta, finish_reason = null) => `data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
 const selection = { engineId: "codex", modelProviderId: "openai", modelId: "test-model" };
 const reply = (text) => JSON.stringify({ kind: "reply", text, toolName: "", arguments: "" });
@@ -47,7 +49,16 @@ function modelStream() {
 async function fixture(t, responses, { systemRoot, discovery = false, discoveryQueries = false, watching = false, assigning = false, watchPollMs = 30000 } = {}) {
   watching ||= assigning;
   const root = systemRoot || await mkdtemp(path.join(os.tmpdir(), "colleague-test-"));
-  if (!systemRoot) t.after(() => rm(root, { force: true, recursive: true }));
+  let resources = fixtureResources.get(t);
+  if (!resources) {
+    resources = { services: [], roots: [] };
+    fixtureResources.set(t, resources);
+    t.after(async () => {
+      for (const service of resources.services) await service.close();
+      for (const root of resources.roots) await rm(root, { force: true, recursive: true });
+    });
+  }
+  if (!systemRoot) resources.roots.push(root);
   const actions = createActionCatalogue();
   const observations = { starts: [], mutations: [], creates: 0, allow: true, projectAllowed: true, reads: 0,
     helperCalls: [], sent: [], conversations: {}, deniedProjects: new Set(), projectChecks: [],
@@ -206,7 +217,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   const send = (message, messageId = "user-1", extra = {}) => actions.execute({ actionId: "vibe64.colleague.message.send", input: {
     clientId: "browser-1", message, messageId, ...extra
   }, context });
-  t.after(() => service.close());
+  resources.services.push(service);
   return { service, actions, events, root, observations, context, send, terminals };
 }
 
