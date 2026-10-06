@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "description": "Vibe64 teaching content validation and deterministic lesson bundles.",
-  "exports": { "./server/content": "./src/server/content.js" },
-  "dependencies": { "@jskit-ai/kernel": "0.1.224" }
+  "exports": {
+    "./server/content": "./src/server/content.js"
+  },
+  "dependencies": {
+    "@jskit-ai/kernel": "0.1.225"
+  }
 }
