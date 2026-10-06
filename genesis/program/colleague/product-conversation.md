@@ -53,6 +53,8 @@ owns product instructions, focused targets, watches, assignments and authorizati
 It consumes normalized events; it has no provider-event parser or reply/tool
 envelope loop. The terminal service supplies authorized account resolution and
 managed execution. Each person has an independent native scope.
+The shared host preserves the native Claude profile lookup used by Main;
+it inherits an explicit configuration directory without inventing a default override.
 
 The private `conversation.json` remains the authoritative product record. JSKIT's
 record transactions commit its canonical transcript and runtime metadata through

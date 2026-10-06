@@ -3340,8 +3340,7 @@ function createService({
       return {
         workdir: scope.workdir, stateDirectory: path.join(scope.runtimeRoot, "native"),
         env: { ...actorHomeEnv(credentialHome, env),
-          CODEX_HOME: path.join(codexProviderOptions.toolHomeSource, ".codex"),
-          CLAUDE_CONFIG_DIR: env.CLAUDE_CONFIG_DIR || path.join(credentialHome.home, ".claude") },
+          CODEX_HOME: path.join(codexProviderOptions.toolHomeSource, ".codex") },
         commands: { codex: codexProviderOptions.codexCommand || STUDIO_MANAGED_CODEX_COMMAND,
           claude: env.VIBE64_CLAUDE_COMMAND || STUDIO_MANAGED_CLAUDE_COMMAND,
           opencode: opencodeTerminalController.command || env.VIBE64_OPENCODE_COMMAND || "opencode" },

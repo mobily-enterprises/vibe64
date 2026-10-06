@@ -49,6 +49,8 @@ without requiring an open project. A host execution error during preparation
 does not by itself mean that account is disconnected. Ask the workspace operator
 to restore execution, then retry in the same conversation. Use **AI Accounts**
 to reconnect only when the account check asks you to sign in.
+Colleague uses the same saved native Claude login as Main. Opening Colleague
+does not move that login to another profile or require a separate sign-in.
 If a model rejects a sent request, its error appears in the message box. Your
 request remains in the conversation; this is separate from **Reconnecting…**,
 which reports a failed connection check. Read the error before sending again.
