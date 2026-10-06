@@ -2,7 +2,8 @@
 
 Vibe64 validates local topic repositories and produces reproducible lesson bundles.
 This authoring facility does not execute exercises, install topics or teach a
-learner. The teaching runtime and hosted provisioning are not yet implemented.
+learner. A read-only server facility now checks preinstalled pinned snapshots;
+there is no installer, learner progress, teaching runtime or hosted provisioning.
 
 ## Sources
 
@@ -10,12 +11,14 @@ learner. The teaching runtime and hosted provisioning are not yet implemented.
 - `packages/vibe64-training/src/server/content.js`
 - `packages/vibe64-training/src/server/catalogue.js`
 - `packages/vibe64-training/src/server/cli.js`
+- `packages/vibe64-training/src/server/installedContent.js`
 - `bin/run.js`
 - `docs/training-content.md`
 - `docs/templates/learn-topic/README.md`
 - `tooling/release/runtime-package.mjs`
 - `docs/colleague-usage/teaching-content.md`
 - `tests/server/vibe64TrainingContent.unit.test.js`
+- `tests/server/vibe64TrainingInstalledContent.unit.test.js`
 
 ## Public contract
 
@@ -51,3 +54,25 @@ Practical descriptors name evidence producers/checks; this facility validates th
 references but does not manufacture observations, run checks or evaluate progress.
 Application execution, learner permissions and teaching remain Vibe64 concerns,
 with no teaching semantics in JSKIT or Genesis.
+
+
+## Installed pinned reads
+
+`@local/vibe64-training/server/installed-content` exports
+`createInstalledTrainingContent({systemRoot})`. The server chooses an absolute
+system root; requests choose validated topic IDs, exact commits and lesson hashes,
+never filesystem paths. A trusted topic hash from the course lock or saved attempt
+is mandatory for both reads and fences even a self-consistent cache replacement.
+Snapshots live under
+`training/content/<topicId>/<commit>/` with `pin.json`, original CLI `bundle.json`
+and its `files/` snapshot. The pin identifies schema, topic, release, canonical
+repository, commit and topic hash.
+
+`readTopic` reuses local validation and compares the complete ordered bundle,
+identity and file inventory. It rejects symlinks, changed/missing/extra files and
+invalid pins. `readLesson` selects only a published lesson at its exact hash and
+returns the checked document, rubric sections and visual descriptors. Reads never
+write, repair, fetch, run checks, enable a course or declare an assessment passed.
+An absent or invalid snapshot reports reinstall guidance. Catalogue enablement is
+not part of a pinned read, so a future existing attempt can continue after its
+release is disabled; new-start permission remains the application action's job.

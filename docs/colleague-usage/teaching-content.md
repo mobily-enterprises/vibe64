@@ -43,3 +43,11 @@ These are terminal authoring steps on desktop, with no separate mobile controls.
 Colleague can explain them and offer to ask a coding agent for help. It cannot run
 them itself or claim a draft lesson is ready for a learner. Human teaching review,
 real exercise checks and animation testing remain necessary before a course release.
+
+
+A lesson version must remain pinned to the content the learner started. If its
+content is reported missing or invalid, ask the workspace owner to restore that
+exact verified revision. A newer bundle or a draft is not a substitute for the
+missing lesson, and retrying must not reset learning history. Colleague can explain
+this recovery and offer to formulate the request; it cannot reinstall content.
+There is still no learner start/install control in this authoring release.

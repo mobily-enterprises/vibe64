@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Vibe64 teaching content validation and deterministic lesson bundles.",
+  "description": "Vibe64 teaching content validation, deterministic bundles and pinned installed reads.",
   "exports": {
     "./server/cli": "./src/server/cli.js",
-    "./server/content": "./src/server/content.js"
+    "./server/content": "./src/server/content.js",
+    "./server/installed-content": "./src/server/installedContent.js"
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.1.225"

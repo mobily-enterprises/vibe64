@@ -3,9 +3,9 @@
 ## `training` Teaching content
 
 Owns versioned local topic/lesson/visual validation and reproducible authoring
-bundles. Consumes the existing CLI entry point without changing editor launch.
-No learner progress, hosted provisioning or teaching runtime exists in this first
-authoring increment. JSKIT and Genesis do not own teaching semantics. Topic source
+bundles, plus read-only validation of preinstalled pinned topic snapshots.
+Consumes the existing CLI entry point without changing editor launch. No installer,
+learner progress, hosted provisioning or teaching runtime exists yet. JSKIT and Genesis do not own teaching semantics. Topic source
 and generated bundles are author-controlled files, rather than database tables.
 
 ### Program

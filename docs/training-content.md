@@ -113,3 +113,29 @@ contains each repository, immutable commit, topic manifest hash and complete
 ordered lesson identities. If a topic changes during generation, commit the
 intended content and retry. This command generates local release material only;
 it does not push Git, create a remote release, install content or enable a course.
+
+
+## Server reads of installed snapshots
+
+This release also provides a read-only server API at
+`@local/vibe64-training/server/installed-content`. It does not add a learner UI or
+an installation command. Create the reader with the server's absolute
+`systemRoot`. `readTopic({topicId,commit,topicHash})` requires the trusted topic
+hash from the course lock or saved attempt, then checks
+`training/content/<topicId>/<40-character-commit>/`, whose `pin.json` contains only
+`schemaVersion:1`, `topicId`, `release`, `repository` (`owner/learn-topic`), `commit`
+and `topicHash`. `bundle.json` and `files/` must be the exact original CLI bundle.
+The pin’s canonical repository must match the source package’s repository URL.
+Local cache self-consistency is insufficient: its topic hash must also match the
+trusted caller pin, which binds topic metadata, release, repository and lesson order.
+
+The reader freshly validates the declared inputs and complete ordered manifests,
+rejecting aliases, symlinks, missing, changed or unrecorded files.
+`readLesson({topicId,commit,topicHash,lessonCode,lessonHash})` requires the exact published
+lesson and returns its checked teaching text, anchored rubrics and visual metadata.
+Drafts and different hashes fail; an invalid or missing snapshot reports that the
+owner must reinstall the verified revision. These reads never repair data or run
+exercise/check scripts. They do not consult catalogue enablement: disabling a
+release must not silently substitute new content into an existing pinned attempt.
+Authorization to start a lesson and durable assessment progress are not provided
+by this API.
