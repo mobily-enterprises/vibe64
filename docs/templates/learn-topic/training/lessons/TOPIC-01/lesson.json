@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "code": "TOPIC-01",
+  "title": "Replace with the learner task",
+  "document": "lesson.md",
+  "prerequisites": [],
+  "estimatedMinutes": 15,
+  "visuals": [],
+  "assessments": [
+    {
+      "id": "explain-outcome",
+      "kind": "answer",
+      "required": true,
+      "rubric": "lesson.md#explain-outcome"
+    }
+  ]
+}

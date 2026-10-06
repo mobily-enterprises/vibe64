@@ -55,10 +55,13 @@ native credentials or canonical project content. See `docs/state-upgrades.md`
 for authoring, operation and recovery.
 
 Task-oriented Colleague usage guides under `docs/colleague-usage/` ship with the
-matching application runtime. The builder copies only that documentation subtree;
-it does not publish unrelated project or internal architecture documentation.
+matching application runtime. The builder also ships `docs/training-content.md`
+and the copyable `docs/templates/learn-topic/` authoring template. Its explicit
+documentation list excludes unrelated project and internal architecture material.
 The relocated runtime proof discovers a topic and reads its complete guide through
 the real authenticated actions, checking it against the packaged Markdown.
+The same relocated-runtime test validates the shipped draft topic through the
+installed teaching CLI, without a source checkout.
 
 This mechanism also applies to persisted message-format changes. Each script
 currently owns discovery, backups and transformation through its `run` callback;

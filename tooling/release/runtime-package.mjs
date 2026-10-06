@@ -4,6 +4,7 @@ import path from "node:path";
 import { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle, buildServerBundle, SERVER_BUNDLE_EXTERNALS } from "./server-build.mjs";
 
 const GENESIS_BOUNDARY = "@local/vibe64-genesis/server";
+const RELEASE_DOCS = ["docs/colleague-usage", "docs/training-content.md", "docs/templates/learn-topic"];
 const RUNTIME_ENTRIES = [
   "bin/run.js",
   "bin/server.js",
@@ -96,8 +97,9 @@ async function createRuntimePackage({ appRoot, releaseAppRoot, extraEntries = []
   for (const entry of ["LICENSE", "LICENSE.md", "LICENSE.txt", "README.md"]) {
     if (await exists(path.join(appRoot, entry))) await cp(path.join(appRoot, entry), path.join(releaseAppRoot, entry));
   }
-  const usageGuides = path.join(appRoot, "docs/colleague-usage");
-  if (await exists(usageGuides)) await cp(usageGuides, path.join(releaseAppRoot, "docs/colleague-usage"), { recursive: true });
+  for (const entry of RELEASE_DOCS) {
+    if (await exists(path.join(appRoot, entry))) await cp(path.join(appRoot, entry), path.join(releaseAppRoot, entry), { recursive: true });
+  }
   const serverEntry = minify ? "server.bundle.mjs" : "server.js";
   const server = await buildServerBundle({
     appRoot, outputPath: path.join(releaseAppRoot, serverEntry), minify,
@@ -216,7 +218,7 @@ async function createRuntimePackage({ appRoot, releaseAppRoot, extraEntries = []
     name: sourceManifest.name, version: sourceManifest.version || "0.0.0", private: sourceManifest.private,
     description: sourceManifest.description, type: "module", engines: sourceManifest.engines,
     bin: { vibe64: "bin/run.js" },
-    files: ["app.json", "bin", "config", "dist", "docs/colleague-usage", serverEntry],
+    files: ["app.json", "bin", "config", "dist", ...RELEASE_DOCS, serverEntry],
     scripts: { start: "node bin/server.js --no-open" },
     dependencies: Object.fromEntries(Object.entries(dependencies).sort(([a], [b]) => a.localeCompare(b))),
     bundleDependencies: [...bundled].sort()

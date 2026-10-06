@@ -1,0 +1,22 @@
+{
+  "name": "learn-example-topic",
+  "private": true,
+  "version": "0.1.0",
+  "vibe64Training": {
+    "schemaVersion": 1,
+    "topicId": "example-topic",
+    "domainId": "vibe64",
+    "title": "Example topic",
+    "status": "preview",
+    "outline": "training/outline.md",
+    "prerequisites": [],
+    "lessons": [
+      {
+        "code": "TOPIC-01",
+        "descriptor": "training/lessons/TOPIC-01/lesson.json",
+        "status": "draft",
+        "required": true
+      }
+    ]
+  }
+}

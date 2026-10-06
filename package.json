@@ -12,6 +12,7 @@
   },
   "files": [
     "docs/training-content.md",
+    "docs/templates/learn-topic",
     "app.json",
     "bin/",
     "config/",

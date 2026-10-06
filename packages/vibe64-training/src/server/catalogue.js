@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { readFile, realpath } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import { promisify } from "node:util";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { courseSchema, topicSchema, validateContent } from "./contentSchemas.js";
@@ -9,12 +9,17 @@ const runFile = promisify(execFile);
 
 async function readPinnedTopic(directory) {
   const root = await realpath(directory);
-  const git = async (...args) => (await runFile("git", ["-C", root, ...args], { maxBuffer: 1024 * 1024 })).stdout.trim();
-  if (await realpath(await git("rev-parse", "--show-toplevel")) !== root) throw new Error("Choose the topic repository root.");
+  const git = async (...args) => {
+    const { stdout } = await runFile("git", ["-C", root, ...args], { maxBuffer: 1024 * 1024 });
+    return stdout.trim();
+  };
+  if (await realpath(await git("rev-parse", "--show-toplevel")) !== root) {
+    throw new Error("Choose the topic repository root.");
+  }
   const commit = await git("rev-parse", "HEAD");
   if (await git("status", "--porcelain", "--untracked-files=all")) throw new Error("Commit the topic content before generating a pinned course manifest.");
   const result = await validateTopic(root);
-  const metadata = JSON.parse(await readFile(`${root}/package.json`, "utf8"));
+  const metadata = JSON.parse(await git("show", `${commit}:package.json`));
   const repository = String(metadata.repository?.url || "").match(/^https:\/\/github\.com\/([a-zA-Z0-9_.-]+\/learn-[a-zA-Z0-9_.-]+)\.git$/u)?.[1];
   if (!repository) throw new Error("Topic package needs its canonical https://github.com/<owner>/learn-<topic>.git repository URL.");
   // Prove every hashed input is from the pinned commit, including transient worktree edits.
@@ -23,8 +28,10 @@ async function readPinnedTopic(directory) {
     if (createHash("sha256").update(stdout).digest("hex") !== file.sha256 || stdout.length !== file.bytes) throw new Error(`Topic input differs from its pinned commit: ${file.path}.`);
   }
   if (await git("rev-parse", "HEAD") !== commit || await git("status", "--porcelain", "--untracked-files=all")) throw new Error("Topic changed during manifest generation. Commit and retry.");
-  return { topicId: result.topic.topicId, release: result.release, repository, commit,
-    topicManifest: result.topicManifest, topicHash: result.topicHash };
+  return {
+    topicId: result.topic.topicId, release: result.release, repository, commit,
+    topicManifest: result.topicManifest, topicHash: result.topicHash
+  };
 }
 
 function createCourseLock(input, resolvedTopics) {
@@ -40,7 +47,9 @@ function createCourseLock(input, resolvedTopics) {
     if (!/^[a-zA-Z0-9_.-]+\/learn-[a-zA-Z0-9_.-]+$/u.test(resolved.repository || "") || !/^[a-f0-9]{40}$/u.test(resolved.commit || "")) throw new Error(`Topic requires a repository and immutable commit: ${reference.topicId}.`);
     const manifest = resolved.topicManifest;
     if (!manifest || manifest.schemaVersion !== 1 || manifest.topic?.topicId !== reference.topicId || manifest.release !== reference.release ||
-      createHash("sha256").update(canonicalJson(manifest)).digest("hex") !== resolved.topicHash) throw new Error(`Topic manifest identity mismatch: ${reference.topicId}.`);
+      createHash("sha256").update(canonicalJson(manifest)).digest("hex") !== resolved.topicHash) {
+      throw new Error(`Topic manifest identity mismatch: ${reference.topicId}.`);
+    }
     validateContent(topicSchema, manifest.topic, reference.topicId);
     if (course.status === "released" && manifest.topic.status !== "released") throw new Error(`Released course requires a released topic: ${reference.topicId}.`);
     const entries = manifest.topic.lessons;
@@ -50,8 +59,11 @@ function createCourseLock(input, resolvedTopics) {
       if (lesson.code !== entry.code || lesson.status !== entry.status || lesson.required !== entry.required || !/^[a-f0-9]{64}$/u.test(lesson.hash || "")) throw new Error(`Changed whole-topic order or lesson identity: ${reference.topicId}.`);
       if (course.status === "released" && lesson.required && lesson.status !== "published") throw new Error(`Released course includes required draft: ${lesson.code}.`);
     }
-    return { topicId: reference.topicId, release: reference.release, repository: resolved.repository,
-      commit: resolved.commit, manifestHash: resolved.topicHash, lessons: manifest.lessons.map(lesson => ({ ...lesson })) };
+    return {
+      topicId: reference.topicId, release: reference.release, repository: resolved.repository,
+      commit: resolved.commit, manifestHash: resolved.topicHash,
+      lessons: manifest.lessons.map(lesson => ({ ...lesson }))
+    };
   });
   return { schemaVersion: 1, courseId: course.courseId, release: course.release, status: course.status, topics };
 }

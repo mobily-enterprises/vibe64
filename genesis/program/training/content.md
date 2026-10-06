@@ -12,10 +12,16 @@ learner. The teaching runtime and hosted provisioning are not yet implemented.
 - `packages/vibe64-training/src/server/cli.js`
 - `bin/run.js`
 - `docs/training-content.md`
+- `docs/templates/learn-topic/README.md`
+- `tooling/release/runtime-package.mjs`
 - `docs/colleague-usage/teaching-content.md`
 - `tests/server/vibe64TrainingContent.unit.test.js`
 
 ## Public contract
+
+The release ships a copyable whole-topic template and its authoring guide. The
+template validates as one draft lesson, without exercise or visual capabilities;
+authors replace its placeholders and review learning outcomes before publication.
 
 `vibe64 training validate <topic-directory>` validates versioned topic, lesson and
 visual schemas, explicit rubric anchors, declared checks, relative file boundaries,
@@ -33,8 +39,11 @@ adds metadata, outline and ordered lesson identities. Nothing is fetched or exec
 `vibe64 training publish-manifest <course.json> <committed-topic-directory...>`
 selects complete ordered topic releases. It validates clean repository roots and
 compares every included input against the exact Git commit before atomically
-replacing the sibling `course.lock.json`. Locks contain repository, immutable
-commit, manifest hash and ordered lesson identities. Released courses require
+replacing the sibling `course.lock.json`. Repository metadata comes from the
+pinned commit rather than a later working-tree read. Output cannot replace its
+input descriptor or live inside a pinned source topic, including physical aliases.
+Locks contain repository, immutable commit, manifest hash and ordered lesson
+identities. Released courses require
 released topics without required drafts. This is local authoring, with no Git
 push, remote release, installation or course enabling.
 

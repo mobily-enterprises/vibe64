@@ -51,7 +51,7 @@
       "title": "dev.js"
     },
     {
-      "bytes": 10029,
+      "bytes": 10017,
       "districtId": "directory:bin",
       "extractors": [
         "javascript"
@@ -77,7 +77,7 @@
         "function:bin/run.js:runServerInCurrentTerminal:function:328:1",
         "function:bin/run.js:runLauncher:function:353:1"
       ],
-      "hash": "sha256:4fa9ec0a406626a9df8ccdc87c92462647183bdd0fc19bcfbca0c5b1b760fdea",
+      "hash": "sha256:0c0d32111b19c0f63eb8b4aec40fcb6b78f244f82e7b581eaa75b3f048c80cc5",
       "id": "file:bin/run.js",
       "internalFunctionCount": 7,
       "language": "javascript",
@@ -13559,7 +13559,7 @@
       "title": "openCodeScopedPreparation.js"
     },
     {
-      "bytes": 30016,
+      "bytes": 30049,
       "districtId": "directory:packages/vibe64-terminals/src/server",
       "extractors": [
         "javascript"
@@ -13603,7 +13603,7 @@
         "function:packages/vibe64-terminals/src/server/opencodeServerProcess.js:verifyOpenCodeApiKey:function:713:1",
         "function:packages/vibe64-terminals/src/server/opencodeServerProcess.js:verifyOpenCodeApiKey.prepareCommand:method:732:7"
       ],
-      "hash": "sha256:0df1646048753fede4a624ef64d4c43ae5e55646da029da959602e5cccd34426",
+      "hash": "sha256:9abbfade0b48abf1b8d50add7902bd3971f2d485a182d47e6d34e543641cf3ed",
       "id": "file:packages/vibe64-terminals/src/server/opencodeServerProcess.js",
       "internalFunctionCount": 28,
       "language": "javascript",
@@ -15335,19 +15335,43 @@
       "title": "launchPreviewProtocol.js"
     },
     {
-      "bytes": 2633,
+      "bytes": 5103,
       "districtId": "directory:packages/vibe64-training/src/server",
       "extractors": [
         "javascript"
       ],
       "functionIds": [
-        "function:packages/vibe64-training/src/server/cli.js:runTrainingCli:function:6:1"
+        "function:packages/vibe64-training/src/server/catalogue.js:readPinnedTopic:function:10:1",
+        "function:packages/vibe64-training/src/server/catalogue.js:readPinnedTopic.git:function:12:15",
+        "function:packages/vibe64-training/src/server/catalogue.js:createCourseLock:function:37:1"
       ],
-      "hash": "sha256:e9b502083e784b1a087b7ba342ed7673fd5aceab0ff1e6f9a093dd462a8803c3",
+      "hash": "sha256:bcc767275b7bf8a41d47f19c596315a2e83f515773e9ce09beafdcbf5205b0c2",
+      "id": "file:packages/vibe64-training/src/server/catalogue.js",
+      "internalFunctionCount": 1,
+      "language": "javascript",
+      "lines": 71,
+      "mode": 33188,
+      "path": "packages/vibe64-training/src/server/catalogue.js",
+      "presentationCampusId": "presentation-campus:packages:packages/vibe64-training",
+      "presentationRegionId": "packages",
+      "publicFunctionCount": 2,
+      "role": "source",
+      "title": "catalogue.js"
+    },
+    {
+      "bytes": 4254,
+      "districtId": "directory:packages/vibe64-training/src/server",
+      "extractors": [
+        "javascript"
+      ],
+      "functionIds": [
+        "function:packages/vibe64-training/src/server/cli.js:runTrainingCli:function:7:1"
+      ],
+      "hash": "sha256:5f8e9314a6167959c27d779bf08eac3d807b20c0542da0e37e341130f327e75e",
       "id": "file:packages/vibe64-training/src/server/cli.js",
       "internalFunctionCount": 0,
       "language": "javascript",
-      "lines": 44,
+      "lines": 74,
       "mode": 33188,
       "path": "packages/vibe64-training/src/server/cli.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-training",
@@ -15394,20 +15418,20 @@
       "title": "content.js"
     },
     {
-      "bytes": 3025,
+      "bytes": 3266,
       "districtId": "directory:packages/vibe64-training/src/server",
       "extractors": [
         "javascript"
       ],
       "functionIds": [
         "function:packages/vibe64-training/src/server/contentSchemas.js:list:function:6:14",
-        "function:packages/vibe64-training/src/server/contentSchemas.js:validateContent:function:43:1"
+        "function:packages/vibe64-training/src/server/contentSchemas.js:validateContent:function:48:1"
       ],
-      "hash": "sha256:9d99d488773a9391bd8404ef669aa6c01d116488f924bcec6d8f4cef0b0c967f",
+      "hash": "sha256:89fa874b3003164868f4aef72a1b3f56904b979d309781ab413ddc817946bf1f",
       "id": "file:packages/vibe64-training/src/server/contentSchemas.js",
       "internalFunctionCount": 1,
       "language": "javascript",
-      "lines": 50,
+      "lines": 55,
       "mode": 33188,
       "path": "packages/vibe64-training/src/server/contentSchemas.js",
       "presentationCampusId": "presentation-campus:packages:packages/vibe64-training",
@@ -22384,29 +22408,29 @@
       "title": "require-release-artifact.mjs"
     },
     {
-      "bytes": 12843,
+      "bytes": 12930,
       "districtId": "directory:tooling/release",
       "extractors": [
         "javascript"
       ],
       "functionIds": [
-        "function:tooling/release/runtime-package.mjs:json:function:27:14",
-        "function:tooling/release/runtime-package.mjs:writeJson:function:28:19",
-        "function:tooling/release/runtime-package.mjs:packageName:function:29:21",
-        "function:tooling/release/runtime-package.mjs:exists:function:31:1",
-        "function:tooling/release/runtime-package.mjs:packageRoot:function:38:1",
-        "function:tooling/release/runtime-package.mjs:buildRuntimeBundles:function:47:1",
-        "function:tooling/release/runtime-package.mjs:buildRuntimeBundles.setup:method:66:9",
-        "function:tooling/release/runtime-package.mjs:createRuntimePackage:function:83:1",
-        "function:tooling/release/runtime-package.mjs:createRuntimePackage.copyDependency:function:138:3",
-        "function:tooling/release/runtime-package.mjs:copyDependency.filter:method:147:7",
-        "function:tooling/release/runtime-package.mjs:createRuntimePackage.filter:method:186:7"
+        "function:tooling/release/runtime-package.mjs:json:function:28:14",
+        "function:tooling/release/runtime-package.mjs:writeJson:function:29:19",
+        "function:tooling/release/runtime-package.mjs:packageName:function:30:21",
+        "function:tooling/release/runtime-package.mjs:exists:function:32:1",
+        "function:tooling/release/runtime-package.mjs:packageRoot:function:39:1",
+        "function:tooling/release/runtime-package.mjs:buildRuntimeBundles:function:48:1",
+        "function:tooling/release/runtime-package.mjs:buildRuntimeBundles.setup:method:67:9",
+        "function:tooling/release/runtime-package.mjs:createRuntimePackage:function:84:1",
+        "function:tooling/release/runtime-package.mjs:createRuntimePackage.copyDependency:function:140:3",
+        "function:tooling/release/runtime-package.mjs:copyDependency.filter:method:149:7",
+        "function:tooling/release/runtime-package.mjs:createRuntimePackage.filter:method:188:7"
       ],
-      "hash": "sha256:1174886aa707d1da7b3a6129e6c590afb3ca6353b608098cbdfd21d97f83b16c",
+      "hash": "sha256:28acce1e443a05ece64c37fa9c3f61f412b4d47304df85ec01af26aa43cd5927",
       "id": "file:tooling/release/runtime-package.mjs",
       "internalFunctionCount": 9,
       "language": "javascript",
-      "lines": 237,
+      "lines": 239,
       "mode": 33188,
       "path": "tooling/release/runtime-package.mjs",
       "presentationCampusId": "presentation-campus:everything-else:tooling",
@@ -22607,7 +22631,7 @@
       "title": "vite.config.mjs"
     }
   ],
-  "codeHash": "sha256:5bb10e835d45c258456163a84d600cc05520adecdca92bd5dd2787fe1d8abfd3",
+  "codeHash": "sha256:9f8e0e6b5491f6a57df7f4fc31790a978309cfd44a36132e2b58f928aec5a678",
   "diagnostics": [],
   "districts": [
     {
@@ -158781,12 +158805,76 @@
       "column": 1,
       "container": null,
       "extractor": "javascript",
-      "fileId": "file:packages/vibe64-training/src/server/cli.js",
+      "fileId": "file:packages/vibe64-training/src/server/catalogue.js",
       "generator": false,
-      "id": "function:packages/vibe64-training/src/server/cli.js:runTrainingCli:function:6:1",
+      "id": "function:packages/vibe64-training/src/server/catalogue.js:readPinnedTopic:function:10:1",
       "kind": "function",
       "language": "javascript",
-      "line": 6,
+      "line": 10,
+      "name": "readPinnedTopic",
+      "parameters": [
+        "directory"
+      ],
+      "path": "packages/vibe64-training/src/server/catalogue.js",
+      "qualifiedName": "readPinnedTopic",
+      "role": "source",
+      "static": false,
+      "visibility": "public"
+    },
+    {
+      "async": true,
+      "column": 15,
+      "container": "readPinnedTopic",
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-training/src/server/catalogue.js",
+      "generator": false,
+      "id": "function:packages/vibe64-training/src/server/catalogue.js:readPinnedTopic.git:function:12:15",
+      "kind": "function",
+      "language": "javascript",
+      "line": 12,
+      "name": "git",
+      "parameters": [
+        "...args"
+      ],
+      "path": "packages/vibe64-training/src/server/catalogue.js",
+      "qualifiedName": "readPinnedTopic.git",
+      "role": "source",
+      "static": false,
+      "visibility": "internal"
+    },
+    {
+      "async": false,
+      "column": 1,
+      "container": null,
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-training/src/server/catalogue.js",
+      "generator": false,
+      "id": "function:packages/vibe64-training/src/server/catalogue.js:createCourseLock:function:37:1",
+      "kind": "function",
+      "language": "javascript",
+      "line": 37,
+      "name": "createCourseLock",
+      "parameters": [
+        "input",
+        "resolvedTopics"
+      ],
+      "path": "packages/vibe64-training/src/server/catalogue.js",
+      "qualifiedName": "createCourseLock",
+      "role": "source",
+      "static": false,
+      "visibility": "public"
+    },
+    {
+      "async": true,
+      "column": 1,
+      "container": null,
+      "extractor": "javascript",
+      "fileId": "file:packages/vibe64-training/src/server/cli.js",
+      "generator": false,
+      "id": "function:packages/vibe64-training/src/server/cli.js:runTrainingCli:function:7:1",
+      "kind": "function",
+      "language": "javascript",
+      "line": 7,
       "name": "runTrainingCli",
       "parameters": [
         "args",
@@ -159166,10 +159254,10 @@
       "extractor": "javascript",
       "fileId": "file:packages/vibe64-training/src/server/contentSchemas.js",
       "generator": false,
-      "id": "function:packages/vibe64-training/src/server/contentSchemas.js:validateContent:function:43:1",
+      "id": "function:packages/vibe64-training/src/server/contentSchemas.js:validateContent:function:48:1",
       "kind": "function",
       "language": "javascript",
-      "line": 43,
+      "line": 48,
       "name": "validateContent",
       "parameters": [
         "schema",
@@ -202340,10 +202428,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:json:function:27:14",
+      "id": "function:tooling/release/runtime-package.mjs:json:function:28:14",
       "kind": "function",
       "language": "javascript",
-      "line": 27,
+      "line": 28,
       "name": "json",
       "parameters": [],
       "path": "tooling/release/runtime-package.mjs",
@@ -202359,10 +202447,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:writeJson:function:28:19",
+      "id": "function:tooling/release/runtime-package.mjs:writeJson:function:29:19",
       "kind": "function",
       "language": "javascript",
-      "line": 28,
+      "line": 29,
       "name": "writeJson",
       "parameters": [
         "filename",
@@ -202381,10 +202469,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:packageName:function:29:21",
+      "id": "function:tooling/release/runtime-package.mjs:packageName:function:30:21",
       "kind": "function",
       "language": "javascript",
-      "line": 29,
+      "line": 30,
       "name": "packageName",
       "parameters": [],
       "path": "tooling/release/runtime-package.mjs",
@@ -202400,10 +202488,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:exists:function:31:1",
+      "id": "function:tooling/release/runtime-package.mjs:exists:function:32:1",
       "kind": "function",
       "language": "javascript",
-      "line": 31,
+      "line": 32,
       "name": "exists",
       "parameters": [
         "filename"
@@ -202421,10 +202509,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:packageRoot:function:38:1",
+      "id": "function:tooling/release/runtime-package.mjs:packageRoot:function:39:1",
       "kind": "function",
       "language": "javascript",
-      "line": 38,
+      "line": 39,
       "name": "packageRoot",
       "parameters": [
         "name",
@@ -202443,10 +202531,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:buildRuntimeBundles:function:47:1",
+      "id": "function:tooling/release/runtime-package.mjs:buildRuntimeBundles:function:48:1",
       "kind": "function",
       "language": "javascript",
-      "line": 47,
+      "line": 48,
       "name": "buildRuntimeBundles",
       "parameters": [
         "{ appRoot, releaseAppRoot, extraEntries = [], extraExternals = [], serverEntry = \"server.bundle.mjs\" }"
@@ -202464,10 +202552,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:buildRuntimeBundles.setup:method:66:9",
+      "id": "function:tooling/release/runtime-package.mjs:buildRuntimeBundles.setup:method:67:9",
       "kind": "method",
       "language": "javascript",
-      "line": 66,
+      "line": 67,
       "name": "setup",
       "parameters": [
         "build"
@@ -202485,10 +202573,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:createRuntimePackage:function:83:1",
+      "id": "function:tooling/release/runtime-package.mjs:createRuntimePackage:function:84:1",
       "kind": "function",
       "language": "javascript",
-      "line": 83,
+      "line": 84,
       "name": "createRuntimePackage",
       "parameters": [
         "{ appRoot, releaseAppRoot, extraEntries = [], extraExternals = [], runtimeDependencies = [], minify = true }"
@@ -202506,10 +202594,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:createRuntimePackage.copyDependency:function:138:3",
+      "id": "function:tooling/release/runtime-package.mjs:createRuntimePackage.copyDependency:function:140:3",
       "kind": "function",
       "language": "javascript",
-      "line": 138,
+      "line": 140,
       "name": "copyDependency",
       "parameters": [
         "name",
@@ -202528,10 +202616,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:copyDependency.filter:method:147:7",
+      "id": "function:tooling/release/runtime-package.mjs:copyDependency.filter:method:149:7",
       "kind": "method",
       "language": "javascript",
-      "line": 147,
+      "line": 149,
       "name": "filter",
       "parameters": [
         "filename"
@@ -202549,10 +202637,10 @@
       "extractor": "javascript",
       "fileId": "file:tooling/release/runtime-package.mjs",
       "generator": false,
-      "id": "function:tooling/release/runtime-package.mjs:createRuntimePackage.filter:method:186:7",
+      "id": "function:tooling/release/runtime-package.mjs:createRuntimePackage.filter:method:188:7",
       "kind": "method",
       "language": "javascript",
-      "line": 186,
+      "line": 188,
       "name": "filter",
       "parameters": [
         "filename"
@@ -203695,7 +203783,7 @@
       "title": "vibe64-terminals"
     },
     {
-      "buildingCount": 3,
+      "buildingCount": 4,
       "districtId": "directory:packages/vibe64-training",
       "id": "presentation-campus:packages:packages/vibe64-training",
       "path": "packages/vibe64-training",
@@ -203761,7 +203849,7 @@
   ],
   "presentationRegions": [
     {
-      "buildingCount": 425,
+      "buildingCount": 426,
       "component": "jskit",
       "fallback": false,
       "id": "packages",

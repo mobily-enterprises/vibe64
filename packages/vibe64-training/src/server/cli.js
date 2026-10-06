@@ -8,11 +8,22 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
   if (args[0] === "publish-manifest") {
     const [, coursePath, ...directories] = args;
     if (!coursePath || !directories.length) throw new Error("Usage: vibe64 training publish-manifest <course.json> <committed-topic-directory...>");
-    const course = JSON.parse(await readFile(coursePath, "utf8"));
+    const input = await realpath(coursePath);
+    const filename = path.join(await realpath(path.dirname(path.resolve(coursePath))), "course.lock.json");
+    if (filename === input || path.basename(coursePath) === "course.lock.json") {
+      throw new Error("Course lock output must not replace its input course descriptor.");
+    }
+    const course = JSON.parse(await readFile(input, "utf8"));
     const topics = [];
-    for (const directory of directories) topics.push(await readPinnedTopic(directory));
+    for (const directory of directories) {
+      const root = await realpath(directory);
+      const relative = path.relative(root, filename);
+      if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) {
+        throw new Error("Course lock output must be outside every pinned source topic.");
+      }
+      topics.push(await readPinnedTopic(root));
+    }
     const lock = createCourseLock(course, topics);
-    const filename = path.join(path.dirname(path.resolve(coursePath)), "course.lock.json");
     const temporary = `${filename}.tmp-${randomUUID()}`;
     try {
       await writeFile(temporary, `${canonicalJson(lock)}\n`, { flag: "wx" });

@@ -250,14 +250,16 @@ test("pinned topic reads require the repository root and committed exact inputs"
 
 test("publish-manifest writes a pinned whole-topic lock without changing source or publishing remotely", async t => {
   const f = await fixture(t);
+  const course = { schemaVersion: 1, courseId: "first-course", title: "First", release: "0.1.0", status: "preview", topics: [{ topicId: "test-topic", release: "0.1.0" }] };
   await f.write("package.json", { name: "learn-test-topic", version: "0.1.0", repository: { type: "git", url: "https://github.com/example/learn-test-topic.git" }, vibe64Training: f.topic });
+  await f.write("course.json", course);
   const git = (...args) => execFileSync("git", ["-C", f.root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   git("init", "--initial-branch=main"); git("add", ".");
   git("-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "Fixture topic");
   const catalogue = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-catalogue-"));
   t.after(() => rm(catalogue, { recursive: true, force: true }));
   const filename = path.join(catalogue, "course.json");
-  await writeFile(filename, JSON.stringify({ schemaVersion: 1, courseId: "first-course", title: "First", release: "0.1.0", status: "preview", topics: [{ topicId: "test-topic", release: "0.1.0" }] }));
+  await writeFile(filename, JSON.stringify(course));
   const messages = [];
   await runTrainingCli(["publish-manifest", filename, f.root], { write: text => messages.push(JSON.parse(text)) });
   const lock = JSON.parse(await readFile(path.join(catalogue, "course.lock.json"), "utf8"));
@@ -266,4 +268,13 @@ test("publish-manifest writes a pinned whole-topic lock without changing source 
   assert.equal(messages[0].status, "preview");
   assert.equal(git("status", "--porcelain"), "");
   assert.equal(git("remote"), "");
+  await assert.rejects(() => runTrainingCli(["publish-manifest", path.join(f.root, "course.json"), f.root]), /outside every pinned source/u);
+  const alias = path.join(catalogue, "topic-alias");
+  await symlink(f.root, alias, "dir");
+  await assert.rejects(() => runTrainingCli(["publish-manifest", path.join(alias, "course.json"), f.root]), /outside every pinned source/u);
+  const lockPath = path.join(catalogue, "course.lock.json");
+  await writeFile(lockPath, JSON.stringify(course));
+  await assert.rejects(() => runTrainingCli(["publish-manifest", lockPath, f.root]), /must not replace its input/u);
+  assert.deepEqual(JSON.parse(await readFile(lockPath, "utf8")), course);
+  assert.equal(git("status", "--porcelain"), "", "Rejected output paths leave the source clean");
 });

@@ -7,6 +7,10 @@ its files validate.
 
 Use a topic repository whose name begins with `learn-`. Keep the teaching document,
 assessment rubrics, SVG descriptors and runnable exercise in that repository.
+The installed `docs/templates/learn-topic/` directory supplies a copyable whole
+topic. The author copies it to a new directory, follows its README to choose
+permanent identifiers and replace placeholder content, then validates it. Its
+single lesson is a draft; copying or validation does not make it ready to teach.
 Ask the coding agent to follow the release's `docs/training-content.md` authoring
 contract. Colleague can help formulate that request and send it to an authorised
 coding conversation when the person asks; Colleague has no source or shell access.
@@ -27,6 +31,8 @@ To pin a course, the author prepares a `course.json` selecting whole topic relea
 and runs `vibe64 training publish-manifest <course.json> <committed-topic-directory...>`.
 Use the repository root for each topic, with its canonical GitHub repository URL
 in its package metadata. Commit all topic content first and leave the tree clean.
+Keep the course file outside the source topics and name it `course.json`, not
+`course.lock.json`; output paths that could change these inputs are refused.
 Success writes `course.lock.json` beside the course file, including exact commits,
 manifest hashes and every lesson in topic order. Dirty or changed inputs require
 the author to commit the intended version and retry. A preview remains a preview;

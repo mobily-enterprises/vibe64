@@ -136,7 +136,7 @@ test("runtime release relocates, runs native and browser services, and packs wit
   try {
     const appRoot = path.join(root, "source");
     await mkdir(appRoot);
-    for (const entry of ["app.json", "package.json", "server.js", "server", "bin", "config", "docs/colleague-usage"]) {
+    for (const entry of ["app.json", "package.json", "server.js", "server", "bin", "config", "docs/colleague-usage", "docs/training-content.md", "docs/templates/learn-topic"]) {
       await cp(path.join(sourceRoot, entry), path.join(appRoot, entry), { recursive: true });
     }
     await symlink(path.join(sourceRoot, "node_modules"), path.join(appRoot, "node_modules"));
@@ -170,6 +170,11 @@ test("runtime release relocates, runs native and browser services, and packs wit
     await verifyRuntime(installed);
     await assert.rejects(execute(process.execPath, [path.join(installed, "bin/run.js"), "training"]),
       error => error.code === 1 && /Usage: vibe64 training validate/u.test(error.stderr));
+    assert.equal(await readFile(path.join(installed, "docs/training-content.md"), "utf8"),
+      await readFile(path.join(appRoot, "docs/training-content.md"), "utf8"));
+    const authorTemplate = path.join(installed, "docs/templates/learn-topic");
+    const templateValidation = await execute(process.execPath, [path.join(installed, "bin/run.js"), "training", "validate", authorTemplate]);
+    assert.equal(JSON.parse(templateValidation.stdout).lessons[0].status, "draft");
     await execute(process.execPath, [path.join(installed, "bin/sqlite-proof.js"), path.join(root, "proof.sqlite")]);
     await assert.rejects(execute(process.execPath, [
       path.join(installed, "node_modules/@local/vibe64-execution/src/host/execHelper.js")

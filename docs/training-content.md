@@ -23,6 +23,11 @@ is removed so the command can be retried. Nothing is downloaded or executed.
 
 ## Topic and lesson contracts
 
+Copy the whole `docs/templates/learn-topic/` directory from the installed package
+or source checkout into a new topic directory. Its README lists each permanent ID,
+title, code and outline change. The template validates as one draft lesson; it is
+not teachable content. Lesson 01 in the getting-started topic is the worked example.
+
 The root `package.json` has a `learn-` name, exact three-part release version and
 `vibe64Training` object. Its schema version is 1. Required fields are `topicId`,
 `domainId`, `title`, `status` (`preview` or `released`), `outline`, `prerequisites`
@@ -99,6 +104,9 @@ must declare `repository.url` as `https://github.com/<owner>/learn-<topic>.git`.
 Commit the topic and leave its working tree clean, including untracked files.
 The command validates the content and compares every included byte against the
 exact Git commit. Missing, duplicate, dirty or mismatched topics fail generation.
+Repository identity is read from that commit's package metadata. Keep the course
+descriptor and output outside every pinned topic, including directory aliases;
+the descriptor cannot itself be named `course.lock.json`.
 
 Success atomically replaces `course.lock.json` beside `course.json`. The lock
 contains each repository, immutable commit, topic manifest hash and complete
