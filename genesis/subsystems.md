@@ -5,8 +5,10 @@
 Owns versioned local topic/lesson/visual validation and reproducible authoring
 bundles, verified server-only installation from admitted owner-selected local
 sources, and read-only validation of pinned topic snapshots. Consumes the existing
-CLI entry point without changing editor launch. No learner progress, hosted
-provisioning, teaching runtime or public installation action exists yet. JSKIT and
+CLI entry point without changing editor launch. Owns private server-only pinned
+learner reservations outside projects, reusing Core atomic writes and Kernel locks.
+No assessment progress, hosted provisioning, teaching runtime or public lesson
+start/installation action exists yet. JSKIT and
 Genesis do not own teaching semantics. Topic source
 and generated bundles are author-controlled files, rather than database tables.
 

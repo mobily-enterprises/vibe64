@@ -14,6 +14,9 @@ authoring facility does not yet install a course, start an exercise or teach a l
 A server-only facility can install exact pinned topic snapshots from an admitted
 owner-selected local source, preserving verified revisions on retry. This does not
 enable a course or expose an installation control to learners or Colleague.
+Private server-only state can reserve and resume one exact lesson identity before
+project preparation. It preserves retry identity and the original pin; it does
+not yet start an exercise, submit an assessment or report learning completion.
 
 Colleague is a separate conversation for discussing ideas and operating Vibe64
 across projects. It knows the selected project and session, can open their views

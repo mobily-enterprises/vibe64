@@ -24,9 +24,10 @@ async function readProjectRecordMetadata(projectRecordPath = "") {
   }
 }
 
-async function writeProjectRecordMetadata(filePath, value) {
+async function writeJsonFileAtomic(filePath, value, { directoryMode, fileMode } = {}) {
   await mkdir(path.dirname(filePath), {
-    recursive: true
+    recursive: true,
+    mode: directoryMode
   });
   const temporaryPath = path.join(
     path.dirname(filePath),
@@ -35,7 +36,8 @@ async function writeProjectRecordMetadata(filePath, value) {
   try {
     await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, {
       encoding: "utf8",
-      flag: "wx"
+      flag: "wx",
+      mode: fileMode
     });
     await rename(temporaryPath, filePath);
   } finally {
@@ -63,7 +65,7 @@ async function updateProjectRecordMetadata(projectRecordPath = "", update = {}) 
     if (!isPlainObject(next)) {
       throw new TypeError("Project metadata updates must produce an object.");
     }
-    await writeProjectRecordMetadata(metadataPath, next);
+    await writeJsonFileAtomic(metadataPath, next);
     return next;
   });
   projectRecordMetadataUpdates.set(metadataPath, operation);
@@ -78,5 +80,6 @@ async function updateProjectRecordMetadata(projectRecordPath = "", update = {}) 
 
 export {
   readProjectRecordMetadata,
-  updateProjectRecordMetadata
+  updateProjectRecordMetadata,
+  writeJsonFileAtomic
 };

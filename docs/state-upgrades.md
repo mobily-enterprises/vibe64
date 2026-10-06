@@ -178,6 +178,26 @@ trusted course pin. This cache policy does not back up learner progress: durable
 `training/users` state has a separate recovery requirement and is not yet provided
 by this installation facility.
 
+## Private lesson reservations
+
+New schema-version-1 records under `training/users/<authenticated-user-key>/`
+are created only by an explicit admitted reservation operation. No existing
+application history is transformed and no numbered historical repair is needed
+for this new namespace. `progress.json` owns reservation identity/revision;
+`active-lesson.json` is a derived summary, not another progress authority.
+
+Ordinary reads never write. Explicit reserve/resume can reconcile a missing or
+semantically identical stale valid summary from durable progress under its
+persistent user lock. This is operational recovery of the same reservation,
+not historical backfill. Corrupt, newer, cross-learner or conflicting records fail
+closed. Future stored-format changes still require the normal numbered offline
+upgrade and script-owned backups. The store has no automatic backup service;
+project archives do not cover this state. The explicit stopped-writer
+[learning-state recovery procedure](training-state-recovery.md) preserves private
+checkpoint bytes and validates a staged restore through these same readers.
+Its focused proof covers filesystem interruption and persistent lock contention,
+not actual fleet stopping, off-host retention or future coordinated project restores.
+
 ## Catalog
 
 `20260925-native-conversation-lifecycle` records the additive native replacement

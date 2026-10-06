@@ -3,8 +3,9 @@
 Vibe64 validates local topic repositories and produces reproducible lesson bundles.
 This authoring facility does not execute exercises or teach a learner. Server-only
 facilities install exact verified snapshots from admitted owner-selected local
-sources and check pinned reads. There is no learner progress, teaching runtime,
-hosted provisioning or public installation action yet.
+sources and check pinned reads. Private server-only state retains one exact lesson
+reservation per learner. Assessment progress, teaching runtime, hosted provisioning
+and public installation/start actions are not provided yet.
 
 ## Sources
 
@@ -14,14 +15,19 @@ hosted provisioning or public installation action yet.
 - `packages/vibe64-training/src/server/cli.js`
 - `packages/vibe64-training/src/server/installedContent.js`
 - `packages/vibe64-training/src/server/contentInstaller.js`
+- `packages/vibe64-training/src/server/learnerState.js`
+- `packages/vibe64-core/src/server/projectRecordMetadata.js`
 - `bin/run.js`
 - `docs/training-content.md`
+- `docs/training-state-recovery.md`
 - `docs/templates/learn-topic/README.md`
 - `tooling/release/runtime-package.mjs`
 - `docs/colleague-usage/teaching-content.md`
 - `tests/server/vibe64TrainingContent.unit.test.js`
 - `tests/server/vibe64TrainingInstalledContent.unit.test.js`
 - `tests/server/vibe64TrainingContentInstaller.unit.test.js`
+- `tests/server/vibe64TrainingLearnerState.unit.test.js`
+- `tests/server/studioProjectContext.unit.test.js`
 
 ## Public contract
 
@@ -58,7 +64,6 @@ references but does not manufacture observations, run checks or evaluate progres
 Application execution, learner permissions and teaching remain Vibe64 concerns,
 with no teaching semantics in JSKIT or Genesis.
 
-
 ## Installed pinned reads
 
 `@local/vibe64-training/server/installed-content` exports
@@ -80,7 +85,6 @@ An absent or invalid snapshot reports reinstall guidance. Catalogue enablement i
 not part of a pinned read, so a future existing attempt can continue after its
 release is disabled; new-start permission remains the application action's job.
 
-
 ## Verified installation
 
 `@local/vibe64-training/server/content-installer` accepts only a server-owned
@@ -100,3 +104,37 @@ Alias/path containment checks precede owned mutations. Busy locks report a retry
 stage; killed-writer stages remain for deliberate operator inspection. The service
 does not fetch Git, run authored code, recursively repair permissions, alter learner
 history or perform historical data upgrades.
+
+## Private reservation authority
+
+The internal learner-state API receives actor and course provenance from the
+admitted composing caller; it does not authenticate objects or expose browser
+paths. It verifies the exact installed published topic/lesson pin and uses the
+existing identity key convention without a local fallback. Private state outside
+projects owns one active attempt, revision, stable request receipts, server UUID
+and project slug, initially `reserved`. Project/session effects and assessment
+evidence remain separate future operation responsibilities.
+
+`progress.json` is authoritative and is saved before its derived
+`active-lesson.json`. Duplicate request IDs are resolved before stale revision
+checks and cannot change their full pin. New IDs reuse the same active pin rather
+than creating another exercise; conflicting pins require explicit recovery. The
+existing Kernel persistent file lock serializes cooperating user-state writers.
+Read-only projection never creates or repairs records. Explicit reserve/resume
+reconciles only missing or semantically identical stale valid summaries; corrupt
+state fails closed. Saved-summary and unconfirmed-progress errors distinguish
+durable reservation from uncertainty and require the same retry identity.
+
+The original Core metadata atomic writer is renamed/exported within its same
+module, retaining its JSON bytes, temporary-file identity, exclusive write, rename,
+cleanup, updater queue and default modes. Only optional file/directory modes allow
+the new private 0600/0700 state. This is reuse of one original operation, not a
+parallel writer. The original metadata tests remain evidence alongside the new
+reservation cases. New schema-version-1 files are explicit writes without a
+historical transformation or lazy startup backfill. Backup/restore of learner
+state remains operator-owned, outside project archives. The documented stopped-writer
+procedure uses ordinary private filesystem copies and the original read-only
+validators; it preserves the previous tree through explicit two-rename restore
+and refuses invalid records/pins before publication. Tests execute its actual
+snippets. Live host stopping and off-host retention are not established by those
+filesystem fixtures.

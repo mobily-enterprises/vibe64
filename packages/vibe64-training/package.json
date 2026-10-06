@@ -8,9 +8,11 @@
     "./server/cli": "./src/server/cli.js",
     "./server/content": "./src/server/content.js",
     "./server/installed-content": "./src/server/installedContent.js",
-    "./server/content-installer": "./src/server/contentInstaller.js"
+    "./server/content-installer": "./src/server/contentInstaller.js",
+    "./server/learner-state": "./src/server/learnerState.js"
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.1.225"
+    "@jskit-ai/kernel": "0.1.225",
+    "@local/vibe64-core": "0.1.0"
   }
 }

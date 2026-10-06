@@ -44,14 +44,12 @@ Colleague can explain them and offer to ask a coding agent for help. It cannot r
 them itself or claim a draft lesson is ready for a learner. Human teaching review,
 real exercise checks and animation testing remain necessary before a course release.
 
-
 A lesson version must remain pinned to the content the learner started. If its
 content is reported missing or invalid, ask the workspace owner to restore that
 exact verified revision. A newer bundle or a draft is not a substitute for the
 missing lesson, and retrying must not reset learning history. Colleague can explain
 this recovery and offer to formulate the request; it cannot reinstall content.
 There is still no learner start/install control in this authoring release.
-
 
 The application also has a server-only verified-snapshot installation facility.
 It is not a visible control, a Colleague tool or a terminal authoring command.
@@ -61,3 +59,16 @@ workspace owner through the supported conversation actions; it cannot choose a
 filesystem path, install content or grant course access. A busy installation can
 be retried after its current operation finishes. Existing invalid content requires
 owner inspection; it must not be replaced automatically during lesson reads.
+
+The server can now retain a private pinned lesson reservation, but there is still
+no learner start/resume control or Colleague lesson tool. Creating a reservation
+does not mean that the exercise is prepared or that a quiz has passed. Colleague
+should explain what is available and offer to help through its current supported
+conversation actions, rather than claiming it can start teaching yet.
+
+When a future lesson operation reports an interrupted save, retry its same request
+identity. A saved reservation with a missing summary must resume that same attempt;
+it must not create another project. Busy state means another update is active, not
+that progress was erased. Corrupt or mismatched state requires owner inspection;
+opening projects or switching devices must not manufacture a repair or a pass.
+These internal facilities add no separate desktop/mobile controls in this release.

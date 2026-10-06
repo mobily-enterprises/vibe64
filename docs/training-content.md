@@ -114,7 +114,6 @@ ordered lesson identities. If a topic changes during generation, commit the
 intended content and retry. This command generates local release material only;
 it does not push Git, create a remote release, install content or enable a course.
 
-
 ## Server reads of installed snapshots
 
 This release provides a read-only server API at
@@ -139,7 +138,6 @@ exercise/check scripts. They do not consult catalogue enablement: disabling a
 release must not silently substitute new content into an existing pinned attempt.
 Authorization to start a lesson and durable assessment progress are not provided
 by this API.
-
 
 ## Owner-controlled snapshot installation
 
@@ -178,3 +176,53 @@ has stopped. It is not a published snapshot. Persistent files under
 unlink them to clear contention. New private parent directories use mode 0700
 and the pin uses 0600; existing paths are not recursively repaired. Installation
 runs no authored exercise, check or visual controller.
+
+## Private learner reservations
+
+`@local/vibe64-training/server/learner-state` exports
+`createTrainingLearnerState({systemRoot})` with `readState({actor})`,
+`reserveAttempt({actor,requestId,expectedRevision,pin})` and
+`resumeAttempt({actor,attemptId})`. These are internal server facilities, not
+learner HTTP routes or Colleague tools. The composing action must supply its
+freshly authenticated actor and admit a new start against an enabled installed
+course. Passing an object to this store is not authentication.
+
+The pin contains `{course:{courseId,release},topic:{schemaVersion:1,topicId,release,
+repository,commit,topicHash},lesson:{code,hash}}`, selected together from the same
+approved course lock. The topic hash is that lock entry's `manifestHash`. Installed
+published lesson reads verify the exact topic and lesson identity before reserve,
+replay and resume. The store does not infer course membership or enablement from
+topic metadata. Resume uses the stored pin, without selecting a newer release.
+
+The actor's nonempty `uid ?? username` uses the existing base64url key convention,
+without a local fallback. State lives outside projects under
+`training/users/<user-key>/`: `progress.json` is the schema-version-1 authority for
+revision and one active reservation; `active-lesson.json` is its derived summary.
+The reservation contains a server UUID, exact pin, creation time, retry IDs,
+server-derived project slug and `reserved` phase. No project/session readiness,
+assessment outcome or grading evidence is fabricated. New directories use 0700,
+records 0600. Files are bounded to 64 KiB and the current pilot retains at most
+64 distinct reservation request IDs; it never silently drops retry history.
+
+A stable request ID is checked before a stale revision: identical retries recover
+the same attempt, while different pins under that ID conflict. A fresh request for
+the same active pin reuses the reservation at the current revision. A different
+active pin requires resuming the existing attempt; no implicit restart is offered.
+Progress is atomically written first through the original Core writer, then the
+active summary. An unconfirmed progress save requires retrying the same ID before
+any provisioning, because rename may already have succeeded. A summary error
+explicitly reports that the reservation was saved; retry or resume recovers that
+identity rather than creating another exercise.
+
+Reads create no files and report whether the stored summary is current. Explicit
+reserve/resume may rebuild a missing or semantically identical stale valid summary
+under the existing persistent per-user OS lock. Corrupt, conflicting, unsupported
+or cross-learner records are refused, not repaired. A busy lock returns
+`VIBE64_TRAINING_STATE_BUSY` (409); retry the same operation later, without unlinking
+`state.lock`. There is no startup conversion, learner start screen, project
+provisioning, assessment submission, grading or automatic backup in this increment.
+Project archives exclude `training/users`. Operators use the explicit
+[stopped-writer checkpoint and restore procedure](training-state-recovery.md),
+which preserves private bytes and validates candidates through the existing
+reservation and installed-content readers. Its fixture proof does not establish
+live fleet stopping, off-host retention or power-loss durability.
