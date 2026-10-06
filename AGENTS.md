@@ -1,5 +1,51 @@
 # Vibe64 Agent Notes
 
+## Ownership Extractions
+
+NO REIMPLEMENTATION FROM SCRATCH. An ownership move starts from the existing
+implementation and its behavioral tests. Classify each piece before extracting:
+move to the shared owner, stay in the application, or supply as a host facility.
+Changes in how the code works are allowed when necessary to keep ownership
+correct; identify that necessity explicitly. Preserve established process sharing,
+account isolation, recovery and lifecycle guarantees. Do not build a parallel
+implementation and use new tests to justify replacing the original. Keep genuine
+new facilities that have no existing counterpart. Preserve a reviewable reference
+and current work before corrective extraction.
+
+The user-confirmed production implementation is the reference: it has been used,
+tested and tuned over days. Smaller replacement code is not evidence of parity.
+For this conversation-runtime extraction, enforce all seven requirements:
+
+1. Inventory original functions, callers, state and tests before editing; mark
+   each behavior as moving, staying application-owned, or becoming a host facility.
+   Admission, checkpoints, Git, worktrees, attachment storage, renewal UX and
+   Senior/Junior orchestration remain Vibe64 responsibilities.
+2. Define the session-store, managed-execution, Genesis-shim and provider-selection
+   cut lines. Prefer existing small facilities such as `host.execution` and
+   `host.commandWrapper`. JSKIT imports no Vibe64 or Genesis; standalone defaults
+   must work without them. Do not replace imports with a large callback bag.
+3. Preserve Codex's shared app-server per account/runtime isolation scope.
+   Conversations own threads, not one server each. Preserve independent stop,
+   account/helper-token refresh, process identity, locks, socket limits, hook trust
+   and recovery. Any host scope choice uses the same implementation.
+4. Move Colleague onto the extracted backend through its common API. Preserve its
+   conversation identity and existing storage upgrade.
+5. Retain genuinely new direct-API, local-execution, file-storage, application-tool
+   and storage-contract facilities that have no Vibe64 counterpart.
+6. Verify the frozen baseline and WIP local Git references before extraction.
+   Preserve unrelated work and staging; do not reset or publish the WIP refs.
+7. Compare original and moved behavior for shared reuse, independent stop,
+   account refresh, restart and recovery. Move original tests for the other cases;
+   do not weaken their assertions or duplicate the full suite.
+
+For each extraction, record the original source, destination, necessary ownership
+adaptation and original test evidence before calling it complete. A new test suite
+cannot replace that evidence. Discuss any material redesign before implementing it.
+
+When moving a consumer onto shared code, move the coordination that consumer
+relied on at the same time, and check every other user of the same resource.
+
+
 This repository is implemented with JSKIT runtime APIs and package-owned source
 patterns, but the product is Vibe64. JSKIT has no general source-authoring CLI;
 its supported commands only manage and check the package graph. Use the

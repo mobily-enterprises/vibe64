@@ -1,16 +1,10 @@
-/** Project history is authoritative; only user and assistant output is spoken. */
+import { projectConversationVoiceState } from "@jskit-ai/assistant-voice/client";
+
 export function projectVoiceState(runtime) {
-  const messages = [];
-  let streamingReply = null;
-  for (const turn of runtime.conversationLog.turns || []) {
-    if (turn.user) messages.push({ ...turn.user, role: "user", id: turn.user.messageId || `${turn.turnId}:user` });
-    if (turn.assistant?.text) {
-      const reply = { ...turn.assistant, role: "assistant", id: `${turn.turnId}:assistant` };
-      if (turn.pending || ["starting", "inProgress"].includes(reply.status)) streamingReply = reply;
-      else messages.push(reply);
-    }
-  }
-  return { messages, streamingReply, status: runtime.mounted.session.value?.agentSession?.turn?.active ? "working" : "ready" };
+  return projectConversationVoiceState({
+    turns: runtime.conversationLog.turns || [],
+    status: runtime.mounted.session.value?.agentSession?.turn?.active ? "working" : "ready"
+  });
 }
 
 export function createProjectVoiceBinding(runtime) {

@@ -14,8 +14,9 @@ host provide managed system values separately.
 - `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
-- `packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js`
-- `packages/vibe64-terminals/src/server/opencodeTerminal.js`
+- `packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js`
+- `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
+- `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `src/components/studio/EnvPanel.vue`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`

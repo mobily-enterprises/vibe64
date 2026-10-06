@@ -1,10 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
+import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { DASHBOARD_PATH, WORKSPACE_SLUG } from "./support/base-shell-data";
 import { assistantStatusServer } from "./support/assistant-status-server";
 
 for (const engineId of ["codex", "opencode"]) {
   test(`${engineId} temporary typing stays in its conversation across browser tabs`, async ({ browser }, info) => {
-    const server = await assistantStatusServer();
+    const server = await assistantStatusServer({ temporaryEngineId: engineId });
     server.state.session.agentSession.turn.active = false;
     Object.assign(server.state.session, { assistantSelection: { engineId } });
     const context = await browser.newContext();
@@ -20,22 +21,12 @@ for (const engineId of ["codex", "opencode"]) {
     const typing = (page: Page) => workspace(page).locator("[data-assistant-composer-support]")
       .filter({ hasText: "John is typing…" });
     try {
+      await server.temporary!.seed(chats);
       for (const [index, page] of pages.entries()) {
         page.on("pageerror", (error) => pageErrors.push(error.message));
         await page.route("**/agent-goal", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
         await page.route("**/agent-plan-usage", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
         await page.route(/\/assistants\/capabilities(?:\?|$)/u, (route) => route.fulfill({ json: { ok: true, engines: [] } }));
-        await page.route("**/temporary-conversations**", async (route) => {
-          const request = route.request();
-          const pathname = new URL(request.url()).pathname;
-          if (request.method() === "GET") {
-            await route.fulfill({ json: { ok: true, conversations: chats } });
-          } else if (pathname.endsWith("/turns")) {
-            await route.fulfill({ json: { ok: true, runId: "sent", status: "completed" } });
-          } else {
-            await route.fulfill({ json: { ok: true } });
-          }
-        });
         await page.route("**/presence", async (route) => {
           const body = route.request().postDataJSON();
           presence.push(body);
@@ -48,6 +39,8 @@ for (const engineId of ["codex", "opencode"]) {
           await route.fulfill({ json: { ok: true } });
         });
         await page.goto(`${server.url}${DASHBOARD_PATH}/env`);
+        await page.locator("[data-vibe64-session-actions]:visible").click();
+        await page.locator("[data-vibe64-temporary-ai-action]:visible").click();
         await expect(composer(page)).toBeVisible();
       }
 
@@ -69,6 +62,8 @@ for (const engineId of ["codex", "opencode"]) {
 
       // Returning to the saved chat receives the next heartbeat, without copying draft text.
       await reader.reload();
+      await reader.locator("[data-vibe64-session-actions]:visible").click();
+      await reader.locator("[data-vibe64-temporary-ai-action]:visible").click();
       await expect(composer(reader)).toBeVisible();
       await composer(writer).fill("Ready to send");
       await expect(typing(reader)).toBeVisible();
@@ -82,6 +77,13 @@ for (const engineId of ["codex", "opencode"]) {
       expect(presence.some((entry) => entry.conversationId === "one" && entry.typing === false)).toBe(true);
       expect(presence.every((entry) => !Object.hasOwn(entry, "draft"))).toBe(true);
       expect(pageErrors).toEqual([]);
+      const id = temporaryConversationId({ projectSlug: WORKSPACE_SLUG, sessionId: server.state.session.sessionId, conversationId: "one" });
+      const canonical = `/api/assistant/app/conversations/${encodeURIComponent(id)}`;
+      expect(server.state.requests.some(request => request === `GET ${canonical}` || request.startsWith(`GET ${canonical}?`))).toBe(true);
+      expect(server.state.requests.filter(request => request === `POST ${canonical}/messages`)).toHaveLength(1);
+      expect(server.state.subscriptions).toContain(id);
+      expect(server.state.requests.filter(request => /\/temporary-conversations\/one\/(?:turns|stop)$/u.test(request))).toEqual([]);
+      expect(server.connectionCount()).toBe(2);
     } finally {
       await context.close();
       await server.close();

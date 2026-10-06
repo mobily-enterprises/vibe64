@@ -199,7 +199,10 @@ async function stopDetachedExecution(executionId = "", {
 function inspectDetachedExecution(executionId) {
   const execution = detachedExecutions.get(executionId);
   const running = Boolean(execution && !execution.scopeEmpty && processGroupExists(execution.pid));
-  return { ok: true, scopeEmpty: !running, activeState: running ? "active" : "inactive" };
+  return { ok: true, scopeEmpty: !running, activeState: running ? "active" : "inactive",
+    running: Boolean(execution && execution.child.exitCode === null && execution.child.signalCode === null),
+    exitCode: execution?.child.exitCode ?? null, signal: execution?.child.signalCode ?? null
+  };
 }
 
 export {

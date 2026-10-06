@@ -9,7 +9,10 @@ import Fastify from "fastify";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
+import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
+import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { registerRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
@@ -74,7 +77,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     });
     const app = testRouteApp();
     registerRoutes(app.http, { fastify: { get() {} }, projectContext, routeRelativePath: "vibe64", routeSurface: "app", terminals, uploads: { readSingleMultipartFile() {} } });
-    assert.equal(actions.listDefinitions().length, 45);
+    assert.equal(actions.listDefinitions().length, 47);
     for (const [method, suffix, operation, serviceMethod, data] of cases) {
       const actionId = `vibe64.terminals.${operation}`;
       const route = findRegisteredRoute(app, { method, path: `${apiRouteBase}/vibe64${suffix}` });
@@ -210,4 +213,64 @@ test("output and attachment action downloads stream exact bytes and close their 
       await rm(root, { recursive: true, force: true });
     }
   }));
+});
+
+test("canonical Main goals reuse internal terminal actions with fresh authority and fixed service representation", async () => {
+  await withRouteProject(async ({ projectContext, slug }) => {
+    const actor = { username: "goal-owner", role: "owner" };
+    let user = actor;
+    let allowed = true;
+    const calls = [];
+    const goal = { status: "available", goal: { id: "opaque-goal", objective: "Keep the product objective", status: "paused" },
+      target: { segmentId: "retained-goal", capabilities: { goals: true, goalBudgets: false,
+        goalCommands: { pause: { delivery: "control", interruptsTurn: true } } } } };
+    const rejected = { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Senior or Junior." };
+    const terminals = {
+      openBrowserConversation() { assert.fail("Goal actions must use the original product service policy."); },
+      async readAgentGoal(...args) { calls.push({ method: "read", args, project: currentProjectRequestContext()?.slug }); return goal; },
+      async updateAgentGoal(...args) { calls.push({ method: "update", args, project: currentProjectRequestContext()?.slug }); return rejected; }
+    };
+    const actions = catalogue(terminals, projectContext, {
+      resolveUser: async () => user,
+      async authorizeProject() { if (!allowed) throw Object.assign(new Error("Access revoked"), { statusCode: 403 }); }
+    });
+    actions.register({ contributorId: "goal-context", domain: "sessions",
+      actions: createSessionActions({ sessions: {} }).filter(definition => definition.id === ACTION_READ_CONVERSATION_CONTEXT)
+        .map(definition => ({ surfaces: ["app"], ...definition })) });
+    const facade = await createMainBrowserConversations({ actions, terminals }).open({
+      id: mainConversationId({ projectSlug: slug, sessionId: "session-1" }), context: { channel: "internal", surface: "app" }
+    });
+    assert.deepEqual(await facade.readGoal(), goal);
+    assert.deepEqual(calls[0], { method: "read", args: ["session-1", { vibe64User: actor }, { canonical: true }], project: slug });
+    const input = { action: "set", expectedSegmentId: null, expectedGoalId: null,
+      messageId: "goal-one", objective: "Finish the requested work", tokenBudget: 1000 };
+    assert.deepEqual(await facade.updateGoal(input), rejected, "original pre-admission failures are returned without manufacturing a goal or receipt");
+    assert.deepEqual(calls[1], { method: "update", args: ["session-1", { ...input, sessionId: "session-1", vibe64User: actor }, { canonical: true }], project: slug });
+    for (const actionId of [ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL]) {
+      const definition = actions.getDefinition(actionId);
+      assert.deepEqual(definition.channels, ["internal"]);
+      assert.equal(definition.idempotency, "none");
+      assert.equal(definition.extensions.assistant.exclude, true);
+      await assert.rejects(actions.execute({ actionId,
+        input: { sessionId: "session-1", projectSlug: slug, ...(actionId === ACTION_UPDATE_CANONICAL_AGENT_GOAL ? input : {}) },
+        context: { channel: "api", surface: "app" } }), { code: "ACTION_CHANNEL_FORBIDDEN" });
+    }
+    const count = calls.length;
+    for (const extra of [
+      { canonical: true }, { canonicalGoal: true }, { onGoalResult: "forged" },
+      { threadId: "native-thread" }, { createdAt: 123.456 }, { host: {} }, { runtime: {} },
+      { vibe64User: { role: "owner" } }, { attachments: [{ path: "/private/input" }] }
+    ]) await assert.rejects(facade.updateGoal({ ...input, ...extra }), { code: "ACTION_VALIDATION_FAILED" });
+    for (const malformed of [{ ...input, expectedSegmentId: "" }, { ...input, tokenBudget: 0 }]) {
+      await assert.rejects(facade.updateGoal(malformed), { code: "ACTION_VALIDATION_FAILED" });
+    }
+    assert.equal(calls.length, count);
+    allowed = false;
+    await assert.rejects(facade.readGoal(), { statusCode: 403 });
+    await assert.rejects(facade.updateGoal(input), { statusCode: 403 });
+    allowed = true;
+    user = { username: "another-owner", role: "owner" };
+    await assert.rejects(facade.readGoal(), { code: "conversation_forbidden" });
+    assert.equal(calls.length, count, "revoked or changed actors cannot reach the retained goal service");
+  });
 });

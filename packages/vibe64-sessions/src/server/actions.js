@@ -1,8 +1,7 @@
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool } from "./assistantContracts.js";
+import { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool } from "./assistantContracts.js";
 import {
   sessionRenameActionInputValidator,
-  conversationRewindActionInputValidator,
   integrationSetupRequestActionInputValidator,
   agentMessageActionInputValidator,
   agentTurnInterruptActionInputValidator,
@@ -59,10 +58,10 @@ const ACTION_RETRY_SESSION_RENEWAL = "vibe64.sessions.renewal.retry";
 const ACTION_INSPECT_SESSION_CHANGES = "vibe64.sessions.changes.inspect";
 const ACTION_INSPECT_SESSION_CHANGE_DIFF = "vibe64.sessions.changes.diff.inspect";
 const ACTION_READ_SESSION_CONVERSATION_LOG = "vibe64.sessions.conversation-log.read";
+const ACTION_READ_CONVERSATION_CONTEXT = "vibe64.sessions.conversation.context.read";
 const ACTION_RETRY_WORKSPACE_SETUP = "vibe64.sessions.workspace-setup.retry";
 const ACTION_ARCHIVE_SESSION = "vibe64.sessions.archive";
 const ACTION_SEND_AGENT_MESSAGE = "vibe64.sessions.agent-message.send";
-const ACTION_REWIND_CONVERSATION = "vibe64.sessions.conversation.rewind";
 const ACTION_INSPECT_ASSISTANT_ACCESS = "vibe64.sessions.assistant-access.inspect";
 const ACTION_INTERRUPT_AGENT_TURN = "vibe64.sessions.agent-turn.interrupt";
 const ACTION_BROADCAST_SESSION_PREVIEW_STATE = "vibe64.sessions.preview-state.broadcast";
@@ -112,6 +111,21 @@ function createSessionActions({ sessions } = {}) {
   }
 
   return Object.freeze([
+    {
+      ...action({
+        id: ACTION_READ_CONVERSATION_CONTEXT,
+        kind: "query",
+        input: sessionIdInputValidator,
+        execute: (_input, context) => ({
+          actor: context.actor,
+          project: context.vibe64Action.project,
+          user: authenticatedVibe64User(context)
+        })
+      }),
+      // This grant stays inside the application's conversation adapter. It has
+      // no HTTP route or assistant tool projection.
+      channels: ["internal"]
+    },
     action({
       id: ACTION_RENAME_SESSION,
       kind: "command",
@@ -381,16 +395,6 @@ function createSessionActions({ sessions } = {}) {
       })
     }),
     action({
-      id: ACTION_REWIND_CONVERSATION,
-      assistant: conversationRewindTool(),
-      kind: "command",
-      idempotency: "domain_native",
-      input: conversationRewindActionInputValidator,
-      execute: (input, context) => sessions.rewindConversation(input.sessionId, {
-        turnId: input.turnId, originId: input.originId, vibe64User: authenticatedVibe64User(context)
-      })
-    }),
-    action({
       id: ACTION_SEND_AGENT_MESSAGE,
       assistant: conversationOperationTool("Send an agreed request or steering to Main chat in the exact selected project/session. Supply a unique messageId and reuse it unchanged on a retry. submissionKind=steer requires a running turn; send requires a new turn. A delivery receipt is not a completed answer: read the conversation or create a watch. Plan creation, changes, reopening, archival and execution are ordinary chat requests routed by intent. An optional planRevision checks the referenced current document without bypassing Router. Never send merely because a watch recommends more work."),
       kind: "command",
@@ -435,7 +439,6 @@ function createSessionActions({ sessions } = {}) {
 
 export {
   ACTION_RENAME_SESSION,
-  ACTION_REWIND_CONVERSATION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
   ACTION_LIST_ASSISTANT_CAPABILITIES,
@@ -459,6 +462,7 @@ export {
   ACTION_LIST_SESSIONS,
   ACTION_LIST_ARCHIVED_SESSIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
+  ACTION_READ_CONVERSATION_CONTEXT,
   ACTION_REQUEST_SESSION_RENEWAL_DRAFT,
   ACTION_RETRY_SESSION_RENEWAL,
   ACTION_RETRY_WORKSPACE_SETUP,

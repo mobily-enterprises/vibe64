@@ -43,6 +43,15 @@ describe("routed chat delivery presentation", () => {
     expect(turn.system.delivery).toBeUndefined();
   });
 
+  it("keeps a restored provisional authored row unconfirmed without duplicating it", () => {
+    const provisional = { turnId: "saved", user: { messageId: request.messageId, text: "Hello", receipt: false } };
+    const turns = chatTurnsWithRouting([provisional], { ...request, status: "uncertain", error: "Native receipt unavailable." });
+    expect(turns).toHaveLength(1);
+    expect(turns[0].user).toEqual(provisional.user);
+    expect(turns[0].optimistic.status).toBe("uncertain");
+    expect(turns[0].system.delivery.messageId).toBe(request.messageId);
+  });
+
   it("lets confirmed delivery replace stale errors before and after history loads", async () => {
     const delivery = createAssistantMessageDelivery();
     await delivery.send({ message: "Hello" }, { messageId: request.messageId, deliver: async () => false });

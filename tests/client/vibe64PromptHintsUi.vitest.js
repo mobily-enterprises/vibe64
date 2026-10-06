@@ -207,8 +207,9 @@ describe("Vibe64 prompt hints UI", () => {
     expect(autopilot.indexOf("const promptHintsBlankConversation"))
       .toBeLessThan(canRequestStart);
     expect(canRequest).toMatch(
-      /promptHintsBlankConversation\.value \|\| \(\s*\(assistantCanUsePurpose\("prompt_hint"\) \|\| assistantCanRequestMessage\.value\)\s*\)/u
+      /promptHintsBlankConversation\.value \|\| assistantCanUsePurpose\("prompt_hint"\)/u
     );
+    expect(canRequest).not.toContain("assistantCanRequestMessage.value");
   });
 
   it("reuses the support row for authenticated typing presence", () => {
@@ -217,7 +218,10 @@ describe("Vibe64 prompt hints UI", () => {
 
     expect(autopilot).toContain("useVibe64SessionTypingPresence({");
     expect(autopilot).toContain(
-      "thinkingVisible.value ? thinkingLabel.value : typingLabel.value"
+      "if (!thinkingVisible.value) return typingLabel.value;"
+    );
+    expect(autopilot).toContain(
+      "return assistantRestrictionMessage.value || thinkingLabel.value;"
     );
     expect(autopilot).toContain('event: VIBE64_SESSION_CHANGED_EVENT');
     expect(autopilot).toContain('payload.assistantProgress');

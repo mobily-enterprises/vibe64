@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { createMainBrowserConversations } from "./mainBrowserConversations.js";
 import { sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 
@@ -204,6 +205,7 @@ function legacyCodexAssistantSelection() {
 }
 
 function createService({
+  actions = null,
   initializeModelRouting,
   project,
   publishSessionChanged = async () => null,
@@ -724,6 +726,7 @@ function createService({
 
   return Object.freeze({
     ...renewal,
+    browserConversations: actions ? createMainBrowserConversations({ actions, terminals }) : null,
     closeSessionPresence() {
       sessionPresence?.close?.();
     },
@@ -1522,7 +1525,6 @@ function createService({
         const result = await runtime.readConversationLogPage(sessionId, pageOptions);
         return {
           ...conversationPage(result, pageOptions),
-          rewind: await terminals.readConversationRewindState(sessionId, { runtime }),
           conversationStream: runtime.store.readConversationStream(sessionId),
           ok: true,
           sessionId
@@ -1582,20 +1584,6 @@ function createService({
         const context = { runtime, session, vibe64User };
         return publicAssistantAccess(await terminals.inspectAssistantAccess(sessionId, context));
       }, "Vibe64 could not inspect assistant access.");
-    },
-
-    async rewindConversation(sessionId, input = {}) {
-      return sessionResult(async () => {
-        const runtime = await project.createRuntime({ inspectSource: false });
-        const result = await terminals.rewindConversation(sessionId, input, {
-          runtime, vibe64User: trustedAssistantUser(input)
-        });
-        if (result.ok !== false) await publishSessionChanged(sessionId, {
-          originId: text(input.originId), reason: "conversation-rewound",
-          session: await runtime.getSession(sessionId, { inspectSource: false })
-        });
-        return result;
-      });
     },
 
     async sendAgentMessage(sessionId, input = {}) {

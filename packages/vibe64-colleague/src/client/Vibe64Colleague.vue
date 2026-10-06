@@ -1,14 +1,15 @@
 <script setup>
 import { useVibe64Voice } from "@local/vibe64-voice/client";
-import { ConversationDialog, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
+import { ConversationDialog, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { mdiArrowTopRight, mdiClose, mdiHeadset, mdiMicrophone, mdiSend, mdiStop, mdiTuneVariant } from "@mdi/js";
-import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantPromptInput } from "@jskit-ai/assistant-core/client/conversation";
-import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
+import { createAssistantApi } from "@jskit-ai/assistant-core/client";
+import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
-import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
+import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 
 const props = defineProps({
   name: { type: String, default: "Colleague" },
@@ -39,16 +40,21 @@ async function toggleConversation() {
 }
 async function openVoice() {
   if (!voice) return false;
-  const actorKey = viewer?.value?.actorKey || viewer?.actorKey || "";
+  if (!conversation.runtime.value) await refresh();
+  const target = conversation.runtime.value;
+  if (!target) throw new Error(connectionError.value || "Colleague is not connected yet. Try again.");
+  let retained;
   const binding = {
-    id: JSON.stringify(["colleague", actorKey]),
+    id: JSON.stringify(["colleague", target.identity.actorKey]),
     get label() { return props.name; },
-    get state() { return state.value; },
-    get available() { return mounted && (viewer?.value?.actorKey || viewer?.actorKey || "") === actorKey; },
+    get state() { return projectConversationVoiceState({ turns: target.turns.value, status: target.snapshot.value?.status, interimReply: target.snapshot.value?.interimReply }); },
+    get available() { return mounted && target.current.value; },
+    retain() { retained = target.retain(); },
+    release() { retained?.release(); retained = null; },
     socketUrl: "/api/vibe64/colleague/voice/ws",
     captureContext: () => ({ ...props.focus }),
-    submitText: (text, { messageId, context }) => sendMessage(text, { messageId, focus: context }),
-    cancelWork: stop,
+    submitText: (text, { messageId, context }) => sendMessage(text, { messageId, focus: context }, target),
+    cancelWork: () => target.cancel(),
     openText() { open.value = true; },
     onTranscript(value) { voiceTranscript.value = value; },
     onVisual(value) { emit("voice-visual", value); },
@@ -68,22 +74,19 @@ async function closeText() {
 const launcherTarget = inject(VIBE64_COLLEAGUE_LAUNCHER_KEY, null);
 const launcher = ref(null);
 const panelTarget = ref(null);
-const draft = ref("");
-const state = ref({ messages: [], status: "ready", error: "" });
-const sending = ref(false);
-const connectionError = ref("");
+const product = ref({ conversationId: "", error: "" });
+const productError = ref("");
+const actorKey = computed(() => viewer?.value?.actorKey || viewer?.actorKey || "");
 const feedback = useShellWebErrorRuntime();
 const modelMenu = ref(false);
 const modelButton = ref(null);
 const sendButton = ref(null);
 const clientId = crypto.randomUUID();
-const working = computed(() => state.value.status === "working");
-const watches = computed(() => (state.value.watches || []).filter((item) => !item.assignmentId && ["active", "pending", "paused"].includes(item.status)));
-const assignments = computed(() => (state.value.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status)));
-let timer;
+const working = computed(() => conversation.runtime.value?.snapshot.value?.status === "working");
+const watches = computed(() => (product.value.watches || []).filter((item) => !item.assignmentId && ["active", "pending", "paused"].includes(item.status)));
+const assignments = computed(() => (product.value.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status)));
 let mounted = true;
 let revision = 0;
-let pendingMessage = null;
 let navigating = null;
 let navigationReceipt = null;
 
@@ -98,94 +101,108 @@ async function requestColleague(suffix = "", options = {}) {
   if (result?.ok === false) throw new Error(result.error || result.errors?.[0]?.message || "Colleague could not complete this request.");
   return result;
 }
-function apply(result, expectedRevision) {
-  if (mounted && expectedRevision === revision) {
-    if (result.streamEpoch && result.streamEpoch === state.value.streamEpoch &&
-        result.streamRevision < state.value.streamRevision) return;
-    state.value = result;
-    void handleNavigation(result.navigation);
+function apply(result, expectedRevision, expectedActor) {
+  if (mounted && expectedRevision === revision && expectedActor === actorKey.value) {
+    const { conversationId, assistantSelection, watches, assignments, navigation, operation, error } = result;
+    product.value = { conversationId, assistantSelection, watches, assignments, navigation, operation, error };
+    void handleNavigation(navigation);
   }
 }
 async function handleNavigation(command) {
   if (navigating || command?.status !== "pending" || !props.navigate) return;
   navigating = command.id;
+  const expectedActor = actorKey.value;
   try {
     if (navigationReceipt?.commandId !== command.id) {
-      try { navigationReceipt = { commandId: command.id, clientId, ok: true, focus: await props.navigate(command) }; }
-      catch (error) { navigationReceipt = { commandId: command.id, clientId, ok: false, error: error.message }; }
+      let receipt;
+      try { receipt = { commandId: command.id, clientId, ok: true, focus: await props.navigate(command) }; }
+      catch (error) { receipt = { commandId: command.id, clientId, ok: false, error: error.message }; }
+      if (!mounted || expectedActor !== actorKey.value) return;
+      navigationReceipt = receipt;
     }
+    if (!mounted || expectedActor !== actorKey.value) return;
     await requestColleague("/navigation/ack", { method: "POST", body: navigationReceipt });
-  } catch (error) { connectionError.value = error.message; }
-  finally { navigating = null; }
+  } catch (error) { if (mounted && expectedActor === actorKey.value) productError.value = error.message; }
+  finally { if (expectedActor === actorKey.value) navigating = null; }
 }
 const realtimeSocket = useRealtimeSocket();
-useRealtimeEvent({ event: "vibe64.colleague.reply.changed", onEvent({ payload }) {
-  if (!mounted || !payload?.streamEpoch || !Number.isSafeInteger(payload.streamRevision)) return;
-  if (state.value.streamEpoch && state.value.streamEpoch !== payload.streamEpoch) { void refresh(); return; }
-  if (payload.streamRevision <= (state.value.streamRevision || 0)) return;
-  const messages = [...(state.value.messages || [])];
-  if (payload.completedMessage && !messages.some((message) => message.id === payload.completedMessage.id)) {
-    messages.push(payload.completedMessage);
-  }
-  state.value = { ...state.value, conversationId: payload.conversationId,
-    streamEpoch: payload.streamEpoch, streamRevision: payload.streamRevision,
-    streamingReply: payload.streamingReply, messages,
-    ...(payload.streamingReply ? { status: "working" } : {}) };
-  if (!payload.streamingReply) void refresh();
-} });
+const api = createAssistantApi({
+  request: (url, options) => props.request(url, options),
+  resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app"
+});
+const conversation = useAssistantConversation({
+  conversationId: () => product.value.conversationId,
+  actorKey, surfaceId: "app", hostSurfaceId: "app", workspaceSlug: "",
+  socket: realtimeSocket,
+  api: { ...api, sendConversationMessage(id, input) {
+    emit("message-submit", input.messageId);
+    const activeVoice = voice?.controller.state;
+    if (activeVoice?.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") activeVoice.session.inviteSpeech(input.messageId);
+    return api.sendConversationMessage(id, input);
+  } },
+  clearDraftOn: "accepted", queueWhileSending: false, draftWhileLoading: true,
+  data: () => ({ clientId, focus: { ...props.focus } }),
+  onEvent(event) { if (event.type === "application") void refresh(); },
+  presentation: () => ({
+    assistantLabel: props.name, systemLabel: "Vibe64", variant: "task", visible: open.value,
+    userMessageFormat: "plain", progressPreviewLimit: 0,
+    welcomeMessage: "Let's think it through. I can discuss an idea, check on your agents, or help you operate Vibe64.",
+    previewMessage: voiceTranscript.value,
+    ariaLabel: `Message ${props.name}`, placeholder: `Talk it through with ${props.name}…`, rows: 1, layout: "compact",
+    submitAriaLabel: working.value ? `Steer ${props.name}` : `Send to ${props.name}`,
+    submitLabel: working.value ? "Steer" : "Send"
+  })
+});
+const adapter = conversation.adapter;
+const draft = computed({ get: () => adapter.value.composer.draft, set: value => adapter.value.actions.setDraft(value) });
+const sending = computed(() => conversation.runtime.value?.delivery.state.sending === true);
+const connectionError = computed(() => productError.value || conversation.runtime.value?.error.value || "");
+const turnError = computed(() => conversation.runtime.value?.snapshot.value?.error ?? product.value.error);
 realtimeSocket.on("connect", refresh);
-function schedule() {
-  clearTimeout(timer);
-  if (mounted && (open.value || working.value || watches.value.length || assignments.value.length)) timer = setTimeout(refresh, open.value || working.value ? 1000 : 5000);
-}
 async function refresh() {
   const expectedRevision = ++revision;
+  const expectedActor = actorKey.value;
   try {
     const result = await requestColleague(`?clientId=${encodeURIComponent(clientId)}`, { method: "GET" });
-    apply(result, expectedRevision);
-    if (mounted && expectedRevision === revision) connectionError.value = "";
-  } catch (error) { if (mounted && expectedRevision === revision) connectionError.value = error.message; }
-  finally { schedule(); }
+    apply(result, expectedRevision, expectedActor);
+    if (mounted && expectedRevision === revision && expectedActor === actorKey.value) productError.value = "";
+  } catch (error) {
+    if (mounted && expectedRevision === revision && expectedActor === actorKey.value) productError.value = error.message;
+  }
 }
-async function sendMessage(message, options = {}) {
-  if (sending.value) throw new Error("Another message is being sent. Your transcript is kept; retry in a moment.");
-  sending.value = true;
-  emit("message-submit", options.messageId);
-  const activeVoice = voice?.controller.state;
-  if (activeVoice?.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") activeVoice.session.inviteSpeech(options.messageId);
-  const expectedRevision = ++revision;
-  try {
-    const result = await requestColleague("/messages", { method: "POST", body: { message, messageId: options.messageId, clientId, focus: options.focus } });
-    apply(result, expectedRevision);
-    connectionError.value = "";
-    return result;
-  } finally { sending.value = false; schedule(); }
+async function sendMessage(message, options = {}, target = conversation.runtime.value) {
+  if (target?.delivery.state.sending) throw new Error("Another message is being sent. Your transcript is kept; retry in a moment.");
+  if (!target?.available.value) return false;
+  return target.send({ message, data: { clientId, focus: options.focus } }, { messageId: options.messageId });
 }
 async function submit() {
-  const message = draft.value.trim();
-  if (!message || sending.value) return;
-  pendingMessage = pendingMessage?.message === message ? pendingMessage : { message, messageId: crypto.randomUUID(), focus: { ...props.focus } };
-  try {
-    await sendMessage(message, pendingMessage);
-    if (draft.value.trim() === message) draft.value = "";
-    pendingMessage = null;
-  } catch (error) { reportFailure(error); }
+  const target = conversation.runtime.value;
+  if (!target?.canSubmit.value) {
+    if (draft.value.trim() && connectionError.value) reportFailure(connectionError.value);
+    return;
+  }
+  const result = await adapter.value.actions.submit();
+  if ((result === false || result?.ok === false) && target.current.value) {
+    const failure = target.delivery.find(target.draftMessageId.value)?.error || target.error.value;
+    if (failure) reportFailure(failure);
+  }
 }
 async function stop() {
-  const expectedRevision = ++revision;
-  try { apply(await requestColleague("/stop", { method: "POST", body: {} }), expectedRevision); }
-  catch (error) { reportFailure(error); }
-  schedule();
+  const target = conversation.runtime.value;
+  if (await target?.cancel() === false && target.current.value && target.error.value) reportFailure(target.error.value);
 }
 async function selectModel(assistantSelection) {
   const expectedRevision = ++revision;
+  const expectedActor = actorKey.value;
   try {
-    const result = await requestColleague("/model", { method: "POST", body: { assistantSelection } });
-    apply(result, expectedRevision);
-    connectionError.value = "";
+    const result = await api.selectConversation(product.value.conversationId, { assistantSelection });
+    apply(result, expectedRevision, expectedActor);
+    if (mounted && expectedActor === actorKey.value) {
+      productError.value = "";
+      conversation.runtime.value?.reload();
+    }
     return result;
-  } catch (error) { reportFailure(error); return { ok: false }; }
-  finally { schedule(); }
+  } catch (error) { if (expectedActor === actorKey.value) reportFailure(error); return { ok: false }; }
 }
 async function changeWatch(watchId, operation) {
   try {
@@ -193,40 +210,22 @@ async function changeWatch(watchId, operation) {
     await refresh();
   } catch (error) { reportFailure(error); }
 }
-const visibleTurns = computed(() => {
-  const messages = state.value.messages || [];
-  const pendingTranscript = voiceTranscript.value;
-  const pendingVoice = pendingTranscript?.text && pendingTranscript.id && !messages.some(message => message.id === pendingTranscript.id)
-    ? { id: pendingTranscript.id, text: pendingTranscript.text, role: "user" } : null;
-  const turns = conversationTurnsFromMessages([
-    ...messages,
-    ...(working.value && state.value.streamingReply?.text ? [state.value.streamingReply] : []),
-    ...(pendingVoice ? [pendingVoice] : [])
-  ]);
-  if (pendingVoice) turns.at(-1).optimistic = { id: pendingVoice.id, status: "pending" };
-  return turns;
-});
-const adapter = computed(() => ({
-  conversation: {
-    turns: visibleTurns.value,
-    assistantLabel: props.name, systemLabel: "Vibe64",
-    scrollKey: state.value.conversationId || "colleague", working: working.value,
-    variant: "task", visible: open.value, userMessageFormat: "plain", progressPreviewLimit: 0,
-    welcomeMessage: state.value.messages?.length ? "" : "Let's think it through. I can discuss an idea, check on your agents, or help you operate Vibe64."
-  },
-  composer: {
-    draft: draft.value, ariaLabel: `Message ${props.name}`, placeholder: `Talk it through with ${props.name}…`,
-    rows: 1, density: "compact", disabled: sending.value,
-    canSend: Boolean(draft.value.trim()) && !sending.value, canStop: working.value,
-    submitAriaLabel: working.value ? `Steer ${props.name}` : `Send to ${props.name}`,
-    submitLabel: working.value ? "Steer" : "Send"
-  },
-  actions: { setDraft: (value) => { draft.value = value; }, submit, stop }
-}));
-watch(open, (value) => { if (value) void refresh(); else schedule(); });
-watch(() => state.value.error, (error) => { if (error) reportFailure(error); });
+watch(open, value => { if (value) void refresh(); });
+watch(actorKey, () => {
+  revision += 1;
+  product.value = { conversationId: "", error: "" };
+  productError.value = "";
+  navigationReceipt = null;
+  navigating = null;
+  voiceTranscript.value = null;
+  void refresh();
+}, { flush: "sync" });
+watch(() => product.value.error, (error) => { if (error) reportFailure(error); });
 watch(() => props.focus, (focus) => {
-  void requestColleague("/focus", { method: "POST", body: { clientId, focus } }).catch((error) => { connectionError.value = error.message; });
+  const expectedActor = actorKey.value;
+  void requestColleague("/focus", { method: "POST", body: { clientId, focus } }).catch(error => {
+    if (mounted && expectedActor === actorKey.value) productError.value = error.message;
+  });
 }, { deep: true });
 onMounted(() => {
   if (voice) voice.launcher.value = launcher.value?.$el;
@@ -240,7 +239,6 @@ onBeforeUnmount(() => {
   realtimeSocket.off("connect", refresh);
   mounted = false;
   if (voice?.controller.state.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") void voice.controller.end({ discard: true });
-  clearTimeout(timer);
   cancelAvatarPress();
   revision += 1;
   window.removeEventListener("focus", refresh);
@@ -290,13 +288,14 @@ onBeforeUnmount(() => {
                 @keydown.tab="$event.defaultPrevented && $event.stopPropagation()"
               >
                 <template #input-start>
-                  <span v-if="connectionError" class="text-body-small" role="status" :title="connectionError">Reconnecting…</span>
+                  <span v-if="turnError" class="text-body-small text-error" role="alert">{{ turnError }}</span>
+                  <span v-else-if="connectionError" class="text-body-small" role="status" :title="connectionError">Reconnecting…</span>
                 </template>
                 <template #footer>
                   <div class="vibe64-colleague__composer-actions">
                     <v-btn
                       ref="modelButton" :icon="mdiTuneVariant" size="small" variant="text"
-                      :aria-label="`Choose ${name} model`" :title="state.assistantSelection?.modelId || 'Choose model'"
+                      :aria-label="`Choose ${name} model`" :title="product.assistantSelection?.modelId || 'Choose model'"
                       :disabled="working || sending" @click="modelMenu = true"
                     />
                     <div class="vibe64-colleague__delivery">
@@ -336,7 +335,7 @@ onBeforeUnmount(() => {
         </ul>
       </details>
       <Vibe64SessionAssistantMenu
-        v-model="modelMenu" :target="modelButton?.$el" :selection="state.assistantSelection"
+        v-model="modelMenu" :target="modelButton?.$el" :selection="product.assistantSelection"
         :save-selection="selectModel" catalog-path="/api/vibe64/colleague/models" :changes-disabled="working || sending"
       />
     </aside>

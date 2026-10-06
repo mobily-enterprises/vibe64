@@ -21,6 +21,24 @@ configuration. Missing resources require ordinary application preparation. Do no
 assume that another session uses the same database: hosted project policy can use
 shared project data or separate session databases.
 
+Open **Copilot** to ask about the database or the currently selected table. It uses
+the configured **Helper** destination, looks up bounded parts of the refreshed
+schema and can run read-only queries. If a lookup or query fails, that question
+stops and shows the error; narrow or correct the request before trying again.
+A step-limit error also asks you to narrow the question. If cleanup of the
+temporary Helper conversation fails, Copilot shows that error instead of reporting
+a successful answer. A proposed write has not run: **Put SQL in editor** only fills the editor, where the normal unlock and
+confirmation rules still apply. On narrow screens Copilot overlays the workspace;
+use **Collapse database copilot** to return to the underlying view.
+
+Type a question and select **Send**, or press **Ctrl+Enter** (**Cmd+Enter** on
+macOS). Ordinary Enter adds a line. Each question keeps the table selected when
+you submit it. Collapsing Copilot keeps an in-progress question running; reopen
+the panel to see its answer. Copilot history lasts for the mounted database
+workspace and clears when another session loads. That reset keeps an unsent
+draft, so check its wording and selected table before sending. A failed question
+is not resent automatically.
+
 Colleague can explain these views, inspect authorized status, refresh schema
 metadata, open a specific view or exact table, and request cancellation of the
 identified active query when asked. It acknowledges actual view/table selection;

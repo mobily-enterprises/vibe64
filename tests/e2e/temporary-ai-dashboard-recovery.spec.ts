@@ -1,7 +1,9 @@
 import { expect, test, type Page, type Request } from "@playwright/test";
+import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
 
 import {
   DASHBOARD_PATH,
+  WORKSPACE_SLUG,
   directChatSessionId,
   directChatSessionPayload
 } from "./support/base-shell-data";
@@ -31,7 +33,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   let server: Awaited<ReturnType<typeof assistantStatusServer>>;
   let pageErrors: string[];
   test.beforeEach(async ({ page }) => {
-    server = await assistantStatusServer();
+    server = await assistantStatusServer({ temporaryEngineId: "codex" });
     pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
   });
@@ -52,7 +54,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
         REPOSITORY_RECOVERY_PROMPT_LEAD,
         REPOSITORY_RECOVERY_GIT_BOUNDARY
       ].join("\n\n");
-      const captured = await mockRepositoryRecovery(page, { code, diagnostic });
+      const captured = await mockRepositoryRecovery(page, server, { code, diagnostic });
 
       await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
 
@@ -92,6 +94,14 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       expect(captured.temporaryCreates).toHaveLength(1);
       expect(captured.temporaryTurns).toHaveLength(1);
       expect(captured.mainChatMessages).toHaveLength(0);
+      const conversationId = String(captured.temporaryCreates[0].conversationId);
+      const id = temporaryConversationId({ projectSlug: WORKSPACE_SLUG, sessionId: directChatSessionId, conversationId });
+      const canonical = `/api/assistant/app/conversations/${encodeURIComponent(id)}`;
+      expect(server.state.requests.some(request => request === `GET ${canonical}` || request.startsWith(`GET ${canonical}?`))).toBe(true);
+      expect(server.state.requests.filter(request => request === `POST ${canonical}/messages`)).toHaveLength(1);
+      expect(server.state.subscriptions).toContain(id);
+      expect(server.state.requests.filter(request => request.endsWith(`/temporary-conversations/${conversationId}/turns`))).toEqual([]);
+      expect(server.connectionCount()).toBe(1);
     });
   }
 
@@ -100,7 +110,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     await page.setViewportSize({ width, height });
     const updates: Array<ReturnType<typeof Promise.withResolvers<Record<string, unknown>>>> = [];
     const updateInputs: Record<string, unknown>[] = [];
-    const captured = await mockRepositoryRecovery(page, {
+    const captured = await mockRepositoryRecovery(page, server, {
       code: "vibe64_session_update_conflict", diagnostic: "Two files need review.",
       outcome: (turn) => turn === 1 ? "continue" : "complete",
       async applyUpdate(input) {
@@ -202,7 +212,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     test(`repair chat replaces the persisted Update failure banner at ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 844 });
       const diagnostic = "1 file needs review: data-overview.json.";
-      const captured = await mockRepositoryRecovery(page, { code: "vibe64_session_update_conflict", diagnostic });
+      const captured = await mockRepositoryRecovery(page, server, { code: "vibe64_session_update_conflict", diagnostic });
       await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/work`, (route) => fulfillJson(route, {
         ok: true, unsaved: true, updateAvailable: true, behind: 1, operation: null,
         updateOperation: {
@@ -244,7 +254,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
 
   test("Update completion follows automatic preparation before offering Return to main chat", async ({ page }, testInfo) => {
     let setup = { status: "succeeded", updatedAt: "2026-09-15T00:00:00Z" };
-    const captured = await mockRepositoryRecovery(page, {
+    const captured = await mockRepositoryRecovery(page, server, {
       code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue", outcome: () => "complete",
       workspaceSetup: () => setup,
       async applyUpdate() {
@@ -283,7 +293,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
 
   test("repeated conflicts pause instead of looping, and a manual check preserves the unsent reply", async ({ page }) => {
     let checks = 0;
-    const captured = await mockRepositoryRecovery(page, {
+    const captured = await mockRepositoryRecovery(page, server, {
       code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue", outcome: () => "complete",
       async applyUpdate() {
         checks += 1;
@@ -312,7 +322,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   test("a disconnected check explains the block and retains the draft through reconnection", async ({ page }) => {
     let unblock: (() => void) | undefined;
     let checks = 0;
-    await mockRepositoryRecovery(page, {
+    await mockRepositoryRecovery(page, server, {
       code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue",
       async applyUpdate() { checks += 1; return { ok: true, status: "updated" }; }
     });
@@ -344,7 +354,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   });
 
   test("provider failure stays inline and a reply resumes the same repair without publishing", async ({ page }) => {
-    const captured = await mockRepositoryRecovery(page, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue", outcome: () => "complete" });
+    const captured = await mockRepositoryRecovery(page, server, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue", outcome: () => "complete" });
     let fail = true;
     await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/temporary-conversations/temporary-conversation-1`, async (route) => {
       if (fail) await fulfillJson(route, { ok: true, status: "failed", error: "Provider connection dropped." });
@@ -368,7 +378,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   });
 
   test("failed Stop and Close retain the repair and can be retried without losing work", async ({ page }) => {
-    const captured = await mockRepositoryRecovery(page, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue" });
+    const captured = await mockRepositoryRecovery(page, server, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue" });
     const conversationPath = `/vibe64/sessions/${directChatSessionId}/temporary-conversations/temporary-conversation-1`;
     let stops = 0;
     let deletes = 0;
@@ -416,7 +426,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       { width: 320, height: 640 }, { width: 390, height: 420 },
       { width: 768, height: 1024 }, { width: 1280, height: 844 }
     ];
-    const captured = await mockRepositoryRecovery(page, {
+    const captured = await mockRepositoryRecovery(page, server, {
       code: "vibe64_session_update_conflict", diagnostic: "Four files need review."
     });
     let failedRequest: Record<string, unknown> | null = null;
@@ -468,7 +478,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   });
 
   test("Tab then Enter sends one reply, and long progress cannot move the composer offscreen", async ({ page }) => {
-    const captured = await mockRepositoryRecovery(page, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue" });
+    const captured = await mockRepositoryRecovery(page, server, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue" });
     await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
     await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
     const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
@@ -493,7 +503,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
 
   test("switching sessions retains the original repair and unsent draft without leaking them", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 844 });
-    const captured = await mockRepositoryRecovery(page, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue" });
+    const captured = await mockRepositoryRecovery(page, server, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue" });
     const other = {
       ...directChatSessionPayload, sessionId: "2026-05-12_02-00-00", sessionName: "Other session",
       manifest: { ...directChatSessionPayload.manifest, sessionId: "2026-05-12_02-00-00" }
@@ -523,7 +533,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   });
 
   test("required preparation offers one direct action, reports failure, and clears after successful setup", async ({ page }) => {
-    const captured = await mockRepositoryRecovery(page, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue" });
+    const captured = await mockRepositoryRecovery(page, server, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue" });
     let setup = { status: "required", updatedAt: "2026-09-09T03:50:00Z", diagnostic: "Run this session's declared setup steps after updating its source." };
     const retries: Array<ReturnType<typeof Promise.withResolvers<void>>> = [];
     await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}`, (route) => fulfillJson(route, {
@@ -563,7 +573,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   });
 });
 
-async function mockRepositoryRecovery(page: Page, {
+async function mockRepositoryRecovery(page: Page, server: Awaited<ReturnType<typeof assistantStatusServer>>, {
   code,
   diagnostic,
   outcome = () => "continue",
@@ -576,10 +586,8 @@ async function mockRepositoryRecovery(page: Page, {
   workspaceSetup?: () => Record<string, unknown>;
   applyUpdate?: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
 }) {
-  const mainChatMessages: Record<string, unknown>[] = [];
-  const temporaryCreates: Record<string, unknown>[] = [];
-  const temporaryTurns: Record<string, unknown>[] = [];
-  let temporaryDeletes = 0;
+  const captured = server.temporary!.captured;
+  captured.outcome = outcome;
   let updated = false;
   await mockProjectGateReady(page);
 
@@ -610,9 +618,10 @@ async function mockRepositoryRecovery(page: Page, {
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
+    if (url.pathname.includes("/temporary-conversations")) return route.fallback();
 
     if (method === "GET" && url.pathname.endsWith("/assistant-access")) {
-      await fulfillJson(route, { ok: true, available: true, canUse: true });
+      await fulfillJson(route, { ok: true, available: true, canUse: true, purposes: { senior: { available: true } } });
       return;
     }
     if (method === "GET" && url.pathname.endsWith("/agent-session")) {
@@ -630,49 +639,6 @@ async function mockRepositoryRecovery(page: Page, {
         ok: true,
         sessionId: directChatSessionId
       });
-      return;
-    }
-    if (method === "POST" && url.pathname.endsWith("/agent-message")) {
-      mainChatMessages.push(requestBodyWithoutOrigin(request));
-      await fulfillJson(route, { delivered: true, ok: true });
-      return;
-    }
-    if (method === "POST" && url.pathname.endsWith("/temporary-conversations")) {
-      temporaryCreates.push(requestBodyWithoutOrigin(request));
-      await fulfillJson(route, {
-        conversationId: "temporary-conversation-1",
-        ok: true
-      });
-      return;
-    }
-    if (
-      method === "POST" &&
-      url.pathname.endsWith("/temporary-conversations/temporary-conversation-1/turns")
-    ) {
-      temporaryTurns.push(requestBodyWithoutOrigin(request));
-      await fulfillJson(route, {
-        ok: true,
-        runId: `temporary-run-${temporaryTurns.length}`,
-        status: "inProgress"
-      });
-      return;
-    }
-    if (
-      method === "GET" &&
-      url.pathname.endsWith("/temporary-conversations/temporary-conversation-1")
-    ) {
-      await fulfillJson(route, {
-        message: "Temporary recovery complete.",
-        ok: true,
-        outcome: { kind: outcome(temporaryTurns.length) },
-        runId: `temporary-run-${temporaryTurns.length}`,
-        status: "completed"
-      });
-      return;
-    }
-    if (method === "DELETE" && url.pathname.endsWith("/temporary-conversations/temporary-conversation-1")) {
-      temporaryDeletes += 1;
-      await fulfillJson(route, { ok: true });
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/updates/check")) {
@@ -695,20 +661,6 @@ async function mockRepositoryRecovery(page: Page, {
       });
       return;
     }
-    if (method === "GET" && url.pathname.endsWith("/conversation-log")) {
-      await fulfillJson(route, {
-        conversationLog: [],
-        ok: true,
-        pagination: {
-          count: 0,
-          hasMoreBefore: false,
-          limit: 20,
-          totalTurnCount: 0
-        },
-        sessionId: directChatSessionId
-      });
-      return;
-    }
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
       await fulfillJson(route, { ...directChatSessionPayload, workspaceSetup: workspaceSetup() });
       return;
@@ -727,10 +679,10 @@ async function mockRepositoryRecovery(page: Page, {
   }, { prefix: true });
 
   return {
-    mainChatMessages,
-    get temporaryDeletes() { return temporaryDeletes; },
-    temporaryCreates,
-    temporaryTurns
+    mainChatMessages: server.state.messages,
+    get temporaryDeletes() { return captured.temporaryDeletes; },
+    temporaryCreates: captured.temporaryCreates,
+    temporaryTurns: captured.temporaryTurns
   };
 }
 

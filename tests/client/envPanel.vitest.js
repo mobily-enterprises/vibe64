@@ -26,7 +26,10 @@ describe("Env panel", () => {
     expect(envSource).not.toContain("Development database");
     expect(settingsSource).toContain("A separate database for each session");
     expect(settingsSource).toContain("One database shared by this project");
-    expect(settingsSource).toContain("not supplied to the application as an environment value");
+    expect(settingsSource).toContain("Data and schema changes will be visible to every project session and remain");
+    expect(settingsSource).toContain("after a session is archived.");
+    expect(settingsSource).toContain("path: DEVELOPMENT_DATABASE_ENDPOINT");
+    expect(settingsSource).toContain("scope: context.scope");
     expect(settingsSource).toContain("event: VIBE64_SESSION_CHANGED_EVENT");
     expect(settingsSource).toContain("matches: sessionListRealtimeShouldRefresh");
     expect(settingsSource).toContain("void resource.reload()");
@@ -45,8 +48,8 @@ describe("Env panel", () => {
     expect(source).toContain('label="Explanation style"');
     expect(source).toContain('label="Suggest useful next prompts"');
     expect(source).toContain("Anyone who can");
-    expect(source).toContain("live Codex instructions do not change");
-    expect(source).toContain("this choice never changes coding-agent");
+    expect(source).toContain("instructions in an active Codex conversation stay as they are.");
+    expect(source).toContain("This Vibe64 setting does not change your AI's instructions.");
     expect(source).toContain('{{ collaborationSaving ? "Saving…" : "Save collaboration" }}');
     expect(source).toContain('{{ promptHintsSaving ? "Saving…" : "Save prompt suggestions" }}');
     expect(source).not.toContain(':loading="collaborationSaving"');

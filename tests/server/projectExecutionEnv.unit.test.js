@@ -4,6 +4,7 @@ import path from "node:path";
 import { mkdir, readFile } from "node:fs/promises";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
+import { saveEnvUserValues as saveStoredEnvUserValues } from "../../packages/vibe64-core/src/server/envUserValues.js";
 import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 import {
@@ -135,8 +136,19 @@ test("resource configuration follows resolved application settings without secre
     defaults[1].value = "4";
     const moreWorkers = await loadProjectExecutionEnvRecords(input);
     assert.notEqual(moreWorkers.resourceConfigurationFingerprint, first.resourceConfigurationFingerprint);
+    const blocked = await service.saveEnvUserValues({ environment: "dev", values: {
+      WORKERS: { value: "6", secret: false }
+    } });
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.code, "vibe64_env_value_not_editable");
+    // An existing persisted override still contributes to execution configuration;
+    // the Env editor cannot change a system-owned Stack default.
+    await saveStoredEnvUserValues({
+      projectRuntimeRoot: service.currentProjectRuntimeRoot(), environment: "dev",
+      values: { WORKERS: { value: "6", secret: false } }
+    });
     assert.equal((await service.saveEnvUserValues({ environment: "dev", values: {
-      WORKERS: { value: "6", secret: false }, PRIVATE_SETTING: { value: "private-one", secret: true }
+      PRIVATE_SETTING: { value: "private-one", secret: true }
     } })).ok, true);
     const overridden = await loadProjectExecutionEnvRecords(input);
     assert.notEqual(overridden.resourceConfigurationFingerprint, moreWorkers.resourceConfigurationFingerprint);

@@ -5,13 +5,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./server/actions": "./src/server/actions.js"
+    "./server/actions": "./src/server/actions.js",
+    "./shared/conversation": "./src/shared/conversationIdentity.js"
   },
   "jskit": {
     "kind": "runtime",
     "capabilities": {
       "provides": [
-        "vibe64.sessions"
+        "vibe64.sessions",
+        "assistant.conversations",
+        "assistant.conversation.access"
       ],
       "requires": [
         "runtime.actions",
@@ -29,6 +32,10 @@
           {
             "entrypoint": "src/server/Vibe64SessionsProvider.js",
             "export": "Vibe64SessionsProvider"
+          },
+          {
+            "entrypoint": "src/server/Vibe64ConversationsProvider.js",
+            "export": "Vibe64ConversationsProvider"
           }
         ]
       },
@@ -45,13 +52,15 @@
           }
         ],
         "capabilities": [
-          "vibe64.sessions"
+          "vibe64.sessions",
+          "assistant.conversations",
+          "assistant.conversation.access"
         ]
       }
     }
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.1.221",
+    "@jskit-ai/kernel": "0.1.223",
     "@local/vibe64-core": "0.1.0",
     "@local/vibe64-execution": "0.1.0",
     "@local/vibe64-project": "0.1.0",
@@ -59,6 +68,7 @@
     "@local/vibe64-terminals": "0.1.0",
     "json-rest-schema": "^1.0.17",
     "@local/vibe64-source-editor": "0.1.0",
-    "@local/vibe64-accounts": "0.1.0"
+    "@local/vibe64-accounts": "0.1.0",
+    "@jskit-ai/assistant-runtime": "0.1.194"
   }
 }

@@ -1,44 +1,41 @@
-// Fixed Codex and Claude Code routes from the providers' integration guides.
-// Reviewed 2026-09-23. Provider keys and native configuration are server-owned.
-const model = (id, label, contextWindow, variants, options = {}) => Object.freeze({
-  id, label, contextWindow, variants: Object.freeze(variants), ...options
-});
+import { nativeAiModel, nativeAiProvider } from "@jskit-ai/assistant-core/shared/native-providers";
+
+// Product choices and presentation. JSKIT owns native routes and capabilities.
+const model = (providerId, id, label, defaultThinking) => {
+  const { modelProviderId: _provider, ...definition } = nativeAiModel(id, providerId);
+  return Object.freeze({ ...definition, label, defaultThinking });
+};
 const CURATED_CODEX_PROVIDERS = Object.freeze([
   Object.freeze({
-    id: "deepseek", label: "DeepSeek", baseUrl: "https://api.deepseek.com/", claudeBaseUrl: "https://api.deepseek.com/anthropic",
+    ...nativeAiProvider("deepseek"), label: "DeepSeek",
     description: "DeepSeek API key · usage-based billing",
     keyUrl: "https://platform.deepseek.com/api_keys",
     guideUrl: "https://api-docs.deepseek.com/quick_start/agent_integrations/codex/",
-    claudeAutoCompactWindow: 786432,
-    ownerOnly: false, webSearch: false,
+    ownerOnly: false,
     models: Object.freeze([
-      // Routing qualification is separate from a successful credential probe.
-      // See codexProviderSwitch.test.js and the managed rich-history check.
-      model("deepseek-flash", "DeepSeek V4.1 Flash", 1048576, ["low", "high", "max"], { images: true, defaultThinking: "high", freeformPatch: true, codexHistoryRouting: true }),
-      model("deepseek-v4-pro", "DeepSeek V4 Pro", 1048576, ["low", "high", "max"], { defaultThinking: "high", freeformPatch: true })
+      model("deepseek", "deepseek-flash", "DeepSeek V4.1 Flash", "high"),
+      model("deepseek", "deepseek-v4-pro", "DeepSeek V4 Pro", "high")
     ])
   }),
   Object.freeze({
-    id: "zai-coding-plan", label: "GLM · Coding Plan", baseUrl: "https://api.z.ai/api/v1", claudeBaseUrl: "https://api.z.ai/api/anthropic",
+    ...nativeAiProvider("zai-coding-plan"), label: "GLM · Coding Plan",
     description: "Z.AI Coding Plan key · uses your subscription quota",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     guideUrl: "https://docs.z.ai/devpack/tool/codex",
-    claudeAutoCompactWindow: 1000000,
-    ownerOnly: true, webSearch: false,
+    ownerOnly: true,
     models: Object.freeze([
-      model("glm-5.3", "GLM 5.3", 1048576, ["low", "high", "max"], { defaultThinking: "max", freeformPatch: true, codexHistoryRouting: true })
+      model("zai-coding-plan", "glm-5.3", "GLM 5.3", "max")
     ])
   }),
   Object.freeze({
-    id: "zai", label: "GLM · Pay-as-you-go API", baseUrl: "https://api.z.ai/api/v1", claudeBaseUrl: "https://api.z.ai/api/anthropic",
+    ...nativeAiProvider("zai"), label: "GLM · Pay-as-you-go API",
     description: "Z.AI API key · pay-as-you-go account",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     guideUrl: "https://docs.z.ai/guides/overview/quick-start",
     setupNote: "Use a key from a Z.AI account without a Coding Plan. Pay-as-you-go access through Codex and Claude Code still needs live verification; a successful check confirms model access, not billing.",
-    claudeAutoCompactWindow: 1000000,
-    ownerOnly: false, webSearch: false,
+    ownerOnly: false,
     models: Object.freeze([
-      model("glm-5.3", "GLM 5.3", 1048576, ["low", "high", "max"], { defaultThinking: "max", freeformPatch: true, codexHistoryRouting: true })
+      model("zai", "glm-5.3", "GLM 5.3", "max")
     ])
   })
 ]);

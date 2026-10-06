@@ -23,6 +23,7 @@ active work, role, goal and access checks remain in the existing routing owner.
 ## Sources
 
 - `packages/vibe64-colleague/src/server/Vibe64ColleagueProvider.js`
+- `packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js`
 - `packages/vibe64-colleague/src/server/actions.js`
 - `packages/vibe64-colleague/src/server/service.js`
 - `packages/vibe64-colleague/src/server/attention.js`
@@ -41,22 +42,69 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `src/composables/useVibe64AssistantCatalog.js`
 - `src/lib/studioUrls.js`
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
-- `packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js`
+- `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-colleague/src/server/conversationUpgrade.js`
 
 ## Public contract
 
-Current system instructions require the full guide for each how-to request.
-Static reply, discovery and progress rules and the bounded available-tool schemas
-live in the provider's system context, not in each user/tool continuation. A
-changed catalogue updates that context before the next native turn. Runtime
-adapters delegate installation and refresh to the shared JSKIT conversation
-runtime. Claude resumes the same native history with a new process when supplied
-instructions change; Codex installs an explicit developer-context revision and
-current compaction configuration; OpenCode replaces its system contribution.
-Restricted execution remains in force across updates. Ordinary tool continuations
-reuse the current installation.
+Colleague uses JSKIT's `createConversationRuntime` for model turns, application
+tools, native history, admission, cancellation and model replacement. Its service
+owns product instructions, focused targets, watches, assignments and authorization.
+It consumes normalized events; it has no provider-event parser or reply/tool
+envelope loop. The terminal service supplies authorized account resolution and
+managed execution. Each person has an independent native scope.
+
+The private `conversation.json` remains the authoritative product record. JSKIT's
+record transactions commit its canonical transcript and runtime metadata through
+the existing atomic writer, together with watches and assignments. There is no
+reconstructed in-memory transcript. Turn metadata survives restart. Schema version
+2 retains the old transcript and retires the previous native binding through the
+numbered stopped-service upgrade `20261002-colleague-conversation`; opening a
+legacy record refuses to mutate it or run inference.
+
+Stable instructions remain installed through JSKIT's engine adapters. Focus,
+observations, user-request identities and assignment summaries travel as bounded
+application data alongside a turn, without changing the system prompt. Ordinary
+user text remains readable in the transcript. Tools use the shared action catalogue,
+with current permissions checked again at execution. Autonomous turns expose only
+queries and, where an existing assignment authorizes them, its bounded commands.
+An unavailable tool call cannot grant itself authority or cause automatic retries.
 
 The server exposes state, focus, message admission, stop and context operations.
+Its browser-conversation facade supplies the existing JSKIT assistant integration
+with the same runtime and authored receipts. Reads before model setup use the
+saved transcript without starting a native engine. Send and Cancel delegate to
+the existing Colleague actions. A follow-up cancels and awaits the current response
+before starting the new request, retaining captured focus, watches and cleanup.
+Releasing a browser subscription does not stop the turn.
+Explicit history queries pass only `beforeTurnId` and `limit` to the existing
+JSKIT transcript page reader, before or after model setup. Ordinary reads keep
+their full-history default. Both paths retain the same product visibility and
+current authorization; no second paginator or history copy is introduced.
+The model picker also uses that shared authenticated facade. Its declared
+selection input reaches the original `model.select` action, which retains
+catalogue revision, account access, active-work guards and the atomic selection
+commit with the runtime configuration. The former private model route is removed;
+there is no second selection implementation or browser access to native settings.
+Each operation and live observation rechecks the original request's current
+authority; an actor change cannot reuse an earlier person's conversation scope.
+The sessions-owned conversation provider supplies the local request guard and
+action context to the one assistant feature. Colleague contributes its existing
+facade and declared schemas as an optional capability; Main does not depend on
+Colleague being enabled. Colleague's conversation IDs, routes and product policy
+remain unchanged, and neither product registers a second transport.
+The facade retains Colleague's history visibility: internal wake prompts,
+tool receipts and incomplete saved answers are not exposed as completed chat.
+Transient snapshots retain authored identity and request origin; autonomous tool
+commentary retires any earlier unclassified partial without becoming a spoken
+progress acknowledgement. Browser configuration does not include Colleague's
+internal system prompt. These projections do not rewrite stored history.
+The drawer uses JSKIT's retained conversation binding for draft, delivery,
+transcript, live updates and cancellation. Its model picker, watches, navigation
+receipts and custom toolbar remain product presentation. Text and voice retain
+one exact actor/conversation target. Live recording preview is applied after
+canonical delivery and cannot acknowledge an unaccepted message. Product reads
+refresh on invalidation, reconnect, opening and focus; no browser polling runs.
 Its query actions `vibe64.colleague.usage.topics.read` and
 `vibe64.colleague.usage.guide.read` discover and read task guides shipped under
 the application root's `docs/colleague-usage/`. The topic index is searchable and
@@ -77,56 +125,41 @@ have no repository context or coding tools. Product operations use JSKIT's nativ
 action catalogue and each operation's own authorization, validation and results.
 The shared project context accepts deleting projects only when the operation
 declares that lifecycle scope; callers cannot grant it through input fields.
-Only completed, validated model envelopes can request a tool. Malformed replies
-have a bounded correction opportunity and never execute embedded prose.
-System instructions explicitly distinguish application operations from native
-runtime tools, with a tool-envelope example and the StructuredOutput carrier when
-provided by the runtime. Claude provider events expose attempted direct calls to
-advertised application tools. Those calls never dispatch an application action;
-Colleague suppresses their reply projection and rejects a final reply in favor of
-a bounded protocol correction. A valid tool envelope can still dispatch exactly
-once. Repeated mistakes produce a specific handoff error instead of saving or
-speaking a false application outage. Only application feedback establishes whether
-an operation succeeded or failed; retained native history receives current guidance.
-The first interactive tool envelope can carry a natural progress sentence of
-at most 280 characters in `text`. Guidance stays in system context;
-subsequent prompts include the already
-announced sentence. After completed-envelope validation and receipt persistence,
-dispatch publishes this sentence (or “Let me check that.”) as a complete transient
-assistant projection with its own per-request ID. It remains visible through
-tool/model waits until reply text arrives, without exposing arguments or reasoning.
-Further tool steps cannot announce again. New user steering resets that allowance;
-autonomous observations never announce tools. Stop/failure clears the projection.
-Only the final answer enters the unchanged transcript format. The voice host can
-finish the short progress utterance independently of the still-running model work.
+JSKIT admits complete native tool requests, saves their reservation before
+execution, then saves the result before further inference. Interrupted reservations
+and uncertain server failures remain inspectable and are not executed again. Model
+output alone does not establish that an application action succeeded. The same
+shared executor serves all supported engines.
 
-The feature stores canonical JSKIT transcript data, native conversation identity,
-model selection and its most recent operation receipt under private application
-state. A known message ID is admitted once. Each tool receipt is saved before
-execution and again with its result. A restart during execution reports an unknown
-outcome and does not retry that operation. Credentials and HTTP requests are never
-persisted. A fresh authenticated request is required to continue after restart.
+Product snapshots show user text, completed replies and commentary; application
+wake records and incomplete answers remain in the canonical history without being
+presented as completed chat replies. Streaming uses JSKIT's normalized message
+events. Partial tool arguments and reasoning are not exposed as assistant text.
+Hosted realtime updates remain actor-private, coalesced over 25 ms, with
+stream epoch/revision checks. HTTP refresh and socket reconnection reconcile the
+same conversation. The shared voice binding consumes that projection and canonical
+completion. Neither projection edits the typed draft.
 
-Persistent interactive turns wait for native completion, Stop or connection loss,
-without the ordinary three-minute detached-helper wait. Explicit caller deadlines
-and bounded Helper profiles still apply. If a completion wait fails, Colleague
-reads the exact retained native run once and accepts an already completed answer;
-an active, failed or different run retains the failure without resending work.
+Tool progress is commentary, separate from the final answer. Product instructions
+request a short sentence for the first interactive lookup. The original first-only
+acknowledgement is selected at the shared tool owner's reserved, pre-execution
+event. A completed reply from that exact authored turn supplies its text; otherwise
+the original “Let me check that.” fallback applies. The selected `interimReply`
+is transient product presentation on the same authorized read/subscription, not
+another stored assistant answer. A single generation-fenced projector runs before
+both product and browser publication, independent of subscription callback order.
+Proven native output identity follows live output into saved history so speech
+does not replay the acknowledgement or confuse it with the later answer.
+Autonomous notifications suppress progress in the live projection. Stop, superseding user instructions and
+failure clear transient output. An accepted application wake is retained even when
+its watch is cancelled; cancellation stops that notification, suppresses its late
+reply and leaves the watched coding agent running.
 
-Native text events update an in-memory reply projection. Only the decoded text
-of the expected reply envelope prefix is exposed; partial tool requests and reasoning
-stay private. Authenticated hosted clients receive actor-private JSKIT realtime projections
-coalesced over 25 ms, with epoch/revision checks against stale snapshots. Existing
-one-second HTTP refreshes and socket reconnect reconcile authoritative state.
-Local mode without an authenticated realtime actor retains that HTTP path.
-The chat displays one pending assistant message. Completed envelope validation still controls saved history
-and tool dispatch. Stop, steering, failures and superseded model steps discard
-the projection; reopening reads the latest projection without replaying actions.
-The shared voice binding receives that projection and canonical completion with the
-same message identity, allowing phrase streaming without replaying the final
-answer. No streamed fragments are persisted. The host can supply a transient user
-transcript with its admission ID; the chat shows it as Pending until the canonical
-user message replaces it. Neither projection edits the typed draft.
+A known message ID is admitted once. Credentials and HTTP requests are never
+persisted. Fresh authenticated access is required to continue after restart.
+Uncertain native delivery must be inspected before another submission; neither
+reopening nor recovery replays it. Failed record writes preserve the last committed
+history and prevent the unsaved request from starting.
 
 An accepted request captures its UI focus. Subsequent navigation does not silently
 redirect its operations. New steering can arrive while a model response is active;
@@ -175,25 +208,17 @@ Connection failures use the existing footer status and clear on a current
 successful refresh. Stale failed reads cannot restore a recovered error.
 Command and model failures use shared transient action feedback without adding
 an error block to the drawer; an unchanged retained model error is not announced
-again on every poll. Failed text submission preserves its draft and retry identity.
+again on every refresh. Failed text submission preserves its draft and retry identity.
 
-Retained Claude scopes save their native identity, account binding, execution
-reference and turn state atomically under their private runtime root. Restoring
-a scope observes and stops an orphaned execution before continuing; it never
-resends a saved request. This does not create or mutate development sessions.
-Previously unpersisted scopes remain unavailable rather than being guessed from
-native history. Ordinary one-shot helpers do not create these retained records.
-
-The model button reuses the existing model picker and actor-aware capability
-catalogue through a global route to the same catalogue action. No coding session
-is needed. `model.select` resolves the current catalogue choice and checks access
-before saving it. Active work and unresolved native turns prevent switching;
-stopping the previous turn makes switching available. A switch retains the
-product transcript and identity, starts no inference, and creates a fresh native
-conversation on the next message. That first turn receives the latest 24 written
-messages, each bounded to 2,000 characters. Previous private native records remain
-in the user's scope; they are not reused by the new selection. The current choice
-survives restart and does not change coding-session routing.
+JSKIT retains each native binding and its exact execution identity in the same
+conversation metadata. Reopening observes or stops an owned orphan before further
+work; no process is reclaimed by guessing its PID. Failed cleanup stays visible.
+The model picker uses the existing actor-aware catalogue. Switching is unavailable
+during active work. A selection checks access, then uses the shared replacement
+journal to preserve logical history and prepare the destination native conversation.
+Model selection is committed with the replacement metadata. An interrupted switch
+requires selecting the same destination again to finish that operation. Switching
+starts no inference and does not change coding-session routing.
 
 Conversation watches are ordinary create/list/cancel/resume actions. Each user
 can retain up to 16 active or paused watches, with exact project/session and
@@ -260,7 +285,8 @@ An absent assignment list means none were created; historical conversations are
 not reclassified. Each model exchange receives a compact overview of open and
 currently observed assignments, omitting full requests and evidence. The detail
 action supplies those when needed. The drawer lists open assignments separately
-from ordinary watches and keeps polling while minimized.
+from ordinary watches and receives their changes while minimized. The server
+watch scheduler still observes its targets; the browser does not poll.
 
 Assignment sends invoke the existing Main or temporary-conversation actions,
 reserve an agent-directed turn before dispatch and automatically attach an
@@ -333,9 +359,8 @@ dialog. Default follows the button's current-or-history choice. Acknowledgement
 reports the actual current/history tab only while that matching dialog is open.
 Missing plans, load failures or changed selections return failure; opening
 neither mutates a plan nor starts a coding turn.
-The native prompt also repeats the discovery call format on each exchange:
-contract lookup identifies the action, and execution supplies actionId plus
-nested input. A rejected malformed call is not evidence that an advertised
+The shared discovery contract identifies each action and executes it with
+actionId plus nested input. A rejected malformed call is not evidence that an advertised
 action is absent. JSKIT still validates and executes the unchanged request;
 Colleague adds no argument repair or alternative dispatch path.
 For Integrations, an optional exact integration ID requires the Integrations

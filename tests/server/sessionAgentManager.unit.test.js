@@ -13,6 +13,17 @@ import {
 
 const catalogRevision = `sha256:${"a".repeat(64)}`;
 
+// These policy units exercise the current admitted scope operations against the
+// original mocked provider boundary; they do not simulate a native engine.
+const executionProfileOptions = { assistantSelection: {
+  schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
+  modelProviderId: "openai", modelId: "provider-owned-model", variantId: "low", catalogRevision
+} };
+function executionProfileScope(id) {
+  return { id, workdir: `/fixture/helpers/${id}/workdir`, runtimeRoot: `/fixture/helpers/${id}/runtime`,
+    stableContext: "Bounded execution profile policy fixture.", environment: {} };
+}
+
 test("native replacement blocks terminal and goal bypass while permitting ordinary chat admission after preparation", async () => {
   const calls = [];
   const manager = createSessionAgentManager({ providers: [{ id: "codex", transportId: "codex_app_server",
@@ -1087,7 +1098,7 @@ test("session agent manager resolves semantic execution profiles before provider
           workloadId: request.workloadId
         };
       },
-      async runDetachedChatTurn(context, input) {
+      async createConversation(context, input) {
         calls.push(["run", context, input]);
         return {
           executionProfile: input.executionProfile,
@@ -1098,13 +1109,13 @@ test("session agent manager resolves semantic execution profiles before provider
     }]
   });
 
-  const result = await manager.runDetachedChatTurn("session-1", {
+  const result = await manager.createEphemeralConversation(executionProfileScope("session-1"), {
     executionProfile: {
       profileId: "helper",
       workloadId: "source_explanation"
     },
     prompt: "Explain this source."
-  }, {
+  }, { ...executionProfileOptions,
     signal: abortController.signal
   });
 
@@ -1154,7 +1165,7 @@ test("session agent manager executes its exact pre-resolved profile without reso
         resolutions += 1;
         return providerResolution;
       },
-      async runDetachedChatTurn(_context, input) {
+      async createConversation(_context, input) {
         detachedProfiles.push(input.executionProfile);
         return {
           executionProfile: input.executionProfile,
@@ -1162,7 +1173,7 @@ test("session agent manager executes its exact pre-resolved profile without reso
           text: "Done"
         };
       },
-      async streamDetachedChatTurn(_context, input) {
+      async startConversationTurn(_context, input) {
         detachedProfiles.push(input.executionProfile);
         return {
           executionProfile: input.executionProfile,
@@ -1173,18 +1184,18 @@ test("session agent manager executes its exact pre-resolved profile without reso
     }]
   });
 
-  const resolved = await manager.resolveExecutionProfile("session-1", {
+  const resolved = await manager.resolveEphemeralExecutionProfile(executionProfileScope("session-1"), {
     profileId: "helper",
     workloadId: "source_explanation"
-  });
-  const result = await manager.runDetachedChatTurn("session-1", {
+  }, executionProfileOptions);
+  const result = await manager.createEphemeralConversation(executionProfileScope("session-1"), {
     executionProfile: resolved,
     prompt: "Explain this source."
-  });
-  const streamed = await manager.streamDetachedChatTurn("session-1", {
+  }, executionProfileOptions);
+  const streamed = await manager.startEphemeralConversationTurn(executionProfileScope("session-1"), {
     executionProfile: resolved,
     prompt: "Explain this source again."
-  });
+  }, executionProfileOptions);
 
   assert.equal(resolutions, 1);
   assert.equal(Object.isFrozen(resolved), true);
@@ -1226,16 +1237,16 @@ test("session agent manager rejects copied, forged, and cross-session pre-resolv
       async resolveExecutionProfile() {
         return providerResolution;
       },
-      async runDetachedChatTurn() {
+      async createConversation() {
         detachedTurns += 1;
         return { ok: true };
       }
     }]
   });
-  const resolved = await manager.resolveExecutionProfile("session-1", {
+  const resolved = await manager.resolveEphemeralExecutionProfile(executionProfileScope("session-1"), {
     profileId: "helper",
     workloadId: "source_explanation"
-  });
+  }, executionProfileOptions);
 
   for (const [sessionId, executionProfile] of [
     ["session-1", providerResolution],
@@ -1243,10 +1254,10 @@ test("session agent manager rejects copied, forged, and cross-session pre-resolv
     ["session-2", resolved]
   ]) {
     await assert.rejects(
-      manager.runDetachedChatTurn(sessionId, {
+      manager.createEphemeralConversation(executionProfileScope(sessionId), {
         executionProfile,
         prompt: "Explain this source."
-      }),
+      }, executionProfileOptions),
       (error) => (
         error.code === "vibe64_agent_execution_profile_invalid" &&
         error.field === "executionProfile"
@@ -1255,10 +1266,10 @@ test("session agent manager rejects copied, forged, and cross-session pre-resolv
   }
   await manager.closeSession("session-1");
   await assert.rejects(
-    manager.runDetachedChatTurn("session-1", {
+    manager.createEphemeralConversation(executionProfileScope("session-1"), {
       executionProfile: resolved,
       prompt: "Do not reuse a profile from a closed session binding."
-    }),
+    }, executionProfileOptions),
     (error) => (
       error.code === "vibe64_agent_execution_profile_invalid" &&
       error.field === "executionProfile"
@@ -1343,7 +1354,7 @@ test("session agent manager rejects malformed provider resolutions before provid
           workloadId: request.workloadId
         };
       },
-      async runDetachedChatTurn() {
+      async createConversation() {
         detachedTurns += 1;
         throw new Error("Malformed provider resolutions must not reach detached work.");
       }
@@ -1351,13 +1362,13 @@ test("session agent manager rejects malformed provider resolutions before provid
   });
 
   await assert.rejects(
-    manager.runDetachedChatTurn("session-1", {
+    manager.createEphemeralConversation(executionProfileScope("session-1"), {
       executionProfile: {
         profileId: "helper",
         workloadId: "source_explanation"
       },
       prompt: "Explain this source."
-    }),
+    }, executionProfileOptions),
     (error) => (
       error.code === "vibe64_agent_execution_profile_unsafe" &&
       error.field === "policy.networkAccess"
@@ -1433,7 +1444,7 @@ test("session agent manager rejects provider resolution identity mismatches befo
             [mismatch.field]: mismatch.value
           };
         },
-        async runDetachedChatTurn() {
+        async createConversation() {
           detachedTurns += 1;
           throw new Error("Mismatched provider resolutions must not reach detached work.");
         }
@@ -1441,13 +1452,13 @@ test("session agent manager rejects provider resolution identity mismatches befo
     });
 
     await assert.rejects(
-      manager.runDetachedChatTurn("session-1", {
+      manager.createEphemeralConversation(executionProfileScope("session-1"), {
         executionProfile: {
           profileId: "helper",
           workloadId: "source_explanation"
         },
         prompt: "Explain this source."
-      }),
+      }, executionProfileOptions),
       mismatch.verify
     );
     assert.equal(detachedTurns, 0);
@@ -1513,21 +1524,21 @@ test("session agent manager rejects consumer-owned execution details before prov
         providerCalls += 1;
         throw new Error("Malformed semantic requests must not reach the provider.");
       },
-      async runDetachedChatTurn() {
+      async createConversation() {
         providerCalls += 1;
         throw new Error("Detached work must not start.");
       }
     }]
   });
 
-  await assert.rejects(manager.runDetachedChatTurn("session-1", {
+  await assert.rejects(manager.createEphemeralConversation(executionProfileScope("session-1"), {
     executionProfile: {
       model: "consumer-must-not-control-this",
       profileId: "helper",
       workloadId: "source_explanation"
     },
     prompt: "Explain this source."
-  }), (error) => (
+  }, executionProfileOptions), (error) => (
     error.code === "vibe64_agent_execution_profile_invalid" &&
     error.field === "request.model"
   ));
@@ -1539,20 +1550,20 @@ test("session agent manager fails closed when a provider cannot resolve a reques
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
-      async runDetachedChatTurn() {
+      async createConversation() {
         throw new Error("Detached work must not start.");
       }
     }]
   });
 
   await assert.rejects(
-    manager.runDetachedChatTurn("session-1", {
+    manager.createEphemeralConversation(executionProfileScope("session-1"), {
       executionProfile: {
         profileId: "helper",
         workloadId: "source_explanation"
       },
       prompt: "Explain this source."
-    }),
+    }, executionProfileOptions),
     /does not implement resolveExecutionProfile/u
   );
 });
@@ -1570,7 +1581,7 @@ test("session agent manager surfaces required Codex authentication before helper
         error.code = "vibe64_codex_helper_auth_unavailable";
         throw error;
       },
-      async runDetachedChatTurn() {
+      async createConversation() {
         detachedTurns += 1;
         throw new Error("Unauthenticated helper work must not start.");
       }
@@ -1578,13 +1589,13 @@ test("session agent manager surfaces required Codex authentication before helper
   });
 
   await assert.rejects(
-    manager.runDetachedChatTurn("session-1", {
+    manager.createEphemeralConversation(executionProfileScope("session-1"), {
       executionProfile: {
         profileId: "helper",
         workloadId: "source_explanation"
       },
       prompt: "Explain this source."
-    }),
+    }, executionProfileOptions),
     (error) => (
       error.code === "vibe64_codex_helper_auth_unavailable" &&
       /Reconnect Codex and retry/u.test(error.message)
@@ -1852,6 +1863,20 @@ test("goal reads and stopping remain available while starting and resuming requi
       const options = { agentSettings: { providerId: engineId }, vibe64User: { role } };
       const supported = engineId !== "opencode";
       await manager.readGoal("session-1", options);
+      if (!supported) {
+        const captured = [];
+        assert.deepEqual(await manager.readGoal("session-1", options), { status: "unsupported", goal: null });
+        assert.equal(await manager.readGoal("session-1", { ...options, canonicalGoal: true,
+          async onGoalResult(result, target) { captured.push({ result, target }); }
+        }), null);
+        assert.deepEqual(captured, [{ result: { status: "unsupported", goal: null }, target: {
+          segmentId: null, capabilities: { goals: false, goalBudgets: false, goalCommands: {} }
+        } }], "An unsupported goal read must capture its own policy target before returning canonical null");
+        const failure = new Error("Goal presentation unavailable");
+        await assert.rejects(manager.readGoal("session-1", { ...options, canonicalGoal: true,
+          async onGoalResult() { throw failure; }
+        }), error => error === failure);
+      }
       for (const action of ["pause", "cancel"]) {
         if (supported) await manager.updateGoal("session-1", { action }, options);
         else await assert.rejects(manager.updateGoal("session-1", { action }, options));

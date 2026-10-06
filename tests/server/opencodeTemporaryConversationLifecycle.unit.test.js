@@ -1,10 +1,45 @@
+import { createSessionConversationBinding, prepareSessionConversationDisposal } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import assert from "node:assert/strict";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import test from "node:test";
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
+import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 
 import { controllerHarness } from "../fixtures/opencodeController.js";
+
+function throughPersistentConversations(harness, controller = harness.controller) {
+  const runtime = createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context, input, operation }) => operation === "dispose"
+      ? prepareSessionConversationDisposal(provider, id, context, input)
+      : createSessionConversationBinding(provider, id, context) }
+  });
+  const provider = controller.provider;
+  const manager = createSessionAgentManager({ providers: [provider], conversationRuntime: runtime, defaultProviderId: "opencode" });
+  return { ...controller,
+    ...Object.fromEntries(["startConversationTurn", "readConversation", "waitForConversationTurn", "stopConversation", "deleteConversation"]
+      .map(method => [method, (sessionId, input = {}, options = {}) => {
+        const context = {
+          runtime: harness.runtime, session: harness.session, assistantSelection: harness.selection,
+          routingConversationId: "saved-temporary", ...options, sessionId
+        };
+        // The original durable-history case waits without requesting persistence.
+        // Preserve that native-owner assertion; do not manufacture scoped authority.
+        if (method === "waitForConversationTurn" && !context.assistantScope && input.persistent !== true) {
+          return controller.waitForConversationTurn(context.sessionId, input, {
+            assistantScope: context.assistantScope,
+            assistantSelection: context.assistantSelection,
+            onEvent: context.onEvent,
+            runtime: context.runtime,
+            session: context.session,
+            vibe64User: context.vibe64User
+          });
+        }
+        return manager[method](sessionId, input, context);
+      }])) };
+}
 
 test("temporary OpenCode applies its own model and variant while main chat keeps its selection", async (t) => {
   const harness = await controllerHarness({ helperResponse: "Temporary reply." });
@@ -90,7 +125,7 @@ test("OpenCode temporary Start returns admission while the provider is still wor
   assert.ok(admitted, "Start waited for a final answer, leaving the browser's Stop button disabled");
   assert.equal(admitted.status, "inProgress");
   assert.ok(admitted.runId);
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
 });
 
 test("OpenCode temporary Stop rejects an unconfirmed abort and permits retry", async (t) => {
@@ -135,9 +170,9 @@ test("OpenCode temporary reads remain working and failed Stop preserves the acti
   await assert.rejects(harness.controller.stopConversation("session-1", { conversationId }), {
     code: "vibe64_opencode_interrupt_unconfirmed"
   });
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
   await harness.controller.stopConversation("session-1", { conversationId });
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
   assert.equal((await harness.controller.readConversation("session-1", { conversationId })).status, "interrupted");
   assert.equal(harness.processStops.length, 0);
 });
@@ -167,13 +202,13 @@ test("OpenCode temporary admission can retry and Stop cancels a held history rea
   await assert.rejects(harness.controller.startConversationTurn("session-1", {
     conversationId, message: "Rejected admission"
   }), { statusCode: 503 });
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
   await harness.controller.startConversationTurn("session-1", { conversationId, message: "Work" });
   await reading.promise;
   const stopped = await harness.controller.stopConversation("session-1", { conversationId });
   assert.equal(stopped.stopped, true);
   assert.equal(aborted, true);
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
 });
 
 test("OpenCode temporary completion and observer failure remain readable", async (t) => {
@@ -223,9 +258,9 @@ test("OpenCode temporary Stop times out and permits a confirmed retry", async (t
   await assert.rejects(harness.controller.stopConversation("session-1", { conversationId }), {
     code: "vibe64_opencode_interrupt_timeout", statusCode: 504
   });
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
   await harness.controller.stopConversation("session-1", { conversationId });
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
   assert.equal(harness.processStops.length, 0);
 });
 
@@ -241,11 +276,11 @@ test("OpenCode deletion retires only its own observer and shutdown retires the r
   await harness.controller.startConversationTurn("session-1", { ...second, message: "Second" });
   await harness.controller.deleteConversation("session-1", first);
   assert.equal(harness.upstreamSessions.has(first.conversationId), false);
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
   assert.equal((await harness.controller.readConversation("session-1", second)).status, "inProgress");
   assert.equal(harness.processStops.length, 0);
   await harness.controller.closeAllForProject();
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
 });
 
 test("temporary OpenCode observation loss stops admitted work and waits for an explicit new Send", async (t) => {
@@ -272,7 +307,7 @@ test("temporary OpenCode observation loss stops admitted work and waits for an e
   loss.resolve();
   await assert.rejects(harness.controller.waitForConversationTurn("session-1", { conversationId }), /event connection ended/);
   assert.equal(interrupts, 1);
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
   assert.equal(harness.promptCalls.length, 1);
   assert.deepEqual(harness.userMessages, []);
   reply.pending = false;
@@ -300,14 +335,14 @@ test("temporary OpenCode retains ownership after an unverified stop and can retr
   await harness.controller.startConversationTurn("session-1", { conversationId, message: "Work" });
   loss.resolve();
   await assert.rejects(harness.controller.waitForConversationTurn("session-1", { conversationId }), /could not be verified/);
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
   const pending = await harness.controller.readConversation("session-1", { conversationId });
   assert.equal(pending.ok, false);
   assert.equal(pending.status, "inProgress");
   assert.match(pending.error, /could not be verified/);
   exited = true;
   assert.equal((await harness.controller.stopConversation("session-1", { conversationId })).stopped, true);
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false);
   assert.equal(harness.promptCalls.length, 1);
 });
 
@@ -348,7 +383,7 @@ test("shared OpenCode process loss stops temporary-only sessions without writing
   await settled;
   assert.equal(harness.processStops.length, 1);
   for (const [id] of conversations) {
-    assert.equal(harness.controller.hasActiveTemporaryConversation(id), false);
+    assert.equal(await harness.controller.hasActiveTemporaryConversation(id), false);
   }
   assert.equal(harness.promptCalls.length, 2);
   assert.deepEqual(harness.userMessages, []);
@@ -357,6 +392,8 @@ test("shared OpenCode process loss stops temporary-only sessions without writing
 
 test("durable OpenCode history survives a controller restart without starting another model turn", async (t) => {
   const harness = await controllerHarness({ helperResponse: "Saved answer" });
+  harness.controller = throughPersistentConversations(harness);
+  const events = [];
   let restarted;
   t.after(async () => {
     await restarted?.closeAllForProject();
@@ -364,16 +401,25 @@ test("durable OpenCode history survives a controller restart without starting an
     await rm(harness.root, { force: true, recursive: true });
   });
   const { conversationId } = await harness.controller.createConversation("session-1", { persistent: true });
-  await harness.controller.startConversationTurn("session-1", { conversationId, persistent: true, messageId: "input", message: "Question" });
+  const started = await harness.controller.startConversationTurn("session-1", {
+    conversationId, persistent: true, messageId: "input", message: "Question"
+  }, { onEvent: event => { if (event.type === "message") events.push(structuredClone(event)); } });
   await harness.controller.waitForConversationTurn("session-1", { conversationId });
   await harness.controller.closeAllForProject();
-  restarted = harness.createController();
+  restarted = throughPersistentConversations(harness, harness.createController());
   const restored = await restarted.readConversation("session-1", { conversationId, persistent: true, messageId: "input" });
   assert.equal(restored.status, "completed");
   assert.equal(restored.admitted, true);
   assert.equal(restored.messages.at(-1).text, "Saved answer");
   assert.equal(harness.promptCalls.length, 1);
   assert.deepEqual(harness.userMessages, []);
+  const published = events.find(event => event.message.role === "assistant" && event.message.complete);
+  assert.ok(published, "the original completion observer publishes the persistent reply");
+  assert.equal(published.threadId, conversationId);
+  assert.equal(published.turnId, started.runId, "publication belongs to the exact admitted native input");
+  assert.deepEqual(published.message, restored.messages.at(-1), "live publication and restarted history use the same native message projection");
+  assert.match(published.message.id, /^oc_[a-f0-9]{48}$/u);
+  assert.equal(Object.hasOwn(published.message, "outputId"), false, "OpenCode retains its single native message identity");
   await restarted.stopConversation("session-1", { conversationId, persistent: true });
   await restarted.deleteConversation("session-1", { conversationId, persistent: true });
 });
@@ -381,6 +427,7 @@ test("durable OpenCode history survives a controller restart without starting an
 test("durable OpenCode Close never kills main chat when an observed Stop is unconfirmed", async (t) => {
   let attempts = 0;
   const harness = await controllerHarness({ interrupt: async () => ++attempts > 1 });
+  harness.controller = throughPersistentConversations(harness);
   t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
   const { conversationId } = await harness.controller.createConversation("session-1", { persistent: true });
   await assert.rejects(harness.controller.stopConversation("session-1", { conversationId, persistent: true }), {
@@ -404,7 +451,7 @@ test("temporary OpenCode steers its observed conversation and follows the new pr
   const guided = await harness.controller.startConversationTurn("session-1", { conversationId, persistent: true, steer: true, messageId: "guidance", message: "Read logs first" });
   assert.equal(guided.deliveryMode, "steer");
   assert.equal(harness.promptCalls.at(-1).input.delivery, "steer");
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), true);
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), true);
   reply.pending = false;
   reply.text = "Read the logs.";
   const completed = await harness.controller.waitForConversationTurn("session-1", { conversationId, persistent: true });

@@ -31,6 +31,30 @@ Hover or focus a control to read its action label.
 Colleague can explain the tabs and open an accessible session through its
 navigation action when you explicitly ask it to do so.
 
+## Archive a session
+
+Select the session, choose **Archive session**, and confirm **Archive session**
+in the dialog. This stops its assistant and terminals, preserves the session and
+removes its active workspace. Desktop and mobile use the same confirmation.
+If history preservation fails, the operation reports the error and keeps the
+workspace for retry. Resolve the reported problem, then retry **Archive session**.
+Colleague can explain these steps and the reported error; the existing session
+permissions and confirmation still apply.
+
+## Open the coding agent's terminal
+
+Open **Dashboard → AI Terminal**, then select **Start Codex**, **Start Claude
+Code** or **Start OpenCode**, depending on the session's agent. The terminal
+continues that session's native conversation. **Close terminal** stops its
+interactive terminal; starting it again resumes the saved conversation.
+
+A resumed Codex terminal keeps the shared server's saved permissions. Codex may
+still show its own OpenAI sign-in screen when Main chat uses an external model:
+its terminal checks the shared server's account before opening the conversation.
+An external model connection alone does not satisfy that native sign-in. Complete
+the offered account sign-in yourself, or close the terminal and continue in Main
+chat. Colleague can explain the steps, but cannot complete your sign-in.
+
 ## Leave a terminal on mobile
 
 AI Terminal fills small screens. Use **Exit full screen** in its header to

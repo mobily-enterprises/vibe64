@@ -15,6 +15,7 @@ import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assis
 const props = defineProps({
   active: Boolean,
   session: { type: Object, default: null },
+  conversationRuntime: { type: Object, default: null },
   sessionsApiPath: { type: [Function, Object, String], default: "" }
 });
 const projectSlug = useVibe64ProjectSlug();
@@ -58,49 +59,22 @@ useRealtimeEvent({
     ["agent-plan-usage", `${engineId.value}-plan-usage`].includes(payload.reason),
   onEvent: () => { if (!globalThis.document?.hidden) void usage.reload(); }
 });
-const goalPath = computed(() => vibe64SessionPath(sessionsPath.value, sessionId.value, "/agent-goal"));
-const goalResource = useEndpointResource({
-  enabled: goalEnabled,
-  path: goalPath,
-  queryKey: computed(() => ["vibe64-agent-goal", engineId.value, projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]),
-  realtime: connectionsRealtime,
-  fallbackLoadError: "Goal status is unavailable.",
-  queryOptions: {
-    meta: { jskit: { requestRecovery: false } },
-    queryFn: ({ signal }) => getHttpWebClient().request(goalPath.value, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-    }),
-    retry: false,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: false
-  }
-});
-useRealtimeEvent({
-  enabled: goalEnabled,
-  event: VIBE64_SESSION_CHANGED_EVENT,
-  matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value &&
-    payload.sessionId === sessionId.value && ["codex-goal", "claude-goal", "assistant-routing-changed"].includes(payload.reason),
-  onEvent: () => { if (!globalThis.document?.hidden) void goalResource.reload(); }
-});
-const goal = computed(() => goalEnabled.value ? goalResource.data.value?.goal || null : null);
-const goalEngineId = computed(() => goalResource.data.value?.routing?.selection?.engineId || engineId.value);
+const suppliedGoal = computed(() => unref(props.conversationRuntime?.goalState));
+const goalView = computed(() => unref(props.conversationRuntime?.goalView));
+const goal = computed(() => goalEnabled.value ? goalView.value?.goal || null : null);
+const goalEngineId = computed(() => goalView.value?.routing?.selection?.engineId || engineId.value);
 const fullGoalOpen = ref(false);
 const goalPreview = computed(() => {
   const objective = String(goal.value?.objective || "").trim();
   return objective.length > 140 ? `${objective.slice(0, 140).trimEnd()}…` : objective;
 });
 watch([sessionId, () => goal.value?.objective], () => { fullGoalOpen.value = false; });
-const goalAvailable = computed(() => goalEnabled.value && !goalResource.loadError.value && goalResource.data.value?.status === "available");
+const goalAvailable = computed(() => goalEnabled.value && !unref(props.conversationRuntime?.goalLoadError) &&
+  goalView.value?.status === "available");
 const goalExplicitMode = computed(() => assistantRoutingFromMetadata(props.session?.metadata)?.mode !== "auto");
-const changingGoal = ref(false);
-let goalChange = 0;
-const goalError = ref("");
+const changingGoal = computed(() => suppliedGoal.value?.pending === true);
+const goalError = computed(() => suppliedGoal.value?.error || "");
 watch(scopeKey, () => {
-  goalChange++;
-  changingGoal.value = false;
-  goalError.value = "";
   claudeObjective.value = "";
   claudeGoalOpen.value = false;
 }, { flush: "sync" });
@@ -110,34 +84,9 @@ async function changeGoal(action, input = {}) {
   }
   if (["set", "resume"].includes(action) && !goalExplicitMode.value) return false;
   const targetScope = scopeKey.value;
-  const change = ++goalChange;
-  changingGoal.value = true;
-  goalError.value = "";
-  try {
-    const result = await getHttpWebClient().request(goalPath.value, {
-      method: "POST",
-      body: {
-        action,
-        threadId: goal.value?.threadId || goalResource.data.value?.threadId || "",
-        createdAt: goal.value?.createdAt,
-        objective: goal.value?.objective,
-        ...input
-      }
-    });
-    if (result.ok === false) {
-      throw new Error(result.error || "Could not change the goal.");
-    }
-    if (targetScope === scopeKey.value && action === "set") claudeObjective.value = "";
-  } catch (error) {
-    if (targetScope === scopeKey.value) {
-      goalError.value = error.message || "Could not change the goal.";
-    }
-  } finally {
-    if (change === goalChange) changingGoal.value = false;
-    if (targetScope === scopeKey.value) {
-      await goalResource.reload();
-    }
-  }
+  const result = await props.conversationRuntime.changeGoal(action, input);
+  if (result !== false && targetScope === scopeKey.value && action === "set") claudeObjective.value = "";
+  return result;
 }
 const currentUsage = computed(() => {
   const value = usage.data.value;
@@ -194,38 +143,29 @@ const details = computed(() => {
   return lines.join("\n");
 });
 const goalState = computed(() => ({
+  ...suppliedGoal.value,
   enabled: goalEnabled.value && Boolean(goalAvailable.value || goalError.value),
   goal: goalAvailable.value && goal.value ? {
     ...goal.value,
     objective: goalPreview.value,
     elapsedSeconds: goal.value.timeUsedSeconds,
-    sampledAt: Number.isFinite(goal.value.updatedAt)
-      ? goal.value.updatedAt * (goal.value.updatedAt < 1_000_000_000_000 ? 1000 : 1) : undefined
+    sampledAt: Date.parse(goal.value.updatedAt)
   } : null,
   pending: changingGoal.value,
   error: goalError.value,
   set: goalExplicitMode.value ? (input) => changeGoal("set", input) : null,
   pause: () => changeGoal("pause"),
-  resume: goalExplicitMode.value ? () => changeGoal("resume") : null
+  resume: goalExplicitMode.value ? () => changeGoal("resume") : null,
+  cancel: () => changeGoal("cancel")
 }));
 </script>
 
 <template>
   <AssistantGoalControl v-if="goalEngineId === 'codex'" :state="goalState">
     <p v-if="!goalExplicitMode" class="text-body-small mt-2">Choose Senior or Junior before starting or resuming a goal.</p>
-    <v-btn
-      v-if="goalAvailable && goal && goal.status !== 'complete'"
-      class="mt-2" color="error" size="small" variant="text"
-      :disabled="changingGoal" @click="changeGoal('cancel')"
-    >
-      Cancel goal
-    </v-btn>
     <v-btn v-if="goal?.objective && goalPreview !== goal.objective" class="mt-2" size="small" variant="text" @click="fullGoalOpen = true">
       View full goal
     </v-btn>
-    <p v-if="goalAvailable && goal && goal.status !== 'complete'" class="text-body-small mt-2">
-      Cancel removes this goal. Use Stop to interrupt a turn already running.
-    </p>
   </AssistantGoalControl>
   <v-menu v-if="goalEngineId === 'claude' && goalState.enabled" v-model="claudeGoalOpen" location="top" :close-on-content-click="false">
     <template #activator="{ props: menuProps }">

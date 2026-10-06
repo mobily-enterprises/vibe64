@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 
 const SESSION_RENEWAL_HANDOVER_SCHEMA_VERSION =
   "vibe64.session-renewal-handover.v1";
@@ -496,7 +497,169 @@ function parseSessionRenewalAcknowledgement(rawOutput = "", {
   });
 }
 
+function prepareSessionRenewalHandoverRequest(input = {}) {
+  if (input && Object.prototype.hasOwnProperty.call(input, "executionProfile")) {
+    throw sessionRenewalProtocolError(
+      "vibe64_session_renewal_interactive_provider_required",
+      "Session handover generation must use the old session's normal interactive assistant settings."
+    );
+  }
+  const operationId = defineSessionRenewalOperationId(
+    input.operationId || input.operationKey
+  );
+  const source = defineSessionRenewalSourceEnvelope(input.source);
+  const clientMessageId = sessionRenewalClientMessageId("handover", operationId);
+  return { operationId, source, clientMessageId };
+}
+
+function prepareSessionRenewalSeedRequest(input = {}) {
+  if (input && Object.prototype.hasOwnProperty.call(input, "executionProfile")) {
+    throw sessionRenewalProtocolError(
+      "vibe64_session_renewal_interactive_provider_required",
+      "A renewed session must start with normal interactive assistant settings."
+    );
+  }
+  const operationId = defineSessionRenewalOperationId(
+    input.operationId || input.operationKey
+  );
+  const approved = defineSessionRenewalApprovedHandover({
+    handover: input.handover,
+    handoverHash: input.handoverHash,
+    source: input.source
+  });
+  const oldThreadId = String(input.oldThreadId || input.forbiddenThreadId || "").trim();
+  const clientMessageId = sessionRenewalClientMessageId("seed", operationId);
+  return { operationId, approved, oldThreadId, clientMessageId };
+}
+
+const RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND =
+  "vibe64.session_renewal_successor_process_exit_proof_release";
+
+function normalizeRenewalContextText(value) {
+  return String(value || "").trim();
+}
+
+function renewalCleanupContext(sessionId = "", options = {}) {
+  const renewalCleanup = options?.renewalCleanup;
+  if (!renewalCleanup) {
+    return null;
+  }
+  const normalizedSessionId = normalizeRenewalContextText(sessionId);
+  const runtime = options.runtime;
+  const session = options.session;
+  const metadata = session?.metadata && typeof session.metadata === "object"
+    ? session.metadata
+    : {};
+  const cleanupKind = normalizeRenewalContextText(renewalCleanup.kind);
+  const renewalId = normalizeRenewalContextText(renewalCleanup.renewalId);
+  const sourceSessionId = normalizeRenewalContextText(renewalCleanup.sourceSessionId);
+  const status = normalizeRenewalContextText(session?.status);
+  const successorIsExact = cleanupKind === "successor" &&
+    status === VIBE64_SESSION_STATUS.RENEWAL_PENDING &&
+    normalizeRenewalContextText(metadata.renewal_id) === renewalId &&
+    normalizeRenewalContextText(metadata.renewed_from) === sourceSessionId &&
+    Boolean(normalizeRenewalContextText(metadata.renewed_from));
+  // renewal_restored_id belongs to a completed rollback, not the next
+  // transition. Current quiescence or renewed_to still owns the predecessor.
+  const predecessorIsExact = cleanupKind === "predecessor" &&
+    sourceSessionId === normalizedSessionId &&
+    (
+      (
+        status === VIBE64_SESSION_STATUS.ACTIVE &&
+        !normalizeRenewalContextText(metadata.renewal_quiesced_id) &&
+        !normalizeRenewalContextText(metadata.renewed_to)
+      ) ||
+      (
+        status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED &&
+        normalizeRenewalContextText(metadata.renewal_quiesced_id) === renewalId
+      )
+    );
+  if (
+    !runtime ||
+    normalizeRenewalContextText(session?.sessionId) !== normalizedSessionId ||
+    !renewalId ||
+    (!successorIsExact && !predecessorIsExact)
+  ) {
+    throw new TypeError("Renewal terminal cleanup requires its exact predecessor or successor and runtime.");
+  }
+  return {
+    kind: cleanupKind,
+    runtime,
+    session
+  };
+}
+
+function renewalArchivedPredecessorContext(sessionId = "", options = {}) {
+  const normalizedSessionId = normalizeRenewalContextText(sessionId);
+  const runtime = options.runtime;
+  const session = options.session;
+  const metadata = session?.metadata && typeof session.metadata === "object"
+    ? session.metadata
+    : {};
+  const renewalId = normalizeRenewalContextText(options.renewalId);
+  if (
+    !runtime ||
+    !renewalId ||
+    normalizeRenewalContextText(session?.sessionId) !== normalizedSessionId ||
+    session?.archived !== true ||
+    normalizeRenewalContextText(session?.status) !== VIBE64_SESSION_STATUS.ARCHIVED ||
+    normalizeRenewalContextText(metadata.renewal_id) !== renewalId ||
+    !normalizeRenewalContextText(metadata.renewed_to)
+  ) {
+    throw new TypeError("Renewal maintenance requires its exact archived predecessor and runtime.");
+  }
+  return {
+    renewalId,
+    runtime,
+    session
+  };
+}
+
+function renewalSuccessorProcessExitProofReleaseContext(sessionId = "", options = {}) {
+  const normalizedSessionId = normalizeRenewalContextText(sessionId);
+  const runtime = options.runtime;
+  const session = options.session;
+  const metadata = session?.metadata && typeof session.metadata === "object"
+    ? session.metadata
+    : {};
+  const renewalId = normalizeRenewalContextText(options.renewalId);
+  const authorization = options.authorization && typeof options.authorization === "object"
+    ? options.authorization
+    : {};
+  const authorizedAt = normalizeRenewalContextText(authorization.authorizedAt);
+  const authorizedAtMs = Date.parse(authorizedAt);
+  if (
+    !runtime ||
+    !renewalId ||
+    normalizeRenewalContextText(session?.sessionId) !== normalizedSessionId ||
+    normalizeRenewalContextText(session?.status) !== VIBE64_SESSION_STATUS.RENEWAL_PENDING ||
+    normalizeRenewalContextText(metadata.renewal_id) !== renewalId ||
+    !normalizeRenewalContextText(metadata.renewed_from) ||
+    normalizeRenewalContextText(authorization.kind) !== RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND ||
+    Number(authorization.schemaVersion) !== 1 ||
+    normalizeRenewalContextText(authorization.renewalId) !== renewalId ||
+    normalizeRenewalContextText(authorization.sourceSessionId) !== normalizeRenewalContextText(metadata.renewed_from) ||
+    normalizeRenewalContextText(authorization.successorSessionId) !== normalizedSessionId ||
+    normalizeRenewalContextText(authorization.runtimeDir) !== normalizeRenewalContextText(metadata.agent_transport_runtime_dir) ||
+    !Number.isFinite(authorizedAtMs) ||
+    new Date(authorizedAtMs).toISOString() !== authorizedAt
+  ) {
+    throw new TypeError(
+      "Renewal successor process-exit proof release requires its exact authorization, pending successor, and runtime."
+    );
+  }
+  return {
+    authorization,
+    renewalId,
+    runtime,
+    session
+  };
+}
+
 export {
+  renewalCleanupContext,
+  renewalArchivedPredecessorContext,
+  renewalSuccessorProcessExitProofReleaseContext,
   SESSION_RENEWAL_ACKNOWLEDGEMENT_SCHEMA_VERSION,
   SESSION_RENEWAL_HANDOVER_SCHEMA_VERSION,
   SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS,
@@ -507,10 +670,13 @@ export {
   defineSessionRenewalSourceEnvelope,
   parseSessionRenewalAcknowledgement,
   parseSessionRenewalHandoverOutput,
+  prepareSessionRenewalHandoverRequest,
+  prepareSessionRenewalSeedRequest,
   sessionRenewalAcknowledgementOutputSchema,
   sessionRenewalClientMessageId,
   sessionRenewalHandoverHash,
   sessionRenewalHandoverPrompt,
   sessionRenewalManualHandoverTemplate,
+  sessionRenewalProtocolError,
   sessionRenewalSeedPrompt
 };

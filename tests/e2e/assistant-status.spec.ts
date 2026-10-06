@@ -16,8 +16,11 @@ test.afterEach(async ({ page }, info) => {
   await info.attach("requests", { body: JSON.stringify({
     checks: server.state.checkCount, details: server.state.detailCount,
     checkTimes: server.state.checkTimes, requests: server.state.requests,
+    connectionAttempts: server.state.connectionAttempts, subscriptions: server.state.subscriptions,
+    conversationReads: server.state.conversationReads,
     unexpectedRequests: server.state.unexpectedRequests,
     messages: server.state.messages, interrupts: server.state.interrupts,
+    goalCommands: server.state.goalCommands,
     pageErrors
   }, null, 2), contentType: "application/json" });
   await server.close();
@@ -33,6 +36,23 @@ const busy = (response) => json(response, { ok: false, code: "vibe64_agent_write
 async function openChat(page: Page) {
   await page.goto(`${server.url}${DASHBOARD_PATH}/env`);
   await expect(composer(page)).toBeVisible();
+}
+
+async function expectCanonicalConversation({ sends = 0, goals = 0, connections = 1, httpRead = true } = {}) {
+  const route = `/api/assistant/app/conversations/${encodeURIComponent(server.conversationId)}`;
+  if (httpRead) await expect.poll(() => server.state.requests.some(request => request === `GET ${route}` || request.startsWith(`GET ${route}?`))).toBe(true);
+  await expect.poll(() => server.state.conversationReads.filter(id => id === server.conversationId).length).toBeGreaterThanOrEqual(connections);
+  await expect.poll(() => server.state.subscriptions.filter(id => id === server.conversationId).length).toBeGreaterThanOrEqual(connections);
+  await expect.poll(() => server.connectionCount()).toBe(1);
+  expect(server.state.connectionAttempts).toBe(connections);
+  expect(server.state.requests.filter(request => request === `POST ${route}/messages`)).toHaveLength(sends);
+  expect(server.state.requests.filter(request => request === `POST ${route}/goal`)).toHaveLength(goals);
+  if (goals) expect(server.state.requests).toContain(`GET ${route}/goal`);
+  const legacy = `/vibe64/sessions/${server.state.session.sessionId}`;
+  expect(server.state.requests.filter(request => [
+    `POST ${legacy}/agent-message`, `POST ${legacy}/agent-turn/interrupt`, `GET ${legacy}/conversation-log`,
+    `GET ${legacy}/agent-goal`, `POST ${legacy}/agent-goal`
+  ].includes(request))).toEqual([]);
 }
 
 test("startup failure explains the cause and preserves the draft through manual recovery", async ({ page }, info) => {
@@ -74,6 +94,7 @@ test("healthy assistant can receive steering in the built client", async ({ page
   await expect.poll(() => server.state.messages.length).toBe(1);
   expect(server.state.messages[0].message).toBe("Preserve my work.");
   await expect(page.getByLabel("Message AI assistant")).toHaveValue("");
+  await expectCanonicalConversation({ sends: 1 });
 });
 
 test("failed control recovery keeps Retry and Renew accessible above a checkpoint warning", async ({ page }) => {
@@ -103,16 +124,16 @@ test("failed control recovery keeps Retry and Renew accessible above a checkpoin
 test("long goal keeps Pause and full-goal Close visible on small screens", async ({ page }, info) => {
   Object.assign(server.state.session, { assistantSelection: { engineId: "codex" } });
   const objective = "Complete the approved customer configuration plan, preserving existing work and checking each stage. ".repeat(45);
-  const actions: Record<string, unknown>[] = [];
-  const goal = { threadId: "thread-long-goal", status: "active", objective, createdAt: 20, timeUsedSeconds: 390 };
-  await page.route("**/agent-goal", async (route) => {
-    if (route.request().method() === "POST") {
-      const action = route.request().postDataJSON();
-      actions.push(action);
-      goal.status = action.action === "pause" ? "paused" : "active";
-    }
-    await route.fulfill({ json: { ok: true, status: "available", goal } });
-  });
+  const actions = server.state.goalCommands;
+  const goal = { id: "goal-long", status: "active", objective, createdAt: "1970-01-01T00:00:20.000Z", timeUsedSeconds: 390 };
+  server.state.goal = { status: "available", goal, target: { segmentId: "codex:thread-long-goal", capabilities: {
+    goals: true, goalBudgets: true, goalCommands: Object.fromEntries(["set", "pause", "resume", "cancel"]
+      .map(action => [action, { delivery: "control", interruptsTurn: false }]))
+  } } };
+  server.state.updateGoal = action => {
+    goal.status = action.action === "pause" ? "paused" : "active";
+    return goal;
+  };
   await page.route("**/agent-plan-usage", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
   await page.route(/\/assistants\/capabilities(?:\?|$)/u, (route) => route.fulfill({ json: { ok: true, engines: [] } }));
   await page.route("**/temporary-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
@@ -142,27 +163,28 @@ test("long goal keeps Pause and full-goal Close visible on small screens", async
   await page.getByRole("button", { name: "Goal running", exact: true }).click();
   await page.getByRole("button", { name: "Pause goal", exact: true }).click();
   await expect(page.getByRole("button", { name: "Resume goal", exact: true })).toBeEnabled();
-  expect(actions).toEqual([expect.objectContaining({ action: "pause", objective })]);
+  expect(actions).toEqual([expect.objectContaining({ action: "pause", expectedSegmentId: "codex:thread-long-goal", expectedGoalId: "goal-long" })]);
+  await expectCanonicalConversation({ goals: 1 });
 });
 
 test("a blocked goal can be cancelled without resuming and stays cleared after reload", async ({ page }, info) => {
   server.state.session.assistantSelection = { engineId: "codex" };
   const objective = "Complete the approved customer configuration plan. ".repeat(30);
-  let goal: Record<string, unknown> | null = {
-    threadId: "thread-blocked", status: "blocked", objective, createdAt: 30, timeUsedSeconds: 400
-  };
-  const actions: Record<string, unknown>[] = [];
+  server.state.goal = { status: "available", goal: {
+    id: "goal-blocked", status: "blocked", objective, createdAt: "1970-01-01T00:00:30.000Z", timeUsedSeconds: 400
+  }, target: { segmentId: "codex:thread-blocked", capabilities: {
+    goals: true, goalBudgets: true, goalCommands: Object.fromEntries(["set", "pause", "resume", "cancel"]
+      .map(action => [action, { delivery: "control", interruptsTurn: false }]))
+  } } };
+  const actions = server.state.goalCommands;
   const cancelReceived = Promise.withResolvers<void>();
   const releaseCancel = Promise.withResolvers<void>();
-  await page.route("**/agent-goal", async (route) => {
-    if (route.request().method() === "POST") {
-      actions.push(route.request().postDataJSON());
-      cancelReceived.resolve();
-      await releaseCancel.promise;
-      goal = null;
-    }
-    await route.fulfill({ json: { ok: true, status: "available", goal } });
-  });
+  server.state.updateGoal = async () => {
+    cancelReceived.resolve();
+    await releaseCancel.promise;
+    server.state.goal!.goal = null;
+    return null;
+  };
   await page.route("**/agent-plan-usage", (route) => route.fulfill({ json: { ok: true, status: "unsupported" } }));
   await page.route(/\/assistants\/capabilities(?:\?|$)/u, (route) => route.fulfill({ json: { ok: true, engines: [] } }));
   await page.route("**/temporary-conversations", (route) => route.fulfill({ json: { ok: true, conversations: [] } }));
@@ -185,7 +207,7 @@ test("a blocked goal can be cancelled without resuming and stays cleared after r
     releaseCancel.resolve();
   }
   await expect(page.getByRole("button", { name: "Set goal", exact: true })).toBeVisible();
-  expect(actions).toEqual([{ action: "cancel", threadId: "thread-blocked", objective, createdAt: 30 }]);
+  expect(actions).toEqual([{ action: "cancel", expectedSegmentId: "codex:thread-blocked", expectedGoalId: "goal-blocked" }]);
   await expect(composer(page)).toHaveValue("Keep my unsent draft.");
   expect(server.state.messages).toEqual([]);
   expect(server.state.interrupts).toBe(0);
@@ -194,6 +216,7 @@ test("a blocked goal can be cancelled without resuming and stays cleared after r
   await page.getByRole("button", { name: "Set goal", exact: true }).click();
   await expect(page.getByLabel("Goal objective")).toBeVisible();
   await expect(page.getByRole("button", { name: "Cancel goal", exact: true })).toHaveCount(0);
+  await expectCanonicalConversation({ goals: 1, connections: 2 });
 });
 
 test("a hung initial session read recovers after its deadline", async ({ page }) => {
@@ -376,11 +399,13 @@ test("reconnect cancels a pending check and recovers once", async ({ page }) => 
   await openChat(page);
   await composer(page).fill("Reconnect without losing this.");
   await expect.poll(() => server.state.checkCount).toBe(1);
+  await expect.poll(() => server.state.subscriptions.length).toBeGreaterThan(0);
   server.disconnect();
   await expect(steer(page)).toBeEnabled();
   expect(server.state.checkCount).toBe(2);
   expect(heldResponse.destroyed).toBe(true);
   await expect(composer(page)).toHaveValue("Reconnect without losing this.");
+  await expectCanonicalConversation({ connections: 2, httpRead: false });
 });
 
 test("offline then online restores steering without a reload", async ({ page, context }) => {
@@ -628,6 +653,7 @@ test("goal steering replies appear immediately, preserve the composer and surviv
   await composer(page).fill("Continue with this guidance after reload.");
   await expect(steer(page)).toBeEnabled();
   expect(server.state.messages).toHaveLength(2);
+  await expectCanonicalConversation({ sends: 2, connections: 2 });
 });
 
 for (const provider of ["codex", "opencode"]) {

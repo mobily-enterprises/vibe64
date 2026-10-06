@@ -99,9 +99,20 @@ function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout
     kind: "result-set", columns: [{ index: 0, label: "value", databaseType: "text" }],
     rows: [["kept row"]]
   }));
+  const assistantBusy = Vue.ref(false);
+  const askAssistant = vi.fn(async () => ({ answer: "Explanation", queries: [] }));
+  const assistantCommand = {
+    get isRunning() { return assistantBusy.value; },
+    run: vi.fn(async ({ payload }) => {
+      assistantBusy.value = true;
+      try { return await askAssistant(payload.messages); }
+      finally { assistantBusy.value = false; }
+    })
+  };
   mocks.database = {
     state, runQuery, saveLayout, running: Vue.ref(false), loading: Vue.ref(false), error: Vue.ref(""),
-    reload: vi.fn(async () => null), askAssistant: vi.fn(async () => ({ answer: "Explanation", queries: [] })), assistantBusy: Vue.ref(false)
+    reload: vi.fn(async () => null), askAssistant, assistantBusy, assistantCommand,
+    assistantEndpoint: Vue.computed(() => `/api/app/vibe64/database/sessions/${props.sessionId}/assistant`)
   };
   const renderer = Vue.createRenderer({
     createElement: (type) => ({ type, children: [], props: {}, style: {}, parent: null, querySelector: () => null }),
@@ -213,12 +224,12 @@ describe("Database Workspace automatic table admission", () => {
       schema: { ...firstState.schema, tables: [firstTable, secondTable] } } });
     try {
       await flushWorkspace(fixture.runQuery);
-      fixture.workspace.assistantDraft = "Explain this table";
-      await fixture.workspace.askCopilot();
+      fixture.workspace.assistantBinding.runtime.value.draft.value = "Explain this table";
+      await fixture.workspace.assistantBinding.runtime.value.submit();
       fixture.workspace.activeView = "erd";
       fixture.workspace.diagramSelections.erd = secondTable.qualifiedName;
-      fixture.workspace.assistantDraft = "And this one?";
-      await fixture.workspace.askCopilot();
+      fixture.workspace.assistantBinding.runtime.value.draft.value = "And this one?";
+      await fixture.workspace.assistantBinding.runtime.value.submit();
       const messages = mocks.database.askAssistant.mock.calls.at(-1)[0];
       expect(messages[0]).toMatchObject({ content: "Explain this table", table: "public.items" });
       expect(messages[2]).toMatchObject({ content: "And this one?", table: "public.orders" });
@@ -232,15 +243,15 @@ describe("Database Workspace automatic table admission", () => {
       fixture.props.assistantAvailable = false;
       await flushWorkspace(fixture.runQuery);
       expect(fixture.workspace.assistantStatusLabel).toBe("OpenCode (deepseek-flash high) · Shared backup");
-      fixture.workspace.assistantDraft = "Explain this table";
-      await fixture.workspace.askCopilot();
+      fixture.workspace.assistantBinding.runtime.value.draft.value = "Explain this table";
+      await fixture.workspace.assistantBinding.runtime.value.submit();
       expect(mocks.database.askAssistant).toHaveBeenCalledTimes(1);
       fixture.state.value = { ...firstState, assistant: { available: false, message: "The Helper model was disabled." } };
       fixture.props.assistantAvailable = true;
       await flushWorkspace(fixture.runQuery);
       expect(fixture.workspace.assistantUnavailableCopy).toBe("The Helper model was disabled.");
-      fixture.workspace.assistantDraft = "Another question";
-      await fixture.workspace.askCopilot();
+      fixture.workspace.assistantBinding.runtime.value.draft.value = "Another question";
+      await fixture.workspace.assistantBinding.runtime.value.submit();
       expect(mocks.database.askAssistant).toHaveBeenCalledTimes(1);
     } finally { await fixture.close(); }
   });
@@ -576,5 +587,91 @@ describe("Colleague exact Database table selection", () => {
     } finally { await fixture.close(); }
     expect(() => panel.selectTable(firstTable.qualifiedName)).toThrow(/not available/);
     expect(fixture.runQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe("Database Copilot supplied bounded-task binding", () => {
+  it("clears only hydrated history and discards an old session's pending answer and query results", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: { ...firstState, assistant: { available: true } } });
+    const pending = Promise.withResolvers();
+    try {
+      await flushWorkspace(fixture.runQuery);
+      mocks.database.askAssistant.mockImplementationOnce(() => pending.promise);
+      fixture.workspace.assistantBinding.runtime.value.draft.value = "Explain this table";
+      const sending = fixture.workspace.assistantBinding.runtime.value.submit();
+      expect(fixture.workspace.assistantBinding.runtime.value.draft.value).toBe("");
+      expect(fixture.workspace.assistantAdapter.conversation.turns).toHaveLength(1);
+      expect(fixture.workspace.assistantAdapter.delivery).toBeUndefined();
+      fixture.workspace.assistantBinding.runtime.value.draft.value = "Keep this draft";
+      fixture.props.sessionId = "next-session";
+      fixture.state.value = { ...secondState, assistant: { available: true } };
+      await flushWorkspace(fixture.runQuery);
+      const currentResult = fixture.workspace.queryResult;
+      expect(fixture.workspace.assistantAdapter.conversation.turns).toEqual([]);
+      expect(fixture.workspace.assistantBinding.runtime.value.draft.value).toBe("Keep this draft");
+      pending.resolve({ answer: "Old session answer", sql: "SELECT old_value", queries: [{ result: { rows: [["old"]] } }] });
+      expect(await sending).toBeUndefined();
+      expect(fixture.workspace.assistantAdapter.conversation.turns).toEqual([]);
+      expect(fixture.workspace.queryResult).toBe(currentResult);
+      expect(fixture.workspace.assistantBinding.runtime.value.draft.value).toBe("Keep this draft");
+      expect(mocks.database.askAssistant).toHaveBeenCalledTimes(1);
+      expect(mocks.database.assistantCommand.run.mock.calls[0][0].path)
+        .toBe("/api/app/vibe64/database/sessions/database-session/assistant");
+    } finally { pending.resolve(null); await fixture.close(); }
+  });
+
+  it("keeps a hidden admitted question alive with modifier-Enter and its original table result placement", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: { ...firstState, assistant: { available: true } } });
+    const pending = Promise.withResolvers();
+    try {
+      await flushWorkspace(fixture.runQuery);
+      mocks.database.askAssistant.mockImplementationOnce(() => pending.promise);
+      fixture.workspace.copilotOpen = true;
+      fixture.workspace.assistantBinding.runtime.value.draft.value = "Explain this table";
+      const sending = fixture.workspace.assistantBinding.runtime.value.submit();
+      expect(fixture.workspace.assistantAdapter.composer.submitOnEnter).toBe(false);
+      expect(fixture.workspace.assistantAdapter.composer.submitOnModifierEnter).toBe(true);
+      expect(fixture.workspace.assistantAdapter.composer.pending).toBe(true);
+      fixture.workspace.copilotOpen = false;
+      fixture.state.value = { ...firstState, assistant: { available: false } };
+      await Vue.nextTick();
+      const rows = { kind: "result-set", rows: [["copilot result"]] };
+      pending.resolve({ answer: "Kept hidden reply", intent: "answer", sql: "SELECT value", queries: [{ result: rows }] });
+      expect(await sending).toBeUndefined();
+      const turns = fixture.workspace.assistantAdapter.conversation.turns;
+      expect(turns).toHaveLength(1);
+      expect(turns[0].user).toMatchObject({ text: "Explain this table", table: "public.items" });
+      expect(turns[0].assistant).toMatchObject({ text: "Kept hidden reply", sql: "SELECT value", intent: "answer" });
+      expect(turns[0].messages).toHaveLength(2);
+      expect(fixture.workspace.queryResult).toEqual(rows);
+      expect(fixture.workspace.copilotOpen).toBe(false);
+      expect(fixture.workspace.assistantAdapter.delivery).toBeUndefined();
+      expect(mocks.database.askAssistant).toHaveBeenCalledTimes(1);
+    } finally { pending.resolve(null); await fixture.close(); }
+  });
+
+  it("retains an unanswered local row and the original command error without a receipt or automatic retry", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: { ...firstState, assistant: { available: true } } });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      const failure = new Error("The original command failed.");
+      mocks.database.askAssistant.mockRejectedValueOnce(failure);
+      fixture.workspace.assistantBinding.runtime.value.draft.value = "First question";
+      await expect(fixture.workspace.assistantBinding.runtime.value.submit()).rejects.toBe(failure);
+      expect(fixture.workspace.assistantBinding.runtime.value.draft.value).toBe("");
+      expect(fixture.workspace.assistantAdapter.conversation.turns).toHaveLength(1);
+      expect(fixture.workspace.assistantAdapter.conversation.turns[0].user.text).toBe("First question");
+      expect(fixture.workspace.assistantAdapter.conversation.turns[0].assistant).toBeUndefined();
+      expect(fixture.workspace.assistantAdapter.delivery).toBeUndefined();
+      await Vue.nextTick();
+      expect(mocks.database.askAssistant).toHaveBeenCalledTimes(1);
+      fixture.workspace.assistantBinding.runtime.value.draft.value = "Second question";
+      expect(await fixture.workspace.assistantBinding.runtime.value.submit()).toBeUndefined();
+      expect(mocks.database.askAssistant.mock.calls[1][0]).toEqual([
+        { content: "First question", role: "user", table: "public.items" },
+        { content: "Second question", role: "user", table: "public.items" }
+      ]);
+      expect(mocks.database.askAssistant).toHaveBeenCalledTimes(2);
+    } finally { await fixture.close(); }
   });
 });

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { startCodexHistoryAdapter } from "@local/vibe64-runtime/server/codexHistoryAdapter";
+import { startCodexHistoryAdapter } from "@jskit-ai/assistant-core/testing/native-codex";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/server/codex-client";
+import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
 import { CodexAppServerAgentProvider } from "@local/vibe64-runtime/server/codexAppServerProvider";
 
 test("native provider switches preserve history without restarting, and cold recovery restores the provider", {

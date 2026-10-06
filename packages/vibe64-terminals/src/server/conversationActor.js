@@ -1,3 +1,4 @@
+import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
   currentActorUser
 } from "@local/vibe64-execution/server";
@@ -29,4 +30,34 @@ async function conversationActorMetadata({
   };
 }
 
-export { conversationActorMetadata };
+function conversationReviewActorMetadata(turnMetadata) {
+  return turnMetadata?.assistantRouting?.resolvedMode === "review" ? { actorId: "app", actorDisplayName: "Automatic review" } : {};
+}
+
+async function codexDeliveredConversationMetadata(store, sessionId, turnMetadata) {
+  return {
+    ...turnMetadata,
+    ...conversationReviewActorMetadata(turnMetadata),
+    engineId: "codex",
+    assistantSelection: vibe64AssistantSelectionFromMetadata({
+      assistant_selection: await store.readMetadataValue(sessionId, "assistant_selection")
+    }, { required: false })
+  };
+}
+
+async function codexTerminalConversationMetadata(store, sessionId) {
+  const turns = await store.readConversationLog(sessionId);
+  const previousMetadata = turns.findLast((turn) => (
+    turn?.user && turn?.metadata
+  ))?.metadata || null;
+  return {
+    actorDisplayName: previousMetadata?.actorDisplayName,
+    actorId: previousMetadata?.actorId,
+    engineId: "codex",
+    assistantSelection: vibe64AssistantSelectionFromMetadata({
+      assistant_selection: await store.readMetadataValue(sessionId, "assistant_selection")
+    }, { required: false })
+  };
+}
+
+export { conversationActorMetadata, conversationReviewActorMetadata, codexDeliveredConversationMetadata, codexTerminalConversationMetadata };

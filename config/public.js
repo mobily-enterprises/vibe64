@@ -41,3 +41,5 @@ config.surfaceDefinitions.app = {
   accessPolicyId: "public",
   origin: ""
 };
+
+config.assistantSurfaces = { app: { settingsSurfaceId: "app", configScope: "global" } };

@@ -1,11 +1,11 @@
+import { createSessionConversationBinding, prepareSessionConversationCreation, prepareSessionConversationDisposal } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import assert from "node:assert/strict";
 import { readFile, rm } from "node:fs/promises";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { createConversationTranscript, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
+import { createConversationRuntime, createConversationTranscript, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { controllerHarness } from "../fixtures/opencodeController.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
-import { createOpenCodeSessionAgentProvider } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js";
 
 const reasoning = "I am examining the application source to understand how its session state is persisted.";
 const summary = "Examines session persistence.";
@@ -18,6 +18,16 @@ async function until(check) {
     await delay(20);
   }
 }
+function scopedConversationRuntime(controller) {
+  const provider = controller.provider;
+  return createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context, input, operation }) => operation === "create"
+      ? prepareSessionConversationCreation(provider, id, context, input)
+      : operation === "dispose" ? prepareSessionConversationDisposal(provider, id, context, input)
+      : createSessionConversationBinding(provider, id, context) }
+  });
+}
 async function fixture(t, { providers = [], readAccess = null, ...options } = {}) {
   const harness = await controllerHarness(options);
   const helper = { ...harness.selection, variantId: "low", selectionSource: "explicit" };
@@ -25,8 +35,10 @@ async function fixture(t, { providers = [], readAccess = null, ...options } = {}
   harness.accessCalls = [];
   harness.controllerOptions.getAssistantManager = () => harness.manager;
   harness.controller = harness.createController();
+  const conversationRuntime = scopedConversationRuntime(harness.controller);
   harness.manager = createSessionAgentManager({
-    providers: [createOpenCodeSessionAgentProvider({ controller: harness.controller }), ...providers],
+    conversationRuntime,
+    providers: [harness.controller.provider, ...providers],
     readRoutingConfiguration: async () => harness.routing,
     readAssistantAccess: async (input) => {
       harness.accessCalls.push(input);
@@ -169,7 +181,9 @@ test("a fresh controller retries the retained summary cleanup without starting a
   assert.equal(retained.conversationId, "ses_native_2");
   const previous = harness.controller;
   harness.controller = harness.createController();
-  harness.manager = createSessionAgentManager({ providers: [createOpenCodeSessionAgentProvider({ controller: harness.controller })] });
+  const conversationRuntime = scopedConversationRuntime(harness.controller);
+  harness.manager = createSessionAgentManager({ conversationRuntime,
+    providers: [harness.controller.provider] });
   allowDeletion = true;
   await harness.controller.closeAllForSession("session-1");
   assert.equal((await harness.runtime.store.readAgentRun("session-1", "opencode_server")).reasoningSummaryHelper, null);
@@ -214,7 +228,7 @@ test("a stalled cosmetic helper cannot keep a completed main turn busy or write 
   Object.assign(harness.runtime.store, createConversationTranscript({ storage: createMemoryConversationStorage() }));
   await harness.controller.sendMessage("session-1", { message: "Review", messageId: "held-summary" });
   await until(() => summaries(harness).length === 1);
-  assert.equal(harness.controller.hasActiveTemporaryConversation("session-1"), false,
+  assert.equal(await harness.controller.hasActiveTemporaryConversation("session-1"), false,
     "Cosmetic summaries must not advertise separate active work");
   response.text = "Done.";
   response.pending = false;

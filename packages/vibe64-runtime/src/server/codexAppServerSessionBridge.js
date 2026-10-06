@@ -1,9 +1,19 @@
-import path from "node:path";
+import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
+import { sendPreparedCodexAppServerHelperTurn } from "@jskit-ai/assistant-core/server/codex-turn";
+import {
+  ensureCodexAppServerThread, sendCodexAppServerPrompt,
+  resumeExactCodexAppServerThread, startFreshCodexAppServerThread,
+  defineCodexRenewalThreadIds, codexRenewalThreadError
+} from "@jskit-ai/assistant-core/server/codex-provider";
+import {
+  createCodexAppServerIsolation, codexAppServerProjectHookTrustConfig,
+  codexAppServerThreadSettings as nativeCodexAppServerThreadSettings,
+  codexAppServerTurnSettings as nativeCodexAppServerTurnSettings
+} from "@jskit-ai/assistant-core/server/codex-configuration";
 
 import { MINIMUM_CODEX_VERSION } from "./minimumCodexVersion.js";
 import {
   CODEX_APP_SERVER_PROVIDER_ID,
-  codexAppServerRequestIsInvalid,
   codexCliResumeCommand
 } from "./codexAppServerProvider.js";
 import {
@@ -36,10 +46,6 @@ const CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE =
   "vibe64_session_renewal_thread_unreadable";
 const CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE =
   "vibe64_session_renewal_fresh_thread_required";
-const CODEX_SESSION_RENEWAL_UNMATERIALIZED_THREAD_SUFFIX =
-  "is not materialized yet; includeTurns is unavailable before first user message";
-const CODEX_SESSION_RENEWAL_BASELINE_MAX_THREADS = 1000;
-const CODEX_SESSION_RENEWAL_THREAD_ID_MAX_LENGTH = 512;
 const CODEX_SESSION_RENEWAL_BASELINE_METADATA =
   "agent_renewal_seed_thread_baseline";
 const CODEX_SESSION_RENEWAL_BASELINE_SCHEMA =
@@ -59,10 +65,6 @@ const CODEX_APP_SERVER_HELPER_HOOK_FIELD_MAX_LENGTH = 2048;
 const CODEX_APP_SERVER_HELPER_HOOK_FINGERPRINT_MAX_LENGTH = 256 * 1024;
 const CODEX_APP_SERVER_HELPER_HOOK_RESPONSE_MAX_BYTES = 512 * 1024;
 const CODEX_APP_SERVER_HELPER_DEVELOPER_INSTRUCTIONS_MAX_LENGTH = 8192;
-const CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_BYTES = 64 * 1024;
-const CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_DEPTH = 8;
-const CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_PROPERTIES = 64;
-const CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_ENUM_VALUES = 64;
 const CODEX_APP_SERVER_HELPER_THREAD_SOURCE = "vibe64-helper";
 const CODEX_APP_SERVER_HELPER_BASE_INSTRUCTIONS = [
   "Complete only the bounded structured task in the user input.",
@@ -103,7 +105,25 @@ const CODEX_APP_SERVER_HELPER_TOOL_FEATURES = Object.freeze([
   "unified_exec_zsh_fork",
   "view_image"
 ]);
-const codexAppServerHelperIsolationConfigs = new WeakSet();
+const codexAppServerHelperIsolation = createCodexAppServerIsolation({
+  clientName: "vibe64",
+  minimumVersion: MINIMUM_CODEX_VERSION,
+  disabledFeatures: CODEX_APP_SERVER_HELPER_TOOL_FEATURES,
+  limits: {
+    userAgentMaxLength: CODEX_APP_SERVER_HELPER_USER_AGENT_MAX_LENGTH,
+    mcpServerMaxCount: CODEX_APP_SERVER_HELPER_MCP_SERVER_MAX_COUNT,
+    mcpServerNameMaxLength: CODEX_APP_SERVER_HELPER_MCP_SERVER_NAME_MAX_LENGTH,
+    configResponseMaxBytes: CODEX_APP_SERVER_HELPER_CONFIG_RESPONSE_MAX_BYTES,
+    hookMaxCount: CODEX_APP_SERVER_HELPER_HOOK_MAX_COUNT,
+    hookErrorMaxCount: CODEX_APP_SERVER_HELPER_HOOK_ERROR_MAX_COUNT,
+    hookFieldMaxLength: CODEX_APP_SERVER_HELPER_HOOK_FIELD_MAX_LENGTH,
+    hookFingerprintMaxLength: CODEX_APP_SERVER_HELPER_HOOK_FINGERPRINT_MAX_LENGTH,
+    hookResponseMaxBytes: CODEX_APP_SERVER_HELPER_HOOK_RESPONSE_MAX_BYTES
+  },
+  createError: codexAppServerHelperPolicyError
+});
+const assertCodexAppServerHelperCompatibility = codexAppServerHelperIsolation.assertCompatibility;
+
 function normalizeWorkdir(value = "") {
   return normalizeAgentText(value);
 }
@@ -116,45 +136,12 @@ function isPlainRecord(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
-function codexAppServerTextHasControlCharacters(value = "") {
-  return Array.from(String(value)).some((character) => {
-    const codePoint = character.codePointAt(0);
-    return codePoint <= 31 || codePoint === 127;
-  });
-}
-
-function deepFreezeCodexAppServerHelperConfig(value) {
-  if (!value || typeof value !== "object" || Object.isFrozen(value)) {
-    return value;
-  }
-  for (const nested of Object.values(value)) {
-    deepFreezeCodexAppServerHelperConfig(nested);
-  }
-  return Object.freeze(value);
-}
-
 function codexAppServerHelperPolicyError(message = "", details = {}) {
   return new Vibe64AgentExecutionProfileError(
     VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE,
     normalizeAgentText(message) || "Codex cannot prove the helper execution policy.",
     details
   );
-}
-
-function assertCodexAppServerHelperResponseBounded(value, maxBytes, label) {
-  let bytes = 0;
-  try {
-    bytes = Buffer.byteLength(JSON.stringify(value), "utf8");
-  } catch {
-    throw codexAppServerHelperPolicyError(
-      `Codex helper execution received an invalid ${label}.`
-    );
-  }
-  if (bytes > maxBytes) {
-    throw codexAppServerHelperPolicyError(
-      `Codex helper execution received an oversized ${label}.`
-    );
-  }
 }
 
 function codexAppServerHelperProfile(executionProfile = null) {
@@ -174,175 +161,11 @@ function codexAppServerHelperProfile(executionProfile = null) {
   return profile;
 }
 
-function assertCodexAppServerOutputSchemaKeys(schema = {}, allowed = [], schemaPath = "$") {
-  const allowedKeys = new Set(["description", "title", "type", ...allowed]);
-  if (Object.keys(schema).some((key) => !allowedKeys.has(key))) {
-    throw codexAppServerHelperPolicyError(
-      `Helper output schema ${schemaPath} contains an unsupported keyword.`,
-      { field: "outputSchema" }
-    );
-  }
-}
-
-function strictOutputSchemaMaximumCharacters(schema = null, schemaPath = "$", depth = 0) {
-  if (!isPlainRecord(schema)) {
-    throw codexAppServerHelperPolicyError(
-      `Helper output schema ${schemaPath} must be an object.`,
-      { field: "outputSchema" }
-    );
-  }
-  if (depth > CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_DEPTH) {
-    throw codexAppServerHelperPolicyError(
-      "Helper output schema is nested too deeply.",
-      { field: "outputSchema" }
-    );
-  }
-  if (typeof schema.type !== "string") {
-    throw codexAppServerHelperPolicyError(
-      `Helper output schema ${schemaPath} must declare one type.`,
-      { field: "outputSchema" }
-    );
-  }
-  if (schema.type === "object") {
-    assertCodexAppServerOutputSchemaKeys(
-      schema,
-      ["additionalProperties", "properties", "required"],
-      schemaPath
-    );
-    if (schema.additionalProperties !== false || !isPlainRecord(schema.properties)) {
-      throw codexAppServerHelperPolicyError(
-        `Helper object schema ${schemaPath} must declare properties and reject additional properties.`,
-        { field: "outputSchema" }
-      );
-    }
-    const propertyNames = Object.keys(schema.properties);
-    const required = Array.isArray(schema.required) ? schema.required : [];
-    if (
-      propertyNames.length === 0 ||
-      propertyNames.length > CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_PROPERTIES ||
-      propertyNames.some((name) => !name || name.length > 128) ||
-      required.length !== propertyNames.length ||
-      new Set(required).size !== required.length ||
-      propertyNames.some((name) => !required.includes(name))
-    ) {
-      throw codexAppServerHelperPolicyError(
-        `Helper object schema ${schemaPath} must require every declared property.`,
-        { field: "outputSchema" }
-      );
-    }
-    return propertyNames.reduce((total, name, index) => (
-      total +
-      (index === 0 ? 0 : 1) +
-      JSON.stringify(name).length +
-      1 +
-      strictOutputSchemaMaximumCharacters(schema.properties[name], `${schemaPath}.${name}`, depth + 1)
-    ), 2);
-  }
-  if (schema.type === "array") {
-    assertCodexAppServerOutputSchemaKeys(schema, ["items", "maxItems", "minItems"], schemaPath);
-    if (!Number.isSafeInteger(schema.maxItems) || schema.maxItems < 0) {
-      throw codexAppServerHelperPolicyError(
-        `Helper array schema ${schemaPath} must have a finite maxItems value.`,
-        { field: "outputSchema" }
-      );
-    }
-    if (
-      schema.minItems !== undefined &&
-      (!Number.isSafeInteger(schema.minItems) || schema.minItems < 0 || schema.minItems > schema.maxItems)
-    ) {
-      throw codexAppServerHelperPolicyError(
-        `Helper array schema ${schemaPath} has an invalid minItems value.`,
-        { field: "outputSchema" }
-      );
-    }
-    const itemMaximum = strictOutputSchemaMaximumCharacters(schema.items, `${schemaPath}[]`, depth + 1);
-    const maximum = 2 + (schema.maxItems * itemMaximum) + Math.max(0, schema.maxItems - 1);
-    if (!Number.isSafeInteger(maximum)) {
-      throw codexAppServerHelperPolicyError(
-        "Helper output schema exceeds its finite bound.",
-        { field: "outputSchema" }
-      );
-    }
-    return maximum;
-  }
-  if (schema.type === "string") {
-    assertCodexAppServerOutputSchemaKeys(schema, ["enum", "maxLength", "minLength"], schemaPath);
-    if (Array.isArray(schema.enum) && schema.enum.length > 0) {
-      if (
-        schema.enum.length > CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_ENUM_VALUES ||
-        schema.enum.some((value) => typeof value !== "string")
-      ) {
-        throw codexAppServerHelperPolicyError(
-          `Helper string schema ${schemaPath} has an invalid enum.`,
-          { field: "outputSchema" }
-        );
-      }
-      return Math.max(...schema.enum.map((value) => JSON.stringify(value).length));
-    }
-    if (!Number.isSafeInteger(schema.maxLength) || schema.maxLength <= 0) {
-      throw codexAppServerHelperPolicyError(
-        `Helper string schema ${schemaPath} must have a finite positive maxLength.`,
-        { field: "outputSchema" }
-      );
-    }
-    if (
-      schema.minLength !== undefined &&
-      (!Number.isSafeInteger(schema.minLength) || schema.minLength < 0 || schema.minLength > schema.maxLength)
-    ) {
-      throw codexAppServerHelperPolicyError(
-        `Helper string schema ${schemaPath} has an invalid minLength value.`,
-        { field: "outputSchema" }
-      );
-    }
-    // JSON may encode each UTF-16 code unit as a six-character `\uXXXX` escape.
-    // Count that worst case so the schema can never admit raw JSON beyond the
-    // resolved response limit even when every string character needs escaping.
-    const maximum = (schema.maxLength * 6) + 2;
-    if (!Number.isSafeInteger(maximum)) {
-      throw codexAppServerHelperPolicyError(
-        "Helper output schema exceeds its finite bound.",
-        { field: "outputSchema" }
-      );
-    }
-    return maximum;
-  }
-  if (schema.type === "boolean" || schema.type === "null") {
-    assertCodexAppServerOutputSchemaKeys(schema, [], schemaPath);
-    return 5;
-  }
-  throw codexAppServerHelperPolicyError(
-    `Helper output schema ${schemaPath} uses an unsupported type.`,
-    { field: "outputSchema" }
-  );
-}
-
 function codexAppServerHelperOutputSchema(outputSchema, profile) {
-  let schemaBytes = 0;
-  try {
-    schemaBytes = Buffer.byteLength(JSON.stringify(outputSchema), "utf8");
-  } catch {
-    throw codexAppServerHelperPolicyError(
-      "Helper output schema is not serializable.",
-      { field: "outputSchema" }
-    );
-  }
-  if (schemaBytes > CODEX_APP_SERVER_HELPER_OUTPUT_SCHEMA_MAX_BYTES) {
-    throw codexAppServerHelperPolicyError(
-      "Helper output schema exceeds its request limit.",
-      { field: "outputSchema" }
-    );
-  }
-  const maximumCharacters = strictOutputSchemaMaximumCharacters(outputSchema);
-  if (maximumCharacters > profile.limits.maxOutputCharacters) {
-    throw codexAppServerHelperPolicyError(
-      "Helper output schema can exceed the resolved output limit.",
-      {
-        maximumCharacters,
-        maxOutputCharacters: profile.limits.maxOutputCharacters
-      }
-    );
-  }
-  return outputSchema;
+  return validateConversationOutputSchema(outputSchema, {
+    maxOutputCharacters: profile.limits.maxOutputCharacters,
+    createError: codexAppServerHelperPolicyError
+  });
 }
 
 function assertCodexAppServerHelperOutputWithinLimit({
@@ -364,322 +187,6 @@ function assertCodexAppServerHelperOutputWithinLimit({
   return output;
 }
 
-function codexAppServerHelperConnectionGeneration(provider) {
-  if (typeof provider?.currentConnectionGeneration !== "function") {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution cannot verify the app-server connection generation."
-    );
-  }
-  const generation = provider.currentConnectionGeneration();
-  if (!Number.isSafeInteger(generation) || generation <= 0) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution found no active app-server connection."
-    );
-  }
-  return generation;
-}
-
-async function codexAppServerHelperExecutionContext(provider) {
-  if (typeof provider?.currentHelperExecutionContext !== "function") {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution requires its dedicated isolated provider."
-    );
-  }
-  const context = await provider.currentHelperExecutionContext();
-  const cwd = normalizeWorkdir(context?.cwd);
-  const accountIdentitySignature = normalizeAgentText(context?.accountIdentitySignature);
-  if (
-    context?.executionMode !== "helper" ||
-    !cwd ||
-    !path.isAbsolute(cwd) ||
-    !/^sha256:[a-f0-9]{64}$/u.test(accountIdentitySignature)
-  ) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper runtime isolation could not be verified."
-    );
-  }
-  return Object.freeze({
-    accountIdentitySignature,
-    cwd,
-    executionMode: "helper"
-  });
-}
-
-function codexAppServerSemanticVersionParts(value = "") {
-  const match = normalizeAgentText(value).match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u);
-  if (!match) {
-    return null;
-  }
-  const parts = match.slice(1).map((part) => Number.parseInt(part, 10));
-  return parts.every(Number.isSafeInteger) ? parts : null;
-}
-
-function codexAppServerUserAgentVersionParts(value = "") {
-  const userAgent = normalizeAgentText(value);
-  if (
-    !userAgent ||
-    userAgent.length > CODEX_APP_SERVER_HELPER_USER_AGENT_MAX_LENGTH ||
-    codexAppServerTextHasControlCharacters(userAgent)
-  ) {
-    return null;
-  }
-  const match = userAgent.match(/^vibe64\/((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))(?:$|[ \t].*$)/u);
-  return match ? codexAppServerSemanticVersionParts(match[1]) : null;
-}
-
-function assertCodexAppServerHelperCompatibility(provider) {
-  if (typeof provider?.currentServerInfo !== "function") {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution cannot verify the app-server version. Update Codex and retry.",
-      { minimumVersion: MINIMUM_CODEX_VERSION }
-    );
-  }
-  const userAgent = normalizeAgentText(provider.currentServerInfo()?.userAgent);
-  const actualParts = codexAppServerUserAgentVersionParts(userAgent);
-  if (!actualParts) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution received an unrecognised app-server version. Update Codex and retry.",
-      {
-        minimumVersion: MINIMUM_CODEX_VERSION
-      }
-    );
-  }
-  const actualVersion = actualParts.join(".");
-  const minimumParts = codexAppServerSemanticVersionParts(MINIMUM_CODEX_VERSION);
-  const differingPart = actualParts.findIndex((part, index) => part !== minimumParts[index]);
-  if (differingPart !== -1 && actualParts[differingPart] < minimumParts[differingPart]) {
-    throw codexAppServerHelperPolicyError(
-      `Codex helper execution requires app-server ${MINIMUM_CODEX_VERSION} or newer; current version is ${actualVersion}. Update Codex and retry.`,
-      {
-        actualVersion,
-        minimumVersion: MINIMUM_CODEX_VERSION
-      }
-    );
-  }
-  return Object.freeze({
-    minimumVersion: MINIMUM_CODEX_VERSION,
-    version: actualVersion
-  });
-}
-
-function codexAppServerHelperMcpServerNames(configResult = null) {
-  if (!isPlainRecord(configResult?.config)) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution could not read the effective app-server configuration."
-    );
-  }
-  const servers = configResult.config.mcp_servers;
-  if (servers === undefined || servers === null) {
-    return [];
-  }
-  // Only the MCP inventory participates in this isolation check. The native
-  // response can also contain large model catalogues and configuration layers.
-  assertCodexAppServerHelperResponseBounded(
-    servers,
-    CODEX_APP_SERVER_HELPER_CONFIG_RESPONSE_MAX_BYTES,
-    "MCP configuration"
-  );
-  if (!isPlainRecord(servers)) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution received an invalid MCP server configuration."
-    );
-  }
-  const names = Object.keys(servers);
-  if (
-    names.length > CODEX_APP_SERVER_HELPER_MCP_SERVER_MAX_COUNT ||
-    names.some((name) => (
-      !name ||
-      name.length > CODEX_APP_SERVER_HELPER_MCP_SERVER_NAME_MAX_LENGTH ||
-      codexAppServerTextHasControlCharacters(name)
-    ))
-  ) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution received an oversized or invalid MCP server inventory."
-    );
-  }
-  return names.sort();
-}
-
-function codexAppServerHelperHookState(result = null, cwd = "") {
-  assertCodexAppServerHelperResponseBounded(
-    result,
-    CODEX_APP_SERVER_HELPER_HOOK_RESPONSE_MAX_BYTES,
-    "hook inventory"
-  );
-  if (!Array.isArray(result?.data)) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution could not enumerate app-server hooks."
-    );
-  }
-  if (result.data.length !== 1) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution received an unexpected hook inventory."
-    );
-  }
-  const record = result.data[0];
-  if (
-    normalizeWorkdir(record?.cwd) !== cwd ||
-    normalizeWorkdir(record?.cwd).length > CODEX_APP_SERVER_HELPER_HOOK_FIELD_MAX_LENGTH ||
-    !Array.isArray(record.hooks) ||
-    !Array.isArray(record.errors) ||
-    record.hooks.length > CODEX_APP_SERVER_HELPER_HOOK_MAX_COUNT ||
-    record.errors.length > CODEX_APP_SERVER_HELPER_HOOK_ERROR_MAX_COUNT
-  ) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution received an incomplete hook inventory."
-    );
-  }
-  if (record.errors.length > 0) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution cannot continue while hook discovery has errors.",
-      { hookErrorCount: record.errors.length }
-    );
-  }
-  const hooks = record.hooks.map((hook) => {
-    const key = normalizeAgentText(hook?.key);
-    const currentHash = normalizeAgentText(hook?.currentHash);
-    const handlerType = normalizeAgentText(hook?.handlerType);
-    const sourcePath = normalizeAgentText(hook?.sourcePath);
-    if (
-      !key ||
-      [key, currentHash, handlerType, sourcePath].some((field) => (
-        field.length > CODEX_APP_SERVER_HELPER_HOOK_FIELD_MAX_LENGTH ||
-        codexAppServerTextHasControlCharacters(field)
-      ))
-    ) {
-      throw codexAppServerHelperPolicyError(
-        "Codex helper execution found an invalid hook inventory entry."
-      );
-    }
-    if (hook?.isManaged === true && hook?.enabled === true) {
-      throw codexAppServerHelperPolicyError(
-        "Codex helper execution cannot disable a managed hook."
-      );
-    }
-    return {
-      currentHash,
-      enabled: hook?.enabled === true,
-      handlerType,
-      isManaged: hook?.isManaged === true,
-      key,
-      sourcePath
-    };
-  }).sort((left, right) => left.key.localeCompare(right.key));
-  const fingerprint = JSON.stringify(hooks);
-  if (fingerprint.length > CODEX_APP_SERVER_HELPER_HOOK_FINGERPRINT_MAX_LENGTH) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution received an oversized hook inventory."
-    );
-  }
-  return {
-    fingerprint,
-    hookKeys: hooks.filter((hook) => !hook.isManaged).map((hook) => hook.key)
-  };
-}
-
-function codexAppServerHelperIsolationConfig({
-  executionProfile = null,
-  hookKeys = [],
-  mcpServerNames = []
-} = {}) {
-  const profile = codexAppServerHelperProfile(executionProfile);
-  const config = {
-    features: Object.fromEntries(
-      CODEX_APP_SERVER_HELPER_TOOL_FEATURES.map((feature) => [feature, false])
-    ),
-    hooks: {
-      state: Object.fromEntries(hookKeys.map((key) => [key, { enabled: false }]))
-    },
-    include_apps_instructions: false,
-    include_collaboration_mode_instructions: false,
-    include_environment_context: false,
-    include_permissions_instructions: false,
-    ...(profile.thinking ? { model_reasoning_effort: profile.thinking } : {}),
-    model_reasoning_summary: "none",
-    mcp_servers: Object.fromEntries(
-      mcpServerNames.map((name) => [name, { enabled: false }])
-    ),
-    memories: {
-      dedicated_tools: false,
-      generate_memories: false,
-      use_memories: false
-    },
-    notify: [],
-    orchestrator: {
-      mcp: {
-        enabled: false
-      },
-      skills: {
-        enabled: false
-      }
-    },
-    project_doc_max_bytes: 0,
-    shell_environment_policy: {
-      inherit: "none",
-      set: {}
-    },
-    skills: {
-      include_instructions: false
-    },
-    tools: {
-      experimental_request_user_input: {
-        enabled: false
-      },
-      update_plan: {
-        enabled: false
-      }
-    },
-    web_search: "disabled"
-  };
-  const frozenConfig = deepFreezeCodexAppServerHelperConfig(config);
-  codexAppServerHelperIsolationConfigs.add(frozenConfig);
-  return frozenConfig;
-}
-
-async function codexAppServerHelperIsolationState(provider, executionProfile = null) {
-  assertCodexAppServerHelperCompatibility(provider);
-  if (
-    typeof provider?.readConfig !== "function" ||
-    typeof provider?.listHooks !== "function"
-  ) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution cannot inventory configuration and hooks."
-    );
-  }
-  const executionContext = await codexAppServerHelperExecutionContext(provider);
-  const generation = codexAppServerHelperConnectionGeneration(provider);
-  const configResult = await provider.readConfig({
-    cwd: executionContext.cwd,
-    includeLayers: false
-  });
-  if (codexAppServerHelperConnectionGeneration(provider) !== generation) {
-    throw codexAppServerHelperPolicyError(
-      "Codex app-server reconnected during helper policy verification."
-    );
-  }
-  const hookResult = await provider.listHooks([executionContext.cwd]);
-  if (codexAppServerHelperConnectionGeneration(provider) !== generation) {
-    throw codexAppServerHelperPolicyError(
-      "Codex app-server reconnected during helper policy verification."
-    );
-  }
-  const mcpServerNames = codexAppServerHelperMcpServerNames(configResult);
-  const hookState = codexAppServerHelperHookState(hookResult, executionContext.cwd);
-  return Object.freeze({
-    accountIdentitySignature: executionContext.accountIdentitySignature,
-    config: codexAppServerHelperIsolationConfig({
-      executionProfile,
-      hookKeys: hookState.hookKeys,
-      mcpServerNames
-    }),
-    connectionGeneration: generation,
-    executionCwd: executionContext.cwd,
-    hookFingerprint: hookState.fingerprint,
-    hookKeys: Object.freeze([...hookState.hookKeys]),
-    mcpServerNames: Object.freeze([...mcpServerNames])
-  });
-}
-
 function codexEffectiveAgentExecutionSettings(agentSettings = {}) {
   return effectiveVibe64AgentExecutionSettings(agentSettings);
 }
@@ -697,75 +204,18 @@ function codexAppServerThreadSettings({
     throw new Error("Codex app-server thread requires a working directory.");
   }
   const effectiveSettings = codexEffectiveAgentExecutionSettings(agentSettings);
-  return {
+  return nativeCodexAppServerThreadSettings({
+    effectiveSettings, config, cwd: normalizedCwd, systemPrompt, hostContext, model,
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
-    config: {
-      ...(effectiveSettings.request.reasoning !== false
-        ? { model_reasoning_effort: effectiveSettings.thinking }
-        : {}),
-      ...(effectiveSettings.request.summary !== false
-        ? { model_reasoning_summary: CODEX_SESSION_REASONING_SUMMARY }
-        : {}),
-      ...(config && typeof config === "object" && !Array.isArray(config) ? config : {})
-    },
-    cwd: normalizedCwd,
-    ...(typeof systemPrompt === "string" && systemPrompt.trim() ? { systemPrompt: normalizeAgentText(systemPrompt) } : {}),
-    ...(hostContext ? { hostContext } : {}),
-    model: normalizeAgentText(model) || effectiveSettings.model,
-    ...(effectiveSettings.modelProviderId ? { modelProvider: effectiveSettings.modelProviderId } : {}),
+    reasoningSummary: CODEX_SESSION_REASONING_SUMMARY,
     sandbox: CODEX_SESSION_SANDBOX
-  };
+  });
 }
 
 function codexAppServerThreadStartSettings(options = {}) {
-  return {
-    ...codexAppServerThreadSettings(options),
-    sessionStartSource: "startup",
-    threadSource: "vibe64"
-  };
+  return codexAppServerHelperIsolation.threadStartSettings(codexAppServerThreadSettings(options), "vibe64");
 }
 
-async function codexAppServerProjectHookTrustConfig(provider, cwd = "", {
-  persist = false
-} = {}) {
-  const normalizedCwd = normalizeWorkdir(cwd);
-  if (!normalizedCwd || typeof provider?.listHooks !== "function") {
-    return null;
-  }
-  await provider.trustProject(normalizedCwd);
-  const result = await provider.listHooks([normalizedCwd]);
-  const record = (Array.isArray(result?.data) ? result.data : [])
-    .find((item) => normalizeWorkdir(item?.cwd) === normalizedCwd);
-  const trustedHooks = (Array.isArray(record?.hooks) ? record.hooks : [])
-    // Session flags contain Vibe64's own command hook. Trust its exact hash
-    // alongside project hooks; unrelated account and plugin hooks stay separate.
-    .filter((hook) => hook?.enabled === true && ["project", "sessionFlags"].includes(hook?.source))
-    .map((hook) => ({
-      currentHash: normalizeAgentText(hook?.currentHash),
-      key: normalizeAgentText(hook?.key),
-      trustStatus: normalizeAgentText(hook?.trustStatus)
-    }))
-    .filter(({ currentHash, key }) => key && currentHash);
-  if (trustedHooks.length === 0) {
-    return null;
-  }
-  const state = Object.fromEntries(trustedHooks.map(({ currentHash, key }) => [
-    key,
-    {
-      trusted_hash: currentHash
-    }
-  ]));
-  if (
-    persist &&
-    trustedHooks.some(({ trustStatus }) => !["managed", "trusted"].includes(trustStatus)) &&
-    typeof provider?.writeHookTrustState === "function"
-  ) {
-    await provider.writeHookTrustState(state);
-  }
-  // Native overrides replace the value at each key. Replacing the whole hooks
-  // table would erase the PreToolUse hook installed through session flags.
-  return { "hooks.state": state };
-}
 
 function codexAppServerTurnSettings({
   agentSettings = {},
@@ -778,22 +228,12 @@ function codexAppServerTurnSettings({
     throw new Error("Codex app-server turn requires a working directory.");
   }
   const effectiveSettings = codexEffectiveAgentExecutionSettings(agentSettings);
-  const settings = {
+  return nativeCodexAppServerTurnSettings({
+    effectiveSettings, cwd: normalizedCwd, effort, model,
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
-    cwd: normalizedCwd,
-    model: normalizeAgentText(model) || effectiveSettings.model,
-    sandboxPolicy: {
-      networkAccess: "enabled",
-      type: "externalSandbox"
-    }
-  };
-  if (effectiveSettings.request.reasoning !== false) {
-    settings.effort = normalizeAgentText(effort) || effectiveSettings.thinking;
-  }
-  if (effectiveSettings.request.summary !== false) {
-    settings.summary = CODEX_SESSION_REASONING_SUMMARY;
-  }
-  return settings;
+    reasoningSummary: CODEX_SESSION_REASONING_SUMMARY,
+    externalSandbox: true
+  });
 }
 
 function codexAppServerHelperThreadSettings({
@@ -808,7 +248,7 @@ function codexAppServerHelperThreadSettings({
       "Codex helper thread requires a working directory."
     );
   }
-  if (!isPlainRecord(config) || !codexAppServerHelperIsolationConfigs.has(config)) {
+  if (!isPlainRecord(config) || !codexAppServerHelperIsolation.hasConfiguration(config)) {
     throw codexAppServerHelperPolicyError(
       "Codex helper thread requires verified tool-isolation configuration."
     );
@@ -824,42 +264,28 @@ function codexAppServerHelperThreadSettings({
       }
     );
   }
-  return {
-    allowProviderModelFallback: false,
+  return codexAppServerHelperIsolation.threadSettings({
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
     baseInstructions: CODEX_APP_SERVER_HELPER_BASE_INSTRUCTIONS,
     config,
     cwd: normalizedCwd,
-    systemPrompt: normalizedSystemPrompt || null,
-    dynamicTools: [],
-    environments: [],
-    model: profile.model,
-    runtimeWorkspaceRoots: [],
+    effectiveSettings: profile,
     sandbox: CODEX_APP_SERVER_HELPER_SANDBOX,
-    selectedCapabilityRoots: []
-  };
+    systemPrompt: normalizedSystemPrompt
+  });
 }
 
 function codexAppServerHelperThreadStartSettings(options = {}) {
-  return {
-    ...codexAppServerHelperThreadSettings(options),
-    sessionStartSource: "startup",
-    threadSource: CODEX_APP_SERVER_HELPER_THREAD_SOURCE
-  };
+  return codexAppServerHelperIsolation.threadStartSettings(
+    codexAppServerHelperThreadSettings(options),
+    CODEX_APP_SERVER_HELPER_THREAD_SOURCE
+  );
 }
 
 function codexAppServerHelperThreadResumeSettings(options = {}) {
-  const settings = codexAppServerHelperThreadSettings(options);
-  return {
-    approvalPolicy: settings.approvalPolicy,
-    baseInstructions: settings.baseInstructions,
-    config: settings.config,
-    cwd: settings.cwd,
-    systemPrompt: settings.systemPrompt,
-    model: settings.model,
-    runtimeWorkspaceRoots: settings.runtimeWorkspaceRoots,
-    sandbox: settings.sandbox
-  };
+  return codexAppServerHelperIsolation.threadResumeSettings(
+    codexAppServerHelperThreadSettings(options)
+  );
 }
 
 function codexAppServerHelperTurnSettings({
@@ -874,23 +300,35 @@ function codexAppServerHelperTurnSettings({
     );
   }
   const profile = codexAppServerHelperProfile(executionProfile);
-  const settings = {
+  return codexAppServerHelperIsolation.turnSettings({
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
     cwd: normalizedCwd,
-    environments: [],
-    model: profile.model,
-    outputSchema: codexAppServerHelperOutputSchema(outputSchema, profile),
-    runtimeWorkspaceRoots: [],
-    sandboxPolicy: {
-      networkAccess: false,
-      type: "readOnly"
-    },
-    summary: "none"
+    effectiveSettings: profile,
+    outputSchema: codexAppServerHelperOutputSchema(outputSchema, profile)
+  });
+}
+
+function codexAppServerHelperThreadStartPreparation({
+  systemPrompt = "",
+  ephemeral = false,
+  executionProfile = null
+} = {}) {
+  const profile = codexAppServerHelperProfile(executionProfile);
+  return {
+    inspection: { effort: profile.thinking, summary: "none" },
+    prepared(enforcement) {
+      return Object.freeze({
+        enforcement,
+        executionProfile: profile,
+        settings: { ...codexAppServerHelperThreadStartSettings({
+          config: enforcement.config,
+          cwd: enforcement.executionCwd,
+          systemPrompt,
+          executionProfile: profile
+        }), ...(ephemeral ? { ephemeral: true } : {}) }
+      });
+    }
   };
-  if (profile.request.reasoning) {
-    settings.effort = profile.thinking;
-  }
-  return settings;
 }
 
 async function prepareCodexAppServerHelperThreadStartSettings({
@@ -899,105 +337,56 @@ async function prepareCodexAppServerHelperThreadStartSettings({
   executionProfile = null,
   provider = null
 } = {}) {
-  const profile = codexAppServerHelperProfile(executionProfile);
-  const enforcement = await codexAppServerHelperIsolationState(
-    provider,
-    profile
-  );
-  return Object.freeze({
-    enforcement,
-    executionProfile: profile,
-    settings: { ...codexAppServerHelperThreadStartSettings({
-      config: enforcement.config,
-      cwd: enforcement.executionCwd,
-      systemPrompt,
-      executionProfile: profile
-    }), ...(ephemeral ? { ephemeral: true } : {}) }
-  });
-}
-
-function codexAppServerHelperIsolationMatches(left = null, right = null) {
-  return left?.accountIdentitySignature === right?.accountIdentitySignature &&
-    left?.connectionGeneration === right?.connectionGeneration &&
-    left?.executionCwd === right?.executionCwd &&
-    left?.hookFingerprint === right?.hookFingerprint &&
-    JSON.stringify(left?.mcpServerNames || []) === JSON.stringify(right?.mcpServerNames || []);
-}
-
-function codexAppServerHelperVerificationFailure(error, cleanupError, threadId = "") {
-  const normalizedThreadId = normalizeAgentText(threadId);
-  if (!cleanupError) {
-    error.codexAppServerHelperThreadId = normalizedThreadId;
-    error.codexAppServerHelperThreadRetired = true;
-    return error;
-  }
-  const failure = codexAppServerHelperPolicyError(
-    "Codex could not retire a helper thread after policy verification failed.",
-    {
-      cleanupFailed: true,
-      threadId: normalizedThreadId
-    }
-  );
-  failure.codexAppServerHelperThreadCleanupRequired = true;
-  failure.codexAppServerHelperThreadId = normalizedThreadId;
-  return failure;
-}
-
-async function throwAfterCodexAppServerHelperVerificationFailure({
-  error = null,
-  provider = null,
-  threadId = ""
-} = {}) {
-  let cleanupError = null;
-  try {
-    await provider.deleteThread(threadId);
-  } catch (caught) {
-    cleanupError = caught;
-  }
-  throw codexAppServerHelperVerificationFailure(error, cleanupError, threadId);
+  const preparation = codexAppServerHelperThreadStartPreparation({ systemPrompt, ephemeral, executionProfile });
+  const enforcement = await codexAppServerHelperIsolation.inspect(provider, preparation.inspection);
+  return preparation.prepared(enforcement);
 }
 
 async function startCodexAppServerHelperThread(options = {}) {
-  const provider = options.provider;
-  if (
-    typeof provider?.startThread !== "function" ||
-    typeof provider?.deleteThread !== "function"
-  ) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution cannot own and clean up its app-server thread."
-    );
-  }
-  const prepared = await prepareCodexAppServerHelperThreadStartSettings(options);
-  const thread = await provider.startThread(prepared.settings);
-  const threadId = normalizeAgentText(thread?.id);
-  if (!threadId) {
-    throw codexAppServerHelperPolicyError(
-      "Codex app-server did not return a helper thread id."
-    );
-  }
-  try {
-    const verified = await codexAppServerHelperIsolationState(
-      provider,
-      prepared.executionProfile
-    );
-    if (!codexAppServerHelperIsolationMatches(prepared.enforcement, verified)) {
-      throw codexAppServerHelperPolicyError(
-        "Codex execution surfaces changed while the helper thread was starting."
-      );
+  let executionProfile;
+  const result = await codexAppServerHelperIsolation.start(options.provider, async () => {
+    const prepared = await prepareCodexAppServerHelperThreadStartSettings(options);
+    executionProfile = prepared.executionProfile;
+    return prepared;
+  });
+  return Object.freeze({
+    enforcement: result.enforcement,
+    executionProfile,
+    thread: result.thread,
+    threadId: result.threadId
+  });
+}
+
+function codexAppServerHelperThreadResumePreparation({
+  systemPrompt = "",
+  executionProfile = null
+} = {}) {
+  const profile = codexAppServerHelperProfile(executionProfile);
+  return {
+    inspection: { effort: profile.thinking, summary: "none" },
+    prepared(enforcement) {
+      return {
+        enforcement,
+        executionProfile: profile,
+        settings: codexAppServerHelperThreadResumeSettings({
+          config: enforcement.config,
+          cwd: enforcement.executionCwd,
+          systemPrompt,
+          executionProfile: profile
+        })
+      };
     }
-    return Object.freeze({
-      enforcement: verified,
-      executionProfile: prepared.executionProfile,
-      thread,
-      threadId
-    });
-  } catch (error) {
-    await throwAfterCodexAppServerHelperVerificationFailure({
-      error,
-      provider,
-      threadId
-    });
-  }
+  };
+}
+
+async function prepareCodexAppServerHelperThreadResumeSettings({
+  systemPrompt = "",
+  executionProfile = null,
+  provider = null
+} = {}) {
+  const preparation = codexAppServerHelperThreadResumePreparation({ systemPrompt, executionProfile });
+  const enforcement = await codexAppServerHelperIsolation.inspect(provider, preparation.inspection);
+  return preparation.prepared(enforcement);
 }
 
 async function resumeCodexAppServerHelperThread({
@@ -1006,60 +395,21 @@ async function resumeCodexAppServerHelperThread({
   provider = null,
   threadId = ""
 } = {}) {
-  if (
-    typeof provider?.resumeThread !== "function" ||
-    typeof provider?.deleteThread !== "function"
-  ) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper execution cannot safely resume and clean up its app-server thread."
-    );
-  }
-  const normalizedThreadId = normalizeAgentText(threadId);
-  if (!normalizedThreadId) {
-    throw codexAppServerHelperPolicyError(
-      "Codex helper resume requires a controller-owned thread id."
-    );
-  }
-  const profile = codexAppServerHelperProfile(executionProfile);
-  const enforcement = await codexAppServerHelperIsolationState(
-    provider,
-    profile
-  );
-  const thread = await provider.resumeThread(
-    normalizedThreadId,
-    codexAppServerHelperThreadResumeSettings({
-      config: enforcement.config,
-      cwd: enforcement.executionCwd,
-      systemPrompt,
-      executionProfile: profile
-    })
-  );
-  try {
-    const verified = await codexAppServerHelperIsolationState(
-      provider,
-      profile
-    );
-    if (!codexAppServerHelperIsolationMatches(enforcement, verified)) {
-      throw codexAppServerHelperPolicyError(
-        "Codex execution surfaces changed while the helper thread was resuming."
-      );
-    }
-    return Object.freeze({
-      enforcement: verified,
-      executionProfile: profile,
-      thread,
-      threadId: normalizedThreadId
-    });
-  } catch (error) {
-    await throwAfterCodexAppServerHelperVerificationFailure({
-      error,
-      provider,
-      threadId: normalizedThreadId
-    });
-  }
+  let profile;
+  const result = await codexAppServerHelperIsolation.resume(provider, threadId, async () => {
+    const prepared = await prepareCodexAppServerHelperThreadResumeSettings({ systemPrompt, executionProfile, provider });
+    profile = prepared.executionProfile;
+    return prepared;
+  });
+  return Object.freeze({
+    enforcement: result.enforcement,
+    executionProfile: profile,
+    thread: result.thread,
+    threadId: result.threadId
+  });
 }
 
-async function sendCodexAppServerHelperTurn({
+function prepareCodexAppServerHelperTurn({
   executionProfile = null,
   outputSchema = null,
   prompt = "",
@@ -1092,20 +442,25 @@ async function sendCodexAppServerHelperTurn({
       "Codex helper turn requires an app-server thread id."
     );
   }
-  const turn = await provider.sendTurn(
-    normalizedThreadId,
-    input,
-    codexAppServerHelperTurnSettings({
-      cwd: (await codexAppServerHelperExecutionContext(provider)).cwd,
-      executionProfile: profile,
-      outputSchema
-    })
-  );
-  return Object.freeze({
+  return {
     executionProfile: profile,
     input,
-    turn
-  });
+    threadId: normalizedThreadId,
+    turnSettings(cwd) {
+      return codexAppServerHelperTurnSettings({ cwd, executionProfile: profile, outputSchema });
+    }
+  };
+}
+
+async function sendCodexAppServerHelperTurn({
+  executionProfile = null,
+  outputSchema = null,
+  prompt = "",
+  provider = null,
+  threadId = ""
+} = {}) {
+  const prepared = prepareCodexAppServerHelperTurn({ executionProfile, outputSchema, prompt, provider, threadId });
+  return sendPreparedCodexAppServerHelperTurn(provider, prepared, codexAppServerHelperIsolation);
 }
 
 function codexAppServerRuntimeMetadata(runtime = {}) {
@@ -1207,33 +562,6 @@ async function writeCodexAppServerIdentityMetadata({
   return metadata;
 }
 
-function defineCodexSessionRenewalThreadIds(value = []) {
-  if (
-    !Array.isArray(value) ||
-    value.length > CODEX_SESSION_RENEWAL_BASELINE_MAX_THREADS
-  ) {
-    throw codexSessionRenewalThreadError(
-      CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-      "The successor assistant thread inventory is invalid."
-    );
-  }
-  const threadIds = value.map((threadId) => normalizeAgentText(threadId));
-  if (
-    threadIds.some((threadId) => (
-      !threadId ||
-      threadId.length > CODEX_SESSION_RENEWAL_THREAD_ID_MAX_LENGTH ||
-      codexAppServerTextHasControlCharacters(threadId)
-    )) ||
-    new Set(threadIds).size !== threadIds.length
-  ) {
-    throw codexSessionRenewalThreadError(
-      CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-      "The successor assistant thread inventory contains an invalid identity."
-    );
-  }
-  return Object.freeze([...threadIds].sort());
-}
-
 function persistedCodexSessionRenewalThreadBaseline(session = {}, {
   operationId = "",
   workdir = ""
@@ -1249,7 +577,7 @@ function persistedCodexSessionRenewalThreadBaseline(session = {}, {
   try {
     baseline = JSON.parse(rawBaseline);
   } catch {
-    throw codexSessionRenewalThreadError(
+    throw codexRenewalThreadError(
       CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
       "The successor assistant thread baseline is unreadable."
     );
@@ -1263,12 +591,14 @@ function persistedCodexSessionRenewalThreadBaseline(session = {}, {
     persistedWorkdir !== normalizeWorkdir(workdir) ||
     !Array.isArray(baseline.threadIds)
   ) {
-    throw codexSessionRenewalThreadError(
+    throw codexRenewalThreadError(
       CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
       "The successor assistant thread baseline does not belong to this exact renewal operation."
     );
   }
-  return defineCodexSessionRenewalThreadIds(baseline.threadIds);
+  return defineCodexRenewalThreadIds(baseline.threadIds, {
+    errorCode: CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE
+  });
 }
 
 function persistedCodexSessionRenewalThreadClaim(session = {}, {
@@ -1286,12 +616,14 @@ function persistedCodexSessionRenewalThreadClaim(session = {}, {
   try {
     claim = JSON.parse(rawClaim);
   } catch {
-    throw codexSessionRenewalThreadError(
+    throw codexRenewalThreadError(
       CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
       "The successor assistant thread claim is unreadable."
     );
   }
-  const claimedThreadIds = defineCodexSessionRenewalThreadIds([claim?.threadId]);
+  const claimedThreadIds = defineCodexRenewalThreadIds([claim?.threadId], {
+    errorCode: CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE
+  });
   const claimedOperationId = normalizeAgentText(claim?.operationId);
   const claimedWorkdir = normalizeWorkdir(claim?.workdir);
   if (
@@ -1300,7 +632,7 @@ function persistedCodexSessionRenewalThreadClaim(session = {}, {
     claimedOperationId !== normalizeAgentText(operationId) ||
     claimedWorkdir !== normalizeWorkdir(workdir)
   ) {
-    throw codexSessionRenewalThreadError(
+    throw codexRenewalThreadError(
       CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
       "The successor assistant thread claim does not belong to this exact renewal operation."
     );
@@ -1310,26 +642,6 @@ function persistedCodexSessionRenewalThreadClaim(session = {}, {
     threadId: claimedThreadIds[0],
     workdir: claimedWorkdir
   });
-}
-
-async function listCodexSessionRenewalThreadIds(provider, workdir = "") {
-  if (typeof provider?.listAppServerThreadsForCwd !== "function") {
-    throw codexSessionRenewalThreadError(
-      CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-      "The assistant provider cannot inventory the successor's exact session threads."
-    );
-  }
-  const normalizedWorkdir = normalizeWorkdir(workdir);
-  const inventory = await provider.listAppServerThreadsForCwd({
-    cwd: normalizedWorkdir
-  });
-  if (normalizeWorkdir(inventory?.cwd) !== normalizedWorkdir) {
-    throw codexSessionRenewalThreadError(
-      CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-      "The assistant provider returned a thread inventory for a different session source."
-    );
-  }
-  return defineCodexSessionRenewalThreadIds(inventory?.threadIds);
 }
 
 async function writeCodexSessionRenewalThreadBaseline({
@@ -1348,7 +660,9 @@ async function writeCodexSessionRenewalThreadBaseline({
   const baseline = JSON.stringify({
     operationId: normalizeAgentText(operationId),
     schemaVersion: CODEX_SESSION_RENEWAL_BASELINE_SCHEMA,
-    threadIds: defineCodexSessionRenewalThreadIds(threadIds),
+    threadIds: defineCodexRenewalThreadIds(threadIds, {
+      errorCode: CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE
+    }),
     workdir: normalizeWorkdir(workdir)
   });
   await writeMetadataValue(
@@ -1372,7 +686,9 @@ async function writeCodexSessionRenewalThreadClaim({
       "Renewed assistant thread claim requires explicit internal renewal metadata access."
     );
   }
-  const [normalizedThreadId] = defineCodexSessionRenewalThreadIds([threadId]);
+  const [normalizedThreadId] = defineCodexRenewalThreadIds([threadId], {
+    errorCode: CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE
+  });
   const claim = JSON.stringify({
     operationId: normalizeAgentText(operationId),
     schemaVersion: CODEX_SESSION_RENEWAL_THREAD_CLAIM_SCHEMA,
@@ -1387,97 +703,7 @@ async function writeCodexSessionRenewalThreadClaim({
   return claim;
 }
 
-function assertCodexSessionRenewalThreadSnapshot(threadSnapshot = null, {
-  threadId = "",
-  workdir = ""
-} = {}) {
-  const expectedThreadId = normalizeAgentText(threadId);
-  const expectedWorkdir = normalizeWorkdir(workdir);
-  const actualThreadId = codexAppServerThreadResponseId(threadSnapshot);
-  const actualWorkdir = normalizeWorkdir(
-    threadSnapshot?.cwd ||
-    threadSnapshot?.raw?.cwd ||
-    threadSnapshot?.response?.thread?.cwd
-  );
-  if (actualThreadId !== expectedThreadId || actualWorkdir !== expectedWorkdir) {
-    throw codexSessionRenewalThreadError(
-      CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-      "The assistant provider could not verify the exact successor thread and session source.",
-      {
-        actualThreadId,
-        actualWorkdir,
-        expectedThreadId,
-        expectedWorkdir
-      }
-    );
-  }
-  return threadSnapshot;
-}
-
-function codexSessionRenewalThreadNeedsStatusRead(error = null, threadId = "") {
-  const normalizedThreadId = normalizeAgentText(threadId);
-  return Boolean(
-    normalizedThreadId &&
-    (
-      (
-        codexAppServerRequestIsInvalid(error, "thread/read") &&
-        normalizeAgentText(error?.message) ===
-          `thread ${normalizedThreadId} ${CODEX_SESSION_RENEWAL_UNMATERIALIZED_THREAD_SUFFIX}`
-      ) ||
-      (
-        Number(error?.code) === -32601 &&
-        normalizeAgentText(error?.method) === "thread/read"
-      )
-    )
-  );
-}
-
-async function readCodexSessionRenewalSuccessorThreadSnapshot({
-  provider,
-  threadId = "",
-  workdir = ""
-} = {}) {
-  try {
-    return assertCodexSessionRenewalThreadSnapshot(
-      await provider.readThread(threadId),
-      { threadId, workdir }
-    );
-  } catch (error) {
-    if (
-      !codexSessionRenewalThreadNeedsStatusRead(error, threadId) ||
-      typeof provider?.readThreadStatus !== "function"
-    ) {
-      throw error;
-    }
-    return assertCodexSessionRenewalThreadSnapshot(
-      await provider.readThreadStatus(threadId),
-      { threadId, workdir }
-    );
-  }
-}
-
-function codexSessionRenewalThreadError(code, message, details = {}, {
-  retryable = false
-} = {}) {
-  const error = new Error(message);
-  error.code = code;
-  error.details = {
-    ...details,
-    retryable
-  };
-  error.retryable = retryable;
-  return error;
-}
-
-function codexAppServerThreadResponseId(thread = null, fallback = "") {
-  return normalizeAgentText(
-    thread?.id ||
-    thread?.response?.thread?.id ||
-    fallback
-  );
-}
-
-async function resumeExactCodexAppServerThreadForSession({
+function codexAppServerRenewalResumePreparation({
   agentSettings = {},
   hostContext = null,
   expectedThreadId = "",
@@ -1489,7 +715,7 @@ async function resumeExactCodexAppServerThreadForSession({
   const persistedThreadId = codexAppServerThreadIdForSession(session, normalizedWorkdir);
   const normalizedExpectedThreadId = normalizeAgentText(expectedThreadId) || persistedThreadId;
   if (!normalizedExpectedThreadId || persistedThreadId !== normalizedExpectedThreadId) {
-    throw codexSessionRenewalThreadError(
+    throw codexRenewalThreadError(
       CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE,
       "The old assistant thread is no longer the exact readable main thread for this session.",
       {
@@ -1498,71 +724,25 @@ async function resumeExactCodexAppServerThreadForSession({
       }
     );
   }
-  if (
-    typeof provider?.ensureRuntime !== "function" ||
-    typeof provider?.resumeThread !== "function" ||
-    typeof provider?.readThread !== "function"
-  ) {
-    throw codexSessionRenewalThreadError(
-      CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE,
-      "The old assistant provider cannot read its exact main thread.",
-      { expectedThreadId: normalizedExpectedThreadId }
-    );
-  }
-  const appServerRuntime = await provider.ensureRuntime();
-  const config = await codexAppServerProjectHookTrustConfig(provider, normalizedWorkdir);
-  const threadSettings = codexAppServerThreadSettings({
-    agentSettings,
-    config,
-    cwd: normalizedWorkdir,
-    hostContext
-  });
-  let thread = null;
-  let threadSnapshot = null;
-  try {
-    thread = await provider.resumeThread(normalizedExpectedThreadId, threadSettings);
-    const resumedThreadId = codexAppServerThreadResponseId(thread, normalizedExpectedThreadId);
-    if (resumedThreadId !== normalizedExpectedThreadId) {
-      throw codexSessionRenewalThreadError(
-        CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE,
-        "The old assistant provider resumed a different thread.",
-        {
-          expectedThreadId: normalizedExpectedThreadId,
-          resumedThreadId
-        }
-      );
+  return {
+    expectedThreadId: normalizedExpectedThreadId,
+    provider,
+    workdir: normalizedWorkdir,
+    errorCode: CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE,
+    projectHooks: true,
+    settings(cwd, config) {
+      return {
+        threadSettings: codexAppServerThreadSettings({ agentSettings, config, cwd, hostContext })
+      };
     }
-    threadSnapshot = await provider.readThread(normalizedExpectedThreadId);
-  } catch (error) {
-    if (
-      error?.code === CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE ||
-      codexAppServerRequestIsInvalid(error, "thread/resume") ||
-      codexAppServerRequestIsInvalid(error, "thread/read")
-    ) {
-      if (error?.code === CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE) {
-        throw error;
-      }
-      throw codexSessionRenewalThreadError(
-        CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE,
-        "The old assistant thread cannot be read. Write or edit the handover manually instead.",
-        {
-          expectedThreadId: normalizedExpectedThreadId,
-          providerError: normalizeAgentText(error?.message)
-        }
-      );
-    }
-    throw error;
-  }
-  return Object.freeze({
-    appServerRuntime,
-    thread,
-    threadId: normalizedExpectedThreadId,
-    threadSnapshot,
-    threadSettings
-  });
+  };
 }
 
-async function startFreshCodexAppServerThreadForSession({
+async function resumeExactCodexAppServerThreadForSession(options = {}) {
+  return resumeExactCodexAppServerThread(codexAppServerRenewalResumePreparation(options));
+}
+
+function codexAppServerRenewalSeedPreparation({
   additionalMetadata = {},
   agentSettings = {},
   hostContext = null,
@@ -1593,7 +773,7 @@ async function startFreshCodexAppServerThreadForSession({
     normalizedOperationId &&
     persistedOperationId !== normalizedOperationId
   ) {
-    throw codexSessionRenewalThreadError(
+    throw codexRenewalThreadError(
       CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
       "The renewed session already belongs to a different renewal operation.",
       {
@@ -1606,7 +786,7 @@ async function startFreshCodexAppServerThreadForSession({
     (persistedThreadId || persistedOperationId || normalizedExpectedThreadId) &&
     !claimedThreadId
   ) {
-    throw codexSessionRenewalThreadError(
+    throw codexRenewalThreadError(
       CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
       "The renewed session has assistant identity metadata without its atomic renewal thread claim.",
       {
@@ -1623,7 +803,7 @@ async function startFreshCodexAppServerThreadForSession({
       (normalizedExpectedThreadId && normalizedExpectedThreadId !== claimedThreadId)
     )
   ) {
-    throw codexSessionRenewalThreadError(
+    throw codexRenewalThreadError(
       CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
       "The renewed session already owns a different assistant thread; Vibe64 will not reuse or replace it.",
       {
@@ -1633,218 +813,71 @@ async function startFreshCodexAppServerThreadForSession({
       }
     );
   }
-  const resumableThreadId = claimedThreadId;
-  if (resumableThreadId && resumableThreadId === normalizedForbiddenThreadId) {
-    throw codexSessionRenewalThreadError(
-      CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-      "The renewed session cannot reuse the old session's assistant thread.",
-      { forbiddenThreadId: normalizedForbiddenThreadId }
-    );
-  }
-  if (
-    typeof provider?.ensureRuntime !== "function" ||
-    typeof provider?.resumeThread !== "function" ||
-    typeof provider?.readThread !== "function" ||
-    typeof provider?.startThread !== "function"
-  ) {
-    throw codexSessionRenewalThreadError(
-      CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-      "The assistant provider cannot prove a genuinely fresh renewal thread."
-    );
-  }
-  const appServerRuntime = await provider.ensureRuntime();
-  const config = await codexAppServerProjectHookTrustConfig(provider, normalizedWorkdir);
-  const ordinaryThreadSettings = codexAppServerThreadSettings({
-    agentSettings,
-    config,
-    cwd: normalizedWorkdir,
-    hostContext
-  });
-  const ordinaryThreadStartSettings = codexAppServerThreadStartSettings({
-    agentSettings,
-    config,
-    cwd: normalizedWorkdir,
-    hostContext
-  });
-  const threadSettings = readOnly
-    ? { ...ordinaryThreadSettings, sandbox: CODEX_SESSION_READ_ONLY_SANDBOX }
-    : ordinaryThreadSettings;
-  const threadStartSettings = readOnly
-    ? { ...ordinaryThreadStartSettings, sandbox: CODEX_SESSION_READ_ONLY_SANDBOX }
-    : ordinaryThreadStartSettings;
-  let fresh = false;
-  let thread = null;
-  let threadSnapshot = null;
-  let baselineThreadIds = Object.freeze([]);
-  if (resumableThreadId) {
-    try {
-      thread = await provider.resumeThread(resumableThreadId, threadSettings);
-      const resumedThreadId = codexAppServerThreadResponseId(thread, resumableThreadId);
-      if (resumedThreadId !== resumableThreadId) {
-        throw codexSessionRenewalThreadError(
-          CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-          "The assistant provider resumed a different renewal thread.",
-          {
-            expectedThreadId: resumableThreadId,
-            resumedThreadId
-          }
-        );
-      }
-      threadSnapshot = await readCodexSessionRenewalSuccessorThreadSnapshot({
-        provider,
-        threadId: resumableThreadId,
+  return {
+    provider,
+    resumableThreadId: claimedThreadId,
+    forbiddenThreadId: normalizedForbiddenThreadId,
+    operationId: normalizedOperationId,
+    workdir: normalizedWorkdir,
+    errorCode: CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
+    applicationName: "Vibe64",
+    projectHooks: true,
+    settings(cwd, config) {
+      const ordinaryThreadSettings = codexAppServerThreadSettings({ agentSettings, config, cwd, hostContext });
+      const ordinaryThreadStartSettings = codexAppServerThreadStartSettings({ agentSettings, config, cwd, hostContext });
+      return {
+        threadSettings: readOnly
+          ? { ...ordinaryThreadSettings, sandbox: CODEX_SESSION_READ_ONLY_SANDBOX }
+          : ordinaryThreadSettings,
+        threadStartSettings: readOnly
+          ? { ...ordinaryThreadStartSettings, sandbox: CODEX_SESSION_READ_ONLY_SANDBOX }
+          : ordinaryThreadStartSettings
+      };
+    },
+    identity: {
+      readBaseline: () => persistedCodexSessionRenewalThreadBaseline(session, {
+        operationId: normalizedOperationId,
         workdir: normalizedWorkdir
-      });
-    } catch (error) {
-      if (
-        error?.code === CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE ||
-        codexAppServerRequestIsInvalid(error, "thread/resume") ||
-        codexAppServerRequestIsInvalid(error, "thread/read")
-      ) {
-        if (error?.code === CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE) {
-          throw error;
-        }
-        throw codexSessionRenewalThreadError(
-          CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-          "The previously started renewal thread is no longer readable; Vibe64 will not replace it silently.",
-          {
-            expectedThreadId: resumableThreadId,
-            providerError: normalizeAgentText(error?.message)
-          }
-        );
-      }
-      throw error;
-    }
-  } else {
-    if (!normalizedOperationId) {
-      throw codexSessionRenewalThreadError(
-        CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-        "Starting a fresh successor thread requires its exact renewal operation id."
-      );
-    }
-    baselineThreadIds = persistedCodexSessionRenewalThreadBaseline(session, {
-      operationId: normalizedOperationId,
-      workdir: normalizedWorkdir
-    });
-    if (!baselineThreadIds) {
-      baselineThreadIds = await listCodexSessionRenewalThreadIds(
-        provider,
-        normalizedWorkdir
-      );
-      await writeCodexSessionRenewalThreadBaseline({
+      }),
+      writeBaseline: (threadIds) => writeCodexSessionRenewalThreadBaseline({
         operationId: normalizedOperationId,
         runtime,
         sessionId: session.sessionId,
-        threadIds: baselineThreadIds,
+        threadIds,
         workdir: normalizedWorkdir
-      });
-    }
-    const currentThreadIds = await listCodexSessionRenewalThreadIds(
-      provider,
-      normalizedWorkdir
-    );
-    const baseline = new Set(baselineThreadIds);
-    const candidateThreadIds = currentThreadIds.filter((threadId) => !baseline.has(threadId));
-    if (candidateThreadIds.length > 1) {
-      throw codexSessionRenewalThreadError(
-        CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-        "More than one unclaimed assistant thread appeared for this renewal; Vibe64 will not guess which one is authoritative.",
-        { candidateThreadIds }
-      );
-    }
-    if (candidateThreadIds.length === 1) {
-      const [candidateThreadId] = candidateThreadIds;
-      thread = await provider.resumeThread(candidateThreadId, threadSettings);
-      const resumedThreadId = codexAppServerThreadResponseId(thread, candidateThreadId);
-      if (resumedThreadId !== candidateThreadId) {
-        throw codexSessionRenewalThreadError(
-          CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-          "The assistant provider resumed a different recovered renewal thread.",
-          {
-            expectedThreadId: candidateThreadId,
-            resumedThreadId
-          }
-        );
+      }),
+      async write({ appServerRuntime, threadId, workdir }) {
+        if (!persistedClaim) {
+          await writeCodexSessionRenewalThreadClaim({
+            operationId: normalizedOperationId,
+            runtime,
+            sessionId: session.sessionId,
+            threadId,
+            workdir
+          });
+        }
+        await writeCodexAppServerIdentityMetadata({
+          additionalMetadata: {
+            ...additionalMetadata,
+            ...(normalizedOperationId
+              ? { agent_renewal_seed_operation_id: normalizedOperationId }
+              : {}),
+            agent_renewal_seed_thread_id: threadId
+          },
+          appServerRuntime,
+          renewalInternal: true,
+          runtime,
+          sessionId: session.sessionId,
+          threadId,
+          workdir
+        });
       }
-      threadSnapshot = await readCodexSessionRenewalSuccessorThreadSnapshot({
-        provider,
-        threadId: candidateThreadId,
-        workdir: normalizedWorkdir
-      });
-    } else {
-      thread = await provider.startThread(threadStartSettings);
-      fresh = true;
     }
-  }
-  const threadId = codexAppServerThreadResponseId(thread, resumableThreadId);
-  if (
-    !threadId ||
-    threadId === normalizedForbiddenThreadId ||
-    (fresh && baselineThreadIds.includes(threadId))
-  ) {
-    throw codexSessionRenewalThreadError(
-      CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-      threadId
-        ? "The assistant provider reused the old session's thread instead of starting a fresh one."
-        : "The assistant provider did not return a fresh renewal thread id.",
-      {
-        forbiddenThreadId: normalizedForbiddenThreadId,
-        threadId
-      }
-    );
-  }
-  if (!persistedClaim) {
-    await writeCodexSessionRenewalThreadClaim({
-      operationId: normalizedOperationId,
-      runtime,
-      sessionId: session.sessionId,
-      threadId,
-      workdir: normalizedWorkdir
-    });
-  }
-  await writeCodexAppServerIdentityMetadata({
-    additionalMetadata: {
-      ...additionalMetadata,
-      ...(normalizedOperationId
-        ? { agent_renewal_seed_operation_id: normalizedOperationId }
-        : {}),
-      agent_renewal_seed_thread_id: threadId
-    },
-    appServerRuntime,
-    renewalInternal: true,
-    runtime,
-    sessionId: session.sessionId,
-    threadId,
-    workdir: normalizedWorkdir
-  });
-  if (fresh) {
-    try {
-      threadSnapshot = await readCodexSessionRenewalSuccessorThreadSnapshot({
-        provider,
-        threadId,
-        workdir: normalizedWorkdir
-      });
-    } catch (error) {
-      throw codexSessionRenewalThreadError(
-        CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE,
-        "The newly started renewal thread cannot be read; Vibe64 will not replace it silently.",
-        {
-          providerError: normalizeAgentText(error?.message),
-          threadId
-        },
-        { retryable: true }
-      );
-    }
-  }
-  return Object.freeze({
-    appServerRuntime,
-    fresh,
-    thread,
-    threadId,
-    threadSnapshot,
-    threadStartSettings,
-    threadSettings
-  });
+  };
+}
+
+async function startFreshCodexAppServerThreadForSession(options = {}) {
+  return startFreshCodexAppServerThread(codexAppServerRenewalSeedPreparation(options));
 }
 
 function codexAppServerThreadIdForSession(session = {}, workdir = "") {
@@ -1870,23 +903,7 @@ function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   return normalizeAgentText(metadata.agent_identity_conversation_id);
 }
 
-async function codexAppServerThreadHasReadableHistory(provider = null, threadId = "") {
-  const normalizedThreadId = normalizeAgentText(threadId);
-  if (!normalizedThreadId || typeof provider?.readThread !== "function") {
-    return false;
-  }
-  try {
-    await provider.readThread(normalizedThreadId);
-    return true;
-  } catch (error) {
-    if (codexAppServerRequestIsInvalid(error, "thread/read")) {
-      return false;
-    }
-    throw error;
-  }
-}
-
-async function ensureCodexAppServerThreadForSession({
+function codexAppServerThreadPreparationForSession({
   agentSettings = {},
   hostContext = null,
   observeThread,
@@ -1895,83 +912,48 @@ async function ensureCodexAppServerThreadForSession({
   session = {},
   workdir = ""
 } = {}) {
-  if (typeof observeThread !== "function") {
-    throw new TypeError("Main Codex threads require an observer before they can resume.");
-  }
-  const normalizedWorkdir = normalizeWorkdir(workdir);
-  let stageStartedAt = Date.now();
-  const availability = typeof provider.ensureAvailable === "function"
-    ? await provider.ensureAvailable()
-    : null;
-  const appServerRuntime = availability?.runtime || await provider.ensureRuntime();
-  vibe64SessionDebugLog("server.codexAppServerSessionBridge.thread.stage", {
-    durationMs: Date.now() - stageStartedAt,
-    sessionId: session.sessionId,
-    stage: "runtime"
-  });
-  const existingThreadId = codexAppServerThreadIdForSession(session, normalizedWorkdir);
-  stageStartedAt = Date.now();
-  const config = await codexAppServerProjectHookTrustConfig(provider, normalizedWorkdir);
-  vibe64SessionDebugLog("server.codexAppServerSessionBridge.thread.stage", {
-    durationMs: Date.now() - stageStartedAt,
-    sessionId: session.sessionId,
-    stage: "hook-config"
-  });
-  const threadSettings = codexAppServerThreadSettings({
-    agentSettings,
-    config,
-    cwd: normalizedWorkdir,
-    hostContext
-  });
-  const threadStartSettings = codexAppServerThreadStartSettings({
-    agentSettings,
-    config,
-    cwd: normalizedWorkdir,
-    hostContext
-  });
-  let thread = null;
-  stageStartedAt = Date.now();
-  if (existingThreadId) {
-    if (session.metadata?.codex_changeover_pause_goal === "yes") {
-      const { goal } = await provider.readGoal(existingThreadId);
-      if (goal?.status === "active") await provider.setGoalStatus(existingThreadId, "paused");
-    }
-    // Resuming can immediately start an active goal before the RPC returns.
-    await observeThread(existingThreadId);
-    thread = await provider.resumeThread(existingThreadId, threadSettings);
-    if (session.metadata?.codex_changeover_pause_goal === "yes") {
-      await runtime.store.writeMetadataValue(session.sessionId, "codex_changeover_pause_goal", "");
-    }
-  } else {
-    thread = await provider.startThread(threadStartSettings);
-  }
-  vibe64SessionDebugLog("server.codexAppServerSessionBridge.thread.stage", {
-    durationMs: Date.now() - stageStartedAt,
-    sessionId: session.sessionId,
-    stage: existingThreadId ? "resume" : "start"
-  });
-  const threadId = normalizeAgentText(thread.id || existingThreadId);
-  if (!threadId) {
-    throw new Error("Codex app-server did not return a thread id.");
-  }
-  stageStartedAt = Date.now();
-  await writeCodexAppServerIdentityMetadata({
-    appServerRuntime,
-    runtime,
-    sessionId: session.sessionId,
-    threadId,
-    workdir: normalizedWorkdir
-  });
-  vibe64SessionDebugLog("server.codexAppServerSessionBridge.thread.stage", {
-    durationMs: Date.now() - stageStartedAt,
-    sessionId: session.sessionId,
-    stage: "identity-metadata"
-  });
   return {
-    appServerRuntime,
-    thread,
-    threadId
+    observeThread,
+    provider,
+    workdir,
+    projectHooks: true,
+    settings(normalizedWorkdir, config) {
+      const threadSettings = codexAppServerThreadSettings({
+        agentSettings,
+        config,
+        cwd: normalizedWorkdir,
+        hostContext
+      });
+      const threadStartSettings = codexAppServerThreadStartSettings({
+        agentSettings,
+        config,
+        cwd: normalizedWorkdir,
+        hostContext
+      });
+      return { threadSettings, threadStartSettings };
+    },
+    identity: {
+      read: normalizedWorkdir => codexAppServerThreadIdForSession(session, normalizedWorkdir),
+      get pauseGoal() { return session.metadata?.codex_changeover_pause_goal === "yes"; },
+      clearPause() { return runtime.store.writeMetadataValue(session.sessionId, "codex_changeover_pause_goal", ""); },
+      write({ appServerRuntime, threadId, workdir }) {
+        return writeCodexAppServerIdentityMetadata({
+          appServerRuntime, runtime, sessionId: session.sessionId, threadId, workdir
+        });
+      }
+    },
+    onStage(event) {
+      vibe64SessionDebugLog("server.codexAppServerSessionBridge.thread.stage", {
+        durationMs: event.durationMs,
+        sessionId: session.sessionId,
+        stage: event.stage
+      });
+    }
   };
+}
+
+async function ensureCodexAppServerThreadForSession(options = {}) {
+  return ensureCodexAppServerThread(codexAppServerThreadPreparationForSession(options));
 }
 
 async function sendCodexAppServerPromptForSession({
@@ -1985,38 +967,11 @@ async function sendCodexAppServerPromptForSession({
   readOnly = false,
   workdir = ""
 } = {}) {
-  const authoredInput = String(prompt ?? "");
-  if (!authoredInput.trim()) {
-    throw new Error("Codex app-server prompt is empty.");
-  }
-  const input = [authoredInput, ...attachments
-    .filter((attachment) => attachment.contentType?.startsWith("image/"))
-    .map((attachment) => ({ type: "localImage", path: attachment.path }))];
-  const turnSettings = {
-    ...codexAppServerTurnSettings({
-      agentSettings,
-      cwd: workdir
-    }),
-    ...(readOnly
-      ? {
-          sandboxPolicy: {
-            networkAccess: false,
-            type: "readOnly"
-          }
-        }
-      : {}),
-    ...(normalizeAgentText(clientUserMessageId)
-      ? { clientUserMessageId: normalizeAgentText(clientUserMessageId) }
-      : {})
-  };
-  if (outputSchema && typeof outputSchema === "object" && !Array.isArray(outputSchema)) {
-    turnSettings.outputSchema = outputSchema;
-  }
-  const turn = await provider.sendTurn(threadId, input, turnSettings);
-  return {
-    input,
-    turn
-  };
+  return sendCodexAppServerPrompt({
+    attachments, clientUserMessageId, outputSchema, provider, prompt, threadId, readOnly
+  }, {
+    get turnSettings() { return codexAppServerTurnSettings({ agentSettings, cwd: workdir }); }
+  });
 }
 
 export {
@@ -2034,14 +989,21 @@ export {
   codexAppServerHelperTurnSettings,
   codexAppServerIdentityMetadata,
   codexAppServerProjectHookTrustConfig,
-  codexAppServerThreadHasReadableHistory,
   codexAppServerThreadIdForSession,
+  codexAppServerThreadPreparationForSession,
   codexAppServerThreadStartSettings,
   codexAppServerThreadSettings,
   codexAppServerTurnSettings,
+  codexAppServerHelperIsolation,
   ensureCodexAppServerThreadForSession,
+  codexAppServerHelperThreadResumePreparation,
+  codexAppServerHelperThreadStartPreparation,
+  prepareCodexAppServerHelperThreadResumeSettings,
   prepareCodexAppServerHelperThreadStartSettings,
+  prepareCodexAppServerHelperTurn,
   resumeCodexAppServerHelperThread,
+  codexAppServerRenewalResumePreparation,
+  codexAppServerRenewalSeedPreparation,
   resumeExactCodexAppServerThreadForSession,
   sendCodexAppServerHelperTurn,
   sendCodexAppServerPromptForSession,

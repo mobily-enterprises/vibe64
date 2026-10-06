@@ -1,32 +1,40 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { nextTick, ref } from "vue";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createRenderer, nextTick, ref } from "vue";
+import { EventEmitter } from "node:events";
+import { routeLocationKey } from "vue-router";
+import { provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
+import { createTemporaryConversationFixture, temporaryRequestBody } from "./helpers/temporaryConversationFixture.js";
 
 const mocks = vi.hoisted(() => ({
+  transport: null,
   requests: [],
   responses: []
 }));
 
-vi.mock("vue", async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    onBeforeUnmount() {},
-    onMounted() {}
-  };
-});
-
 vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
-  getHttpWebClient() {
-    return {
-      async request(...args) {
-        mocks.requests.push(args);
-        if (args[1]?.method === "PATCH") return { ok: true };
-        const response = mocks.responses.shift();
-        return typeof response === "function" ? response(...args) : response;
-      }
-    };
-  }
+  getHttpWebClient: () => ({ request: (...args) => mocks.transport.request(...args) })
 }));
+vi.mock("@jskit-ai/assistant-core/client", async (importOriginal) => ({
+  ...await importOriginal(), assistantHttpClient: { request: (...args) => mocks.transport.request(...args) }
+}));
+let createdId = "conversation-1";
+const mountedApps = new Set();
+const renderer = createRenderer({ createComment: () => ({}), insert() {}, nextSibling: () => null,
+  parentNode: () => null, remove() {} });
+async function mountTemporaryAi(options = {}) {
+  const { useVibe64TemporaryAi } = await import("../../src/composables/useVibe64TemporaryAi.js");
+  let temporary;
+  const app = renderer.createApp({ setup() {
+    temporary = useVibe64TemporaryAi({ sessionId: () => "session-1",
+      sessionsApiPath: () => "/api/vibe64/sessions", ...options });
+    return () => null;
+  } });
+  provideConversationFixture(app, mocks.transport.attach(new EventEmitter()));
+  app.provide(routeLocationKey, { params: { slug: "project-a" } });
+  app.runWithContext(() => app.mount({}));
+  mountedApps.add(app);
+  return temporary;
+}
 
 async function flushPromises() {
   for (let i = 0; i < 12; i++) await Promise.resolve();
@@ -40,38 +48,15 @@ function deferredPromise() {
   return { promise, resolve };
 }
 
-async function temporaryAi() {
-  const { useVibe64TemporaryAi } = await import(
-    "../../src/composables/useVibe64TemporaryAi.js"
-  );
-  return useVibe64TemporaryAi({
-    sessionId: () => "session-1",
-    sessionsApiPath: () => "/api/vibe64/sessions"
-  });
-}
-
+async function temporaryAi() { return mountTemporaryAi(); }
 async function temporaryAiWithDraft() {
-  const { useVibe64TemporaryAi } = await import(
-    "../../src/composables/useVibe64TemporaryAi.js"
-  );
-  const temporary = useVibe64TemporaryAi({
-    sessionId: () => "session-1",
-    sessionsApiPath: () => "/api/vibe64/sessions"
-  });
+  const temporary = await mountTemporaryAi();
   const task = temporary.openTask();
   temporary.updateDraft(task.id, "Explain this conflict.");
   return { task, temporary };
 }
-
 async function temporaryAiWithFinishedObserver(onTaskFinished, taskOptions = {}) {
-  const { useVibe64TemporaryAi } = await import(
-    "../../src/composables/useVibe64TemporaryAi.js"
-  );
-  const temporary = useVibe64TemporaryAi({
-    onTaskFinished,
-    sessionId: () => "session-1",
-    sessionsApiPath: () => "/api/vibe64/sessions"
-  });
+  const temporary = await mountTemporaryAi({ onTaskFinished });
   const task = temporary.openTask({ title: "Resolve Update", ...taskOptions });
   temporary.updateDraft(task.id, "Resolve this conflict safely.");
   return { task, temporary };
@@ -80,7 +65,7 @@ async function temporaryAiWithFinishedObserver(onTaskFinished, taskOptions = {})
 async function runningTemporaryAi() {
   const fixture = await temporaryAiWithDraft();
   mocks.responses.push(
-    { ok: true, conversationId: "conversation-1" },
+    { ok: true, conversationId: createdId },
     { ok: true, runId: "turn-1", status: "inProgress" },
     { ok: true, status: "inProgress" }
   );
@@ -94,45 +79,116 @@ describe("useVibe64TemporaryAi", () => {
     mocks.requests.length = 0;
     mocks.responses.length = 0;
     vi.useFakeTimers();
+    createdId = "conversation-1";
+    mocks.transport = createTemporaryConversationFixture({ created: id => { createdId = id; },
+      async request(...args) {
+        mocks.requests.push(args);
+        if (args[1]?.method === "PATCH") return { ok: true };
+        const response = mocks.responses.shift();
+        return typeof response === "function" ? response(...args) : response;
+      }
+    });
+  });
+  afterEach(() => {
+    for (const app of mountedApps) app.unmount();
+    mountedApps.clear();
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   it("checks a restored unconfirmed request without changing its ID or the newer draft", async () => {
-    const { task, temporary } = await temporaryAiWithDraft();
     const route = { messageId: "interrupted-1", status: "uncertain", input: { message: "Original prompt.", displayMessage: "Original prompt." } };
-    Object.assign(temporary.activeTask.value, {
-      conversationId: "conversation-1", draft: "Newer draft.", routingMetadata: { assistant_routing_request: JSON.stringify(route) }
-    });
+    mocks.responses.push({ conversations: [{ conversationId: createdId, status: "uncertain", messages: [],
+      draft: "Newer draft.", routingMetadata: { assistant_routing_request: JSON.stringify(route) } }] });
+    const temporary = await mountTemporaryAi({ assistantReady: () => true });
+    await flushPromises();
+    const task = temporary.activeTask.value;
     expect(await temporary.cancelMessage(task.id, route.messageId)).toBe(false);
     expect(await temporary.editMessage(task.id, route.messageId)).toBe(false);
     mocks.responses.push({ ok: true, status: "completed", messages: [
       { id: route.messageId, role: "user", text: "Original prompt." }
     ], assistantRoutingRequest: { ...route, status: "sent" } });
     expect(await temporary.send(task.id, { retryMessageId: route.messageId })).toBe(true);
-    expect(mocks.requests.find(([, options]) => options.method === "POST")[1].body)
-      .toMatchObject({ messageId: route.messageId, message: "Original prompt." });
+    expect(mocks.requests.find(([path]) => path.includes("/deliveries/"))[0])
+      .toContain(`/deliveries/${route.messageId}/inspect`);
+    expect(mocks.requests.some(([path]) => path.endsWith("/messages"))).toBe(false);
     expect(temporary.activeTask.value.draft).toBe("Newer draft.");
     expect(temporary.activeTask.value.delivery.state.messages).toHaveLength(0);
   });
 
   it("ignores a late HTTP failure after the exact temporary message receipt arrives", async () => {
     const { task, temporary } = await temporaryAiWithDraft();
-    mocks.responses.push({ ok: true, conversationId: "conversation-1" }, async (_url, options) => {
-      Object.assign(temporary.activeTask.value, {
-        messages: [{ id: options.body.messageId, role: "user", text: options.body.message }],
-        status: "inProgress", busy: true
-      });
+    mocks.responses.push({ ok: true, conversationId: createdId }, async (_url, options) => {
+      mocks.transport.observe(task.id, { messageId: temporaryRequestBody(options).messageId,
+        messages: [{ id: temporaryRequestBody(options).messageId, role: "user", text: temporaryRequestBody(options).message }],
+        status: "inProgress" });
+      mocks.transport.publishTranscript(task.id);
       temporary.updateDraft(task.id, "Keep my new draft.");
       throw new Error("Late HTTP failure.");
     });
     expect(await temporary.send(task.id)).toBe(true);
+    expect(temporary.activeTask.value).toMatchObject({ draft: "Keep my new draft.", error: "", pendingMessageId: "" });
+    expect(temporary.activeTask.value.delivery.state.messages).toHaveLength(0);
+    await flushPromises();
     expect(temporary.activeTask.value).toMatchObject({ draft: "Keep my new draft.", error: "", pendingMessageId: "", status: "inProgress" });
     expect(temporary.activeTask.value.delivery.state.messages).toHaveLength(0);
+  });
+
+  it("keeps a provisional temporary row uncertain and explicitly checks the captured request without clearing a newer draft", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    const file = { attachmentId: "original-file", name: "Original" };
+    temporary.updateAttachments(task.id, [file]);
+    let original;
+    const provisional = () => ({ id: original.messageId, role: "user", text: original.displayMessage, receipt: false });
+    mocks.responses.push({ ok: true, conversationId: createdId }, async (_url, options) => {
+      original = temporaryRequestBody(options);
+      mocks.transport.observe(task.id, { messageId: original.messageId, messages: [provisional()], status: "failed" });
+      mocks.transport.publishTranscript(task.id);
+      temporary.updateDraft(task.id, "Keep the newer draft.");
+      return { ok: false, delivered: false, status: "uncertain", readError: true, error: "Native history unavailable." };
+    });
+    expect(await temporary.send(task.id)).toBe(false);
+    const current = temporary.activeTask.value;
+    expect(current.delivery.find(original.messageId).status).toBe("uncertain");
+    expect(current.delivery.turns([{ turnId: "saved", user: { ...provisional(), messageId: original.messageId } }])).toHaveLength(1);
+    expect(current.attachments).toEqual([file]);
+    expect(current.draft).toBe("Keep the newer draft.");
+    for (const response of [
+      { ok: false, error: "Native history unavailable." },
+      { ok: true, delivered: false, status: "completed", messages: [provisional()] }
+    ]) {
+      mocks.responses.push(async (_url, options) => {
+        expect(_url).toContain(`/deliveries/${original.messageId}/inspect`);
+        expect(options).not.toHaveProperty("body");
+        const captured = current.delivery.find(original.messageId).payload;
+        expect(captured.message).toBe(original.message);
+        expect(captured.attachmentIds).toEqual(original.attachmentIds);
+        expect(captured.agentSettings).toEqual(original.agentSettings);
+        Object.assign(temporary.activeTask.value, { busy: false, status: "failed" });
+        return response;
+      });
+      expect(await temporary.send(task.id, { retryMessageId: original.messageId })).toBe(false);
+      expect(current.delivery.find(original.messageId).status).toBe("uncertain");
+      expect(temporary.activeTask.value.attachments).toEqual([file]);
+      expect(temporary.activeTask.value.draft).toBe("Keep the newer draft.");
+    }
+    mocks.responses.push({ ok: true, delivered: true, status: "completed", messages: [
+      { ...provisional(), receipt: undefined }
+    ] });
+    expect(await temporary.send(task.id, { retryMessageId: original.messageId })).toBe(true);
+    expect(temporary.activeTask.value.delivery.state.messages).toHaveLength(0);
+    expect(temporary.activeTask.value.attachments).toEqual([]);
+    expect(temporary.activeTask.value.draft).toBe("Keep the newer draft.");
+    expect(mocks.requests.filter(([path]) => path.endsWith("/messages")).map(([, options]) => options.body.messageId))
+      .toEqual([original.messageId]);
+    expect(mocks.requests.filter(([path]) => path.endsWith(`/deliveries/${original.messageId}/inspect`))).toHaveLength(3);
   });
 
   it("flags unseen replies while working and clears them only when that conversation is viewed", async () => {
     const { task, temporary } = await runningTemporaryAi();
     temporary.closeWorkspace();
     mocks.responses.push({ ok: true, status: "inProgress", text: "A new reply." });
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(temporary.hasUnreadMessages.value).toBe(true);
     expect(temporary.activeTask.value).toMatchObject({ busy: true, unread: true });
@@ -154,9 +210,11 @@ describe("useVibe64TemporaryAi", () => {
       { ok: true, conversationId: "conversation-2" },
       { ok: true, status: "inProgress", text: "A new reply." }
     );
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(temporary.hasUnreadMessages.value).toBe(false);
     mocks.responses.push({ ok: true, status: "completed", text: "A new reply. Now complete." });
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(temporary.hasUnreadMessages.value).toBe(true);
     temporary.showWorkspace();
@@ -167,6 +225,7 @@ describe("useVibe64TemporaryAi", () => {
   it("does not flag visible replies or background reasoning and user messages", async () => {
     const { temporary } = await runningTemporaryAi();
     mocks.responses.push({ ok: true, status: "inProgress", text: "Visible reply." });
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(temporary.hasUnreadMessages.value).toBe(false);
     temporary.closeWorkspace();
@@ -176,6 +235,7 @@ describe("useVibe64TemporaryAi", () => {
       text: "Visible reply.",
       progressUpdates: [{ id: "progress-1", text: "Still working." }]
     });
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(temporary.hasUnreadMessages.value).toBe(false);
     mocks.responses.push({
@@ -183,21 +243,22 @@ describe("useVibe64TemporaryAi", () => {
       status: "completed",
       messages: [...temporary.activeTask.value.messages, { id: "user-2", role: "user", text: "Another prompt." }]
     });
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(temporary.hasUnreadMessages.value).toBe(false);
   });
 
   it("retains unread replies while its session is inactive and removes them with a closed task", async () => {
-    const { useVibe64TemporaryAi } = await import("../../src/composables/useVibe64TemporaryAi.js");
+    await import("../../src/composables/useVibe64TemporaryAi.js");
     const active = ref(false);
-    const temporary = useVibe64TemporaryAi({
+    const temporary = await mountTemporaryAi({
       active,
       sessionId: () => "session-1",
       sessionsApiPath: () => "/api/vibe64/sessions"
     });
     const task = temporary.openTask({ draft: "Check this." });
     mocks.responses.push(
-      { ok: true, conversationId: "conversation-1" },
+      { ok: true, conversationId: createdId },
       { ok: true, runId: "turn-1", status: "inProgress" },
       { ok: true, status: "completed", text: "Ready for review." }
     );
@@ -230,8 +291,12 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.open.value).toBe(true);
     expect(mocks.requests.at(-1)[1].method).toBe("DELETE");
     mocks.responses.push({ ok: true, status: "inProgress", progressUpdates: [{ id: "later", text: "Still working." }] });
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
-    expect(temporary.activeTask.value.messages.at(-1).progressUpdates).toEqual([{ id: "later", text: "Still working." }]);
+    expect(temporary.activeTask.value.messages.filter(message => message.role === "thinking")
+      .map(({ id, text }) => ({ id, text }))).toEqual([
+      { id: "fixture-native:turn-1:progress:later", text: "Still working." }
+    ]);
   });
 
   it("keeps a stopped repair visible when deletion fails and allows retry", async () => {
@@ -253,7 +318,7 @@ describe("useVibe64TemporaryAi", () => {
     const { task, temporary } = await temporaryAiWithFinishedObserver(observer, { recoveryOperation: "update" });
     const poll = deferredPromise();
     mocks.responses.push(
-      { ok: true, conversationId: "conversation-1" },
+      { ok: true, conversationId: createdId },
       { ok: true, runId: "turn-1", status: "inProgress" },
       () => poll.promise
     );
@@ -274,11 +339,11 @@ describe("useVibe64TemporaryAi", () => {
     const closing = temporary.closeTask(task.id);
     expect(temporary.activeTask.value.id).toBe(task.id);
     mocks.responses.push({ ok: true, deleted: true });
-    start.resolve({ ok: true, conversationId: "conversation-1" });
+    start.resolve({ ok: true, conversationId: createdId });
     await closing;
     await expect(sending).resolves.toBe(false);
     expect(temporary.tasks.value).toEqual([]);
-    expect(mocks.requests.some(([path]) => path.endsWith("/turns"))).toBe(false);
+    expect(mocks.requests.some(([path]) => path.endsWith("/messages"))).toBe(false);
     expect(mocks.requests.at(-1)[1].method).toBe("DELETE");
   });
 
@@ -286,7 +351,7 @@ describe("useVibe64TemporaryAi", () => {
     const observer = vi.fn();
     const { task, temporary } = await temporaryAiWithFinishedObserver(observer, { recoveryOperation: "update" });
     mocks.responses.push(
-      { ok: true, conversationId: "conversation-1" },
+      { ok: true, conversationId: createdId },
       { ok: true, runId: "turn-1", status: "inProgress" },
       { ok: true, status: "completed", outcome: { kind: "complete" }, message: "Repaired." }
     );
@@ -309,7 +374,7 @@ describe("useVibe64TemporaryAi", () => {
     await expect(temporary.send(task.id)).resolves.toBe(true);
     await flushPromises();
     expect(temporary.activeTask.value.recoveryOutcome).toBe("failed");
-    expect(mocks.requests.filter(([path]) => path.endsWith("/turns")).at(-1)[1].body.message)
+    expect(mocks.requests.filter(([path]) => path.endsWith("/messages")).at(-1)[1].body.text)
       .toContain("Still conflicts.");
     expect(observer).toHaveBeenLastCalledWith(expect.objectContaining({ runId: "turn-2", outcomeKind: "continue" }));
   });
@@ -318,7 +383,7 @@ describe("useVibe64TemporaryAi", () => {
     const temporary = await temporaryAi();
     const input = { recoveryOperation: "update", message: "Repair eight conflicts." };
     mocks.responses.push(
-      { ok: true, conversationId: "conversation-1" },
+      { ok: true, conversationId: createdId },
       { ok: true, runId: "turn-1", status: "inProgress" },
       { ok: true, status: "completed", outcome: { kind: "continue" } }
     );
@@ -336,7 +401,7 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.tasks.value).toHaveLength(1);
     expect(mocks.requests.filter(([path, options]) => path.endsWith("/temporary-conversations") && options.method === "POST"))
       .toHaveLength(1);
-    expect(mocks.requests.filter(([path]) => path.endsWith("/turns")).at(-1)[0]).toContain("conversation-1");
+    expect(mocks.requests.filter(([path]) => path.endsWith("/messages")).at(-1)[0]).toContain(createdId);
     temporary.reportRecoveryOutcome(first.taskId, { status: "succeeded" });
     expect(temporary.updateRepairTask.value).toBeNull();
   });
@@ -359,7 +424,8 @@ describe("useVibe64TemporaryAi", () => {
   it.each(["repeated", "limit"])("returns exact Update diagnostics to the same chat and pauses at the %s retry boundary", async (boundary) => {
     const temporary = await temporaryAi();
     const task = temporary.openTask({ recoveryOperation: "update" });
-    Object.assign(temporary.tasks.value[0], { conversationId: "conversation-1", status: "completed", runId: "turn-1" });
+    createdId = task.id;
+    Object.assign(temporary.tasks.value[0], { conversationId: task.id, status: "completed", runId: "turn-1" });
     const attempts = boundary === "repeated" ? 1 : 3;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       mocks.responses.push(
@@ -371,9 +437,9 @@ describe("useVibe64TemporaryAi", () => {
         retryKey: `conflict-${attempt}`, retryMessage: `Exact remaining conflict: file-${attempt}.vue`
       });
       await flushPromises();
-      const request = mocks.requests.filter(([path]) => path.endsWith("/turns")).at(-1);
-      expect(request[0]).toContain("conversation-1");
-      expect(request[1].body.message).toContain(`Exact remaining conflict: file-${attempt}.vue`);
+      const request = mocks.requests.filter(([path]) => path.endsWith("/messages")).at(-1);
+      expect(request[0]).toContain(createdId);
+      expect(request[1].body.text).toContain(`Exact remaining conflict: file-${attempt}.vue`);
       expect(temporary.activeTask.value.recoveryOutcome).toBe("failed");
     }
     const requestCount = mocks.requests.length;
@@ -388,8 +454,8 @@ describe("useVibe64TemporaryAi", () => {
   });
 
   it.each(["draft", "attachment", "stopped", "repository-busy"])("does not auto-retry over %s", async (state) => {
-    const { useVibe64TemporaryAi } = await import("../../src/composables/useVibe64TemporaryAi.js");
-    const temporary = useVibe64TemporaryAi({ sessionId: () => "session-1", operationBusy: () => state === "repository-busy" });
+    await import("../../src/composables/useVibe64TemporaryAi.js");
+    const temporary = await mountTemporaryAi({ sessionId: () => "session-1", operationBusy: () => state === "repository-busy" });
     const task = temporary.openTask({ recoveryOperation: "update" });
     if (state === "draft") temporary.updateDraft(task.id, "My decision.");
     if (state === "attachment") temporary.updateAttachments(task.id, [{ attachmentId: "attachment-1" }]);
@@ -411,9 +477,9 @@ describe("useVibe64TemporaryAi", () => {
     const conversationRequest = deferredPromise();
     mocks.responses.push(
       () => conversationRequest.promise,
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress" },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         message: "The recovery is complete.",
         ok: true,
         runId: "turn-1",
@@ -451,7 +517,7 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.activeTask.value.id).not.toBe(previousTask.id);
     expect(mocks.requests).toHaveLength(1);
 
-    conversationRequest.resolve({ conversationId: "conversation-1", ok: true });
+    conversationRequest.resolve({ conversationId: createdId, ok: true });
     await expect(sending).resolves.toMatchObject({
       ok: true,
       reused: false,
@@ -460,12 +526,12 @@ describe("useVibe64TemporaryAi", () => {
     });
     await flushPromises();
 
-    const turnRequests = mocks.requests.filter(([path]) => path.endsWith("/turns"));
+    const turnRequests = mocks.requests.filter(([path]) => path.endsWith("/messages"));
     expect(turnRequests).toHaveLength(1);
     expect(turnRequests[0][1]).toMatchObject({
       body: {
-        message: "Inspect the full workspace diagnostic and repair the invalid contract.",
-        promptLabel: "Fix workspace preparation"
+        text: "Inspect the full workspace diagnostic and repair the invalid contract.",
+        data: { promptLabel: "Fix workspace preparation" }
       },
       method: "POST"
     });
@@ -499,9 +565,9 @@ describe("useVibe64TemporaryAi", () => {
     const conversationRequest = deferredPromise();
     mocks.responses.push(
       () => conversationRequest.promise,
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress" },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         message: "The recovery is complete.",
         ok: true,
         runId: "turn-1",
@@ -530,7 +596,7 @@ describe("useVibe64TemporaryAi", () => {
       taskId: firstTaskId
     });
 
-    conversationRequest.resolve({ conversationId: "conversation-1", ok: true });
+    conversationRequest.resolve({ conversationId: createdId, ok: true });
     await expect(firstStart).resolves.toEqual({
       ok: true,
       reused: false,
@@ -540,7 +606,7 @@ describe("useVibe64TemporaryAi", () => {
     await flushPromises();
 
     expect(mocks.requests.filter(([path]) => path.endsWith("/temporary-conversations"))).toHaveLength(1);
-    expect(mocks.requests.filter(([path]) => path.endsWith("/turns"))).toHaveLength(1);
+    expect(mocks.requests.filter(([path]) => path.endsWith("/messages"))).toHaveLength(1);
     expect(temporary.tasks.value).toHaveLength(1);
     expect(temporary.activeTask.value.messages.filter((message) => message.role === "user")).toHaveLength(1);
   });
@@ -549,9 +615,9 @@ describe("useVibe64TemporaryAi", () => {
     const conversationRequest = deferredPromise();
     mocks.responses.push(
       () => conversationRequest.promise,
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress" },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         message: "The recovery is complete.",
         ok: true,
         runId: "turn-1",
@@ -591,7 +657,7 @@ describe("useVibe64TemporaryAi", () => {
     });
     expect(mocks.requests).toHaveLength(1);
 
-    conversationRequest.resolve({ conversationId: "conversation-1", ok: true });
+    conversationRequest.resolve({ conversationId: createdId, ok: true });
     await expect(chatStart).resolves.toMatchObject({
       ok: true,
       reused: false,
@@ -601,7 +667,7 @@ describe("useVibe64TemporaryAi", () => {
     await flushPromises();
 
     expect(mocks.requests.filter(([path]) => path.endsWith("/temporary-conversations"))).toHaveLength(1);
-    expect(mocks.requests.filter(([path]) => path.endsWith("/turns"))).toHaveLength(1);
+    expect(mocks.requests.filter(([path]) => path.endsWith("/messages"))).toHaveLength(1);
     expect(temporary.activeTask.value.messages.filter((message) => message.role === "user")).toEqual([
       expect.objectContaining({ text: "Resolve this update from chat." })
     ]);
@@ -614,10 +680,10 @@ describe("useVibe64TemporaryAi", () => {
       title: "Fix workspace preparation"
     };
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true },
+      { conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress" },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         message: "The first recovery is complete.",
         ok: true,
         runId: "turn-1",
@@ -661,7 +727,7 @@ describe("useVibe64TemporaryAi", () => {
       text: recovery.message
     });
     expect(mocks.requests.filter(([path]) => path.endsWith("/temporary-conversations"))).toHaveLength(2);
-    expect(mocks.requests.filter(([path]) => path.endsWith("/turns"))).toHaveLength(2);
+    expect(mocks.requests.filter(([path]) => path.endsWith("/messages"))).toHaveLength(2);
   });
 
   it("starts a fresh recovery task after the matching task was interrupted", async () => {
@@ -672,8 +738,8 @@ describe("useVibe64TemporaryAi", () => {
       title: "Resolve Save conflict"
     };
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true },
+      { conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress" },
       () => firstPoll.promise,
       { ok: true }
     );
@@ -713,10 +779,10 @@ describe("useVibe64TemporaryAi", () => {
       text: recovery.message
     });
     expect(mocks.requests.filter(([path]) => path.endsWith("/temporary-conversations"))).toHaveLength(2);
-    expect(mocks.requests.filter(([path]) => path.endsWith("/turns"))).toHaveLength(2);
+    expect(mocks.requests.filter(([path]) => path.endsWith("/messages"))).toHaveLength(2);
 
     firstPoll.resolve({
-      conversationId: "conversation-1",
+      conversationId: createdId,
       ok: true,
       runId: "turn-1",
       status: "interrupted"
@@ -724,20 +790,19 @@ describe("useVibe64TemporaryAi", () => {
     await flushPromises();
   });
 
-  it("starts a fresh recovery task after polling the matching task failed", async () => {
+  it("starts a fresh recovery task after the matching native turn failed", async () => {
     const recovery = {
       dedupeKey: "update-conflict:session-1",
       message: "Resolve the Update conflict safely.",
       title: "Resolve Update"
     };
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true },
+      { conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress" },
       {
-        code: "vibe64_temporary_conversation_expired",
-        conversationExpired: true,
-        error: "This Temporary AI task ended when Vibe64 restarted.",
-        ok: false
+        error: "Native work stopped.",
+        status: "failed",
+        ok: true
       }
     );
     const temporary = await temporaryAi();
@@ -780,7 +845,7 @@ describe("useVibe64TemporaryAi", () => {
       text: recovery.message
     });
     expect(mocks.requests.filter(([path]) => path.endsWith("/temporary-conversations"))).toHaveLength(2);
-    expect(mocks.requests.filter(([path]) => path.endsWith("/turns"))).toHaveLength(2);
+    expect(mocks.requests.filter(([path]) => path.endsWith("/messages"))).toHaveLength(2);
   });
 
   it("keeps a failed recovery request in its delivery record for explicit Retry", async () => {
@@ -814,10 +879,10 @@ describe("useVibe64TemporaryAi", () => {
     expect(failedTask.pendingMessageId).toMatch(/^message_/u);
 
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true },
+      { conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress" },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         message: "The Save conflict is resolved.",
         ok: true,
         runId: "turn-1",
@@ -844,10 +909,10 @@ describe("useVibe64TemporaryAi", () => {
   it("restores a stopped Router draft and uses a fresh identity on the next Send", async () => {
     const finish = deferredPromise();
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
+      { conversationId: createdId, ok: true },
       async () => {
         await finish.promise;
-        throw Object.assign(new Error("Routing cancelled."), { code: "vibe64_assistant_routing_cancelled" });
+        return { ok: false, error: "Routing cancelled.", code: "vibe64_assistant_routing_cancelled" };
       }
     );
     const { temporary, task } = await temporaryAiWithDraft();
@@ -864,14 +929,14 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.activeTask.value.delivery.state.messages).toEqual([]);
     mocks.responses.push({ ok: true, status: "completed", messages: [] });
     await expect(temporary.send(task.id)).resolves.toBe(true);
-    const sends = mocks.requests.filter(([path]) => path.endsWith("/turns"));
+    const sends = mocks.requests.filter(([path]) => path.endsWith("/messages"));
     expect(sends).toHaveLength(2);
     expect(sends[1][1].body.messageId).not.toBe(originalMessageId);
   });
 
   it("reuses the created conversation and message identity after an ambiguous turn failure", async () => {
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
+      { conversationId: createdId, ok: true },
       { error: "The turn request could not be confirmed.", ok: false }
     );
     const temporary = await temporaryAi();
@@ -889,15 +954,15 @@ describe("useVibe64TemporaryAi", () => {
     const failedTask = temporary.activeTask.value;
     const originalMessageId = failedTask.pendingMessageId;
     expect(failedTask).toMatchObject({
-      conversationId: "conversation-1",
+      conversationId: createdId,
       draft: "",
       status: "failed"
     });
 
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress" },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         message: "The Update conflict is resolved.",
         ok: true,
         runId: "turn-1",
@@ -915,7 +980,7 @@ describe("useVibe64TemporaryAi", () => {
     const conversationRequests = mocks.requests.filter(([path]) => (
       path.endsWith("/temporary-conversations")
     ));
-    const turnRequests = mocks.requests.filter(([path]) => path.endsWith("/turns"));
+    const turnRequests = mocks.requests.filter(([path]) => path.endsWith("/messages"));
     expect(conversationRequests).toHaveLength(1);
     expect(turnRequests).toHaveLength(2);
     expect(turnRequests[0][1].body.messageId).toBe(originalMessageId);
@@ -925,17 +990,21 @@ describe("useVibe64TemporaryAi", () => {
 
   it("shows live progress and settles with the final answer", async () => {
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true },
+      (_url, options) => ({ conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress", messages: [
+        // The server resolves the authorized upload into its authored receipt.
+        { id: options.body.messageId, role: "user", text: options.body.data.displayMessage,
+          attachments: [{ attachmentId: "attachment-1", fileName: "conflict.png", size: 2048 }] }
+      ] }),
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         ok: true,
         progressUpdates: [{ id: "progress:1", text: "Inspecting the conflict." }],
         runId: "turn-1",
         status: "inProgress"
       },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         text: "The conflict can be resolved safely.",
         ok: true,
         progressUpdates: [{ id: "progress:1", text: "Inspecting the conflict." }],
@@ -961,11 +1030,13 @@ describe("useVibe64TemporaryAi", () => {
       role: "user",
       text: "Explain this conflict."
     });
-    expect(temporary.activeTask.value.messages.at(-1)).toMatchObject({
-      progressUpdates: [{ id: "progress:1", text: "Inspecting the conflict." }],
-      status: "inProgress"
-    });
+    expect(temporary.activeTask.value.messages.filter(message => message.role === "thinking")
+      .map(({ id, text }) => ({ id, text }))).toEqual([
+      { id: "fixture-native:turn-1:progress:progress:1", text: "Inspecting the conflict." }
+    ]);
+    expect(temporary.activeTask.value.status).toBe("inProgress");
 
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     await flushPromises();
     expect(temporary.activeTask.value).toMatchObject({
@@ -980,17 +1051,17 @@ describe("useVibe64TemporaryAi", () => {
 
   it("keeps a hidden task polling and restores the same result", async () => {
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true },
+      { conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress" },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         ok: true,
         progressUpdates: [{ id: "progress:1", text: "Still checking." }],
         runId: "turn-1",
         status: "inProgress"
       },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         message: "Finished while Main chat was visible.",
         ok: true,
         progressUpdates: [{ id: "progress:1", text: "Still checking." }],
@@ -1009,7 +1080,7 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.tasks.value).toHaveLength(1);
     expect(temporary.activeTask.value).toMatchObject({
       busy: true,
-      conversationId: "conversation-1",
+      conversationId: createdId,
       id: hiddenTaskId,
       runId: "turn-1"
     });
@@ -1017,6 +1088,7 @@ describe("useVibe64TemporaryAi", () => {
       path.includes("temporary-conversations") && options?.method === "DELETE"
     ))).toBe(false);
 
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     await flushPromises();
     expect(temporary.open.value).toBe(false);
@@ -1041,7 +1113,7 @@ describe("useVibe64TemporaryAi", () => {
       recoveryOperation: "update", recoveryConflictId: "conflict-1"
     });
     mocks.responses.push(
-      { ok: true, conversationId: "conversation-1" },
+      { ok: true, conversationId: createdId },
       { ok: true, runId: "turn-1", status: "inProgress" },
       { ok: true, status: "completed", outcome: { kind: "complete" } }
     );
@@ -1088,10 +1160,10 @@ describe("useVibe64TemporaryAi", () => {
   it("reports a completed task exactly once for global user feedback", async () => {
     const onTaskFinished = vi.fn();
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      { conversationId: createdId, ok: true },
+      { conversationId: createdId, ok: true, runId: "turn-1", status: "inProgress" },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         message: "The working files are ready for Vibe64 to retry.",
         ok: true,
         runId: "turn-1",
@@ -1127,6 +1199,7 @@ describe("useVibe64TemporaryAi", () => {
     const { task, temporary } = await runningTemporaryAi();
     temporary.updateDraft(task.id, "Keep this reply.");
     mocks.responses.push(response);
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
 
     expect(temporary.activeTask.value).toMatchObject({
@@ -1156,71 +1229,90 @@ describe("useVibe64TemporaryAi", () => {
 
   it("settles a confirmed failed turn without retrying progress or sending again", async () => {
     const { task, temporary } = await runningTemporaryAi();
-    mocks.responses.push({ ok: false, status: "failed", error: "Native work stopped." });
+    const authored = JSON.parse(JSON.stringify(temporary.activeTask.value.messages));
+    mocks.responses.push({ ok: true, status: "failed", error: "Native work stopped." });
+    mocks.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(temporary.activeTask.value).toMatchObject({
       busy: false,
       error: "Native work stopped.",
       status: "failed"
     });
-    expect(temporary.activeTask.value.messages.at(-1).status).toBe("failed");
+    expect(temporary.activeTask.value.binding.runtime.value.snapshot.value.presentation.status).toBe("failed");
+    expect(temporary.activeTask.value.adapter.conversation.working).toBe(false);
+    expect(temporary.activeTask.value.messages).toEqual(authored);
+    expect(temporary.activeTask.value.messages.filter(message => message.role === "assistant")).toEqual([]);
     const requests = mocks.requests.length;
     await vi.advanceTimersByTimeAsync(650);
     expect(mocks.requests).toHaveLength(requests);
     await expect(temporary.stopTask(task.id)).resolves.toBe(false);
   });
 
-  it("settles an expired conversation after polling fails", async () => {
-    mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
-      {
-        code: "vibe64_temporary_conversation_expired",
-        conversationExpired: true,
-        error: "This Temporary AI task ended when Vibe64 restarted.",
-        ok: false
-      }
-    );
-    const { task, temporary } = await temporaryAiWithDraft();
-
-    await temporary.send(task.id);
-    await flushPromises();
+  it("retains a durable conversation and Stop after native history read fails", async () => {
+    const { task, temporary } = await runningTemporaryAi();
+    const authored = JSON.parse(JSON.stringify(temporary.activeTask.value.messages));
+    mocks.responses.push({
+      error: "Native history unavailable.",
+      ok: true,
+      readError: true,
+      runId: "turn-1",
+      status: "inProgress"
+    });
+    mocks.transport.notify();
+    await vi.advanceTimersByTimeAsync(650);
 
     expect(temporary.activeTask.value).toMatchObject({
-      busy: false,
-      conversationId: "",
-      error: "This Temporary AI task ended when Vibe64 restarted.",
-      runId: "",
-      status: "failed"
+      busy: true,
+      conversationId: task.id,
+      error: "Native history unavailable.",
+      runId: "turn-1",
+      status: "inProgress"
     });
-    expect(temporary.activeTask.value.messages.at(-1).status).toBe("failed");
+    expect(temporary.activeTask.value.messages).toEqual(authored);
+    expect(temporary.activeTask.value.messages.filter(message => message.role === "assistant")).toEqual([]);
+    expect(temporary.activeTask.value.adapter.composer.canStop).toBe(true);
+    const requests = mocks.requests.length;
+    await vi.advanceTimersByTimeAsync(650);
+    expect(mocks.requests).toHaveLength(requests);
+    mocks.responses.push({ ok: true });
+    await expect(temporary.stopTask(task.id)).resolves.toBe(true);
+    expect(temporary.activeTask.value).toMatchObject({
+      busy: false, conversationId: task.id, error: "", runId: "turn-1", status: "interrupted"
+    });
+    expect(mocks.requests.filter(([path]) => path.endsWith("/messages"))).toHaveLength(1);
   });
 
   it("reuses one message id after an ambiguous turn request failure", async () => {
     mocks.responses.push(
-      { conversationId: "conversation-1", ok: true },
+      { conversationId: createdId, ok: true },
       () => {
         throw new Error("Network request failed.");
-      },
-      { conversationId: "conversation-1", ok: true, runId: "turn-1", status: "inProgress" },
+      }
+    );
+    const { task, temporary } = await temporaryAiWithDraft();
+
+    await expect(temporary.send(task.id)).resolves.toBe(false);
+    await flushPromises();
+    const retryMessageId = temporary.activeTask.value.pendingMessageId;
+    mocks.responses.push(
+      { conversationId: createdId, ok: true, delivered: true, runId: "turn-1", status: "inProgress" },
       {
-        conversationId: "conversation-1",
+        conversationId: createdId,
         message: "Recovered without another turn.",
         ok: true,
         runId: "turn-1",
         status: "completed"
       }
     );
-    const { task, temporary } = await temporaryAiWithDraft();
-
-    await expect(temporary.send(task.id)).resolves.toBe(false);
-    const retryMessageId = temporary.activeTask.value.pendingMessageId;
     await expect(temporary.send(task.id, { retryMessageId })).resolves.toBe(true);
     await flushPromises();
 
-    const turnRequests = mocks.requests.filter(([path]) => path.endsWith("/turns"));
-    expect(turnRequests).toHaveLength(2);
+    const turnRequests = mocks.requests.filter(([path]) => path.endsWith("/messages"));
+    expect(turnRequests).toHaveLength(1);
     expect(turnRequests[0][1].body.messageId).toMatch(/^message_/u);
-    expect(turnRequests[1][1].body.messageId).toBe(turnRequests[0][1].body.messageId);
+    const inspections = mocks.requests.filter(([path]) => path.includes("/deliveries/"));
+    expect(inspections).toHaveLength(1);
+    expect(inspections[0][0]).toContain(`/deliveries/${turnRequests[0][1].body.messageId}/inspect`);
+    expect(inspections[0][1]).not.toHaveProperty("body");
   });
 });

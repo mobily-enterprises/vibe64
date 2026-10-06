@@ -1,4 +1,4 @@
-import { createSSRApp, h, ref } from "vue";
+import { computed, createSSRApp, h, ref } from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { expect, it, vi } from "vitest";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
@@ -8,18 +8,15 @@ const mocks = vi.hoisted(() => ({
   options: null,
   realtime: null,
   goal: null,
-  goalResource: null,
-  goalOptions: null,
+  goalView: null,
+  goalController: null,
+  resources: [],
   buttons: [],
   request: vi.fn()
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource(options) {
-    if (options.path.value.endsWith("/agent-goal")) {
-      mocks.goalOptions = options;
-      mocks.goalResource = { data: ref(mocks.goal), loadError: ref(""), reload: vi.fn() };
-      return mocks.goalResource;
-    }
+    mocks.resources.push(options);
     mocks.options = options;
     return mocks.resource;
   }
@@ -62,25 +59,31 @@ import PlanUsage from "../../src/components/studio/vibe64-session/Vibe64AgentPla
 
 async function render(data, props = {}, viewer = { actorKey: "local" }) {
   mocks.resource = { data: ref(data), loadError: ref(""), reload: vi.fn() };
+  mocks.resources = [];
+  mocks.goalView = ref(mocks.goal);
+  mocks.goalController = {
+    goalView: mocks.goalView, goalLoadError: ref(""),
+    goalState: computed(() => ({ enabled: Boolean(mocks.goalView.value), pending: false, error: "",
+      cancel: () => mocks.goalController.changeGoal("cancel", {}) })),
+    changeGoal: vi.fn().mockResolvedValue({ ok: true })
+  };
   return renderToString(createSSRApp({ render: () => h(PlanUsage, {
     active: true, session: { sessionId: "one", assistantSelection: { engineId: "codex" } },
-    sessionsApiPath: "/api/projects/fixture/sessions", ...props
+    sessionsApiPath: "/api/projects/fixture/sessions", conversationRuntime: mocks.goalController, ...props
   }) }).provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer));
 }
 
-it("separates cached goal and allowance data by viewer and disables both when signed out", async () => {
+it("separates allowance data by viewer and leaves goal ownership in the supplied binding", async () => {
   const viewer = ref({ actorKey: "owner" });
   await render(null, {}, viewer);
   const ownerUsage = [...mocks.options.queryKey.value];
-  const ownerGoal = [...mocks.goalOptions.queryKey.value];
   viewer.value = { actorKey: "member" };
   expect(mocks.options.queryKey.value).not.toEqual(ownerUsage);
-  expect(mocks.goalOptions.queryKey.value).not.toEqual(ownerGoal);
   expect(mocks.options.queryKey.value.at(-1)).toBe("member");
-  expect(mocks.goalOptions.queryKey.value.at(-1)).toBe("member");
   viewer.value = { actorKey: "" };
   expect(mocks.options.enabled.value).toBe(false);
-  expect(mocks.goalOptions.enabled.value).toBe(false);
+  expect(mocks.resources).toHaveLength(1);
+  expect(mocks.resources.every(resource => !resource.path.value.endsWith("/agent-goal"))).toBe(true);
 });
 
 it("keeps retained goal controls on their own engine after a foreign chat turn", async () => {
@@ -89,7 +92,7 @@ it("keeps retained goal controls on their own engine after a foreign chat turn",
   const html = await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "opencode" } } });
   expect(html).toContain("Resume goal");
   expect(html).toContain("Cancel goal");
-  expect(mocks.goalOptions.enabled.value).toBe(true);
+  expect(mocks.goalController.goalView.value.routing.selection.engineId).toBe("claude");
   expect(mocks.options.enabled.value).toBe(false);
   mocks.goal = null;
 });
@@ -183,17 +186,17 @@ it("resolves the reactive sessions path used by the live chat", async () => {
 it("keeps passive allowance and goal lookup failures out of app-wide network recovery", async () => {
   await render(null);
   expect(mocks.options.queryOptions.meta.jskit.requestRecovery).toBe(false);
-  expect(mocks.goalOptions.queryOptions.meta.jskit.requestRecovery).toBe(false);
+  expect(mocks.resources).toHaveLength(1); // Shared binding owns passive goal failure; no second query resource.
 });
 
-it("gives both passive status requests the agreed 30-second deadline", async () => {
+it("keeps the allowance deadline while the shared binding owns the goal deadline", async () => {
   const controller = new AbortController();
   const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
   try {
     await render(null);
     await mocks.options.queryOptions.queryFn({ signal: controller.signal });
-    await mocks.goalOptions.queryOptions.queryFn({ signal: controller.signal });
-    expect(timeout.mock.calls).toEqual([[30_000], [30_000]]);
+    expect(timeout.mock.calls).toEqual([[30_000]]);
+    expect(mocks.resources).toHaveLength(1);
   } finally {
     timeout.mockRestore();
   }
@@ -237,16 +240,16 @@ it("shows a goal and its controls even without plan allowance", async () => {
   mocks.goal = null;
 });
 
-it("sends an explicit status action for the displayed goal and reloads after failure", async () => {
+it("delegates explicit status changes for the displayed goal to the supplied controller", async () => {
   mocks.buttons = [];
   mocks.goal = { status: "available", goal: { threadId: "thread-one", status: "paused", objective: "Finish migration", createdAt: 10 } };
-  mocks.request.mockResolvedValueOnce({ ok: false, error: "Goal changed" });
   await render(null);
+  mocks.goalController.changeGoal.mockResolvedValueOnce(false);
+  mocks.request.mockClear();
   await mocks.buttons.find((button) => button.text === "Resume goal").click();
-  expect(mocks.request).toHaveBeenCalledWith("/api/projects/fixture/sessions/one/agent-goal", {
-    method: "POST", body: { action: "resume", threadId: "thread-one", objective: "Finish migration", createdAt: 10 }
-  });
-  expect(mocks.goalResource.reload).toHaveBeenCalledOnce();
+  expect(mocks.goalController.changeGoal).toHaveBeenCalledExactlyOnceWith("resume", {});
+  expect(mocks.goalView.value.goal).toEqual(mocks.goal.goal);
+  expect(mocks.request).not.toHaveBeenCalled();
   mocks.goal = null;
 });
 
@@ -267,13 +270,13 @@ it("cancels the exact displayed goal without sending a resume action", async () 
   const objective = "Finish the approved implementation. ".repeat(20);
   mocks.goal = { status: "available", goal: { threadId: "thread-blocked", status: "blocked", objective, createdAt: 30 } };
   mocks.request.mockClear();
-  mocks.request.mockResolvedValueOnce({ ok: true, status: "available", goal: null });
-  await render(null);
+  const html = await render(null);
+  expect(mocks.buttons.filter((button) => button.text.trim() === "Cancel goal")).toHaveLength(1);
+  expect(html.match(/Cancel removes this goal\. Use Stop to interrupt a turn already running\./g)).toHaveLength(1);
   await mocks.buttons.find((button) => button.text.trim() === "Cancel goal").click();
-  expect(mocks.request).toHaveBeenCalledExactlyOnceWith("/api/projects/fixture/sessions/one/agent-goal", {
-    method: "POST", body: { action: "cancel", threadId: "thread-blocked", objective, createdAt: 30 }
-  });
-  expect(mocks.goalResource.reload).toHaveBeenCalledOnce();
+  expect(mocks.goalController.changeGoal).toHaveBeenCalledExactlyOnceWith("cancel", {});
+  expect(mocks.goalView.value.goal).toEqual({ threadId: "thread-blocked", status: "blocked", objective, createdAt: 30 });
+  expect(mocks.request).not.toHaveBeenCalled();
   mocks.goal = null;
 });
 
@@ -281,15 +284,13 @@ it("previews long goals without changing the exact objective used by Pause", asy
   mocks.buttons = [];
   const objective = "Complete the approved implementation and verification plan. ".repeat(40);
   mocks.goal = { status: "available", goal: { threadId: "thread-long", status: "active", objective, createdAt: 20 } };
-  mocks.request.mockResolvedValueOnce({ ok: true });
   const html = await render(null);
   expect(html).toContain(`${objective.slice(0, 140).trimEnd()}…`);
   expect(html).not.toContain(objective);
   expect(html).toContain("View full goal");
   await mocks.buttons.find((button) => button.text === "Pause goal").click();
-  expect(mocks.request).toHaveBeenLastCalledWith("/api/projects/fixture/sessions/one/agent-goal", {
-    method: "POST", body: { action: "pause", threadId: "thread-long", objective, createdAt: 20 }
-  });
+  expect(mocks.goalController.changeGoal).toHaveBeenCalledExactlyOnceWith("pause", {});
+  expect(mocks.goalView.value.goal.objective).toBe(objective);
   mocks.goal = null;
 });
 

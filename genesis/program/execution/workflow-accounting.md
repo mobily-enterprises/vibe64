@@ -7,6 +7,8 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 
 - `packages/vibe64-execution/src/server/index.js`
 - `packages/vibe64-execution/src/server/managedExecution.js`
+- `packages/vibe64-execution/src/server/conversationExecution.js`
+- `packages/vibe64-execution/src/server/engines/stdioBridge.js`
 - `packages/vibe64-execution/src/server/request.js`
 - `packages/vibe64-execution/src/server/engines/capture.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessions.js`
@@ -25,6 +27,24 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 
 ## Public contract
+
+`createVibe64ConversationExecution()` adapts native conversation execution to the
+existing command policy gateway. It exposes process start, running/exit
+observations and owned stop, with optional duplex bytes carried by a private
+socket inside the managed scope. Input EOF does not discard the remaining reply.
+JSKIT owns the engine command and protocol; this host retains actor, environment,
+runtime paths, resource accounting and verified scope cleanup. Socket files are
+removed only after the execution owner confirms that the scope is empty.
+Recovery delegates the saved execution ID to that same owner rather than
+requiring an entry in the restarted adapter's memory. An absent process is not
+evidence of a successful exit; missing exit status stays unknown. Observation
+failure rejects the exit wait and does not acknowledge scope cleanup.
+Startup rejects missing execution identities and retains the gateway's failure
+receipt and retryability. Native owners may supply their existing stop reason
+and termination grace period; the gateway still proves scope cleanup.
+Driver-supplied private home and XDG directories pass through the gateway's
+credential-home validation; they are not overwritten with the application's
+account home. Relative directories are rejected before starting a process.
 
 The privileged command helper requires exact numeric target UID/GID values and
 uses a fixed executable path and trusted environment search path while dropping

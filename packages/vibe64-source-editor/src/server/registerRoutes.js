@@ -113,15 +113,19 @@ function registerRoutes(http, {
   const body = (request) => sourceInput(request, routes.requestBody(request));
   const query = (request) => sourceInput(request, routes.requestQuery(request));
   const searched = (request) => {
-    const { q, ...rest } = routes.requestQuery(request);
-    return sourceInput(request, { ...rest, query: q });
+    const query = routes.requestQuery(request);
+    const { q, ...rest } = query;
+    return sourceInput(request, { ...rest, ...(Object.hasOwn(query, "q") ? { query: q } : {}) });
   };
   const areaQuery = (request, operation) => {
-    const input = { ...routes.requestQuery(request) };
-    // The existing Files client includes its paging offset on every read URL.
-    // Only directory listing uses it in the domain contract.
-    if (operation !== "tree") delete input.offset;
-    return sourceInput(request, { ...input, area: request.params.area });
+    const query = routes.requestQuery(request);
+    // As with the original Files boundary, only operation fields enter the action.
+    // Identity and area come from the authenticated request and route.
+    return sourceInput(request, {
+      area: request.params.area,
+      ...(Object.hasOwn(query, "path") ? { path: query.path } : {}),
+      ...(operation === "tree" && Object.hasOwn(query, "offset") ? { offset: query.offset } : {})
+    });
   };
   route("GET", "/files", "file-areas.read", { summary: "Read the session file areas available to this caller." });
   for (const [method, suffix, operation] of [

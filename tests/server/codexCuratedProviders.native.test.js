@@ -11,7 +11,7 @@ import path from "node:path";
 import test from "node:test";
 import { zstdDecompressSync, gunzipSync } from "node:zlib";
 import { createCodexProviderConnectionStore, codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
-import { createCodexTerminalController } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
+import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 import { createCodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
 import { startCodexAppServerHelperThread, sendCodexAppServerHelperTurn } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
 import { resolveCodexHelperExecutionProfile } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";

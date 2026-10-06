@@ -1,51 +1,31 @@
-import { readFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
+import { readOpenCodeEnvironments, openCodeEnvironmentForDirectory, openCodeEnvironmentForSession,
+  createOpenCodeConversationPlugin, assertOpenCodeModelProvider, limitOpenCodeModelOutput } from "@jskit-ai/assistant-core/server/opencode-process";
 import { vibe64Driver } from "@local/vibe64-genesis/server/promptContext";
-
-const OPENCODE_UNDECLARED_OUTPUT_TOKEN_MAX = 32_000;
 
 function text(value = "") {
   return String(value ?? "").trim();
 }
 
-function pathContains(root = "", candidate = "") {
-  const relative = path.relative(root, candidate);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
 async function sessionEnvironments() {
-  const registryPath = text(process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY);
-  if (!registryPath) {
-    return [];
-  }
-  const source = JSON.parse(await readFile(registryPath, "utf8"));
-  return Array.isArray(source?.sessions) ? source.sessions : [];
+  return readOpenCodeEnvironments(text(process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY));
 }
 
 async function sessionEnvironment(cwd = "") {
-  const normalizedCwd = path.resolve(text(cwd) || process.cwd());
-  return (await sessionEnvironments())
-    .filter((entry) => text(entry?.workdir) && pathContains(path.resolve(entry.workdir), normalizedCwd))
-    .sort((left, right) => path.resolve(right.workdir).length - path.resolve(left.workdir).length)[0] || null;
+  return openCodeEnvironmentForDirectory(await sessionEnvironments(), cwd);
 }
 
 async function sessionEnvironmentForUpstreamSession(sessionId = "", client = null) {
-  const environments = await sessionEnvironments();
-  const visited = new Set();
-  let id = text(sessionId);
-  while (id && !visited.has(id) && visited.size < 32) {
-    const selected = environments.find((entry) => text(entry?.upstreamSessionId) === id);
-    if (selected) return selected;
-    if (!client) return null;
-    visited.add(id);
-    const result = await client.session.get({ path: { id } });
-    if (result.error) throw new Error("Vibe64 could not verify the subagent's parent session.");
-    id = text(result.data?.parentID);
+  try {
+    return await openCodeEnvironmentForSession(await sessionEnvironments(), sessionId, client);
+  } catch (error) {
+    if (error.code === "assistant_opencode_parent_unverified") {
+      throw new Error("Vibe64 could not verify the subagent's parent session.");
+    }
+    throw error;
   }
-  return null;
 }
 
 function isSelectedHelperAgent(agent, selected) {
@@ -99,20 +79,20 @@ function sessionCommand(command = "", selected = null) {
 }
 
 export const Vibe64SessionEnvironment = async ({ client } = {}) => {
-  const instructions = createConversationRuntime({
-    engine: "opencode",
-    resolveInstructions: async (id) => {
+  const common = await createOpenCodeConversationPlugin({ client,
+    registryPath: text(process.env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY),
+    resolveHostInstructions: async (id) => {
       const selected = await sessionEnvironmentForUpstreamSession(id, client);
-      if (!selected?.promptContext) return null;
+      if (!selected?.promptContext) return { conversation: selected?.conversation, instructions: null };
       const { workdir, promptContext } = selected;
       if (promptContext.scope === "ephemeral") {
-        return {
+        return { conversation: selected.conversation, instructions: {
           identity: JSON.stringify(promptContext),
           placement: "replace",
           read: () => vibe64Driver(promptContext)
-        };
+        } };
       }
-      return {
+      return { conversation: selected.conversation, instructions: {
         // Project guidance can change independently of the registry: read it
         // before every inference instead of supplying a cached revision.
         placement: "append",
@@ -132,12 +112,11 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => {
             child.stdin.end(JSON.stringify({ workdir, promptContext }));
           });
         }
-      };
+      } };
     }
   });
   return {
-    event: instructions.event,
-    "experimental.chat.system.transform": instructions.transformSystem,
+    ...common,
     "chat.message": async (input = {}, output = {}) => {
       if (!text(input.agent).startsWith("vibe64-helper-")) return;
       const selected = await sessionEnvironmentForUpstreamSession(input.sessionID, client);
@@ -148,27 +127,14 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => {
     },
     "chat.params": async (input = {}, output = {}) => {
       const selected = await sessionEnvironmentForUpstreamSession(input.sessionID, client);
-      if (selected?.modelProviderId && input.model?.providerID !== selected.modelProviderId) {
-        throw new Error("Assistants must use the session's selected AI account.");
-      }
+      assertOpenCodeModelProvider(selected, input);
       if (text(input.agent).startsWith("vibe64-helper-") && (
         !isSelectedHelperAgent(input.agent, selected) ||
         input.model?.providerID !== selected.modelProviderId || input.model?.id !== selected.helperModelId
       )) {
         throw new Error("This helper is not available through the session's selected AI account.");
       }
-      const advertisedOutputTokenLimit = input.model?.limit?.output;
-      const supportedOutputTokenLimit = (
-        Number.isSafeInteger(advertisedOutputTokenLimit) && advertisedOutputTokenLimit > 0
-      )
-        ? advertisedOutputTokenLimit
-        : OPENCODE_UNDECLARED_OUTPUT_TOKEN_MAX;
-      if (
-        Number.isSafeInteger(output.maxOutputTokens) &&
-        output.maxOutputTokens > supportedOutputTokenLimit
-      ) {
-        output.maxOutputTokens = supportedOutputTokenLimit;
-      }
+      limitOpenCodeModelOutput(input, output);
     },
     "experimental.chat.messages.transform": async (...hookArguments) => {
       const output = hookArguments[1] || {};
@@ -214,6 +180,7 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => {
       if (!selected) {
         return;
       }
+      if (selected.conversation) return common["shell.env"](input, output);
       const env = selected.env && typeof selected.env === "object" && !Array.isArray(selected.env)
         ? selected.env
         : {};
@@ -238,6 +205,7 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => {
       if (!selected) {
         throw new Error("Vibe64 could not verify this conversation's tool access. Reconnect the assistant.");
       }
+      if (selected.conversation) return common["tool.execute.before"](input, output);
       if (selected.promptContext?.scope === "ephemeral") {
         throw new Error("Tools are unavailable in this host conversation. Use only the supplied context.");
       }

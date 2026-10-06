@@ -121,8 +121,8 @@
     <template v-if="activeTask">
       <Vibe64EphemeralConversationMessages
         :session-id="props.sessionId"
-        :messages="activeTask.messages"
-        :delivery="activeTask.delivery"
+        :adapter="activeTask.adapter"
+        :recovery-message="activeTask.recoveryMessage"
         :routing-request="routingRequest"
         :working="activeTask.busy && !activeTask.delivery.state.sending"
         :scroll-key="activeTask.id"
@@ -636,15 +636,8 @@ async function sendTask(taskId = "", options = {}) {
   }
   const task = temporary.tasks.value.find((task) => task.id === taskId);
   if (!task || taskInputDisabled(task)) return;
-  const attachmentIds = options.retryMessageId
-    ? task.delivery.find(options.retryMessageId)?.payload.attachmentIds || []
-    : task.attachments.map((attachment) => attachment.attachmentId);
   typingPresence.submit();
-  const sent = await temporary.send(taskId, options);
-  if (sent) {
-    currentPrompt?.clearAttachments?.({ attachmentIds });
-  }
-  return sent;
+  return temporary.send(taskId, { ...options, attachmentOwner: currentPrompt });
 }
 
 async function startTask(options = {}) {

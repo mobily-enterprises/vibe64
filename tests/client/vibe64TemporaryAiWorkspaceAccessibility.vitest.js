@@ -106,17 +106,18 @@ import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session
 import * as SharedConversation from "@jskit-ai/assistant-core/client/conversation";
 import { VIBE64_HOST_CONVERSATION_KEY, VIBE64_COLLEAGUE_VIEW_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
+import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import { AssistantProgress as Vibe64ConversationProgress } from "@jskit-ai/assistant-core/client/conversation";
 import { AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 
 for (const [name, component] of [
-  ...["AssistantConversationElement", "AssistantTranscript", "AssistantProgress", "LongTextPreviewBlocks", "LongTextInlineParts", "AssistantPromptInput", "AssistantComposerActions"].map((name) => [name, SharedConversation[name]]),
+  ...["AssistantConversationElement", "AssistantConversationStatus", "AssistantTranscript", "AssistantProgress", "LongTextPreviewBlocks", "LongTextInlineParts", "AssistantPromptInput", "AssistantComposerActions"].map((name) => [name, SharedConversation[name]]),
   ["AssistantComposerSupport", AssistantComposerSupport],
   ["Vibe64TemporaryAiWorkspace", Vibe64TemporaryAiWorkspace],
   ["Vibe64EphemeralConversationMessages", Vibe64EphemeralConversationMessages],
   ["Vibe64ConversationStatus", Vibe64ConversationStatus]
 ]) {
-  const componentPath = path.resolve(SharedConversation[name]
+  const componentPath = component.__file || path.resolve(SharedConversation[name]
     ? `node_modules/@jskit-ai/assistant-core/src/client/conversation/${name}.vue`
     : `src/components/studio/vibe64-session/${name}.vue`);
   const componentSource = fs.readFileSync(componentPath, "utf8");
@@ -143,7 +144,13 @@ function temporaryAiTestState(startResult) {
   const activeTaskId = ref("");
   const open = ref(false);
   return {
-    activeTask: computed(() => tasks.value.find((task) => task.id === activeTaskId.value) || null),
+    activeTask: computed(() => {
+      const task = tasks.value.find((task) => task.id === activeTaskId.value);
+      if (task && !Object.hasOwn(task, "adapter")) Object.defineProperty(task, "adapter", {
+        get: () => ({ conversation: { turns: conversationTurnsFromMessages(task.messages || []) }, delivery: task.delivery })
+      });
+      return task || null;
+    }),
     activeTaskId,
     closeTask: vi.fn(async (taskId) => {
       tasks.value = tasks.value.filter((task) => task.id !== taskId);

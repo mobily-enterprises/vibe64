@@ -5,7 +5,8 @@ import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_TOOL_POLICIES,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
-  VIBE64_ASSISTANT_ENGINE_IDS
+  VIBE64_ASSISTANT_ENGINE_IDS,
+  vibe64AgentExecutionProfileAuditSnapshot
 } from "../../packages/vibe64-runtime/src/shared/index.js";
 import {
   OPENCODE_HELPER_PROFILE_REVISION,
@@ -80,28 +81,29 @@ test("OpenCode refuses helper profiles without its durable provider and model se
   );
 });
 
-test("OpenCode provider advertises and audits its helper execution profile on turns", async () => {
-  const events = [];
+// This adapter case preserves its original mocked creation boundary; runtime
+// dispatch is exercised by the actual scoped and service owner fixtures.
+function creationRequestFixture(options) {
+  const provider = createOpenCodeSessionAgentProvider({ accounts: {} });
+  return { ...provider, createConversation(context, input = {}) {
+    const request = provider.prepareConversationRequest("createConversation", context, input);
+    return options.controller.createConversation(context.sessionId, request.input, request.context);
+  } };
+}
+
+test("OpenCode scoped creation retains its helper profile and original audit snapshot", async () => {
   const calls = [];
   const controller = {
-    async runDetachedChatTurn(...args) {
+    async createConversation(...args) {
       calls.push(args);
       return {
         ok: true,
         text: '{"subject":"Add multi-AI sessions"}',
         threadId: "ses_helper"
       };
-    },
-    async streamDetachedChatTurn(...args) {
-      calls.push(args);
-      return {
-        ok: true,
-        text: '{"subject":"Add streamed multi-AI sessions"}',
-        threadId: "ses_streamed_helper"
-      };
     }
   };
-  const provider = createOpenCodeSessionAgentProvider({ controller });
+  const provider = creationRequestFixture({ controller });
   const profile = resolveOpenCodeHelperExecutionProfile({
     assistantSelection: selection,
     assistantAccess
@@ -109,10 +111,9 @@ test("OpenCode provider advertises and audits its helper execution profile on tu
     profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
     workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.COMMIT_TITLE
   });
-  const result = await provider.runDetachedChatTurn({
+  await provider.createConversation({
     assistantSelection: selection,
     assistantAccess,
-    onEvent: (event) => events.push(event),
     runtime: { stateRoot: "/runtime" },
     session: { sessionId: "session-1" },
     sessionId: "session-1"
@@ -120,10 +121,9 @@ test("OpenCode provider advertises and audits its helper execution profile on tu
     executionProfile: profile,
     prompt: "Name this work"
   });
-  const streamed = await provider.streamDetachedChatTurn({
+  await provider.createConversation({
     assistantSelection: selection,
     assistantAccess,
-    onEvent: (event) => events.push(event),
     runtime: { stateRoot: "/runtime" },
     session: { sessionId: "session-1" },
     sessionId: "session-1"
@@ -138,18 +138,7 @@ test("OpenCode provider advertises and audits its helper execution profile on tu
   assert.equal(calls[0][1].executionProfile, profile);
   assert.equal(calls[1][0], "session-1");
   assert.equal(calls[1][1].executionProfile, profile);
-  assert.deepEqual(events, [
-    {
-      executionProfile: profile,
-      type: "execution-profile"
-    },
-    {
-      executionProfile: profile,
-      type: "execution-profile"
-    }
-  ]);
-  assert.deepEqual(result.executionProfile, profile);
-  assert.deepEqual(streamed.executionProfile, profile);
+  assert.deepEqual(vibe64AgentExecutionProfileAuditSnapshot(profile), profile);
 });
 
 test("OpenCode provider routes the complete interactive terminal lifecycle", async () => {
@@ -165,7 +154,7 @@ test("OpenCode provider routes the complete interactive terminal lifecycle", asy
     calls.push({ args, name });
     return { name, ok: true };
   }]));
-  const provider = createOpenCodeSessionAgentProvider({ controller });
+  const provider = createOpenCodeSessionAgentProvider({ accounts: {}, terminals: controller });
   const context = {
     runtime: { stateRoot: "/runtime" },
     session: { sessionId: "session-1" },

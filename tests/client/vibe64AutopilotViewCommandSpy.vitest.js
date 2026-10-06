@@ -201,7 +201,8 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAiComposable).toContain("function showWorkspace()");
     expect(temporaryAiComposable).toContain("async function startTask(options = {})");
     expect(temporaryAiComposable).toContain("if (tasks.value.length === 0)");
-    expect(temporaryAiComposable).toContain("progressUpdates: temporaryAiProgressUpdates(response.progressUpdates)");
+    expect(temporaryAiComposable).toContain("useAssistantConversationFactory");
+    expect(temporaryAiComposable).toContain("temporaryAiMessages(runtime.turns.value)");
     expect(temporaryAiComposable).toContain("displayMessage: draftPayload.displayMessage");
     expect(temporaryAiComposable).not.toMatch(/localStorage|sessionStorage/gu);
   });
@@ -287,6 +288,10 @@ describe("Vibe64 direct session view", () => {
       path.resolve("src/composables/useVibe64SessionRuntimeHost.js"),
       "utf8"
     );
+    const conversationRuntimeComposable = fs.readFileSync(
+      path.resolve("src/composables/useVibe64ConversationRuntime.js"),
+      "utf8"
+    );
 
     expect(runtimeHost).toContain(":send-agent-message=\"sendAgentMessage\"");
     expect(runtimeHost).toContain(":conversation-log=\"conversationLog\"");
@@ -302,10 +307,13 @@ describe("Vibe64 direct session view", () => {
     expect(runtimeHost).not.toContain(":rewind-to-step=");
     expect(runtimeHost).not.toContain(":actions=");
     expect(runtimeHostComposable).toContain(
-      'void refreshSessionData({ reason: "agent-message-accepted" }).catch(() => null);'
+      "return conversationRuntime.value?.sendAgentMessage(input) ?? false;"
     );
-    expect(runtimeHostComposable).not.toContain(
-      'await refreshSessionData({ reason: "agent-message-accepted" })'
+    expect(conversationRuntimeComposable).toContain(
+      'void mounted.refresh({ reason: "agent-message-accepted" }).catch(() => {});'
+    );
+    expect(conversationRuntimeComposable).not.toContain(
+      'await mounted.refresh({ reason: "agent-message-accepted" })'
     );
   });
 

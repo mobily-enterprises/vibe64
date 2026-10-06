@@ -24,6 +24,20 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
+  "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";
+
+function codexAppServerResultDeliveryFailureMessage({
+  error = ""
+} = {}) {
+  const normalizedError = normalizeText(error);
+  if (!normalizedError) {
+    return CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE;
+  }
+  const punctuation = [".", "!", "?"].some((character) => normalizedError.endsWith(character)) ? "" : ".";
+  return `Codex completed, but Vibe64 could not process its response: ${normalizedError}${punctuation}`;
+}
+
 function codexTurnOutcomeNoticeMessage(outcome = "", detail = "", {
   usageLimitExceeded = false
 } = {}) {
@@ -105,6 +119,7 @@ async function writeCodexTurnOutcomeNotice({
 }
 
 export {
+  codexAppServerResultDeliveryFailureMessage,
   CODEX_TURN_OUTCOME,
   codexTurnOutcomeNoticeMessage,
   codexTurnOutcomeNoticeMessageId,

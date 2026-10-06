@@ -8,7 +8,7 @@ import path from "node:path";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { gunzipSync, zstdDecompressSync } from "node:zlib";
-import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/server/codex-client";
+import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
 
 import { CodexAppServerAgentProvider, startCodexAppServerProcess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { codexAppServerProjectHookTrustConfig } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";

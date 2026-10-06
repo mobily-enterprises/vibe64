@@ -1,10 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
+import { EventEmitter } from "node:events";
 import { compile } from "@vue/compiler-dom";
 import { compileScript, parse } from "@vue/compiler-sfc";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import {
   configureHttpWebClient,
+  getHttpWebClient,
   resetHttpWebClientForTests
 } from "@jskit-ai/http-web/client/lib/httpClient";
 import * as Vue from "vue";
@@ -12,8 +14,13 @@ import { renderToString } from "@vue/server-renderer";
 import { routeLocationKey } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { VIBE64_COLLEAGUE_PREVIEW_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
+import { createTemporaryConversationFixture, temporaryRequestBody } from "./helpers/temporaryConversationFixture.js";
 
 const mocks = vi.hoisted(() => ({ live: false, resource: null, query: null }));
+vi.mock("@jskit-ai/assistant-core/client", async (importOriginal) => ({
+  ...await importOriginal(), assistantHttpClient: { request: (...args) => getHttpWebClient().request(...args) }
+}));
 vi.mock("vuetify/components/VBtn", () => ({ VBtn: passthroughComponent("button") }));
 vi.mock("vuetify/components/VAlert", () => ({ VAlert: passthroughComponent("aside") }));
 vi.mock("vuetify/components/VTextarea", () => ({ VTextarea: passthroughComponent("textarea") }));
@@ -109,9 +116,9 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let closed = false;
   const colleaguePreview = Vue.shallowRef(null);
-  configureHttpWebClient({
+  const transport = {
     request(url, options) {
-      if (url.startsWith("/api/vibe64/sessions/")) {
+      if (url.startsWith("/api/vibe64/sessions/") || url.startsWith("/api/assistant/app/conversations/")) {
         conversationRequests.push({ url, ...options });
         if (url.endsWith("/temporary-conversations")) {
           return Promise.resolve({ ok: true, conversationId: options.body.conversationId });
@@ -130,7 +137,9 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
       if (closed) response.resolve({ ok: true });
       return response.promise;
     }
-  });
+  };
+  const temporaryTransport = temporaryChats ? createTemporaryConversationFixture(transport) : null;
+  configureHttpWebClient(temporaryTransport || transport);
   const outputSlot = Vue.defineComponent({
     setup() {
       outputs.mounted();
@@ -184,16 +193,22 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   app.provide(Vue.ssrContextKey, { modules: new Set() });
   app.provide(routeLocationKey, Vue.reactive({ path: "/app/project/project-a", params: {}, query: {}, matched: [] }));
   app.provide("jskit.shell-web.runtime.web-error.client", feedback);
-  app.provide("jskit.realtime.runtime.client.socket", {
+  const socketEvents = temporaryChats ? new EventEmitter() : null;
+  const socket = {
     on(event, handler) {
       if (event === "vibe64.project.changed") listeners.add(handler);
       if (event === "vibe64.session.changed") sessionListeners.add(handler);
+      socketEvents?.on(event, handler);
     },
     off(event, handler) {
       if (event === "vibe64.project.changed") listeners.delete(handler);
       if (event === "vibe64.session.changed") sessionListeners.delete(handler);
-    }
-  });
+      socketEvents?.off(event, handler);
+    },
+    emit(...args) { return socketEvents?.emit(...args); }
+  };
+  if (temporaryTransport) provideConversationFixture(app, temporaryTransport.attach(socket));
+  else app.provide("jskit.realtime.runtime.client.socket", socket);
   for (const [name, element] of [["VAlert", "aside"], ["VBtn", "button"], ["VTextarea", "textarea"], ["VSkeletonLoader", "div"]]) {
     app.component(name, passthroughComponent(element));
   }
@@ -426,7 +441,9 @@ describe("Preview project onboarding", () => {
       await help.props.onClick();
       await fixture.requestTemporaryAi.mock.results.at(-1).value;
       const creations = fixture.conversationRequests.filter(({ url, method }) => method === "POST" && url.endsWith("/temporary-conversations"));
-      const turns = fixture.conversationRequests.filter(({ url, method }) => method === "POST" && url.endsWith("/turns"));
+      const turns = fixture.conversationRequests
+        .filter(({ url, method }) => method === "POST" && url.endsWith("/messages"))
+        .map(request => ({ ...request, body: temporaryRequestBody(request) }));
       expect(creations).toHaveLength(2);
       expect(turns).toHaveLength(2);
       expect(creations[0].body.conversationId).not.toBe(creations[1].body.conversationId);

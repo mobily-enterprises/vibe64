@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
+import { createOpenCodeSharedRuntime } from "@jskit-ai/assistant-core/server/opencode-process";
+
 import {
   recordSessionGitCommandActor
 } from "../../packages/vibe64-terminals/src/server/sessionGitCommandActor.js";
@@ -70,21 +72,27 @@ test("session Git actor changes only when a new turn explicitly replaces it", as
 
 test("new assistant turns explicitly replace the session Git actor", async () => {
   const [codexSource, openCodeSource] = await Promise.all([
-    readFile(path.resolve("packages/vibe64-terminals/src/server/codexTerminal.js"), "utf8"),
-    readFile(path.resolve("packages/vibe64-terminals/src/server/opencodeTerminal.js"), "utf8")
+    readFile(path.resolve("packages/vibe64-terminals/src/server/mainConversationBinding.js"), "utf8"),
+    readFile(path.resolve("packages/vibe64-terminals/src/server/mainConversationBinding.js"), "utf8")
   ]);
   assert.match(
     codexSource,
     /recordSessionGitCommandActor\(\{\s*env,\s*overwrite: true,\s*reason: "codex-prompt"/u
   );
+  // The shared owner supplies the original monitor-derived overwrite policy;
+  // the application still owns Git identity and persistence.
+  assert.match(
+    createOpenCodeSharedRuntime.toString(),
+    /const currentMonitor = monitors\.get\(key\);[\s\S]*?application\.prepare\(\{\s*overwrite: !currentMonitor,\s*threadId: currentThreadId\s*\}\)/u
+  );
   assert.match(
     openCodeSource,
-    /recordGitActor\(\{\s*env,\s*overwrite: !currentMonitor,\s*reason: "agent-message"/u
+    /async prepare\(\{\s*overwrite,\s*threadId\s*\}\)\s*\{\s*const actor = await recordGitActor\(\{\s*env,\s*overwrite,\s*reason: "agent-message"/u
   );
 });
 
 test("native OpenCode terminal input preserves the actor from the latest UI turn", async () => {
-  const source = await readFile(path.resolve("packages/vibe64-terminals/src/server/opencodeTerminal.js"), "utf8");
+  const source = await readFile(path.resolve("packages/vibe64-terminals/src/server/openCodeInteractiveTerminals.js"), "utf8");
   assert.match(
     source,
     /recordGitActor\(\{\s*env,\s*overwrite: false,\s*reason: "opencode-terminal-input"/u

@@ -179,16 +179,6 @@ const agentTurnInterruptFields = {
   }
 };
 
-const conversationRewindFields = {
-  ...optionalOrigin,
-  turnId: { type: "string", pattern: /^\d{6}$/u, required: true }
-};
-const conversationRewindInputValidator = requiredInputSchema(conversationRewindFields);
-const conversationRewindActionInputValidator = requiredInputSchema({
-  ...conversationRewindFields, ...optionalUser,
-  sessionId: { type: "string", noTrim: false, minLength: 1, required: true }
-});
-
 const agentTurnInterruptInputValidator = patchSchema(agentTurnInterruptFields);
 const agentTurnInterruptActionInputValidator = requiredInputSchema({
   ...agentTurnInterruptFields,
@@ -625,8 +615,6 @@ export {
   sessionHistoryReviewSchema,
   sessionRenameInputValidator,
   sessionRenameActionInputValidator,
-  conversationRewindInputValidator,
-  conversationRewindActionInputValidator,
   integrationSetupRequestInputValidator,
   integrationSetupRequestActionInputValidator,
   assistantAccessActionInputValidator,

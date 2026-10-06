@@ -29,6 +29,9 @@ const navigationOutput = {
   })
 };
 const clientId = { ...text, minLength: 1, maxLength: 128, required: true };
+const modelSelectionFields = {
+  assistantSelection: { type: "object", additionalProperties: true, required: true }
+};
 const watchFields = {
   watchId: clientId, projectSlug: { ...text, required: true }, sessionId: { ...text, required: true }, conversationId: text,
   condition: { type: "string", enum: ["reply", "finished", "attention"], required: true },
@@ -94,11 +97,9 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       messageId: clientId,
       message: { type: "string", noTrim: false, minLength: 1, maxLength: 24000, required: true },
       assistantSelection: { type: "object", additionalProperties: true, required: false }
-    }, (input, context) => colleague.send(input, context)),
+    }, (input, context, deps) => colleague.send(input, context, { receiptOnly: deps?.receiptOnly === true })),
     definition("turn.stop", {}, (input, context) => colleague.stop(input, context)),
-    definition("model.select", {
-      assistantSelection: { type: "object", additionalProperties: true, required: true }
-    }, (input, context) => colleague.selectModel(input, context)),
+    definition("model.select", modelSelectionFields, (input, context) => colleague.selectModel(input, context)),
     definition("watches.read", {}, (input, context) => colleague.listWatches(input, context), {
       description: "List your conversation watches and their active, pending, delivered, paused or cancelled status. Paused reads need attention; silence does not prove an agent is blocked.", output: watchOutput
     }),
@@ -190,4 +191,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
   ];
 }
 
-export { createColleagueActions };
+const colleagueConversationDataSchema = createSchema({ clientId, focus: focusField });
+const colleagueConversationSelectionSchema = createSchema(modelSelectionFields);
+
+export { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema };

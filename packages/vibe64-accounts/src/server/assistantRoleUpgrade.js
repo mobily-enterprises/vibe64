@@ -4,7 +4,7 @@ import { listProjectRuntimeRoots } from "@local/vibe64-core/server/studioProject
 import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
 import { validateAssistantRoutingConfiguration as validateV2 } from "@local/vibe64-core/server/stateUpgrades/routingV2Format";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { publishAssistantRoutingUpgrade } from "./assistantRoutingUpgrade.js";
+import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
 
 const oldRoles = { plan: "senior", code: "junior", economy: "intern" };
 const roles = new Set(["senior", "junior", "intern", "router", "auto", "review", "deslop"]);
@@ -103,7 +103,7 @@ function upgradeAssistantRoleTurn(value) {
 
 async function upgradeAssistantRoles(context) {
   const { systemRoot, report } = context;
-  return publishAssistantRoutingUpgrade({ ...context, prepareUpdates: async temporaryRoot => {
+  return publishStateUpgradeFiles({ ...context, prepareUpdates: async temporaryRoot => {
     const updates = [];
     const filePath = path.join(systemRoot, "ai-connections", "routing.json");
     let original;

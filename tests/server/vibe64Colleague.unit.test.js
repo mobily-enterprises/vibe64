@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
@@ -10,14 +11,38 @@ import { registerVibe64ActionContext, withVibe64ActionContext } from "@local/vib
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
 import { readWatchedConversation } from "../../packages/vibe64-colleague/src/server/attention.js";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, readEnvelope, readPartialReply } from "../../packages/vibe64-colleague/src/server/protocol.js";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 
+const modelFrame = (delta, finish_reason = null) => `data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
 const selection = { engineId: "codex", modelProviderId: "openai", modelId: "test-model" };
 const reply = (text) => JSON.stringify({ kind: "reply", text, toolName: "", arguments: "" });
 const call = (value) => JSON.stringify({ kind: "tool", text: "", toolName: "vibe64_test_operate", arguments: JSON.stringify({ value }) });
+
+function modelStream() {
+  let controller, signal, abort, settled = false;
+  const finish = error => {
+    if (settled) return;
+    settled = true;
+    signal?.removeEventListener("abort", abort);
+    if (error) controller.error(error);
+    else controller.close();
+  };
+  return {
+    response(value) {
+      signal = value;
+      abort = () => finish(signal.reason);
+      return new Response(new ReadableStream({ start(value) {
+        controller = value;
+        signal.addEventListener("abort", abort, { once: true });
+      } }), { headers: { "content-type": "text/event-stream" } });
+    },
+    write(delta, reason = null) { if (!settled) controller.enqueue(new TextEncoder().encode(modelFrame(delta, reason))); },
+    finish
+  };
+}
 
 async function fixture(t, responses, { systemRoot, discovery = false, discoveryQueries = false, watching = false, assigning = false, watchPollMs = 30000 } = {}) {
   watching ||= assigning;
@@ -102,27 +127,56 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
       observations.helperCalls.push({ cleanup: input });
       return observations.cleanupFails ? { ok: false, error: "Summary cleanup unavailable." } : { ok: true };
     },
-    async createEphemeralAgentConversation(scope, input, options) {
+    createConversationHost(scope) {
       observations.creates += 1;
-      observations.createdSelection = options.assistantSelection;
-      assert.equal(input.persistent, true);
-      assert.deepEqual(scope.environment, {});
+      observations.scope = scope;
       assert.ok(scope.workdir.startsWith(path.join(root, "colleague")));
-      return { ok: true, conversationId: `native-${observations.creates}`, status: "ready" };
+      return { workdir: scope.workdir, stateDirectory: scope.runtimeRoot };
     },
-    async startEphemeralAgentConversationTurn(scope, input, options) {
-      observations.starts.push({ scope, input, options });
-      return { ok: true, runId: `run-${observations.starts.length}`, status: "inProgress" };
+    async resolveConversationConfiguration(actual, systemPrompt, options) {
+      await this.requireAssistantSelectionAccess(actual, options);
+      observations.createdSelection = actual;
+      // This fixture exercises product policy through the real common API driver.
+      // Native engine protocols have their own JSKIT integration cases.
+      return { engine: "api", configuration: { systemPrompt, integrationId: actual.modelProviderId, model: actual.modelId } };
     },
-    async waitForEphemeralAgentConversationTurn() {
-      const next = responses.shift();
-      assert.notEqual(next, undefined, "Unexpected additional model turn");
-      return { ok: true, status: observations.waitStatus || "completed",
-        [observations.responseField || "text"]: typeof next === "function" ? await next() : next };
-    },
-    async stopEphemeralAgentConversation() { observations.onStop?.(); return { ok: true, status: "interrupted" }; },
-    async readEphemeralAgentConversation() { return observations.readResult || { ok: true, status: observations.readStatus || "completed" }; }
+    async resolveConversationConnection({ assistantSelection: actual }, options) {
+      await this.requireAssistantSelectionAccess(actual, options);
+      return { providerId: actual.modelProviderId, model: actual.modelId,
+        sdkPackage: "@ai-sdk/openai-compatible", apiKey: "test", baseURL: "http://colleague.invalid/v1" };
+    }
   };
+  t.mock.method(globalThis, "fetch", async (_url, request) => {
+    const body = JSON.parse(request.body);
+    const current = body.messages.findLast(message => message.role === "user").content;
+    const data = JSON.parse(current.split("\n")[2]);
+    const last = body.messages.at(-1);
+    let result = null;
+    if (last.role === "tool") {
+      const saved = JSON.parse(await readFile(path.join(root, "colleague", "NDI", "conversation.json"), "utf8"));
+      result = saved.conversationLog.flatMap(turn => turn.metadata?.applicationTools || [])
+        .findLast(call => call.id === last.tool_call_id)?.result;
+      assert.ok(result, "The model continuation must reference its durable tool receipt");
+      assert.deepEqual(JSON.parse(last.content), result.ok ? result.result ?? null : { error: result.error });
+    }
+    observations.starts.push({ body, data, result, scope: { ...observations.scope, stableContext: body.messages[0].content } });
+    const next = responses.shift();
+    assert.notEqual(next, undefined, "Unexpected additional model request");
+    const cancelled = Promise.withResolvers();
+    const abort = () => { observations.onStop?.(); cancelled.reject(request.signal.reason); };
+    request.signal.addEventListener("abort", abort, { once: true });
+    try {
+      const value = await Promise.race([Promise.resolve().then(() => typeof next === "function" ? next(request.signal) : next), cancelled.promise]);
+      if (value instanceof Response) return value;
+      const model = JSON.parse(value);
+      const delta = model.kind === "tool" ? {
+        ...(model.text ? { content: model.text } : {}), tool_calls: [{ index: 0, id: `call_${randomUUID()}`, type: "function",
+          function: { name: model.toolName, arguments: model.arguments } }]
+      } : { content: model.text };
+      return new Response(modelFrame(delta) + modelFrame({}, model.kind === "tool" ? "tool_calls" : "stop"),
+        { headers: { "content-type": "text/event-stream" } });
+    } finally { request.signal.removeEventListener("abort", abort); }
+  });
   const events = createEventRuntime();
   observations.realtime = [];
   events.register({ id: "test.colleague-replies", matches: event => event.entity === "colleague", handle: event => { observations.realtime.push(event); } });
@@ -148,124 +202,101 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     }
   } }).filter(({ id }) => ["vibe64.sessions.inspect", "vibe64.sessions.conversation-log.read"].includes(id) || (assigning && id === "vibe64.sessions.agent-message.send")));
   actions.register({ contributorId: "colleague-test", domain: "vibe64", actions: [operation, ...extras, ...createColleagueActions(service)]
-    .map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+    .map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
   const send = (message, messageId = "user-1", extra = {}) => actions.execute({ actionId: "vibe64.colleague.message.send", input: {
     clientId: "browser-1", message, messageId, ...extra
   }, context });
   t.after(() => service.close());
-  return { service, actions, events, root, observations, context, send };
+  return { service, actions, events, root, observations, context, send, terminals };
 }
 
 const watchInput = { watchId: "watch-1", projectSlug: "alpha", sessionId: "session-1", conversationId: "temporary-1", condition: "reply", question: "Tell me when the agent answers." };
 
-test("Colleague decodes only reply text, including every split inside JSON escapes", () => {
-  const text = 'Hello "there"!\n\\path 🐈 café';
-  const encoded = reply(text).replace("🐈", "\\ud83d\\udc08").replace("é", "\\u00e9");
-  for (let end = 0; end <= encoded.length; end += 1) {
-    const partial = readPartialReply(encoded.slice(0, end));
-    assert.ok(text.startsWith(partial), JSON.stringify(partial));
-    assert.doesNotMatch(partial, /[\uD800-\uDBFF]$/);
-  }
-  assert.equal(readPartialReply(encoded), text);
-  for (const hidden of [call("private arguments"), '{"kind":"tool","text":"secret', 'Thinking first', '{"text":"unknown kind']) {
-    assert.equal(readPartialReply(hidden), "");
-  }
+test("Colleague forwards shared text events before completion and retains one final reply", async t => {
+  const stream = modelStream();
+  const f = await fixture(t, [signal => stream.response(signal)]);
+  t.after(() => stream.finish());
+  await f.send("Hello");
+  await until(() => f.observations.starts.length === 1);
+  stream.write({ content: "Hello " });
+  await until(async () => (await f.service.read({}, f.context)).streamingReply?.text === "Hello ");
+  const first = await f.service.read({}, f.context);
+  assert.equal(first.messages.filter(message => message.role === "assistant").length, 0);
+  assert.deepEqual((await f.service.read({ clientId: "another-browser" }, f.context)).streamingReply, first.streamingReply);
+  await until(() => f.observations.realtime.some(event => event.realtime.payload.streamingReply?.text === "Hello "));
+  const event = f.observations.realtime.find(event => event.realtime.payload.streamingReply?.text === "Hello ");
+  assert.equal(event.realtime.audience, "actor_user");
+  assert.equal(event.actorId, "42");
+  assert.equal(event.realtime.payload.conversationId, first.conversationId);
+  stream.write({ content: "world" });
+  stream.write({}, "stop");
+  stream.finish();
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.equal(final.streamingReply, null);
+  assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["Hello world"]);
+  assert.equal(f.observations.realtime.find(event => event.realtime.payload.completedMessage)?.realtime.payload.conversationId, final.conversationId);
 });
 
-for (const engine of ["codex", "claude", "opencode"]) {
-  test(`Colleague streams ${engine} reply text before completion and saves one final answer`, async (t) => {
-    const finish = Promise.withResolvers();
-    t.after(() => finish.resolve(reply("Hello world")));
-    const f = await fixture(t, [() => finish.promise]);
-    await f.send("Hello");
-    await until(() => f.observations.starts.length === 1);
-    const emit = f.observations.starts[0].options.onEvent;
-    const prefix = '{"kind":"reply","text":"Hello ';
-    emit({ type: "thinking", text: "Do not show this." });
-    assert.equal((await f.service.read({}, f.context)).streamingReply, null);
-    if (engine === "opencode") {
-      emit({ type: "message.part.updated", partType: "text", partId: "answer", textSnapshot: prefix });
-    } else emit({ type: "text", messageId: "answer", text: prefix });
-    const first = await f.service.read({}, f.context);
-    assert.equal(first.streamingReply.text, "Hello ");
-    await until(() => f.observations.realtime.some(event => event.realtime.payload.streamingReply?.text === "Hello "));
-    const event = f.observations.realtime.find(event => event.realtime.payload.streamingReply?.text === "Hello ");
-    assert.equal(event.realtime.audience, "actor_user");
-    assert.equal(event.actorId, "42");
-    assert.equal(event.realtime.payload.conversationId, first.conversationId, "streaming and polling retain the same rendered conversation");
-    assert.equal(event.realtime.payload.streamRevision, first.streamRevision);
-    assert.equal(first.messages.filter((message) => message.role === "assistant").length, 0);
-    assert.deepEqual((await f.service.read({ clientId: "another-browser" }, f.context)).streamingReply, first.streamingReply);
-    if (engine === "opencode") emit({ type: "message.part.delta", partId: "answer", textDelta: "world" });
-    else emit({ type: "text", messageId: "answer", text: "world" });
-    assert.equal((await f.service.read({}, f.context)).streamingReply.text, "Hello world");
-    const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
-    assert.equal(saved.streamingReply, undefined);
-    finish.resolve(reply("Hello world"));
-    const final = await f.service.wait(f.context);
-    assert.equal(f.observations.realtime.find(event => event.realtime.payload.completedMessage)?.realtime.payload.conversationId, final.conversationId);
-    assert.equal(final.streamingReply, null);
-    assert.deepEqual(final.messages.filter((message) => message.role === "assistant").map((message) => message.text), ["Hello world"]);
-    emit({ type: "text", text: "late" });
-    assert.equal((await f.service.read({}, f.context)).streamingReply, null);
-  });
-}
-
-for (const action of ["stop", "steer", "failure"]) {
-  test(`Colleague clears unfinished replies on ${action} and ignores late events`, async (t) => {
-    const finish = Promise.withResolvers();
-    void finish.promise.catch(() => {}); // Observe rejection even before the fake provider begins waiting.
-    t.after(() => finish.resolve(reply("Stale answer")));
-    const f = await fixture(t, [() => finish.promise, reply("Latest answer")]);
+for (const operation of ["stop", "supersede", "disconnect"]) {
+  test(`Colleague clears shared streaming state after ${operation}`, async t => {
+    const stream = modelStream();
+    const f = await fixture(t, [signal => stream.response(signal), reply("Latest answer")]);
+    t.after(() => stream.finish());
     await f.send("First question");
     await until(() => f.observations.starts.length === 1);
-    const emit = f.observations.starts[0].options.onEvent;
-    emit({ type: "text", text: '{"kind":"reply","text":"Unfinished' });
-    assert.equal((await f.service.read({}, f.context)).streamingReply.text, "Unfinished");
-    if (action === "stop") {
-      f.observations.onStop = () => finish.resolve(reply("Stale answer"));
-      await f.service.stop({}, f.context);
-    } else if (action === "steer") {
-      await f.send("Change direction", "user-2");
-      assert.equal((await f.service.read({}, f.context)).streamingReply, null);
-      finish.resolve(reply("Stale answer"));
-    } else finish.reject(new Error("Provider disconnected"));
+    stream.write({ content: "Unfinished answer" });
+    await until(async () => (await f.service.read({}, f.context)).streamingReply?.text === "Unfinished answer");
+    if (operation === "stop") await f.service.stop({}, f.context);
+    else if (operation === "supersede") await f.send("Change direction", "next-request");
+    else stream.finish(new Error("Provider disconnected"));
     const result = await f.service.wait(f.context);
     assert.equal(result.streamingReply, null);
-    emit({ type: "text", text: " stale update" });
+    assert.equal(result.status, operation === "stop" ? "interrupted" : operation === "disconnect" ? "failed" : "ready");
+    assert.deepEqual(result.messages.filter(message => message.role === "assistant").map(message => message.text),
+      operation === "supersede" ? ["Latest answer"] : []);
+    stream.write({ content: " late text" });
     assert.equal((await f.service.read({}, f.context)).streamingReply, null);
-    assert.deepEqual(result.messages.filter((message) => message.role === "assistant").map((message) => message.text), action === "steer" ? ["Latest answer"] : []);
-    assert.equal(result.status, action === "stop" ? "interrupted" : action === "failure" ? "failed" : "ready");
   });
 }
 
-test("Colleague keeps stable instructions and tool schemas out of ordinary turns", async (t) => {
-  const f = await fixture(t, [call("first"), call("second"), reply("Checked.")]);
-  await f.send("Check both projects");
-  await f.service.wait(f.context);
-  assert.equal(f.observations.starts.length, 3);
-  const contexts = f.observations.starts.map(({ scope }) => scope.stableContext);
-  assert.equal(new Set(contexts).size, 1);
-  assert.match(contexts[0], /Available application tools:/);
-  assert.match(contexts[0], /vibe64_test_operate/);
-  assert.match(contexts[0], /StructuredOutput/);
-  for (const { input } of f.observations.starts) {
-    const message = JSON.parse(input.message);
-    for (const field of ["tools", "toolUsage", "progressInstructions", "replyStyle", "usageKnowledge"]) {
-      assert.equal(Object.hasOwn(message, field), false, `${field} belongs in the system instructions`);
-    }
-  }
-  assert.deepEqual(f.observations.mutations, ["first", "second"]);
+test("tool progress is shared commentary and the final answer does not repeat it", async t => {
+  const operation = Promise.withResolvers();
+  const answer = Promise.withResolvers();
+  t.after(() => { operation.resolve(); answer.resolve(reply("Checked.")); });
+  const progress = "Let me check your projects.";
+  const f = await fixture(t, [JSON.stringify({ ...JSON.parse(call("check")), text: progress }), () => answer.promise]);
+  f.observations.onOperation = () => operation.promise;
+  await f.send("Which projects are open?");
+  await until(() => f.observations.mutations.length === 1);
+  const checking = await f.service.read({}, f.context);
+  assert.equal(checking.operation.status, "executing");
+  assert.equal(checking.streamingReply.text, progress);
+  assert.equal(checking.streamingReply.status, "completed");
+  operation.resolve();
+  await until(() => f.observations.starts.length === 2);
+  answer.resolve(reply("One project is open."));
+  const final = await f.service.wait(f.context);
+  assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);
+  assert.deepEqual(final.messages.filter(message => message.role === "commentary").map(message => message.text), [progress]);
 });
 
-test("Colleague shows one completed progress sentence during tools, then replaces it with the answer", async (t) => {
+// Original first-progress assertions, driven through shared API tools instead
+// of the retired private envelope loop. Native prompts retain tool history;
+// the former progressAlreadySaid envelope field is no longer an input format.
+test("Colleague shows one completed progress sentence during tools, then replaces it with the answer", async t => {
   const operation = Promise.withResolvers();
-  const finish = Promise.withResolvers();
-  t.after(() => { operation.resolve(); finish.resolve(reply("Checked.")); });
+  const stream = modelStream();
+  t.after(() => { operation.resolve(); stream.finish(); });
   const progress = "Let me check your projects.";
   const tool = (value, text) => JSON.stringify({ ...JSON.parse(call(value)), text });
-  const f = await fixture(t, [tool("first", progress), tool("second", "Checking again."), () => finish.promise]);
+  const f = await fixture(t, [tool("first", progress), tool("second", "Checking again."), signal => stream.response(signal)]);
   f.observations.onOperation = ({ value }) => value === "first" ? operation.promise : undefined;
+  const initial = await f.service.read({}, f.context);
+  const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
+  const events = [];
+  const release = await browser.subscribe(event => events.push(event));
+  t.after(release);
   await f.send("Which projects are open?");
   await until(() => f.observations.mutations.length === 1);
   const checking = await f.service.read({}, f.context);
@@ -276,51 +307,121 @@ test("Colleague shows one completed progress sentence during tools, then replace
   assert.equal(checking.messages.filter(message => message.role === "assistant").length, 0);
   const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
   assert.equal(JSON.stringify(saved).includes(progress), false, "progress is transient, not another history format");
-  const prompt = JSON.parse(f.observations.starts[0].input.message);
-  assert.match(f.observations.starts[0].scope.stableContext, /first tool request/);
-  assert.equal(prompt.progressInstructions, undefined);
-  assert.equal(prompt.progressAlreadySaid, "");
+  assert.match(f.observations.starts[0].scope.stableContext, /first tool call/);
+  assert.equal(f.observations.starts[0].data.progressInstructions, undefined);
+  assert.equal((await browser.read()).interimReply.text, progress);
+  assert.equal(events.find(event => event.type === "presentation")?.interimReply.text, progress);
+  assert.equal(events.some(event => event.type === "tool" || Object.hasOwn(event, "call")), false);
   operation.resolve();
   await until(() => f.observations.starts.length === 3);
-  assert.equal(JSON.parse(f.observations.starts[2].input.message).progressAlreadySaid, progress);
   assert.equal((await f.service.read({}, f.context)).streamingReply.id, checking.streamingReply.id);
   assert.equal((await f.service.read({}, f.context)).streamingReply.text, progress);
-  f.observations.starts[2].options.onEvent({ type: "text", text: '{"kind":"reply","text":"One project' });
+  assert.equal((await browser.read()).interimReply.id, checking.streamingReply.id);
+  stream.write({ content: "One project" });
+  await until(async () => (await f.service.read({}, f.context)).streamingReply?.text === "One project");
   const answering = await f.service.read({}, f.context);
   assert.notEqual(answering.streamingReply.id, checking.streamingReply.id);
   assert.equal(answering.streamingReply.text, "One project");
-  finish.resolve(reply("One project is open."));
+  assert.equal((await browser.read()).interimReply, null);
+  stream.write({ content: " is open." });
+  stream.write({}, "stop");
+  stream.finish();
   const final = await f.service.wait(f.context);
   assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);
+  assert.equal((await browser.read()).interimReply, null);
 });
 
-test("tool progress is bounded, has a fallback, and cannot turn a partial envelope into an action", async (t) => {
-  assert.throws(() => readEnvelope(JSON.stringify({ ...JSON.parse(call("never")), text: "x".repeat(281) })), /progress text/);
-  const finish = Promise.withResolvers();
-  t.after(() => finish.resolve(reply("Done.")));
-  const f = await fixture(t, [call("first"), () => finish.promise]);
+test("Colleague's original progress fallback is transient and Stop clears it", async t => {
+  const stream = modelStream();
+  const f = await fixture(t, [call("first"), signal => stream.response(signal)]);
+  t.after(() => stream.finish());
   await f.send("Check it");
   await until(() => f.observations.starts.length === 2);
-  assert.equal((await f.service.read({}, f.context)).streamingReply.text, "Let me check that.");
-  f.observations.onStop = () => finish.resolve(reply("Done."));
+  const checking = await f.service.read({}, f.context);
+  const browser = await f.service.browserConversations.open({ id: checking.conversationId, context: f.context });
+  assert.equal(checking.streamingReply.text, "Let me check that.");
+  assert.equal((await browser.read()).interimReply.text, "Let me check that.");
   await f.service.stop({}, f.context);
   assert.equal((await f.service.read({}, f.context)).streamingReply, null);
+  assert.equal((await browser.read()).interimReply, null);
 });
 
-test("Colleague never displays or executes a partial tool request", async (t) => {
-  const finish = Promise.withResolvers();
-  t.after(() => finish.resolve(call("allowed")));
-  const f = await fixture(t, [() => finish.promise, reply("Done")]);
+test("partial application tool arguments are never shown or executed", async t => {
+  const stream = modelStream();
+  const f = await fixture(t, [signal => stream.response(signal), reply("Done.")]);
+  t.after(() => stream.finish());
   await f.send("Do it");
   await until(() => f.observations.starts.length === 1);
-  const emit = f.observations.starts[0].options.onEvent;
-  for (const text of call("allowed")) emit({ type: "text", text });
+  stream.write({ tool_calls: [{ index: 0, id: "partial-call", type: "function", function: { name: "vibe64_test_operate", arguments: '{"value":' } }] });
+  await new Promise(resolve => setTimeout(resolve, 25));
   assert.equal((await f.service.read({}, f.context)).streamingReply, null);
   assert.deepEqual(f.observations.mutations, []);
-  finish.resolve(call("allowed"));
-  await f.service.wait(f.context);
+  stream.write({ tool_calls: [{ index: 0, function: { arguments: '"allowed"}' } }] });
+  stream.write({}, "tool_calls");
+  stream.finish();
+  assert.equal((await f.service.wait(f.context)).status, "ready");
   assert.deepEqual(f.observations.mutations, ["allowed"]);
 });
+
+test("Colleague retains canonical history and turn metadata directly across restart", async t => {
+  const first = await fixture(t, [reply("Retained answer")]);
+  await first.send("Retain this request");
+  await first.service.wait(first.context);
+  await first.service.close();
+  const file = path.join(first.root, "colleague", "NDI", "conversation.json");
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  saved.conversationLog[0].metadata = { application: { receipt: "retained" } };
+  await writeFile(file, JSON.stringify(saved));
+  const resumed = await fixture(t, [reply("Continued")], { systemRoot: first.root });
+  assert.deepEqual((await resumed.service.read({}, resumed.context)).messages.map(message => message.text),
+    ["Retain this request", "Retained answer"]);
+  await resumed.send("Continue", "continued-request");
+  await resumed.service.wait(resumed.context);
+  const next = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(next.conversationLog[0], saved.conversationLog[0]);
+  assert.equal(next.schemaVersion, saved.schemaVersion);
+  assert.equal(next.conversationMetadata.runtime.version, 3);
+});
+
+test("a failed Colleague record write cannot admit an in-memory-only message", async t => {
+  const f = await fixture(t, [reply("Saved"), reply("Retried once")]);
+  await f.send("First");
+  await f.service.wait(f.context);
+  const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+  const saved = await readFile(file, "utf8");
+  await rm(file);
+  await mkdir(file);
+  try {
+    await assert.rejects(f.send("Save must succeed", "write-failure"));
+    assert.equal((await f.service.read({}, f.context)).messages.some(message => message.id === "write-failure"), false);
+    assert.equal(f.observations.starts.length, 1);
+  } finally {
+    await rm(file, { recursive: true });
+    await writeFile(file, saved);
+  }
+  await f.send("Save must succeed", "write-failure");
+  const result = await f.service.wait(f.context);
+  assert.equal(result.messages.filter(message => message.id === "write-failure").length, 1);
+  assert.equal(f.observations.starts.length, 2);
+});
+
+test("Colleague keeps stable instructions and tool schemas out of ordinary turns", async (t) => {
+  const f = await fixture(t, [call("first"), call("second"), reply("Checked.")]);
+  await f.send("Check both projects");
+  await f.service.wait(f.context);
+  assert.equal(f.observations.starts.length, 3);
+  const contexts = f.observations.starts.map(({ scope }) => scope.stableContext);
+  assert.equal(new Set(contexts).size, 1);
+  assert.doesNotMatch(contexts[0], /StructuredOutput|response envelope/);
+  for (const { data: message, body } of f.observations.starts) {
+    assert.ok(body.tools.some(tool => tool.function.name === "vibe64_test_operate"));
+    for (const field of ["tools", "toolUsage", "progressInstructions", "replyStyle", "usageKnowledge"]) {
+      assert.equal(Object.hasOwn(message, field), false, `${field} belongs in the system instructions`);
+    }
+  }
+  assert.deepEqual(f.observations.mutations, ["first", "second"]);
+});
+
 const watchAction = (f, operation, input) => f.actions.execute({ actionId: `vibe64.colleague.${operation}`, input, context: f.context });
 const changed = (f, overrides = {}) => f.events.publish({ type: "entity.changed", source: "vibe64", entity: "session", entityId: "session-1", realtime: { payload: { projectSlug: "alpha" } }, ...overrides });
 async function until(predicate) {
@@ -345,7 +446,9 @@ async function finishAssignedTurn(f, conversationId = "temporary-1", text = "Imp
     f.observations.log.at(-1).messages.push({ messageId: `answer-${f.observations.sent.length}`, role: "assistant", text });
   }
   const before = f.observations.starts.length;
-  const assignment = (await f.service.read({}, f.context)).assignments.find((item) => item.conversationId === conversationId || item.reviewerConversationId === conversationId);
+  const current = await f.service.read({}, f.context);
+  const assignment = current.assignments.find((item) => item.conversationId === conversationId || item.reviewerConversationId === conversationId);
+  assert.ok(assignment, current.error || "The assignment must exist before observing its answer.");
   await changed(f, { entityId: assignment.sessionId, realtime: { payload: { projectSlug: assignment.projectSlug } } });
   await until(() => f.observations.starts.length > before);
   return f.service.wait(f.context);
@@ -366,7 +469,7 @@ test("assignment retains the real request, follows a reply into same-session rev
   assert.ok(reviewer.startsWith("review-"));
   assert.equal(f.observations.createdReview.sessionId, "session-1");
   assert.equal(f.observations.sent[1].conversationId, reviewer);
-  const prompt = JSON.parse(f.observations.starts[3].input.message);
+  const prompt = f.observations.starts[3].data;
   assert.equal(prompt.autonomous, true);
   assert.equal(prompt.readOnly, false);
   responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "ready", summary: "Ready for your testing.",
@@ -387,14 +490,15 @@ test("assignment quota and canonical background catalogue prevent extra sends an
   const f = await fixture(t, responses, { assigning: true });
   await f.send("Implement this with a one-turn allowance.");
   await f.service.wait(f.context);
-  responses.push(call("forbidden"), assignmentSend("implement-2"), reply("The allowance is exhausted; review still needs your permission for more turns."));
+  responses.push(assignmentSend("implement-2"), reply("The allowance is exhausted; review still needs your permission for more turns."));
   const result = await finishAssignedTurn(f);
   assert.equal(result.status, "ready", result.error);
   assert.equal(result.assignments[0].status, "needs-user");
   assert.equal(result.assignments[0].turnsUsed, 1);
   assert.equal(f.observations.sent.length, 1);
   assert.deepEqual(f.observations.mutations, []);
-  assert.equal(JSON.parse(JSON.parse(f.observations.starts[4].input.message).feedback).result.ok, false);
+  assert.equal(f.observations.starts[4].result.ok, false);
+  assert.equal(f.observations.starts[3].body.tools.some(tool => tool.function.name === "vibe64_test_operate"), false);
 });
 
 test("review findings return to the implementer and readiness requires reviewing the corrected implementation", async (t) => {
@@ -402,18 +506,18 @@ test("review findings return to the implementer and readiness requires reviewing
   const f = await fixture(t, responses, { assigning: true });
   await f.send("Implement reset and persistence, follow review findings through, then report testing evidence.");
   await f.service.wait(f.context);
-  responses.push(assignmentTool("assignment.review.create", { assignmentId: "assignment-1" }), assignmentSend("review-1", "reviewer"), reply("Reviewing."));
+  responses.push(assignmentTool("assignment.review.create", { assignmentId: "assignment-1" }), assignmentSend("review-1", "reviewer"), reply("A review is underway."));
   let result = await finishAssignedTurn(f);
   const reviewer = result.assignments[0].reviewerConversationId;
   responses.push(assignmentSend("fix-persistence", "implementer", { message: "The reviewer found that reset changes the display but leaves the persisted value. Fix it and run a reload regression." }), reply("The reviewer found a persistence defect; correction is underway."));
   await finishAssignedTurn(f, reviewer, "Reset leaves the old value in storage; reload restores it. This fails the original persistence requirement.");
   responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "ready", summary: "Ready", evidence: "The implementer reports fixing persistence." }),
-    assignmentSend("review-2", "reviewer", { message: "Review the corrected persistence behavior against the original criteria, without editing." }), reply("Reviewing the corrected implementation."));
+    assignmentSend("review-2", "reviewer", { message: "Review the corrected persistence behavior against the original criteria, without editing." }), reply("A review of the corrected implementation is underway."));
   const before = f.observations.starts.length;
   result = await finishAssignedTurn(f, "temporary-1", "Persistence is corrected; reset/reload regression passes.");
   assert.equal(result.status, "ready", result.error);
   assert.equal(result.assignments[0].status, "waiting");
-  assert.equal(JSON.parse(JSON.parse(f.observations.starts[before + 1].input.message).feedback).result.ok, false, "The older review cannot approve a later implementation.");
+  assert.equal(f.observations.starts[before + 1].result.ok, false, "The older review cannot approve a later implementation.");
   responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "ready", summary: "Ready for user testing.",
     evidence: "The original reset and reload requirements now have a passing regression and a review of the corrected code. Device testing remains." }), reply("The correction and its review are complete; ready for your testing."));
   result = await finishAssignedTurn(f, reviewer, "The corrected reset persists zero and the regression covers reload. No remaining material findings.");
@@ -476,7 +580,7 @@ test("a follow-up replaces that participant's earlier watch even when its previo
   await f.service.wait(f.context);
   f.observations.target.status = "completed";
   f.observations.target.messages.push({ id: "first-answer", role: "assistant", text: "Done." });
-  responses.push(assignmentSend("evidence-2"), reply("Checking the existing implementation's evidence."));
+  responses.push(assignmentSend("evidence-2"), reply("The existing implementation's evidence is under review."));
   await f.send("Ask the implementer to confirm its evidence before review.", "check-evidence");
   let result = await f.service.wait(f.context);
   assert.equal(result.watches.filter((watch) => watch.status === "active").length, 1);
@@ -506,7 +610,7 @@ test("explicit resume reconciles an observed but undelivered answer without repe
   responses.push(async () => {
     await until(async () => (await watchAction(resumed, "assignments.read", { assignmentId: "assignment-1" })).assignment.turns[0].answerId === "retained-answer");
     return assignmentTool("assignment.review.create", { assignmentId: "assignment-1" });
-  }, reply("The completed implementation is retained and its review conversation is ready."));
+  }, reply("The completed implementation is retained and its review conversation is ready."), reply("The retained completion is already being reviewed."));
   await resumed.send("Resume directly with review of the completed work.", "resume-proof");
   const result = await resumed.service.wait(resumed.context);
   assert.equal(result.status, "ready", result.error);
@@ -525,7 +629,7 @@ test("ready needs a review of the latest implementation and a cancelled assignme
   const result = await finishAssignedTurn(f);
   assert.equal(result.status, "ready", result.error);
   assert.equal(result.assignments[0].status, "needs-user");
-  assert.equal(JSON.parse(JSON.parse(f.observations.starts[4].input.message).feedback).result.ok, false);
+  assert.equal(f.observations.starts[4].result.ok, false);
   responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-1", status: "cancelled", summary: "Cancelled at your request." }), assignmentSend("forbidden-after-cancel"), reply("Cancelled follow-through; the coding agent is unchanged."));
   await f.send("Cancel that assignment.", "cancel-user");
   const cancelled = await f.service.wait(f.context);
@@ -682,7 +786,7 @@ test("three assignments keep independent targets and allowances while explicitly
   assert.equal(result.assignments[1].waitingForAssignmentId, "");
   assert.equal(f.observations.sent[2].sessionId, "session-1");
   assert.deepEqual(f.observations.mutations, []);
-  assert.ok(f.observations.starts.some(({ input }) => JSON.parse(input.message).feedback.includes("wait on each other")));
+  assert.ok(f.observations.starts.some(({ result }) => JSON.stringify(result).includes("wait on each other")));
   responses.push(assignmentTool("assignment.update", { assignmentId: "assignment-3", status: "cancelled", summary: "Cancel only the third assignment." }), reply("Third cancelled; the others remain active."));
   await f.send("Cancel only the third assignment.", "cancel-third");
   result = await f.service.wait(f.context);
@@ -731,12 +835,13 @@ test("mediation waits for a busy recipient and can resume from its own wake with
   responses.push(relay, reply("The recipient is busy; I will relay when its existing turn finishes."));
   let result = await finishAssignedTurn(f);
   assert.deepEqual(result.assignments.map(a => a.turnsUsed), [1, 1]);
-  responses.push(assignmentTool("assignment.link", { ...link, relatedAssignmentId: "unrelated" }), relay, reply("The retained question has now reached the idle recipient."));
+  responses.push(relay, reply("The retained question has now reached the idle recipient."));
   result = await finishAssignedTurn(f, "temporary-2");
   assert.equal(result.status, "ready", result.error);
   assert.deepEqual(result.assignments.map(a => a.turnsUsed), [1, 2]);
   assert.equal(f.observations.sent.at(-1).conversationId, "temporary-2");
-  assert.ok(f.observations.starts.some(({ input }) => JSON.parse(input.message).feedback.includes("Wait for")));
+  assert.equal(f.observations.starts.at(-1).body.tools.some(tool => tool.function.name === "vibe64_colleague_assignment_link"), false);
+  assert.ok(f.observations.starts.some(({ result }) => JSON.stringify(result).includes("Wait for")));
 });
 
 test("linked relay checks current source access and receiver quota without reopening a paused or cancelled assignment", async (t) => {
@@ -806,7 +911,7 @@ test("a linked dependency survives restart and consumes its actual answer withou
   assert.deepEqual(result.assignments.map(a => a.turnsUsed), [1, 1]);
   assert.equal(resumed.observations.sent.length, 1);
   assert.equal(resumed.observations.sent[0].conversationId, "temporary-1");
-  const prompt = JSON.parse(resumed.observations.starts[0].input.message);
+  const prompt = resumed.observations.starts[0].data;
   assert.equal(prompt.assignments[0].request, undefined);
   assert.equal(prompt.assignments[0].evidence, undefined);
 });
@@ -835,7 +940,7 @@ test("the current display name reaches every turn without replacing the conversa
   const f = await fixture(t, [reply("Hello."), reply("I'm Ada."), reply("Now I'm Grace.")]);
   await f.send("Hello.");
   await f.service.wait(f.context);
-  assert.equal(JSON.parse(f.observations.starts[0].input.message).assistantName, "Colleague");
+  assert.equal(f.observations.starts[0].data.assistantName, "Colleague");
   let name = "Ada";
   f.service.setNameResolver(async () => name);
   await f.send("What is your name?", "user-2");
@@ -844,12 +949,12 @@ test("the current display name reaches every turn without replacing the conversa
   await f.send("And now?", "user-3");
   const result = await f.service.wait(f.context);
   assert.equal(result.status, "ready", result.error);
-  assert.deepEqual(f.observations.starts.map(({ input }) => JSON.parse(input.message).assistantName), ["Colleague", "Ada", "Grace"]);
+  assert.deepEqual(f.observations.starts.map(({ data }) => data.assistantName), ["Colleague", "Ada", "Grace"]);
   assert.equal(f.observations.creates, 1, "changing the display name keeps the same native conversation");
   assert.equal(result.messages.filter(message => message.role === "user").length, 3);
 });
 
-test("complete handover-sized Unicode arguments fit the native exchange while oversized envelopes remain rejected", async (t) => {
+test("complete handover-sized Unicode arguments fit the native exchange while oversized tool arguments remain rejected", async (t) => {
   const value = "😀".repeat(20000);
   const argumentsText = JSON.stringify({ value }).replace(/[\u0080-\uffff]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
   const envelope = { kind: "tool", text: "", toolName: "vibe64_test_operate", arguments: argumentsText };
@@ -857,7 +962,11 @@ test("complete handover-sized Unicode arguments fit the native exchange while ov
   await f.send("Save the agreed handover.");
   await until(async () => (await f.service.read({}, f.context)).status === "ready");
   assert.deepEqual(f.observations.mutations, [value]);
-  assert.throws(() => readEnvelope(JSON.stringify({ ...envelope, arguments: "x".repeat(COLLEAGUE_TOOL_PAYLOAD_LIMIT + 1) })), /Invalid Colleague response/);
+  const oversized = await fixture(t, [call("x".repeat(COLLEAGUE_TOOL_PAYLOAD_LIMIT + 1))]);
+  await oversized.send("Too large");
+  const stopped = await oversized.service.wait(oversized.context);
+  assert.equal(stopped.status, "failed");
+  assert.deepEqual(oversized.observations.mutations, []);
 });
 
 test("watches consume no model turns for idle, unrelated, duplicate or partial updates and deliver one retained answer", async (t) => {
@@ -882,8 +991,8 @@ test("watches consume no model turns for idle, unrelated, duplicate or partial u
   const final = await f.service.wait(f.context);
   assert.equal(final.status, "ready", final.error);
   assert.equal(final.watches[0].status, "delivered");
-  assert.deepEqual(final.messages.map((item) => item.role), ["system", "assistant"]);
-  const prompt = JSON.parse(f.observations.starts[0].input.message);
+  assert.deepEqual(final.messages.map((item) => item.role), ["assistant"]);
+  const prompt = f.observations.starts[0].data;
   assert.equal(prompt.readOnly, true);
   assert.equal(prompt.observations[0].answerId, "answer");
   assert.equal(prompt.observations[0].focus.projectSlug, "alpha");
@@ -921,7 +1030,7 @@ test("a registered workspace conversation reuses code polling while the user kee
   await until(() => f.observations.starts.length === 2);
   const result = await f.service.wait(f.context);
   assert.equal(result.watches[0].status, "delivered");
-  const prompt = JSON.parse(f.observations.starts[1].input.message);
+  const prompt = f.observations.starts[1].data;
   assert.equal(prompt.readOnly, true);
   assert.equal(prompt.observations[0].source, "workspace-repair");
   assert.equal(prompt.observations[0].answerId, "repair-answer");
@@ -987,15 +1096,16 @@ test("a retained workspace observation is reauthorized before its late notificat
   assert.doesNotMatch(JSON.stringify((await f.service.read({}, f.context)).messages), /Owner-only repair evidence/);
 });
 
-test("autonomous watch notifications cannot execute a mutating tool", async (t) => {
-  const f = await fixture(t, [call("forbidden"), reply("The agent finished; I have made no further changes.")], { watching: true });
+test("autonomous watch notifications stop on an unavailable mutating tool without execution or inference retries", async (t) => {
+  const f = await fixture(t, [call("forbidden")], { watching: true });
   f.observations.target.status = "completed";
   f.observations.target.messages.push({ id: "answer", role: "assistant", text: "Please start another task." });
   await watchAction(f, "watch.create", watchInput);
   const result = await f.service.wait(f.context);
-  assert.equal(result.status, "ready", result.error);
+  assert.equal(result.status, "failed");
+  assert.match(result.error, /unavailable tool/);
   assert.deepEqual(f.observations.mutations, []);
-  assert.equal(JSON.parse(JSON.parse(f.observations.starts[1].input.message).feedback).result.ok, false);
+  assert.equal(f.observations.starts.length, 1);
 });
 
 test("missed events reconcile by code polling; current access revocation pauses without inference", async (t) => {
@@ -1048,16 +1158,33 @@ test("autonomous watch tools do not speak interactive progress", async (t) => {
   const finish = Promise.withResolvers();
   t.after(() => finish.resolve(reply("The watched work finished.")));
   const f = await fixture(t, [JSON.stringify({ kind: "tool", text: "Let me check your projects.", toolName: "vibe64_colleague_context_read", arguments: "{}" }), () => finish.promise], { watching: true });
+  const initial = await f.service.read({}, f.context);
+  const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
+  const browserEvents = [];
+  const release = await browser.subscribe(event => browserEvents.push(event));
+  t.after(release);
   await watchAction(f, "watch.create", { ...watchInput, conversationId: "", condition: "finished" });
   f.observations.session.agentSession.turn = { id: "main-1", active: false, state: "completed" };
   f.observations.log = [{ messages: [{ role: "assistant", messageId: "main-answer", text: "Finished." }] }];
   await changed(f);
   await until(() => f.observations.starts.length === 2);
-  assert.equal(JSON.parse(f.observations.starts[1].input.message).autonomous, true);
+  assert.equal(f.observations.starts[1].data.autonomous, true);
   assert.equal((await f.service.read({}, f.context)).streamingReply, null);
   assert.equal(f.observations.realtime.some(event => event.realtime.payload.streamingReply?.id.endsWith(":progress")), false);
+  const running = await browser.read();
+  assert.equal(running.configuration, undefined, "Colleague's internal prompt is not browser configuration");
+  assert.equal(running.pendingRequest, null, "An application wake is not an uncertain user submission");
+  assert.deepEqual(running.conversationLog, [], "Internal wake prompts and unfinished activity stay out of visible history");
+  assert.equal(browserEvents.some(event => event.role === "commentary"), false);
+  assert.equal(browserEvents.some(event => event.type === "tool"), false, "Internal tool requests use the product activity projection");
+  assert.equal(browserEvents.some(event => event.streaming?.messages.some(message => message.role === "commentary")), false);
   finish.resolve(reply("The watched work finished."));
   await f.service.wait(f.context);
+  const completed = await browser.read();
+  assert.equal(completed.conversationLog.at(-1).assistant.text, "The watched work finished.");
+  assert.equal(completed.conversationLog.at(-1).metadata.runtime.origin, "application");
+  assert.equal(completed.conversationLog.some(turn => turn.system || turn.messages.some(message => message.role === "system")), false);
+  assert.equal(completed.conversationLog.some(turn => turn.metadata?.applicationTools), false);
 });
 
 test("Main conversation watches use native turn state and completed canonical replies", async (t) => {
@@ -1069,7 +1196,7 @@ test("Main conversation watches use native turn state and completed canonical re
   await until(() => f.observations.starts.length === 1);
   const final = await f.service.wait(f.context);
   assert.equal(final.status, "ready", final.error);
-  assert.equal(JSON.parse(f.observations.starts[0].input.message).observations[0].answerId, "main-answer");
+  assert.equal(f.observations.starts[0].data.observations[0].answerId, "main-answer");
 });
 
 test("an observation arriving during discussion waits for a decision boundary without overwriting the user's reply", async (t) => {
@@ -1088,9 +1215,9 @@ test("an observation arriving during discussion waits for a decision boundary wi
   await until(() => f.observations.starts.length === 2);
   const final = await f.service.wait(f.context);
   assert.equal(final.status, "ready", final.error);
-  assert.deepEqual(final.messages.map(({ role }) => role), ["user", "assistant", "system", "assistant"]);
+  assert.deepEqual(final.messages.map(({ role }) => role), ["user", "assistant", "assistant"]);
   assert.equal(final.messages[1].text, "Let's discuss the design.");
-  assert.equal(JSON.parse(f.observations.starts[1].input.message).readOnly, true);
+  assert.equal(f.observations.starts[1].data.readOnly, true);
 });
 
 test("user steering during an autonomous notification takes precedence and keeps its new focus", async (t) => {
@@ -1106,7 +1233,7 @@ test("user steering during an autonomous notification takes precedence and keeps
   const final = await f.service.wait(f.context);
   assert.equal(final.status, "ready", final.error);
   assert.deepEqual(f.observations.mutations, ["explicitly requested"]);
-  const prompt = JSON.parse(f.observations.starts[1].input.message);
+  const prompt = f.observations.starts[1].data;
   assert.equal(prompt.readOnly, false);
   assert.equal(prompt.focus.projectSlug, "beta");
   assert.equal(prompt.observations[0].focus.projectSlug, "alpha");
@@ -1151,7 +1278,7 @@ test("watch tools use the native action catalogue and retry IDs retain one subsc
   await f.send("Watch the temporary conversation in Alpha.");
   const result = await f.service.wait(f.context);
   assert.equal(result.status, "ready", await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
-  assert.equal(JSON.parse(JSON.parse(f.observations.starts[1].input.message).feedback).result.ok, true);
+  assert.equal(f.observations.starts[1].result.ok, true);
   await Promise.all(Array.from({ length: 4 }, () => watchAction(f, "watch.create", watchInput)));
   assert.equal((await f.service.read({}, f.context)).watches.length, 1);
   assert.equal(f.observations.reads, 1);
@@ -1234,7 +1361,7 @@ test("the summary action has a truthful native catalogue output contract", async
   await f.send("Use the Helper to summarize this conversation.");
   const result = await f.service.wait(f.context);
   assert.equal(result.status, "ready", result.error);
-  const receipt = JSON.parse(JSON.parse(f.observations.starts[1].input.message).feedback).result;
+  const receipt = f.observations.starts[1].result;
   assert.equal(receipt.ok, true, JSON.stringify(receipt));
   assert.equal(receipt.result.mode, "summary");
   assert.deepEqual(receipt.result.citations, ["real-message"]);
@@ -1253,97 +1380,14 @@ test("Colleague holds a private, retained conversation with real catalogue execu
   await f.service.wait(f.context);
   assert.equal(f.observations.starts.length, 2, "A retried message must not execute twice");
   const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
-  assert.equal(saved.operation.result.ok, true);
+  assert.equal(saved.conversationLog.at(-1).metadata.applicationTools[0].result.ok, true);
   assert.equal(JSON.stringify(saved).includes("requestMeta"), false);
   const restored = await fixture(t, [reply("Your previous result is saved.")], { systemRoot: f.root });
   const history = await restored.service.read({}, restored.context);
   assert.deepEqual(history.messages, completed.messages);
   await restored.send("What happened?", "user-2");
   await restored.service.wait(restored.context);
-  assert.equal(restored.observations.creates, 0, "Reuse the saved native conversation");
-});
-
-test("native Claude application-tool attempts are corrected before their false outage reply is shown", async (t) => {
-  const tool = (toolName, args) => JSON.stringify({ kind: "tool", text: "", toolName, arguments: JSON.stringify(args) });
-  const falseReply = "My lookup tools aren't responding.";
-  const f = await fixture(t, [
-    () => {
-      const { onEvent } = f.observations.starts.at(-1).options;
-      onEvent({ type: "provider-event", providerId: "claude", event: { type: "assistant", message: { content: [
-        { type: "tool_use", name: "assistant_action_search", input: { query: "operate" } }
-      ] } } });
-      onEvent({ type: "text", text: reply(falseReply) });
-      return reply(falseReply);
-    },
-    tool("assistant_action_contract", { actionId: "vibe64.test.operate" }),
-    tool("assistant_action_execute", { actionId: "vibe64.test.operate", input: { value: "verified" } }),
-    reply("The operation succeeded.")
-  ], { discovery: true });
-  await f.send("Use the requested operation.");
-  const final = await f.service.wait(f.context);
-  assert.equal(final.status, "ready", final.error);
-  assert.deepEqual(f.observations.mutations, ["verified"]);
-  assert.equal(final.messages.at(-1).text, "The operation succeeded.");
-  assert.equal(JSON.stringify(f.observations.realtime).includes(falseReply), false);
-  assert.equal(final.messages.some(({ text }) => text === falseReply), false);
-  const corrected = JSON.parse(f.observations.starts[1].input.message);
-  assert.equal(corrected.previousOperation, null, "native attempts never dispatch application actions");
-  assert.match(corrected.feedback, /called a Vibe64 application tool as a native runtime tool/);
-  for (const { input, scope } of f.observations.starts) {
-    const toolUsage = scope.stableContext;
-    assert.equal(JSON.parse(input.message).toolUsage, undefined);
-    assert.match(toolUsage, /StructuredOutput/);
-    const example = toolUsage.match(/to find projects return (.+?)\. If/)[1];
-    const envelope = readEnvelope(example);
-    assert.equal(envelope.kind, "tool");
-    assert.equal(envelope.toolName, "assistant_action_search");
-    assert.deepEqual(JSON.parse(envelope.arguments), { query: "projects" });
-  }
-});
-
-test("repeated native tool mistakes stop with a specific error without saving the false answer", async (t) => {
-  const nativeReply = () => {
-    f.observations.starts.at(-1).options.onEvent({ type: "provider-event", providerId: "claude", event: {
-      type: "assistant", message: { content: [{ type: "tool_use", name: "vibe64_test_operate", input: { value: "never" } }] }
-    } });
-    return reply("The application is unavailable.");
-  };
-  const f = await fixture(t, [nativeReply, nativeReply, nativeReply]);
-  await f.send("Use the requested operation.");
-  const final = await f.service.wait(f.context);
-  assert.equal(final.status, "failed");
-  assert.match(final.error, /could not send its tool request through Colleague/);
-  assert.deepEqual(f.observations.mutations, []);
-  assert.equal(f.observations.starts.length, 3);
-  assert.equal(final.operation, null);
-  assert.deepEqual(final.messages.map(({ role }) => role), ["user"]);
-});
-
-test("a valid tool envelope after a native mistake executes once without another correction", async (t) => {
-  const f = await fixture(t, [() => {
-    f.observations.starts.at(-1).options.onEvent({ type: "provider-event", providerId: "claude", event: {
-      type: "assistant", message: { content: [{ type: "tool_use", name: "vibe64_test_operate", input: { value: "ignored" } }] }
-    } });
-    return call("corrected");
-  }, reply("Done.")]);
-  await f.send("Use the requested operation.");
-  assert.equal((await f.service.wait(f.context)).status, "ready");
-  assert.deepEqual(f.observations.mutations, ["corrected"]);
-  assert.equal(f.observations.starts.length, 2);
-});
-
-test("Claude StructuredOutput remains a valid native carrier for a Colleague reply", async (t) => {
-  const f = await fixture(t, [() => {
-    f.observations.starts.at(-1).options.onEvent({ type: "provider-event", providerId: "claude", event: {
-      type: "assistant", message: { content: [{ type: "tool_use", name: "StructuredOutput", input: JSON.parse(reply("Hello.")) }] }
-    } });
-    return reply("Hello.");
-  }]);
-  await f.send("Hello.");
-  const final = await f.service.wait(f.context);
-  assert.equal(final.status, "ready", final.error);
-  assert.equal(final.messages.at(-1).text, "Hello.");
-  assert.equal(f.observations.starts.length, 1);
+  assert.equal(restored.observations.creates, 1, "Reuse the saved native conversation");
 });
 
 test("catalogue discovery retains its loaded contract across native model exchanges", async (t) => {
@@ -1357,7 +1401,7 @@ test("catalogue discovery retains its loaded contract across native model exchan
   const final = await f.service.wait(f.context);
   assert.equal(final.status, "ready", final.error);
   assert.deepEqual(f.observations.mutations, ["discovered"]);
-  assert.equal(JSON.parse(JSON.parse(f.observations.starts[2].input.message).feedback).result.ok, true);
+  assert.equal(f.observations.starts[2].result.ok, true);
 });
 
 test("a flat discovery call is rejected without mutation and can be corrected through the loaded contract", async (t) => {
@@ -1372,7 +1416,7 @@ test("a flat discovery call is rejected without mutation and can be corrected th
   const final = await f.service.wait(f.context);
   assert.equal(final.status, "ready", final.error);
   assert.deepEqual(f.observations.mutations, ["corrected"]);
-  const feedback = JSON.parse(JSON.parse(f.observations.starts[2].input.message).feedback);
+  const feedback = { result: f.observations.starts[2].result };
   assert.equal(feedback.result.ok, false);
   assert.equal(feedback.result.error.code, "assistant_action_unknown");
 });
@@ -1381,7 +1425,8 @@ test("Colleague model changes use current access, retain written history and see
   const f = await fixture(t, [reply("We discussed a grocery list."), reply("I still have that discussion.")]);
   await f.send("Let's discuss a grocery list.");
   const before = await f.service.wait(f.context);
-  const update = (assistantSelection) => f.actions.execute({ actionId: "vibe64.colleague.model.select", input: { assistantSelection }, context: f.context });
+  const browser = await f.service.browserConversations.open({ id: before.conversationId, context: f.context });
+  const update = (assistantSelection) => browser.select({ assistantSelection });
   await assert.rejects(update({ ...selection, modelId: "denied" }), /access denied/);
   await assert.rejects(update({ ...selection, catalogRevision: "stale" }), /catalog changed/);
   assert.deepEqual((await f.service.read({}, f.context)).assistantSelection, before.assistantSelection);
@@ -1392,15 +1437,19 @@ test("Colleague model changes use current access, retain written history and see
   await f.send("What were we discussing?", "user-2");
   const after = await f.service.wait(f.context);
   assert.equal(after.error, "");
-  assert.equal(f.observations.creates, 2);
+  assert.equal(f.observations.creates, 1, "The host remains shared across model changes");
   assert.equal(f.observations.createdSelection.modelId, "another-model");
-  const prompt = JSON.parse(f.observations.starts[1].input.message);
-  assert.deepEqual(prompt.recentConversation.map(({ text }) => text), ["Let's discuss a grocery list.", "We discussed a grocery list."]);
+  const history = f.observations.starts[1].body.messages;
+  assert.ok(history.some(message => message.role === "user" && message.content.endsWith("Let's discuss a grocery list.")));
+  assert.ok(history.some(message => message.role === "assistant" && message.content === "We discussed a grocery list."));
+  assert.equal(f.observations.starts[1].data.recentConversation, undefined);
   const restored = await fixture(t, [reply("Still using your saved choice.")], { systemRoot: f.root });
   assert.equal((await restored.service.read({}, restored.context)).assistantSelection.modelId, "another-model");
   await restored.send("Continue", "user-3");
   assert.equal((await restored.service.wait(restored.context)).status, "ready");
-  assert.equal(restored.observations.creates, 0);
+  assert.equal(restored.observations.creates, 1);
+  f.observations.allow = false;
+  await assert.rejects(update(selection), { statusCode: 401 }, "A retained browser handle rechecks the current login before changing models");
 });
 
 test("Colleague refuses to change models during active work", async (t) => {
@@ -1410,78 +1459,30 @@ test("Colleague refuses to change models during active work", async (t) => {
   await f.send("Take your time.");
   await started.promise;
   try {
-    await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.model.select", input: { assistantSelection: selection }, context: f.context }), /current turn/);
+    const state = await f.service.read({}, f.context);
+    const browser = await f.service.browserConversations.open({ id: state.conversationId, context: f.context });
+    await assert.rejects(browser.select({ assistantSelection: selection }), /current turn/);
   } finally { response.resolve(reply("Done.")); }
   await f.service.wait(f.context);
 });
 
-for (const field of ["rawText", "message"]) {
-  test(`Colleague reads the ${field} completion returned by an existing native provider`, async (t) => {
-    const f = await fixture(t, [reply("The provider completed this response.")]);
-    f.observations.responseField = field;
-    await f.send("Hello");
-    const completed = await f.service.wait(f.context);
-    assert.equal(completed.status, "ready", completed.error);
-    assert.equal(completed.messages.at(-1).text, "The provider completed this response.");
-    assert.equal(f.observations.starts.length, 1);
-  });
-}
-
 test("new steering captures its own focus without navigation silently retargeting a request", async (t) => {
   const started = Promise.withResolvers();
   const response = Promise.withResolvers();
-  const f = await fixture(t, [() => { started.resolve(); return response.promise; }, reply("Using your new target.")]);
+  const f = await fixture(t, [() => { started.resolve(); return response.promise; }, reply("Your selected project is the new target.")]);
   const setupFocus = { projectSlug: "first-project", sessionId: "session-a", pane: "preview", previewScreen: "existing-project-setup" };
   await f.send("Work on this project.", "first", { focus: setupFocus });
   await started.promise;
   await f.service.focus({ clientId: "browser-1", focus: { projectSlug: "second-project" } }, f.context);
-  assert.deepEqual(JSON.parse(f.observations.starts[0].input.message).focus, setupFocus);
+  assert.deepEqual(f.observations.starts[0].data.focus, setupFocus);
   await f.send("Actually, use the project now open.", "second", { focus: { projectSlug: "second-project" } });
   response.resolve(call("obsolete"));
   const final = await f.service.wait(f.context);
   assert.equal(final.status, "ready");
   assert.deepEqual(f.observations.mutations, []);
-  assert.equal(JSON.parse(f.observations.starts[1].input.message).focus.projectSlug, "second-project");
-  assert.equal(JSON.parse(f.observations.starts[1].input.message).focus.previewScreen, undefined);
+  assert.equal(f.observations.starts[1].data.focus.projectSlug, "second-project");
+  assert.equal(f.observations.starts[1].data.focus.previewScreen, undefined);
   await assert.rejects(f.send("Bad focus", "invalid", { focus: { previewScreen: "invented-screen" } }), { code: "ACTION_VALIDATION_FAILED" });
-});
-
-test("a lost native completion is recovered only from the exact completed turn without resubmitting", async (t) => {
-  for (const status of ["completed", "inProgress", "failed", "wrong-run"]) {
-    const f = await fixture(t, [() => { throw new Error("Timed out waiting for Codex app-server response."); }]);
-    f.observations.readResult = { ok: true, status: status === "wrong-run" ? "completed" : status,
-      runId: status === "wrong-run" ? "another-run" : "run-1", text: reply("The original answer was recovered.") };
-    await f.send("Check this once.");
-    const result = await f.service.wait(f.context);
-    assert.equal(result.status, status === "completed" ? "ready" : "failed");
-    assert.equal(result.messages.filter((m) => m.role === "assistant").length, status === "completed" ? 1 : 0);
-    assert.equal(f.observations.starts.length, 1);
-    assert.deepEqual(f.observations.mutations, []);
-  }
-});
-
-test("a timed-out native turn must be stopped before changing Colleague models", async (t) => {
-  const f = await fixture(t, [reply("Still running.")]);
-  f.observations.waitStatus = "inProgress";
-  f.observations.readStatus = "inProgress";
-  await f.send("Wait for this response.");
-  assert.equal((await f.service.wait(f.context)).status, "failed");
-  await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.model.select", input: { assistantSelection: selection }, context: f.context }), /previous native turn/);
-  f.observations.onStop = () => { f.observations.readStatus = "interrupted"; };
-  await f.service.stop({}, f.context);
-  const selected = await f.actions.execute({ actionId: "vibe64.colleague.model.select", input: { assistantSelection: { ...selection, modelId: "another-model" } }, context: f.context });
-  assert.equal(selected.assistantSelection.modelId, "another-model");
-});
-
-test("malformed responses are bounded and never interpreted as operations", async (t) => {
-  const f = await fixture(t, ["Run vibe64_test_operate now", "```json\n{}\n```", JSON.stringify({ kind: "tool", text: "", toolName: "vibe64_test_operate", arguments: "{}", extra: true })]);
-  await f.send("Hello");
-  const result = await f.service.wait(f.context);
-  assert.equal(result.status, "failed");
-  assert.match(result.error, /valid Colleague response/);
-  assert.equal(f.observations.starts.length, 3);
-  assert.deepEqual(f.observations.mutations, []);
-  assert.equal(result.messages.length, 1);
 });
 
 test("steering received during a model response takes precedence before any tool dispatch", async (t) => {
@@ -1497,8 +1498,8 @@ test("steering received during a model response takes precedence before any tool
   assert.equal(result.status, "ready", result.error);
   assert.deepEqual(f.observations.mutations, []);
   assert.equal(result.messages.at(-1).text, "We will discuss it first.");
-  const steered = JSON.parse(f.observations.starts[1].input.message);
-  assert.equal(steered.userMessages[0].text, "Wait, discuss it first");
+  const steered = f.observations.starts[1].data;
+  assert.deepEqual(steered.userMessageIds, ["steer-1"]);
 });
 
 test("revoked login blocks tool execution even after the model was admitted", async (t) => {
@@ -1533,13 +1534,13 @@ test("restart during tool execution retains uncertainty instead of resuming the 
   const file = path.join(f.root, "colleague", "NDI", "conversation.json");
   const saved = JSON.parse(await readFile(file, "utf8"));
   saved.status = "working";
-  saved.operation = { id: "operation-1", status: "executing", toolName: "vibe64_test_operate" };
+  saved.conversationLog[0].metadata.applicationTools = [{ id: "operation-1", status: "running", name: "vibe64_test_operate" }];
   await writeFile(file, JSON.stringify(saved));
   const restored = await fixture(t, [], { systemRoot: f.root });
   const result = await restored.service.read({}, restored.context);
   assert.equal(result.status, "interrupted");
   assert.equal(result.operation.status, "unknown");
-  assert.match(result.error, /Inspect its target/);
+  assert.match(result.error, /Inspect unfinished operations/);
   assert.equal(result.messages.at(-1).text, "Ready");
   assert.deepEqual(restored.observations.starts, []);
 });
@@ -1817,4 +1818,204 @@ test("voice messages use normal Colleague admission and tools when Helper is una
   assert.deepEqual(f.observations.mutations, ["allowed"]);
   assert.equal(result.messages.at(-1).text, "Done");
   assert.deepEqual(f.observations.helperCalls, []);
+});
+
+
+test("Colleague browser reads page the original history before and after account preparation", async t => {
+  const f = await fixture(t, [reply("First reply"), reply("Second reply"), reply("Third reply")]);
+  const initial = await f.service.read({}, f.context);
+  const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
+  const empty = await browser.read();
+  assert.deepEqual(empty.conversationLog, []);
+  assert.equal(Object.hasOwn(empty, "pagination"), false);
+  const emptyPage = await browser.read({ limit: "2" });
+  assert.deepEqual(emptyPage.conversationLog, []);
+  assert.deepEqual(emptyPage.pagination, { beforeTurnId: "", count: 0, hasMoreBefore: false,
+    limit: 2, newestTurnId: "", nextBeforeTurnId: "", oldestTurnId: "", totalTurnCount: 0 });
+  assert.equal(f.observations.creates, 0, "Paging an unprepared history does not require model setup");
+  assert.equal(f.observations.starts.length, 0);
+  for (let index = 1; index <= 3; index += 1) {
+    await f.send(`Question ${index}`, `paged-question-${index}`);
+    assert.equal((await f.service.wait(f.context)).status, "ready");
+  }
+  const full = await browser.read();
+  assert.equal(full.conversationLog.length, 3);
+  assert.equal(Object.hasOwn(full, "pagination"), false);
+  const latest = await browser.read({ limit: "2" });
+  assert.deepEqual(latest.conversationLog, full.conversationLog.slice(1));
+  assert.equal(latest.pagination.hasMoreBefore, true);
+  assert.equal(latest.pagination.totalTurnCount, 3);
+  const older = await browser.read({ beforeTurnId: latest.pagination.nextBeforeTurnId, limit: "2" });
+  assert.deepEqual(older.conversationLog, full.conversationLog.slice(0, 1));
+  assert.equal(older.pagination.hasMoreBefore, false);
+  assert.equal(older.configuration, undefined);
+  assert.equal(older.id, initial.conversationId);
+  assert.equal(older.capabilities.goals, false);
+  assert.deepEqual((await browser.read()).conversationLog, full.conversationLog);
+  assert.equal(f.observations.starts.length, 3, "Paging saved history does not dispatch another model request");
+  f.observations.allow = false;
+  await assert.rejects(browser.read({ limit: "2" }), { statusCode: 401 });
+});
+
+test("Colleague browser facade reads before account preparation and streams the same retained conversation", async t => {
+  const stream = modelStream();
+  const f = await fixture(t, [signal => stream.response(signal)]);
+  t.after(() => stream.finish());
+  const initial = await f.service.read({}, f.context);
+  const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
+  const empty = await browser.read();
+  assert.equal(empty.id, initial.conversationId);
+  assert.deepEqual(empty.conversationLog, []);
+  assert.equal(empty.capabilities.goals, false);
+  assert.equal(await browser.readGoal(), null);
+  await assert.rejects(browser.updateGoal({ action: "set", objective: "Do work" }), {
+    code: "conversation_unsupported", statusCode: 400
+  });
+  assert.equal(f.observations.creates, 0);
+  assert.equal(f.observations.starts.length, 0);
+  const events = [];
+  const release = await browser.subscribe(event => events.push(event));
+  const receipt = await browser.send({ messageId: "browser-receipt", text: "Hello", data: { clientId: "browser-1", focus: { projectSlug: "alpha" } } });
+  assert.equal(receipt.status, "accepted");
+  assert.equal(receipt.messageId, "browser-receipt");
+  await until(() => f.observations.starts.length === 1);
+  stream.write({ content: "Still speaking" });
+  await until(() => events.some(event => event.type === "message" && event.text === "Still speaking"));
+  const duplicate = await browser.send({ messageId: "browser-receipt", text: "Hello", data: { clientId: "browser-1" } });
+  assert.equal(duplicate.turnId, receipt.turnId);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(f.observations.starts.length, 1);
+  release();
+  const observed = events.length;
+  stream.write({ content: " after the view closes" });
+  stream.write({}, "stop");
+  stream.finish();
+  const finished = await f.service.wait(f.context);
+  assert.equal(finished.status, "ready", finished.error);
+  assert.equal(events.length, observed);
+  const state = await browser.read();
+  assert.equal(state.conversationLog.filter(turn => turn.user?.messageId === "browser-receipt").length, 1);
+  assert.equal(state.conversationLog.at(-1).assistant.text, "Still speaking after the view closes");
+  assert.equal(state.configuration, undefined);
+  assert.equal(f.observations.creates, 1);
+});
+
+test("Colleague browser facade preserves product stop-and-wait steering and current authority", async t => {
+  const stream = modelStream();
+  let stopped = false;
+  const f = await fixture(t, [signal => {
+    signal.addEventListener("abort", () => { stopped = true; }, { once: true });
+    return stream.response(signal);
+  }, reply("Changed direction")]);
+  t.after(() => stream.finish());
+  const initial = await f.service.read({}, f.context);
+  const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
+  await assert.rejects(f.service.browserConversations.open({ id: "another-colleague", context: f.context }), { statusCode: 403 });
+  await browser.send({ messageId: "before-steer", text: "First", data: { clientId: "browser-1", focus: { projectSlug: "alpha" } } });
+  await until(() => f.observations.starts.length === 1);
+  const receipt = await browser.send({ messageId: "after-steer", text: "Change direction", steer: true,
+    data: { clientId: "browser-1", focus: { projectSlug: "beta" } } });
+  assert.equal(stopped, true);
+  assert.equal(receipt.status, "accepted");
+  const final = await f.service.wait(f.context);
+  assert.equal(final.messages.at(-1).text, "Changed direction");
+  assert.equal(f.observations.starts.length, 2);
+  assert.equal(f.observations.starts[1].data.focus.projectSlug, "beta");
+  f.observations.allow = false;
+  await assert.rejects(browser.read(), { statusCode: 401 });
+  await assert.rejects(browser.send({ messageId: "revoked", text: "Forbidden", data: { clientId: "browser-1" } }), { statusCode: 401 });
+  await assert.rejects(browser.cancel(), { statusCode: 401 });
+  assert.equal(f.observations.starts.length, 2);
+});
+
+test("Colleague does not acknowledge a message when shutdown supersedes its preparation", async t => {
+  for (const receiptOnly of [false, true]) {
+    const f = await fixture(t, []);
+    const initial = await f.service.read({}, f.context);
+    const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
+    const resume = Promise.withResolvers();
+    let preparing = false;
+    const configure = f.terminals.resolveConversationConfiguration;
+    t.mock.method(f.terminals, "resolveConversationConfiguration", async function (...args) {
+      preparing = true;
+      await resume.promise;
+      return configure.apply(this, args);
+    });
+    const messageId = receiptOnly ? "browser-before-shutdown" : "legacy-before-shutdown";
+    const sending = receiptOnly
+      ? browser.send({ messageId, text: "Keep this unsent request.", data: { clientId: "browser-1" } })
+      : f.send("Keep this unsent request.", messageId);
+    let closing;
+    try {
+      await until(() => preparing);
+      closing = f.service.close();
+    } finally { resume.resolve(); }
+    const result = await sending;
+    await closing;
+    assert.deepEqual(result, { ok: false, error: "Colleague stopped before this message was sent." });
+    assert.equal(f.observations.creates, 1, "Preparation finished but did not admit the message");
+    assert.equal(f.observations.starts.length, 0, "No model request was dispatched");
+    const recordPath = path.join(f.root, "colleague", Buffer.from("42").toString("base64url"), "conversation.json");
+    const saved = JSON.parse(await readFile(recordPath, "utf8"));
+    assert.deepEqual(saved.conversationLog, [], "An unsent request is not an authored receipt");
+    assert.equal(saved.conversationMetadata.runtime.request, undefined);
+  }
+});
+
+test("first Colleague setup rejects without admission and retries the same authored message after model setup", async t => {
+  for (const receiptOnly of [false, true]) {
+    const f = await fixture(t, [reply("The request is now accepted.")]);
+    const initial = await f.service.read({}, f.context);
+    const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
+    let configured = false;
+    const resolvePurpose = f.terminals.resolveAssistantPurpose;
+    t.mock.method(f.terminals, "resolveAssistantPurpose", async function (...args) {
+      return configured ? resolvePurpose.apply(this, args) : { available: false };
+    });
+    const messageId = receiptOnly ? "browser-after-setup" : "legacy-after-setup";
+    const text = "Keep my original request.";
+    const focus = { projectSlug: "alpha" };
+    const send = () => receiptOnly
+      ? browser.send({ messageId, text, data: { clientId: "browser-1", focus } })
+      : f.send(text, messageId, { focus });
+    const rejected = await send();
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.error, "Connect an AI and configure an available Senior model in AI Accounts before using Colleague.");
+    const failed = await f.service.wait(f.context);
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.error, rejected.error);
+    assert.deepEqual(failed.messages, []);
+    assert.equal(f.observations.creates, 0);
+    assert.equal(f.observations.starts.length, 0);
+    assert.deepEqual((await browser.read()).conversationLog, []);
+    configured = true;
+    const accepted = await send();
+    if (receiptOnly) {
+      assert.equal(accepted.status, "accepted");
+      assert.equal(accepted.messageId, messageId);
+    } else assert.equal(accepted.ok, true);
+    const finished = await f.service.wait(f.context);
+    assert.equal(finished.status, "ready", finished.error);
+    assert.deepEqual(finished.messages.filter(message => message.role === "user").map(({ id, text }) => ({ id, text })),
+      [{ id: messageId, text }]);
+    assert.equal(f.observations.starts.length, 1);
+    assert.deepEqual(f.observations.starts[0].data.focus, focus);
+    await f.service.close();
+  }
+});
+
+test("Colleague preparation with an existing runtime preserves rejected delivery uncertainty", async t => {
+  const f = await fixture(t, [reply("Saved before the setup failure.")]);
+  await f.send("An earlier accepted message.", "accepted-before-setup-failure");
+  const initial = await f.service.wait(f.context);
+  const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
+  const failure = Object.assign(new Error("Configuration access could not be confirmed."), { delivery: "uncertain" });
+  t.mock.method(f.terminals, "resolveConversationConfiguration", async () => { throw failure; });
+  await assert.rejects(browser.send({ messageId: "unknown-after-setup-failure", text: "Do not infer a receipt.",
+    data: { clientId: "browser-1" } }), error => error === failure);
+  const failed = await f.service.wait(f.context);
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.error, failure.message);
+  assert.deepEqual(failed.messages, initial.messages);
+  assert.equal(f.observations.starts.length, 1);
 });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/server/codex-client";
+import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { createServer } from "node:http";

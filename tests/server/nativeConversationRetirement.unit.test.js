@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { EventEmitter } from "node:events";
 import { nativeConversationBindings } from "@local/vibe64-terminals/server/nativeConversationBindings";
-import { retireNativeConversation } from "../../packages/vibe64-terminals/src/server/nativeConversationRetirement.js";
-import { listClaudeConversationStorage, retireClaudeConversationHistory } from "../../packages/vibe64-terminals/src/server/claudeConversationHistory.js";
+import { retireNativeConversation } from "@jskit-ai/assistant-core/server/native-history";
 import { CodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
 import { controllerHarness } from "../fixtures/opencodeController.js";
-import { createCodexTerminalController } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
-import { exportCodexNativeHistory } from "../../packages/vibe64-runtime/src/server/codexNativeHistoryExport.js";
+import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 
 const binding = { engineId: "codex", conversationId: "parent", workdir: "/saved/source" };
 const proof = async () => ({ preserved: true, exclusive: true });
@@ -58,62 +56,6 @@ function codexExportProvider(native = codexExportClient()) {
   provider.activeClient = async () => ({ endpoint: "ws://native", request: () => assert.fail("shared observer used for export") });
   return { provider, sockets, native };
 }
-
-test("Codex modern export pages items independently and preserves goal and readable text without attachments", async () => {
-  const client = codexExportClient();
-  const records = [];
-  const result = await exportCodexNativeHistory(client, "parent", async (record) => { records.push(record); });
-  assert.equal(result.turnCount, 1);
-  assert.equal(result.itemCount, 2);
-  assert.match(result.revision, /^[a-f0-9]{64}$/u);
-  assert.deepEqual(records.flatMap((record) => record.text).map(({ role, text }) => ({ role, text })), [
-    { role: "goal", text: "Finish the project" }, { role: "user", text: "Saved question" }, { role: "assistant", text: "Saved answer" }
-  ]);
-  assert.equal(records[3].text[0].messageId, "prompt");
-  assert.equal(records[3].text[0].branchId, "parent");
-  assert.equal(records[3].item.content[1].url, "data:image/png;base64,payload");
-  assert.equal((await exportCodexNativeHistory(client, "parent", async () => {})).revision, result.revision);
-  client.goal.objective = "Changed goal";
-  assert.notEqual((await exportCodexNativeHistory(client, "parent", async () => {})).revision, result.revision);
-});
-
-test("Codex export rejects unsupported modes, active goals, oversized exports, repeating cursors and cancellation", async () => {
-  const client = codexExportClient();
-  client.thread.historyMode = "legacy";
-  await assert.rejects(exportCodexNativeHistory(client, "parent", async () => {}), /requires paginated/);
-  client.thread.historyMode = "paginated";
-  client.goal.status = "active";
-  await assert.rejects(exportCodexNativeHistory(client, "parent", async () => {}), /Pause/);
-  client.goal.status = "paused";
-  await assert.rejects(exportCodexNativeHistory(client, "parent", async () => {}, { maxBytes: 1 }), /byte limit/);
-  await assert.rejects(exportCodexNativeHistory(client, "parent", async () => {}, { maxPages: 1 }), /page limit/);
-  await assert.rejects(exportCodexNativeHistory(client, "parent", async () => {}, { signal: AbortSignal.abort() }), { name: "AbortError" });
-  const request = client.request;
-  client.request = (method, params) => method === "thread/items/list" ? { data: [], nextCursor: "repeat" } : request(method, params);
-  await assert.rejects(exportCodexNativeHistory(client, "parent", async () => {}), /cursor/);
-});
-
-test("Codex export awaits preservation and rejects changed metadata or a failed sink", async () => {
-  const client = codexExportClient();
-  await assert.rejects(exportCodexNativeHistory(client, "parent", async () => { throw new Error("disk full"); }), /disk full/);
-  assert.deepEqual(client.calls.map(([method]) => method), ["thread/read", "thread/goal/get"]);
-  await assert.rejects(exportCodexNativeHistory(client, "parent", async (record) => {
-    if (record.type === "item") client.thread.updatedAt++;
-  }), /changed during export/);
-});
-
-test("Codex native export revisions survive unloading while retaining exact conversation content", async () => {
-  const client = codexExportClient();
-  Object.assign(client.thread, { status: { type: "idle" }, canAcceptDirectInput: true,
-    environments: [{ environmentId: "local", cwd: "/saved/source" }] });
-  const first = await exportCodexNativeHistory(client, "parent", async () => {});
-  Object.assign(client.thread, { status: { type: "notLoaded" }, canAcceptDirectInput: null, environments: null });
-  const unloaded = await exportCodexNativeHistory(client, "parent", async () => {});
-  assert.equal(unloaded.revision, first.revision);
-  await assert.rejects(exportCodexNativeHistory(client, "parent", async (record) => {
-    if (record.type === "item") client.thread.status = { type: "active" };
-  }), /changed during export/u);
-});
 
 test("Codex native export uses a separate bounded JSKIT connection and closes it on sink failure", async () => {
   const { provider, sockets } = codexExportProvider();
@@ -166,53 +108,6 @@ test("cancelled retirement waits for its admitted preservation callback before e
   assert.equal(callbackFinished, true);
   assert.equal(deleted, false);
   assert.equal(records, 1);
-});
-
-test("native retirement requires every complete export and rechecks exact content even when metadata is unchanged", async () => {
-  let revision = "a".repeat(64);
-  let deleted = false;
-  const input = { binding, inspect: async () => [{ conversationId: "parent" }],
-    remove: async () => { deleted = true; }, exportConversation: async (_id, emit) => { await emit({ type: "item" }); return { revision }; } };
-  await assert.rejects(retireNativeConversation({ ...input, beforeDelete: proof }), /complete native export/);
-  await assert.rejects(retireNativeConversation({ ...input, beforeDelete: async ({ exportConversation }) => {
-    await assert.rejects(exportConversation("foreign", async () => {}), /outside/);
-    await exportConversation("parent", async () => {});
-    revision = "b".repeat(64);
-    return proof();
-  } }), /changed during preservation/);
-  assert.equal(deleted, false);
-});
-
-test("native retirement preserves the complete scope before removal and verifies absence", async () => {
-  let rows = [{ conversationId: "parent", modified: 1 }, { conversationId: "child", modified: 2 }];
-  const calls = [];
-  const input = { binding, inspect: async () => { calls.push("inspect"); return rows; },
-    beforeDelete: async (inventory) => {
-      calls.push("preserve");
-      assert.deepEqual(inventory.conversations, rows);
-      inventory.conversations.length = 0; // The host cannot change deletion's snapshot.
-      return proof();
-    }, remove: async (scope) => { calls.push("delete"); assert.equal(scope.length, 2); rows = []; } };
-  assert.deepEqual(await retireNativeConversation(input), { ok: true, alreadyAbsent: false, conversationIds: ["parent", "child"] });
-  assert.deepEqual(calls, ["inspect", "preserve", "inspect", "delete", "inspect"]);
-  calls.length = 0;
-  assert.equal((await retireNativeConversation(input)).alreadyAbsent, true);
-  assert.deepEqual(calls, ["inspect"]);
-});
-
-test("native retirement refuses missing proofs, changing history and unconfirmed deletion", async () => {
-  let deleted = 0;
-  const input = { binding, inspect: async () => [{ conversationId: "parent", modified: 1 }], remove: async () => deleted++ };
-  await assert.rejects(retireNativeConversation(input), /callback/);
-  for (const result of [undefined, {}, { preserved: true }, { exclusive: true }]) {
-    await assert.rejects(retireNativeConversation({ ...input, beforeDelete: async () => result }), /did not confirm/);
-  }
-  let revision = 0;
-  await assert.rejects(retireNativeConversation({ ...input, beforeDelete: proof,
-    inspect: async () => [{ conversationId: "parent", modified: ++revision }] }), /changed/);
-  assert.equal(deleted, 0);
-  await assert.rejects(retireNativeConversation({ ...input, beforeDelete: proof }), /not confirmed/);
-  assert.equal(deleted, 1);
 });
 
 test("saved inventory separates main bindings from acknowledged predecessors and preserves physical Codex homes", () => {
@@ -337,77 +232,6 @@ test("Codex retirement uses native deletion only after preserving idle descendan
   } });
   assert.deepEqual(result.conversationIds, ["child", "parent"]);
   assert.equal(deleted, 1);
-});
-
-async function claudeFixture(t) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-native-retirement-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  const configRoot = path.join(root, "claude");
-  const workdir = path.join(root, "removed-source");
-  const id = "12345678-1234-4234-8234-123456789abc";
-  const project = path.join(configRoot, "projects", workdir.replace(/[^a-zA-Z0-9]/gu, "-"));
-  const write = async (name) => { await mkdir(path.dirname(name), { recursive: true }); await writeFile(name, "preserved native bytes"); };
-  const targets = [path.join(project, `${id}.jsonl`), path.join(project, id, "subagents/agent.jsonl"),
-    path.join(configRoot, "file-history", id, "checkpoint"), path.join(configRoot, "uploads", id, "image.png")];
-  for (const name of targets) await write(name);
-  await writeFile(targets[0], [
-    { type: "user", uuid: "question", timestamp: "2026-09-25T00:00:00Z", message: { content: [
-      { type: "text", text: "Keep the question" }, { type: "image", source: { data: "attachment payload" } }
-    ] } },
-    { type: "assistant", uuid: "answer", parentUuid: "question", message: { model: "claude-model", content: [{ type: "text", text: "Keep the answer" }] } }
-  ].map(JSON.stringify).join("\n") + "\n");
-  await writeFile(targets[1], JSON.stringify({ type: "assistant", uuid: "child-answer", isSidechain: true, parent_tool_use_id: "call",
-    message: { content: [{ type: "text", text: "Keep the child answer" }] } }) + "\n");
-  const originals = new Map(await Promise.all(targets.map(async (file) => [file, await readFile(file, "utf8")])));
-  const protectedFiles = [path.join(configRoot, "settings.json"), path.join(project, "memory/MEMORY.md"), path.join(project, "another.jsonl")];
-  for (const name of protectedFiles) await write(name);
-  return { root, project, configRoot, targets, protectedFiles, originals, binding: { engineId: "claude", conversationId: id, workdir },
-    requireIdle: async () => {}, beforeDelete: proof };
-}
-
-test("Claude retirement works after source removal, preserves shared files and is idempotent", async (t) => {
-  const f = await claudeFixture(t);
-  let preserved = 0;
-  f.beforeDelete = async ({ conversations, exportConversation }) => {
-    assert.equal(conversations.length, 1);
-    assert.equal(conversations[0].files.filter((file) => !file.directory).length, 4);
-    preserved++;
-    for (const target of f.targets) assert.equal(await readFile(target, "utf8"), f.originals.get(target));
-    const entries = [];
-    await exportConversation(f.binding.conversationId, async (record) => entries.push(...record.text));
-    assert.deepEqual(entries.map((entry) => entry.text).sort(), ["Keep the answer", "Keep the child answer", "Keep the question"]);
-    assert.equal(new Set(entries.map((entry) => entry.branchId)).size, 2);
-    assert.equal(entries.find((entry) => entry.messageId === "question").createdAt, "2026-09-25T00:00:00Z");
-    assert.equal(entries.find((entry) => entry.messageId === "answer").modelId, "claude-model");
-    return proof();
-  };
-  assert.equal((await retireClaudeConversationHistory(f)).ok, true);
-  for (const target of f.targets) await assert.rejects(stat(target), { code: "ENOENT" });
-  for (const file of f.protectedFiles) assert.equal(await readFile(file, "utf8"), "preserved native bytes");
-  assert.equal((await retireClaudeConversationHistory(f)).alreadyAbsent, true);
-  assert.equal(preserved, 1);
-});
-
-test("Claude inventory discovers additional native roots without silently claiming ownership", async (t) => {
-  const f = await claudeFixture(t);
-  const other = "23456789-1234-4234-8234-123456789abc";
-  await writeFile(path.join(f.project, `${other}.jsonl`), "native fork");
-  assert.deepEqual((await listClaudeConversationStorage(f)).map((row) => row.conversationId), [f.binding.conversationId, other]);
-  assert.equal(await readFile(path.join(f.project, `${other}.jsonl`), "utf8"), "native fork");
-});
-
-test("Claude retirement rejects writers, symlinks and changed files without deleting history", async (t) => {
-  const f = await claudeFixture(t);
-  await assert.rejects(retireClaudeConversationHistory({ ...f, requireIdle: async () => { throw new Error("busy"); } }), /busy/);
-  const link = path.join(f.project, f.binding.conversationId, "outside");
-  await symlink(f.protectedFiles[0], link);
-  await assert.rejects(retireClaudeConversationHistory(f), /unsafe paths/);
-  await rm(link);
-  await assert.rejects(retireClaudeConversationHistory({ ...f, beforeDelete: async ({ exportConversation }) => {
-    await exportConversation(f.binding.conversationId, async () => {});
-    await writeFile(f.targets[0], f.originals.get(f.targets[0]).replace("Keep the answer", "changed after inventory")); return proof();
-  } }), /changed/);
-  assert.match(await readFile(f.targets[0], "utf8"), /changed after inventory/);
 });
 
 test("OpenCode retirement does not recreate archived source or make inference and checks the complete child family", async (t) => {

@@ -109,7 +109,7 @@ test("remaining Vibe64 features use named capabilities and register direct route
   for (const action of actions.listDefinitions().filter(({ id }) => id.startsWith("vibe64.source-editor."))) {
     assert.equal(action.input.mode, "create");
     assert.equal(action.extensions.assistant.exclude === true,
-      !["vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.setup"].includes(action.id),
+      !["vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.save", "vibe64.source-editor.integrations.setup"].includes(action.id),
       "Only integration product controls are exposed; source tools belong to coding sessions.");
   }
   assert.equal(routes.length, 41);

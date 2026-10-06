@@ -1,4 +1,7 @@
 import { createGitTurnCheckpoint } from "@local/vibe64-execution/server";
+import { codexAppServerTurnState } from "@jskit-ai/assistant-core/server/codex-turn";
+import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
+import { CODEX_TURN_OUTCOME } from "./codexTurnOutcomeNotice.js";
 import { terminalWorktreePath } from "./terminalShared.js";
 
 // Retain the existing persisted task identity; checkpoints now cover every
@@ -51,4 +54,63 @@ async function checkpointSessionTurn({
   return { ok: !failure, processed: true, task, ...(failure ? { error: failure } : { checkpoint }) };
 }
 
-export { checkpointSessionTurn };
+// Preserve the original Codex Main and temporary checkpoint projections.
+// The native owner still decides when the existing callback is invoked.
+function createCodexSessionTurnCheckpoint({ projectService, publishSessionChanged }) {
+  function normalizeText(value) {
+    return String(value || "").trim();
+  }
+
+  function checkpointOutcomeForCodexTurn(status = "", turnOutcome = "") {
+    const normalizedTurnOutcome = normalizeText(turnOutcome);
+    if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.USER_CANCELLED) {
+      return "cancelled";
+    }
+    if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.SERVICE_RESTART) {
+      return "interrupted";
+    }
+    if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.RESPONSE_DELIVERY_FAILURE) {
+      return "failed";
+    }
+    const normalizedStatus = normalizeText(status);
+    if (normalizedStatus === "interrupted") {
+      return "interrupted";
+    }
+    if (normalizedStatus === "completed") {
+      return "completed";
+    }
+    return "failed";
+  }
+
+  async function checkpointCodexAppServerTurn(sessionId = "", {
+    status = "completed",
+    turnOutcome = "",
+    outerTurnId: conversationOuterTurnId = "",
+    threadId = "",
+    turnId = ""
+  } = {}) {
+    if (conversationOuterTurnId) {
+      await checkpointSessionTurn({
+        projectService, sessionId, outerTurnId: conversationOuterTurnId,
+        outcome: checkpointOutcomeForCodexTurn(status), publishSessionChanged
+      });
+      return publishSessionChanged(sessionId, { reason: "temporary-agent-turn-idle", payload: {
+        conversationId: threadId, temporaryRun: { active: false, state: status, providerTurnId: turnId }
+      } });
+    }
+    const normalizedSessionId = normalizeText(sessionId);
+    const runtime = await projectService.createRuntime({ inspectSource: false });
+    const session = await runtime.getSession(normalizedSessionId);
+    const turn = codexAppServerTurnState(session, normalizeVibe64AgentRunState);
+    const outerTurnId = normalizeText(turn.outerTurnId);
+    return checkpointSessionTurn({
+      projectService, runtime, session, sessionId: normalizedSessionId, outerTurnId,
+      outcome: checkpointOutcomeForCodexTurn(status, turnOutcome),
+      timestamp: normalizeText(turn.completedAt || turn.updatedAt), publishSessionChanged
+    });
+  }
+
+  return checkpointCodexAppServerTurn;
+}
+
+export { checkpointSessionTurn, createCodexSessionTurnCheckpoint };

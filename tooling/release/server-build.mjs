@@ -7,6 +7,11 @@ const STATIC_SERVER_ENTRY_PATH = "server.static.mjs";
 const STATIC_SERVER_PROVIDER_REGISTRY_PATH = ".jskit/static-server-provider-registry.mjs";
 const SERVER_BUNDLE_PATH = "server.bundle.mjs";
 const SERVER_BUNDLE_LINE_LIMIT = 120;
+const ASSISTANT_SQL_RUNTIME_ENTRIES = [
+  "node_modules/@jskit-ai/assistant-runtime/src/server/repositories/assistantConfigRepository.js",
+  "node_modules/@jskit-ai/assistant-runtime/src/server/repositories/conversationsRepository.js",
+  "node_modules/@jskit-ai/assistant-runtime/src/server/repositories/messagesRepository.js"
+];
 const SERVER_BUNDLE_EXTERNALS = [
   "@fastify/ajv-compiler", "@fastify/fast-json-stringify-compiler",
   "@vue/compiler-sfc", "@vue/compiler-sfc/*", "fast-json-stringify", "fast-json-stringify/*",
@@ -310,6 +315,21 @@ async function buildNodeBundle({ appRoot, entryPoint, outfile, external = SERVER
   const resolvedAppRoot = path.resolve(appRoot);
   const requireFromApp = createRequire(path.join(resolvedAppRoot, "package.json"));
   const esbuild = requireFromApp("esbuild");
+  const assistantProviderPath = path.join(resolvedAppRoot, "node_modules/@jskit-ai/assistant-runtime/src/server/AssistantProvider.js");
+  const assistantSqlPaths = new Set(ASSISTANT_SQL_RUNTIME_ENTRIES.map(entry => path.join(resolvedAppRoot, entry)));
+  const preserveAssistantSqlPlugin = {
+    name: "vibe64-preserve-optional-assistant-sql",
+    setup(build) {
+      build.onResolve({ filter: /^\.\/repositories\// }, args => {
+        if (args.kind !== "dynamic-import" || args.importer !== assistantProviderPath) return null;
+        const target = path.resolve(path.dirname(args.importer), args.path);
+        if (!assistantSqlPaths.has(target)) return null;
+        // These modules are materialized separately so their optional database
+        // imports stay behind the provider's existing SQL-only branch.
+        return { path: importPathBetween(entryPoint, target), external: true };
+      });
+    }
+  };
   const preserveModuleUrlsPlugin = {
     name: "vibe64-preserve-module-urls",
     setup(build) {
@@ -355,6 +375,7 @@ async function buildNodeBundle({ appRoot, entryPoint, outfile, external = SERVER
     platform: "node",
     plugins: [
       ...plugins,
+      preserveAssistantSqlPlugin,
       preserveModuleUrlsPlugin
     ],
     preserveSymlinks: true,
@@ -379,5 +400,5 @@ async function buildServerBundle({ appRoot, outputPath = path.join(appRoot, SERV
   return { ...result, bundlePath: SERVER_BUNDLE_PATH, outputPath };
 }
 
-export { buildNodeBundle, buildServerBundle, prepareServerBuild, SERVER_BUNDLE_EXTERNALS,
+export { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle, buildServerBundle, prepareServerBuild, SERVER_BUNDLE_EXTERNALS,
   SERVER_BUNDLE_PATH, STATIC_SERVER_ENTRY_PATH, STATIC_SERVER_PROVIDER_REGISTRY_PATH };

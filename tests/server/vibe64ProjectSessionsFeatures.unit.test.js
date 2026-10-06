@@ -152,10 +152,13 @@ test("project and sessions register routes and captured actions during setup", a
   const sessionActions = [];
   const sessionRoutes = [];
   const configurationReads = [];
+  const sessionCatalogue = createActionCatalogue();
   const sessionOutputs = await Vibe64SessionsProvider.setup({
     actionCatalogue: {
+      ...sessionCatalogue,
       register(contributor) {
         sessionActions.push(contributor);
+        return sessionCatalogue.register(contributor);
       }
     },
     events: {
@@ -173,10 +176,13 @@ test("project and sessions register routes and captured actions during setup", a
       configurationReads.push(input);
       return { ok: true, baseHash: "verified-configuration" };
     } },
-    terminals: { async resumeIntegrationContinuation(_sessionId, _input, options) {
-      assert.deepEqual(await options.readIntegrationConfiguration(), { ok: true, baseHash: "verified-configuration" });
-      return { ok: true };
-    } }
+    terminals: {
+      openBrowserConversation() { throw new Error("Feature setup must not open a native conversation."); },
+      async resumeIntegrationContinuation(_sessionId, _input, options) {
+        assert.deepEqual(await options.readIntegrationConfiguration(), { ok: true, baseHash: "verified-configuration" });
+        return { ok: true };
+      }
+    }
   }, {});
 
   assert.equal(typeof sessionOutputs.sessions.createSession, "function");
@@ -203,7 +209,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.changes.diff.inspect",
     "vibe64.sessions.changes.inspect",
     "vibe64.sessions.conversation-log.read",
-    "vibe64.sessions.conversation.rewind",
+    "vibe64.sessions.conversation.context.read",
     "vibe64.sessions.create",
     "vibe64.sessions.current.update",
     "vibe64.sessions.inspect",
@@ -226,7 +232,11 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.work.save",
     "vibe64.sessions.workspace-setup.retry"
   ]);
-  assert.equal(sessionRoutes.length, sessionActions[0].actions.length);
+  const contextRead = sessionActions[0].actions.find(action => action.id === "vibe64.sessions.conversation.context.read");
+  assert.deepEqual(contextRead.channels, ["internal"]);
+  assert.equal(contextRead.extensions?.assistant, undefined);
+  assert.equal(sessionRoutes.length, sessionActions[0].actions.length - 1,
+    "the internal conversation access query has no HTTP route");
   assert.equal(sessionActions[0].actions.some((action) => Object.hasOwn(action, "dependencies")), false);
   const resumed = await sessionOutputs.sessions.resumeIntegrationContinuation("session-1", {
     turnId: "000001", requestId: "a".repeat(64)

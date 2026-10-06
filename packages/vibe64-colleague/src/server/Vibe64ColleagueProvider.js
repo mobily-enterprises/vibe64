@@ -1,7 +1,7 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
-import { createColleagueActions } from "./actions.js";
+import { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema } from "./actions.js";
 import { createColleagueService } from "./service.js";
 
 const Vibe64ColleagueProvider = defineFeature({
@@ -18,12 +18,16 @@ const Vibe64ColleagueProvider = defineFeature({
     routes.actionRoute("GET", "/models", { actionId: "vibe64.assistants.capabilities.list", buildInput: routes.requestQuery, summary: "Read the existing actor-aware model catalogue for Colleague." });
     routes.actionRoute("GET", "/usage/topics", { actionId: "vibe64.colleague.usage.topics.read", buildInput: routes.requestQuery, summary: "Find Vibe64 usage topics shipped in this release." });
     routes.actionRoute("GET", "/usage/guide", { actionId: "vibe64.colleague.usage.guide.read", buildInput: routes.requestQuery, summary: "Read a shipped Vibe64 usage guide." });
-    for (const [route, operation] of [["/messages", "message.send"], ["/focus", "focus.update"], ["/stop", "turn.stop"], ["/model", "model.select"], ["/watches/cancel", "watch.cancel"], ["/watches/resume", "watch.resume"], ["/navigation/ack", "navigation.acknowledge"]]) {
+    for (const [route, operation] of [["/messages", "message.send"], ["/focus", "focus.update"], ["/stop", "turn.stop"], ["/watches/cancel", "watch.cancel"], ["/watches/resume", "watch.resume"], ["/navigation/ack", "navigation.acknowledge"]]) {
       routes.actionRoute("POST", route, {
         actionId: `vibe64.colleague.${operation}`, buildInput: routes.requestBody, summary: `Colleague ${operation}.`
       });
     }
-    return { colleague };
+    return { colleague: { ...colleague,
+      browserConversations: { ...colleague.browserConversations,
+        conversationDataSchema: colleagueConversationDataSchema,
+        conversationSelectionSchema: colleagueConversationSelectionSchema }
+    } };
   },
   actions: ({ colleague }) => createColleagueActions(colleague),
   shutdown(_deps, { outputs }) { return outputs.colleague.close(); }

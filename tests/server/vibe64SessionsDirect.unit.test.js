@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ACTION_READ_CONVERSATION_CONTEXT,
   ACTION_RENAME_SESSION,
   ACTION_SKIP_INTEGRATION_SETUP,
   ACTION_RESUME_INTEGRATION_SETUP,
@@ -34,7 +35,6 @@ import {
   ACTION_UPDATE_ASSISTANT_SELECTION,
   ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
   ACTION_UPDATE_SESSION_PRESENCE,
-  ACTION_REWIND_CONVERSATION,
   ACTION_SEND_AGENT_MESSAGE,
   ACTION_INTERRUPT_AGENT_TURN,
   ACTION_BROADCAST_SESSION_PREVIEW_STATE,
@@ -48,6 +48,8 @@ import {
 import {
   createService
 } from "../../packages/vibe64-sessions/src/server/service.js";
+import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
+import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import {
   developmentDatabasePolicy
 } from "../../packages/vibe64-project/src/server/developmentDatabasePolicy.js";
@@ -228,6 +230,7 @@ function sessionCreationPolicyHarness({
 
 test("sessions expose only direct chat and source actions", () => {
   assert.deepEqual(createSessionActions({ sessions: {} }).map((action) => action.id), [
+    ACTION_READ_CONVERSATION_CONTEXT,
     ACTION_RENAME_SESSION,
     ACTION_RESUME_INTEGRATION_SETUP,
     ACTION_SKIP_INTEGRATION_SETUP,
@@ -258,13 +261,15 @@ test("sessions expose only direct chat and source actions", () => {
     ACTION_READ_SESSION_CONVERSATION_LOG,
     ACTION_RETRY_WORKSPACE_SETUP,
     ACTION_ARCHIVE_SESSION,
-    ACTION_REWIND_CONVERSATION,
-  ACTION_SEND_AGENT_MESSAGE,
+    ACTION_SEND_AGENT_MESSAGE,
     ACTION_INSPECT_ASSISTANT_ACCESS,
     ACTION_INTERRUPT_AGENT_TURN,
     ACTION_UPDATE_SESSION_PRESENCE,
     ACTION_BROADCAST_SESSION_PREVIEW_STATE
   ]);
+  const contextRead = createSessionActions({ sessions: {} }).find(action => action.id === ACTION_READ_CONVERSATION_CONTEXT);
+  assert.deepEqual(contextRead.channels, ["internal"]);
+  assert.equal(contextRead.extensions?.assistant, undefined);
 });
 
 test("typing presence trusts the authenticated request user and never accepts a draft", async () => {
@@ -458,7 +463,7 @@ test("session publications use the trusted project context and actions do not re
 
 test("conversation history includes the current live snapshot for reconnecting clients", async () => {
   const conversationStream = { revision: 3, messages: [{ messageId: "answer", role: "assistant", text: "Partial", status: "inProgress" }] };
-  const service = createService({ terminals: { readConversationRewindState: async () => null }, project: { async createRuntime() {
+  const service = createService({ terminals: {}, project: { async createRuntime() {
     return {
       async readConversationLogPage(sessionId) {
         assert.equal(sessionId, "session-1");
@@ -669,6 +674,39 @@ test("empty assistant messages fail without starting a provider turn", async () 
   });
   assert.equal(Object.hasOwn(service, "broadcastComposerDraft"), false);
   assert.equal(Object.hasOwn(service, "readComposerDraft"), false);
+});
+
+test("Main browser delivery preserves original owner-conflict recovery scalars without private results", async () => {
+  const target = { projectSlug: "test-project", sessionId: "session-1" };
+  const calls = [];
+  let result = {
+    ok: false, delivered: false, code: "vibe64_agent_turn_owner_conflict",
+    error: "This assistant turn belongs to another user. Your message will be sent when that turn finishes.",
+    operationOutcome: "active_turn_owned_by_another_user", retryable: true, refreshRecommended: true,
+    threadId: "private-thread", turnId: "private-turn", session: { metadata: { private: true } }
+  };
+  const expected = { ok: false, delivered: false, code: result.code, error: result.error,
+    operationOutcome: result.operationOutcome, retryable: true, refreshRecommended: true };
+  const conversations = createMainBrowserConversations({
+    actions: { async execute(request) {
+      calls.push(request);
+      if (request.actionId === ACTION_READ_CONVERSATION_CONTEXT) return { actor: { id: "owner" } };
+      assert.equal(request.actionId, ACTION_SEND_AGENT_MESSAGE);
+      return result;
+    } },
+    terminals: { openBrowserConversation() { assert.fail("Projecting an action result must not inspect or dispatch another native turn."); } }
+  });
+  const conversation = await conversations.open({ id: mainConversationId(target), context: { surface: "app", channel: "internal" } });
+  const input = { messageId: "owner-conflict", text: "Keep my original request", data: { originId: "original-tab" }, steer: true };
+  assert.deepEqual(await conversation.send(input), expected);
+  assert.deepEqual(calls.map(call => call.actionId), [ACTION_READ_CONVERSATION_CONTEXT,
+    ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE]);
+  assert.deepEqual(calls.at(-1).input, { ...target, messageId: input.messageId, message: input.text,
+    originId: input.data.originId, submissionKind: "steer" });
+
+  result = { ok: false, delivered: false, error: "Do not reinterpret malformed optional fields.",
+    operationOutcome: true, retryable: "true", refreshRecommended: { private: true } };
+  assert.deepEqual(await conversation.send(input), { ok: false, delivered: false, error: result.error });
 });
 
 test("failed assistant delivery is published as failed, not accepted", async () => {
@@ -3461,39 +3499,6 @@ test("workspace preparation starts required or newly configured recipes and retr
   assert.equal(startCount, 4);
 });
 
-
-test("conversation rewind forwards the authenticated actor without preparing the workspace", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
-  const session = { sessionId: "session-1" };
-  const calls = [];
-  const events = [];
-  const runtime = { async getSession(id, options) {
-    assert.equal(id, session.sessionId);
-    assert.deepEqual(options, { inspectSource: false });
-    return session;
-  } };
-  const sessions = createService({
-    project: { async createRuntime(options) {
-      assert.deepEqual(options, { inspectSource: false });
-      return runtime;
-    } },
-    terminals: {
-      async rewindConversation(...args) { calls.push(args); return { ok: true, text: "Last prompt" }; },
-      async prepareWorkspaceSetup() { assert.fail("Undo must not prepare the workspace"); }
-    },
-    publishSessionChanged: async (...args) => events.push(args)
-  });
-  const action = createSessionActions({ sessions }).find((entry) => entry.id === ACTION_REWIND_CONVERSATION);
-  const actor = { username: "member" };
-  const result = await action.execute({
-    sessionId: session.sessionId, turnId: "000002", originId: "browser-1",
-    vibe64User: { username: "owner" }, checkpoint: { threadId: "untrusted" }
-  }, { requestMeta: { request: { params: { slug: "unit_project" }, vibe64User: actor } } });
-  assert.deepEqual(result, { ok: true, text: "Last prompt" });
-  assert.deepEqual(calls, [[session.sessionId, {
-    turnId: "000002", originId: "browser-1", vibe64User: actor
-  }, { runtime, vibe64User: actor }]]);
-  assert.deepEqual(events, [[session.sessionId, { originId: "browser-1", reason: "conversation-rewound", session }]]);
-}));
 
 test("integration continuation action forwards only request identity and authenticated actor", async () => runWithProjectRequestContext({ slug: "unit_project" }, async () => {
   const runtime = {};

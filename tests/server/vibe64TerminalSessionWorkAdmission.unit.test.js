@@ -119,6 +119,7 @@ function agentWriteLockHarness({ holdFirst = false, secondValue = null } = {}) {
 
 async function terminalServiceFixture(t, lock, {
   assistantSelection = null,
+  codexAppServerProviderFactory,
   logger = null,
   opencodeTerminalController = {},
   publishSessionChanged = {}
@@ -217,12 +218,14 @@ async function terminalServiceFixture(t, lock, {
   const service = createTerminalService({
     logger,
     codexTerminalController: {
+      codexAppServerProviderFactory,
       codexToolHomeRequired: false,
       codexToolHomeSource,
       codexAppServerProviderOptions: { systemRoot: path.join(root, "system") }
     },
     env: {
       [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: attachmentRoot,
+      VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-runtimes"),
       VIBE64_SYSTEM_ROOT: path.join(root, "system"),
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
@@ -268,21 +271,6 @@ async function outdatedSkillFixture(projectRoot) {
   assert.equal((await inspectGenesisSkills({ projectRoot })).status, "outdated");
   return { skillPath, original, expected };
 }
-
-test("conversation rewind rejects denied AI access before cancelling routing", async (t) => {
-  const lock = agentWriteLockHarness();
-  const f = await terminalServiceFixture(t, lock, {
-    assistantSelection: { ...CODEX_SELECTION, engineId: "opencode", agentId: "build", modelProviderId: "personal" },
-    opencodeTerminalController: { createServerProcess() { assert.fail("Denied Undo must not start a provider."); } }
-  });
-  const routing = JSON.stringify({ status: "planning_pending", review: true, workPlan: { status: "ready" } });
-  await f.runtime.store.writeMetadataValue("session-1", "assistant_routing_request", routing);
-  f.service.configureAssistantRuntime({ readAssistantAccess: async () => ({ available: true, ownerOnly: true }) });
-  await assert.rejects(f.service.rewindConversation("session-1", { turnId: "000002" }, {
-    runtime: f.runtime, vibe64User: { username: "member", role: "member" }
-  }), { code: "vibe64_assistant_owner_required" });
-  assert.equal(await f.runtime.store.readMetadataValue("session-1", "assistant_routing_request"), routing);
-});
 
 test("native replacement uses the service's write lock and access gate without starting inference", async (t) => {
   const lock = agentWriteLockHarness();
@@ -342,17 +330,18 @@ test("native storage discovers and retires an archived native-only chat through 
   const f = await terminalServiceFixture(t, lock, { assistantSelection: selection, opencodeTerminalController: {
     createServerProcess: async () => ({
       client: { health: async () => ({ healthy: true }), sessionStatus: async () => ({ type: "idle" }),
-        deleteSession: async (id) => { assert.equal(preserved, true); ids.delete(id); } },
-      readConversationStorage: async (id) => {
-        if (!ids.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 });
-        return { id, directory: workdir, time: { updated: 1 } };
-      },
-      listConversationsForDirectory: async (directory) => { assert.equal(directory, workdir); return [...ids].map((id) => ({ id, directory: workdir })); },
-      listConversationChildren: async () => [], stop: async () => ({ exited: true }),
-      readConversationStoragePage: async (id) => ({ nextCursor: null, data: [{
-        info: { id: "msg_nativeuser", sessionID: id, role: "user" },
-        parts: [{ type: "text", text: "Native-only question" }]
-      }] })
+        deleteSession: async (id) => { assert.equal(preserved, true); ids.delete(id); },
+        readConversationStorage: async (id) => {
+          if (!ids.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 });
+          return { id, directory: workdir, time: { updated: 1 } };
+        },
+        listConversationsForDirectory: async (directory) => { assert.equal(directory, workdir); return [...ids].map((id) => ({ id, directory: workdir })); },
+        listConversationChildren: async () => [],
+        readConversationStoragePage: async (id) => ({ nextCursor: null, data: [{
+          info: { id: "msg_nativeuser", sessionID: id, role: "user" },
+          parts: [{ type: "text", text: "Native-only question" }]
+        }] }) },
+      stop: async () => ({ exited: true })
     })
   } });
   workdir = f.session.metadata.source_path;
@@ -384,18 +373,41 @@ test("native storage discovers and retires an archived native-only chat through 
 });
 
 for (const kind of ["main", "temporary", "goal"]) test(`${kind} assistant work refreshes skills under both write locks and preserves source customization`, async (t) => {
+  const provider = kind === "temporary" ? await controllerHarness({
+    withCommandBoundary: true,
+    beforePrompt() { throw new Error("This fixture does not perform inference."); }
+  }) : null;
+  if (provider) t.after(async () => {
+    await provider.controller.closeAllForProject();
+    await rm(provider.root, { recursive: true, force: true });
+  });
   const lock = agentWriteLockHarness();
   const events = [];
-  const { service, session, projectService } = await terminalServiceFixture(t, lock, {
+  const { service, session, projectService, runtime, root } = await terminalServiceFixture(t, lock, {
     ...(kind === "goal" ? { assistantSelection: {
       engineId: "opencode", agentId: "build", modelProviderId: "opencode", modelId: "big-pickle",
       variantId: "", catalogRevision: `sha256:${"a".repeat(64)}`
     } } : {}),
-    opencodeTerminalController: {
+    opencodeTerminalController: provider?.controllerOptions || {
       createServerProcess() { throw new Error("The test does not start an AI provider."); }
     },
     publishSessionChanged: { agentTerminal: async (_sessionId, event) => events.push(event) }
   });
+  if (provider) {
+    session.metadata.assistant_selection = provider.session.metadata.assistant_selection;
+    const selection = { ...JSON.parse(session.metadata.assistant_selection), selectionSource: "explicit" };
+    await createAssistantRoutingStore({ systemRoot: path.join(root, "system") }).write({ opencode: { senior: selection, junior: selection } }, 0);
+    service.configureAssistantRuntime({
+      readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "shared-deepseek" }),
+      resolveConnection: provider.controllerOptions.resolveConnection,
+      listConnections: provider.controllerOptions.listConnections
+    });
+    runtime.renderPrompt = async (_sessionId, input) => ({ prompt: input.request });
+    await service.createTemporaryConversation(session.sessionId, {
+      conversationId: "temporary",
+      assistantRouting: { mode: "junior", workflowEngineId: "opencode", review: false }
+    });
+  }
   const projectRoot = session.metadata.source_path;
   const { skillPath, expected } = await outdatedSkillFixture(projectRoot);
   const pluginPath = path.join(projectRoot, ".opencode/plugins/genesis-project-guidance.js");
@@ -415,9 +427,10 @@ for (const kind of ["main", "temporary", "goal"]) test(`${kind} assistant work r
     return operation();
   };
 
-  // Provider delivery is unavailable in this fixture; preparation is deterministic.
+  // The original controlled provider rejects inference; preparation is deterministic.
+  let temporaryMessage = 0;
   const send = () => kind === "temporary"
-    ? service.startAgentConversationTurn(session.sessionId, { conversationId: "temporary", message: "Continue." }, { engineId: "opencode" })
+    ? service.startTemporaryConversationTurn(session.sessionId, { conversationId: "temporary", message: "Continue.", messageId: `skills-preparation-${++temporaryMessage}` })
     : kind === "goal"
       ? service.updateAgentGoal(session.sessionId, { action: "set", objective: "Check this fixture.", engineId: "opencode" })
       : service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" });
@@ -889,6 +902,17 @@ test("publication rejects missing reviews and enforces the project's PR workflow
 test("Save rechecks active assistant work after waiting for preparation", { timeout: 15_000 }, async (t) => {
   const contended = deferred();
   const { runtime, service, session } = await terminalServiceFixture(t, { store: {} }, {
+    codexAppServerProviderFactory() {
+      return {
+        close() {},
+        async ensureAvailable() {
+          throw new Error("Initial connection failed");
+        },
+        async stopRuntime() {
+          return { processExitVerified: true, stopped: true };
+        }
+      };
+    },
     logger: { info() {}, warn(event) { if (event.event.endsWith(".contended")) contended.resolve(); } }
   });
   const entered = deferred();
@@ -940,8 +964,11 @@ test("rebase, assistant preparation and temporary repair identify their lock req
     code: "vibe64_agent_write_mode_busy"
   });
   assert.equal((await service.ensureAgentSession(session.sessionId)).code, "vibe64_agent_write_mode_busy");
-  assert.equal((await service.streamDetachedAgentChatTurn(session.sessionId)).code, "vibe64_agent_write_mode_busy");
-  assert.deepEqual(operations, ["update-session-work", "prepare-agent-session", "stream-temporary-chat"]);
+  const temporaryFailure = await service.startTemporaryConversationTurn(session.sessionId, {
+    conversationId: "temporary", message: "Repair this update.", messageId: "blocked-repair"
+  }).catch(error => error);
+  assert.equal(temporaryFailure.code, "vibe64_agent_write_mode_busy");
+  assert.deepEqual(operations, ["update-session-work", "prepare-agent-session", "temporary-conversation"]);
 });
 
 test("workspace setup reuses an already-held session agent-write lock", async (t) => {
@@ -1007,6 +1034,7 @@ test("workspace setup reuses an already-held session agent-write lock", async (t
     codexTerminalController: { codexToolHomeRequired: false },
     env: {
       [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: path.join(root, "attachments"),
+      VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-runtimes"),
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
@@ -1144,6 +1172,7 @@ test("renewal workspace setup privately resumes a pending successor while public
     codexTerminalController: { codexToolHomeRequired: false },
     env: {
       [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: path.join(root, "attachments"),
+      VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-runtimes"),
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
@@ -1505,7 +1534,7 @@ test("shutdown requested by a dependent feature closes main and temporary routin
   session.metadata.assistant_routing = JSON.stringify({ mode: "junior", workflowEngineId: "opencode", review: false });
   await service.createTemporaryConversation(session.sessionId, { conversationId: "shutdown-chat" });
   const shutdown = await service.invalidateAgentRuntimes({ reason: "server-shutdown" });
-  assert.notEqual(shutdown.ok, false);
+  assert.notEqual(shutdown.ok, false, JSON.stringify(shutdown));
   const input = { messageId: "late-send", message: "Do not send this after shutdown.", submissionKind: "send" };
   await assert.rejects(service.sendAgentMessage(session.sessionId, input), /shutting down/);
   await assert.rejects(service.startTemporaryConversationTurn(session.sessionId, {

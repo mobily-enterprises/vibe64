@@ -69,6 +69,7 @@ describe("vibe64 agent execution profiles", () => {
     expect(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).toEqual({
       COMMIT_TITLE: "commit_title",
       CONVERSATION_SUMMARY: "conversation_summary",
+      VOICE_TURN: "voice_turn",
       DATABASE_ASSISTANT: "database_assistant",
       PROMPT_HINT: "prompt_hint",
       REQUEST_ROUTING: "request_routing",

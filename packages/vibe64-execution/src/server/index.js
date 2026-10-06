@@ -202,3 +202,4 @@ export {
 export {
   agentEnvWrapperSource
 } from "./runtime/agentEnvWrapperSource.js";
+export { createVibe64ConversationExecution } from "./conversationExecution.js";

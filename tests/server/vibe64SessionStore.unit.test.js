@@ -13,6 +13,7 @@ import {
   vibe64SessionStatusIsOpen
 } from "@local/vibe64-runtime/server";
 import {
+  markHistoricalConversationRewound,
   projectRuntimeRoot,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
@@ -1755,7 +1756,7 @@ test("rewound integration requests cannot resume from an old browser tab", async
     });
     const selection = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId };
     assert.equal((await store.readIntegrationSetupRequest("rewound-setup", turn.turnId)).outcome, "pending");
-    await store.rewindConversationLog("rewound-setup", [turn.turnId]);
+    await markHistoricalConversationRewound(store, "rewound-setup", [turn.turnId]);
     const reopened = createStore(targetRoot);
     assert.equal(await reopened.readIntegrationSetupRequest("rewound-setup", turn.turnId), null);
     await assert.rejects(reopened.skipIntegrationSetupRequest("rewound-setup", selection),

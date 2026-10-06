@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
-import { sessionConversationKey, readConversationRewindState, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedNativeConversationReplacement, rewindLastConversationTurn, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
+import { sessionConversationKey, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
+import { readMainConversationHistory } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 
 function selection(engineId, providerId = "") {
   return { engineId, agentId: engineId === "codex" ? "codex" : "build",
@@ -28,7 +29,7 @@ async function harness(t) {
   let serial = 0;
   const api = {
     get store() { return store; },
-    calls, logs, receipts, failure: "", inspectUnknown: false,
+    calls, logs, receipts, failure: "", inspectUnknown: false, provisional: new Set(),
     nativeThread: "", closeFailure: false,
     async replace(input) { return replaceNativeConversation(sessionId, input, await api.context(), agent); },
     async bindNative() {
@@ -38,7 +39,12 @@ async function harness(t) {
         await store.writeMetadataValue(sessionId, name, value);
       }
     },
-    async context() { return { runtime: { store }, session: await store.readSession(sessionId) }; },
+    async context() { return { runtime: { store: api.provisional.size ? { ...store,
+      readConversationLog: async id => (await store.readConversationLog(id)).map(turn => !api.provisional.has(turn.user?.messageId) ? turn : {
+        ...turn, user: { ...turn.user, receipt: false },
+        messages: turn.messages.map(message => message.role === "user" ? { ...message, receipt: false } : message)
+      })
+    } : store }, session: await store.readSession(sessionId) }; },
     async select(engineId, providerId) {
       const context = await api.context();
       const old = sessionConversationKey(context.session);
@@ -51,9 +57,6 @@ async function harness(t) {
     },
     async restart() { store = makeStore(); },
     async history() { return store.readConversationLog(sessionId); },
-    async rewind(turnId) { return rewindLastConversationTurn(sessionId, { turnId }, await api.context(), agent); },
-    async rewindState() { return readConversationRewindState(store, sessionId, sessionConversationKey((await api.context()).session)); },
-    rewindCalls: [], rewindFailure: false,
     async editAnswer(turnId, text) { await store.upsertConversationAssistantMessage(sessionId, { turnId, text }); }
   };
   const agent = {
@@ -62,12 +65,6 @@ async function harness(t) {
       assert.equal(context.forgetConversationBinding, true);
       if (api.closeFailure) throw new Error("Native stop unconfirmed");
       api.nativeThread = "fresh-successor";
-      return { ok: true };
-    },
-    async rewindConversation(_id, input) {
-      if (!input.checkpoint) return { ok: true, checkpoint: { messageId: input.messageId } };
-      api.rewindCalls.push(input.checkpoint.messageId);
-      if (api.rewindFailure) throw new Error("lost rewind response");
       return { ok: true };
     },
     async inspectMessageAdmission(_id, { messageId, threadId }) {
@@ -261,6 +258,42 @@ test("lost receipt plus restart checks acceptance and never resends or exposes t
   assert.equal(h.calls.length, 2);
 });
 
+test("provisional history cannot settle pending or duplicate delivery and never enters quoted prompts or fingerprints", async (t) => {
+  const h = await harness(t);
+  await h.send("Original", "first");
+  await h.select("opencode");
+  h.failure = "lost-response";
+  await assert.rejects(h.send("Unconfirmed", "second"), /connection lost/);
+  await h.store.writeConversationUserMessage("changeover", {
+    messageId: "second", text: "Unconfirmed", turnMetadata: { engineId: "opencode", assistantSelection: selection("opencode") }
+  });
+  h.provisional.add("second");
+  h.failure = "";
+  h.inspectUnknown = true;
+  const pending = await h.send("Unconfirmed", "second");
+  assert.equal(pending.delivered, false);
+  assert.equal(pending.code, "vibe64_changeover_delivery_unconfirmed");
+  assert.equal(h.calls.length, 2);
+  assert.ok(JSON.parse(await h.store.readMetadataValue("changeover", "assistant_changeover")).engines.opencode.pending);
+  h.inspectUnknown = false;
+  assert.equal((await h.send("Unconfirmed", "second")).delivered, true);
+  assert.equal(h.calls.length, 2);
+  assert.equal(JSON.parse(await h.store.readMetadataValue("changeover", "assistant_changeover")).engines.opencode.pending, undefined);
+  h.inspectUnknown = true;
+  assert.equal((await h.send("Unconfirmed", "second")).delivered, false);
+  assert.equal(h.calls.length, 2);
+  const context = await h.context();
+  const projected = await readMainConversationHistory(context.runtime.store, "changeover");
+  const original = await readMainConversationHistory(h.store, "changeover");
+  assert.equal(projected.find(message => message.messageId === "second").receipt, false);
+  assert.deepEqual(projected.map(message => message.version), original.map(message => message.version));
+  await h.select("codex");
+  await h.send("Continue", "third");
+  assert.match(h.calls.at(-1).message, /Unconfirmed/);
+  assert.doesNotMatch(h.calls.at(-1).message, /"receipt"/);
+  assert.equal((await h.history()).some(turn => turn.messages.some(message => Object.hasOwn(message, "receipt"))), false);
+});
+
 test("a saved authored bubble confirms acceptance even when native receipt inspection is unavailable", async (t) => {
   const h = await harness(t);
   await h.send("Background");
@@ -291,64 +324,6 @@ test("uncertain receipt blocks replay but permits switching to another engine", 
   assert.equal((await h.send("Use this AI instead")).delivered, true);
   assert.equal(h.calls.length, 3);
 });
-
-
-test("Undo removes one whole exchange durably, keeps IDs reserved, and stops at the AI switch", async (t) => {
-  const h = await harness(t);
-  await h.send("Codex first");
-  await h.send("Codex second");
-  await h.select("opencode");
-  await h.send("OpenCode first");
-  const boundary = (await h.history()).at(-1).turnId;
-  assert.equal(await h.rewindState(), null);
-  await assert.rejects(h.rewind(boundary), /same AI/);
-  await h.send("OpenCode second", "undo-me");
-  const last = (await h.history()).at(-1).turnId;
-  await h.store.writeConversationCommentaryMessage("changeover", { messageId: "tail-comment", text: "Extra tool output" });
-  assert.equal((await h.rewindState()).turnId, last);
-  assert.equal((await h.rewind(last)).text, "OpenCode second");
-  await h.restart();
-  assert.equal((await h.history()).at(-1).turnId, boundary);
-  assert.equal(await h.rewindState(), null);
-  assert.equal(await h.store.conversationMessageIdExists("changeover", "undo-me"), true);
-  assert.equal(await h.store.writeConversationCommentaryMessage("changeover", { messageId: "tail-comment", text: "Late duplicate" }), null);
-  await h.rewind(last);
-  assert.equal(h.rewindCalls.length, 1, "retry must not undo a second native turn");
-  await h.send("Replacement", "replacement");
-  assert.ok((await h.history()).at(-1).turnId > last);
-  assert.equal(h.calls.at(-1).message, "Replacement", "undone context must not come back as a changeover");
-});
-
-test("Undo recovers after a lost response and blocks Send until native and local history agree", async (t) => {
-  const h = await harness(t);
-  await h.send("First");
-  await h.send("Second");
-  const last = (await h.history()).at(-1).turnId;
-  h.rewindFailure = true;
-  await assert.rejects(h.rewind(last), /lost rewind response/);
-  await h.restart();
-  await assert.rejects(h.send("Must wait"), /Finish undoing/);
-  const pending = await h.rewindState();
-  assert.equal(pending.turnId, last);
-  assert.equal(pending.pending, true);
-  h.rewindFailure = false;
-  await h.rewind(last);
-  await h.send("Continue");
-  assert.equal(h.calls.at(-1).message, "Continue");
-});
-
-test("Undo rejects stale targets and the currently selected different AI", async (t) => {
-  const h = await harness(t);
-  await h.send("First");
-  const first = (await h.history()).at(-1).turnId;
-  await h.send("Second");
-  await assert.rejects(h.rewind(first), /latest turn/);
-  const second = (await h.history()).at(-1).turnId;
-  await h.select("opencode");
-  await assert.rejects(h.rewind(second), /same AI/);
-  assert.equal(h.rewindCalls.length, 0);
-});
-
 
 test("Codex models share one native history across providers and restart", async (t) => {
   const h = await harness(t);
@@ -381,19 +356,28 @@ test("an uncertain Codex changeover blocks another model until its receipt is re
   assert.equal(h.calls.length, 2, "Native receipt recovery must not duplicate delivery");
 });
 
-test("Undo follows the shared Codex history across model providers", async (t) => {
-  const h = await harness(t);
-  await h.send("GPT first");
-  await h.select("codex", "deepseek");
-  await h.send("DeepSeek second");
-  const latest = (await h.history()).at(-1).turnId;
-  await h.select("codex", "zai-coding-plan");
-  assert.equal((await h.rewindState()).turnId, latest);
-  assert.equal((await h.rewind(latest)).text, "DeepSeek second");
-  assert.equal(h.rewindCalls.length, 1);
-});
-
 const replacementRequest = { operationId: "rotation-1", expectedConversationId: "codex-original-thread", handover: "Keep the blue clock and its seconds display." };
+
+test("unfinished historical Undo blocks assistant work while completed markers remain intact", async (t) => {
+  const h = await harness(t);
+  await h.bindNative();
+  const state = { lastEngine: "codex", engines: { codex: { seen: {} } },
+    rewind: { turnId: "000001", turnIds: ["000001"], checkpoint: { messageId: "old" }, completed: false } };
+  const saved = JSON.stringify(state);
+  await h.store.writeMetadataValue("changeover", "assistant_changeover", saved);
+  const message = "An unfinished conversation Undo from a previous release blocks assistant work. Complete it using the previous release before upgrading.";
+  assert.throws(() => requireCompletedConversationRewind({ metadata: { assistant_changeover: saved } }),
+    { code: "vibe64_conversation_rewind_pending", message });
+  await assert.rejects(h.send("Blocked"), { code: "vibe64_conversation_rewind_pending", message });
+  await assert.rejects(h.replace(replacementRequest), { code: "vibe64_conversation_replacement_unavailable", message });
+  assert.equal(await h.store.readMetadataValue("changeover", "assistant_changeover"), saved);
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.nativeThread, "");
+  state.rewind.completed = true;
+  await h.store.writeMetadataValue("changeover", "assistant_changeover", JSON.stringify(state));
+  await h.send("Continue");
+  assert.deepEqual(JSON.parse(await h.store.readMetadataValue("changeover", "assistant_changeover")).rewind, state.rewind);
+});
 
 test("native replacement preserves History and delivers the briefing once with the next ordinary Send", async (t) => {
   const h = await harness(t);

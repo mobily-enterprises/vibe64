@@ -8,7 +8,9 @@ Genesis without creating another interpretation of the application.
 - `packages/studio-terminal-core/src/server/codexRuntimeContext.js`
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
-- `packages/vibe64-terminals/src/server/codexTerminal.js`
+- `packages/vibe64-terminals/src/server/mainConversationBinding.js`
+- `packages/vibe64-terminals/src/server/codexConversationPreparation.js`
+- `packages/vibe64-terminals/src/server/codexSessionEnvironment.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`

@@ -2,7 +2,8 @@ import process from "node:process";
 
 import { genesisParserEnvironment, withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import { requestUnixJsonCommand } from "./unixJsonCommand.js";
-import { codexTerminalNamespace } from "./terminalShared.js";
+import { codexTerminalNamespace, openCodeError } from "./terminalShared.js";
+import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { prepareAgentHelperCommand } from "./agentHelperCommand.js";
 import {
   prepareAgentDatabaseCommand
@@ -65,6 +66,51 @@ async function agentSessionCommandEnvironmentIsHealthy(env = {}) {
     }
   }));
   return results.every(Boolean);
+}
+
+async function prepareOpenCodeSessionCommandEnvironment(context = {}, {
+  agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
+  codexGitCommand, env, prepareCommandEnvironment, projectService
+}) {
+  if (context.assistantScope) {
+    return {
+      env: context.assistantScope.environment || {},
+      shimDirs: []
+    };
+  }
+  if (!codexGitCommand) {
+    return { env: {}, shimDirs: [] };
+  }
+  const project = typeof projectService?.readCurrentProject === "function"
+    ? await projectService.readCurrentProject()
+    : projectService?.selectedProject || {};
+  const prepared = await prepareCommandEnvironment({
+    agentDatabaseCommand,
+    agentEnvCommand,
+    agentPreviewCommand,
+    agentSessionCommand,
+    env,
+    gitCommand: codexGitCommand,
+    project,
+    runtime: context.runtime,
+    sessionId: context.sessionId,
+    worktreePath: context.workdir
+  });
+  if (prepared?.ok !== true) {
+    throw openCodeError(
+      "vibe64_opencode_command_boundary_unavailable",
+      "Vibe64 could not prepare session-scoped Git commands for OpenCode.",
+      {},
+      503
+    );
+  }
+  return {
+    env: {
+      ...await loadProjectExecutionEnv({ projectService, session: context.session, target: "opencode" }),
+      ...record(prepared.env)
+    },
+    shimDirs: prepared.shimDirs
+  };
 }
 
 async function prepareAgentSessionCommandEnvironment(options = {}) {
@@ -196,5 +242,6 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
 export {
   agentSessionCommandEnvironmentIsHealthy,
   closeAgentSessionCommandEnvironment,
-  prepareAgentSessionCommandEnvironment
+  prepareAgentSessionCommandEnvironment,
+  prepareOpenCodeSessionCommandEnvironment
 };

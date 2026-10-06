@@ -25,6 +25,14 @@ Unsaved configuration must be saved or deliberately discarded before reloading.
 For client-registration or OAuth-discovery controls, review the displayed provider,
 callback, scopes and previous attempt before authorizing creation or retry.
 
+For an app-user connection, **Prepare app user connection request** places the
+setup request in the chat draft for review. It does not send it automatically or
+connect the application's users. Once that wiring is implemented, users connect
+through the application's own account screen and provider consent flow.
+Saving an application connection does not automatically give the coding agent
+its provider tools. Any assistant tool access requires explicit application
+wiring and authorization. These connections also remain separate from Git login.
+
 Payment and advertising operations retain separate account, environment and review
 requirements. Development can still address a real provider or spending account.
 Creating a paused campaign does not authorize launching it or spending money.

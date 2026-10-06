@@ -25,6 +25,16 @@ async function databaseHelperRuntime(t) {
   } };
 }
 
+// Controlled native replies use the shared bounded protocol; action execution,
+// response budgets and cleanup still run through the actual shared owners.
+function databaseFinalResponse(result) {
+  return JSON.stringify({ response: { kind: "final", result } });
+}
+
+function databaseToolResponse(name, args) {
+  return JSON.stringify({ response: { kind: "tool", name, arguments: args } });
+}
+
 const sharedDatabaseSelection = { engineId: "opencode", agentId: "build", modelProviderId: "deepseek",
   modelId: "deepseek-chat", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
 
@@ -223,16 +233,27 @@ test("database dialect registry is the single PostgreSQL and MySQL capability se
   );
 });
 
-test("database assistant structured schema stays inside the verified helper output bound", () => {
-  assert.doesNotThrow(() => codexAppServerHelperTurnSettings({
-    cwd: "/runtime/database-assistant-test",
-    executionProfile: databaseExecutionProfile({
-      model: "gpt-5.6-luna",
-      providerId: "codex",
-      thinking: "low"
-    }),
-    outputSchema: DATABASE_ASSISTANT_OUTPUT_SCHEMA
-  }));
+test("database assistant structured schema stays inside the verified helper output bound", async () => {
+  let responses = 0;
+  await runDatabaseAssistant({
+    schema: testSchema(), messages: [{ role: "user", content: "Explain this database." }],
+    executeReadQuery: async () => assert.fail("A final answer must not read rows"),
+    deleteThread: async () => ({ ok: true }),
+    async runAgentTurn(input) {
+      responses++;
+      assert.doesNotThrow(() => codexAppServerHelperTurnSettings({
+        cwd: "/runtime/database-assistant-test",
+        executionProfile: databaseExecutionProfile({
+          model: "gpt-5.6-luna", providerId: "codex", thinking: "low"
+        }),
+        outputSchema: input.outputSchema
+      }));
+      assert.equal(input.outputSchema.properties.response.anyOf.length, 3);
+      return { ok: true, threadId: "bounded-schema", executionProfile: databaseExecutionProfile(),
+        text: databaseFinalResponse({ answer: "Explanation", intent: "explain", sql: "" }) };
+    }
+  });
+  assert.equal(responses, 1);
 });
 
 test("query provenance keeps aliases and joins editable while derived fields stay read-only", () => {
@@ -705,7 +726,7 @@ test("database assistant retains selected-table context per question and rejects
     deleteThread: async () => ({ ok: true }),
     runAgentTurn: async (input) => {
       turns.push(input);
-      return { ok: true, executionProfile: databaseExecutionProfile(), threadId: "table-context", text: JSON.stringify({ action: "answer", intent: "explain", answer: "Explanation", schema: "", sql: "" }) };
+      return { ok: true, executionProfile: databaseExecutionProfile(), threadId: "table-context", text: databaseFinalResponse({ answer: "Explanation", intent: "explain", sql: "" }) };
     }
   };
   await runDatabaseAssistant({ ...options, messages: [
@@ -727,25 +748,15 @@ test("database assistant uses one selected-provider secondary conversation and a
   const schema = testSchema();
   const turns = [];
   const deletions = [];
-  const responses = [JSON.stringify({
-    action: "schema",
-    answer: "",
-    intent: "read",
-    schema: "books categories",
-    sql: ""
-  }), JSON.stringify({
-    action: "query",
-    answer: "",
-    intent: "read",
-    schema: "",
-    sql: "SELECT id, title FROM public.books;"
-  }), JSON.stringify({
-      action: "answer",
+  const responses = [
+    databaseToolResponse("vibe64_database_assistant_schema_search", { search: "books categories" }),
+    databaseToolResponse("vibe64_database_assistant_query_read", { sql: "SELECT id, title FROM public.books;" }),
+    databaseFinalResponse({
       answer: "There is one matching book.",
       intent: "read",
-      schema: "",
       sql: "SELECT id, title FROM public.books;"
-  })];
+    })
+  ];
   const executed = [];
   const executionProfile = databaseExecutionProfile();
 
@@ -790,21 +801,26 @@ test("database assistant uses one selected-provider secondary conversation and a
     workloadId: "database_assistant"
   });
   assert.equal(turns[0].input.threadId, undefined);
-  assert.deepEqual(turns[0].input.outputSchema, DATABASE_ASSISTANT_OUTPUT_SCHEMA);
-  assert.equal(turns[0].input.outputSchema.properties.answer.maxLength, 1_200);
+  const responseSchemas = turns[0].input.outputSchema.properties.response.anyOf;
+  const finalSchema = responseSchemas.find(branch => branch.properties.kind.enum[0] === "final").properties.result;
+  const schemaTool = responseSchemas.find(branch => branch.properties.name?.enum[0] === "vibe64_database_assistant_schema_search");
+  const queryTool = responseSchemas.find(branch => branch.properties.name?.enum[0] === "vibe64_database_assistant_query_read");
+  assert.deepEqual(finalSchema, DATABASE_ASSISTANT_OUTPUT_SCHEMA);
+  assert.equal(finalSchema.properties.answer.maxLength, 1_200);
   assert.equal(
-    turns[0].input.outputSchema.properties.schema.maxLength,
+    schemaTool.properties.arguments.properties.search.maxLength,
     DATABASE_ASSISTANT_SCHEMA_SEARCH_MAX_CHARACTERS
   );
-  assert.equal(turns[0].input.outputSchema.properties.sql.maxLength, 1_000);
+  assert.equal(finalSchema.properties.sql.maxLength, 1_000);
+  assert.equal(queryTool.properties.arguments.properties.sql.maxLength, 1_000);
   assert.equal(turns[0].input.timeoutMs, DATABASE_ASSISTANT_TURN_TIMEOUT_MS);
   assert.equal(turns[1].input.threadId, "database-thread-1");
   assert.equal(turns[1].input.conversationId, "database-thread-1");
-  assert.match(turns[1].input.prompt, /UNTRUSTED_DATABASE_SCHEMA_RESULT_JSON_BEGIN/u);
+  assert.match(turns[1].input.prompt, /UNTRUSTED_APPLICATION_TOOL_RESULT_JSON_BEGIN/u);
   assert.match(turns[1].input.prompt, /public\.books/u);
   assert.match(turns[1].input.prompt, /public\.categories/u);
   assert.match(turns[1].input.prompt, /comments?[^\n]*untrusted/iu);
-  assert.match(turns[2].input.prompt, /UNTRUSTED_DATABASE_QUERY_RESULT_JSON_BEGIN/u);
+  assert.match(turns[2].input.prompt, /UNTRUSTED_APPLICATION_TOOL_RESULT_JSON_BEGIN/u);
   assert.match(turns[2].input.prompt, /Dune/u);
   assert.deepEqual(executed, ["SELECT id, title FROM public.books;"]);
   assert.equal(answer.answer, "There is one matching book.");
@@ -889,13 +905,10 @@ test("database assistant rejects ambiguous schema actions and still removes the 
         options.onEvent({ threadId: "invalid-schema-thread", type: "thread" });
         return {
           ok: true,
-          text: JSON.stringify({
-            action: "schema",
-            answer: "I already know it.",
-            intent: "read",
-            schema: "books",
-            sql: ""
-          }),
+          text: JSON.stringify({ response: { kind: "tool", name: "vibe64_database_assistant_schema_search",
+            arguments: { search: "books" },
+            result: { answer: "I already know it.", intent: "read", sql: "" }
+          } }),
           threadId: "invalid-schema-thread"
         };
       },
@@ -923,13 +936,7 @@ test("database assistant fails closed when the selected provider omits its execu
         options.onEvent({ threadId: "unproved-database-thread", type: "thread" });
         return {
           ok: true,
-          text: JSON.stringify({
-            action: "answer",
-            answer: "The schema contains books.",
-            intent: "explain",
-            schema: "",
-            sql: ""
-          }),
+          text: databaseFinalResponse({ answer: "The schema contains books.", intent: "explain", sql: "" }),
           threadId: "unproved-database-thread"
         };
       },
@@ -1249,13 +1256,7 @@ test("database members can browse, run SQL and use a shared assistant through th
       });
       return {
         ok: true,
-        text: JSON.stringify({
-          action: "answer",
-          answer: "The books table stores the catalogue titles.",
-          intent: "explain",
-          schema: "",
-          sql: "SELECT id, title FROM public.books;"
-        }),
+        text: databaseFinalResponse({ answer: "The books table stores the catalogue titles.", intent: "explain", sql: "SELECT id, title FROM public.books;" }),
         threadId: "database-service-thread"
       };
     }
@@ -1433,7 +1434,7 @@ for (const { name, scenario } of [
     const providerDeletions = [];
     const providerAnswer = {
       ok: true,
-      text: JSON.stringify({ action: "answer", answer: "Done.", intent: "read", schema: "", sql: "" }),
+      text: databaseFinalResponse({ answer: "Done.", intent: "read", sql: "" }),
       threadId: "acquisition-assistant"
     };
     let providerTurns = 0;
@@ -1565,7 +1566,7 @@ for (const { name, scenario } of [
         assert.equal((await service.cancelQuery({ ...input, queryId: "unrelated-query" })).cancelled, false);
         providerResponse.resolve({
           ok: true,
-          text: JSON.stringify({ action: "query", answer: "", intent: "read", schema: "", sql: input.sql }),
+          text: databaseToolResponse("vibe64_database_assistant_query_read", { sql: input.sql }),
           threadId: "acquisition-assistant"
         });
         await attempts[0].requested.promise;
@@ -1755,7 +1756,7 @@ test("database copilot keeps failed cleanup for restart and closes a late cancel
       await options.onEvent({ type: "thread", threadId: "scoped-database-thread" });
       await options.onEvent({ type: "turn", turnId: "scoped-database-turn" });
       return { ok: true, threadId: "scoped-database-thread", executionProfile: databaseExecutionProfile(),
-        text: JSON.stringify({ action: "answer", answer: "Private answer", intent: "explain", schema: "", sql: "" }) };
+        text: databaseFinalResponse({ answer: "Private answer", intent: "explain", sql: "" }) };
     },
     async deleteEphemeralAgentConversation(scope, input, options) {
       deletes += 1;
@@ -1969,4 +1970,82 @@ test("database service replaces a schema snapshot owned by a different database"
   assert.equal(refreshCount, 1);
   assert.equal(JSON.parse(artifacts.get("database/schema.json")).database, "catalogue");
   await service.close();
+});
+
+test("database assistant application tools preserve host exceptions and clean up their exact native conversation", async () => {
+  for (const statusCode of [403, 503]) {
+    const failure = Object.assign(new Error("Original read failure"), { code: "original_read_failure", statusCode });
+    const executionProfile = databaseExecutionProfile();
+    let nativeResponses = 0;
+    let reads = 0;
+    const deletions = [];
+    await assert.rejects(runDatabaseAssistant({
+      agentContext: { vibe64User: { username: "owner" } },
+      executeReadQuery: async () => { reads++; throw failure; },
+      deleteThread: async (input, options) => { deletions.push({ input, options }); return { ok: true }; },
+      messages: [{ content: "Read the books.", role: "user" }],
+      schema: testSchema(),
+      async runAgentTurn(input, options) {
+        nativeResponses++;
+        assert.equal(input.timeoutMs, DATABASE_ASSISTANT_TURN_TIMEOUT_MS);
+        await options.onEvent({ type: "thread", threadId: "exact-database-thread", executionProfile });
+        return { ok: true, threadId: "exact-database-thread", turnId: "exact-database-turn", executionProfile,
+          text: databaseToolResponse("vibe64_database_assistant_query_read", { sql: "SELECT id FROM public.books;" }) };
+      }
+    }), error => error === failure);
+    assert.equal(nativeResponses, 1);
+    assert.equal(reads, 1);
+    assert.deepEqual(deletions, [{ input: {
+      conversationId: "exact-database-thread", ephemeral: true, executionProfile, threadId: "exact-database-thread"
+    }, options: { vibe64User: { username: "owner" } } }]);
+  }
+});
+
+test("database assistant application tools preserve the original result bound before another native response", async () => {
+  const executionProfile = databaseExecutionProfile();
+  let nativeResponses = 0;
+  let reads = 0;
+  let deletions = 0;
+  await assert.rejects(runDatabaseAssistant({
+    executeReadQuery: async () => { reads++; return { kind: "result-set", columns: [], rows: [["x".repeat(2 * 1024 * 1024)]] }; },
+    deleteThread: async input => { deletions++; assert.equal(input.threadId, "bounded-result-thread"); return { ok: true }; },
+    messages: [{ content: "Read the books.", role: "user" }],
+    schema: testSchema(),
+    async runAgentTurn(_input, options) {
+      nativeResponses++;
+      await options.onEvent({ type: "thread", threadId: "bounded-result-thread", executionProfile });
+      return { ok: true, threadId: "bounded-result-thread", executionProfile,
+        text: databaseToolResponse("vibe64_database_assistant_query_read", { sql: "SELECT title FROM public.books;" }) };
+    }
+  }), { code: "vibe64_database_assistant_query_result_too_large" });
+  assert.equal(nativeResponses, 1);
+  assert.equal(reads, 1);
+  assert.equal(deletions, 1);
+});
+
+test("database assistant application tools finish operation four on the same native thread without response five", async () => {
+  const executionProfile = databaseExecutionProfile();
+  const trace = [];
+  let nativeResponses = 0;
+  let reads = 0;
+  await assert.rejects(runDatabaseAssistant({
+    executeReadQuery: async sql => { trace.push(`read:${++reads}`); assert.equal(sql, "SELECT id FROM public.books;");
+      return { kind: "result-set", columns: [{ label: "id" }], rows: [[1]] }; },
+    deleteThread: async input => { trace.push("delete"); assert.equal(input.threadId, "four-response-thread"); return { ok: true }; },
+    messages: [{ content: "Read the books.", role: "user" }],
+    schema: testSchema(),
+    async runAgentTurn(input, options) {
+      trace.push(`response:${++nativeResponses}`);
+      assert.equal(input.timeoutMs, DATABASE_ASSISTANT_TURN_TIMEOUT_MS);
+      assert.equal(input.conversationId, nativeResponses === 1 ? undefined : "four-response-thread");
+      assert.equal(input.tools, undefined);
+      assert.deepEqual(input.executionProfile, { profileId: "helper", workloadId: "database_assistant" });
+      await options.onEvent({ type: "thread", threadId: "four-response-thread", executionProfile });
+      return { ok: true, threadId: "four-response-thread", turnId: `native-turn-${nativeResponses}`, executionProfile,
+        text: databaseToolResponse("vibe64_database_assistant_query_read", { sql: "SELECT id FROM public.books;" }) };
+    }
+  }), { code: "vibe64_database_assistant_tool_limit" });
+  assert.equal(nativeResponses, 4);
+  assert.equal(reads, 4);
+  assert.deepEqual(trace, ["response:1", "read:1", "response:2", "read:2", "response:3", "read:3", "response:4", "read:4", "delete"]);
 });

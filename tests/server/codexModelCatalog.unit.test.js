@@ -3,7 +3,8 @@ import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { prepareCodexModelCatalog } from "@local/vibe64-runtime/server/codexModelCatalog";
+import { prepareCodexModelCatalog } from "@jskit-ai/assistant-core/testing/native-codex";
+import { codexProviderModelCatalog } from "@local/vibe64-core/server/codexProviderConnections";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 
 async function fixture(t, source) {
@@ -12,7 +13,7 @@ async function fixture(t, source) {
   const command = path.join(runtimeDir, "codex");
   await writeFile(command, `#!${process.execPath}\n${source}\n`);
   await chmod(command, 0o700);
-  return { runtimeDir, command };
+  return { runtimeDir, command, additionalModels: codexProviderModelCatalog().models };
 }
 
 test("startup exports current native metadata verbatim and adds every unique curated model", async (t) => {
@@ -50,33 +51,4 @@ test("a provider-only home obtains native metadata from the installed binary wit
   assert.equal(catalog.models.filter((model) => model.slug === "deepseek-flash").length, 1);
   assert.equal(catalog.models.find((model) => model.slug === "deepseek-flash").context_window, 1048576);
   assert.equal(catalog.models[0].slug, "gpt-native");
-});
-
-for (const [name, source] of [
-  ["CLI failure", 'process.stderr.write("secret-provider-key"); process.exit(1);'],
-  ["invalid JSON", 'process.stdout.write("secret-provider-key");'],
-  ["oversized output", 'process.stdout.write("x".repeat(17 * 1024 * 1024));'],
-  ["empty catalogue", 'process.stdout.write(JSON.stringify({ models: [] }));'],
-  ["missing slug", 'process.stdout.write(JSON.stringify({ models: [{}] }));'],
-  ["duplicate slugs", 'process.stdout.write(JSON.stringify({ models: [{slug:"gpt"}, {slug:"gpt"}] }));']
-]) test(`${name} blocks startup without overwriting the last catalogue or exposing CLI output`, async (t) => {
-  const f = await fixture(t, source);
-  const target = path.join(f.runtimeDir, "models.json");
-  await writeFile(target, "previous catalogue");
-  await assert.rejects(prepareCodexModelCatalog(f), (error) => {
-    assert.match(error.message, /could not load its model catalogue/);
-    assert.doesNotMatch(String(error), /secret-provider-key/);
-    return true;
-  });
-  assert.equal(await readFile(target, "utf8"), "previous catalogue");
-  await assert.rejects(stat(`${target}.tmp`), { code: "ENOENT" });
-});
-
-test("stopping startup cancels the exporter and publishes no catalogue", async (t) => {
-  const f = await fixture(t, "setInterval(() => {}, 1000);");
-  const controller = new AbortController();
-  const pending = prepareCodexModelCatalog({ ...f, signal: controller.signal });
-  controller.abort();
-  await assert.rejects(pending, /could not load its model catalogue/);
-  await assert.rejects(stat(path.join(f.runtimeDir, "models.json")), { code: "ENOENT" });
 });

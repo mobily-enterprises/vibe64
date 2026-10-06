@@ -28,8 +28,15 @@ import {
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
 import {
-  normalizeThinkingMessageText,
-  mergeConversationStream
+  normalizeConversationMessage as normalizeSharedConversationMessage,
+  normalizeConversationTurn as normalizeSharedConversationTurn,
+  applyConversationLogPatch as applySharedConversationLogPatch,
+  mergeConversationStream,
+  CONVERSATION_LOG_PAGE_LIMIT,
+  normalizeConversationLogPagination,
+  normalizeConversationLogPage,
+  mergeConversationLogPages,
+  conversationLogReadQuery
 } from "@jskit-ai/assistant-core/shared/conversation";
 import {
   normalizeVibe64ConversationAttachments
@@ -70,73 +77,16 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "session-agent-message-delivered",
   "session-agent-message-failed"
 ]);
-const CONVERSATION_LOG_PAGE_LIMIT = 20;
 
 function normalizeConversationMessage(message = {}) {
-  if (!message || typeof message !== "object" || Array.isArray(message)) {
-    return null;
-  }
-  const role = String(message.role || "").trim();
-  const text = role === "thinking"
-    ? normalizeThinkingMessageText(message.text)
-    : String(message.text || "").trim();
-  if (!role || !text) {
-    return null;
-  }
-  const attachments = normalizeVibe64ConversationAttachments(message.attachments);
-  return {
-    at: String(message.at || "").trim(),
-    ...(attachments.length ? { attachments } : {}),
-    ...(String(message.messageId || "").trim()
-      ? { messageId: String(message.messageId).trim() }
-      : {}),
-    role,
-    text
-  };
-}
-
-function chronologicalConversationActivity(messages = []) {
-  return [...messages].sort((left, right) => (
-    String(left?.at || "").localeCompare(String(right?.at || ""))
-  ));
+  return normalizeSharedConversationMessage(message, { normalizeAttachments: normalizeVibe64ConversationAttachments });
 }
 
 function normalizeConversationTurn(turn = {}, index = 0) {
-  if (!turn || typeof turn !== "object" || Array.isArray(turn)) {
-    return null;
-  }
-  const user = normalizeConversationMessage(turn.user);
-  const assistant = normalizeConversationMessage(turn.assistant);
-  const normalizedCommentary = Array.isArray(turn.commentary)
-    ? turn.commentary.map(normalizeConversationMessage).filter(Boolean)
-    : [];
-  const system = normalizeConversationMessage(turn.system);
-  const normalizedThinking = Array.isArray(turn.thinking)
-    ? turn.thinking.map(normalizeConversationMessage).filter(Boolean)
-    : [];
-  const activityFromMessages = Array.isArray(turn.messages)
-    ? turn.messages
-      .map(normalizeConversationMessage)
-      .filter((message) => ["commentary", "thinking"].includes(message?.role))
-    : [];
-  const activity = activityFromMessages.length
-    ? activityFromMessages
-    : chronologicalConversationActivity([...normalizedThinking, ...normalizedCommentary]);
-  const commentary = activity.filter((message) => message.role === "commentary");
-  const thinking = activity.filter((message) => message.role === "thinking");
-  if (!system && !user && !assistant && !activity.length) {
-    return null;
-  }
-  return {
-    assistant,
-    commentary,
-    messages: [system, user, ...activity, assistant].filter(Boolean),
-    ...(isRecord(turn.metadata) ? { metadata: turn.metadata } : {}),
-    ...(isRecord(turn.integrationSetup) ? { integrationSetup: turn.integrationSetup } : {}),
-    ...(system ? { system } : {}),
-    thinking,
-    turnId: String(turn.turnId || index + 1).trim(),
-    user
+  const normalized = normalizeSharedConversationTurn(turn, index, { normalizeAttachments: normalizeVibe64ConversationAttachments });
+  return normalized && {
+    ...normalized,
+    ...(isRecord(turn.integrationSetup) ? { integrationSetup: turn.integrationSetup } : {})
   };
 }
 
@@ -149,8 +99,12 @@ function normalizeConversationLog(payload = {}, options = {}) {
   const normalizedTurns = turns
     .map((turn, index) => normalizeConversationTurn(turn, index))
     .filter(Boolean);
-  const pendingTurnIndex = options.pending === true ? normalizedTurns.length - 1 : -1;
-  return normalizedTurns.map((turn, index) => {
+  return conversationTurnsWithPending(normalizedTurns, options.pending);
+}
+
+function conversationTurnsWithPending(turns, pending) {
+  const pendingTurnIndex = pending === true ? turns.length - 1 : -1;
+  return turns.map((turn, index) => {
     if (index === pendingTurnIndex && turn.user && !turn.assistant) {
       return {
         ...turn,
@@ -159,70 +113,6 @@ function normalizeConversationLog(payload = {}, options = {}) {
     }
     return turn;
   });
-}
-
-function normalizeConversationLogPagination(pagination = {}) {
-  const source = isRecord(pagination) ? pagination : {};
-  return {
-    beforeTurnId: String(source.beforeTurnId || "").trim(),
-    count: Number.isFinite(Number(source.count)) ? Number(source.count) : 0,
-    hasMoreBefore: source.hasMoreBefore === true,
-    limit: Number.isFinite(Number(source.limit)) ? Number(source.limit) : 0,
-    newestTurnId: String(source.newestTurnId || "").trim(),
-    nextBeforeTurnId: String(source.nextBeforeTurnId || "").trim(),
-    oldestTurnId: String(source.oldestTurnId || "").trim(),
-    totalTurnCount: Number.isFinite(Number(source.totalTurnCount)) ? Number(source.totalTurnCount) : 0
-  };
-}
-
-function normalizeConversationLogPage(payload = {}) {
-  const source = isRecord(payload) ? payload : {};
-  const conversationLog = Array.isArray(source.conversationLog) ? source.conversationLog : [];
-  const pagination = normalizeConversationLogPagination(source.pagination);
-  return {
-    ...source,
-    conversationLog,
-    pagination: {
-      ...pagination,
-      count: pagination.count || conversationLog.length,
-      newestTurnId: pagination.newestTurnId || String(conversationLog.at(-1)?.turnId || "").trim(),
-      oldestTurnId: pagination.oldestTurnId || String(conversationLog[0]?.turnId || "").trim()
-    }
-  };
-}
-
-function mergeConversationLogPages(pages = []) {
-  const orderedTurns = [];
-  const indexes = new Map();
-  for (const page of Array.isArray(pages) ? pages : []) {
-    const normalized = normalizeConversationLogPage(page);
-    for (const turn of normalized.conversationLog) {
-      const turnId = String(turn?.turnId || "").trim();
-      if (!turnId) {
-        orderedTurns.push(turn);
-        continue;
-      }
-      if (indexes.has(turnId)) {
-        orderedTurns[indexes.get(turnId)] = turn;
-        continue;
-      }
-      indexes.set(turnId, orderedTurns.length);
-      orderedTurns.push(turn);
-    }
-  }
-  return {
-    conversationLog: orderedTurns
-  };
-}
-
-function conversationLogReadQuery({
-  beforeTurnId = "",
-  limit = CONVERSATION_LOG_PAGE_LIMIT
-} = {}) {
-  return {
-    ...(beforeTurnId ? { beforeTurnId } : {}),
-    limit: String(limit)
-  };
 }
 
 function conversationLogRealtimePatch(payload = {}) {
@@ -277,77 +167,9 @@ function conversationLogRealtimePatch(payload = {}) {
 }
 
 function applyConversationLogPatch(payload = {}, patch = null, options = {}) {
-  if (patch?.type !== "upsert-turn" || !isRecord(patch.turn)) {
-    return null;
-  }
-  const source = isRecord(payload) ? payload : {};
-  const turns = Array.isArray(source.conversationLog) ? source.conversationLog : [];
-  const turnId = String(patch.turn.turnId || "").trim();
-  if (!turnId) {
-    return null;
-  }
-  const existingIndex = turns.findIndex((turn) => String(turn?.turnId || "").trim() === turnId);
-  const existing = turns[existingIndex];
-  const updated = { ...existing, ...patch.turn };
-  if (existing) {
-    // An upsert adds delivered messages. An older partial turn must not remove
-    // a saved answer or progress; explicit Undo arrives through a fresh read.
-    for (const role of ["system", "user", "assistant"]) {
-      if (existing[role] && !updated[role]) {
-        updated[role] = existing[role];
-      }
-    }
-    const existingTurn = normalizeConversationTurn(existing);
-    const patchedTurn = normalizeConversationTurn(patch.turn);
-    for (const role of ["thinking", "commentary"]) {
-      const messages = new Map();
-      for (const message of [...(existingTurn?.[role] || []), ...(patchedTurn?.[role] || [])]) {
-        // Timestamped progress without a message ID updates one saved file as
-        // its text grows. Match that identity instead of retaining each version.
-        const key = message.messageId || JSON.stringify(message.at
-          ? [message.role, message.at]
-          : [message.role, "", message.text]);
-        messages.set(key, message);
-      }
-      updated[role] = chronologicalConversationActivity([...messages.values()]);
-    }
-    updated.messages = [
-      updated.system,
-      updated.user,
-      ...chronologicalConversationActivity([...updated.thinking, ...updated.commentary]),
-      updated.assistant
-    ].filter(Boolean);
-  }
-  const nextTurns = (existingIndex >= 0
-    ? turns.map((turn, index) => index === existingIndex ? updated : turn)
-    : [...turns, patch.turn]
-  ).sort((left, right) => String(left?.turnId || "").localeCompare(
-    String(right?.turnId || ""),
-    undefined,
-    {
-      numeric: true
-    }
-  ));
-  const limit = Number.parseInt(String(options.limit || ""), 10);
-  const limitedTurns = Number.isFinite(limit) && limit > 0
-    ? nextTurns.slice(-limit)
-    : nextTurns;
-  const wasTrimmed = limitedTurns.length < nextTurns.length;
-  const pagination = normalizeConversationLogPagination(source.pagination);
-  const hasMoreBefore = pagination.hasMoreBefore || wasTrimmed;
-  const oldestTurnId = String(limitedTurns[0]?.turnId || "").trim();
-  return {
-    ...source,
-    conversationLog: limitedTurns,
-    pagination: {
-      ...pagination,
-      count: limitedTurns.length,
-      hasMoreBefore,
-      newestTurnId: String(limitedTurns.at(-1)?.turnId || "").trim(),
-      nextBeforeTurnId: hasMoreBefore ? oldestTurnId : "",
-      oldestTurnId
-    }
-  };
+  return applySharedConversationLogPatch(payload, patch, {
+    ...options, normalizeAttachments: normalizeVibe64ConversationAttachments
+  });
 }
 
 function sessionIsAwaitingCodex(session = {}) {
@@ -398,24 +220,125 @@ function conversationLogCompletedTurnKey(session = {}) {
   return `${sessionId}|${revision}|${turnId}`;
 }
 
+function useConversationIntegrationActions({ turns, enabled, sessionId, projectSlug, sessionsApiPath, reloadConversationLog, httpClient }) {
+  const integrationActionPending = shallowRef(null);
+  const integrationActionError = ref(null);
+  const integrationConnections = shallowRef({});
+
+  function connectIntegrationRequest(request = {}) {
+    return runIntegrationRequestAction(request, "connect");
+  }
+
+  function checkIntegrationRequest(request = {}) {
+    return runIntegrationRequestAction(request, "status");
+  }
+
+  function cancelIntegrationRequest(request = {}) {
+    return runIntegrationRequestAction(request, "cancel");
+  }
+
+  function skipIntegrationRequest(request = {}) {
+    return runIntegrationRequestAction(request, "skip");
+  }
+
+  function resumeIntegrationRequest(request = {}) {
+    return runIntegrationRequestAction(request, "resume");
+  }
+
+  async function runIntegrationRequestAction(request, action) {
+    const turn = turns.value.find((entry) => entry.turnId === request.turnId);
+    if (!enabled.value || request.sessionId !== sessionId.value || integrationActionPending.value ||
+        turn?.integrationSetup?.outcome !== (action === "resume" ? "completed" : "pending") ||
+        turn.integrationSetup.requestId !== request.requestId) return false;
+    const selection = { sessionId: sessionId.value, turnId: request.turnId, requestId: request.requestId };
+    integrationActionPending.value = selection;
+    integrationActionError.value = null;
+    try {
+      if (["connect", "cancel", "status"].includes(action)) {
+        const path = vibe64SessionPath(sessionsApiPath.value, selection.sessionId, "/integrations");
+        const config = await httpClient.request(path);
+        if (integrationActionPending.value !== selection || sessionId.value !== selection.sessionId) return false;
+        const integrationId = turn.integrationSetup.integrationId;
+        const integration = config?.configuration?.integrations?.[integrationId];
+        if (!integration) throw new Error("Choose Configure to set up this integration first.");
+        if (connectorDefinitions.some((provider) => provider.id === integration.provider && (provider.configurationOnly || provider.configurationOnlyForSettings?.(integration?.settings || {})))) {
+          integrationConnections.value = { ...integrationConnections.value,
+            [selection.requestId]: { status: "configuration-only" } };
+          return true;
+        }
+        if (integration.accountMode === "per-user") throw new Error("Each app user connects their account inside the application. Choose Configure for setup instructions.");
+        const endpoint = `${path}/${encodeURIComponent(integrationId)}/setup`;
+        const previous = integrationConnections.value[selection.requestId];
+        if (action === "cancel" && !previous?.attemptId) return false;
+        let connection = await httpClient.request(endpoint, { method: "POST", body: {
+          operation: action,
+          ...(action === "cancel" ? { attemptId: previous.attemptId } : {
+            setupRequest: { turnId: selection.turnId, requestId: selection.requestId, configurationHash: config.baseHash }
+          })
+        } });
+        if (integrationActionPending.value !== selection || sessionId.value !== selection.sessionId) return false;
+        if (action === "cancel") {
+          connection = await httpClient.request(endpoint, { method: "POST", body: { operation: "status" } });
+          if (integrationActionPending.value !== selection || sessionId.value !== selection.sessionId) return false;
+        }
+        integrationConnections.value = { ...integrationConnections.value, [selection.requestId]: connection };
+        if (connection.integrationSetup?.outcome === "completed" && connection.integrationSetup.continuation?.status !== "accepted") {
+          const resumed = await httpClient.request(vibe64SessionPath(sessionsApiPath.value, selection.sessionId, "/integration-setup/resume"), {
+            method: "POST", body: { turnId: selection.turnId, requestId: selection.requestId }
+          });
+          if (resumed?.ok !== true) throw new Error(resumed?.error || "Assistant continuation is not yet confirmed.");
+        }
+        if (integrationActionPending.value === selection && sessionId.value === selection.sessionId) await reloadConversationLog();
+        return true;
+      }
+      const result = await httpClient.request(vibe64SessionPath(sessionsApiPath.value, selection.sessionId, `/integration-setup/${action}`), {
+        method: "POST", body: { turnId: selection.turnId, requestId: selection.requestId }
+      });
+      if (result?.ok !== true) throw new Error(result?.error || "Could not update integration setup.");
+      if (integrationActionPending.value === selection && sessionId.value === selection.sessionId) {
+        await reloadConversationLog();
+      }
+      return true;
+    } catch (error) {
+      if (sessionId.value === selection.sessionId && integrationActionPending.value === selection) {
+        integrationActionError.value = { turnId: selection.turnId, message: String(error?.message || "Could not update integration setup.") };
+        if (action === "resume" || action === "connect" || action === "status") await reloadConversationLog();
+      }
+      return false;
+    } finally {
+      if (sessionId.value === selection.sessionId && integrationActionPending.value === selection) {
+        integrationActionPending.value = null;
+      }
+    }
+  }
+
+  onScopeDispose(() => {
+    integrationActionPending.value = null;
+  });
+
+  watch([sessionId, projectSlug], () => {
+    integrationActionPending.value = null;
+    integrationActionError.value = null;
+    integrationConnections.value = {};
+  });
+
+  return { integrationConnections, connectIntegrationRequest, checkIntegrationRequest, cancelIntegrationRequest,
+    integrationActionPending, integrationActionError, skipIntegrationRequest, resumeIntegrationRequest };
+}
+
 function useVibe64ConversationLog({
   active = true,
   projectSlug: projectSlugInput,
   sessionsApiPath: sessionsApiPathInput,
-  session
+  session,
+  conversation = null
 } = {}) {
   const paths = usePaths();
   const httpClient = getHttpWebClient();
-  const queryClient = useQueryClient();
   const projectSlug = projectSlugInput === undefined ? useVibe64ProjectSlug()
     : computed(() => readRefOrGetterValue(projectSlugInput));
   const currentSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(currentSession.value?.sessionId || "").trim());
-  const olderPages = ref([]);
-  const loadingMore = ref(false);
-  const loadMoreError = ref("");
-  const integrationActionPending = shallowRef(null);
-  const integrationActionError = ref(null);
   const enabled = computed(() => Boolean(
     readRefOrGetterValue(active) !== false &&
     sessionId.value
@@ -423,6 +346,27 @@ function useVibe64ConversationLog({
   const sessionsApiPath = computed(() => readRefOrGetterValue(sessionsApiPathInput) || paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
+  if (conversation) {
+    const turns = computed(() => conversationTurnsWithPending(conversation.turns.value, sessionIsAwaitingCodex(currentSession.value)));
+    const integrationActions = useConversationIntegrationActions({ turns, enabled, sessionId, projectSlug,
+      sessionsApiPath, reloadConversationLog: conversation.reload, httpClient });
+    // These are product state changes. Native delivery, live output, history
+    // patches and reconnect reads belong to the supplied subscription alone.
+    const realtime = useRealtimeEvent({ enabled, event: VIBE64_SESSION_CHANGED_EVENT,
+      matches: context => ["session-assistant-selection-updated", "integration-setup-skipped", "integration-setup-completed"]
+        .includes(context?.payload?.reason) && conversationLogRealtimeShouldRefresh(context, sessionId.value),
+      onEvent: () => conversation.reload() });
+    return { ...integrationActions, turns, error: conversation.error, hasMoreBefore: conversation.hasMoreBefore,
+      loadMore: conversation.loadMore, loadMoreError: conversation.loadMoreError, loading: conversation.loading,
+      initializing: computed(() => !conversation.snapshot.value && conversation.loading.value),
+      loadingMore: conversation.loadingMore, reload: conversation.reload, realtime,
+      visible: computed(() => Boolean(conversation.loading.value || conversation.error.value || turns.value.length)) };
+  }
+  // Archived sessions still use their original read-only history resource.
+  const queryClient = useQueryClient();
+  const olderPages = ref([]);
+  const loadingMore = ref(false);
+  const loadMoreError = ref("");
   const queryKey = computed(() => [
     ...vibe64ConversationLogQueryKey(
       VIBE64_SURFACE_ID,
@@ -722,124 +666,22 @@ function useVibe64ConversationLog({
     }
   }
 
-  const integrationConnections = shallowRef({});
-
-  function connectIntegrationRequest(request = {}) {
-    return runIntegrationRequestAction(request, "connect");
-  }
-
-  function checkIntegrationRequest(request = {}) {
-    return runIntegrationRequestAction(request, "status");
-  }
-
-  function cancelIntegrationRequest(request = {}) {
-    return runIntegrationRequestAction(request, "cancel");
-  }
-
-  function skipIntegrationRequest(request = {}) {
-    return runIntegrationRequestAction(request, "skip");
-  }
-
-  function resumeIntegrationRequest(request = {}) {
-    return runIntegrationRequestAction(request, "resume");
-  }
-
-  async function runIntegrationRequestAction(request, action) {
-    const turn = turns.value.find((entry) => entry.turnId === request.turnId);
-    if (!enabled.value || request.sessionId !== sessionId.value || integrationActionPending.value ||
-        turn?.integrationSetup?.outcome !== (action === "resume" ? "completed" : "pending") ||
-        turn.integrationSetup.requestId !== request.requestId) return false;
-    const selection = { sessionId: sessionId.value, turnId: request.turnId, requestId: request.requestId };
-    integrationActionPending.value = selection;
-    integrationActionError.value = null;
-    try {
-      if (["connect", "cancel", "status"].includes(action)) {
-        const path = vibe64SessionPath(sessionsApiPath.value, selection.sessionId, "/integrations");
-        const config = await httpClient.request(path);
-        if (integrationActionPending.value !== selection || sessionId.value !== selection.sessionId) return false;
-        const integrationId = turn.integrationSetup.integrationId;
-        const integration = config?.configuration?.integrations?.[integrationId];
-        if (!integration) throw new Error("Choose Configure to set up this integration first.");
-        if (connectorDefinitions.some((provider) => provider.id === integration.provider && (provider.configurationOnly || provider.configurationOnlyForSettings?.(integration?.settings || {})))) {
-          integrationConnections.value = { ...integrationConnections.value,
-            [selection.requestId]: { status: "configuration-only" } };
-          return true;
-        }
-        if (integration.accountMode === "per-user") throw new Error("Each app user connects their account inside the application. Choose Configure for setup instructions.");
-        const endpoint = `${path}/${encodeURIComponent(integrationId)}/setup`;
-        const previous = integrationConnections.value[selection.requestId];
-        if (action === "cancel" && !previous?.attemptId) return false;
-        let connection = await httpClient.request(endpoint, { method: "POST", body: {
-          operation: action,
-          ...(action === "cancel" ? { attemptId: previous.attemptId } : {
-            setupRequest: { turnId: selection.turnId, requestId: selection.requestId, configurationHash: config.baseHash }
-          })
-        } });
-        if (integrationActionPending.value !== selection || sessionId.value !== selection.sessionId) return false;
-        if (action === "cancel") {
-          connection = await httpClient.request(endpoint, { method: "POST", body: { operation: "status" } });
-          if (integrationActionPending.value !== selection || sessionId.value !== selection.sessionId) return false;
-        }
-        integrationConnections.value = { ...integrationConnections.value, [selection.requestId]: connection };
-        if (connection.integrationSetup?.outcome === "completed" && connection.integrationSetup.continuation?.status !== "accepted") {
-          const resumed = await httpClient.request(vibe64SessionPath(sessionsApiPath.value, selection.sessionId, "/integration-setup/resume"), {
-            method: "POST", body: { turnId: selection.turnId, requestId: selection.requestId }
-          });
-          if (resumed?.ok !== true) throw new Error(resumed?.error || "Assistant continuation is not yet confirmed.");
-        }
-        if (integrationActionPending.value === selection && sessionId.value === selection.sessionId) await reloadConversationLog();
-        return true;
-      }
-      const result = await httpClient.request(vibe64SessionPath(sessionsApiPath.value, selection.sessionId, `/integration-setup/${action}`), {
-        method: "POST", body: { turnId: selection.turnId, requestId: selection.requestId }
-      });
-      if (result?.ok !== true) throw new Error(result?.error || "Could not update integration setup.");
-      if (integrationActionPending.value === selection && sessionId.value === selection.sessionId) {
-        await reloadConversationLog();
-      }
-      return true;
-    } catch (error) {
-      if (sessionId.value === selection.sessionId && integrationActionPending.value === selection) {
-        integrationActionError.value = { turnId: selection.turnId, message: String(error?.message || "Could not update integration setup.") };
-        if (action === "resume" || action === "connect" || action === "status") await reloadConversationLog();
-      }
-      return false;
-    } finally {
-      if (sessionId.value === selection.sessionId && integrationActionPending.value === selection) {
-        integrationActionPending.value = null;
-      }
-    }
-  }
-
-  onScopeDispose(() => {
-    integrationActionPending.value = null;
-  });
-
+  const integrationActions = useConversationIntegrationActions({ turns, enabled, sessionId, projectSlug,
+    sessionsApiPath, reloadConversationLog, httpClient });
   watch([sessionId, projectSlug], () => {
     conversationStream.value = null;
-    integrationActionPending.value = null;
-    integrationActionError.value = null;
-    integrationConnections.value = {};
     olderPages.value = [];
     loadMoreError.value = "";
   });
 
   return {
-    integrationConnections,
-    connectIntegrationRequest,
-    checkIntegrationRequest,
-    cancelIntegrationRequest,
-    integrationActionPending,
-    integrationActionError,
-    skipIntegrationRequest,
-    resumeIntegrationRequest,
+    ...integrationActions,
     error: resource.loadError,
     hasMoreBefore,
     loadMore: loadMoreConversationLog,
     loadMoreError,
     loading: resource.isLoading,
     initializing: resource.isInitialLoading,
-    rewind: computed(() => resource.data.value?.rewind || null),
     loadingMore,
     reload: reloadConversationLog,
     realtime,

@@ -4,7 +4,7 @@ import { effectiveVibe64AgentExecutionSettings } from "@local/vibe64-runtime/sha
 
 import {
   codexTerminalArgs
-} from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
+} from "../../packages/vibe64-terminals/src/server/codexTerminalAccess.js";
 
 test("managed Codex terminals pass the hook-trust bypass to Codex", () => {
   const [, startupScript] = codexTerminalArgs({

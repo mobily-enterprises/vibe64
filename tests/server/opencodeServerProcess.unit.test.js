@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  startSupervisedProcess
+  startSupervisedProcess,
+  VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "../../packages/vibe64-execution/src/server/index.js";
 
 import {
@@ -275,6 +276,9 @@ test("OpenCode process environment is minimal and keeps managed Helper tools beh
     doom_loop: "deny",
     external_directory: "deny",
     question: "deny",
+    assistant_action_search: "deny",
+    assistant_action_contract: "deny",
+    assistant_action_execute: "deny",
     read: {
       "*.env": "deny",
       "*.env.*": "deny",
@@ -282,6 +286,12 @@ test("OpenCode process environment is minimal and keeps managed Helper tools beh
     }
   });
   assert.equal(config.snapshot, false);
+  for (const name of ["jskit-assistant-coding", "jskit-assistant-coding-actions"]) {
+    assert.deepEqual(config.agent[name].permission.read, { "*": "allow", ...config.permission.read });
+    assert.equal(config.agent[name].permission.bash, "allow");
+  }
+  assert.deepEqual(config.agent["jskit-assistant"].permission, { "*": "ask" });
+  assert.equal(config.agent["jskit-assistant-actions"].permission["*"], "ask");
 });
 
 test("non-project OpenCode tools stay behind approval and require the execution guard", () => {
@@ -424,16 +434,14 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   const privateRoot = path.join(root, "private");
   const requests = [];
   const stops = [];
-  const pageRequests = [];
-  const permissionUpdates = [];
-  const existingPermission = { permission: "bash", pattern: "*", action: "ask" };
-  let conversationPermission = [existingPermission];
-  let messageResponse = () => new Response("[]");
-  let inventoryRows = [{ id: "ses_child", parentID: "ses_parent", directory: "/archived/source" }];
   const executionId = "11111111-1111-4111-8111-111111111111";
   t.after(() => rm(root, { force: true, recursive: true }));
 
   const server = await createOpenCodeServerProcess({
+    inspectExecution: async id => {
+      assert.equal(id, executionId);
+      return { ok: true, running: true };
+    },
     commandRunner: async (request) => {
       requests.push(request);
       if (request.mode === "pty") {
@@ -464,31 +472,7 @@ test("OpenCode servers run and drain through one managed execution id", async (t
       sessionId: "session-1"
     },
     expectedVersion: OPENCODE_EXPECTED_VERSION,
-    fetchImpl: async (url, options) => {
-      if (new URL(url).pathname.endsWith("/message")) {
-        assert.equal(options.headers.authorization, `Basic ${Buffer.from(`opencode:${requests[0].baseEnv.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`);
-        assert.equal(options.method, "GET");
-        pageRequests.push(new URL(url));
-        return messageResponse(options);
-      }
-      if (new URL(url).pathname === "/experimental/session") {
-        assert.deepEqual(Object.fromEntries(new URL(url).searchParams), { directory: "/archived/source", limit: "1001" });
-      }
-      if (new URL(url).pathname === "/session/ses_parent") {
-        assert.equal(options.headers.authorization, `Basic ${Buffer.from(`opencode:${requests[0].baseEnv.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`);
-        if (options.method === "PATCH") {
-          assert.equal(options.headers["content-type"], "application/json");
-          conversationPermission = JSON.parse(options.body).permission;
-          permissionUpdates.push(conversationPermission);
-          return new Response(null, { status: 204 });
-        }
-        return new Response(JSON.stringify({ id: "ses_parent", directory: "/archived/source", permission: conversationPermission }), { status: 200 });
-      }
-      if (new URL(url).pathname.startsWith("/session") || new URL(url).pathname === "/experimental/session") {
-        assert.equal(options.headers.authorization, `Basic ${Buffer.from(`opencode:${requests[0].baseEnv.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`);
-        assert.equal(options.method, "GET");
-        return new Response(JSON.stringify(inventoryRows), { status: 200 });
-      }
+    fetchImpl: async (url) => {
       assert.equal(new URL(url).pathname, "/global/health");
       return new Response(JSON.stringify({
         healthy: true,
@@ -511,6 +495,7 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   const [request] = requests;
   assert.equal(request.mode, "detached");
   assert.equal(request.purpose, "assistant");
+  assert.deepEqual(request.runtimes, VIBE64_INTERACTIVE_RUNTIME_PACKS);
   assert.equal(request.inheritProcessEnv, false);
   assert.equal(request.execution.kind, "assistant");
   assert.equal(request.execution.lifecycle, "service");
@@ -532,54 +517,6 @@ test("OpenCode servers run and drain through one managed execution id", async (t
   assert.equal(request.baseEnv.npm_config_cache, path.join(privateRoot, "cache", "npm"));
   assert.equal(request.credentialHome.home, path.join(privateRoot, "home"));
   assert.equal(server.executionId, executionId);
-  assert.deepEqual(await server.readConversationStorage("ses_parent"), { id: "ses_parent", directory: "/archived/source", permission: [existingPermission] });
-  const terminalAttachment = { path: "/session-artifacts/attachments/file-1/file" };
-  await server.allowConversationAttachments("ses_parent", [terminalAttachment]);
-  assert.deepEqual(permissionUpdates, [[existingPermission, {
-    permission: "external_directory", pattern: "/session-artifacts/attachments/file-1/*", action: "allow"
-  }]]);
-  await server.allowConversationAttachments("ses_parent", [terminalAttachment]);
-  assert.equal(permissionUpdates.length, 1);
-  await assert.rejects(server.allowConversationAttachments("../credentials", [terminalAttachment]), /Invalid/);
-  await assert.rejects(server.readConversationStorage("../credentials"), /Invalid/);
-  assert.deepEqual(await server.listConversationChildren("ses_parent"), inventoryRows);
-  assert.deepEqual(await server.listConversationsForDirectory("/archived/source"), inventoryRows);
-  await assert.rejects(server.listConversationChildren("../credentials"), /Invalid/);
-  inventoryRows = [{ id: "ses_child", parentID: "ses_foreign", directory: "/archived/source" }];
-  await assert.rejects(server.listConversationChildren("ses_parent"), /invalid child inventory/);
-  inventoryRows = Array.from({ length: 1001 }, (_, index) => ({ id: `ses_${index}`, directory: "/archived/source" }));
-  await assert.rejects(server.listConversationsForDirectory("/archived/source"), /incomplete or invalid/);
-  assert.deepEqual(await server.readConversationStoragePage("ses_parent"), { data: [], nextCursor: null });
-  messageResponse = () => new Response("[]", { headers: { "x-next-cursor": "opaque+/=" } });
-  assert.equal((await server.readConversationStoragePage("ses_parent", { before: "opaque+/=" })).nextCursor, "opaque+/=");
-  assert.equal(pageRequests[0].pathname, "/session/ses_parent/message");
-  assert.deepEqual(Object.fromEntries(pageRequests[0].searchParams), { limit: "1" });
-  assert.deepEqual(Object.fromEntries(pageRequests[1].searchParams), { limit: "1", before: "opaque+/=" });
-  await assert.rejects(server.readConversationStoragePage("../credentials"), /Invalid/);
-  await assert.rejects(server.readConversationStoragePage("ses_parent", { signal: AbortSignal.abort() }), { name: "AbortError" });
-  assert.equal(pageRequests.length, 2);
-  const largeMessage = { info: { id: "msg_large", role: "user" }, parts: [{ type: "text", text: "x".repeat(3 * 1024 * 1024) }] };
-  messageResponse = () => new Response(JSON.stringify([largeMessage]));
-  assert.deepEqual(await server.readConversationStoragePage("ses_parent"), { data: [largeMessage], nextCursor: null });
-  messageResponse = () => new Response("[]", { headers: { link: '<http://localhost/session/ses_parent/message?before=opaque>; rel="next"' } });
-  await assert.rejects(server.readConversationStoragePage("ses_parent"), /continuation cursor/);
-  let bodyCancelled = false;
-  messageResponse = () => new Response(new ReadableStream({
-    pull(controller) { controller.enqueue(new Uint8Array(1024 * 1024)); },
-    cancel() { bodyCancelled = true; }
-  }));
-  await assert.rejects(server.readConversationStoragePage("ses_parent"), { code: "assistant_opencode_response_too_large" });
-  assert.equal(bodyCancelled, true);
-  const started = Promise.withResolvers();
-  const cancellation = new AbortController();
-  messageResponse = ({ signal }) => new Promise((_resolve, reject) => {
-    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-    started.resolve();
-  });
-  const cancelledPage = server.readConversationStoragePage("ses_parent", { signal: cancellation.signal });
-  await started.promise;
-  cancellation.abort();
-  await assert.rejects(cancelledPage, { name: "AbortError" });
 
   const attached = await server.startAttachedTerminal({
     metadata: { sessionId: "session-1" },
@@ -622,4 +559,35 @@ test("OpenCode servers run and drain through one managed execution id", async (t
     }
   }]);
   await assert.rejects(access(privateRoot), { code: "ENOENT" });
+});
+
+test("shared OpenCode startup keeps Vibe64's timeout and version recovery errors", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-opencode-startup-errors-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const failure of ["timeout", "version"]) {
+    const privateRoot = path.join(root, failure);
+    const stopped = [];
+    const cause = new Error("native health unavailable");
+    await assert.rejects(createOpenCodeServerProcess({
+      dbPath: path.join(root, "opencode.db"), privateRoot, workdir: root, port: 43210,
+      env: { PATH: "/usr/bin" }, readinessTimeoutMs: 20,
+      commandRunner: async () => ({ ok: true, execution: { id: failure }, pid: 4242 }),
+      inspectExecution: async () => ({ ok: true, running: true }),
+      stopExecution: async (id, options) => { stopped.push({ id, options }); return { scopeEmpty: true }; },
+      fetchImpl: async () => {
+        if (failure === "timeout") throw cause;
+        return new Response(JSON.stringify({ healthy: true, version: "unsupported" }));
+      }
+    }), error => {
+      assert.equal(error.code, failure === "timeout" ? "vibe64_opencode_start_timeout" : "vibe64_opencode_version_mismatch");
+      if (failure === "timeout") assert.equal(error.cause, cause);
+      else assert.match(error.message, /Vibe64 requires/);
+      assert.equal(error.stopProof.scopeEmpty, true);
+      return true;
+    });
+    assert.deepEqual(stopped, [{ id: failure, options: {
+      allowMissingRecordScopeRecovery: true, reason: "opencode-server-stop", termTimeoutMs: 3000
+    } }]);
+    await assert.rejects(access(privateRoot), { code: "ENOENT" });
+  }
 });

@@ -1,3 +1,10 @@
+import {
+  codexProviderModelCatalog as nativeModelCatalog,
+  codexProviderConfiguration,
+  codexProviderFileConfiguration,
+  verifyCodexProviderKey
+} from "@jskit-ai/assistant-core/server/codex-configuration";
+import { verifyClaudeProviderKey } from "@jskit-ai/assistant-core/server/claude-process";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -32,97 +39,9 @@ async function privateFile(filePath, contents) {
 }
 
 function codexProviderModelCatalog(provider) {
-  let models = provider?.models;
-  if (!models) {
-    const byId = new Map();
-    for (const entry of CURATED_CODEX_PROVIDERS) {
-      for (const model of entry.models) byId.set(model.id, model);
-    }
-    models = [...byId.values()];
-  }
-  return {
-    models: models.map((model, priority) => ({
-      slug: model.id,
-      display_name: model.label,
-      description: model.label,
-      default_reasoning_level: model.defaultThinking,
-      supported_reasoning_levels: model.variants.map((effort) => ({ effort, description: effort })),
-      shell_type: "shell_command",
-      visibility: "list",
-      supported_in_api: true,
-      priority,
-      base_instructions: "You are a coding assistant. Complete the user's task in the workspace, use the available tools, preserve unrelated work, and verify your changes.",
-      supports_reasoning_summaries: false,
-      default_reasoning_summary: "none",
-      support_verbosity: false,
-      truncation_policy: { mode: "bytes", limit: 10000 },
-      context_window: model.contextWindow,
-      max_context_window: model.contextWindow,
-      effective_context_window_percent: 95,
-      supports_parallel_tool_calls: true,
-      experimental_supported_tools: [],
-      input_modalities: model.images ? ["text", "image"] : ["text"],
-      prefer_websockets: false,
-      ...(model.freeformPatch ? { apply_patch_tool_type: "freeform" } : {})
-    }))
-  };
-}
-
-async function verifyCodexProviderKey(provider, apiKey, fetchImpl = fetch) {
-  let response;
-  try {
-    response = await fetchImpl(`${provider.baseUrl.replace(/\/$/u, "")}/responses`, {
-      method: "POST",
-      redirect: "error",
-      signal: AbortSignal.timeout(30000),
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: provider.models[0].id,
-        input: "Reply with OK.",
-        reasoning: { effort: "low" },
-        max_output_tokens: 64,
-        store: false
-      })
-    });
-  } catch {
-    throw new Error(`${provider.label} could not be reached. Your previous connection is unchanged; try again.`);
-  }
-  // Never expose a provider's raw response, which can contain request details.
-  if (!response.ok) {
-    await response.body?.cancel?.();
-    throw new Error(response.status === 401 || response.status === 403
-      ? `${provider.label} rejected this key. Check the key and the required account plan.`
-      : `${provider.label} could not complete a test request (HTTP ${response.status}). Check your plan or API credit.`);
-  }
-  const result = await response.json().catch(() => null);
-  if (!result?.id || result.error || !Array.isArray(result.output) ||
-      !["completed", "incomplete"].includes(result.status)) {
-    throw new Error(`${provider.label} did not return a usable Responses API result. The key was not saved.`);
-  }
-}
-
-async function verifyClaudeProviderKey(provider, apiKey, fetchImpl) {
-  let response;
-  try {
-    response = await fetchImpl(`${provider.claudeBaseUrl}/v1/messages`, {
-      method: "POST", redirect: "error", signal: AbortSignal.timeout(30_000),
-      headers: { Authorization: `Bearer ${apiKey}`, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-      body: JSON.stringify({ model: provider.models[0].id, max_tokens: 64,
-        messages: [{ role: "user", content: "Reply with OK." }] })
-    });
-  } catch {
-    throw new Error(`${provider.label} could not be reached through Claude Code. Your previous connection is unchanged; try again.`);
-  }
-  if (!response.ok) {
-    await response.body?.cancel?.();
-    throw new Error(response.status === 401 || response.status === 403
-      ? `${provider.label} rejected this key. Check the key and the required account plan.`
-      : `${provider.label} could not complete a Claude Code test request (HTTP ${response.status}). Check your plan or API credit.`);
-  }
-  const result = await response.json().catch(() => null);
-  if (!result?.id || result.type !== "message" || result.error || !Array.isArray(result.content)) {
-    throw new Error(`${provider.label} did not return a usable Messages API result. The key was not saved.`);
-  }
+  const models = provider?.models || [...new Map(CURATED_CODEX_PROVIDERS
+    .flatMap(entry => entry.models).map(model => [model.id, model])).values()];
+  return nativeModelCatalog({ models });
 }
 
 function createCodexProviderConnectionStore({
@@ -184,14 +103,7 @@ function createCodexProviderConnectionStore({
     if (!connection) throw new Error(`Reconnect ${provider.label} before continuing.`);
     // Private control-plane data. Never return this configuration through an
     // Accounts response or put it into the model's shell environment.
-    return {
-      model_reasoning_summary: "none",
-      web_search: provider.webSearch ? "live" : "disabled",
-      [`model_providers.${providerId}`]: {
-        name: provider.label, base_url: provider.baseUrl, wire_api: "responses",
-        requires_openai_auth: false, experimental_bearer_token: connection.apiKey
-      }
-    };
+    return codexProviderConfiguration(provider, connection.apiKey);
   }
   async function claudeProviderSettings(providerId) {
     const provider = curatedCodexProvider(providerId);
@@ -256,21 +168,7 @@ function createCodexProviderConnectionStore({
         await rm(path.join(paths.codexHome, "config.toml"), { force: true });
       } else {
         if (ready.codex) {
-          const config = [
-            `model = ${JSON.stringify(provider.models[0].id)}`,
-            `model_provider = ${JSON.stringify(provider.id)}`,
-            `model_catalog_json = ${JSON.stringify(path.join(paths.codexHome, "models.json"))}`,
-            `model_reasoning_effort = ${JSON.stringify(provider.models[0].defaultThinking)}`,
-            'model_reasoning_summary = "none"',
-            `web_search = "${provider.webSearch ? "live" : "disabled"}"`,
-            `[model_providers.${provider.id}]`,
-            `name = ${JSON.stringify(provider.label)}`,
-            `base_url = ${JSON.stringify(provider.baseUrl)}`,
-            'wire_api = "responses"',
-            'requires_openai_auth = false',
-            `experimental_bearer_token = ${JSON.stringify(key)}`,
-            ""
-          ].join("\n");
+          const config = codexProviderFileConfiguration(provider, key, paths.codexHome);
           await privateFile(path.join(paths.codexHome, "models.json"), JSON.stringify(codexProviderModelCatalog(provider)));
           await privateFile(path.join(paths.codexHome, "config.toml"), config);
         } else {

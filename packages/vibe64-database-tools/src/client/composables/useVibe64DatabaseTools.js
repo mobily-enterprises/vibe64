@@ -236,15 +236,9 @@ function useVibe64DatabaseTools({
     });
   }
 
-  function askAssistant(messages = []) {
-    return assistantCommand.run({
-      path: `${sessionPath.value}/assistant`,
-      payload: { messages }
-    });
-  }
-
   return {
-    askAssistant,
+    assistantCommand,
+    assistantEndpoint: computed(() => `${sessionPath.value}/assistant`),
     assistantBusy: computed(() => assistantCommand.isRunning === true),
     cancelQuery,
     cancelling: computed(() => cancelCommand.isRunning === true),

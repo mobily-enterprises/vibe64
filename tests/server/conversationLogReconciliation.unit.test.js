@@ -3,7 +3,18 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import * as vue from "vue";
 import { QueryClient } from "@tanstack/vue-query";
-import { mergeConversationStream, normalizeThinkingMessageText } from "@jskit-ai/assistant-core/shared/conversation";
+import {
+  normalizeConversationMessage as normalizeSharedConversationMessage,
+  normalizeConversationTurn as normalizeSharedConversationTurn,
+  applyConversationLogPatch as applySharedConversationLogPatch,
+  mergeConversationStream,
+  normalizeThinkingMessageText,
+  CONVERSATION_LOG_PAGE_LIMIT,
+  normalizeConversationLogPagination,
+  normalizeConversationLogPage,
+  mergeConversationLogPages,
+  conversationLogReadQuery
+} from "@jskit-ai/assistant-core/shared/conversation";
 import { normalizeVibe64ConversationAttachments } from "@local/vibe64-runtime/shared";
 
 // Run the real composable with Vue and the real query cache. Only the HTTP,
@@ -69,6 +80,14 @@ function fixture(t) {
     vibe64SessionDebugError: (error) => error.message,
     normalizeThinkingMessageText,
     mergeConversationStream,
+    normalizeSharedConversationMessage,
+    normalizeSharedConversationTurn,
+    applySharedConversationLogPatch,
+    CONVERSATION_LOG_PAGE_LIMIT,
+    normalizeConversationLogPagination,
+    normalizeConversationLogPage,
+    mergeConversationLogPages,
+    conversationLogReadQuery,
     normalizeVibe64ConversationAttachments
   };
   const { useVibe64ConversationLog } = new Function(...Object.keys(dependencies), source)(...Object.values(dependencies));

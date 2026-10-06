@@ -7,7 +7,7 @@ import { createService } from "../../packages/vibe64-sessions/src/server/service
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
-import { retireNativeConversation } from "../../packages/vibe64-terminals/src/server/nativeConversationRetirement.js";
+import { retireNativeConversation } from "@jskit-ai/assistant-core/server/native-history";
 
 function archiveFixture(phase = "") {
   const calls = [];

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/studioProjectContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { publishAssistantRoutingUpgrade } from "./assistantRoutingUpgrade.js";
+import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
 
 // This exact incident was verified against native history and confirmed by the
 // owner. Other drafts must never be declared complete from prose or a model guess.
@@ -29,7 +29,7 @@ function completeDiscussionPlan(plan, request, expected) {
 
 async function upgradeCompletedDiscussionPlan(context) {
   const { systemRoot, report } = context;
-  await publishAssistantRoutingUpgrade({ ...context, prepareUpdates: async () => {
+  await publishStateUpgradeFiles({ ...context, prepareUpdates: async () => {
     const updates = [];
     for (const projectRuntimeRoot of await listProjectRuntimeRoots(systemRoot)) {
       const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });

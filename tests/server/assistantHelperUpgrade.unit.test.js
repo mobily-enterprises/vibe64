@@ -6,6 +6,7 @@ import test from "node:test";
 import { upgradeAssistantHelpers, upgradeAssistantHelperSession, upgradeAssistantHelperTurn } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
+import { upgradeSessionConversations } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 
 import { codexHelperThreadRecordId, createCodexHelperThreadLedger, defineCodexHelperThreadRecord }
   from "../../packages/vibe64-terminals/src/server/codexHelperThreadLedger.js";
@@ -45,7 +46,9 @@ async function populate(f, id) {
   await f.store.createSession({ sessionId: id, runtimeKind: "genesis" });
   for (const [key, value] of Object.entries(metadata)) await f.store.writeMetadataValue(id, key, value);
   await f.store.writeSessionConversation(id, "temporary", { routingMetadata: metadata, providerConversationId: "native-temp" });
-  await f.store.writeConversationUserMessage(id, { messageId: "one", text: "intern and economy are my words" });
+  const turnRoot = path.join(f.store.paths(id).conversationLogRoot, "000001");
+  await mkdir(turnRoot, { recursive: true });
+  await writeFile(path.join(turnRoot, "user.20260927T090000000Z.one.md"), "intern and economy are my words\n");
   await writeFile(path.join(f.store.paths(id).conversationLogRoot, "000001/metadata.json"), JSON.stringify({ messageId: "one",
     assistantRouting: { requestedMode: "intern", resolvedMode: "intern", destination: selection } }));
   await f.store.writeJsonArtifact(id, "assistant/prompt-hint-tasks/one.json", { executionProfile: profile, executionId: "retained" });
@@ -74,14 +77,16 @@ test("Helper upgrade preserves user choices and authored content while removing 
     { ...profile, profileId: "helper" });
   assert.equal(request.input.message, "intern and economy are my words");
   assert.equal(request.submittedBy.username, "member");
-  const history = await f.store.readConversationTail("active");
-  assert.equal(history[0].user.text, "intern and economy are my words");
-  assert.equal(history[0].metadata.assistantRouting.resolvedMode, "helper");
   assert.equal(JSON.parse(await f.store.readArtifact("active", "assistant/prompt-hint-tasks/one.json")).executionProfile.profileId, "helper");
   assert.equal(await readFile(path.join(f.backupRoot, "before/ai-connections/routing.json"), "utf8"), source);
   const published = await readFile(f.file, "utf8");
   await f.run(); await f.run(true);
   assert.equal(await readFile(f.file, "utf8"), published);
+  await upgradeSessionConversations({ systemRoot: f.systemRoot, apply: true,
+    backupRoot: path.join(f.systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} });
+  const history = await f.store.readConversationTail("active");
+  assert.equal(history[0].user.text, "intern and economy are my words");
+  assert.equal(history[0].metadata.assistantRouting.resolvedMode, "helper");
 });
 
 test("Helper upgrade includes closing and archived histories", async t => {
@@ -95,12 +100,14 @@ test("Helper upgrade includes closing and archived histories", async t => {
   await f.store.publishSessionArchive("archived");
   await f.run(true);
   assert.equal(JSON.parse(await readFile(path.join(closingRoot, "metadata/assistant_routing"), "utf8")).mode, "junior");
+  await upgradeSessionConversations({ systemRoot: f.systemRoot, apply: true,
+    backupRoot: path.join(f.systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} });
   assert.equal((await f.store.readConversationTail("archived"))[0].metadata.assistantRouting.resolvedMode, "helper");
 });
 
 test("interrupted publication resumes from verified backups without selecting a new model", async t => {
   const f = await fixture(t); await f.config(); await populate(f, "active");
-  await assert.rejects(f.run(true, (_level, message) => { if (message.startsWith("Published routing state:")) throw new Error("power loss"); }), /power loss/);
+  await assert.rejects(f.run(true, (_level, message) => { if (message.startsWith("Published state:")) throw new Error("power loss"); }), /power loss/);
   assert.equal(JSON.parse(await readFile(f.file, "utf8")).schemaVersion, 4);
   assert.equal(JSON.parse(await f.store.readMetadataValue("active", "assistant_routing")).mode, "intern");
   await f.run(true);

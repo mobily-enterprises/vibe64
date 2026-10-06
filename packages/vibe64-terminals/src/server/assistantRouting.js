@@ -274,7 +274,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     await save(context, state);
   }
 
-  async function deliver(sessionId, context, state, followup = false) {
+  async function deliver(sessionId, context, state, followup = false, inspectionOnly = false) {
     if (context.requiredAssistantMode && state.resolvedMode !== context.requiredAssistantMode) {
       throw failure("Merge repairs now require Senior. Cancel the old request and send it again.");
     }
@@ -294,7 +294,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     selectedContext.expectedConnectionIdentity = destinations(state.decision || {})[modelRole]?.connectionIdentity;
     const uncertain = state.status === (followup ? continuationStatus(state, "uncertain") : "uncertain");
     if (uncertain || state.attemptedMessageId === messageId) {
-      const receipt = await agent.inspectMessageAdmission(sessionId, { messageId, threadId: state.threadId }, selectedContext);
+      const receipt = await agent.inspectMessageAdmission(sessionId, { messageId, threadId: state.threadId }, selectedContext)
+        .catch(error => { if (!inspectionOnly) throw error; return null; });
+      if (inspectionOnly && receipt?.admission !== "accepted") return { ok: false, delivered: false, messageId };
       if (receipt?.admission !== "accepted") throw failure("Delivery is uncertain. Retry to check the receipt; this will not send a duplicate.", "vibe64_assistant_routing_delivery_uncertain");
       await store.writeConversationUserMessage(sessionId, {
         messageId, text: displayMessage,
@@ -308,6 +310,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       await save(context, state);
       return { ok: true, delivered: true, messageId, threadId: state.threadId };
     }
+    // Explicit inspection may use only the original uncertain-receipt branch.
+    // It cannot continue into selection, preparation or native dispatch.
+    if (inspectionOnly) return null;
     if (followup && state.mode !== "auto") throw failure("Automatic follow-ups require Auto. Cancel this follow-up and send a new request in your chosen role.");
     if (state.stopped) throw failure("This request was stopped. Send a new request to continue.");
     if (followup && !implementing && state.continuation !== "planning" && await skipReviewForQuestion(sessionId, context, state)) return { ok: true, skipped: true };
@@ -616,6 +621,19 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     }
   }
 
+  function inspectDelivery(sessionId, { messageId }, options) {
+    return exclusive(sessionId, options, async context => {
+      const state = await read(context.runtime.store, sessionId);
+      if (!state) return null;
+      const followup = state.messageId !== messageId && continuationMessage(state)?.messageId === messageId;
+      if (state.messageId !== messageId && !followup) return null;
+      if (![followup ? continuationStatus(state, "sending") : "sending",
+        followup ? continuationStatus(state, "uncertain") : "uncertain"].includes(state.status)) return null;
+      if (state.attemptedMessageId !== messageId && state.status !== (followup ? continuationStatus(state, "uncertain") : "uncertain")) return null;
+      return deliver(sessionId, context, state, followup, true);
+    });
+  }
+
   async function cancel(sessionId, options, { waitForCleanup = false } = {}) {
     let stop;
     let finished;
@@ -890,7 +908,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const failures = results.filter((result) => result.status === "rejected").map((result) => result.reason);
     if (failures.length) throw new AggregateError(failures, "Assistant routing shutdown did not complete successfully.");
   }
-  return { send, cancel, afterTurn, prepareGoal, reconcile, close };
+  return { send, cancel, inspectDelivery, afterTurn, prepareGoal, reconcile, close };
 }
 
 export { createAssistantRouting };

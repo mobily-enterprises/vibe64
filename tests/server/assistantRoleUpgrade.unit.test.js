@@ -8,6 +8,7 @@ import test from "node:test";
 import { upgradeAssistantRoles, upgradeAssistantRoleSession, upgradeAssistantRoleTurn } from "../../packages/vibe64-accounts/src/server/assistantRoleUpgrade.js";
 import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
+import { upgradeSessionConversations } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 
 const exec = promisify(execFile);
 const senior = { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource: "explicit" };
@@ -69,10 +70,10 @@ async function populateSession(f, sessionId, { transcriptOnly = false } = {}) {
   await f.store.writeSessionConversation(sessionId, "temporary", { routingMetadata: transcriptOnly ? {} : oldMetadata,
     providerConversationId: "native-temp", assistantSelection: junior, presentation: { draft: "Keep my draft" } });
   for (const conversationId of [null, "temporary"]) {
-    const scope = conversationId ? { sessionId, conversationId } : sessionId;
-    await f.store.writeConversationUserMessage(scope, { messageId: "request-1", text: "plan code economy are user words" });
-    await f.store.writeConversationAssistantMessage(scope, { text: "Detailed answer must stay byte-for-byte" });
     const logRoot = conversationId ? path.join(f.store.paths(sessionId).conversationsRoot, conversationId, "conversation-log") : f.store.paths(sessionId).conversationLogRoot;
+    await mkdir(path.join(logRoot, "000001"), { recursive: true });
+    await writeFile(path.join(logRoot, "000001/user.20260926T090000000Z.request-1.md"), "plan code economy are user words\n");
+    await writeFile(path.join(logRoot, "000001/assistant.20260926T090001000Z.md"), "Detailed answer must stay byte-for-byte\n");
     await writeFile(path.join(logRoot, "000001", "metadata.json"), JSON.stringify(turn));
   }
   await writeFile(path.join(f.store.paths(sessionId).sessionRoot, "provider-history.json"), '{"encrypted":"keep-opaque-data"}');
@@ -126,10 +127,11 @@ test("preflight creates no state and changes no bytes; publication preserves rou
       assert.equal(await readFile(backup, "base64"), bytes);
     }
   }
-  const log = await f.store.readConversationTail("active");
-  assert.equal(log[0].metadata.assistantRouting.resolvedMode, "junior");
-  const tempLog = await f.store.readConversationLogPage({ sessionId: "active", conversationId: "temporary" });
-  assert.equal(tempLog.conversationLog[0].metadata.assistantRouting.resolvedMode, "junior");
+  for (const logRoot of [f.store.paths("active").conversationLogRoot,
+    path.join(f.store.paths("active").conversationsRoot, "temporary/conversation-log")]) {
+    const metadata = JSON.parse(await readFile(path.join(logRoot, "000001/metadata.json"), "utf8"));
+    assert.equal(metadata.assistantRouting.resolvedMode, "junior");
+  }
   assert.equal(JSON.parse((await f.store.readSessionConversation("active", "temporary")).routingMetadata.assistant_routing).mode, "junior");
   const renewal = JSON.parse(await f.store.readSessionRenewalStateRecord("active"));
   assert.equal(renewal.successor.assistantRouting.mode, "intern");
@@ -138,6 +140,10 @@ test("preflight creates no state and changes no bytes; publication preserves rou
   const published = await snapshot(f.systemRoot);
   await f.run(); await f.run(true);
   assert.deepEqual(await snapshot(f.systemRoot), published, "retry reuses exact published copies");
+  await upgradeSessionConversations({ systemRoot: f.systemRoot, apply: true,
+    backupRoot: path.join(f.systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} });
+  assert.equal((await f.store.readConversationTail("active"))[0].metadata.assistantRouting.resolvedMode, "junior");
+  assert.equal((await f.store.readConversationLogPage({ sessionId: "active", conversationId: "temporary" })).conversationLog[0].metadata.assistantRouting.resolvedMode, "junior");
 });
 
 test("closing, archived and prepared renewal histories are renamed, including archives with only transcript routing", async t => {
@@ -163,13 +169,15 @@ test("closing, archived and prepared renewal histories are renamed, including ar
     assert.equal(main.assistantRouting.resolvedMode, "junior");
     assert.equal(await readFile(path.join(extractRoot, "archived/provider-history.json"), "utf8"), '{"encrypted":"keep-opaque-data"}');
   }
+  await upgradeSessionConversations({ systemRoot: f.systemRoot, apply: true,
+    backupRoot: path.join(f.systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} });
   assert.equal((await f.store.readConversationTail("archived"))[0].metadata.assistantRouting.resolvedMode, "junior");
 });
 
 test("partial publication resumes from saved replacements without recomputing choices", async t => {
   const f = await fixture(t);
   await f.config(); await populateSession(f, "active");
-  await assert.rejects(f.run(true, message => { if (message.startsWith("Published routing state:")) throw new Error("power loss"); }), /power loss/);
+  await assert.rejects(f.run(true, message => { if (message.startsWith("Published state:")) throw new Error("power loss"); }), /power loss/);
   assert.equal(JSON.parse(await readFile(f.file, "utf8")).schemaVersion, 3);
   assert.equal(JSON.parse(await f.store.readMetadataValue("active", "assistant_routing")).mode, "code");
   await f.run(); await f.run(true);

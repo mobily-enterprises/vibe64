@@ -32,11 +32,19 @@ describe("Vibe64 direct session runtime host", () => {
       import.meta.url
     ), "utf8");
 
+    const conversationSource = readFileSync(new URL(
+      "../../src/composables/useVibe64ConversationRuntime.js",
+      import.meta.url
+    ), "utf8");
+
     expect(source).toContain(
-      "void refreshSessionData({ reason: \"agent-message-accepted\" }).catch(() => null);"
+      "return conversationRuntime.value?.sendAgentMessage(input) ?? false;"
     );
-    expect(source).not.toContain(
-      "await refreshSessionData({ reason: \"agent-message-accepted\" })"
+    expect(conversationSource).toContain(
+      'void mounted.refresh({ reason: "agent-message-accepted" }).catch(() => {});'
+    );
+    expect(conversationSource).not.toContain(
+      'await mounted.refresh({ reason: "agent-message-accepted" })'
     );
   });
 

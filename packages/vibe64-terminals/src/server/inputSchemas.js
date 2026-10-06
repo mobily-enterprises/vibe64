@@ -1,5 +1,6 @@
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
+import { assistantConversationGoalBodyValidator } from "@jskit-ai/assistant-runtime/server";
 import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS } from "@local/vibe64-runtime/shared";
 import { ASSISTANT_MODES } from "@local/vibe64-runtime/shared/assistantRouting";
 
@@ -241,6 +242,10 @@ const agentGoalInputValidator = validator({
   objective: { ...optionalText, noTrim: true },
   tokenBudget: { type: "integer", min: 1, max: Number.MAX_SAFE_INTEGER, required: false }
 });
+const canonicalAgentGoalInputValidator = validator({
+  ...assistantConversationGoalBodyValidator.schema.getFieldDefinitions(),
+  sessionId: sessionIdField
+});
 const agentTerminalStartInputValidator = validator({
   sessionId: sessionIdField,
   originId: optionalText,
@@ -268,6 +273,7 @@ export {
   outputStatusInputValidator,
   outputResultInputValidator,
   agentGoalInputValidator,
+  canonicalAgentGoalInputValidator,
   agentTerminalStartInputValidator,
   terminalInputValidator,
   globalTerminalInputValidator,

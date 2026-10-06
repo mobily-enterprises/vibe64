@@ -2365,14 +2365,14 @@ test("model routing only clears migrated helper evidence after explicit review o
   });
 });
 
-test("first-session setup offers included OpenCode chat without promising restricted helpers", async () => {
+test("first-session setup offers included OpenCode for chat and managed Router and Helper", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
     f.unavailable.add("gpt-6-astra");
     f.unavailable.add("deepseek-flash");
     const before = await f.service.readModelRouting({ vibe64User: f.member });
     const preview = before.engines.find(({ engineId }) => engineId === "opencode");
-    assert.equal(preview.setupPreview.auto.available, false);
+    assert.equal(preview.setupPreview.auto.available, true);
     assert.equal(preview.setupPreview.senior.available, true);
     assert.equal((await f.store.read()).revision, 0);
     const initialized = await f.service.initializeModelRouting({ engineIds: ["opencode"], vibe64User: f.member });
@@ -2383,9 +2383,9 @@ test("first-session setup offers included OpenCode chat without promising restri
       assert.equal(saved.orchestrators.opencode[role].modelId, "big-pickle");
     }
     const after = await f.service.readModelRouting({ vibe64User: f.member });
-    assert.equal(saved.orchestrators.opencode.router, undefined);
-    assert.equal(saved.orchestrators.opencode.helper, undefined);
-    assert.equal(after.engines.find(({ engineId }) => engineId === "opencode").preview.viewer.auto.available, false);
+    assert.equal(saved.orchestrators.opencode.router.modelId, "big-pickle");
+    assert.equal(saved.orchestrators.opencode.helper.modelId, "big-pickle");
+    assert.equal(after.engines.find(({ engineId }) => engineId === "opencode").preview.viewer.auto.available, true);
   });
 });
 

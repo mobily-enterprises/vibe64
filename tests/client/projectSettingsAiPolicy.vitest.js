@@ -570,7 +570,7 @@ describe("ProjectSettingsPanel AI behaviour", () => {
       projectSettingsMocks.commandOptions.length = 0;
       const { app, container } = mountPanel();
       await nextTick();
-      expect(findField(container, "Require pull requests for Vibe64 publication").props.modelValue).toBe(true);
+      expect(findField(container, "GitHub save workflow").props.modelValue).toBe(true);
       expect(findButton(container, "Save repository workflow").props.disabled).toBe(true);
       app.unmount();
     }

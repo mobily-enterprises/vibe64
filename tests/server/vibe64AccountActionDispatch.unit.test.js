@@ -13,7 +13,14 @@ test("all account operations use project-independent canonical contracts and aut
     let managementAllowed = true;
     const calls = [];
     const events = [];
-    const requireAiManagement = () => managementAllowed ? null : { ok: false, code: "management_disabled", error: "Management unavailable." };
+    const requireAiManagement = ({ vibe64User }) => {
+      if (vibe64User && vibe64User.role !== "owner") {
+        throw Object.assign(new Error("Only the workspace owner can manage AI connections."), {
+          code: "vibe64_owner_required", statusCode: 403
+        });
+      }
+      return managementAllowed ? null : { ok: false, code: "management_disabled", error: "Management unavailable." };
+    };
     const cases = [
       ["GET", "", "read", "getStatus", { refresh: true, providerIds: ["codex"] }],
       ["GET", "/model-routing/workflows", "model-routing.workflows.read", "readModelRoutingWorkflows", {}],

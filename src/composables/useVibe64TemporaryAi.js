@@ -1,6 +1,6 @@
 import { routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
-import { computed, hasInjectionContext, inject, onBeforeUnmount, ref, watch } from "vue";
+import { computed, hasInjectionContext, inject, markRaw, onBeforeUnmount, ref, watch } from "vue";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
@@ -13,20 +13,16 @@ import {
 } from "@local/vibe64-runtime/shared";
 
 import { chatMessagePayload } from "@/lib/vibe64ChatMessage.js";
-import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
-import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
+import { useAssistantConversationFactory } from "@jskit-ai/assistant-runtime/client";
+import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
   vibe64TemporaryConversationPath,
-  vibe64TemporaryConversationsPath,
-  vibe64TemporaryConversationStopPath,
-  vibe64TemporaryConversationTurnsPath
+  vibe64TemporaryConversationsPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
-
-const TEMPORARY_AI_POLL_INTERVAL_MS = 650;
 
 function temporaryAiId(prefix = "temporary") {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -49,22 +45,14 @@ function temporaryAiTurnIsActive(status = "") {
   return ["starting", "inProgress"].includes(normalizedStatus) || assistantRoutingStatusIsPending(normalizedStatus);
 }
 
-function temporaryAiProgressUpdates(value = []) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.map((update = {}, index) => ({
-    id: temporaryAiText(update.id) || `progress:${index + 1}`,
-    text: temporaryAiText(update.text)
-  })).filter((update) => update.text);
-}
-
-function temporaryAiTurnMessages(messages = [], runId = "", update = {}) {
-  return messages.map((message) => (
-    message.runId === runId && message.role === "assistant"
-      ? { ...message, ...update }
-      : message
-  ));
+function temporaryAiMessages(turns = []) {
+  return turns.flatMap((turn) => (turn.messages || [turn.system, turn.user,
+    ...(turn.thinking || []), ...(turn.commentary || []), turn.assistant].filter(Boolean)).map((message) => ({
+    ...message, id: message.messageId || message.id,
+    ...(message.role === "user" ? { attachments: turn.user?.attachments || [] } : {}),
+    status: message.status || (message.complete === false ? "inProgress" : "completed"),
+    assistantSelection: turn.metadata?.assistantSelection, assistantRouting: turn.metadata?.assistantRouting
+  })));
 }
 
 function useVibe64TemporaryAi({
@@ -79,8 +67,6 @@ function useVibe64TemporaryAi({
   const tasks = ref([]);
   const activeTaskId = ref("");
   const open = ref(false);
-  const pollTimers = new Map();
-  const pendingPolls = new Set();
   const restorations = new Map();
   const saveTimers = new Map();
   const creations = new Map();
@@ -89,6 +75,11 @@ function useVibe64TemporaryAi({
   const projectSlug = useVibe64ProjectSlug();
   const viewer = hasInjectionContext() ? inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" }) : { actorKey: "local" };
   const actorKey = computed(() => readRefOrGetterValue(viewer)?.actorKey || "");
+  const acquireConversation = useAssistantConversationFactory({
+    actorKey: () => actorKey.value, endpoint: "/api/assistant/app", surfaceId: "app", hostSurfaceId: "app",
+    workspaceSlug: "", queueWhileSending: false, clearDraftOn: "dispatch",
+    presentation: { assistantLabel: "Temporary AI", variant: "task", visible: true, userMessageFormat: "plain", systemLabel: "System" }
+  });
   const restoreError = ref("");
   let restoreGeneration = 0;
   let restoreRetryTimer;
@@ -121,28 +112,94 @@ function useVibe64TemporaryAi({
   }
 
   function canApplyTaskResponse(task) {
-    return !disposed && tasks.value.some((current) => current.id === task.id && current.delivery === task.delivery);
+    return !disposed && tasks.value.some((current) => current.id === task.id && current.binding === task.binding);
+  }
+
+  function taskView(value) {
+    const task = { ...value };
+    const runtime = task.binding.runtime.value;
+    // Draft and delivery belong to the supplied retained owner. This flattened
+    // read projection serves product feedback only; the element renders its
+    // canonical turns directly, without regrouping native/history identities.
+    Object.defineProperties(task, {
+      draft: { enumerable: true, configurable: true, get: () => runtime.draft.value, set: value => { runtime.draft.value = value; } },
+      attachments: { enumerable: true, configurable: true, get: () => runtime.draftAttachments.value, set: value => { runtime.draftAttachments.value = value; } },
+      delivery: { enumerable: true, configurable: true, get: () => runtime.delivery },
+      messages: { enumerable: true, configurable: true, get() {
+        const messages = temporaryAiMessages(runtime.turns.value);
+        return task.recoveryMessage && !messages.some(message => message.id === task.recoveryMessage.id)
+          ? [...messages, task.recoveryMessage] : messages;
+      } },
+      adapter: { enumerable: true, configurable: true, get: () => task.binding.adapter.value }
+    });
+    return task;
+  }
+
+  function bindTask(value) {
+    const taskId = value.id;
+    let binding;
+    binding = markRaw(acquireConversation({
+      conversationId: temporaryConversationId({ projectSlug: projectSlug.value, sessionId: value.sessionId, conversationId: taskId }),
+      active: () => !disposed && Boolean(tasks.value.find(task => task.id === taskId && task.binding === binding)?.conversationId)
+    }));
+    const runtime = binding.runtime.value;
+    runtime.draft.value = value.draft || "";
+    runtime.draftAttachments.value = value.attachments || [];
+    let observedSnapshot = false;
+    const stop = watch([runtime.snapshot, runtime.turns, runtime.error, () => runtime.delivery.state.sending],
+      ([snapshot, turns, error, sending], [, previousTurns = []] = []) => {
+        const task = tasks.value.find(task => task.id === taskId && task.binding === binding);
+        if (!task || disposed) return;
+        // Restore's saved messages are its original unread baseline; any new
+        // native reply in the first canonical read is still a new reply.
+        const previous = observedSnapshot ? temporaryAiMessages(previousTurns) : value.messages || [];
+        if (snapshot) observedSnapshot = true;
+        const messages = temporaryAiMessages(turns);
+        const newReply = messages.some(message => message.role === "assistant" && temporaryAiText(message.text) &&
+          !previous.some(old => old.id === message.id && old.text === message.text));
+        const observed = snapshot?.presentation;
+        // Original reads cannot finish a stopped request or undo its cleared
+        // error. A subsequent Send (or routing admission) marks the task busy.
+        const canApplyProgress = !closingTaskIds.has(taskId) && !stoppingTaskIds.has(taskId) &&
+          !(task.status === "interrupted" && !task.busy);
+        const update = { unread: visibleTaskId.value !== taskId && (task.unread === true || newReply) };
+        if (observed) {
+          for (const field of ["routingMetadata", "purposes", "canSteer", "assistantSelection", "goal"]) {
+            if (Object.hasOwn(observed, field)) update[field] = observed[field];
+          }
+          const route = JSON.parse(observed.routingMetadata?.assistant_routing_request || "null");
+          // The old poll's captured turn/send fence remains product policy. A
+          // pre-Send read cannot finish a newer request while preparation runs.
+          const sameRequest = !task.messageId || observed.messageId === task.messageId || route?.messageId === task.messageId;
+          if (canApplyProgress && !sending && (!task.busy || sameRequest)) {
+            if (!observed.readError) {
+              update.status = temporaryAiText(observed.status) || task.status;
+              update.busy = temporaryAiTurnIsActive(update.status);
+              update.runId = observed.runId || task.runId;
+              update.outcomeKind = temporaryAiText(observed.outcome?.kind);
+            }
+            update.error = temporaryAiText(observed.error || error);
+          }
+          if (snapshot.pendingRequest && !task.pendingMessageId) update.pendingMessageId = snapshot.pendingRequest.messageId;
+        } else if (error && canApplyProgress) update.error = error;
+        const finished = task.busy && update.busy === false && update.status !== "interrupted";
+        updateTask(taskId, update);
+        if (finished) reportTaskFinished(taskId);
+      }, { flush: "sync" });
+    return taskView({ ...value, binding, releaseBinding: markRaw(() => { stop(); binding.release(); }) });
   }
 
   function updateTask(taskId = "", update = {}) {
     tasks.value = tasks.value.map((task) => {
       if (task.id !== taskId) return task;
-      const updated = { ...task, ...update };
-      if (update.messages) {
-        const newReply = update.messages.some((message) => (
-          message.role === "assistant" && temporaryAiText(message.text) &&
-          !task.messages.some((old) => old.id === message.id && old.text === message.text)
-        ));
-        updated.unread = visibleTaskId.value !== taskId && (task.unread === true || newReply);
-      }
-      return updated;
+      if (Object.hasOwn(update, "draft")) task.draft = update.draft;
+      if (Object.hasOwn(update, "attachments")) task.attachments = update.attachments;
+      return taskView({ ...task, ...update });
     });
     const task = tasks.value.find((task) => task.id === taskId) || null;
     const draftChanged = ["draft", "agentSettings", "attachments", "recoveryOutcome", "recoveryRetryKeys"]
       .some((key) => Object.hasOwn(update, key));
-    if (task && !Object.hasOwn(update, "status") && draftChanged) {
-      scheduleSave(taskId);
-    }
+    if (task && !Object.hasOwn(update, "status") && draftChanged) scheduleSave(taskId);
     return task;
   }
 
@@ -188,7 +245,10 @@ function useVibe64TemporaryAi({
   }
 
   async function saveTask(taskId) {
-    const task = tasks.value.find((candidate) => candidate.id === taskId);
+    const currentTask = tasks.value.find((candidate) => candidate.id === taskId);
+    // Keep the original queued PATCH's invocation snapshot now that draft and
+    // attachments are accessors over the retained binding.
+    const task = currentTask && { ...currentTask };
     if (!task || disposed || closingTaskIds.has(taskId)) return;
     const previous = saves.get(taskId);
     const operation = (async () => {
@@ -207,6 +267,7 @@ function useVibe64TemporaryAi({
       if (saved?.routingMetadata && canApplyTaskResponse(task)) {
         updateTask(taskId, { routingMetadata: saved.routingMetadata, purposes: saved.purposes });
       }
+      if (canApplyTaskResponse(task) && task.settingsToSave) void task.binding.runtime.value.reload();
       const current = tasks.value.find((candidate) => candidate.id === taskId);
       if (canApplyTaskResponse(task) && current.settingsToSave === task.settingsToSave) {
         updateTask(taskId, { settingsToSave: null });
@@ -268,7 +329,7 @@ function useVibe64TemporaryAi({
           updateTask(existing.id, { purposes: record.purposes, canSteer: record.canSteer });
           continue;
         }
-        const task = {
+        const task = bindTask({
           ...record,
           id: record.conversationId,
           sessionId: ownerSessionId,
@@ -276,7 +337,6 @@ function useVibe64TemporaryAi({
           agentSettings: normalizeVibe64AgentSettings(record.agentSettings),
           attachments: record.attachments || [],
           pendingMessageId: "",
-          delivery: createAssistantMessageDelivery(),
           draft: record.draft || "",
           messages: record.messages || [],
           unread: false,
@@ -287,10 +347,9 @@ function useVibe64TemporaryAi({
           recoveryOutcomeMessage: record.recoveryOutcome === "checking"
             ? "Check Update again to verify this repair."
             : record.recoveryOutcomeMessage
-        };
+        });
         tasks.value.push(task);
         if (!activeTaskId.value) activeTaskId.value = task.id;
-        if (task.busy) void pollTask(task.id);
       }
     } catch (error) {
       if (disposed || generation !== restoreGeneration) return;
@@ -348,7 +407,7 @@ function useVibe64TemporaryAi({
   } = {}) {
     const number = nextTaskNumber;
     nextTaskNumber += 1;
-    const task = {
+    const task = bindTask({
       initialRouting,
       agentSettings: normalizeVibe64AgentSettings(readRefOrGetterValue(agentSettings)),
       apiPath: currentSessionsApiPath(),
@@ -364,7 +423,6 @@ function useVibe64TemporaryAi({
       id: temporaryAiId("temporary-ai"),
       messages: [],
       unread: false,
-      delivery: createAssistantMessageDelivery(),
       nextStepMessage: temporaryAiText(nextStepMessage),
       pendingMessageId: "",
       recoveryOutcome: "",
@@ -380,7 +438,7 @@ function useVibe64TemporaryAi({
       sessionId: currentSessionId(),
       status: "ready",
       title: temporaryAiText(title) || `Temporary ${number}`
-    };
+    });
     tasks.value = [...tasks.value, task];
     activeTaskId.value = task.id;
     open.value = true;
@@ -492,7 +550,10 @@ function useVibe64TemporaryAi({
     const result = await request(vibe64TemporaryConversationPath(task.apiPath, task.sessionId, conversationId), {
       method: "PATCH", body: { assistantRouting: preferences }
     });
-    if (canApplyTaskResponse(task)) updateTask(taskId, { routingMetadata: result.routingMetadata, purposes: result.purposes });
+    if (canApplyTaskResponse(task)) {
+      updateTask(taskId, { routingMetadata: result.routingMetadata, purposes: result.purposes });
+      void task.binding.runtime.value.reload();
+    }
     return result;
   }
 
@@ -517,17 +578,11 @@ function useVibe64TemporaryAi({
     if (disposed || !task || closingTaskIds.has(taskId) || !["checking", "failed", "succeeded"].includes(outcome)) {
       return false;
     }
-    const messages = [...task.messages];
     const messageId = `recovery_${task.runId || task.id}`;
-    if (outcome === "succeeded" && !messages.some(({ id }) => id === messageId)) {
-      messages.push({
-        id: messageId,
-        role: "system",
-        text: temporaryAiText(message) || "Repair verified."
-      });
-    }
     updateTask(taskId, {
-      messages,
+      ...(outcome === "succeeded" && !task.messages.some(({ id }) => id === messageId) ? {
+        recoveryMessage: { id: messageId, role: "system", text: temporaryAiText(message) || "Repair verified." }
+      } : {}),
       recoveryOutcome: outcome,
       recoveryAutoPaused: false,
       recoveryOutcomeMessage: temporaryAiText(message),
@@ -576,263 +631,104 @@ function useVibe64TemporaryAi({
     return response;
   }
 
-  function stopPolling(taskId = "") {
-    clearTimeout(pollTimers.get(taskId));
-    pollTimers.delete(taskId);
-  }
-
-  async function pollTask(taskId = "") {
-    stopPolling(taskId);
-    const task = tasks.value.find((candidate) => candidate.id === taskId);
-    const canApplyResponse = () => {
-      const current = tasks.value.find((candidate) => candidate.id === taskId);
-      return canApplyTaskResponse(task) && current?.busy && current.runId === task.runId &&
-        current.sendVersion === task.sendVersion &&
-        !closingTaskIds.has(taskId) && !stoppingTaskIds.has(taskId);
-    };
-    if (!task?.conversationId || !canApplyResponse()) {
-      return;
-    }
-    // Realtime routing updates can arrive faster than a native history read.
-    // Share the pending read; each mounted conversation owns one poll at a time.
-    if (pendingPolls.has(task.delivery)) return;
-    pendingPolls.add(task.delivery);
-    try {
-      const response = await request(
-        vibe64TemporaryConversationPath(
-          task.apiPath,
-          task.sessionId,
-          task.conversationId
-        ),
-        { method: "GET" }
-      );
-      if (!canApplyResponse()) return;
-      const text = temporaryAiText(response.text || response.message || response.rawText);
-      const status = temporaryAiText(response.status) || "completed";
-      const messages = response.messages || temporaryAiTurnMessages(task.messages, task.runId, {
-        progressUpdates: temporaryAiProgressUpdates(response.progressUpdates),
-        status,
-        text
-      });
-      const active = temporaryAiTurnIsActive(status);
-      updateTask(taskId, {
-        busy: active,
-        routingMetadata: response.routingMetadata,
-        purposes: response.purposes,
-        canSteer: response.canSteer,
-        assistantSelection: response.assistantSelection,
-        ...(Object.hasOwn(response, "goal") ? { goal: response.goal } : {}),
-        conversationId: response.conversationExpired === true ? "" : task.conversationId,
-        error: temporaryAiText(response.error),
-        messages,
-        outcomeKind: temporaryAiText(response.outcome?.kind),
-        runId: response.conversationExpired === true ? "" : response.runId || task.runId,
-        status
-      });
-      task.delivery.reconcile(conversationTurnsFromMessages(messages));
-      if (active) {
-        pollTimers.set(taskId, setTimeout(() => void pollTask(taskId), TEMPORARY_AI_POLL_INTERVAL_MS));
-      } else {
-        reportTaskFinished(taskId);
-      }
-    } catch (error) {
-      if (!canApplyResponse()) return;
-      if (error.code === "vibe64_conversation_closed") {
-        removeTask(taskId);
-        return;
-      }
-      const message = temporaryAiText(error?.message || error) || "Temporary AI response could not be read.";
-      // A failed read does not prove that native work has stopped.
-      const active = error?.conversationExpired !== true &&
-        !["completed", "failed", "interrupted"].includes(error?.status);
-      updateTask(taskId, {
-        busy: active,
-        conversationId: error?.conversationExpired === true ? "" : task.conversationId,
-        error: message,
-        messages: temporaryAiTurnMessages(task.messages, task.runId, {
-          status: active ? task.status : "failed"
-        }),
-        runId: error?.conversationExpired === true ? "" : task.runId,
-        status: active ? task.status : "failed"
-      });
-      if (active) {
-        pollTimers.set(taskId, setTimeout(() => void pollTask(taskId), TEMPORARY_AI_POLL_INTERVAL_MS));
-      } else {
-        reportTaskFinished(taskId);
-      }
-    } finally {
-      pendingPolls.delete(task.delivery);
-      // A new turn can replace this poll while Stop/Send is in flight. Once
-      // the stale response settles, keep observing the current turn.
-      if (canApplyTaskResponse(task) && tasks.value.find((current) => current.id === taskId)?.busy &&
-          !pollTimers.has(taskId)) void pollTask(taskId);
-    }
-  }
-
   function pendingMessage(task, messageId) {
     const local = task?.delivery.find(messageId);
     const route = JSON.parse(task?.routingMetadata?.assistant_routing_request || "null");
     return (route?.messageId === messageId && routedChatMessage(route, local)) || local;
   }
 
-  async function send(taskId = "", { retryMessageId = "", generatedMessage = null } = {}) {
+  async function send(taskId = "", { retryMessageId = "", generatedMessage = null, attachmentOwner = null } = {}) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     if (disposed || !task || closingTaskIds.has(taskId) || stoppingTaskIds.has(taskId) ||
-        readRefOrGetterValue(operationBusy) || task.delivery.state.sending || task.recoveryOutcome === "checking") {
-      return false;
-    }
+        readRefOrGetterValue(operationBusy) || task.delivery.state.sending || task.recoveryOutcome === "checking") return false;
     const route = JSON.parse(task.routingMetadata?.assistant_routing_request || "null");
     if (!retryMessageId && assistantRoutingStatusIsPending(route?.status)) return false;
     const retry = retryMessageId ? pendingMessage(task, retryMessageId) : null;
-    if (retryMessageId && !["failed", "uncertain"].includes(retry?.status)) return false;
     const draftPayload = generatedMessage || chatMessagePayload(task.draft, task.attachments);
     const payload = retry?.payload || (draftPayload && {
-      ...draftPayload,
-      agentSettings: task.agentSettings,
-      displayMessage: draftPayload.displayMessage,
+      ...draftPayload, agentSettings: task.agentSettings, displayMessage: draftPayload.displayMessage,
       presentation: taskPresentation(task),
       message: !generatedMessage && task.recoveryContext
-        ? `${task.recoveryContext}\n\nUser message:\n${draftPayload.message}`
-        : draftPayload.message,
+        ? `${task.recoveryContext}\n\nUser message:\n${draftPayload.message}` : draftPayload.message,
       ...(task.recoveryOperation === "update" ? { outputSchema: VIBE64_AGENT_TASK_RESULT_SCHEMA } : {}),
       promptLabel: task.title
     });
-    if (!payload?.message) {
-      return false;
-    }
+    if (!payload?.message) return false;
+    const authored = payload.request ? payload : { ...payload, data: {
+      agentSettings: payload.agentSettings, displayMessage: payload.displayMessage,
+      presentation: payload.presentation, ...(payload.outputSchema ? { outputSchema: payload.outputSchema } : {}),
+      promptLabel: payload.promptLabel
+    } };
     const messageId = retryMessageId || temporaryAiId("message");
-    stopPolling(taskId);
-    updateTask(taskId, {
-      sendVersion: (task.sendVersion || 0) + 1,
-      busy: true,
-      ...(!retry && !generatedMessage ? { draft: "" } : {}),
-      error: "",
-      errorCode: "",
-      pendingMessageId: messageId,
-      outcomeKind: "",
-      // Keep this turn's review separate from diagnostics returned by a later Update.
-      runConflictId: task.recoveryConflictId,
-      recoveryOutcome: task.recoveryOutcome === "failed" ? "failed" : "",
-      recoveryOutcomeMessage: task.recoveryOutcome === "failed" ? task.recoveryOutcomeMessage : "",
-      status: "starting"
-    });
-    clearTimeout(saveTimers.get(taskId));
-    saveTimers.delete(taskId);
-    let conversationId = task.conversationId;
-    const apiPath = task.apiPath;
-    const ownerSessionId = task.sessionId;
+    const working = ["starting", "inProgress"].includes(task.status);
+    function accepted() {
+      if (!canApplyTaskResponse(task) || closingTaskIds.has(taskId)) return;
+      const current = tasks.value.find(candidate => candidate.id === taskId);
+      if (current.pendingMessageId !== messageId) return;
+      updateTask(taskId, { displayMessage: "", pendingMessageId: "", error: "", errorCode: "", status: current.status });
+      if (retry || current.draft || current.agentSettings !== task.agentSettings || current.attachments.length) scheduleSave(taskId);
+    }
     try {
-      const response = await task.delivery.send(payload, {
-        messageId,
-        isCurrent: () => canApplyTaskResponse(task) && !closingTaskIds.has(taskId),
-        async deliver(submission) {
+      const submission = task.binding.submitPrepared(authored, {
+        messageId, retryMessageId, retry, working, clearDraft: !generatedMessage, attachments: attachmentOwner,
+        isCurrent: () => canApplyTaskResponse(task) && !closingTaskIds.has(taskId), onAccepted: accepted,
+        onSubmit() {
+          updateTask(taskId, {
+            sendVersion: (task.sendVersion || 0) + 1, messageId, busy: true,
+            error: "", errorCode: "", pendingMessageId: messageId,
+            outcomeKind: "", runConflictId: task.recoveryConflictId,
+            recoveryOutcome: task.recoveryOutcome === "failed" ? "failed" : "",
+            recoveryOutcomeMessage: task.recoveryOutcome === "failed" ? task.recoveryOutcomeMessage : "", status: "starting"
+          });
+          clearTimeout(saveTimers.get(taskId));
+          saveTimers.delete(taskId);
+        },
+        async prepare(submission) {
           if (saves.has(taskId)) await saves.get(taskId);
           if (!canApplyTaskResponse(task) || closingTaskIds.has(taskId)) return false;
-          conversationId = conversationId || await ensureConversation(task);
+          await ensureConversation(task);
           if (!canApplyTaskResponse(task) || closingTaskIds.has(taskId)) return false;
-          return request(vibe64TemporaryConversationTurnsPath(apiPath, ownerSessionId, conversationId), {
-            body: {
-              agentSettings: submission.agentSettings,
-              ...(submission.attachmentIds?.length ? { attachmentIds: submission.attachmentIds } : {}),
-              messageId,
-              displayMessage: submission.displayMessage,
-              presentation: { ...submission.presentation, draft: tasks.value.find((candidate) => candidate.id === taskId).draft },
-              message: submission.message,
-              submissionKind: ["starting", "inProgress"].includes(task.status) ? "steer" : "send",
-              ...(submission.outputSchema ? { outputSchema: submission.outputSchema } : {}),
-              promptLabel: submission.promptLabel
-            },
-            method: "POST"
-          });
+          return { ...submission.request, data: { ...submission.request.data,
+            presentation: { ...submission.request.data.presentation,
+              draft: tasks.value.find(candidate => candidate.id === taskId).draft }
+          } };
         }
       });
-      const current = tasks.value.find((candidate) => candidate.id === taskId);
-      if (response === false || !canApplyTaskResponse(task) || closingTaskIds.has(taskId)) return false;
-      const status = current.status === "interrupted" ? "interrupted" : response.status || "inProgress";
-      const messages = response.messages || [
-        ...current.messages.map((entry) => (
-          entry.role === "assistant" ? { ...entry, runId: "", status: "completed" } : entry
-        )),
-        {
-          attachments: payload.displayAttachments || [],
-          id: messageId,
-          role: "user",
-          status: "completed",
-          text: payload.displayMessage
-        },
-        {
-          id: temporaryAiId("message"),
-          role: "assistant",
-          runId: response.runId,
-          status,
-          progressUpdates: [],
-          text: ""
-        }
-      ];
-      const acceptedAttachmentIds = new Set(payload.attachmentIds || []);
-      updateTask(taskId, {
-        attachments: current.attachments.filter((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId)),
-        ...(response.assistantRoutingRequest ? { routingMetadata: { ...current.routingMetadata, assistant_routing_request: JSON.stringify(response.assistantRoutingRequest) } } : {}),
-        busy: temporaryAiTurnIsActive(status),
-        ...(Object.hasOwn(response, "goal") ? { goal: response.goal } : {}),
-        conversationId,
-        displayMessage: "",
-        error: "",
-        messages,
-        pendingMessageId: "",
-        runId: response.runId,
-        status
-      });
-      task.delivery.reconcile(conversationTurnsFromMessages(messages));
-      if (retry || current.draft || current.agentSettings !== task.agentSettings ||
-          current.attachments.some((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId))) {
-        scheduleSave(taskId);
+      if (submission === false) return false;
+      const response = await submission;
+      if (!canApplyTaskResponse(task) || closingTaskIds.has(taskId)) return false;
+      if (response === false || response?.ok === false) {
+        throw temporaryAiRequestError(response || { error: task.delivery.find(messageId)?.error || "Message could not be sent." });
       }
-      if (temporaryAiTurnIsActive(status)) void pollTask(taskId);
-      else if (status !== "interrupted") reportTaskFinished(taskId);
+      const current = tasks.value.find(candidate => candidate.id === taskId);
+      if (response?.assistantRoutingRequest) updateTask(taskId, { routingMetadata: { ...current.routingMetadata,
+        assistant_routing_request: JSON.stringify(response.assistantRoutingRequest) } });
+      // Native run identity/status comes only from the original logical read.
+      // The shared owner already schedules that read and reconciles its receipt.
       return true;
     } catch (error) {
       if (!canApplyTaskResponse(task)) return false;
-      if (error.code === "vibe64_conversation_closed") {
-        removeTask(taskId);
-        return false;
-      }
+      if (error.code === "vibe64_conversation_closed") { removeTask(taskId); return false; }
       if (error.code === "vibe64_assistant_routing_cancelled") {
-        const current = tasks.value.find((candidate) => candidate.id === taskId);
-        const draft = current.draft;
+        const current = tasks.value.find(candidate => candidate.id === taskId);
         const text = payload.displayMessage || payload.message;
         task.delivery.remove(messageId);
-        updateTask(taskId, {
-          busy: false, conversationId, pendingMessageId: "", error: "", errorCode: "", status: "interrupted",
-          draft: draft ? `${text}\n\n${draft}` : text
-        });
+        updateTask(taskId, { busy: false, pendingMessageId: "", error: "", errorCode: "", status: "interrupted",
+          draft: current.draft ? `${text}\n\n${current.draft}` : text });
         scheduleSave(taskId);
         return false;
       }
-      const current = tasks.value.find((candidate) => candidate.id === taskId);
-      if (conversationTurnsFromMessages(current.messages).some((turn) => turn.user?.messageId === messageId)) {
-        task.delivery.reconcile(conversationTurnsFromMessages(current.messages));
-        const acceptedAttachmentIds = new Set(payload.attachmentIds || []);
-        updateTask(taskId, {
-          attachments: current.attachments.filter((attachment) => !acceptedAttachmentIds.has(attachment.attachmentId)),
-          pendingMessageId: "", error: "", errorCode: ""
-        });
-        scheduleSave(taskId);
-        return true;
-      }
+      const current = tasks.value.find(candidate => candidate.id === taskId);
+      const retained = task.delivery.find(messageId);
+      if (retained?.status === "accepted" || !retained && current.pendingMessageId !== messageId) return true;
       const stillWorking = task.busy && error?.conversationExpired !== true;
-      updateTask(taskId, {
-        busy: stillWorking,
-        conversationId: error?.conversationExpired === true ? "" : conversationId,
+      updateTask(taskId, { busy: stillWorking,
+        conversationId: error?.conversationExpired === true ? "" : current.conversationId,
         error: temporaryAiText(error?.message || error) || "Temporary AI message could not be sent.",
-        errorCode: temporaryAiText(error?.code),
-        pendingMessageId: messageId,
-        runId: error?.conversationExpired === true ? "" : task.runId,
-        status: stillWorking ? task.status : "failed"
-      });
+        errorCode: temporaryAiText(error?.code), pendingMessageId: messageId,
+        runId: error?.conversationExpired === true ? "" : task.runId, status: stillWorking ? task.status : "failed" });
       scheduleSave(taskId);
-      if (stillWorking) void pollTask(taskId);
-      else reportTaskFinished(taskId);
+      if (!stillWorking) reportTaskFinished(taskId);
       return false;
     }
   }
@@ -865,49 +761,23 @@ function useVibe64TemporaryAi({
   }
 
   async function stopTask(taskId = "") {
-    const task = tasks.value.find((candidate) => candidate.id === taskId);
-    if (disposed || !task || !task.busy && !task.routingMetadata?.assistant_routing_request || stoppingTaskIds.has(taskId)) {
-      return false;
-    }
-    if (!task.conversationId) {
-      throw new Error("Temporary AI is still starting. Wait for it to start, then stop it.");
-    }
+    const task = tasks.value.find(candidate => candidate.id === taskId);
+    if (disposed || !task || !task.busy && !task.routingMetadata?.assistant_routing_request || stoppingTaskIds.has(taskId)) return false;
+    if (!task.conversationId) throw new Error("Temporary AI is still starting. Wait for it to start, then stop it.");
     stoppingTaskIds.add(taskId);
-    stopPolling(taskId);
     try {
-      const response = await request(
-        vibe64TemporaryConversationStopPath(
-          task.apiPath,
-          task.sessionId,
-          task.conversationId
-        ),
-        {
-          body: { runId: task.runId },
-          method: "POST"
-        }
-      );
+      const runtime = task.binding.runtime.value;
+      const response = await runtime.cancel();
       if (!canApplyTaskResponse(task)) return false;
-      updateTask(taskId, {
-        busy: false,
-        ...(response.routingMetadata ? { routingMetadata: response.routingMetadata } : {}),
-        error: "",
-        messages: temporaryAiTurnMessages(task.messages, task.runId, {
-          status: "interrupted"
-        }),
-        status: "interrupted"
-      });
+      if (response === false || response?.ok === false) throw temporaryAiRequestError(response || { error: runtime.error.value });
+      updateTask(taskId, { busy: false,
+        ...(response.routingMetadata ? { routingMetadata: response.routingMetadata } : {}), error: "", status: "interrupted" });
       return true;
     } catch (error) {
       if (!canApplyTaskResponse(task)) return false;
-      if (error.code === "vibe64_conversation_closed") {
-        removeTask(taskId);
-        return false;
-      }
-      pollTimers.set(taskId, setTimeout(() => void pollTask(taskId), TEMPORARY_AI_POLL_INTERVAL_MS));
+      if (error.code === "vibe64_conversation_closed") { removeTask(taskId); return false; }
       throw error;
-    } finally {
-      stoppingTaskIds.delete(taskId);
-    }
+    } finally { stoppingTaskIds.delete(taskId); }
   }
 
   async function closeTask(taskId = "") {
@@ -919,7 +789,6 @@ function useVibe64TemporaryAi({
       throw new Error("Wait for Update to finish before closing this repair.");
     }
     closingTaskIds.add(taskId);
-    stopPolling(taskId);
     try {
       clearTimeout(saveTimers.get(taskId));
       saveTimers.delete(taskId);
@@ -940,7 +809,6 @@ function useVibe64TemporaryAi({
     } catch (error) {
       if (!canApplyTaskResponse(task)) return;
       updateTask(taskId, { error: error.message });
-      if (task.busy) pollTimers.set(taskId, setTimeout(() => void pollTask(taskId), TEMPORARY_AI_POLL_INTERVAL_MS));
       throw error;
     } finally {
       closingTaskIds.delete(taskId);
@@ -954,9 +822,9 @@ function useVibe64TemporaryAi({
   function removeTask(taskId) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     closedConversationIds.add(task?.conversationId || taskId);
-    stopPolling(taskId);
     clearTimeout(saveTimers.get(taskId));
     saveTimers.delete(taskId);
+    task?.releaseBinding();
     tasks.value = tasks.value.filter((candidate) => candidate.id !== taskId);
     if (activeTaskId.value === taskId) activeTaskId.value = tasks.value[0]?.id || "";
     if (!tasks.value.length) open.value = false;
@@ -979,7 +847,7 @@ function useVibe64TemporaryAi({
       if (payload.reason === "temporary-conversation-closed") removeTask(task?.id || payload.conversationId);
       else if (task && payload.assistantRoutingRequest) {
         updateTask(task.id, { routingMetadata: { ...task.routingMetadata, assistant_routing_request: JSON.stringify(payload.assistantRoutingRequest) }, busy: true });
-        void pollTask(task.id);
+        void task.binding.runtime.value.reload();
       }
     }
   });
@@ -991,11 +859,10 @@ function useVibe64TemporaryAi({
     if (ownerSessionId !== previousSessionId || apiPath !== previousApiPath || actor !== previousActor) {
       restoreGeneration += 1;
       restoreError.value = "";
-      for (const timer of pollTimers.values()) clearTimeout(timer);
       for (const timer of saveTimers.values()) clearTimeout(timer);
-      pollTimers.clear();
       saveTimers.clear();
       closedConversationIds.clear();
+      for (const task of tasks.value) task.releaseBinding();
       tasks.value = [];
       activeTaskId.value = "";
       open.value = false;
@@ -1009,10 +876,9 @@ function useVibe64TemporaryAi({
     disposed = true;
     clearTimeout(restoreRetryTimer);
     restoreGeneration += 1;
-    for (const timer of pollTimers.values()) clearTimeout(timer);
     for (const timer of saveTimers.values()) clearTimeout(timer);
-    pollTimers.clear();
     saveTimers.clear();
+    for (const task of tasks.value) task.releaseBinding();
   });
 
   return {

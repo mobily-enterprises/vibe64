@@ -14,11 +14,7 @@ import {
 } from "@/lib/vibe64ChatMessage.js";
 import { unmatchedOptimisticMessages } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
-import {
-  numberedQuestionSubmissionText,
-  parseNumberedQuestionPrompt,
-  parseAnswerChoicePrompt
-} from "@jskit-ai/assistant-core/shared/conversation";
+import { useAssistantQuestions } from "@jskit-ai/assistant-core/client/conversation-questions";
 import {
   latestAssistantMessageAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
@@ -240,17 +236,6 @@ function normalizedAgentTurnText(value = "") {
   return String(value || "").trim();
 }
 
-function composerDraftAfterAcceptedSubmission(currentDraft = "", submittedDraft = "") {
-  const current = String(currentDraft || "");
-  const submitted = String(submittedDraft || "");
-  if (current === submitted) {
-    return "";
-  }
-  return submitted && current.startsWith(submitted)
-    ? current.slice(submitted.length)
-    : current;
-}
-
 function agentConnectionThinkingLabel({
   active = false,
   status = "connected"
@@ -371,13 +356,13 @@ function useVibe64AutopilotView(props, emit, {
     loader: () => import("@/components/studio/Vibe64OutputControls.vue"),
     minHeight: "10rem"
   });
-  const agentSettings = computed(() => props.conversationRuntime.agentSettings);
+  const agentSettings = computed(() => props.conversationRuntime?.agentSettings);
   const preferredName = inject(VIBE64_WELCOME_NAME_KEY, () => {
     const accounts = useVibe64Accounts();
     return computed(() => accounts.status.value?.personalProfile?.preferredName);
   }, true);
-  const currentAgentSettings = computed(() => agentSettings.value.settings.value);
-  const requestAgentSettings = computed(() => agentSettings.value.requestSettings.value);
+  const currentAgentSettings = computed(() => agentSettings.value?.settings.value || {});
+  const requestAgentSettings = computed(() => agentSettings.value?.requestSettings.value || null);
   const sessionId = computed(() => normalizedAgentTurnText(props.session?.sessionId));
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   const actorKey = computed(() => unref(viewer)?.actorKey || "");
@@ -420,86 +405,41 @@ function useVibe64AutopilotView(props, emit, {
   ));
 
   const composerKey = computed(() => JSON.stringify([actorKey.value, projectSlug.value, sessionId.value]));
-  const composerDraft = ref("");
-  const composerAttachments = ref([]);
-  const composerRetrySubmission = ref(null);
-  const messageDelivery = computed(() => props.conversationRuntime.delivery);
+  const composerDraft = computed({
+    get: () => props.conversationRuntime?.draft.value || "",
+    set: value => { if (props.conversationRuntime) props.conversationRuntime.draft.value = value; }
+  });
+  const composerAttachments = computed({
+    get: () => props.conversationRuntime?.draftAttachments.value || [],
+    set: value => { if (props.conversationRuntime) props.conversationRuntime.draftAttachments.value = value; }
+  });
+  const composerRetrySubmission = computed(() => props.conversationRuntime?.draftRetry.value || null);
+  const messageDelivery = computed(() => props.conversationRuntime?.delivery || null);
   const discardingMessageIds = new Set();
-  const composerSending = computed(() => messageDelivery.value.state.sending);
+  const composerSending = computed(() => messageDelivery.value?.state.sending === true);
   const composerSubmissionKind = ref("");
   const routingRequest = computed(() => {
     try { return JSON.parse(props.session?.metadata?.assistant_routing_request || "null"); } catch { return null; }
   });
   const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status));
   const routingStatusLabel = computed(() => assistantRoutingStatusLabel(routingRequest.value));
-  let composerStorageKey = "";
-  let composerDeliveryOwner;
-  let restoringComposer = false;
-  function restoreComposerState() {
-    restoringComposer = true;
-    composerDeliveryOwner = messageDelivery.value;
-    composerStorageKey = actorKey.value && projectSlug.value && sessionId.value
-      ? `vibe64:chat-composer:v1:${composerKey.value}` : "";
-    try {
-      const saved = composerStorageKey && typeof window !== "undefined"
-        ? JSON.parse(window.sessionStorage?.getItem(composerStorageKey) || "null") : null;
-      composerDraft.value = typeof saved?.draft === "string" ? saved.draft : "";
-      composerAttachments.value = Array.isArray(saved?.attachments)
-        ? saved.attachments.filter((attachment) => typeof attachment?.attachmentId === "string") : [];
-      const messages = Array.isArray(saved?.messages) ? saved.messages.filter((message) =>
-        typeof message?.id === "string" && typeof message.text === "string" &&
-        typeof message.payload?.message === "string") : [];
-      const restoredMessages = messages.filter(message => !messageDelivery.value.find(message.id))
-        .map(message => ({ ...message, status: "failed", error: message.error ||
-          "Delivery was not confirmed before this page closed. Check the conversation before retrying." }));
-      messageDelivery.value.state.messages = unmatchedOptimisticMessages(props.conversationLog?.turns,
-        [...messageDelivery.value.state.messages, ...restoredMessages]);
-    } catch {
-      // Unavailable browser storage must not prevent sending a message.
-      composerDraft.value = "";
-      composerAttachments.value = [];
-    } finally {
-      restoringComposer = false;
-    }
-    persistComposerState();
-  }
-  function persistComposerState() {
-    if (restoringComposer || composerDeliveryOwner !== messageDelivery.value || !composerStorageKey || typeof window === "undefined") return;
-    try {
-      const saved = { draft: composerDraft.value,
-        attachments: composerAttachments.value.filter((attachment) => attachment?.attachmentId),
-        messages: messageDelivery.value.state.messages };
-      if (saved.draft || saved.attachments.length || saved.messages.length) {
-        window.sessionStorage?.setItem(composerStorageKey, JSON.stringify(saved));
-      }
-      else window.sessionStorage?.removeItem(composerStorageKey);
-    } catch {
-      // The in-memory delivery UI remains usable if storage is full or blocked.
-    }
-  }
-  restoreComposerState();
-  watch([composerDraft, composerAttachments, () => messageDelivery.value.state.messages], persistComposerState, { deep: true, flush: "sync" });
   function restoreCancelledMessage(messageId) {
-    const message = messageDelivery.value.find(messageId);
+    const message = messageDelivery.value?.find(messageId);
     if (!message || discardingMessageIds.has(messageId) ||
         !unmatchedOptimisticMessages(props.conversationLog?.turns, [message]).length) return;
     const text = message.payload.draftSnapshot || message.text;
     const draft = composerDraft.value;
     composerDraft.value = !draft || draft.startsWith(text) ? draft || text : `${text}\n\n${draft}`;
-    messageDelivery.value.remove(messageId);
+    messageDelivery.value?.remove(messageId);
   }
   const conversationFollowLatestKey = ref(0);
   const interrupting = ref(false);
-  const questionAnswers = ref({});
-  const dismissedNumberedQuestionText = ref("");
-  const submittedQuestionText = ref("");
   const saveWorkConfirmOpen = ref(false);
   const saveWorkReview = ref(null);
   const saveWorkError = ref("");
   const saveWorkFailure = ref(null);
   const saveWorkAttempt = ref(null);
   const saveWorkSending = ref(false);
-  const selectedAnswerChoice = ref("");
   const shortActionDismissals = ref({
     saveWork: "",
     workspaceSetup: ""
@@ -519,7 +459,6 @@ function useVibe64AutopilotView(props, emit, {
     diagnosticsBusy: false
   });
   let messageSequence = 0;
-  let composerSubmissionSequence = 0;
   let repositoryRequestSequence = 0;
 
   const shortActionDismissalsStorageKey = computed(() => {
@@ -552,40 +491,19 @@ function useVibe64AutopilotView(props, emit, {
     return true;
   }
 
-  const latestAssistantQuestionText = computed(() => (
-    latestAssistantMessageAwaitingUserReply(props.conversationLog)
-  ));
-  const numberedQuestionInput = computed(() => (
-    parseNumberedQuestionPrompt(latestAssistantQuestionText.value)
-  ));
-  const numberedQuestions = computed(() => (
-    [
-      dismissedNumberedQuestionText.value,
-      submittedQuestionText.value
-    ].includes(latestAssistantQuestionText.value)
-      ? []
-      : numberedQuestionInput.value.questions || []
-  ));
-  const numberedQuestionSelectItems = computed(() => Object.fromEntries(
-    numberedQuestions.value.map((question) => {
-      const choices = Array.isArray(question.choices) ? question.choices : [];
-      const includesUnsureChoice = choices.some((choice) => (
-        String(choice?.value || "").trim().toLowerCase() === NUMBERED_QUESTION_UNSURE_VALUE.toLowerCase()
-      ));
-      return [
-        question.name,
-        includesUnsureChoice ? choices : [...choices, NUMBERED_QUESTION_UNSURE_CHOICE]
-      ];
-    })
-  ));
-  const answerChoices = computed(() => (
-    numberedQuestions.value.length || submittedQuestionText.value === latestAssistantQuestionText.value
-      ? []
-      : parseAnswerChoicePrompt(latestAssistantQuestionText.value).choices || []
-  ));
-  const structuredQuestionActive = computed(() => Boolean(
-    numberedQuestions.value.length || answerChoices.value.length
-  ));
+  const questionState = useAssistantQuestions({
+    message: () => latestAssistantMessageAwaitingUserReply(props.conversationLog),
+    extraChoice: NUMBERED_QUESTION_UNSURE_CHOICE
+  });
+  const {
+    answers: questionAnswers,
+    choice: selectedAnswerChoice,
+    questions: numberedQuestions,
+    selectItems: numberedQuestionSelectItems,
+    choices: answerChoices,
+    active: structuredQuestionActive,
+    dismiss: dismissNumberedQuestions
+  } = questionState;
 
   const repositoryOperationActive = computed(() => [
     props.workState?.operation,
@@ -612,14 +530,7 @@ function useVibe64AutopilotView(props, emit, {
     !agentActive.value &&
     !repositoryOperationActive.value
   ));
-  const composerRetryMatchesDraft = computed(() => {
-    const retry = composerRetrySubmission.value;
-    const draft = String(composerDraft.value || "");
-    const submitted = String(retry?.draftSnapshot || "");
-    return Boolean(retry && submitted && (
-      draft === submitted || draft.startsWith(submitted)
-    ));
-  });
+  const composerRetryMatchesDraft = computed(() => props.conversationRuntime?.draftRetryMatches.value === true);
   const composerSubmitMode = computed(() => {
     if (assistantAccountUnavailable.value) {
       return "unavailable";
@@ -682,7 +593,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Keep typing while the assistant becomes ready"
   })[composerSubmitMode.value] || "Send message");
   const composerCanSubmit = computed(() => {
-    if (composerDisabled.value || routingBusy.value && !agentSteerable.value) return false;
+    if (!props.conversationRuntime || composerDisabled.value || routingBusy.value && !agentSteerable.value) return false;
     if (
       composerConnectionStatus.value !== "connected" ||
       (composerSending.value && !agentSteerable.value) ||
@@ -1098,22 +1009,16 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   function settleComposerRetry(retry = composerRetrySubmission.value) {
-    if (!retry || retry.messageId !== composerRetrySubmission.value?.messageId) {
-      return false;
-    }
-    composerDraft.value = composerDraftAfterAcceptedSubmission(
-      composerDraft.value,
-      retry.draftSnapshot
-    );
-    composerRetrySubmission.value = null;
-    return true;
+    return props.conversationRuntime?.settleDraftRetry(retry) ?? false;
   }
 
   async function sendChatPayload(payload = {}, {
     messageId: existingMessageId = "",
-    submissionKind = "send"
+    submissionKind = "send",
+    composer = false,
+    questionText = ""
   } = {}) {
-    if ((composerSending.value && (submissionKind !== "steer" || !agentSteerable.value)) ||
+    if (!props.conversationRuntime || (composerSending.value && (submissionKind !== "steer" || !agentSteerable.value)) ||
       !normalizedAgentTurnText(payload?.message)) {
       return false;
     }
@@ -1123,10 +1028,10 @@ function useVibe64AutopilotView(props, emit, {
     const sendingActorKey = actorKey.value;
     composerSubmissionKind.value = submissionKind === "steer" ? "steer" : "send";
     try {
-      const response = await props.conversationRuntime.send({
+      const response = await props.conversationRuntime[composer ? "submitDraft" : "send"]({
         ...payload,
         agentSettings: Object.hasOwn(payload, "agentSettings") ? payload.agentSettings : requestAgentSettings.value || null
-      }, { messageId, submissionKind });
+      }, { messageId, submissionKind, ...(composer ? { questionText } : {}) });
       if (sessionId.value !== sendingSessionId || projectSlug.value !== sendingProjectSlug || actorKey.value !== sendingActorKey) {
         return false;
       }
@@ -1160,85 +1065,22 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   async function submitComposerMessage() {
-    if (!composerCanSubmit.value) {
-      return false;
-    }
-    const retry = composerRetryMatchesDraft.value
-      ? composerRetrySubmission.value
-      : null;
-    if (!retry) {
-      composerRetrySubmission.value = null;
-    }
+    if (!composerCanSubmit.value) return false;
+    const retry = composerRetryMatchesDraft.value ? composerRetrySubmission.value : null;
     const draftSnapshot = retry?.draftSnapshot || composerDraft.value;
-    const additionalContext = draftSnapshot.trim();
-    const message = numberedQuestions.value.length
-      ? [
-          numberedQuestionSubmissionText(numberedQuestions.value, questionAnswers.value),
-          additionalContext
-        ].filter(Boolean).join("\n\n")
-      : selectedAnswerChoice.value || additionalContext;
+    const { message, questionText } = questionState.capture(draftSnapshot);
     const payload = retry?.payload || chatMessagePayload(message, composerAttachments.value);
-    if (!payload) {
-      return false;
-    }
+    if (!payload) return false;
     const submissionKind = retry?.submissionKind || (agentSteerable.value ? "steer" : "send");
-    const questionTextSnapshot = retry?.questionTextSnapshot || (structuredQuestionActive.value
-      ? latestAssistantQuestionText.value
-      : "");
+    const questionTextSnapshot = retry?.questionTextSnapshot || questionText;
     const messageId = retry?.messageId || nextMessageId();
-    const submissionSequence = ++composerSubmissionSequence;
-    composerRetrySubmission.value = null;
-    submittedQuestionText.value = questionTextSnapshot;
-    composerDraft.value = retry
-      ? composerDraftAfterAcceptedSubmission(composerDraft.value, draftSnapshot)
-      : "";
-    questionAnswers.value = {};
-    selectedAnswerChoice.value = "";
-    const sendingSessionId = sessionId.value;
-    const sendingProjectSlug = projectSlug.value;
-    const sendingActorKey = actorKey.value;
-    const accepted = await sendChatPayload(payload, { messageId, submissionKind });
-    if (sessionId.value !== sendingSessionId || projectSlug.value !== sendingProjectSlug || actorKey.value !== sendingActorKey) {
-      return false;
-    }
-    if (!accepted && submissionKind === "steer" &&
-      submissionSequence === composerSubmissionSequence && !composerDraft.value) {
-      composerDraft.value = draftSnapshot;
-      const optimistic = optimisticMessageById(messageId) || {
-        createdAtMs: Date.now(),
-        id: messageId,
-        text: normalizedAgentTurnText(payload.displayMessage || payload.message)
-      };
-      composerRetrySubmission.value = {
-        draftSnapshot,
-        messageId,
-        optimistic,
-        payload: optimistic.payload || payload,
-        questionTextSnapshot,
-        submissionKind
-      };
-      if (!unmatchedOptimisticMessages(
-        props.conversationLog?.turns,
-        [optimistic]
-      ).length) {
-        settleComposerRetry(composerRetrySubmission.value);
-      }
-    }
-    return accepted;
-  }
-
-  function dismissNumberedQuestions() {
-    if (!numberedQuestions.value.length) {
-      return false;
-    }
-    dismissedNumberedQuestionText.value = latestAssistantQuestionText.value;
-    questionAnswers.value = {};
-    return true;
+    questionState.markSubmitted(questionTextSnapshot);
+    return sendChatPayload(payload, { messageId, submissionKind, composer: true, questionText: questionTextSnapshot });
   }
 
   function optimisticMessageById(messageId = "") {
     const request = routingRequest.value;
-    const local = messageDelivery.value.find(messageId);
+    const local = messageDelivery.value?.find(messageId);
     return (request?.messageId === messageId && routedChatMessage(request, local)) || local;
   }
 
@@ -1262,7 +1104,7 @@ function useVibe64AutopilotView(props, emit, {
     if (composerRetrySubmission.value?.messageId === messageId) {
       settleComposerRetry(composerRetrySubmission.value);
     }
-    messageDelivery.value.remove(messageId);
+    messageDelivery.value?.remove(messageId);
     return true;
   }
 
@@ -1286,7 +1128,15 @@ function useVibe64AutopilotView(props, emit, {
     const retry = composerRetrySubmission.value?.messageId === messageId
       ? composerRetrySubmission.value
       : null;
-    messageDelivery.value.remove(messageId);
+    if (message.status === "uncertain" && routingRequest.value?.messageId !== messageId) {
+      const receipt = await props.conversationRuntime.inspectDelivery(messageId);
+      if (receipt?.status === "accepted") {
+        settleComposerRetry(retry);
+        return true;
+      }
+      return false;
+    }
+    messageDelivery.value?.remove(messageId);
     const accepted = await sendChatPayload(message.payload, {
       messageId,
       submissionKind: retry?.submissionKind || (agentSteerable.value ? "steer" : "send")
@@ -1698,7 +1548,7 @@ function useVibe64AutopilotView(props, emit, {
 
   const chatTurns = computed(() => {
     // Hydrate history before appending a restored unsent request to its tail.
-    if (props.conversationLog?.initializing) return [];
+    if (!messageDelivery.value || props.conversationLog?.initializing) return [];
     return chatTurnsWithRouting(
       messageDelivery.value.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []),
       routingRequest.value,
@@ -2021,7 +1871,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   function updateAgentSetting(parameterId = "", value = "") {
-    agentSettings.value.update({
+    agentSettings.value?.update({
       [String(parameterId || "")]: String(value || "")
     });
   }
@@ -2060,7 +1910,6 @@ function useVibe64AutopilotView(props, emit, {
   }, { immediate: true });
 
   watch([sessionId, projectSlug, actorKey], () => {
-    restoringComposer = true;
     repositoryRequestSequence += 1;
     saveWorkConfirmOpen.value = false;
     saveWorkSending.value = false;
@@ -2069,14 +1918,7 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkFailure.value = null;
     composerSubmissionKind.value = "";
     interrupting.value = false;
-    composerDraft.value = "";
-    composerAttachments.value = [];
-    composerRetrySubmission.value = null;
-    restoreComposerState();
-    questionAnswers.value = {};
-    dismissedNumberedQuestionText.value = "";
-    submittedQuestionText.value = "";
-    selectedAnswerChoice.value = "";
+    questionState.reset();
     workspaceSetupRetryError.value = "";
     workspaceSetupFixTaskId.value = "";
     checkedUpdateRepairRuns.clear();
@@ -2089,29 +1931,12 @@ function useVibe64AutopilotView(props, emit, {
     workspaceSetupRetryError.value = "";
   });
 
-  watch([routingRequest, () => messageDelivery.value.state.messages], ([request]) => {
+  watch([routingRequest, () => messageDelivery.value?.state.messages || []], ([request]) => {
     if (request?.status === "cancelled" && !request.helper && !request.attemptedMessageId) {
       restoreCancelledMessage(request.messageId);
     }
   }, { immediate: true });
 
-  watch(latestAssistantQuestionText, (questionText) => {
-    questionAnswers.value = {};
-    if (questionText !== dismissedNumberedQuestionText.value) {
-      dismissedNumberedQuestionText.value = "";
-    }
-    if (questionText !== submittedQuestionText.value) {
-      submittedQuestionText.value = "";
-    }
-    selectedAnswerChoice.value = "";
-  });
-
-  watch(() => props.conversationLog?.turns, (turns) => {
-    const retry = composerRetrySubmission.value;
-    if (retry && !unmatchedOptimisticMessages(turns, [retry.optimistic]).length) {
-      settleComposerRetry(retry);
-    }
-  });
 
   watch(() => Boolean(
     agentActive.value ||

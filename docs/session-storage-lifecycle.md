@@ -322,9 +322,11 @@ invalid/incomplete archives, and serialization across store instances.
 Archive tests also cover atomic attachment expiry, unchanged text/descriptions
 and failure/retry. `assistantChangeover.unit.test.js` covers native replacement,
 interrupted writes, fresh successor checks and lost admission receipts.
-`nativeConversationRetirement.unit.test.js` covers native inventories, complete
-families, preservation-before-deletion, changed files, unsafe paths, removed
-source and confirmed absence. The numbered upgrade records an additive release
+`nativeConversationRetirement.unit.test.js` covers application-bound Codex/OpenCode
+inventories, complete families and export cancellation. The original generic
+retirement and Claude cases now live in JSKIT's `nativeConversationRetirement.test.js`:
+preservation-before-deletion, changed files, unsafe paths, removed source and
+confirmed absence. Their assertions are unchanged. The numbered upgrade records an additive release
 boundary without rewriting application state.
 
 Mocked responses prove control flow, not pinned-provider runtime compatibility.

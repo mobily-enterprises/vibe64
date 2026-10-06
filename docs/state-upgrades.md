@@ -351,3 +351,112 @@ The script has read-only check/apply behavior and requires no backup because it
 mutates no application files. The runner records the ordinary ordered ledger
 entry, preventing older candidates from accepting this newer release boundary.
 Retries are no-ops. Delivery and cleanup use the existing request/receipt owners.
+
+## Colleague common conversation runtime
+
+`20261002-colleague-conversation` changes private Colleague records from schema
+version 1 to 2. It retains the canonical transcript, model choice, watches,
+observations and assignments. The old native conversation/run identity and last
+operation receipt move to `retiredConversation`. An executing operation becomes
+unknown; interrupted work is not resumed. Native history files are untouched.
+
+The Colleague package owns validation and conversion; the candidate CLI supplies
+that operation to the ordered runner. Check is read-only. Apply requires all
+services and native writers stopped. Every original `conversation.json` is backed
+up under `upgrades/backups/20261002-colleague-conversation/<user-key>/` before the
+first replacement. Conflicting backups, changed originals, invalid histories and
+symlinked histories fail explicitly. Publication is atomic per record, and retry
+keeps already upgraded records and original backups. The upgrade opens no native
+conversation, sends no model request and changes no credentials.
+
+## Native delivery journal
+
+`20261003-conversation-native-journal` upgrades existing Colleague runtime
+metadata from version 2 to 3 after the outer conversation-schema upgrade.
+It preserves conversation identity, configuration, native bindings, predecessor
+segments, written history and product data. The last delivered engine is derived
+from accepted, nonsuperseded transcript turns. No engine starts during conversion.
+
+An older pending native request has no saved rendered prompt. The upgrade marks
+it inspection-only using its exact saved native identity. The runtime may inspect
+native delivery evidence; it must not reconstruct or replay that request. Check
+reports this condition as a warning. Missing identities, conflicting native fields,
+unsupported versions and unfinished Undo operations fail preflight.
+
+OpenCode bindings from an earlier development candidate that lack a saved
+`databasePath` are not converted by this step. Their private native database must
+be assessed and converted offline before this release can accept them. Preflight
+blocks rather than guessing a database location, discarding history or opening a
+replacement conversation. Do not remove the binding or edit the upgrade ledger
+to bypass that failure. This candidate provides no private-database conversion.
+
+JSKIT owns the pure metadata transformation; Colleague owns enumeration and file
+publication. Check is read-only. With services and native writers stopped, apply
+backs up every affected original `conversation.json` under
+`upgrades/backups/20261003-conversation-native-journal/<user-key>/` before replacing
+any record. Publication rereads the original bytes and uses an exclusive temporary
+file and atomic rename. A retry retains already converted records and their
+original backups. Invalid histories, symlinks, conflicting backups or a writer
+changing a record cause an actionable failure. Native databases, credentials and
+history files are never changed by this upgrade.
+
+## Main and temporary conversation records
+
+`20261002-session-conversations` converts each main and temporary chat to one
+`conversation-log/transcript.json` record. It preserves messages, timestamps,
+message IDs, attachments, attribution, answering-model metadata and hidden rewind
+turns. Native histories and application admission records are unchanged. Existing
+integration setup decisions stay in their application-owned files.
+
+Runtime owns conversion and session/archive inventory. Core's shared file
+publisher retains the existing verified before/after manifest procedure. Check
+is read-only; apply requires stopped services and native writers. Active, closing,
+archived and prepared renewal histories are included. All originals are backed
+up under `upgrades/backups/20261002-session-conversations/before/` before any
+replacement. Archives are backed up and replaced as complete files. Old message,
+attachment, metadata and derived index files are retired after the new record is
+published; they remain available in the backup.
+
+Retry validates the original and replacement copies and completes the same
+prepared conversion. Conflicting data, invalid records and symlinks stop the
+upgrade with an error. Restore damaged backup copies from the operator's backup
+before retrying; do not delete the manifest or edit live histories to force an
+upgrade. Runtime readers report that an offline upgrade is required when legacy
+history remains. Opening a chat never performs historical conversion or sends a
+model request as part of the upgrade.
+
+New writes use JSKIT's shared transaction implementation under the existing
+session lease. A failed callback or record replacement leaves messages and runtime
+receipts unchanged together. This storage upgrade does not by itself migrate
+main chat's engine orchestration to the common conversation runtime.
+
+## Conversation Undo retirement
+
+`20261003-conversation-undo-retirement` performs read-only inspection before the
+release that removes conversation Undo. It uses the existing session inventory,
+including temporary chats, closing sessions, archives and prepared renewal
+archives. An unfinished or malformed `assistant_changeover.rewind` blocks the
+upgrade before any pending upgrade is applied. Complete the unfinished operation
+using the previous release, then stop services and retry the candidate's check.
+Do not erase the marker to bypass the check: native and application history may
+still disagree.
+
+Completed historical markers, messages, receipts and native history are retained
+unchanged. The step changes no application files and therefore needs no data
+backup; successful apply only records its completion in the upgrade ledger.
+The common runtime's separate native-journal preflight also refuses unfinished
+historical Undo operations without replaying or changing them.
+
+## Native speech output identity
+
+New message writes may include JSKIT's optional `outputId` when the native owner
+has observed the exact relationship between a live output and its saved message.
+This presentation identity does not replace message IDs, turn IDs, native history
+keys or delivery receipts. The canonical record stores it with that message so a
+read during playback preserves the identity already being spoken.
+
+Existing records remain valid and unchanged. No correspondence is inferred from
+old text, no alias table is created, and reads do not backfill the field. Messages
+without it retain the existing voice projection. This new-write-only addition
+requires no historical transformation or numbered upgrade. Colleague's selected
+`interimReply` is separate transient presentation and is never persisted.

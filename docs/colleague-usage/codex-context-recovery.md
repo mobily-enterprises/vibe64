@@ -18,14 +18,25 @@ conversation history and existing file edits remain available. A context
 rejection does not mean earlier commands in the turn were undone, and Vibe64
 does not automatically replay the whole turn.
 
-After work stops, **Undo last turn** still works across a Codex settings refresh
-or account reconnection. Use **Undo last turn** in the chat toolbar; in a compact
-chat layout, including phones, open **Session actions → Undo last turn**. Review the shown
-prompt and confirm **Undo last turn**. This removes that exchange from the
-conversation; project files and databases stay as they are. If a native terminal
-has added other work, refresh and review it before retrying. Colleague can
-inspect the conversation and offer to undo the selected exchange through its
-existing action; explaining Undo does not authorize it.
+If observation is lost, wait for the reported stop to finish before using
+**Send** or **Resume**. Reconnecting alone does not resend the interrupted
+instruction or resume its goal. A failed stop remains visible until it can be
+verified; inspect the session status before retrying.
+After cleanup is confirmed, a connection check can reconnect an idle conversation
+without sending another message. Continuing an interrupted goal still requires
+explicit **Resume**.
+
+Main chat and Colleague can share the same Codex service. If recovery has to stop
+that service, other conversations using it may be interrupted too. Review each
+affected conversation before continuing; recovery does not resend either request.
+
+Conversation Undo is unavailable. Review earlier messages in History and send a
+correction as a new message. Colleague can inspect the conversation and help with
+that correction; it cannot remove the previous exchange.
+If an unfinished Undo from a previous release blocks the conversation, contact
+the workspace operator. The operation must be completed with the previous
+release before upgrading. Colleague can explain the error, but cannot erase the
+saved boundary or resume the removed operation.
 
 To return to the previous model, open the chat mode menu, choose **Custom**,
 select **Codex** under **Orchestrator**, choose the previous **Model** and
@@ -39,6 +50,11 @@ and GLM. Choose the model through these controls; no extra instruction in each
 message is needed to enable its tools or context window. Each provider still
 requires its own connection in **AI Accounts**.
 
+When supported, switching from a compacted GPT conversation to DeepSeek or GLM
+recovers readable earlier messages automatically. You do not need to paste a
+second copy. Saved native history stays intact; unsupported recovery produces
+the error described below instead of silently omitting earlier work.
+
 Switching from OpenCode or Claude to Codex prepares the new conversation for
 model routing before opening it. Earlier replies keep their original AI labels;
 check the current chat mode control for the assistant that will receive **Send**.
@@ -51,6 +67,14 @@ source changes first. Renewal keeps the old session until the handover reaches
 the new conversation. Do not delete the guest or its account connections to fix
 this error. Colleague can explain these steps and offer to prepare a renewal;
 confirmation remains a separate operation after the handover is reviewed.
+
+If renewal reports that its newly started thread cannot be read, retry the same
+renewal after the connection recovers. The saved thread is reused; retrying does
+not silently create another one. If the error reports multiple possible threads
+or a mismatched identity, stop and contact the workspace operator. Colleague can
+explain that error and inspect the session status, but cannot choose an unknown
+thread or bypass the saved renewal identity. If the old thread is unreadable,
+write or edit the handover manually in the renewal dialog before confirming.
 
 If Codex reports that an expected editing tool is unavailable, stop the work
 and review any edits already made before continuing. Report the model and the

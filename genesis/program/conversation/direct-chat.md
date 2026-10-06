@@ -8,20 +8,373 @@ Genesis-composed project guidance or an application's current instructions, plus
 authorized configuration and owned execution resources. Genesis's generated
 hooks yield only for a bound managed conversation; independent CLI conversations
 in the same project retain standalone Genesis delivery.
+Codex's native thread status and operation-history checks also live in JSKIT.
+The same run owner selects the retained provider for Stop and keeps failed
+observation attached to its existing owner. It also owns the original in-flight
+thread-reconciliation map, loaded-thread restoration and ordinary-readiness
+fallback. Fallback remains inside that same pending operation through Vibe64's
+authorized context, health/error handling and result projection. Vibe64 supplies
+authorized project inventory and cleanup admission. The same native owner keeps
+reconciliation generations and drains its pending work before completing shutdown.
+Output recovery's retained-provider choice and visible-terminal native acquisition
+also use that owner. Vibe64 keeps authorized environment and PTY preparation;
+JSKIT retains the distinct lazy options, hook-trust and runtime-acquisition order.
+Main and scoped operations reach that owner through the common runtime. Helper
+account/profile policy and authorized storage roots stay in Vibe64. Historical
+saved Helper receipts retain their existing interrupt/delete cleanup through
+that same native owner. JSKIT owns
+the original durable Helper record format, revision checks, file locking and
+atomic writes. Public supplies its existing strict profile codec and error
+contract. The same run owner now holds Helper identity, pending mutation/start
+maps and retirement, including provider-retirement cleanup reconciliation.
+The same owner restores retained records, revalidates identity around connection
+and inventories isolated Helper threads under the original operation gate.
+Vibe64 retains lazy authorized session/provider preparation and awaits its
+cleanup notices inside that operation. Detached start/ACTIVE/READY transitions
+and failure retirement also use that owner through its focused execution module.
+Stable-account capture and completion checks also run there, independently of
+the retained Helper ledger. Vibe64's result projection keeps profile/output
+policy and parsing; the shared owner validates the exact active turn before
+mutating completion. Its original conversation commands, delivery, output and
+reasoning modules share the same state references and native owner.
+JSKIT also serializes ordinary native request settings and interactive CLI
+arguments, validates native UUIDs and projects detached native thread IDs.
+Vibe64 chooses permission values and its managed/Git launch wrapper. Its
+read-only assistant-scope choice uses the shared native settings formatter at
+the original lazy preparation point; the application still supplies its
+selected model, tool-free configuration and stable instructions.
+Its exact-turn renewal wait preserves subscribe-before-reread and saved-answer
+recovery. The original handover uses that same run owner for exact predecessor
+resume, native snapshot validation, subscription and managed-thread registration
+before dispatch. It persists native ownership, installs the detached
+watcher before Send and drains the original queue before finalizing the exact
+turn. The hidden successor seed uses its separate operation in that owner for
+fresh creation/adoption and snapshot validation, retaining its original read-only
+dispatch, exact-ID acceptance and reconciliation without Main subscription or
+finalization. Vibe64 supplies authorized context, lazy settings and the original
+receipt/storage codecs. It keeps handover parsing, hashes, exact ACK validation
+and internal renewal metadata writes. The authorized manager invokes the common
+runtime's separate handover and hidden-seed operations. Drivers use the same
+native owners and original application preparation phases; the service retains
+source-write leases and the hidden successor's private reader and ACK transaction.
+Hidden seeding creates no ordinary Main handle or publication.
+Predecessor/successor process-exit-proof release also uses the manager and configured
+common runtime. Codex keeps its original authorization before native lifecycle
+acquisition and deferred metadata inside that queue. Claude uses the same native
+close owner. OpenCode keeps predecessor close before late proof consumption and
+successor proof-only cleanup, including original resolved-failure versus rejection
+behavior. Manager result projection and successful binding/token retirement remain
+application-owned; these trusted cleanup operations create no Main handle or browser
+route.
+`sessionRenewalHandover` owns request validation, exact predecessor/successor
+cleanup authorization and the shared handover/hash/ACK protocol. The focused
+`sessionRenewalReceipts` owner applies the original three-engine receipt names,
+error identity, handover result and hidden ACK transaction through the existing
+session store. Its Codex preparation factory captures the existing runtime and
+environment facilities; settings, prompts, receipt reads and proof-result projection
+keep their original lazy phases. The provider supplies authorized context and keeps
+its existing result-error envelope. Claude/OpenCode retain their original application receipt timing;
+these historical differences are preserved, not declared permanent requirements.
+JSKIT also selects the operation's exact snapshot turn and classifies missing
+predecessor history or unrelated successor history; Vibe64 maps those facts to
+its unchanged renewal errors and retry policy. Abandoned starting-claim
+classification and failed-run persistence use the same shared run owner. Vibe64
+supplies only its background-task completion predicate at the original decision
+point; the existing prompt-delivery map and 15-second grace remain native-owned.
+Native token-usage payload interpretation also lives in JSKIT's event owner;
+Vibe64 keeps current-thread/replay validation, saved usage metadata and renewal
+advisory deduplication. Shared retained-Helper checks prevent an ordinary request
+from reusing a Helper-owned thread and preserve restoration failure details.
+Exact predecessor resume and successor creation/adoption also live in
+that owner, including native thread/source proof and the narrowly allowed
+pre-message status fallback. Vibe64 keeps the renewal deadline, error presentation,
+settings and metadata. Its original atomic baseline precedes native creation;
+the successor claim and identity are saved before the first snapshot read, so a
+retry uses the same claimed thread after a failed read or partial metadata write.
+Live goal activity takes precedence over an older interrupted history entry;
+native control probes do not become the user's latest turn. Vibe64 retains
+session admission, renewal handover records, checkpoints and recovery controls.
 Codex instruction changes update native configuration and add an explicit
 developer-context revision before new work; compaction rebuilds from the current
 configuration. The native environment proof also verifies its instruction revision.
-Claude applies compatible model settings or restarts the same native history
-when its prompt changes. JSKIT disables native prompt snapshot reuse so a resumed
-Claude process can actually apply the changed prompt. OpenCode uses the shared
-system transform and compaction invalidation. Project guidance is read before
+Claude's existing JSKIT turn owner also owns its serialized instruction state.
+The same native conversation owner connects its process operations to that
+instruction owner and drains its preparation queue before shutdown. It applies
+compatible model settings or restarts the same native history when its prompt
+changes. Both consumers apply authorized provider flags before selecting the model; compatible key
+rotation retains the process. JSKIT assembles native flag settings while Vibe64
+supplies its managed command hook. Selected connection credentials are installed
+through controls after initialization, and returning to native routing clears
+the previous overrides. JSKIT disables native prompt snapshot reuse so a resumed
+Claude process can actually apply the changed prompt. OpenCode's shared plugin
+owns the existing native/host transformer selection, two instruction caches and
+host-first event invalidation. Vibe64 supplies only the original registry lookup
+and lazy prompt descriptor; the plugin preserves selection followed by the
+selected owner's second lookup. Project guidance is read before
 each inference; only supplied content with a complete revision can be cached.
+OpenCode's native history ordering, admitted-turn boundaries and completion
+observation use JSKIT's shared runtime and internal turn owner. That owner follows
+native automatic compaction and its continuation within the admitted request. Vibe64
+retains its Genesis failure diagnostics, application admission and run projection.
+JSKIT decodes the native error envelope before those application diagnostics and
+formats the selected model and effort; Vibe64 retains account authorization and
+strict execution-profile validation before supplying those values.
+Native event summaries, stale-event filtering, conversation-specific errors and
+unexpected stream termination also use that owner. The original single
+reasoning-only final-answer recovery is shared with the common runtime; the
+application flushes its reasoning projection before the recovery input changes.
+JSKIT also retains event readiness and awaited observer closure, bounded native
+admission lookup and steering input rollback. Vibe64 keeps application progress
+publication, durable delivery records and its original returned identifiers.
+Main and detached prompt dispatch use the same JSKIT operation as the common
+runtime. The shared OpenCode owner now also coordinates Main's original duplicate
+and observation-loss handling, turn allocation, steering selection, event readiness,
+rejection drain and admitted receipt ordering on the same maps and monitor. Vibe64
+supplies Git/Genesis preparation, actor and routing metadata, attachment policy,
+the original receipt write/publication and run projection. The shared owner
+advances the observed input only after that receipt is saved and published, then
+releases admission. Detached completion, failed observation and retryable stop
+also use one native owner. Vibe64's bounded result projection still runs before
+observation closes; its checkpoint runs immediately after confirmed closure,
+before completion is published. The original structured helper result and
+temporary status fields remain application-owned.
+The shared owner also projects native history, retires completed stream rows,
+reuses or rebinds the original target, and coordinates pending acquisition,
+session/project closure and exit proofs. Vibe64 supplies its actual transcript
+store, message identities, reasoning-summary presentation and registry/terminal
+cleanup at their original sequence points. The ordinary standalone driver is
+joined to that same sender, native admission gate, monitor and Stop owner. Its
+application tools wait for their exact authored receipt and rejected steering
+retains the previous request. Retained scoped target selection, persistent native
+status/admission projection, restored-run reconciliation and the final native
+completion read also live in that owner. Vibe64 retains the exact saved-run
+equality fence and write transaction, profile/output policy and publication.
+The owner also checks cached native readiness and fences a late health response
+against the same target, server, workdir and selection. Vibe64 refreshes application
+eligibility at that point and keeps native recovery inside its original write lease.
+The same shared OpenCode runtime now owns scoped native creation, model/agent
+selection, active-turn dispatch, persistent history reads and completion waits
+over its original temporary records. Vibe64 supplies authorized context, profile
+and prompt policy, native message-ID mapping and the existing registry,
+publication and checkpoint effects. Parent admission receipts remain awaited
+before native Send; bounded Helper waits retain their original completion.
+Explicit scoped deletion uses that same preparation boundary: Vibe64 decides
+persistent lookup from the request and its current authorized application scope.
+The common driver passes the deletion operation and leaves application scope
+interpretation here; reads and Stop retain their existing preparation.
+The bounded renewal turn uses the original native history/dispatch/wait sequence
+in JSKIT too, including the accepted-input recheck after a wait failure. That same
+owner checks the exact predecessor and fresh successor history before evaluating
+the approved prompt. Seeding retains the separate freshness and receipt reads,
+awaits Vibe64's ACK validation and metadata write, then calls the original retained
+cleanup facility. An invalid ACK or failed write does not close the successor;
+failed cleanup can retry against the same native receipt without another prompt.
+Vibe64 retains the approved source/hash, handover grammar, selection, deadline,
+metadata and renewal error presentation. Hidden seeding stays inside its original
+private application transaction with deferred publication, using the same selected
+process and native turn owner without opening ordinary Main state.
+
+OpenCode server startup, authenticated readiness, version checks and cleanup now
+use JSKIT's `/server/opencode-process`. The standalone conversation driver uses
+the same server owner. Vibe64 supplies managed execution, resource policy,
+credential isolation and interactive terminal presentation. Native storage reads,
+child inventories, pagination and retained attachment permissions use JSKIT's
+OpenCode client; archived history reads do not initialize a deleted worktree.
+That owner also inspects the complete idle native family and exports bounded
+native pages with exact message/cursor validation. Its retirement operation owns
+the original native inspect/export/read/delete assembly and the shared
+preserve/recheck/remove/verify sequence. Vibe64 supplies the authorized shared
+process, saved binding, exact-directory control client and durable preservation
+policy before native history can be retired.
+Failed startup retains execution identity and logs when cleanup is unconfirmed.
+JSKIT's shared owner retains that exact native stop operation for retry even
+when acquisition never returned a server. Project close and shutdown reach the
+same pending cleanup; replacement startup waits for its verified exit proof.
+Readiness preserves the original 30-second deadline, strict healthy/version
+checks and last health-error cause. The host maps shared failure categories to
+the existing application error codes, preserving startup retry behavior. Stop
+keeps the original termination policy and full confirmed proof; unsuccessful
+cleanup leaves the private root and remains retryable.
+JSKIT's extracted shared runtime also owns the server's acquisition maps, pending
+starts, health/credential reuse, last-user release and exact-server recovery.
+Vibe64 supplies authorized startup inputs and keeps terminal closure, durable
+run completion and environment publication in their existing order. It supplies
+the application rows to JSKIT's atomic registry writer, which retains other
+consumers' contributions. Native registry reading and environment selection by
+directory or parent conversation also use that owner.
+The same owner performs Main's native health/session inspection, exact-process
+recovery and passive idle confirmation after observation loss. Vibe64 retains
+the fresh session-context and closure checks, original exclusive write admission
+and saved-run comparison. The shared owner evaluates observation-loss recovery
+eligibility against its existing monitor map at both original pre- and post-lease
+checks. Vibe64 keeps the fresh saved-run read and full equality fence inside its
+storage transaction. Healthy inspection takes no write admission; recovery cannot
+replace a newer process or overwrite a newer run.
+Colleague's common driver acquires the same owner through the terminal service's
+host facility. Its native session and private tool binding remain independent
+of main chat. Project closure selects the application's own registered sessions;
+it does not retire Colleague. Ordinary Colleague closure likewise retains main
+chat's server. Failed native observation can require stopping the shared service
+and failing both consumers. The one native plugin routes common instructions and
+application tools by native session while preserving project Genesis behavior.
+Common coding grants retain the application's existing environment-file read
+restrictions; adding application tools does not grant them to ordinary agents.
+JSKIT also assembles the original native environment flags and loopback proxy
+bypass. Vibe64 retains isolated credentials, its Genesis registry and the
+application's Helper/ephemeral configuration.
+Its existing OpenCode process-host preparation facility owns authorized account
+resolution, managed startup configuration and the original session-environment
+map. The shared application command-environment owner supplies project Env and
+session command bindings at the original configuration phase. Native acquisition,
+reuse, Stop and terminal attachment remain in the same JSKIT owner; this preparation
+facility returns configuration and storage effects, not native command callbacks.
+The same native process owner reads the credential-free provider/agent catalogue
+and bounded public Zen model list, and runs the finite API-key probe. Vibe64's
+private OpenCode account facility retains the original catalogue cache, fresh
+account visibility and model eligibility; the existing catalogue projector keeps
+its pagination and revision rules. Managed execution and outward error codes
+remain application-owned. Probe preparation evaluates the existing isolated environment after the
+native auth-file write and outside the sanitized command-error boundary; it
+returns the original managed command operation. JSKIT supplies native arguments
+and limits, classifies its result and removes the temporary credential root in
+the original `finally` position. Catalogue cleanup must succeed before either a
+result or a captured read error is returned.
+
 Vibe64's native OpenCode plugin reads Genesis through a fixed Node composer
 inside OpenCode's managed process group, with bounded output and a timeout.
 The compiler stays outside OpenCode's plugin process; a failed read prevents
 inference rather than delivering cached project guidance.
 Ordinary user messages and tool continuations carry no prompt copy.
-The implementation is in `@jskit-ai/assistant-core/server/conversation`;
+Claude's retained turn owner now also applies the original native state, verified
+Stop, result projection and completion ordering to the same entry. Vibe64 retains
+checkpoint, metadata, transcript and goal publication at their original awaited
+sequence points. Native exit proof precedes clearing the saved execution; failed
+cleanup remains retryable. Its original provider-wide entry registry, retained
+history restoration, Send/steering, reads, admission inspection and native drain
+now belong to the same shared conversation owner. Vibe64 supplies authorized
+identity storage, account/profile/prompt preparation and message publication.
+Original history-derived resume, native process assignment, execution receipt,
+frame reception and failure-to-Stop also live in that owner. Managed environment
+preparation remains before the history read; application guidance and launch
+configuration remain after it. The Helper execution receipt is still saved and
+published before launch returns.
+The ordinary driver now uses that same entry owner for native launch, Send,
+steering, completion and Stop. Successful disposal retires only the verified
+closed entry so the same binding can reopen; failed cleanup stays retryable.
+The same owner now decides retained-process readiness, scoped Start and saved-execution
+recovery, and coordinates verified Stop, native-history deletion and receipt retirement.
+Vibe64 retains profile and main-chat deletion guards, fresh metadata inventory and the
+original account/storage effects at their existing points. The owner classifies
+native goal/usage updates after raw observer forwarding, prepares interactive
+native history/resume and CLI arguments, and stops selected entries through its
+existing live inventory. Vibe64 supplies authorized terminal configuration and
+performs its managed PTY launch. The native terminal result also supplies its
+updater-disable setting after the authorized terminal environment; managed
+launch and session/terminal exclusion stay in Vibe64.
+The same native owner now performs the original active-turn/closing checks,
+authorized account binding and verified Stop before terminal preparation. Vibe64
+supplies only its application closing fact and retains the following Git/PTY work.
+OpenCode terminal attachment grants likewise use its retained native owner;
+attachment admission and the subsequent Git/PTY write remain application-owned.
+Its shared native owner also records attached terminal identity, checks the
+existing PTY snapshot for reuse, and clears matching target bindings after PTY
+close resolves. Vibe64 supplies the existing terminal read/close/namespace
+facility. Codex and Claude retain their same native owner across the original
+account/environment/Git preparation phases; plain PTY operations do not open or
+send a chat conversation.
+Main, persistent temporary chats, scoped Helpers
+and ordinary standalone conversations acquire that same owner through the common
+Claude driver. Vibe64 supplies authorized entry acquisition, storage/receipt
+effects and broad application cleanup; it no longer returns native Send/read/wait/
+Stop operation dictionaries. The shared command lifetime preserves duplicate
+admission, accepted-publication completion and tool draining. The application
+binding still supplies its original storage, representation and admission policy.
+Claude JSONL framing, control requests and ordered event observation use the
+internal client of JSKIT's native turn owner. Vibe64 retains managed process
+execution and application message admission. Native Claude history
+lookup, branch selection and transcript parsing use JSKIT's `/server/claude-history`;
+that module also owns the original safe native retirement inventory, branch
+export and removal. Vibe64 still authorizes history access and retirement,
+preserves archive artifacts and supplies the idle/exclusive-writer proof.
+Native Claude command construction and JSON handshake now use JSKIT's
+`/server/claude-process`. Public Vibe64 supplies its managed execution facility,
+account/model selection and managed command hooks. Its stdio bridge belongs to
+the execution gateway and only transports bytes inside that owned scope.
+JSKIT also owns stopping a retained Claude process or recovering its saved
+execution identity. Vibe64 records the stop result and publishes run/checkpoint
+state only after native cleanup is confirmed; failed cleanup retains the identity
+for a later Stop attempt.
+The same native turn owner performs control interruption followed by mandatory
+drain even when the control pipe fails. Vibe64 retains the active-turn guard,
+saved execution cleanup and result publication through its original stop entry.
+JSKIT also owns native model/allowance queries, their account-bound caches,
+shared pending requests and failed-query-process cleanup. Its original native
+model/effort projection supplies IDs, names and effort labels without changing
+those cached query results. The retained owner supplies its own process inventory
+and closing barrier. `claudeConversationAccounts` retains authorized identity,
+access, curated model choices, Helper profiles and product error projection;
+`claudeConversationEvents` retains the original publication and checkpoint effects.
+JSKIT classifies native result completion into the existing semantic goal-update
+event before resolving the turn. The application no longer reads the native
+completion source. It supplies its authorized command hook and timeout; JSKIT
+formats the native hook envelope.
+Account invalidation still drains queries and retained failed stops before closing sessions.
+The existing native account-binding guard also belongs to JSKIT. A changed
+signed-in Claude account cannot resume another account's history; an authorized
+external-provider key may rotate. Vibe64 supplies the resolved identity and
+persists the binding in its existing metadata format.
+Claude's native goal status and command sequence also use JSKIT's Claude turn
+owner. Vibe64 authorizes the session/account, routes native goal commands through
+its normal Send admission and checkpoint path, and publishes the result after
+the command. Pause stops the work and retains the goal; Cancel stops the work and
+then clears the native goal. Stale goal revisions cannot apply to a newer goal.
+Main OpenCode's common driver consumes the original shared runtime directly.
+Its native-state read selects the existing target/thread, reads the existing PTY
+snapshot, then projects the same native turn map. Vibe64 supplies current context,
+its historical saved-ID codec and terminal host; canonical session/configuration/
+delivery projection remains in the common application binding. Passive reads do
+not prepare or start a server.
+The binding supplies authorized context, application preparation and result
+projection rather than native operation callbacks. It keeps passive status reads
+separate from explicit native preparation, captures the existing monitor from
+the original acquisition key, and adopts the actual saved user receipt. Streaming,
+Stop, admission inspection and failed-cleanup retry use that same shared owner.
+That owner retains Main's original turn and monitor maps, five-second Stop
+acknowledgement, retryable failure flags and admission release before waiting for
+the current monitor. Ordinary Stop requires the native acknowledgement; the
+existing observation-loss branch retains its stronger stop proof. Vibe64 selects
+the authorized target and prepares the actor-attributed run and reasoning scope.
+The same JSKIT owner runs the original Main monitor: admission, native completion,
+compaction phase, interruption, failed-observation cleanup and exact monitor
+retirement. Vibe64 supplies its existing run writer, transcript projection and
+final notices. Event closure still precedes notices and the final run write;
+reasoning cleanup starts after monitor removal without delaying settlement.
+JSKIT supplies ordered reasoning facts to that presenter, including source
+message/part identity, original text, creation time and completion. Vibe64 retains
+its stored-message IDs, first-write timestamp formatting, headline policy and
+Helper queue; it no longer reads native reasoning-part envelopes.
+Target draining uses that same owner and its original temporary records: stop
+the exact active threads, abort and release admission, await retained completions,
+then release the shared process. Vibe64 still closes PTYs and reasoning scopes
+first, publishes registry removal and retains the resulting exit proof.
+The terminal service and manager use this same binding. Focused source checks
+cover actual service activation, original duplicate/ownership-conflict outcomes,
+streaming and retryable Stop. Main's browser facade and supplied retained binding
+use that same owner; OpenCode reports native goals as unsupported.
+
+The common runtime uses this same goal owner with its serialized Stop and Send
+operations. Goal clear has an ordinary message receipt; failed process cleanup
+prevents the clear command. The bound session provider retains its original
+application admission/checkpoint pipeline.
+Claude's native turn protocol uses JSKIT's `/server/claude-turn`: acknowledgement,
+streamed blocks, background-task completion and the interruption barrier for
+steering have one shared implementation. Vibe64 persists admitted user messages
+and projects normalized events into its existing run, transcript and checkpoint
+records. A pipe write alone remains insufficient proof of message delivery.
+Claude's streamed blocks are temporary. Completed native snapshots retain the
+same identities in live chat and recovered history; block completion removes
+the temporary stream rather than saving it as another reply.
+The instruction implementation is in `@jskit-ai/assistant-core/server/conversation`;
 `tests/server/codexManagedControls.test.js` verifies actual native model requests,
 compaction, retained subscribers and unchanged history without an external model.
 The numbered `20260928-completed-discussion-plan` upgrade restores the exact
@@ -120,6 +473,9 @@ For DeepSeek and GLM under Codex or Claude, the presentation adapter maps record
 commentary to thinking and excludes raw thinking from the chat display entirely.
 Only the latest commentary is previewed while working; saved roles and final
 answers are unchanged. Unknown model attribution retains the ordinary presentation.
+Isolated Codex assistants obtain their native hook, feature and MCP restrictions
+from JSKIT's `codexToolFreeConfiguration`. Vibe64 supplies the current inventory
+and verifies that its connection generation did not change while reading it.
 Short Codex agent messages without a phase are saved as commentary too. In native
 history without phases, earlier updates separated by tools or reasoning are not
 final replies; only the trailing response is final after the turn stops working.
@@ -171,53 +527,26 @@ and never rewrites the native rollout. Single-provider requests and ordinary tex
 summaries trigger no recovery reads; helper models elsewhere do not enable it.
 This preserves recorded text, not the originating model's opaque internal state.
 
-Undo last turn is a main-conversation command, available while idle. Its saved
-target identifies the latest user prompt and every following reply/activity row.
-The preceding user turn must use the same current assistant application.
-Codex models and providers share its native history; switching between them
-does not create an Undo boundary. The first turn after switching assistant
-applications cannot be removed. The confirmation states
-that project files and databases remain unchanged, and the removed prompt
-prefills only an empty composer.
+The application transcript is one `conversation-log/transcript.json` record per
+main or temporary conversation. JSKIT owns its nine-method transaction behavior;
+Vibe64 holds the existing session mutation lease and publishes the record by one
+atomic replacement. Messages, runtime metadata, tool receipts and per-turn
+attribution commit together, or a failed transaction leaves the previous record.
+The application retains attachment references, native message versions and
+integration setup decisions; decisions remain separate application records.
+Conversation Undo is not exposed in the UI, HTTP routes or action catalogue.
+Historical rewind markers remain readable and are not erased by this removal.
+The offline `20261003-conversation-undo-retirement` preflight inspects the same
+session/archive inventory and blocks unfinished native Undo without changing
+history. Those operations must finish on the previous release before activation.
 
-The existing main assistant write lock serializes Undo with Send.
-AI access is checked before cancelling routing, then rechecked inside that lock.
-Colleague reaches the same action using the exact current Undo turn ID returned
-by conversation-log reads. Its result reports the removed prompt with an explicit
-truncation flag; it does not refill the browser composer or resend it.
-
-A saved `assistant_changeover.rewind` boundary precedes native mutation. Claude uses
-`rewind_conversation`; history reads follow its durable `last-prompt` resume
-anchor. Codex App Server uses `thread/revert` with the exact excluded native turn;
-a turn containing steering cannot be represented as one visible prompt and is
-rejected before mutation. OpenCode deletes the exact tail message IDs in reverse
-order through its conversation-only endpoint. Each provider checks the saved
-boundary on retry, so a lost reply cannot remove another exchange. Older
-non-paginated Codex threads reject Undo before mutation.
-Codex's completed, fixed read-only settings checks do not form user-turn
-boundaries. Undo reads past those checks across native history pages, including
-after a provider restart, and still rejects intervening user work or an
-unfinished check. Recognition requires the complete command and successful
-digest output; an unrelated command carrying the same marker is not skipped.
-
-The filesystem adapter retains undone message files and their IDs, excluding
-the listed rows in `conversation-log/rewound.json` from active history. This
-preserves deduplication and prevents ID reuse or later AI catchup from restoring
-the removed exchange. Pending Undo is exposed with the history response after
-reload and blocks Send, AI changeover and goal restart until native and stored
-history agree. Rewind publishes `conversation-rewound`, not a turn-idle event,
-so it does not trigger workspace preparation. The action does not restore Git,
-run project setup, execute tools, or touch the project's database.
-Integration setup requests in discarded turns cannot be resumed from an old tab.
-
-The filesystem transcript maintains `conversation-log/message-ids.json` for
-duplicate delivery checks. Ordinary checks read this index instead of walking
-every historical turn. Transcript writes invalidate it before changing message
-files and publish it afterward under the session mutation lock; missing or
-damaged indexes rebuild from message filenames, including undone turns. Nested
-transcript writes share the existing mutation queue so concurrent participants
-cannot overwrite each other's receipts. AI changeover still compares transcript
-contents to preserve corrections and missed history.
+The numbered offline `20261002-session-conversations` upgrade converts old message
+files, attachment/turn metadata and rewind lists, including temporary, closing,
+archived and prepared renewal histories. It backs up all original bytes before
+publication and retries the prepared replacements. Ordinary conversation reads
+require the upgrade instead of converting old state. Nested transcript writes
+share the mutation queue; AI changeover still compares content to preserve
+corrections and missed history.
 
 Session detail has its own query key, so a realtime detail refresh does not also
 invalidate access, suggestions and renewal queries. Session lists ignore events
@@ -231,18 +560,24 @@ processes still require verified stop evidence. A Claude entry retains its resol
 assistant selection for later cleanup, including when it originally read that
 selection from session metadata. Moving Main to Codex or OpenCode cannot make
 shutdown reinterpret the retained Claude process as the new engine.
+Claude's named application storage adapter preserves its existing session
+metadata and scoped receipt format. It supplies the original storage methods to
+JSKIT's retained conversation owner and keeps the entry's serialized atomic-save
+chain, renewal mutation rules and metadata-mirror ordering. Native entry state,
+recovery and verified process/history retirement remain with JSKIT.
 
-The conversation client overlays realtime upserts received during each pending
-history request before publishing that response to the query cache. Upserts
+The shared conversation subscription overlays realtime upserts received during
+each pending history request before publishing that response. Upserts
 retain already delivered roles and progress messages, with stable message IDs
 allowing corrections. Progress without a message ID uses its role and saved
 timestamp, matching the transcript file identity; growing text replaces that
 entry instead of appearing as multiple partial paragraphs. Later authoritative
-reads remain replacements, so Undo can remove its selected exchange. Pending-read
-overlays stay scoped to their project and session and are discarded when that
+reads remain authoritative replacements. Pending-read
+overlays stay scoped to their conversation identity and are discarded when that
 request finishes or fails.
-`tests/server/conversationLogReconciliation.unit.test.js` exercises the real Vue
-composable and query cache with delayed HTTP responses.
+The archived-session history resource retains its original query-cache reader;
+`tests/server/conversationLogReconciliation.unit.test.js` exercises that Vue
+composable with delayed HTTP responses.
 
 Automatic thinking uses the selected curated model's declared default in both
 native Codex terminals and app-server turns.
@@ -258,6 +593,101 @@ exact previous execution owner's scope empty. A missing file by itself is never
 accepted as proof. Runtime sharing and shutdown follow the provider's runtime,
 so retaining a different provider does not skip the selected provider's cleanup.
 
+The process-identity inspection and verified process-group shutdown implementation
+now comes from JSKIT's execution facility. The shared native runtime validates
+its metadata schema and provider before using that proof. Vibe64 supplies its
+existing runtime marker names. The moved code still waits for transient identity ambiguity,
+checks descendant groups and rechecks identity before each signal or escalation.
+Registered executions continue to stop through Vibe64's execution gateway;
+inspection cannot replace an unconfirmed managed stop with PID-only signalling.
+JSKIT also owns the existing shared runtime coordinator, runtime lock and metadata
+read/write implementation. The private descriptor's format and atomic publication
+remain unchanged. Its module-level startup map serializes by runtime directory;
+waiters recheck their own account and compatibility values. A timed-out liveness
+probe remains suspect/reusable, and replacement requires proven retirement. The
+same owner handles helper preparation, readiness, publication and failure cleanup.
+Vibe64 prepares its attachment root before the lock, supplies scope and compatibility
+facts, and performs account-generation checks through its credential owner. Its
+execution gateway retains actor policy, runtime packs, resource profiles and
+project/session attribution. Both the native provider and external runtime cleanup
+operations call this JSKIT owner. The common driver now uses that same native
+backend. Colleague supplies the established account/runtime host through its
+existing common API. Main Codex, Claude and OpenCode commands enter
+`createConversationRuntime` through their original session bindings. Send, receipt
+inspection, Stop, status, supported goals, replacement and close reuse the existing native owner, process or account
+runtime, transcript and `assistant_changeover` record. The existing Main binding
+supplies their original common handle-opening operation and lazy stream read
+from the authoritative session store. The session agent manager owns Main Send,
+read, delivery inspection, Stop and supported goal dispatch. The provider facets
+retain only original request/result representation, including Codex's error and
+session projection and Claude's zero-argument Stop. The same manager dispatches
+retained Temporary and Helper read, Start, Wait, Stop and Delete after their
+original scope and native identity have been admitted. Native creation keeps its
+pre-identity preparation. Logical histories, profile policy and successful-cleanup
+binding removal stay with their existing owners. Main close also retires the
+retained common handle through this manager before the original resource cleanup
+fallback, preserving each engine's original close options. Empty Helper scopes
+still close directly through their captured native owner. Actor/access, attachment
+preparation, goal pins and product policy keep their original positions around
+that shared dispatch. The Main binding also supplies Claude and OpenCode's ordered
+application notification then canonical publication, resolving the current
+namespace after the first awaited notification. Codex retains its application-only
+native-goal filtering. Scoped identity adapters retain their original
+normalization and separate histories. The server-only native
+result representation preserves the original application response and exact
+session snapshot; canonical events do not expose that snapshot. Vibe64 keeps
+selection, actor/access policy, Genesis and Git admission, attachment storage
+and broad session cleanup. Claude retains its one provider entry, original receipt
+writer and unbounded main-turn completion. An explicit Claude state read still
+selects its native identity without starting a process; opening the common handle
+alone does neither. Its raw native goal commands preserve their original authored
+messages and exact stale-goal checks. Canonical Claude goal commands now use that
+same owner and literal `/goal` sender, adopting the original saved receipt without
+changing chat delivery cursors or adding a goal journal. The invocation queue is
+released before acknowledgement so Stop remains available. Vibe64 applies its
+existing goal pin and display policy to the exact native result before canonical
+projection. Canonical Codex goals use the same per-invocation policy after the
+original namespace admission releases. They retain native control semantics,
+without authored message rows. A passive unavailable result rejects canonical
+read without clearing the saved goal pin; raw reads retain their original status.
+The Main browser facade now routes canonical goal reads and updates through
+internal terminal actions and this same service policy. Those actions use the
+shared goal input validator and resolve the actor and project afresh; callers
+cannot select a native result representation or provide native goal tuples.
+The mounted goal panel uses the retained binding's goal read and command owner.
+Its canonical read includes the exact same-read target and declared capabilities,
+plus Vibe64's plain objective and pinned selection. The panel retains Auto policy,
+engine-specific presentation and full-objective preview without a separate goal
+cache, poll or POST. Standalone common goal delivery is unchanged.
+A native-history duplicate with no authored application row retains its exact
+native result; canonical callers receive an explicit missing-receipt error instead
+of an invented transcript row. Main's supplied browser binding consumes the same
+canonical commands for Codex, Claude and OpenCode. JSKIT owns page normalization,
+merge, queries and retained delivery; Vibe64 keeps the mounted product presentation.
+Temporary uses the same supplied binding through its logical conversation facade.
+Renewal invokes the prepared native owners inside its original application
+transaction; hidden successor seeding does not open or publish ordinary Main state.
+
+JSKIT also owns the original provider inventory, acquisition tracking, lifecycle
+queue, account invalidation and shared recovery sequence. Both consumers acquire
+their native providers from it. Inventory and invalidation use the workspace's
+runtime root and the selected account; shared fallback recovery uses the exact
+runtime directory. Vibe64 retains session barriers, stopped-state persistence,
+publication and Helper cleanup. Colleague's common runtime persists its native
+barrier through the same conversation storage contract. Both host bindings supply
+the existing Genesis hook environment, so their shared server has one consistent
+configuration. A runtime lock still protects native startup/retirement and exact
+metadata; it is not a cross-process observer registry.
+
+The native connection/thread provider also lives in JSKIT. Vibe64's subclass only
+supplies these host facilities and its existing diagnostic/error labels. The moved
+methods retain helper-account activation and refresh, bounded native inventories,
+control recovery, goals, hook trust and exact command interruption. The
+native credential parser and invalidation detector come from JSKIT; Vibe64 owns
+login generations, access and reconnect markers. JSKIT's bounded native export
+stream awaits the preservation sink and verifies the native revision; the editor
+still authorizes retirement and owns its preserved archive.
+
 An archived attachment whose payload has been removed returns a Gone response.
 Its preview keeps the filename and explains that chat text and the attachment
 description remain, with no broken Download action. The host owns expiry policy.
@@ -267,6 +697,16 @@ combines saved receipts with its pending upload queue, retains completed uploads
 when a saved view closes, and still cancels unfinished uploads. Restored files count
 against the normal attachment limit; additions and removals keep numbered text
 references consistent. A confirmed send clears only its accepted receipts.
+
+
+The shared transcript package owns the original page/merge helpers, turn and
+message normalization, and incremental saved-turn patch merging. Vibe64 supplies
+its attachment display policy and integration-setup presentation. The same patch
+owner preserves delivered user rows and saved progress during a history request.
+The supplied Main subscription owns native transcript updates and reconnect;
+product-only invalidations reload that same subscription through the application
+binding.
+
 
 ## Sources
 
@@ -291,9 +731,7 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `tests/server/vibe64WorkPlanClient.test.js`
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
-- `packages/vibe64-runtime/src/server/codexHistoryAdapter.js`
 - `packages/vibe64-runtime/src/server/codexAppServerProcess.js`
-- `packages/vibe64-runtime/src/server/codexModelCatalog.js`
 - `tests/server/codexHistoryAdapter.unit.test.js`
 - `tests/server/codexProviderSwitch.test.js`
 - `src/components/studio/vibe64-session/Vibe64ChatModeControls.vue`
@@ -302,11 +740,14 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `src/composables/useVibe64InAppLinks.js`
 - `tests/server/inAppLinks.unit.test.js`
 - `src/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue`
-- `packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js`
+- `packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js`
+- `packages/vibe64-terminals/src/server/claudeConversationStorage.js`
+- `packages/vibe64-terminals/src/server/claudeConversationEnvironment.js`
+- `packages/vibe64-terminals/src/server/claudeConversationEvents.js`
+- `packages/vibe64-terminals/src/server/claudeConversationAccounts.js`
 - `packages/vibe64-terminals/src/server/claudeCodeProcess.js`
-- `packages/vibe64-terminals/src/server/claudeConversationHistory.js`
-- `packages/vibe64-terminals/src/server/claudeStdioBridge.js`
-- `packages/vibe64-runtime/src/server/claudeStreamJson.js`
+- `packages/vibe64-execution/src/server/conversationExecution.js`
+- `packages/vibe64-execution/src/server/engines/stdioBridge.js`
 
 - `packages/vibe64-core/src/server/sessionRealtimeEvents.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
@@ -341,15 +782,45 @@ references consistent. A confirmed send clears only its accepted receipts.
 - `packages/vibe64-terminals/src/server/conversationActor.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js`
 - `packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js`
-- `packages/vibe64-terminals/src/server/codexTerminal.js`
+- `packages/vibe64-terminals/src/server/codexConversationStorage.js`
+- `packages/vibe64-terminals/src/server/codexConversationPreparation.js`
+- `packages/vibe64-terminals/src/server/codexScopedConversationPreparation.js`
+- `packages/vibe64-terminals/src/server/codexLifecyclePreparation.js`
+- `packages/vibe64-terminals/src/server/codexRuntimeHost.js`
+- `packages/vibe64-terminals/src/server/sessionRenewalReceipts.js`
+- `packages/vibe64-terminals/src/server/sessionRenewalHandover.js`
+- `packages/vibe64-terminals/src/server/codexSessionProviderHost.js`
+- `packages/vibe64-terminals/src/server/codexHelperPreparation.js`
+- `packages/vibe64-terminals/src/server/codexSessionEnvironment.js`
+- `packages/vibe64-terminals/src/server/codexAccountPreparation.js`
+- `packages/vibe64-terminals/src/server/codexAssistantCatalog.js`
+- `packages/vibe64-terminals/src/server/codexTerminalAccess.js`
+- `packages/vibe64-terminals/src/server/codexInteractiveTerminals.js`
+- `packages/vibe64-terminals/src/server/codexStartupHealth.js`
+- `packages/vibe64-terminals/src/server/terminalShared.js`
+- `packages/vibe64-execution/src/server/engines/terminalSessions.js`
 - `packages/vibe64-terminals/src/server/codexTurnOutcomeNotice.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
 - `packages/vibe64-genesis/bin/genesis`
 - `packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js`
-- `packages/vibe64-terminals/src/server/opencodeTerminal.js`
+- `packages/vibe64-terminals/src/server/openCodeScopedPreparation.js`
+- `packages/vibe64-terminals/src/server/openCodeInteractiveTerminals.js`
+- `packages/vibe64-terminals/src/server/openCodeLifecyclePreparation.js`
+- `packages/vibe64-terminals/src/server/openCodeConversationAccounts.js`
+- `packages/vibe64-terminals/src/server/openCodeConversationEvents.js`
+- `packages/vibe64-terminals/src/server/openCodeConversationPresentation.js`
+- `packages/vibe64-terminals/src/server/openCodeConversationStorage.js`
 - `tests/server/opencodeReasoningSummaries.unit.test.js`
 - `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/mainConversationBinding.js`
+- `packages/vibe64-terminals/src/server/nativeConversationRetirement.js`
+- `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
+- `packages/vibe64-terminals/src/server/sessionConversations.js`
+- `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
+- `packages/vibe64-sessions/src/server/mainBrowserConversations.js`
+- `packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js`
+- `packages/vibe64-sessions/src/shared/conversationIdentity.js`
 - `packages/vibe64-terminals/src/server/providerUsage.js`
 - `packages/vibe64-terminals/src/server/assistantChangeover.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
@@ -380,6 +851,54 @@ references consistent. A confirmed send clears only its accepted receipts.
 
 ## Public contract
 
+The session-owned browser facade supplies Main's original native conversation to
+the same JSKIT assistant transport used by optional Colleague. Its transport ID
+selects the existing project/session pair; it creates no stored identity or
+runtime record. Reads default to the original 20-turn page and use the original
+bounded history reader. Live events come from that same runtime subscription.
+Every operation and publication rechecks the current actor and project through
+the original action-context owner; its internal grant is never returned to the
+browser. Main and Temporary handle operations run inside that freshly authorized
+project context, including asynchronous reads and subscription registration;
+opening a handle alone does not establish context for its later calls. Event
+publication retains its existing current-authority checks rather than restoring
+the registration's cached context. Send, Stop and assistant selection delegate to the existing session
+actions, preserving source-write, routing, renewal and native receipt policy.
+Responses retain product acceptance without inventing a native receipt ID.
+They preserve the original operation outcome, retry permission and refresh
+recommendation as bounded scalar fields, without exposing session or native RPC
+objects. Normal Stop keeps its original `operationOutcome: interrupted` result.
+Delivery inspection can read an authored receipt while native work continues.
+Otherwise it asks the original native admission owner using the retained thread;
+native-only acceptance does not create an authored row or borrow a native turn ID.
+An idle attempted changeover still recovers through its original owner, which
+writes the authored receipt before clearing the existing pending journal.
+Inspection rechecks authorization after native I/O and never resubmits a prompt.
+
+One sessions-owned composition provider installs the assistant conversation and
+access facilities, whether or not Colleague is enabled. Colleague supplies its
+own optional facade and schemas. The shared HTTP and socket owners retain the
+same origin checks and private subscriptions. Main's existing custom composer and
+transcript now consume the supplied retained browser binding. Its original
+actor/project/session storage key and `{draft,attachments,messages}` format feed
+the binding's single draft and delivery owner; restoration never resends or
+reconstructs a request. Failed Steer recovery keeps the captured request identity,
+latest-submission ordering and accepted-prefix removal. The binding also owns the
+original per-message HTTP abort, text/voice readers and final-reader cleanup.
+Vibe64 retains source/Save/access admission, Router state and cancellation,
+uploaded attachment policy, settings and the existing goal panel. Those mounted
+product facilities share the binding's retained scope through its optional
+application factory. Goal state and command retries belong to that same binding;
+Vibe64 supplies only the existing pinned and Auto presentation policy.
+Main has no private native transcript/reconnect reader; product-only integration
+and selection invalidations reload the same shared subscription. Archived sessions
+still need the original read-only history resource and share the original
+integration actions and pending-turn formatting without starting a Main binding.
+The Main facade exposes Codex, Claude and OpenCode reads through their existing
+native owners. Its canonical goal methods use the original product actions and
+service policy. A goal read can target a retained Codex or Claude goal while the
+visible chat uses OpenCode; its native capability remains `goals: false`.
+
 The session header preserves label space by tightening its right-aligned action
 group in 512–640 px chat panes: 44 px controls, 20 px icons and no inter-button
 gap. Larger panes retain 48 px controls and their normal gaps; smaller panes use
@@ -400,15 +919,19 @@ changes from admitting new assistant work; retries finish the same operation.
 The next ordinary Send delivers continuity into a fresh native ID, with existing
 receipt recovery, before its predecessor becomes eligible for explicit cleanup.
 Visible history, source and session identity remain unchanged. Unfinished goals,
-delivery, routing, Undo and active work block replacement. Native terminal/goal
-entry waits until the successor has accepted its briefing.
+delivery, routing, unfinished historical Undo and active work block replacement.
+Native terminal/goal entry waits until the successor has accepted its briefing.
 
 Neutral storage operations enumerate saved bindings and native-only candidates
 within evidenced homes/directories, including CLI-created chats and forks. They
 retire finalized archived histories or accepted predecessors only after a host
 callback proves preservation and exclusive ownership. Provider owners check the
 entire native deletion family; matching a directory does not establish ownership.
-Codex retirement requires modern paginated history. Its owner streams native
+Codex retirement uses JSKIT's existing provider owner for the complete native
+family, saved-directory, status and rollout-file checks before preservation and
+confirmed deletion. Vibe64 supplies its authorized provider and native home,
+then retains the same preservation and application admission gates.
+Retirement requires modern paginated history. Its owner streams native
 thread, goal, turn and item records plus normalized readable chat text through a
 bounded, separate JSKIT connection. Every inspected family member must finish
 exporting, and a second export must confirm the same exact content revision.
@@ -430,8 +953,10 @@ revision recheck. An archived callback can publish that text and recovery files
 through the store's scoped artifact batch before authorizing native deletion.
 No public retention policy, compression worker or timer is added. Contracts and
 acceptance limits live in `docs/session-storage-lifecycle.md`; implementation is
-in `nativeConversationRetirement.js`, `assistantChangeover.js`, the terminal
-service and native adapters. Focused evidence is in the corresponding retirement,
+in JSKIT's native-history retirement owner and Claude history module, with
+`nativeConversationRetirement.js` retaining Vibe64's saved-binding inventory.
+`assistantChangeover.js`, the terminal service and native adapters supply
+application lifecycle policy. Focused evidence is in the corresponding retirement,
 changeover and session-storage tests.
 
 The session manager exposes a purpose resolver for callers migrating to unified
@@ -805,9 +1330,10 @@ is stopped through the same path; an empty inventory during startup is not exit
 proof. Unconfirmed termination invokes the existing verified runtime-stop owner,
 and the turn's interrupted status cannot hide that failure.
 
-Before interactive Codex starts, the managed leader exports the installed CLI's
-raw model catalogue with `codex debug models` and adds every unique curated
-DeepSeek and GLM definition from the connection owner. Provider-only homes use
+Before interactive Codex starts, the managed leader calls JSKIT's extracted
+catalogue and child-process implementation. It exports the installed CLI's raw
+model catalogue with `codex debug models` and adds every unique curated DeepSeek
+and GLM definition supplied by Vibe64's connection owner. Provider-only homes use
 `--bundled` for the native base, without requiring OpenAI credentials. The merged
 private runtime file is supplied as `model_catalog_json` at process startup:
 Codex's process-wide model manager cannot load catalogue overrides on thread
@@ -828,8 +1354,19 @@ switches among already-loaded models reuse the same process and conversation.
 to execute patches with real model IDs, check provider keys and context windows,
 restore saved history, and load an updated native catalogue after restart.
 
-The managed execution leader starts a local history adapter before Codex and
-stops both together. Browser/backend observer reconnects do not own its lifetime.
+JSKIT's internal Codex history adapter owns outgoing history translation and
+encrypted-compaction recovery. Its native provider definitions own
+the fixed protocol routes and qualified model capabilities. Vibe64's catalogue
+retains offered models, labels, account restrictions and recommended effort;
+the connection store supplies credentials to JSKIT's native configuration builder.
+There is one recovery implementation. Engine conformance tests live in JSKIT;
+Vibe64 tests its managed process lifetime and account/selection integration.
+
+JSKIT's process-leader implementation starts that local history adapter before
+Codex and stops both together. The public executable supplies the managed runtime
+token, command and offered models; JSKIT's shared native runtime owns process
+reuse and recovery through Vibe64's managed execution facility. Browser/backend
+observer reconnects do not own the leader's lifetime.
 The native account type selects a fixed OpenAI upstream through per-thread
 `openai_base_url`; authentication remains native-owned. On outgoing OpenAI
 requests, recognized foreign plaintext reasoning becomes labelled assistant
@@ -897,6 +1434,8 @@ selection before sending, preserving its native conversation. Partial settings
 acknowledgement stops that process before another prompt is admitted.
 The selected external model supplies the native `[1m]` model id, provider-owned
 auto-compaction window, and explicit main/background/subagent model mappings.
+JSKIT's `claudeModelConfiguration()` owns those rules; chat and terminal pass their
+authorized provider/model and connection through the same helper.
 Returning to Anthropic clears those overrides and the external credential.
 The native terminal receives the same configuration through its private process
 environment; command arguments contain no provider key. Chat and terminal retain
@@ -954,6 +1493,9 @@ as a refreshed allowance. Goal start/resume retains the assistant's access
 boundary; reads and pause/cancel remain available without inference admission.
 Native subscription allowance is owner-only. Passive goal and allowance lookup failures stay
 local to those controls and do not report an app-wide network outage.
+Both retain a 30-second read deadline. Goal status refreshes through the shared
+subscription, reconnect and focus; the separate plan allowance keeps its polling.
+Product account/routing and pinned-goal invalidations refresh that same goal owner.
 
 The shared command environment installs `vibe64-helper` beside the existing
 session executables for Codex and OpenCode. Its fixed groups are `preview`,
@@ -1002,7 +1544,9 @@ Recovery guidance appears inside Settings,
 with an attention badge on its button. Continue uses ordinary message delivery;
 an existing draft or attachments are kept for review instead of being sent.
 The goal popover shows a bounded objective preview beside the existing status
-and Pause/Resume/Cancel controls. View full goal opens the exact instruction in a
+and Pause/Resume/Cancel controls. The supplied control owns Codex's command buttons
+and explanations; the application adds its routing notice and full-goal view.
+View full goal opens the exact instruction in a
 scrollable dialog with a fixed Close action. Preview truncation affects only
 presentation; goal updates still identify the complete original objective.
 The goal indicator flashes red while active, uses the app's warning color while paused, and shows
@@ -1026,10 +1570,12 @@ behavior retain their current format and ownership. No transcript migration or
 second durable history is introduced.
 
 JSKIT's `createConversationStreams` accumulates live Codex deltas and OpenCode's
-existing 250 ms message snapshots outside durable history. Vibe64 admits Codex
-events under the session lock against the current native thread and turn, supplies
-project/session scope and saved message identities, and broadcasts snapshots on
-its existing realtime channel. The history read includes the current snapshot
+existing 250 ms message snapshots outside durable history. JSKIT's extracted
+Codex run owner admits events through Vibe64's session lock against the current
+native thread and turn. Vibe64 supplies project/session scope, authorized actor
+metadata and publication on its existing realtime channel. The original pending
+receipt and observer collections belong to that same run owner; a late provider
+acknowledgement cannot create a second authored message or replace a successor. The history read includes the current snapshot
 for browser reconnects. The client uses JSKIT's `mergeConversationStream` and
 ignores older revisions; chunk events do not refetch history or session details.
 The session notification queue combines adjacent text fragments still waiting
@@ -1041,8 +1587,18 @@ Successful persistence replaces the live item. Stop and verified observation los
 clear unfinished output. Saved replies retain their recovery authority, and a
 server-process restart relies on native history rather than a second partial log.
 
-The Codex indicator reads the current main conversation goal from `thread/goal/get`
-on its existing provider. Goal controls require assistant access and accept only
+The Codex indicator reads the current main conversation goal through JSKIT's
+existing native provider. The extracted run owner also owns the original goal
+command sequence: unchanged thread/goal identity guards, observation before native
+activation, recovery of saved output and explicit Resume's stopped-barrier handling.
+Its existing goal owner also selects first-goal thread readiness before native
+conversation acquisition; other controls retain the command's pinned context.
+Vibe64 retains Save/renewal admission, readiness health/storage preparation and authorized
+selection. Main chat reaches that same owner through its bound common-runtime
+entry, preserving the manager's original pinned goal selection even when the
+visible assistant selection differs. Goal commands retain their original native
+thread, objective and creation expectations and do not add an authored message.
+Goal controls require assistant access and accept only
 pause/resume/cancel on that session's current thread and unchanged objective/creation
 identity. Status-only `thread/goal/set` preserves Codex-owned objective, budget
 and usage history. Pause prevents further automatic turns without interrupting
@@ -1052,8 +1608,8 @@ budgets are not restarted by this control. Cancel uses `thread/goal/clear` for
 any unfinished goal, including blocked and budget-limited goals. It removes the
 goal without resuming the thread, marking the objective complete, interrupting
 the current turn, or deleting conversation history. The existing goal-cleared
-reconciliation updates run state and lets the UI offer a new goal. Goal notifications invalidate the
-protected read endpoint without broadcasting the objective. The same square
+reconciliation updates run state and lets the UI offer a new goal. Goal notifications
+refresh the binding's protected goal read without another native observer. The same square
 retains weekly allowance and exposes goal controls independently of plan data.
 
 When reconnecting to a native goal continuation, live thread activity takes
@@ -1062,7 +1618,12 @@ resumed turn prepares its context. The main-thread bridge requires an observer
 before native resume, and provider observers survive replacement of the socket.
 Thread preparation and reconnection restore the saved assistant selection and
 request concise reasoning summaries in the thread configuration, including when
-Codex resumes a goal before the next explicit message. Model capability rules and
+Codex resumes a goal before the next explicit message. The shared run owner also
+performs the original ordinary start and steer dispatch: it races native RPC
+acknowledgement with the same durable authored receipt, preserves rejection
+cleanup and only adopts the acknowledged turn while its ownership is current.
+The application still owns admission, selected settings, Git identity and prompt
+content. All callers use the extracted prompt-input helper in the shared provider. Model capability rules and
 explicit isolation settings still apply.
 The interactive Codex app-server starts with explicit `approval_policy="never"`
 and `sandbox_mode="danger-full-access"` configuration overrides. Codex does not
@@ -1150,11 +1711,14 @@ instructions during resume. Catalogue authentication uses the selected provider.
 The focused managed-control regression includes the actual native CLI with a local
 model fixture, a second subscriber, interrupted goals and preserved files/history.
 
-Observation loss is owned by the provider controller. Codex transport loss and
+Codex observation loss is owned by JSKIT's run/provider owners. Transport loss and
 notification-processing failures block provider work, persist an observation-loss
 barrier, then pause the native goal and interrupt its turn. A fresh idle read
 proves a per-thread stop. If control fails, the existing runtime owner must
-verify process exit; shared sessions are suspended together. The barrier prevents
+verify process exit; shared sessions are suspended together. Shared fallback
+attempts every registered peer's durable barrier before stopping the server and
+reports any failed write under the original failure policy. It does not require
+a separate native goal-pause operation for each peer. The barrier prevents
 background native resume and stale activity writes. Only explicit Send or Resume
 clears it. A healthy stopped control connection remains available for goal reads.
 A shared-process fallback may make goal details unavailable until an explicit Send.
@@ -1312,7 +1876,7 @@ other selected-session conversation models reread durable history rather than
 trusting event-provided decision data. Status restoration does not publish another
 completion event. After completion, the Integrations screen calls the session-owned
 resume action and reloads conversation state, including when delivery is uncertain.
-The OpenCode controller can inspect admission of an exact message on its original
+The common conversation API can inspect OpenCode admission of an exact message on its original
 native thread. A matching user message proves acceptance; absent or unavailable
 bounded history leaves admission unknown. Inspection creates no native session,
 sends no prompt and returns no conversation content. Integration continuation uses this admission check after uncertain delivery. A controlled test closes the sending
@@ -1444,7 +2008,7 @@ prose at word boundaries, and preserves declared column alignment. Table cells
 override the inline renderer's arbitrary word breaking; long identifiers remain
 bounded. Wide tables scroll inside a labelled, keyboard-focusable container
 without widening the conversation. Headers and row separators use theme colors.
-OpenCode creates its own native conversation ID. The controller persists it as
+OpenCode creates its own native conversation ID. The application storage codec persists it as
 `opencode_conversation_id`, separately from the currently selected application's
 identity, and uses it for resume, event observation, and the system-prompt registry.
 Its native database lives in the persistent service data directory, outside the
@@ -1476,12 +2040,51 @@ process stays running.
 
 Assistant verification observes an established provider connection without
 taking the session's agent-write lock or rebuilding its command environment.
+JSKIT's same Codex run owner performs native connection maintenance and loaded
+thread restoration, including status/control checks, subscription before resume
+and exact run reconciliation. Its provider owner also performs the original
+cached-provider selection, replacement, native construction and runtime acquisition,
+including observation-stop retry and startup-lock contention handling. The same
+owner subscribes to command-control changes and refreshes native project-hook trust
+before resume. Vibe64 supplies current authorized account, context, settings and
+managed execution preparation. It retains late session/admission
+checks, managed registration, ready-health writes and protected-preparation fallback. Authorized resume
+settings and the managed workdir are read at their original native dispatch
+points, after earlier status and control awaits.
+JSKIT's same run owner now owns the original wellbeing timer and runtime lifecycle
+state, including the closing fence, session closures and reconciliation tasks.
+Its original shutdown still starts invalidation before draining pending work,
+shares one shutdown Promise and performs the second invalidation sweep with the
+same error priority. Account invalidation enters that owner through the configured
+common runtime, preserving the fence before application result formatting.
+The same native owner now performs original batch restoration, Helper inventory
+under its existing project lock, observation-loss recovery selection, stale
+generation pruning and startup unsubscribe/retirement. Vibe64 supplies current
+session/metadata reads and its original write-exclusive recovery and readiness
+leases. Startup unsubscribe still retains a failed native unsubscribe and retries
+client retirement; it does not introduce a server Stop. Aggregate startup callers
+use the manager's configured common-runtime reconciliation and unsubscribe operations.
+The same run owner now coordinates Main readiness and Send preparation. Readiness
+acquires the provider outside the existing startup gate; Send acquires it inside
+that gate. Vibe64 supplies authorized environment/settings, the gate, identity
+storage and health/briefing writes. The owner selects the retained provider,
+installs observation, prepares native history, records managed ownership and
+recovers abandoned starts in the original order. Ordinary Send uses that same
+preparation, preserving its native tool settings and binding on failure.
+The existing JSKIT provider owner also runs Main's original native release
+sequence: retained-thread unsubscribe, notification drain, shared/cached/persisted
+Stop selection and exit-proof classification. It protects retained peers before
+changeover releases its provider. Vibe64 resolves the current metadata and supplies
+configured managed execution. It supplies lazy authorized Helper-record preparation,
+renewal authorization and errors, plus awaited terminal and attachment cleanup.
+JSKIT's same run owner coordinates Helper restoration and retirement and the
+enclosing session-close lifetime.
 The session-agent manager shares overlapping checks after authorizing each
 caller. A missing, unloaded, or disconnected provider session goes through its
-provider controller's preparation path, which waits up to ten seconds for the
-agent-write lock. Attachment uploads wait up to sixty seconds for that lock and
-retain it so renewal cannot freeze and clean up a session while an upload is
-writing. Admission rechecks the session after waiting, so renewal or archive
+common runtime's native readiness operation, retaining the application's wait
+of up to ten seconds for the agent-write lock. Attachment uploads wait up to sixty
+seconds for that lock and retain it so renewal cannot freeze and clean up a session
+while an upload is writing. Admission rechecks the session after waiting, so renewal or archive
 cannot be bypassed by a queued upload. Vibe64 configures JSKIT's shared attachment
 queue for one upload at a time, matching this storage boundary; selected files
 appear immediately as queued and proceed automatically. Concurrent requests from
@@ -1565,8 +2168,9 @@ The shared composer inserts ordinary `[Image #1]` and `[File #1]` references and
 shows the same labels beside uploaded files. Removing an upload removes its
 exact reference and renumbers remaining references; edited text remains ordinary
 text and never deletes a file. Both Codex and OpenCode use the same upload,
-reference, admission and retention implementation. Their adapters translate
-resolved image descriptors into native image inputs; other files remain
+reference, admission and retention implementation. JSKIT's native bindings translate
+resolved image descriptors into native image inputs; Codex ordinary sends and
+steering use the same authorized-local-image conversion; other files remain
 available through trusted file paths in the provider prompt. OpenCode also
 records per-conversation native access to those attachment directories so its
 file tools can reopen them later, preserving unrelated permission rules.
@@ -1650,9 +2254,11 @@ content through Vibe64's composition boundary.
 JSKIT installs Codex developer instructions and verifies their effective native
 configuration. Changed instructions or an unknown installation also receive a
 developer-context revision before new work; native compaction rebuilds from the
-current configuration. Claude reuses compatible processes or restarts against
-the same history with current prompt arguments and native prompt snapshot reuse
-disabled. OpenCode's system transform reads project guidance before each
+current configuration. Claude's native turn owns the original instruction queue
+and process hooks, reusing compatible processes or restarting against the same
+history with current prompt arguments and native prompt snapshot reuse disabled.
+OpenCode's shared plugin owns instruction routing and cache invalidation while
+Vibe64 retains the fixed composer and its bounds. Its system transform reads project guidance before each
 inference and invalidates cached supplied prompts on compaction. Ordinary user
 messages and tool continuations receive no repeated static instructions, and
 existing native history remains intact. Standalone Genesis hooks continue to
@@ -1836,11 +2442,16 @@ fallback. OpenCode uses the same managed ceiling when reserving context for the
 response and deciding when to compact the conversation.
 
 The AI Terminal follows that fixed session engine without substituting another
-one: Codex sessions expose a Codex terminal and OpenCode sessions expose an
-OpenCode terminal. A person starts the interactive terminal explicitly and
+one: Codex, OpenCode and Claude sessions expose their own native interactive
+terminal. A person starts the interactive terminal explicitly and
 sees the complete terminal rather than a collapsed status line. Closing it
 terminates and hides the terminal, and a clean terminal exit such as Ctrl-D
 hides it without affecting the durable conversation.
+JSKIT's Codex CLI codec omits permission overrides for remote resume: the native
+client rejects them, and the existing server thread owns its saved permissions.
+Local terminal launches retain their explicit policy. Codex's remote client also
+checks the server-wide account before resuming; a per-thread external-provider
+connection does not bypass its native OpenAI sign-in requirement.
 Terminal availability checks the conversation's native connection, independently
 of the next routed chat mode. Each open terminal retains the connection it was
 started with; input rechecks the current viewer's access and connection identity
@@ -1859,8 +2470,10 @@ independently of the last visible chat selection; starting or resuming still
 checks the effective destination's access. In Auto, the goal menu explains the
 explicit-mode requirement before submission and omits Start/Resume; Pause and
 Cancel remain available for an existing goal. An unavailable goal observation
-never marks a saved goal complete or unlocks Auto. Goal and allowance caches separate
-viewers, and a late goal response cannot update another viewer's controls.
+never marks a saved goal complete or unlocks Auto. The retained goal binding and
+allowance resource separate viewers, and a late goal response cannot update
+another viewer's controls. Message-goal retries retain their original UUID and
+captured target; uncertain delivery uses inspection rather than automatic resend.
 
 Opening the selected session view prepares that session's chosen provider and
 native thread without sending a model prompt or loading the provider catalogue.
@@ -1988,6 +2601,346 @@ an unrelated failure cannot gain an account link merely because of its wording.
 
 ## Implementation map
 
+### Application conversation and host boundaries
+
+The ordinary entry is `service.assistantSessionOptions` / `runMainAgentWrite`,
+then `sessionAgentManager.callSessionProvider` and `conversationOperation`, then
+JSKIT's common conversation runtime. Main and retained read, Send/Start, Wait,
+Stop, Delete and supported goal commands use that dispatcher. The three
+`agent/providers/*SessionAgentProvider.js` modules supply
+`prepareConversationRequest` / `projectConversationResult` for their existing
+input and result shapes; those codecs do not choose another runtime or own a
+native command loop.
+
+`mainConversationBinding.js` supplies the one `createSessionConversationBinding`
+constructor. The service obtains the selected registered provider through the
+manager's existing `conversationProvider` lookup. Each provider's
+`prepareConversationHost` supplies its actual native owner, preparation/close
+operations and original history projection; it no longer constructs the
+application binding. The shared constructor assembles admission, identity,
+transcript, selection and delivery reads, preserving passive/native read behavior.
+The lower `createMainConversationBinding` storage facet, `openMainConversation`,
+`readMainConversationHistory`, lazy `readStream` and scoped authority guard remain
+in that same module. `sessionConversations.js` owns Temporary's
+`selectedContext`, `providerInput`, `persistentConversationOptions` and
+`routingContext`: its logical identity and history remain distinct from Main.
+Before a native ID exists, manager `createConversation` completes its original
+access/profile checks and invokes the runtime's `createNativeConversation`.
+The configured host uses `prepareSessionConversationCreation` to select the
+original request codec and native owner without opening a Main binding. The
+three drivers call those same creation owners; Claude's owner now also performs
+its original UUID/acquire/profile/persistence/two-save sequence. The parent
+records the returned identity before Start. `runScopedTurn` retains the Helper
+create/receipt/Start/receipt/Wait/Stop sequence without a placeholder identity.
+
+`nativeConversationRetirement.prepareCodexModelRouting` owns the existing saved
+provider-home check and pin. The provider registers it as `prepareSelection`;
+Main and Temporary selection invoke it through the manager. It preserves an
+existing history's storage location and rejects unsupported relocation.
+
+`readSessionConversationContext` in the same binding module owns the original
+context validation, snapshot acquisition and workspace/selection gates. Its
+closed policies preserve Codex's full matching snapshot, OpenCode's bounded
+matching snapshot and Claude's captured/pinned snapshot. Scoped early branches
+retain their original project-free behavior. The old context functions only
+adapt signatures; they no longer choose or validate the application context.
+
+Explicit Codex, OpenCode and Claude readiness enters the same conversation runtime's
+`ensureNativeConversation` API after the manager's original authorization and
+coalescing. Its configured host prepares the registered provider's original
+application facilities; the driver and existing native owner decide readiness,
+recovery, acquisition and native result projection. OpenCode application phases
+retain fresh context checks, source-write leases and the unchanged-record commit;
+they neither inspect native maps nor select native recovery. Claude retains its
+original acquire/readiness sequence inside its driver. Codex's same run owner
+chooses observation-loss settlement, passive managed-connection verification or
+write-admitted preparation. Its original source-write lease, current-record fence,
+health effects, account/Genesis preparation and result projection remain application
+facilities at their original phases. Managed/provider capture and connection checks
+use the same native maps; passive verification still does not take the source-write
+lease. No retained binding is opened and no inference is sent solely for readiness.
+
+Session/scope shutdown uses the common disposal API as described below.
+The common application binding now owns the original Main message policy: Codex actor reuse/conflict, Genesis rendering and settings/briefing receipts; OpenCode duplicate inspection, actor admission, opening/explicit rendering and authored receipts; and Claude entry preparation, actor metadata and admission callbacks. Their native owners retain the original Send/steering phases and distinct scope/renewal predicates. OpenCode's original empty-input, context-before-ID and raw-result preparation now live in that existing message owner, preserving monitor capture before duplicate lookup. Historical message IDs come from the existing storage codec; the shared application-error module supplies the original result mapping. The binding imports no process host. Startup reconciliation
+and account invalidation use the configured common runtime; their original
+native sequence and terminal closure order remain intact.
+
+`publishMainConversationEvent` awaits application publication before canonical
+publication and resolves the namespace at that later position. Codex supplies
+its public event without `nativeGoal` while the common runtime receives the
+original event. `conversationActor.conversationActorMetadata` and
+`conversationReviewActorMetadata` own authenticated actor and Automatic review
+attribution; each native result caller retains its original metadata precedence.
+Its Codex receipt codecs, `codexDeliveredConversationMetadata` and
+`codexTerminalConversationMetadata`, preserve delivery-time saved-selection lookup
+and terminal echoes' latest UI actor. `sessionTurnCheckpoint` constructs the
+original Codex Main/Temporary checkpoint callback: Temporary retains its supplied
+outer identity and publishes idle after the checkpoint, while Main rereads its
+original current-turn metadata and outcome. Other engines retain their original
+checkpoint result projections. `claudeConversationEvents` owns Claude's original
+`publishRun`, `publishMessage` and `receiveTurnEvent` bodies, preserving
+checkpoint-before-state and stream-removal order through one native event sink. OpenCode `writeRun`, `writeConversationProjection` and
+`publishConversationTurn` retain their transaction, fresh-session read and
+null-write handling; `projectReasoning` remains cosmetic product presentation.
+Those store/event projections do not implement native turn state.
+
+`service.createCodexSessionRegistration` constructs one shared native provider/run
+owner pair and the existing account, storage, environment, preparation, catalogue,
+attachment and terminal facilities. The registered Codex provider assembles its
+selected-owner descriptors directly from those instances; there is no intermediate
+Codex controller. Service-wide terminal access uses the actual terminal facility,
+while ordinary chat operations still dispatch through the common manager/runtime.
+The attachment adapter retains one renewal facility per registration as its retry
+identity, so terminal lease retries share their original coordination.
+
+`service.createOpenCodeSessionRegistration` constructs the original shared native
+runtime and its named host, account, message, scoped, lifecycle, renewal,
+publication and terminal facilities once. The registered provider assembles the
+same configured-owner descriptors from those instances; there is no intermediate
+OpenCode controller. Account description uses the account facility's original
+context read and selected-connection check. Colleague uses the actual host
+preparation, while connection verification uses the same account catalogue cache.
+
+The following are specific application or host contracts. They do not make
+every operation in the containing engine module a host responsibility. Native
+process/thread/turn state, protocol formats, streaming, recovery and retirement
+remain with the same JSKIT owners used by the ordinary driver.
+
+**Authorized context and preparation**
+
+| Named application operation | Caller and contract that remains distinct |
+| --- | --- |
+| [mainConversationBinding.js](../../../packages/vibe64-terminals/src/server/mainConversationBinding.js): `readSessionConversationContext`, `prepareSessionConversationCreation`, `prepareSessionConversationReadiness`, `prepareSessionConversationDisposal`, `createCodexMainMessagePreparation`, `createClaudeConversationMessagePolicy`, `createOpenCodeMainMessagePreparation` | Existing preparation callers share the original context/snapshot authority; Codex namespace admission precedes lookup, OpenCode checks roots before durable selection, and Claude retains explicit pinned selection. Creation and readiness prepare selected request/native facilities only after manager admission; neither constructs a Main binding. Main Codex message policy here preserves actor reuse/conflict, new-turn actor replacement, opening/explicit Genesis rendering and successful settings/briefing receipts at the native owner's existing phases. |
+| [codexConversationPreparation.js](../../../packages/vibe64-terminals/src/server/codexConversationPreparation.js): `createCodexConversationPreparation`; [codexAccountPreparation.js](../../../packages/vibe64-terminals/src/server/codexAccountPreparation.js), [codexSessionEnvironment.js](../../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js) and [codexStartupHealth.js](../../../packages/vibe64-terminals/src/server/codexStartupHealth.js); provider `prepareConversationHost` context descriptors | The common context owner invokes the two existing account-home/unavailable-worktree effects at their original phases. Main message facilities discard the opening snapshot and retain environment/account preparation, startup health and failed-message health/worktree handling. `controlPreparation` supplies closing-session Stop facts; the driver invokes the same native control-acquisition owner; `readGoalContext` is passive; `goalPreparation` supplies readiness health/storage preparation and the stored-goal projection while JSKIT chooses native readiness and acquisition using the authorized pinned selection; `inspectionPreparation` checks the original thread before the driver invokes its existing native conversation-acquisition owner. The admission lease and checkpoint effects stay at their original phases. |
+| [claudeConversationHost.js](../../../packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js): `createClaudeConversationHost`, `prepareEntry`, `checkConfiguration` | The existing Claude owner acquires native entries through authorized context and preserves native closing checks at their original positions. Vibe64 retains replacement/PTY guards, the late session-closing fact, Helper-profile postconditions and Delete-Main protection. Fresh application storage prevents an old captured session from resurrecting a deleted chat; passive retained-turn projection stays inside the native owner. |
+| [openCodeLifecyclePreparation.js](../../../packages/vibe64-terminals/src/server/openCodeLifecyclePreparation.js): `createOpenCodeLifecyclePreparation` | Original readiness, interruption, reconciliation and cleanup preparation retains fresh context/account reads, write-admission leases, original run compare-and-write guards, shared process-release effects, PTY cleanup and cosmetic-summary disposal. It captures the actual host, Main, event, presentation and native runtime facilities and creates no native lifecycle state. JSKIT owns native readiness, stopping and retry sequencing. |
+| [mainConversationBinding.js](../../../packages/vibe64-terminals/src/server/mainConversationBinding.js): `createOpenCodeMainMessagePreparation` | Main input/context/configuration, observation/publication, result/error policy and exact-thread delivery inspection share the common application owner. The original inspection validates its message and thread before preparing the same host and projecting the native receipt. |
+| [openCodeScopedPreparation.js](../../../packages/vibe64-terminals/src/server/openCodeScopedPreparation.js): `createOpenCodeScopedPreparation` | Scoped application preparation preserves profile auditing and bounds, explicit scope and historical message identities, lazy process facts, registry publication, checkpoint and cleanup descriptors. It reuses common context and actual profile/storage/host facilities. Native creation, steering, read-back, Stop and deletion stay in the same shared owner. |
+
+| [sessionRenewalReceipts.js](../../../packages/vibe64-terminals/src/server/sessionRenewalReceipts.js): `createOpenCodeSessionRenewalPreparation` | The original handover/seed application preparation uses the same Main context, host settings and lifecycle release object. Prompt getters, exact native-history constraints, accepted-message errors, ACK write and completion/release order remain unchanged; the shared native runtime performs each renewal turn. |
+
+**Existing identity and storage**
+
+OpenCode's original native-boundary fixture in
+`tests/fixtures/opencodeController.js` invokes the common runtime with the
+application's actual configured provider and original native owner. Its test
+view preserves the original request/result assertions; it does not keep
+production controller aliases for scoped operations or create another native
+lifecycle. Product commands use the same common handle and native binding.
+
+| Named application operation | Caller and persisted contract |
+| --- | --- |
+| [codexAppServerSessionBridge.js](../../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js): `codexAppServerThreadPreparationForSession`, `codexAppServerThreadIdForSession`, `writeCodexAppServerIdentityMetadata` | Main binding preparation/identity and private renewal use the existing provider-specific metadata. Renewal requires its explicit writer/mutation pair; supplemental fields are restricted to `agent_renewal_*`. Parallel writes preserve the existing empty-string conversion and return metadata without mirroring a captured session. Native settings serialization and isolation verification are JSKIT operations. |
+| [codexConversationStorage.js](../../../packages/vibe64-terminals/src/server/codexConversationStorage.js): `createCodexConversationStorage`, identity and native-result projections | Main state and identity reads use the original bounded source descriptor, exact metadata list and shared run-owner reader. Each read stays fresh; initial opening still accepts its captured session, and thread/run/native-result getters remain lazy on the returned snapshot. The original terminal registry supplies terminal presentation. This adapter neither hydrates conversation history nor acquires a provider, owns a native map or caches state. |
+| [claudeConversationStorage.js](../../../packages/vibe64-terminals/src/server/claudeConversationStorage.js): `createClaudeConversationStorage` (`select`, `read`, `save`, `remove`, `hasMessage`, `readSessionConversations`, `projectContextRoot`, `modelProviderId`; application-only `metadata`) | The shared Claude owner uses the original session metadata and schema-1 scoped receipt. Metadata writes/deletes are serial; the captured session changes only after success. Scoped saves retain the entry's existing atomic save chain; removal awaits it. The adapter owns no native entry map or cleanup algorithm. The native owner receives the same eight storage functions; the application-only metadata writer remains with renewal and event effects. |
+| [openCodeConversationStorage.js](../../../packages/vibe64-terminals/src/server/openCodeConversationStorage.js): `writeOpenCodeSessionMetadata`, `recordOpenCodeSessionIdentity`; `opencodeServerProcess.js`: `createOpenCodeHostPreparation`, `storedUpstreamSessionId`, `upstreamSessionOptions.identity.publish` | The shared OpenCode owner reads/writes the existing binding through this historical storage codec. The writer filters absent values, keeps optional mutation/renewal fallback and parallel string writes; the identity receipt retains its four-field comparison and awaited write before updating only the captured OpenCode ID. The original environment-registry publication follows that receipt. Renewal receipts capture the same writer reference at their original phase. These semantics differ from both other writers. |
+
+**Accounts and managed execution**
+
+| Named host operation | Caller and reason |
+| --- | --- |
+| [codexAppServerProvider.js](../../../packages/vibe64-runtime/src/server/codexAppServerProvider.js): `codexAppServerRuntimeHost`; [codexRuntimeHost.js](../../../packages/vibe64-terminals/src/server/codexRuntimeHost.js): `createCodexSessionRuntimeHost`; [codexSessionProviderHost.js](../../../packages/vibe64-terminals/src/server/codexSessionProviderHost.js): `createCodexSessionProviderHost` | JSKIT's shared account/runtime provider receives authoritative credential identity/generation checks, reconnect recording and the existing managed run/stop facilities. The host selects application roots, resource profile and trusted environment; Helpers omit project/session/user context at the original boundary. Conversations continue sharing that account-scoped server. |
+| [claudeConversationAccounts.js](../../../packages/vibe64-terminals/src/server/claudeConversationAccounts.js): `createClaudeConversationAccounts`, `claudeCapabilities` | The account facility supplies authorized native-login/external-key identity, visibility, curated catalogue projection, allowance error mapping and Helper-profile policy. Its single query object comes from the same native owner's `createAccountQueries`; that owner supplies its own inventory and closing state. Native cache, refresh, process reuse and cleanup order are unchanged. |
+| [claudeConversationEnvironment.js](../../../packages/vibe64-terminals/src/server/claudeConversationEnvironment.js): `createClaudeConversationEnvironment`; [claudeCodeProcess.js](../../../packages/vibe64-terminals/src/server/claudeCodeProcess.js): `createClaudeCodeProcess`, `claudeFlagSettings` | Helpers use their original credential home/tool-free configuration; ordinary sessions defer command/Genesis preparation until needed. The process module supplies Vibe64 managed execution to JSKIT. Account binding, native arguments, instruction state and process coordination remain in the shared owner. |
+| `opencodeServerProcess.js`: `createOpenCodeHostPreparation`, `conversationHost`, `prepareSharedProcess`, `prepareProcess`, `writeSessionEnvironmentRegistry`; `agentCommandEnvironment.js`: `prepareOpenCodeSessionCommandEnvironment`; [opencodeServerProcess.js](../../../packages/vibe64-terminals/src/server/opencodeServerProcess.js): `createOpenCodeServerProcess`, `safeOpenCodeEnvironment`, `readOpenCodeCatalog`, `verifyOpenCodeApiKey` | JSKIT's selected-process owner receives authorized connections, private roots, resource policy and the application registry. Colleague's host returns lazy process preparation; the common driver invokes the same native start owner only when its existing reuse/health checks require startup. Catalogue/key checks retain their bounded managed request and product error projection. Native service/API/probe/cleanup mechanics stay JSKIT-owned. [opencodeSessionEnvironmentPlugin.js](../../../packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js) `Vibe64SessionEnvironment` supplies Genesis instructions and the exact trusted session-command wrapper to the shared native plugin. |
+
+All three preparations reuse `agentCommandEnvironment.prepareAgentSessionCommandEnvironment`
+and `projectExecutionEnv.loadProjectExecutionEnv` where their original contracts
+require them. `conversationExecution.createVibe64ConversationExecution` supplies
+Claude/OpenCode managed run/stop/inspection; Codex's host uses the same execution
+gateway with its account-wide scope. Account access checks and provider `capabilities` /
+`resolveExecutionProfile` retain product account visibility, selected-model
+and workload limits; `opencodeAssistantCatalog.js` projects those application choices.
+Codex's private `codexAssistantCatalog` facility retains the original discovery
+budget, caller cancellation and authorized account/runtime preparation around the
+same native catalogue and plan-usage owners. Retained-session profile discovery
+and account description use the actual common conversation-context and Helper
+preparation facilities, preserving their supplied snapshots, lazy restoration and
+runtime-option reads. Account access stays in `codexAccountPreparation`, using
+the original captured tool home and late provider-options root without a fallback.
+These policies neither grant native tools nor substitute for native isolation.
+
+The renewal receipt owner also preserves Claude's fresh context read and saved
+ACK/error fields, and OpenCode's two-phase seed receipt: ACK metadata is written
+before native shutdown, while the final result includes the subsequent process
+exit proof. Those phases remain selected by the same JSKIT native owners. No
+receipt implementation changes the hidden successor reader or publication lease.
+
+**Closure and retained resources**
+
+These production sequences run behind the common runtime API. Observing a
+different sequence does not establish that an engine requires it. Preserve behavior
+during extraction, and distinguish actual resource/state dependencies from application policy and unproven historical differences. The
+application supplies its persistence, authorization and terminal facilities;
+it must not choose native cleanup steps or retire a binding before all awaited
+cleanup effects succeed.
+
+`sessionAgentManager.closeSession` uses the common runtime's `disposeNative` for
+retained, unready and uncached native owners. Its configured disposal host prepares
+the original application context and options without opening a Main record. The
+same JSKIT driver/owner performs cleanup; no provider close fallback remains for
+the three common engines. A scope with no native ID keeps its authorized native
+owner. Ready retained handles retire only after all awaited completion effects;
+unready local handles preserve their original early-retirement fence and use the
+configured owner for retryable cleanup. `service.closeAllSessionTerminals` and
+`closeProjectRuntime` retain ordered product shutdown; manager `closeProject`
+clears matching terminal bindings only after successful provider results. For Codex
+and OpenCode, it invokes the configured common runtime project-close operation
+without opening a conversation. Claude now uses that same route: its retained
+native owner groups the original contexts and closes them sequentially using
+current application storage and terminal facilities. Claude account invalidation
+also enters the common runtime without a conversation identity. The same native
+owner fences new work, drains existing account queries, then closes conversations;
+selected-provider cleanup retains its narrower original behavior. The application
+supplies its unchanged account-error conversion. The same native owners preserve
+Helper cleanup, shared peer retention and retryable stop failures. Codex and
+OpenCode account cleanup also enter this configured runtime operation. Codex
+preserves its immediate shutdown fence before result formatting; OpenCode retains
+its original pending-start join, target release and failed-start retry operation.
+Their closing state belongs to those same native owners. Application guards read
+that state at their original admission positions. Startup reconciliation now
+uses `reconcileNativeSessions` on the same configured runtime. The manager keeps
+its original engine grouping, per-session access checks and custom-provider
+receiver; Codex retains concurrent recovery and generation/pruning, OpenCode
+retains per-session failure aggregation, and Claude retains fail-fast sequential
+restore/recover. Codex startup unsubscribe uses `unsubscribeNativeSessions` and
+still selects one configured provider before recovery. Neither operation opens
+a Main record, creates a new process owner or replays a submission.
+
+Claude explicit current/native-state reads acquire the original entry and snapshot
+inside the common driver. The application reader only appends actual PTY status
+and reads saved session metadata. Passive initialization still allocates no native
+identity and starts no process.
+
+The preserved order has three distinct sources:
+
+- Resource dependencies require pending preparation and final writes to settle,
+  durable ownership to be discovered, and other shared-server users to retain
+  their process before common retirement completes.
+- Application policy chooses hidden/public access, strict renewal stop proof,
+  Helper service retention, explicit forgetting and attachment retention.
+- PTY placement before or after native Stop, sequential versus parallel cleanup,
+  OpenCode's repeated namespace close and retained-versus-uncached field
+  projections have no demonstrated universal necessity. They remain unchanged
+  historical behavior; differing sequences alone do not justify new APIs.
+
+Partial failure does not roll every native structure back. OpenCode's original
+release removes a target and awaits its registry removal before stopping the
+last shared server. If that final Stop fails, the shared process remains and
+common retirement fails, but the removed target is not recreated. Aggregate
+cleanup retries the retained process/failed startup. Ordinary per-session retry
+at that exact intermediate point has not been established by the focused
+coverage; earlier abort-failure retries are a different case.
+
+Application startup status is projected by `codexStartupHealth`: the original
+background-task ID, health-attempt matching, ready-state deduplication and
+publication/error order stay in Vibe64. The shared native readiness owner calls
+these same application effects; the projection owns no process or lifecycle map.
+Its separate unavailable-worktree handler re-reads the session, resolves the current
+authorized runtime options and awaits the existing native retirement API before
+publishing blocked health. A failed retirement still prevents that publication;
+a missing session still receives the original blocked result. It adds no native
+cleanup sequence, queue or ownership state.
+
+| Current operation | Caller and observed production sequence |
+| --- | --- |
+| `codexLifecyclePreparation.js`: `prepareCodexSessionCleanup`, reconciliation and storage facts; `sessionRenewalReceipts.js`: `prepareRenewalProcessExitProof` | Session preparation supplies renewal authorization, deferred metadata and terminal/attachment completion. JSKIT's run owner performs the original pending-close coordination, Helper restoration/retirement and provider release, preserving the same Map/WeakSet references and retryable proof failures. Project closure also uses the same run/provider owners for Helper restoration, native conversation closure and project-provider selection. Vibe64 retains authorized project/storage preparation; account shutdown and startup recovery enter the configured common runtime. The same provider owner selects shared-peer retention or persisted process-exit-proof release using the original disk-locked stop; Vibe64 retains exact renewal authorization and result/error projection. Output acquisition, managed-thread registration/recovery and the before-resume observation guard also call the existing native owners directly. Main message selection now builds its native acquisition closure inside the same JSKIT message-command owner; application preparation supplies only the original captured session/thread facts and deferred runtime options. Application preparation supplies the original lazy runtime options and authorized run record; it does not invoke those native commands. |
+| `claudeConversationHost.js`: `prepareSessionCleanup`, `prepareConversationHost`; `claudeConversationStorage.readSessionConversations` | Fresh saved receipt decoding stays in the storage adapter. JSKIT restores entries, marks closure, drains native entries before the supplied PTY closure, conditionally forgets successful bindings and clears the marker in `finally`. Project and selected-account policy retain their original predicates. Entry acquisition and account binding/Stop/save now run inside that same owner; preparation supplies authorized context, options and postconditions in their original order. |
+| `openCodeLifecyclePreparation.js`: `prepareSessionCleanup` and process-release effects; configured common runtime cleanup | Preparation supplies terminal access, the Helper's shared-process retention policy and reasoning-task completion. JSKIT performs the original terminal-first session-close sequence, target/process drain and result merge with the original partial-failure boundaries described above. Project closure still limits release to the application's registered targets. Scoped deletion reads cleanup preparation only after successful native deletion and the registry write, then invokes that same native session-close owner directly. |
+
+Saved-history inventory and retirement now enter the configured common runtime
+through the manager, using the saved `binding.engineId` independently of current
+assistant selection. Vibe64 retains authorized storage-provider/directory
+preparation, application idle gates and the archive `beforeDelete` transaction.
+The same native drivers acquire the existing shared providers and invoke their
+original enumeration, export and deletion owners; no retained Main handle is opened.
+Claude's native owner applies the original saved-execution, retained-native and
+PTY idle checks in order; the application supplies fresh saved receipt and actual
+terminal facts, plus the awaited preservation callback. Temporary activity now enters the configured common
+runtime through the existing manager and common application preparation, without
+opening Main. Original result envelopes and provider/context policy stay here.
+Private scoped/activity controller aliases have been removed. Their original
+behavioral fixtures use the common runtime and the same native owners; malformed
+identity cases remain explicit original-native boundary checks.
+Activity likewise comes from the same native owners: Claude first restores fresh saved entries, and OpenCode excludes cosmetic
+summary work. Authorized context and session-ID validation remain application
+inputs. `generateSessionRenewalHandover` /
+`seedSessionRenewalHandover` retain approved handover parsing, hashes, ACK metadata
+and the hidden successor's private reader while invoking those same native
+owners. Codex `restoreCodexAppServerHelperThreads` supplies authorized record
+locations, profile policy and cleanup publication; JSKIT owns durable Helper
+records, locks, restoration and retirement. The same native conversation owner performs Helper restoration or ordinary-thread ledger exclusion before admission, and reads its existing map for active temporary work. The native provider owner selects the first eligible provider for plan usage; Vibe64 retains plan-visibility policy. Historical `interruptDetachedChatTurn`
+and `deleteDetachedChatThread` commands preserve source-editor cleanup of previously
+saved explanation receipts through the service, manager and common runtime. They
+retain the saved provider, execution-profile marker and original native IDs without
+inventing a scoped identity. The drivers call the existing native control owners;
+application providers retain only their original request/context codecs. Detached Send/stream
+wrappers are not part of this host contract. Naming, prompt hints and database
+tasks use the common scoped runner.
+
+**Interactive terminals**
+
+| Named terminal operation | Caller and preserved native access |
+| --- | --- |
+| [codexInteractiveTerminals.js](../../../packages/vibe64-terminals/src/server/codexInteractiveTerminals.js): `createCodexInteractiveTerminals`; [codexTerminalAccess.js](../../../packages/vibe64-terminals/src/server/codexTerminalAccess.js): `createCodexGatewayTerminal`, `codexTerminalArgs`, `codexGitCommandShimDirs`, `codexAppTerminalOwnerMetadata`, `activeCodexTerminal`, `activeGlobalCodexTerminal` | The terminal-access facility prepares the original managed PTY request and umask/Git startup shell using the supplied command runner, and reads the existing PTY inventory. JSKIT formats native CLI arguments. Service/manager launch retains authorized environment and account preparation. Full native thread readiness precedes the application source/Git/account/attachment checks; shared-runtime attachment follows the startup gate's fresh session/environment read. Those two native calls use the same JSKIT run/provider owner at their original phases. Global access retains its separate account preflight. |
+| [claudeConversationEnvironment.js](../../../packages/vibe64-terminals/src/server/claudeConversationEnvironment.js): `createTerminalAccess`, `configureTerminal` | Service/manager launch rejects active turns/closure, binds the account and stops the retained process before application environment/Git setup. The shared owner prepares native continuation/arguments, then Vibe64 launches its session-owned PTY. |
+| `openCodeInteractiveTerminals.js`: `startTerminal`, `terminalSnapshot`, `closeTerminal`, `writeTerminal`; `opencodeServerProcess.js`: `startAttachedTerminal` | Service/manager launch attaches to the selected native history and reuses its live PTY. Close clears the matching reference. Attachment input grants native directory access before inserting bytes; ordinary input does not submit a chat prompt. JSKIT owns native acquisition, session readiness and attach sequencing through the same shared owner; Vibe64 supplies the authorized context, lazy process/session facts and actual PTY facility. |
+
+For every engine, `readTerminal`, `subscribeTerminal`, `writeTerminal`,
+`resizeTerminal` and `closeTerminal` use `terminalShared` namespaces and the
+existing execution `terminalSessions` owner. Manager retains captured
+provider/account/actor access; raw keystrokes avoid session hydration and Main's
+write lock. There is one PTY state/I/O/cleanup owner, separate from conversation
+Send, while the three interactive entry points remain available.
+
+**Other engine-named modules**
+
+These supporting modules do not own another conversation controller. Account
+management is explained in [Connections and health](../accounts/connections-and-health.md);
+its user-authorized connection workflow remains separate from ordinary chat.
+
+| Named location and operation | Actual caller and ownership |
+| --- | --- |
+| `agent/providers/codexSessionAgentProvider.js`, `opencodeSessionAgentProvider.js`, `claudeConversationHost.js` in `vibe64-terminals` | Manager calls their request/result codecs, access/capability/profile projections and named host/terminal operations listed above. The manager, not these codecs, selects ordinary Main/retained commands. Claude's private host constructor composes the existing native owner with application context, storage, account, environment and publication facilities. |
+| [codexAttachments.js](../../../packages/vibe64-terminals/src/server/codexAttachments.js): `storeCodexAttachment`, `renewCodexAttachments`, `withUploadedAgentAttachment`, `cleanupCodexAttachments`, `releaseCodexSessionAttachments`; [codexAttachmentPaths.js](../../../packages/vibe64-runtime/src/server/codexAttachmentPaths.js): `codexAttachmentHostRoot`, `prepareCodexAttachmentRoot` | `sessionAttachments`, upload routes, terminal input and session/renewal cleanup use application-owned files, leases, locks, size limits and authorized roots. They do not own model input or native turn delivery. |
+| [codexHelperPreparation.js](../../../packages/vibe64-terminals/src/server/codexHelperPreparation.js): `createCodexHelperPreparation` | The application validates the original persisted record against its current project, session and worktree, then supplies lazy account/runtime options and cleanup notices. Restoration and inventory reuse the same provider-host and native run-owner facilities; the original closing fence and observation/resource reads remain deferred until the native owner requests them. This facility creates no ledger, native map or restore/retire loop. |
+| [codexHelperThreadLedger.js](../../../packages/vibe64-terminals/src/server/codexHelperThreadLedger.js): `strictExecutionProfile`, `codexAppServerHelperExecutionProfileMatches`, `codexHelperThreadLedgerOwner` | Codex host preparation supplies the existing profile codec/error prefix to JSKIT's actual ledger owner. Record format, atomic storage, locking and Helper lifecycle stay JSKIT-owned. |
+| [codexContextRenewalSignals.js](../../../packages/vibe64-terminals/src/server/codexContextRenewalSignals.js): `createCodexContextRefreshMarker`, `recordCodexContextUsageSignal`, `recordCodexContextRenewalSignal`, `writeCodexAppServerContextRefreshPending`, `clearCodexAppServerContextRefreshPending`; [codexTurnOutcomeNotice.js](../../../packages/vibe64-terminals/src/server/codexTurnOutcomeNotice.js): `writeCodexTurnOutcomeNotice` | Native event/result callbacks update current-session usage, deduplicated renewal advice and product notices. The signal owner retains the bounded briefing/current-thread reads and stale-event fence before writing its original advisory receipts. JSKIT decodes native usage/outcomes; these modules own metadata, wording, message IDs and publication. |
+| [codexGitCommand.js](../../../packages/vibe64-terminals/src/server/codexGitCommand.js): `createCodexGitCommandService`, `prepareCodexGitCommand` | `service` and `agentCommandEnvironment` use the existing authenticated Git/GitHub command broker, actor/source-root checks and Save policy across engines. Its historical name does not make it an engine protocol owner. |
+| [claudeConversationEnvironment.js](../../../packages/vibe64-terminals/src/server/claudeConversationEnvironment.js): `createClaudeConversationEnvironment` | The original managed command/project environment, selected provider configuration and Genesis registry preparation share one private application facility. It creates no native owner or lifecycle state; the same native owner invokes those facts at their original phases. Its private session-environment preparation is also reused by `createTerminalAccess`: native acquisition and confirmed Stop precede application environment/Git effects, native resume/argument preparation and managed PTY launch. Existing terminal methods retain their authorized namespaces. |
+| [openCodeConversationEvents.js](../../../packages/vibe64-terminals/src/server/openCodeConversationEvents.js): `createOpenCodeConversationEvents`, `openCodeMessageError` | Application checkpoint, run-record, transcript and realtime effects retain the original awaited order. Native frames, monitoring and error decoding remain JSKIT-owned; this facility supplies Genesis diagnostics, actor attribution, visible notices and cosmetic-summary publication using the existing presentation facility. |
+| [openCodeConversationPresentation.js](../../../packages/vibe64-terminals/src/server/openCodeConversationPresentation.js): `createOpenCodeConversationPresentation` | Product progress summaries retain actor-authorized Helper selection, durable cleanup receipts, headline formatting and the original publication throttle maps. Summary state still participates in the same native owner inventory; no second process or registry is introduced. |
+| [claudeConversationEvents.js](../../../packages/vibe64-terminals/src/server/claudeConversationEvents.js): `createClaudeConversationEvents` | The same synchronous native event sink applies application receipts, run/log/stream publication and checkpoints in their original order. It shares the existing storage, message policy, native snapshot and account-query owners; it creates no queue, native dispatcher or lifecycle state. |
+| [codexRuntimeHost.js](../../../packages/vibe64-terminals/src/server/codexRuntimeHost.js): `createCodexRuntimeHost`, `createCodexSessionRuntimeHost` | Codex application preparation reuses its captured environment, normalized provider options and tool-home reference for the original shared-runtime options, provider identity key and saved transport metadata projection. Session facts use the same account/environment facilities and project service for full runtime versus bounded-store reads, late managed-thread identity and saved-runtime presence. Supplied environment still bypasses project preparation; otherwise the original ordered inspection, command environment and account selection remain lazy. These factories create no process, cache, native map or account store. |
+| [codexSessionProviderHost.js](../../../packages/vibe64-terminals/src/server/codexSessionProviderHost.js): `createCodexSessionProviderHost` | The application facility supplies the original selected-account and managed-command policy, exact hidden-renewal reader, Genesis thread binding and fresh connection-current checks. It reuses the same runtime/account/environment facilities and lazily references the actual native owner; construction performs no session read or acquisition. Parameter/settings getters and observation-error presentation keep their original phases. JSKIT still owns native provider selection, subscription, resume guards, recovery and retirement. |
+| [codexConversationPreparation.js](../../../packages/vibe64-terminals/src/server/codexConversationPreparation.js): `createCodexConversationPreparation` | The application preparation leaf reuses common session-context admission and binding, actual runtime/account/environment facilities, and the existing health writer. It preserves fresh versus supplied snapshots, source-write recovery/readiness gates, health attempts, briefing receipts, and lazy message/control/goal settings. It creates no native owner, state or dispatcher; the original native owners invoke these application phases at their existing positions. |
+| [codexScopedConversationPreparation.js](../../../packages/vibe64-terminals/src/server/codexScopedConversationPreparation.js): `createCodexScopedConversationPreparation` | Temporary and Helper preparation reuses the actual Main context, Helper restoration, account, runtime and environment facilities. It retains the original scope/profile guards, actor reference, lazy thread settings, output limit, expired-task response and progress projection over the native owner's existing record. The four deferred preparation entries preserve construction order; JSKIT retains acquisition, thread/turn state, native execution and cleanup. |
+| [codexLifecyclePreparation.js](../../../packages/vibe64-terminals/src/server/codexLifecyclePreparation.js): `createCodexLifecyclePreparation` | Application cleanup and recovery preparation preserves the original saved provider selection, public-before-hidden renewal authorization, lazy session/runtime facts and retryable process-proof errors. It uses the same native closing map and restricted-renewal set. Successful native cleanup still awaits PTY close before fresh source and attachment cleanup; native reconciliation, stopping and recovery remain JSKIT-owned. |
+| [codexSessionEnvironment.js](../../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js): `createCodexSessionEnvironment` | The application startup facility retains the original fresh-session mutation gate, worktree-closing check, concurrent project/managed-command environment preparation and error projection. It delegates to the existing project environment and shared command owners; it adds no queue or native operation. Attachment-root selection remains a late environment read. Native readiness, terminal launch and health publication call these operations at their original phases. |
+| [codexAccountPreparation.js](../../../packages/vibe64-terminals/src/server/codexAccountPreparation.js): `createCodexAccountPreparation` | The original selected-home checks, reconnect-marker/error projection and terminal authentication preflight share the same runtime-host and provider-connection store. Account provisioning keeps its existing saved-selection and required-home policy; preflight delegates to the existing native verifier. The factory reads no account/session, starts no process and adds no native state. Catalogue and authorized project preparation retain their separate phases. |
+| [codexRuntimeContext.js](../../../packages/studio-terminal-core/src/server/codexRuntimeContext.js): `codexRuntimeContext`; [claudeRuntime.js](../../../packages/studio-terminal-core/src/server/claudeRuntime.js): `readClaudeCodeAuthStatus` | Accounts and terminal preparation select the application's credential actor, curated environment and managed runtime packs. Claude status uses JSKIT's native reader with the authorized capture runner. |
+| [codexAppServerProcess.js](../../../packages/vibe64-runtime/src/server/codexAppServerProcess.js); [minimumCodexVersion.js](../../../packages/vibe64-runtime/src/server/minimumCodexVersion.js) | The managed Codex host invokes the small process entry, which passes its token/environment and curated catalogue to JSKIT `runCodexAppServerProcess`. The session bridge supplies the product's compatibility floor; neither file implements process/protocol coordination. |
+| [codexAuthState.js](../../../packages/vibe64-core/src/server/codexAuthState.js): `readCodexAuthStatus`, `readCodexLoginId`, `codexAuthStateSignature`, marker/reconnect writers; [codexAuth.js](../../../packages/vibe64-core/src/shared/codexAuth.js) | Accounts, provider preparation and connection replacement use application connection-generation records and shared reconnect presentation. These are not a native credential parser or login implementation. |
+| [curatedCodexProviders.js](../../../packages/vibe64-core/src/shared/curatedCodexProviders.js): `CURATED_CODEX_PROVIDERS`, `curatedCodexProvider`, `curatedCodexModel` | Accounts, routing, settings and capability presentation select product labels, defaults and supported plans. Native provider routes/model capabilities come from JSKIT's `nativeAiProvider` / `nativeAiModel`. |
+| [useCodexProviderConnections.js](../../../packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js); [claude-auth-browser](../../../packages/vibe64-accounts/bin/claude-auth-browser) | Accounts settings use the supplied HTTP resource/command owners. The login browser handoff validates the CLI's authorized URL and writes the private remote-browser handoff; the unmodified CLI owns OAuth exchange and credential storage. |
+| [Vibe64CodexSession.vue](../../../src/components/studio/Vibe64CodexSession.vue), [useVibe64CodexCommands.js](../../../src/composables/useVibe64CodexCommands.js), [useCodexTerminalOutput.js](../../../src/composables/useCodexTerminalOutput.js) | `Vibe64SessionRuntimeHost` mounts the actual Codex terminal. Its command shorthand reuses common terminal/attachment commands; local output/activity timers affect terminal presentation, not chat admission, inference or completion. |
+| [codexOutput.js](../../../src/lib/codexOutput.js): `stripTerminalControlSequences`, `terminalLastMeaningfulLine`; [vibe64CodexTerminalAttention.js](../../../src/lib/vibe64CodexTerminalAttention.js): attention/reconnect predicates | Terminal surfaces and session presentation strip terminal control bytes, build bounded summaries and show saved-state attention/reconnect indicators. No native command or chat transport is created. |
+
+`src/assets/codex-device-code-authorize.png` and
+`codex-device-code-settings.png` are account-help images.
+`vibe64-core/src/server/stateUpgrades/20260923-codex-login-id.js` is the
+immutable offline marker upgrade, not a live request/controller path.
+
+[codexProviderConnections.js](../../../packages/vibe64-core/src/server/codexProviderConnections.js)
+`createCodexProviderConnectionStore` owns account admission, serialized key
+replacement, invalidate-before-write and private persisted connection paths.
+Its `change` calls JSKIT's `codexProviderFileConfiguration` and
+`verifyCodexProviderKey` through `/server/codex-configuration`, and
+`verifyClaudeProviderKey` through `/server/claude-process`. Those existing owners
+hold native TOML and Responses/Messages request/result formats. Vibe64 retains
+the selected-then-optional check order, private writes and connection generation;
+these account-setup operations do not create a conversation runner.
+
 - `codexAppServerRuntimeOptionsForSession()` keeps the Codex process identity
   workspace-wide while carrying each session's directory and environment into
   its thread requests.
@@ -2007,8 +2960,9 @@ an unrelated failure cannot gain an account link merely because of its wording.
 - `stopOwnedCodexAppServerExecution()` stops the exact managed Codex execution
   scope and can prove that scope empty after its ordinary resource-history
   record expires, without treating an unrelated process as the provider.
-- `ensureSharedProcess()` and `stopProcessRecord()` own OpenCode's one-process
-  lifecycle. Established session targets and pending starts both retain that
+- `ensureSharedProcess()` supplies authorized inputs to JSKIT's shared runtime;
+  `stopProcessRecord()` finishes application cleanup before releasing its native
+  handle. Established session targets and pending starts both retain that
   process; directory-scoped clients and `Vibe64SessionEnvironment` preserve
   each session's working and command boundary. The shared process receives
   only Vibe64's bundled Genesis executable path; the environment plugin adds
@@ -2018,15 +2972,17 @@ an unrelated failure cannot gain an account link merely because of its wording.
   disabling OpenCode's unrelated default plugins and loading Vibe64's
   session-environment plugin for command routing. It raises OpenCode's response
   and compaction ceiling only alongside that host plugin.
-- `readOpenCodeCatalog()` starts a bounded temporary OpenCode service and reads
-  its complete provider and agent APIs while the resident session service stays
+- `readOpenCodeCatalog()` delegates to JSKIT's existing native process owner to
+  start a bounded temporary OpenCode service and read its complete provider and
+  agent APIs while the resident session service stays
   asleep. Its non-secret Zen `public` identity makes paid-model metadata visible
   without loading an owner's saved key. The client allowlists safe provider and
   model capability fields before they can enter the catalogue cache. That
-  metadata is reconciled with the ids from Zen's bounded, credential-free
-  public model endpoint before presentation or verification; a newly advertised
-  id absent from the pinned metadata receives only a minimal safe fallback. The
-  temporary service must be proven stopped before the result is returned.
+  metadata is reconciled with the ids read by JSKIT from Zen's bounded,
+  credential-free public model endpoint before presentation or verification; a
+  newly advertised id absent from the pinned metadata receives only a minimal
+  safe fallback. The temporary service must be proven stopped before the result
+  is returned.
 - `openCodeConfiguredAssistantCapabilities()` projects saved connection labels,
   access descriptions, preferred-provider status, and verified default models
   into the new-session choices
@@ -2034,8 +2990,11 @@ an unrelated failure cannot gain an account link merely because of its wording.
   capability and session-creation paths both use that projection, while
   `Vibe64AssistantSessionDialog` preloads it before the dialog opens.
 - `verifyConnection()` checks the exact current provider and model before
-  `verifyOpenCodeApiKey()` runs one finite, tool-free request in an isolated
-  credential home. It omits provider URL overrides so OpenCode owns native
+  `verifyOpenCodeApiKey()` delegates one finite, tool-free request to JSKIT's
+  native process owner in an isolated credential home. Its synchronous host
+  preparation returns the existing managed command with the original resource
+  profile; native arguments, result classification and cleanup stay shared.
+  It omits provider URL overrides so OpenCode owns native
   routing, bounds time, output, and captured bytes, sanitizes failures, and
   removes the temporary credential root on every outcome.
 - `Vibe64SessionEnvironment` presents ordinary shell commands rather than
@@ -2056,6 +3015,36 @@ an unrelated failure cannot gain an account link merely because of its wording.
   managed execution scope.
 - `Vibe64SessionRuntimeHost` selects exactly one interactive terminal from the
   session's immutable engine id and has no cross-engine fallback.
+- `codexTerminalAccess` prepares the original Codex managed PTY request through
+  its supplied command runner, preserving lazy argument and cleanup callbacks,
+  environment/credential policy, Git shims and terminal limits. It also reads the
+  existing PTY inventory for session and global presentation, preserving namespace/workdir filtering, latest
+  live-terminal selection and bounded status fields without owning another
+  terminal registry. `sessionAttachments` also owns the original upload-lease
+  renewal facade: empty requests finish before storage reads; nonempty requests
+  retain the fresh session source and environment lookup. `codexStartupHealth`
+  owns the finished-task admission predicate, and `codexTurnOutcomeNotice` owns
+  the existing response-delivery failure wording. `terminalShared` supplies project-scoped namespaces;
+  execution's `terminalSessions` owns PTY admission, I/O, subscribers and cleanup.
+  `codexInteractiveTerminals` owns the original session/global launch and access
+  workflow around these facilities. It joins the same native run owner before
+  session preparation, attaches after the original account/environment/Git phases,
+  and preserves namespace admission before terminal-input actor recording. It
+  creates no native owner or terminal registry.
+- Native interactive launch retains each engine's existing access and identity
+  rules. Codex ensures its native thread before managed PTY launch and selects
+  its shared app-server through JSKIT; its global terminal keeps separate
+  project/account preparation. OpenCode attaches to the selected native history,
+  reuses its retained live PTY and clears that reference after close. Claude
+  rejects launch during an active turn or session closure, binds the account and
+  stops its retained process before preparing native history/resume and launching
+  the PTY. JSKIT owns each engine's native arguments and continuation mechanics;
+  Vibe64 owns authorized context, Git environment and managed PTY presentation.
+  These terminal-specific paths remain separate from conversation dispatch.
+- Terminal input keeps its existing fast path: raw keystrokes do not hydrate the
+  conversation or acquire Main's operation lock. OpenCode file attachment
+  handoff retains its bounded write admission and native directory grant before
+  text insertion. Read, resize, subscription and close use the existing PTY owner.
 - `Vibe64SessionRuntime.renderPrompt()` owns Genesis prompt composition.
   Codex and OpenCode call it for the opening request and an explicitly marked
   Deslop request; later ordinary messages are sent without rebuilding the full
@@ -2075,8 +3064,8 @@ an unrelated failure cannot gain an account link merely because of its wording.
   durable-history recovery, and identity update complete before the pending
   message starts the new ordinary turn.
 - `startAttachedTerminal()` attaches OpenCode's native TUI to the session's
-  existing upstream history in a session-owned PTY. The OpenCode controller
-  owns its bounded snapshot, stream, input, resize, close, and session cleanup;
+  existing upstream history in a session-owned PTY. The OpenCode interactive
+  terminal facility owns its bounded snapshot, stream, input, resize and close;
   ordinary input transport does not repeat assistant-selection authorization.
 - `helperOperationForRequest()` keeps assistant PTYs on the project command
   policy instead of the home-only account-login policy, and maps both the

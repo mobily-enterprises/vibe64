@@ -1,3 +1,4 @@
+import { codexAuthOutputRequiresReconnect } from "@jskit-ai/assistant-core/server/codex-configuration";
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -12,8 +13,6 @@ const CODEX_AUTH_STATUS_RELATIVE_PATH = Object.freeze(["auth", "codex", "auth-st
 const CODEX_AUTH_STATE_SIGNATURE_VERSION = 1;
 const CODEX_AUTH_RECONNECTING_CODE = "vibe64_codex_reconnecting";
 const CODEX_AUTH_RECONNECTING_MESSAGE = "Codex is reconnecting with the current account.";
-const CODEX_AUTH_INVALIDATED_PATTERN =
-  /\b(?:token_invalidated|refresh_token_invalidated)\b|authentication token has been invalidated|HTTP error:\s*401 Unauthorized|401 Unauthorized/iu;
 
 function requireCodexAuthSystemRoot(systemRoot = "") {
   const normalizedRoot = String(systemRoot || "").trim();
@@ -139,10 +138,6 @@ async function markCodexReconnectRequired(systemRoot = "", {
     updatedAt: new Date().toISOString(),
     version: 1
   });
-}
-
-function codexAuthOutputRequiresReconnect(output = "") {
-  return CODEX_AUTH_INVALIDATED_PATTERN.test(String(output || ""));
 }
 
 async function codexAuthStateSignature({

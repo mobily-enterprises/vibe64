@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 
 import {
   vibe64Driver
 } from "../../packages/vibe64-genesis/src/server/promptContext.js";
-import {
-  createCodexSessionAgentProvider
-} from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
+import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapter.js";
 import {
   createOpenCodeSessionAgentProvider
 } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js";
@@ -58,10 +57,12 @@ for (const engineId of ["codex", "opencode"]) {
   test(`${engineId} reuses its provider lifecycle for one non-project ephemeral conversation`, async () => {
     const calls = [];
     const controller = conversationController(calls);
+    const conversationRuntime = scopedConversationRuntime(controller, engineId);
     const provider = engineId === "codex"
-      ? createCodexSessionAgentProvider({ controller })
-      : createOpenCodeSessionAgentProvider({ controller });
+      ? createCodexSessionAgentProvider({ controller, conversationRuntime })
+      : createOpenCodeSessionAgentProvider({ accounts: {} });
     const manager = createSessionAgentManager({
+      conversationRuntime,
       providers: [provider],
       async readAssistantAccess() {
         return {
@@ -175,8 +176,11 @@ test("owner-only assistant access rejects a member before provider creation", as
 test("a foreign scoped helper retains its exact model, profile provenance and independent binding", async () => {
   const calls = [];
   let identity = "shared-key-1";
-  const provider = createOpenCodeSessionAgentProvider({ controller: conversationController(calls) });
+  const controller = conversationController(calls);
+  const conversationRuntime = scopedConversationRuntime(controller, "opencode");
+  const provider = createOpenCodeSessionAgentProvider({ accounts: {} });
   const manager = createSessionAgentManager({
+    conversationRuntime,
     providers: [provider, { id: "codex", transportId: "codex_app_server" }],
     readAssistantAccess: async () => ({ available: true, ownerOnly: false,
       connectionIdentity: identity, defaultModelId: "legacy-helper-model" })
@@ -234,11 +238,13 @@ test("Codex scoped profile discovery and every lifecycle operation keep the sele
       return { data: [{ model: "deepseek-flash", supportedReasoningEfforts: [{ reasoningEffort: "low" }] }] };
     }
   };
-  const manager = createSessionAgentManager({ providers: [createCodexSessionAgentProvider({ controller })] });
+  const conversationRuntime = scopedConversationRuntime(controller);
+  const manager = createSessionAgentManager({ conversationRuntime,
+    providers: [createCodexSessionAgentProvider({ controller, conversationRuntime })] });
   const scope = { id: "codex_helper", environment: {}, workdir: "/tmp/helper", runtimeRoot: "/tmp/runtime",
     stableContext: "Summarize supplied text only." };
   const options = { assistantSelection: { engineId: "codex", agentId: "codex", modelProviderId: "deepseek",
-    modelId: "deepseek-flash", variantId: "high", catalogRevision } };
+    modelId: "deepseek-flash", variantId: "low", catalogRevision } };
   const profile = await manager.resolveEphemeralExecutionProfile(scope, { profileId: "helper", workloadId: "conversation_summary" }, options);
   assert.equal(profile.model, "deepseek-flash");
   assert.equal(profile.thinking, "low");
@@ -256,12 +262,58 @@ test("Codex scoped profile discovery and every lifecycle operation keep the sele
   }
 });
 
+// The real drivers receive the fixture's recording owner through their actual
+// descriptor contracts; every original provider call and context is retained.
+function scopedConversationRuntime(controller, engine = "codex") {
+  const provider = engine === "codex" ? createCodexSessionAgentProvider({ controller })
+    : createOpenCodeSessionAgentProvider({ accounts: {} });
+  return createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context, input, operation }) => {
+      const native = engine === "codex"
+        ? { runOwner: { ...controller,
+              closeSession: (sessionId, options) => controller.closeAllForSession(sessionId, options) },
+            providerOwner: { async stopCachedProvidersForSession() {
+              const result = await controller.closeAllForSession(id, context);
+              return { ...result, stopped: result.closed };
+            } },
+            preparation: { cleanup: options => options } }
+        : { owner: {
+              closeSession: (sessionId, options) => controller.closeAllForSession(sessionId, options),
+              createPreparedConversation: ({ input, context }) => controller.createConversation(id, input, context),
+              runPreparedConversationTurn: ({ input, context }) => controller.startConversationTurn(id, input, context),
+              readPreparedConversation: ({ context }, input) => controller.readConversation(id, input, context),
+              waitPreparedConversationTurn: ({ context }, input) => controller.waitForConversationTurn(id, input, context),
+              stopPreparedConversation: ({ context }, input) => controller.stopConversation(id, input, context),
+              deletePreparedConversation: ({ context }, input) => controller.deleteConversation(id, input, context)
+            },
+            preparation: {
+              cleanup: options => ({ sessionId: id, options }),
+              creation: (input, context) => ({ input, context }),
+              turn: (input, context) => ({ input, context }),
+              existing: (input, context) => ({ input, context })
+            } };
+      if (operation === "dispose") {
+        const request = provider.prepareConversationRequest("closeSession", context);
+        return { sessionId: id, namespace: request.namespace, engine, native, context, options: input };
+      }
+      if (operation === "create") {
+        const request = provider.prepareConversationRequest("createConversation", context, input);
+        return { sessionId: id, engine, native, input: request.input, context: request.context };
+      }
+      return { sessionId: id, namespace: `fixture\0${id}\0${context.scopedConversationId}`, engine,
+        native: { ...native, scoped: { conversationId: context.scopedConversationId, context } } };
+    } }
+  });
+}
+
 function conversationController(calls) {
   const capture = (name, result) => async (sessionId, input = {}, options = {}) => {
     calls.push({ input, name, options, sessionId });
     return result;
   };
   return {
+    closeAllForSession: capture("close", { closed: true, ok: true }),
     createConversation: capture("create", { conversationId: "conversation_1", ok: true }),
     deleteConversation: capture("delete", { deleted: true, ok: true }),
     readConversation: capture("read", { message: "Done", ok: true, status: "completed" }),
@@ -278,7 +330,8 @@ test("a bounded helper turn awaits parent ownership and leaves the working chat 
     calls.push({ name: "wait", sessionId, input });
     return { ok: true, status: "completed", rawText: '{"subject":"Improve search"}' };
   };
-  const manager = createSessionAgentManager({ providers: [createOpenCodeSessionAgentProvider({ controller }),
+  const conversationRuntime = scopedConversationRuntime(controller, "opencode");
+  const manager = createSessionAgentManager({ conversationRuntime, providers: [createOpenCodeSessionAgentProvider({ accounts: {} }),
     { id: "codex", transportId: "codex_app_server" }],
     readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "shared" }) });
   const scope = { id: "naming_job", environment: {}, workdir: "/tmp/naming-work", runtimeRoot: "/tmp/naming-runtime",
@@ -304,6 +357,15 @@ test("a bounded helper turn awaits parent ownership and leaves the working chat 
   assert.equal(manager.binding("main"), "codex");
   assert.equal(calls.find(({ name }) => name === "start").sessionId, scope.id);
   assert.equal(calls.some(({ name }) => name === "delete"), false, "the parent keeps cleanup ownership");
+  const start = controller.startConversationTurn;
+  controller.startConversationTurn = async (...args) => ({ ...await start(...args), runId: "run_2" });
+  const continued = await manager.runEphemeralChatTurn(scope, {
+    executionProfile, prompt: "Refine that title.", conversationId: result.threadId
+  }, options);
+  assert.equal(calls.filter(({ name }) => name === "create").length, 1, "another response reuses the original native conversation");
+  assert.equal(continued.threadId, result.threadId);
+  assert.equal(continued.turnId, "run_2", "each response returns its actual native turn identity");
+  assert.equal(calls.filter(({ name }) => name === "start").at(-1).input.conversationId, result.threadId);
   await manager.deleteEphemeralConversation(scope, { conversationId: result.threadId }, options);
   assert.equal(manager.binding(scope.id), "");
 });
@@ -325,7 +387,8 @@ for (const phase of ["starting", "waiting"]) {
       released.resolve();
       return { ok: true };
     };
-    const manager = createSessionAgentManager({ providers: [createOpenCodeSessionAgentProvider({ controller })] });
+    const conversationRuntime = scopedConversationRuntime(controller, "opencode");
+    const manager = createSessionAgentManager({ conversationRuntime, providers: [createOpenCodeSessionAgentProvider({ accounts: {} })] });
     const scope = { id: "cancel_helper", environment: {}, workdir: "/tmp/cancel-work", runtimeRoot: "/tmp/cancel-runtime",
       stableContext: "Supplied text only." };
     const options = { signal: abort.signal, assistantSelection: { engineId: "opencode", agentId: "build", modelProviderId: "opencode",

@@ -14,15 +14,6 @@ import {
 } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../node_modules/@jskit-ai/assistant-core/src/client/conversation/LongTextPreviewBlocks.vue", () => ({
-  default: defineComponent({
-    inheritAttrs: false,
-    setup(_props, { attrs }) {
-      return () => h("span", attrs);
-    }
-  })
-}));
-
 vi.mock("vuetify/components/VAlert", () => ({
   VAlert: passthroughComponent()
 }));
@@ -53,12 +44,20 @@ import Vibe64ConversationLog from "../../src/components/studio/vibe64-session/Vi
 import Vibe64ConversationAttachments from "../../src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue";
 
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
+import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
 import { chatTurnsWithRouting } from "../../src/lib/vibe64ChatDelivery.js";
 import Vibe64ConversationStatus from "../../src/components/studio/vibe64-session/Vibe64ConversationStatus.vue";
 import Vibe64EphemeralConversationMessages from "../../src/components/studio/vibe64-session/Vibe64EphemeralConversationMessages.vue";
 
+Object.assign(SharedConversation.LongTextPreviewBlocks, {
+  inheritAttrs: false,
+  setup(props, { attrs }) {
+    return () => h("span", { ...attrs, ...props });
+  }
+});
+
 function attachClientRender(component, sourcePath, id) {
-  const componentPath = path.resolve(sourcePath);
+  const componentPath = component.__file || path.resolve(sourcePath);
   const componentSource = fs.readFileSync(componentPath, "utf8");
   const { descriptor } = parse(componentSource, {
     filename: componentPath
@@ -74,6 +73,7 @@ function attachClientRender(component, sourcePath, id) {
 
 for (const name of [
   "AssistantConversationElement",
+  "AssistantConversationStatus",
   "AssistantTranscript",
   "AssistantProgress",
   "AssistantComposerSupport",
@@ -364,7 +364,9 @@ describe("Vibe64 conversation scroll following", () => {
       })
       : h(Vibe64EphemeralConversationMessages, {
         working: working.value,
-        messages: messages.value.map((message) => ({ ...message, assistantSelection: selection }))
+        adapter: { conversation: { turns: [{
+          turnId: "turn-1", metadata: { assistantSelection: selection }, messages: messages.value
+        }] } }
       })
     });
     for (const name of ["VAlert", "VIcon", "VSelect", "VCard", "VCardText", "VCardActions", "VSkeletonLoader"]) {
@@ -424,7 +426,8 @@ describe("Vibe64 conversation scroll following", () => {
         onResendTurn: (id) => checks.push(id)
       })
       : h(Vibe64EphemeralConversationMessages, {
-        delivery, routingRequest: route.value, messages: messages.value,
+        adapter: { delivery, conversation: { turns: conversationTurnsFromMessages(messages.value) } },
+        routingRequest: route.value,
         onResend: (id) => checks.push(id)
       })
     });

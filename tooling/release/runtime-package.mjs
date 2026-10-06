@@ -1,7 +1,7 @@
 import { builtinModules, createRequire } from "node:module";
 import { chmod, cp, lstat, mkdir, readFile, readdir, realpath, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { buildNodeBundle, buildServerBundle, SERVER_BUNDLE_EXTERNALS } from "./server-build.mjs";
+import { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle, buildServerBundle, SERVER_BUNDLE_EXTERNALS } from "./server-build.mjs";
 
 const GENESIS_BOUNDARY = "@local/vibe64-genesis/server";
 const RUNTIME_ENTRIES = [
@@ -20,7 +20,8 @@ const RUNTIME_ENTRIES = [
   "node_modules/@local/vibe64-accounts/bin/claude-auth-browser",
   "node_modules/@local/vibe64-terminals/src/server/sessionWorkOperationCommand.js",
   "node_modules/@local/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js",
-  "node_modules/@local/vibe64-terminals/src/server/claudeStdioBridge.js"
+  "node_modules/@local/vibe64-execution/src/server/engines/stdioBridge.js",
+  ...ASSISTANT_SQL_RUNTIME_ENTRIES
 ];
 const builtins = new Set(builtinModules.flatMap(name => [name, `node:${name}`]));
 const json = async filename => JSON.parse(await readFile(filename, "utf8"));
@@ -57,7 +58,9 @@ async function buildRuntimeBundles({ appRoot, releaseAppRoot, extraEntries = [],
     }
     results.push(await buildNodeBundle({
       appRoot, entryPoint: path.join(appRoot, entry), outfile,
-      external: [...SERVER_BUNDLE_EXTERNALS, GENESIS_BOUNDARY, ...extraExternals],
+      external: [...SERVER_BUNDLE_EXTERNALS, GENESIS_BOUNDARY, ...extraExternals,
+        ...(ASSISTANT_SQL_RUNTIME_ENTRIES.includes(entry)
+          ? ["@jskit-ai/database-runtime", "@jskit-ai/database-runtime/*"] : [])],
       plugins: [{
         name: "vibe64-published-server",
         setup(build) {

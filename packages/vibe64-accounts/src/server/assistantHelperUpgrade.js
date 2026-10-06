@@ -4,7 +4,7 @@ import { listProjectRuntimeRoots } from "@local/vibe64-core/server/studioProject
 import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/assistantRoutingStore";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { publishAssistantRoutingUpgrade } from "./assistantRoutingUpgrade.js";
+import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
 
 const object = value => value && typeof value === "object" && !Array.isArray(value);
 const json = value => `${JSON.stringify(value, null, 2)}\n`;
@@ -158,7 +158,7 @@ async function readOptional(filePath) {
 
 async function upgradeAssistantHelpers(context) {
   const { systemRoot, report } = context;
-  return publishAssistantRoutingUpgrade({ ...context, prepareUpdates: async temporaryRoot => {
+  return publishStateUpgradeFiles({ ...context, prepareUpdates: async temporaryRoot => {
     const updates = [];
     const filePath = path.join(systemRoot, "ai-connections/routing.json");
     const original = await readOptional(filePath);

@@ -1,119 +1,32 @@
+import { prepareSessionDetachedConversationCleanup, createSessionConversationBinding, prepareSessionConversationActivity, prepareSessionConversationRenewal, prepareSessionConversationCreation, prepareSessionConversationReadiness, prepareSessionConversationDisposal, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { Readable, Duplex } from "node:stream";
 import { test } from "node:test";
 import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createClaudeJsonClient, readClaudeJsonFrames } from "../../packages/vibe64-runtime/src/server/claudeStreamJson.js";
-import { claudeCodeArguments, claudeModelConfiguration, createClaudeCodeProcess } from "../../packages/vibe64-terminals/src/server/claudeCodeProcess.js";
-import { readClaudeHistory } from "../../packages/vibe64-terminals/src/server/claudeConversationHistory.js";
-import { claudeCapabilities, claudePlanUsage, createClaudeSessionAgentProvider, nativeMessageId } from "../../packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js";
+import { claudeCodeArguments, createClaudeCodeProcess } from "../../packages/vibe64-terminals/src/server/claudeCodeProcess.js";
+import { readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
+import { claudeCapabilities, createClaudeConversationHost as createNativeClaudeSessionAgentProvider, nativeMessageId } from "../../packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js";
+import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { sessionRenewalManualHandoverTemplate, sessionRenewalHandoverHash } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { readClaudeCodeAuthStatus } from "../../packages/studio-terminal-core/src/server/claudeRuntime.js";
-import { defineVibe64AssistantCapabilities } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
+import { defineVibe64AssistantCapabilities, defineVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
 import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
-
-async function frames(chunks, options) {
-  const result = [];
-  for await (const frame of readClaudeJsonFrames(Readable.from(chunks), options)) result.push(frame);
-  return result;
-}
-
-test("Claude JSON frames survive every byte boundary, including Unicode and escaped newlines", async () => {
-  const expected = [{ type: "assistant", text: "Hello 🌏\n世界" }, { type: "result", is_error: false }];
-  const bytes = Buffer.from(`${expected.map((frame) => JSON.stringify(frame)).join("\r\n")}\n`);
-  assert.deepEqual(await frames([...bytes].map((byte) => Buffer.from([byte]))), expected);
-  assert.deepEqual(await frames([bytes]), expected);
-});
-
-test("Claude JSON framing bounds fragmented and complete frames and rejects malformed data without echoing it", async () => {
-  await assert.rejects(frames([Buffer.from('{"type":"secret"}\n')], { maxFrameBytes: 8 }), /size limit/u);
-  await assert.rejects(frames([Buffer.alloc(4, 32), Buffer.alloc(5, 32)], { maxFrameBytes: 8 }), /size limit/u);
-  await assert.rejects(frames([Buffer.from("secret token\n")]), (error) => !error.message.includes("secret token"));
-  await assert.rejects(frames([Buffer.from('{"type":"user","text":"'), Buffer.from([255]), Buffer.from('"}\n')]), /invalid UTF-8/u);
-  await assert.rejects(frames([Buffer.from('[]\n')]), /event type/u);
-  await assert.rejects(frames([Buffer.from('{"type":"result"}')]), /incomplete/u);
-  assert.deepEqual(await frames([Buffer.from('{"type":"result"}')], { allowIncompleteTail: true }), []);
-});
-
-function fakeStream(onWrite) {
-  return new Duplex({ read() {}, write(chunk, _encoding, callback) {
-    Promise.resolve().then(() => onWrite(JSON.parse(String(chunk)), this)).then(() => callback(), callback);
-  } });
-}
-
-test("Claude controls correlate out-of-order replies and events apply backpressure", async () => {
-  const requests = [];
-  const observed = [];
-  const stream = fakeStream((frame, socket) => {
-    requests.push(frame);
-    if (requests.length === 2) for (const request of [...requests].reverse()) {
-      socket.push(`${JSON.stringify({ type: "control_response", response: { subtype: "success", request_id: request.request_id, response: { name: request.request.subtype } } })}\n`);
-    }
-  });
-  const client = createClaudeJsonClient({ stream, onEvent: async (frame) => {
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    observed.push(frame.number);
-  } });
-  assert.deepEqual(await Promise.all([client.request({ subtype: "one" }), client.request({ subtype: "two" })]), [{ name: "one" }, { name: "two" }]);
-  stream.push('{"type":"test","number":1}\n{"type":"test","number":2}\n');
-  stream.push(null);
-  await client.completion;
-  assert.deepEqual(observed, [1, 2]);
-  client.close();
-});
-
-test("Claude control replies bypass slow event persistence while events remain ordered", async () => {
-  const entered = Promise.withResolvers();
-  const release = Promise.withResolvers();
-  const observed = [];
-  const stream = fakeStream((frame, socket) => socket.push(`${JSON.stringify({
-    type: "control_response", response: { subtype: "success", request_id: frame.request_id, response: {} }
-  })}\n`));
-  const client = createClaudeJsonClient({ stream, onEvent: async (frame) => {
-    if (frame.number === 1) { entered.resolve(); await release.promise; }
-    observed.push(frame.number);
-  } });
-  stream.push('{"type":"event","number":1}\n{"type":"event","number":2}\n');
-  await entered.promise;
-  try {
-    await client.request({ subtype: "interrupt" }, { timeoutMs: 100 });
-    assert.deepEqual(observed, []);
-    release.resolve();
-    stream.push(null);
-    await client.completion;
-    assert.deepEqual(observed, [1, 2]);
-  } finally {
-    release.resolve();
-    client.close();
-  }
-});
-
-test("Claude interrupt uses the common 30-second control deadline", async (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const client = createClaudeJsonClient({ stream: fakeStream(() => {}) });
-  const pending = client.interrupt();
-  let settled = false;
-  const rejected = assert.rejects(pending, /interrupt timed out/u).then(() => { settled = true; });
-  t.mock.timers.tick(29_999);
-  await Promise.resolve();
-  assert.equal(settled, false);
-  t.mock.timers.tick(1);
-  await rejected;
-  client.close();
-  await client.completion;
-});
-
-test("Claude control timeouts and pipe closure reject pending work promptly", async () => {
-  const stream = fakeStream(() => {});
-  const client = createClaudeJsonClient({ stream, timeoutMs: 10 });
-  await assert.rejects(client.initialize(), /timed out/u);
-  const pending = client.request({ subtype: "interrupt" }, { timeoutMs: 10_000 });
-  stream.push(null);
-  await assert.rejects(pending, /ended unexpectedly/u);
-  await client.completion;
-});
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
+import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { assistantModePrompt } from "@local/vibe64-runtime/shared/assistantRouting";
+import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
+import { createService as createSessionService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
+import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 
 test("Claude subscription launch preserves native auth and makes helper tools unavailable", () => {
   const args = claudeCodeArguments({ sessionId: "session", resume: true, model: "sonnet", effort: "high", toolFree: true });
@@ -133,9 +46,142 @@ test("Claude's live model and effort catalog fits the shared assistant selection
   assert.equal(catalog.modelProviders[0].models[0].variants[0].label, "Low");
 });
 
-async function fixture(t) {
+const fixtureRuntimeOwners = Symbol("Claude fixture runtime owners");
+
+// Preserve the original fixture call shape while exercising the same manager and
+// common runtime used by the application. Original low-level retained cases use
+// the actual native owner and acquire function supplied by its existing binding.
+// Product scoped admission remains covered by manager/Temporary integration.
+function createClaudeSessionAgentProvider(options) {
+  const { [fixtureRuntimeOwners]: owners, ...nativeOptions } = options;
+  let provider;
+  const conversations = options.conversationRuntime || createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { nativeTools: true, conversation: ({ id, context, input, options, operation }) => operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
+      ? prepareSessionDetachedConversationCleanup(provider, id, context, input,
+        operation === "interruptDetachedConversation" ? "interruptDetachedChatTurn" : "deleteDetachedChatThread") : operation === "inspectTemporaryActivity"
+      ? prepareSessionConversationActivity(provider, id, context) : operation === "generateRenewalHandover" || operation === "seedRenewalHandover"
+      ? prepareSessionConversationRenewal(provider, id, context, input) : operation === "reconcileSessions"
+      ? prepareConversationReconciliation(provider, context, input, options) : operation === "closeProject"
+      ? prepareProjectConversationCleanup(provider, context, input) : operation === "invalidateRuntimes"
+      ? prepareConversationRuntimeInvalidation(provider, context, input) : operation === "create"
+      ? prepareSessionConversationCreation(provider, id, context, input) : operation === "ensure"
+      ? prepareSessionConversationReadiness(provider, id, context) : operation === "dispose"
+      ? prepareSessionConversationDisposal(provider, id, context, input) : createSessionConversationBinding(provider, id, {
+      ...context, prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
+    }) }
+  });
+  provider = createNativeClaudeSessionAgentProvider({ ...nativeOptions, conversationRuntime: conversations,
+    publishConversation: options.publishConversation || (event => conversations.publishNative(event)) });
+  const manager = createSessionAgentManager({ conversationRuntime: conversations, defaultProviderId: "claude",
+    providers: [provider], readAssistantAccess: async () => ({ available: true, ownerOnly: false }) });
+  async function retainedNative(context, input) {
+    const opening = context.assistantScope ? { ...context,
+      scopedConversationId: String(input.conversationId || input.threadId || "").trim()
+    } : context;
+    return (await createSessionConversationBinding(provider, context.sessionId, opening)).native;
+  }
+
+  async function readConversation(context, input = {}) {
+    const { owner: conversations } = await retainedNative(context, input);
+    const entry = await conversations.acquire(context, input.conversationId || input.threadId);
+    return conversations.read(entry, input);
+  }
+
+  async function startConversationTurn(context, input = {}) {
+    const { owner: conversations } = await retainedNative(context, input);
+    const entry = await conversations.acquire(context, input.conversationId || input.threadId, { operation: "start", input });
+    return conversations.startTurn(entry, input);
+  }
+
+  async function waitForConversationTurn(context, input = {}) {
+    const { owner: conversations } = await retainedNative(context, input);
+    const entry = await conversations.acquire(context, input.conversationId || input.threadId);
+    return conversations.wait(entry, input, { context, acquire: conversations.acquire });
+  }
+
+  function stopConversation(context, input) {
+    return conversations.interruptNativeDetachedConversation({ id: context.sessionId, context, input });
+  }
+
+  function deleteConversation(context, input) {
+    return conversations.deleteNativeDetachedConversation({ id: context.sessionId, context, input });
+  }
+
+  // The two original native-helper cases retain their owner-level setup after
+  // removal of the unused application start/stream route. Product helper routing
+  // is exercised separately through the common scoped runtime.
+  async function runDetachedChatTurn(context, input = {}) {
+    const conversationId = input.conversationId || input.threadId || randomUUID();
+    const created = !input.conversationId && !input.threadId;
+    const { owner: conversations } = await retainedNative(context, { ...input, conversationId });
+    const entry = await conversations.acquire(context, conversationId, { create: created });
+    const executionProfile = input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
+    if (created && context.assistantScope) entry.profile = executionProfile;
+    if (executionProfile) await context.onEvent?.({ type: "execution-profile", executionProfile });
+    await startConversationTurn(context, { ...input, conversationId });
+    const result = await waitForConversationTurn(context, { ...input, conversationId });
+    return executionProfile ? { ...result, executionProfile } : result;
+  }
+
+  const facade = { ...provider,
+    hasActiveTemporaryConversation: context => provider.projectConversationResult("hasActiveTemporaryConversation", () =>
+      conversations.inspectNativeTemporaryActivity({ id: context.sessionId, context })),
+    generateSessionRenewalHandover: (context, input) => conversations.generateNativeRenewalHandover({ id: context.sessionId, context, input }),
+    seedSessionRenewalHandover: (context, input) => conversations.seedNativeRenewalHandover({ id: context.sessionId, context, input }),
+    reconcileSessions: (context, sessions, options) => conversations.reconcileNativeSessions({ context, sessions, options }),
+    closeProject: (context, input) => conversations.closeNativeProject({ context, input }),
+    invalidateRuntimes: (context, input) => conversations.invalidateNativeRuntimes({ context, input }),
+    createConversation: (context, input) => conversations.createNativeConversation({ id: context.sessionId, context, input }),
+    readConversation, startConversationTurn, waitForConversationTurn, stopConversation, deleteConversation, runDetachedChatTurn,
+    async closeSession(context) {
+      return (await conversations.disposeNative(provider.prepareConversationRequest("closeSession", context))).result;
+    },
+    ensureSession: context => manager.ensureSession(context.sessionId, context),
+    sendMessage: (context, input) => manager.sendMessage(context.sessionId, input, context),
+    sessionState: context => manager.sessionState(context.sessionId, context),
+    inspectMessageAdmission: (context, input) => manager.inspectMessageAdmission(context.sessionId, input, context),
+    interruptTurn: (context, input) => manager.interruptTurn(context.sessionId, input, context),
+    readGoal: context => manager.readGoal(context.sessionId, context),
+    updateGoal: (context, input) => manager.updateGoal(context.sessionId, input, context)
+  };
+  if (!options.conversationRuntime) owners?.push({ provider: facade, conversations });
+  return facade;
+}
+
+function scopedProvider(options) {
+  let provider;
+  const conversations = createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context, input, options, operation }) => operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
+      ? prepareSessionDetachedConversationCleanup(provider, id, context, input,
+        operation === "interruptDetachedConversation" ? "interruptDetachedChatTurn" : "deleteDetachedChatThread") : operation === "inspectTemporaryActivity"
+      ? prepareSessionConversationActivity(provider, id, context) : operation === "generateRenewalHandover" || operation === "seedRenewalHandover"
+      ? prepareSessionConversationRenewal(provider, id, context, input) : operation === "reconcileSessions"
+      ? prepareConversationReconciliation(provider, context, input, options) : operation === "closeProject"
+      ? prepareProjectConversationCleanup(provider, context, input) : operation === "invalidateRuntimes"
+      ? prepareConversationRuntimeInvalidation(provider, context, input) : operation === "create"
+      ? prepareSessionConversationCreation(provider, id, context, input) : operation === "ensure"
+      ? prepareSessionConversationReadiness(provider, id, context) : operation === "dispose"
+      ? prepareSessionConversationDisposal(provider, id, context, input) : createSessionConversationBinding(provider, id, context) }
+  });
+  provider = createClaudeSessionAgentProvider({ ...options, conversationRuntime: conversations });
+  options[fixtureRuntimeOwners]?.push({ provider, conversations });
+  return provider;
+}
+
+async function fixture(t, { scopedConversations = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-claude-provider-test-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  const owners = [];
+  t.after(async () => {
+    const failures = [];
+    for (const { provider, conversations } of [...owners].reverse()) {
+      try { await provider.closeProject(); } catch (error) { failures.push(error); }
+      try { await conversations.close(); } catch (error) { failures.push(error); }
+    }
+    await rm(root, { recursive: true, force: true });
+    if (failures.length) throw new AggregateError(failures, "Claude fixture cleanup failed.");
+  });
   const selection = { engineId: "claude", agentId: "claude", modelId: "sonnet", modelProviderId: "anthropic", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` };
   const workdir = path.join(root, "sessions", "active", "test", "source");
   await mkdir(workdir, { recursive: true });
@@ -145,25 +191,50 @@ async function fixture(t) {
   const session = { sessionId: "test", sessionRoot: path.join(root, "state"), metadata: { source_kind: "session_clone", source_path_authority: "managed_session_source", source_path: workdir, assistant_selection: JSON.stringify(selection) } };
   const written = [];
   const checkpoints = [];
-  const store = {
-    async writeBackgroundTaskEvent(_id, _task, { patch }) { checkpoints.push(patch); return patch; },
-    async mutateSession(_id, operation) { return operation(); },
-    async writeMetadataValue(_id, key, value) { session.metadata[key] = value; },
-    async deleteMetadataValue(_id, key) { delete session.metadata[key]; },
-    async writeAgentRunEvent(_id, _run, { patch }) { return patch; },
-    conversationMessageIdExists: async (_id, id) => written.some((message) => message.messageId === id),
-    writeConversationUserMessage: async (_id, message) => { written.push({ role: "user", ...message }); return message; },
-    writeConversationAssistantMessage: async (_id, message) => { written.push({ role: "assistant", ...message }); return message; },
-    writeConversationCommentaryMessage: async (_id, message) => { written.push({ role: "commentary", ...message }); return message; },
-    writeConversationThinkingMessage: async (_id, message) => { written.push({ role: "thinking", ...message }); return message; },
-    updateConversationStream: (_id, value) => value,
-    completeConversationStreamMessage() {}, clearConversationStream: () => ({}), readConversationStream: () => ({})
+  const persisted = createVibe64SessionStore({ projectContextRoot: root,
+    projectRuntimeRoot: path.join(root, "fixture-runtime") });
+  await persisted.createSession({ sessionId: "test", runtimeKind: "genesis", metadata: session.metadata });
+  Object.assign(session, await persisted.readSession("test"));
+  // Keep the original observation arrays and mutable session snapshot, but let
+  // the real store own transactions, transcript receipts and changeover state.
+  const store = { ...persisted,
+    async writeBackgroundTaskEvent(id, task, input) {
+      checkpoints.push(input.patch);
+      return persisted.writeBackgroundTaskEvent(id, task, input);
+    },
+    async writeMetadataValue(id, key, value) {
+      const result = await persisted.writeMetadataValue(id, key, value);
+      session.metadata[key] = value;
+      return result;
+    },
+    async deleteMetadataValue(id, key) {
+      const result = await persisted.deleteMetadataValue(id, key);
+      delete session.metadata[key];
+      return result;
+    },
+    async writeConversationUserMessage(id, message) {
+      written.push({ role: "user", ...message });
+      return persisted.writeConversationUserMessage(id, message);
+    },
+    async writeConversationAssistantMessage(id, message) {
+      written.push({ role: "assistant", ...message });
+      return persisted.writeConversationAssistantMessage(id, message);
+    },
+    async writeConversationCommentaryMessage(id, message) {
+      written.push({ role: "commentary", ...message });
+      return persisted.writeConversationCommentaryMessage(id, message);
+    },
+    async writeConversationThinkingMessage(id, message) {
+      written.push({ role: "thinking", ...message });
+      return persisted.writeConversationThinkingMessage(id, message);
+    }
   };
-  const runtime = { stateRoot: root, store, getSession: async () => session, renderPrompt: async (_id, input) => ({ prompt: `Context: ${input.request}` }) };
+  const runtime = { stateRoot: root, store, getSession: async () => session,
+    renderPrompt: async (_id, input) => ({ prompt: `Context: ${input.request}` }) };
   const context = { sessionId: "test", session, runtime, assistantSelection: selection };
   const processes = [];
   const behavior = { account: { loggedIn: true, email: "owner@example.test", authMethod: "claude.ai" } };
-  const providerOptions = { systemRoot: path.join(root, "system"), env: {
+  const providerOptions = { [fixtureRuntimeOwners]: owners, systemRoot: path.join(root, "system"), env: {
     CLAUDE_CONFIG_DIR: path.join(root, "config"), VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-runtime")
   },
     projectService: { readCurrentProject: async () => ({ sourceRoot: workdir }) },
@@ -189,7 +260,7 @@ async function fixture(t) {
       return native;
     }
   };
-  const provider = createClaudeSessionAgentProvider(providerOptions);
+  const provider = scopedConversations ? scopedProvider(providerOptions) : createClaudeSessionAgentProvider(providerOptions);
   return { provider, providerOptions, behavior, context, processes, written, root, checkpoints, git };
 }
 
@@ -208,7 +279,6 @@ test("Claude main and temporary chats receive project values with their managed 
     },
     prepareCommandEnvironment: async () => ({ ok: true, env: { MANAGED_COMMAND: "ready" }, shimDirs: [] })
   });
-  t.after(() => provider.closeProject());
   await provider.sendMessage(f.context, { message: "First", messageId: "main-env" });
   const temporary = await provider.createConversation(f.context);
   await provider.startConversationTurn(f.context, {
@@ -223,7 +293,6 @@ test("Claude main and temporary chats receive project values with their managed 
 
 test("Claude main and temporary chats install composed system guidance and yield their Genesis hooks", async (t) => {
   const f = await fixture(t);
-  t.after(() => f.provider.closeProject());
   await f.provider.sendMessage(f.context, { message: "First", messageId: "main-guidance" });
   const temporary = await f.provider.createConversation(f.context);
   await f.provider.startConversationTurn(f.context, {
@@ -367,7 +436,6 @@ test("Claude inspection defers native hooks until the prepared first Send", asyn
       return f.providerOptions.createProcess(options);
     }
   });
-  t.after(() => provider.closeProject());
   const first = await provider.ensureSession(f.context);
   assert.equal((await provider.ensureSession(f.context)).thread.id, first.thread.id);
   assert.equal(f.processes.length, 0);
@@ -394,12 +462,16 @@ test("Claude reuses its main conversation when callers hold older session snapsh
 test("Claude replacement forgets its cached main binding and blocks admission while preparing", async (t) => {
   const f = await fixture(t);
   const first = await f.provider.sessionState(f.context);
-  f.context.session.metadata.assistant_changeover = JSON.stringify({ replacement: { status: "preparing" } });
+  f.context.session.metadata.assistant_changeover = JSON.stringify({ lastEngine: "claude", engines: { claude: { seen: {} } }, replacement: { status: "preparing" } });
+  await f.context.runtime.store.writeMetadataValue("test", "assistant_changeover", f.context.session.metadata.assistant_changeover);
   await assert.rejects(f.provider.sessionState(f.context), { code: "vibe64_conversation_replacement_pending" });
   assert.equal((await f.provider.closeSession({ ...f.context, forgetConversationBinding: true })).ok, true);
   delete f.context.session.metadata.claude_conversation_id;
   delete f.context.session.metadata.agent_identity_conversation_id;
-  f.context.session.metadata.assistant_changeover = JSON.stringify({ replacement: { status: "ready" } });
+  f.context.session.metadata.assistant_changeover = JSON.stringify({ lastEngine: "claude", engines: { claude: { seen: {} } }, replacement: { status: "ready" } });
+  await f.context.runtime.store.deleteMetadataValue("test", "claude_conversation_id");
+  await f.context.runtime.store.deleteMetadataValue("test", "agent_identity_conversation_id");
+  await f.context.runtime.store.writeMetadataValue("test", "assistant_changeover", f.context.session.metadata.assistant_changeover);
   const successor = await f.provider.sessionState(f.context);
   assert.notEqual(successor.thread.id, first.thread.id);
   assert.equal(f.context.session.metadata.claude_conversation_id, successor.thread.id);
@@ -424,6 +496,9 @@ test("restoring Claude conversations preserves another engine's main identity", 
       Object.assign(f.context.session.metadata, identity, {
         assistant_selection: JSON.stringify({ ...f.context.assistantSelection, engineId: "codex", agentId: "codex" })
       });
+      for (const key of [...Object.keys(identity), "assistant_selection"]) {
+        await f.context.runtime.store.writeMetadataValue("test", key, f.context.session.metadata[key]);
+      }
       // A temporary Claude operation receives a selection-specific snapshot;
       // its store still writes to the parent session.
       const context = { ...f.context, session: structuredClone(f.context.session) };
@@ -444,6 +519,7 @@ test("restoring Claude conversations preserves another engine's main identity", 
       // Explicitly returning to Claude must activate the cached main entry.
       const selected = { ...f.context, session: structuredClone(f.context.session) };
       selected.session.metadata.assistant_selection = JSON.stringify(selected.assistantSelection);
+      await f.context.runtime.store.writeMetadataValue("test", "assistant_selection", selected.session.metadata.assistant_selection);
       assert.equal((await restored.sessionState(selected)).thread.id, main.thread.id);
       assert.equal(f.context.session.metadata.agent_identity_provider, "claude");
       assert.equal(f.context.session.metadata.agent_identity_conversation_id, main.thread.id);
@@ -559,6 +635,9 @@ test("Claude shutdown retains its resolved selection after main chat moves to Co
     modelProviderId: "deepseek", modelId: "deepseek-flash" });
   Object.assign(f.context.session.metadata, { assistant_selection: selection,
     agent_identity_provider: "codex", agent_identity_conversation_id: "retained-codex-thread" });
+  for (const key of ["assistant_selection", "agent_identity_provider", "agent_identity_conversation_id"]) {
+    await f.context.runtime.store.writeMetadataValue("test", key, f.context.session.metadata[key]);
+  }
   const messages = structuredClone(f.written);
 
   assert.equal((await f.provider.invalidateRuntimes({}, { reason: "server-shutdown" })).ok, true);
@@ -654,87 +733,24 @@ test("Claude renewal failures allow the shared manual handover recovery without 
   assert.equal(f.written.length, 0);
 });
 
-test("Claude status reads native JSON and returns only public account details", async () => {
-  const status = await readClaudeCodeAuthStatus({ credentialHome: { home: "/home/fixture" }, commandRunner: async (input) => {
-    assert.deepEqual(input.args, ["auth", "status", "--json"]);
-    assert.equal(input.timeout, 30_000);
-    assert.equal(input.credentialHome.home, "/home/fixture");
-    return { ok: true, stdout: JSON.stringify({ loggedIn: true, email: "owner@example.test", authMethod: "claude.ai", subscriptionType: "max", accessToken: "not-public" }) };
-  } });
-  assert.equal(status.loggedIn, true);
+test("Vibe64 supplies its managed account execution policy to the shared Claude status reader", async () => {
+  const status = await readClaudeCodeAuthStatus({
+    env: { VIBE64_CLAUDE_COMMAND: "/managed/claude" }, credentialHome: { home: "/home/fixture" },
+    commandRunner: async input => {
+      assert.equal(input.actor, "app");
+      assert.equal(input.command, "/managed/claude");
+      assert.equal(input.cwd, "/home/fixture");
+      assert.deepEqual(input.allowedRoots, ["/home/fixture"]);
+      assert.equal(input.inheritProcessEnv, false);
+      assert.equal(input.mode, "capture");
+      assert.equal(input.purpose, "account");
+      assert.equal(input.envPolicy, "auth");
+      assert.deepEqual(input.runtimes, ["operator-clis", "node26"]);
+      return { ok: true, stdout: '{"loggedIn":true,"email":"owner@example.test"}' };
+    }
+  });
   assert.equal(status.email, "owner@example.test");
-  assert.equal(JSON.stringify(status).includes("not-public"), false);
 });
-
-test("Claude signed-out JSON is normal while failed and malformed status responses stay errors", async () => {
-  const readStatus = (result) => readClaudeCodeAuthStatus({
-    credentialHome: { home: "/home/fixture" }, commandRunner: async () => result
-  });
-  const signedOut = { ok: false, exitCode: 1, stdout: JSON.stringify({ loggedIn: false, authMethod: "none" }) };
-  assert.deepEqual(await readStatus(signedOut), {
-    loggedIn: false, email: "", authMethod: "none", subscriptionType: ""
-  });
-  for (const result of [
-    { ...signedOut, timedOut: true },
-    { ...signedOut, signal: "SIGTERM" },
-    { ...signedOut, exitCode: 2 },
-    { ...signedOut, stdout: JSON.stringify({ loggedIn: true, email: "owner@example.test" }) },
-    { ...signedOut, stdout: "invalid" },
-    { ok: true, stdout: "{}" },
-    { ok: true, stdout: "null" }
-  ]) {
-    const status = await readStatus(result);
-    assert.equal(status.loggedIn, false);
-    assert.ok(status.error);
-  }
-});
-
-test("Claude status shares concurrent reads and invalidates when native account files change", async (t) => {
-  const home = await mkdtemp(path.join(os.tmpdir(), "claude-auth-status-"));
-  t.after(() => rm(home, { recursive: true, force: true }));
-  const configRoot = path.join(home, ".claude");
-  await mkdir(configRoot);
-  let calls = 0;
-  let email = "first@example.test";
-  const input = { env: { CLAUDE_CONFIG_DIR: configRoot }, credentialHome: { home }, commandRunner: async () => {
-    calls += 1;
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    return { ok: true, stdout: JSON.stringify({ loggedIn: true, email, authMethod: "claude.ai" }) };
-  } };
-  const statuses = await Promise.all(Array.from({ length: 8 }, () => readClaudeCodeAuthStatus(input)));
-  assert.equal(calls, 1);
-  assert.ok(statuses.every((status) => status.email === email));
-  if (process.platform !== "darwin") {
-    await readClaudeCodeAuthStatus(input);
-    assert.equal(calls, 1);
-  }
-  for (const file of [path.join(configRoot, ".credentials.json"), path.join(home, ".claude.json"), path.join(configRoot, ".claude.json")]) {
-    email = `${calls}@example.test`;
-    // Deliberately not JSON: the wrapper must never parse native credentials.
-    await writeFile(file, "native-account-changed");
-    assert.equal((await readClaudeCodeAuthStatus(input)).email, email);
-    await rm(file);
-    const before = calls;
-    await readClaudeCodeAuthStatus(input);
-    assert.equal(calls, before + 1);
-  }
-});
-
-test("Claude status failures do not poison later reads or share across credential homes", async () => {
-  let calls = 0;
-  const commandRunner = async () => {
-    calls += 1;
-    return calls === 1 ? { ok: false, error: "Temporary failure" }
-      : { ok: true, stdout: JSON.stringify({ loggedIn: false }) };
-  };
-  const input = { env: {}, credentialHome: { home: "/home/fixture" }, commandRunner };
-  assert.equal((await readClaudeCodeAuthStatus(input)).error, "Temporary failure");
-  assert.equal((await readClaudeCodeAuthStatus(input)).error, undefined);
-  assert.equal(calls, 2);
-  await readClaudeCodeAuthStatus({ ...input, credentialHome: { home: "/home/another" } });
-  assert.equal(calls, 3);
-});
-
 
 test("Claude account identity survives restart and prevents another account from resuming owned history", async (t) => {
   const f = await fixture(t);
@@ -767,19 +783,6 @@ test("Claude requires an authenticated account identity before starting a native
 });
 
 
-test("Claude plan usage retains real windows and never invents an allowance after reset", () => {
-  assert.deepEqual(claudePlanUsage({ rate_limits_available: false }).windows, []);
-  const usage = claudePlanUsage({ rate_limits_available: true, rate_limits: {
-    five_hour: { utilization: 25, resets_at: "2099-01-01T00:00:00Z" },
-    seven_day: { utilization: 100, resets_at: null },
-    seven_day_sonnet: { utilization: 10, resets_at: "2000-01-01T00:00:00Z" },
-    seven_day_opus: { utilization: null, resets_at: null }
-  } });
-  assert.equal(usage.status, "available");
-  assert.deepEqual(usage.windows.map(({ id, remainingPercent }) => ({ id, remainingPercent })), [
-    { id: "five_hour", remainingPercent: 75 }, { id: "seven_day", remainingPercent: 0 }
-  ]);
-});
 
 test("Claude changes model and effort through native controls without restarting the conversation", async (t) => {
   const f = await fixture(t);
@@ -788,13 +791,15 @@ test("Claude changes model and effort through native controls without restarting
   const native = f.processes[0];
   const requests = [];
   native.client.request = async (request) => { requests.push(request); return {}; };
-  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku", variantId: "" };
+  f.context.assistantSelection = defineVibe64AssistantSelection({ ...f.context.assistantSelection, modelId: "haiku", variantId: "" });
+  await f.context.runtime.store.writeMetadataValue("test", "assistant_selection", JSON.stringify(f.context.assistantSelection));
   const second = await f.provider.ensureSession(f.context);
   assert.equal(second.thread.id, first.thread.id);
   assert.deepEqual(requests.map(({ subtype }) => subtype), ["apply_flag_settings", "set_model"]);
   assert.equal(requests[0].settings.effortLevel, null);
   assert.deepEqual(requests[1], { subtype: "set_model", model: "haiku" });
-  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "sonnet", variantId: "low" };
+  f.context.assistantSelection = defineVibe64AssistantSelection({ ...f.context.assistantSelection, modelId: "sonnet", variantId: "low" });
+  await f.context.runtime.store.writeMetadataValue("test", "assistant_selection", JSON.stringify(f.context.assistantSelection));
   await f.provider.ensureSession(f.context);
   assert.equal(requests.at(-2).settings.effortLevel, "low");
   assert.equal(f.processes.length, 1);
@@ -936,18 +941,13 @@ test("Claude helper choices apply to new tasks without changing an already resol
 });
 
 
-test("Claude conversation rewind selects the retained native branch across retries and new replies", async (t) => {
+test("Claude reads a historical rewound branch and its subsequent replies without exposing Undo", async (t) => {
   const f = await fixture(t);
   const ready = await f.provider.ensureSession(f.context);
   for (const messageId of ["first", "second"]) {
     await f.provider.sendMessage(f.context, { message: messageId, messageId });
     await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Done." });
   }
-  const events = [];
-  f.context.runtime.store.writeAgentRunEvent = async (_id, _run, { event, patch }) => {
-    events.push(event.kind);
-    return patch;
-  };
   const first = nativeMessageId("first");
   const second = nativeMessageId("second");
   const frames = [
@@ -957,20 +957,9 @@ test("Claude conversation rewind selects the retained native branch across retri
     { type: "assistant", uuid: "answer-2", parentUuid: second, message: { content: [{ type: "text", text: "Discarded" }] } }
   ];
   await writeHistory(f, ready.thread.id, frames);
-  let controls = 0;
-  f.processes[0].client.request = async (request) => {
-    assert.deepEqual(request, { subtype: "rewind_conversation", target_message_uuid: second });
-    await f.processes[0].options.onEvent({ type: "system", subtype: "status" });
-    controls += 1;
-    frames.push({ type: "last-prompt", leafUuid: "answer-1", explicit: true, rewound: true });
-    await writeHistory(f, ready.thread.id, frames);
-    throw new Error("reply lost after native rewind");
-  };
-  const plan = await f.provider.rewindConversation(f.context, { messageId: "second", previousMessageId: "first" });
-  await assert.rejects(f.provider.rewindConversation(f.context, plan), /reply lost/);
-  await f.provider.rewindConversation(f.context, plan);
-  assert.equal(controls, 1);
-  assert.deepEqual(events, ["conversation-rewound"], "Undo must not publish a turn completion that triggers workspace setup");
+  frames.push({ type: "last-prompt", leafUuid: "answer-1", explicit: true, rewound: true });
+  await writeHistory(f, ready.thread.id, frames);
+  assert.equal(typeof f.provider.rewindConversation, "undefined");
   let history = await readClaudeHistory({ configRoot: path.join(f.root, "config"), workdir: f.context.session.metadata.source_path, conversationId: ready.thread.id });
   assert.deepEqual(history.userIds, [first]);
   assert.deepEqual(history.messages.map((message) => message.text), ["Retained"]);
@@ -981,13 +970,11 @@ test("Claude conversation rewind selects the retained native branch across retri
   await writeHistory(f, ready.thread.id, frames);
   history = await readClaudeHistory({ configRoot: path.join(f.root, "config"), workdir: f.context.session.metadata.source_path, conversationId: ready.thread.id });
   assert.deepEqual(history.messages.map((message) => message.text), ["Retained", "New branch"]);
-  await assert.rejects(f.provider.rewindConversation(f.context, plan), /last turn no longer matches/);
 });
 
 
 test("persistent Claude waits beyond three minutes but retains completion, Stop and bounded deadlines", async (t) => {
-  const f = await fixture(t);
-  t.after(() => f.provider.closeProject());
+  const f = await fixture(t, { scopedConversations: true });
   for (const outcome of ["complete", "stop", "deadline", "helper"]) {
     const abort = new AbortController();
     const context = { assistantSelection: f.context.assistantSelection, signal: abort.signal, sessionId: "persistent_wait",
@@ -1033,7 +1020,10 @@ test("persistent Claude waits beyond three minutes but retains completion, Stop 
 });
 
 test("temporary Claude accepts active-turn steering in its existing native conversation", async (t) => {
-  const f = await fixture(t);
+  const f = await fixture(t, { scopedConversations: true });
+  const forwarded = [];
+  f.context.routingConversationId = "saved-temporary";
+  f.context.onEvent = event => { if (event.type === "message") forwarded.push(structuredClone(event)); };
   const { conversationId } = await f.provider.createConversation(f.context, { persistent: true });
   const first = await f.provider.startConversationTurn(f.context, { conversationId, persistent: true, message: "Investigate", messageId: "first" });
   const guided = await f.provider.startConversationTurn(f.context, { conversationId, persistent: true, steer: true, message: "Read logs first", messageId: "guidance" });
@@ -1041,8 +1031,22 @@ test("temporary Claude accepts active-turn steering in its existing native conve
   assert.equal(guided.runId, first.runId);
   assert.equal(f.processes.length, 1);
   assert.equal(f.processes[0].lastInput.message, "Read logs first");
+  const receive = f.processes[0].options.onEvent;
+  await receive({ type: "stream_event", event: { type: "message_start", message: { id: "temporary-api" } } });
+  await receive({ type: "stream_event", event: { type: "content_block_start", index: 0, content_block: { type: "text" } } });
+  await receive({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { text: "Reading the logs." } } });
+  await receive({ type: "assistant", uuid: "temporary-frame", message: { id: "temporary-api", content: [{ type: "text", text: "Reading the logs." }] } });
+  assert.equal(forwarded.length, 2);
+  assert.deepEqual(forwarded.map(event => [event.threadId, event.turnId]), [[conversationId, first.runId], [conversationId, first.runId]]);
+  assert.equal(forwarded[0].message.id, "claude_temporary-api_0");
+  assert.equal(forwarded[0].message.complete, false);
+  assert.equal(forwarded[1].message.id, "claude_temporary-frame_0");
+  assert.equal(forwarded[1].message.outputId, forwarded[0].message.id);
+  assert.equal(forwarded[1].message.complete, true);
+  const observed = await f.provider.readConversation(f.context, { conversationId, persistent: true });
+  assert.deepEqual(observed.messages.find(message => message.id === forwarded[1].message.id), forwarded[1].message);
   assert.equal(f.written.length, 0, "temporary steering stays out of main History");
-  await f.provider.stopConversation(f.context, { conversationId });
+  await f.provider.stopConversation(f.context, { conversationId, persistent: true });
 });
 
 
@@ -1118,14 +1122,14 @@ test("rejecting an instruction change during work preserves the current steering
 });
 
 test("retained scoped Claude conversations survive restart without touching a development session", async (t) => {
-  const f = await fixture(t);
+  const f = await fixture(t, { scopedConversations: true });
   const original = structuredClone(f.context.session);
   const context = { assistantSelection: f.context.assistantSelection, sessionId: "colleague_test",
     assistantScope: { id: "colleague_test", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "colleague-runtime"),
       stableContext: "Operate only the supplied product actions." } };
   const { conversationId } = await f.provider.createConversation(context, { persistent: true });
   const stopped = [];
-  const restored = createClaudeSessionAgentProvider({ ...f.providerOptions,
+  const restored = scopedProvider({ ...f.providerOptions,
     stopExecution: async (id) => { stopped.push(id); return { scopeEmpty: true }; } });
   assert.equal((await restored.readConversation(context, { conversationId })).status, "completed");
   await restored.startConversationTurn(context, { conversationId, persistent: true, message: "Hello", messageId: "colleague-1" });
@@ -1133,7 +1137,7 @@ test("retained scoped Claude conversations survive restart without touching a de
     { type: "user", uuid: nativeMessageId("colleague-1"), message: { content: "Hello" } },
     { type: "assistant", uuid: "reply", message: { content: [{ type: "text", text: "Welcome back" }] } }
   ], f.root);
-  const restarted = createClaudeSessionAgentProvider({ ...f.providerOptions,
+  const restarted = scopedProvider({ ...f.providerOptions,
     stopExecution: async (id) => { stopped.push(id); return { scopeEmpty: true }; } });
   const read = await restarted.readConversation(context, { conversationId, messageId: "colleague-1" });
   assert.equal(read.text, "Welcome back");
@@ -1150,7 +1154,7 @@ test("retained scoped Claude conversations survive restart without touching a de
 });
 
 test("scoped Claude helpers use the resolved model and can stop while main chat continues", async (t) => {
-  const f = await fixture(t);
+  const f = await boundMainFixture(t);
   await f.provider.sendMessage(f.context, { message: "Main task", messageId: "main-task" });
   const main = f.processes[0];
   const original = structuredClone(f.context.session);
@@ -1180,7 +1184,7 @@ test("scoped Claude helpers use the resolved model and can stop while main chat 
 });
 
 test("Claude router reasoning does not consume the structured answer limit", async (t) => {
-  const f = await fixture(t);
+  const f = await fixture(t, { scopedConversations: true });
   const context = { assistantSelection: f.context.assistantSelection, sessionId: "router_output",
     assistantScope: { id: "router_output", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "helper-runtime") } };
   const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "helper", workloadId: "request_routing" });
@@ -1203,7 +1207,7 @@ test("Claude router reasoning does not consume the structured answer limit", asy
 });
 
 test("Claude helpers still reject oversized answer text and structured results", async (t) => {
-  const f = await fixture(t);
+  const f = await fixture(t, { scopedConversations: true });
   const context = { assistantSelection: f.context.assistantSelection, sessionId: "helper_limit",
     assistantScope: { id: "helper_limit", environment: {}, workdir: f.root, runtimeRoot: path.join(f.root, "helper-runtime") } };
   const executionProfile = await f.provider.resolveExecutionProfile(context, { profileId: "helper", workloadId: "request_routing" });
@@ -1254,25 +1258,9 @@ test("Claude changes provider controls before model and keeps the native convers
   assert.equal(f.processes.length, 1);
 });
 
-test("Claude model configuration maps background calls and resets external settings", () => {
-  for (const [provider, model, window] of [["deepseek", "deepseek-flash", "786432"], ["zai-coding-plan", "glm-5.3", "1000000"]]) {
-    const configured = claudeModelConfiguration({ modelProviderId: provider, modelId: model }, { apiKey: "test-secret", baseUrl: "https://provider.test" });
-    assert.equal(configured.model, `${model}[1m]`);
-    assert.equal(configured.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, window);
-    for (const name of ["ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL"]) {
-      assert.equal(configured.env[name], `${model}[1m]`);
-    }
-    const native = claudeModelConfiguration({ modelProviderId: "anthropic", modelId: "opus" }, null);
-    for (const name of Object.keys(configured.env)) {
-      if (!["ANTHROPIC_BASE_URL", "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST"].includes(name)) assert.equal(native.env[name], "", name);
-    }
-    assert.equal(native.model, "opus");
-  }
-});
 
 test("Claude-only keys work in the catalogue, access check, chat and native terminal", async (t) => {
   const f = await fixture(t);
-  t.after(() => f.provider.closeProject());
   const root = path.join(f.providerOptions.systemRoot, "ai-connections", "codex", "deepseek");
   await mkdir(path.join(root, "auth", "codex"), { recursive: true });
   await writeFile(path.join(root, "connection.json"), JSON.stringify({ apiKey: "claude-only-key", codexDisabled: true, claudeReady: true }));
@@ -1292,12 +1280,12 @@ test("Claude-only keys work in the catalogue, access check, chat and native term
   const terminalProvider = createClaudeSessionAgentProvider({ ...f.providerOptions,
     commandRunner: async input => { request = input; return { ok: true }; }
   });
-  t.after(() => terminalProvider.closeProject());
   await terminalProvider.startTerminal(f.context);
   assert.equal(request.mode, "pty");
   assert.equal(request.args[request.args.indexOf("--model") + 1], "deepseek-flash[1m]");
   assert.equal(request.baseEnv.ANTHROPIC_AUTH_TOKEN, "claude-only-key");
   assert.equal(request.baseEnv.CLAUDE_CODE_AUTO_COMPACT_WINDOW, "786432");
+  assert.equal(request.baseEnv.DISABLE_AUTOUPDATER, "1");
   assert.doesNotMatch(request.args.join(" "), /claude-only-key/u);
 });
 
@@ -1316,7 +1304,7 @@ test("Claude does not send when a provider-settings acknowledgement fails", asyn
 test("scoped Claude helper cleanup recovers the captured managed process after restart", async (t) => {
   const f = await fixture(t);
   let captured;
-  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions, async createProcess(options) {
+  const provider = scopedProvider({ ...f.providerOptions, async createProcess(options) {
     const native = await f.providerOptions.createProcess(options);
     await options.onStarted?.(native.executionId);
     return native;
@@ -1332,7 +1320,7 @@ test("scoped Claude helper cleanup recovers the captured managed process after r
   assert.equal(captured.executionId, f.processes.at(-1).executionId);
   const stopped = [];
   let confirmStop = false;
-  const restarted = createClaudeSessionAgentProvider({ ...f.providerOptions, async stopExecution(id) {
+  const restarted = scopedProvider({ ...f.providerOptions, async stopExecution(id) {
     stopped.push(id);
     return { scopeEmpty: confirmStop };
   } });
@@ -1342,4 +1330,697 @@ test("scoped Claude helper cleanup recovers the captured managed process after r
   assert.equal((await restarted.deleteConversation(context, input)).deleted, true);
   assert.deepEqual(stopped, [captured.executionId, captured.executionId]);
   assert.equal(f.context.session.metadata[`claude_conversation_${captured.conversationId}`], undefined);
+});
+
+async function boundMainFixture(t, { configureProcess } = {}) {
+  let removeFixture;
+  const f = await fixture({ after(callback) { removeFixture = callback; } });
+  const store = createVibe64SessionStore({ projectContextRoot: f.root, projectRuntimeRoot: path.join(f.root, "runtime") });
+  await store.createSession({ sessionId: "test", runtimeKind: "genesis" });
+  for (const [key, value] of Object.entries(f.context.session.metadata)) await store.writeMetadataValue("test", key, value);
+  f.context.runtime.store = store;
+  f.context.runtime.getSession = id => store.readSession(id);
+  f.context.session = await store.readSession("test");
+  let provider;
+  const conversations = createConversationRuntime({ authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { nativeTools: true, conversation: ({ id, context, input, options, operation }) => operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
+      ? prepareSessionDetachedConversationCleanup(provider, id, context, input,
+        operation === "interruptDetachedConversation" ? "interruptDetachedChatTurn" : "deleteDetachedChatThread") : operation === "inspectTemporaryActivity"
+      ? prepareSessionConversationActivity(provider, id, context) : operation === "generateRenewalHandover" || operation === "seedRenewalHandover"
+      ? prepareSessionConversationRenewal(provider, id, context, input) : operation === "reconcileSessions"
+      ? prepareConversationReconciliation(provider, context, input, options) : operation === "closeProject"
+      ? prepareProjectConversationCleanup(provider, context, input) : operation === "invalidateRuntimes"
+      ? prepareConversationRuntimeInvalidation(provider, context, input) : operation === "create"
+      ? prepareSessionConversationCreation(provider, id, context, input) : operation === "ensure"
+      ? prepareSessionConversationReadiness(provider, id, context) : operation === "dispose"
+      ? prepareSessionConversationDisposal(provider, id, context, input) : createSessionConversationBinding(provider, id, {
+      ...context, prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
+    }) }
+  });
+  const publications = [];
+  provider = createClaudeSessionAgentProvider({ ...f.providerOptions, conversationRuntime: conversations,
+    ...(configureProcess ? { createProcess: async options => {
+      const native = await f.providerOptions.createProcess(options);
+      configureProcess(native);
+      return native;
+    } } : {}),
+    publishSessionChanged: async (_id, event) => publications.push(event),
+    publishConversation: event => conversations.publishNative(event)
+  });
+  t.after(async () => {
+    try { await conversations.close(); await provider.closeProject(); }
+    finally { await removeFixture(); }
+  });
+  return { ...f, provider, store, conversations, publications,
+    open: (representation = "canonical", context = f.context) => conversations.open({ id: "test", context, representation }) };
+}
+
+test("main Claude binds the actual provider once and adopts its original receipt, stream and steering", { timeout: 15000 }, async t => {
+  const f = await boundMainFixture(t);
+  const canonical = await f.open();
+  assert.equal((await f.store.readSession("test")).metadata.claude_conversation_id, undefined, "open is inert");
+  assert.equal(f.processes.length, 0);
+  const state = await f.provider.sessionState(f.context);
+  assert.ok(state.thread.id);
+  assert.equal(f.processes.length, 0, "the original explicit state read selects identity without starting a process");
+  const events = [];
+  const receiptsBeforeAdmission = [];
+  canonical.subscribe(event => {
+    events.push(event);
+    if (event.type === "accepted") receiptsBeforeAdmission.push(f.publications.some(publication =>
+      publication.reason === "claude-stream-message-delivered" &&
+      publication.payload.conversationLogPatch.turn.messages.some(message => message.messageId === event.messageId)));
+  });
+  let callbackThread;
+  const first = await f.provider.sendMessage({ ...f.context, vibe64User: { username: "first", role: "owner" } }, {
+    message: "First", messageId: "bound-first", onPromptSending({ threadId }) { callbackThread = threadId; }
+  });
+  assert.equal(first.delivered, true);
+  assert.equal(callbackThread, state.thread.id);
+  assert.equal(first.conversationTurn.messages[0].messageId, "bound-first");
+  const second = await f.provider.sendMessage({ ...f.context, vibe64User: { username: "second", role: "owner" } }, {
+    message: "Guide", messageId: "bound-second"
+  });
+  assert.equal(second.deliveryMode, "steer");
+  assert.equal(f.processes.length, 1);
+  const receive = f.processes[0].options.onEvent;
+  await receive({ type: "stream_event", event: { type: "message_start", message: { id: "bound-answer" } } });
+  await receive({ type: "stream_event", event: { type: "content_block_start", index: 0,
+    content_block: { type: "text", text: "" } } });
+  await receive({ type: "stream_event", event: { type: "content_block_delta", index: 0,
+    delta: { type: "text_delta", text: "Done" } } });
+  assert.ok(events.some(event => event.type === "message" && event.text === "Done"), "the original live stream reaches the common subscriber before completion");
+  await receive({ type: "assistant", message: { id: "bound-answer", content: [{ type: "text", text: "Done" }] } });
+  await receive({ type: "result", subtype: "success", result: "Done", uuid: "bound-result" });
+  await canonical.wait();
+  const turns = await f.store.readConversationLog("test");
+  assert.deepEqual(turns.flatMap(turn => turn.messages).filter(message => message.role === "user").map(message => message.messageId),
+    ["bound-first", "bound-second"]);
+  assert.equal(turns[0].metadata.actorId, "first");
+  assert.equal(turns[1].metadata.actorId, "second", "steering uses this command's actor, not the opening context");
+  assert.equal(turns.flatMap(turn => turn.messages).filter(message => message.role === "assistant").length, 1);
+  assert.deepEqual(events.filter(event => event.type === "accepted").map(event => event.messageId), ["bound-first", "bound-second"]);
+  assert.deepEqual(receiptsBeforeAdmission, [true, true]);
+  assert.ok(events.some(event => event.type === "message" && event.text === "Done"));
+  const patches = events.filter(event => event.type === "transcript").map(event => event.patch);
+  assert.deepEqual(patches.find(patch => patch.turn.messages.some(message => message.messageId === "bound-first")),
+    { type: "upsert-turn", turn: first.conversationTurn });
+  assert.deepEqual(patches.find(patch => patch.turn.messages.some(message => message.messageId === "bound-second")),
+    { type: "upsert-turn", turn: second.conversationTurn });
+  const finalTurn = turns.find(turn => turn.messages.some(message => message.role === "assistant" && message.text === "Done"));
+  assert.deepEqual(patches.findLast(patch => patch.turn.turnId === finalTurn.turnId),
+    { type: "upsert-turn", turn: finalTurn }, "completion publishes the original saved row with its unchanged grouping");
+  assert.doesNotMatch(JSON.stringify(events), /"(?:nativeResult|session)"\s*:/u);
+  assert.equal((await f.provider.sendMessage(f.context, { message: "First", messageId: "bound-first" })).duplicate, true);
+  const metadata = (await f.store.readSession("test")).metadata;
+  assert.equal(metadata.runtime, undefined);
+  assert.equal(JSON.parse(metadata.assistant_changeover).engines.claude.pending, undefined);
+  assert.equal(turns.some(turn => turn.metadata.runtime), false, "original rows receive no common runtime annotation");
+  assert.equal(events.some(event => Object.hasOwn(event, "nativeResult") || Object.hasOwn(event, "session")), false);
+});
+
+test("main Claude preserves a native-only duplicate without inventing a canonical authored receipt", { timeout: 15000 }, async t => {
+  const f = await boundMainFixture(t);
+  const ready = await f.provider.ensureSession(f.context);
+  await writeHistory(f, ready.thread.id, [{ type: "user", uuid: nativeMessageId("native-only"), message: { content: "Accepted" } }]);
+  const canonical = await f.open();
+  const events = [];
+  canonical.subscribe(event => events.push(event));
+  const result = await f.provider.sendMessage(f.context, { message: "Accepted", messageId: "native-only" });
+  // This original assertion covers the provider's native value, without the
+  // manager's separate application-routing attribution.
+  for (const key of ["engineId", "providerId", "sessionId", "transportId"]) delete result[key];
+  assert.deepEqual(result, { ok: true, delivered: true, duplicate: true, thread: { id: ready.thread.id }, turn: null });
+  await canonical.wait();
+  assert.equal(f.processes.length, 0);
+  assert.deepEqual(await f.store.readConversationLog("test"), []);
+  await assert.rejects(canonical.send({ text: "Accepted", messageId: "native-only" }), { code: "conversation_receipt_unavailable" });
+  await canonical.wait();
+  assert.equal(events.some(event => event.type === "accepted"), false);
+  assert.equal((await canonical.read()).status, "ready");
+  assert.equal((await canonical.read()).error, "");
+  assert.equal((await f.store.readSession("test")).metadata.runtime, undefined);
+  await assert.rejects(canonical.updateGoal({ action: "set", expectedSegmentId: `claude:${ready.thread.id}`,
+    objective: "Accepted", messageId: "native-only" }), { code: "conversation_receipt_unavailable" });
+  await canonical.wait();
+  assert.deepEqual(await canonical.inspectDelivery({ messageId: "native-only" }), { status: "accepted", messageId: "native-only", duplicate: true });
+  assert.equal(f.processes.length, 0, "checking a native-only goal UUID never submits another command");
+  assert.deepEqual(await f.store.readConversationLog("test"), []);
+  assert.equal(events.some(event => event.type === "accepted"), false);
+  assert.equal((await canonical.read()).status, "ready");
+});
+
+test("main Claude raw goals retain original commands and stale identities", { timeout: 15000 }, async t => {
+  const f = await boundMainFixture(t);
+  const canonical = await f.open();
+  assert.equal(f.processes.length, 0);
+  assert.equal((await f.store.readSession("test")).metadata.claude_conversation_id, undefined);
+  let timestamp = Date.now();
+  f.behavior.afterSend = async (native, message) => {
+    const condition = message.slice(6);
+    await writeHistory(f, native.options.sessionId, [{ type: "attachment", timestamp: new Date(timestamp++).toISOString(),
+      attachment: { type: "goal_status", condition: condition === "clear" ? "Tests pass" : condition,
+        sentinel: true, met: condition === "clear" } }]);
+    if (condition === "clear") await native.options.onEvent({ type: "result", subtype: "success", result: "" });
+  };
+  const started = await f.provider.updateGoal(f.context, { action: "set", objective: "Tests pass" });
+  assert.equal(started.status, "available");
+  assert.equal(started.goal.status, "active");
+  assert.equal(f.processes[0].lastInput.message, "/goal Tests pass");
+  const expected = { threadId: started.threadId, objective: started.goal.objective, createdAt: started.goal.createdAt };
+  await assert.rejects(f.provider.updateGoal(f.context, { ...expected, action: "pause", createdAt: -1 }), /goal changed/u);
+  const paused = await f.provider.updateGoal(f.context, { ...expected, action: "pause" });
+  assert.equal(paused.goal.status, "paused");
+  assert.equal(f.processes[0].stopped, true);
+  const resumed = await f.provider.updateGoal(f.context, { ...expected, action: "resume" });
+  assert.equal(resumed.goal.status, "active");
+  assert.equal(f.processes[1].options.resume, true);
+  const cancelled = await f.provider.updateGoal(f.context, { action: "cancel", threadId: resumed.threadId,
+    objective: resumed.goal.objective, createdAt: resumed.goal.createdAt });
+  assert.equal(cancelled.goal, null);
+  assert.equal(f.processes.at(-1).lastInput.message, "/goal clear");
+  assert.equal((await canonical.read()).capabilities.goals, true);
+  assert.equal((await canonical.read()).capabilities.goalCommands.set.delivery, "message");
+  assert.equal((await f.store.readSession("test")).metadata.runtime, undefined);
+  assert.equal((await f.store.readConversationLog("test")).some(turn => turn.metadata.runtime), false);
+});
+
+test("main Claude canonical goals adopt original receipts and keep literal commands outside chat changeover", { timeout: 15000 }, async t => {
+  const f = await boundMainFixture(t);
+  const canonical = await f.open();
+  const events = [];
+  canonical.subscribe(event => events.push(event));
+  const sent = [];
+  let timestamp = Date.now();
+  f.behavior.afterSend = async (native, message) => {
+    sent.push(message);
+    if (message.startsWith("/goal ")) {
+      const condition = message.slice(6);
+      await writeHistory(f, native.options.sessionId, [{ type: "attachment", timestamp: new Date(timestamp++).toISOString(),
+        attachment: { type: "goal_status", condition: condition === "clear" ? "Tests pass" : condition,
+          sentinel: true, met: condition === "clear" } }]);
+      if (condition !== "clear") return;
+    }
+    await native.options.onEvent({ type: "result", subtype: "success", result: "" });
+  };
+  const first = await canonical.updateGoal({ action: "set", expectedSegmentId: null,
+    objective: "Tests pass", messageId: "first-goal" });
+  assert.equal(first.status, "accepted");
+  assert.equal(first.messageId, "first-goal");
+  const metadata = (await f.store.readSession("test")).metadata;
+  const segmentId = `claude:${metadata.claude_conversation_id}`;
+  assert.ok(metadata.claude_conversation_id, "the original goal read selects the first native identity");
+  assert.equal(metadata.assistant_changeover, undefined, "a goal does not create a chat delivery cursor");
+  assert.equal(metadata.runtime, undefined);
+  const firstRow = (await f.store.readConversationLog("test")).find(turn => turn.turnId === first.turnId);
+  assert.equal(firstRow.user.messageId, "first-goal");
+  assert.equal(firstRow.user.text, "/goal Tests pass");
+  assert.equal(firstRow.metadata.runtime, undefined);
+  assert.equal(firstRow.user.goal, undefined, "the original authored row has no fabricated goal descriptor");
+  let goal = await canonical.readGoal();
+  assert.equal(goal.status, "active");
+  await assert.rejects(canonical.updateGoal({ action: "pause", expectedSegmentId: segmentId, expectedGoalId: "stale" }), /goal changed/u);
+  assert.equal((await canonical.updateGoal({ action: "pause", expectedSegmentId: segmentId, expectedGoalId: goal.id })).status, "paused");
+  const resumed = await canonical.updateGoal({ action: "resume", expectedSegmentId: segmentId,
+    expectedGoalId: goal.id, messageId: "resume-goal" });
+  assert.equal(resumed.status, "accepted");
+  goal = await canonical.readGoal();
+  const cleared = await canonical.updateGoal({ action: "cancel", expectedSegmentId: segmentId,
+    expectedGoalId: goal.id, messageId: "clear-goal" });
+  assert.equal(cleared.status, "accepted");
+  await canonical.wait();
+  assert.equal(await canonical.readGoal(), null);
+  assert.deepEqual(sent, ["/goal Tests pass", "/goal Tests pass", "/goal clear"]);
+
+  await f.provider.sendMessage(f.context, { message: "Ordinary chat", messageId: "chat-before-goal" });
+  await canonical.wait();
+  await f.store.writeConversationAssistantMessage("test", { messageId: "late-context", text: "A later result for the chat cursor." });
+  const cursor = (await f.store.readSession("test")).metadata.assistant_changeover;
+  assert.ok(cursor);
+  const next = await canonical.updateGoal({ action: "set", expectedSegmentId: segmentId,
+    objective: "Follow up", messageId: "after-chat-goal" });
+  assert.equal(next.status, "accepted");
+  assert.equal(sent.at(-1), "/goal Follow up", "prior chat history is never rendered into a native goal command");
+  assert.equal((await f.store.readSession("test")).metadata.assistant_changeover, cursor);
+  const beforeDuplicate = sent.length;
+  const duplicate = await canonical.updateGoal({ action: "set", expectedSegmentId: segmentId,
+    objective: "An altered retry cannot replace the admitted UUID", messageId: "after-chat-goal" });
+  assert.deepEqual(duplicate, { status: "accepted", messageId: "after-chat-goal", turnId: next.turnId, origin: "user", duplicate: true });
+  assert.equal(sent.length, beforeDuplicate);
+  assert.equal((await canonical.readGoal()).objective, "Follow up");
+  const rows = await f.store.readConversationLog("test");
+  assert.equal(rows.flatMap(turn => turn.messages).filter(message => message.messageId === "after-chat-goal").length, 1);
+  assert.equal(rows.some(turn => turn.metadata.runtime), false);
+  assert.deepEqual(events.filter(event => event.type === "accepted").map(event => event.messageId),
+    ["first-goal", "resume-goal", "clear-goal", "chat-before-goal", "after-chat-goal"]);
+  assert.doesNotMatch(JSON.stringify(events), /"(?:nativeResult|session)"\s*:/u);
+});
+
+test("main Claude common close retains unconfirmed ownership and replacement uses the same broad cleanup", { timeout: 15000 }, async t => {
+  const f = await boundMainFixture(t);
+  const native = await f.open("native");
+  const sent = await f.provider.sendMessage(f.context, { message: "Work", messageId: "before-replace" });
+  const temporary = await f.provider.createConversation(f.context);
+  await f.provider.startConversationTurn(f.context, { conversationId: temporary.conversationId, message: "Temporary", messageId: "temporary-work" });
+  f.processes[0].stopAllowed = false;
+  await assert.rejects(native.dispose(f.context), /exit has not been confirmed/u);
+  assert.equal((await f.provider.sessionState(f.context)).turn.active, true);
+  assert.ok(JSON.parse((await f.store.readSession("test")).metadata[`claude_conversation_${sent.thread.id}`]).executionId);
+  f.processes[0].stopAllowed = true;
+  const closed = await native.dispose(f.context);
+  assert.equal(closed.ok, true);
+  assert.equal(closed.processExitProofs.length, 2);
+  assert.equal(f.processes.every(process => process.stopped), true);
+  const reopened = await f.open("native");
+  const replacement = await reopened.replace({ operationId: "replace-claude", expectedSegmentId: `claude:${sent.thread.id}`,
+    reason: "renewal", briefing: "Continue the original work." });
+  assert.equal(replacement.replacement.status, "ready");
+  assert.equal(f.processes.length, 2, "replacement does not start its successor");
+  f.context.session = await f.store.readSession("test");
+  const successor = await f.provider.sendMessage(f.context, { message: "Continue", messageId: "after-replace" });
+  assert.notEqual(successor.thread.id, sent.thread.id);
+  assert.match(f.processes.at(-1).lastInput.message, /Continue the original work/u);
+  await f.provider.interruptTurn(f.context);
+  const metadata = (await f.store.readSession("test")).metadata;
+  assert.equal(JSON.parse(metadata.assistant_changeover).replacement.successorConversationId, successor.thread.id);
+  assert.equal(metadata.runtime, undefined);
+  assert.deepEqual((await f.store.readConversationLog("test")).flatMap(turn => turn.messages)
+    .filter(message => message.role === "user").map(message => message.messageId), ["before-replace", "after-replace"]);
+});
+
+test("main Claude Stop remains available while the original goal acknowledgement is pending", { timeout: 15000 }, async t => {
+  const sent = Promise.withResolvers();
+  const inputs = [];
+  const f = await boundMainFixture(t, { configureProcess(native) {
+    native.client.send = async (message, input) => {
+      native.lastInput = { message, ...input };
+      inputs.push(native.lastInput);
+      sent.resolve(native);
+      // Leave the original turn owner's admission pending: neither a user
+      // echo nor a queued command acknowledgement has arrived.
+    };
+  } });
+  const canonical = await f.open();
+  const events = [];
+  canonical.subscribe(event => events.push(event));
+  let goalSettled = false;
+  const pendingGoal = f.provider.updateGoal(f.context, { action: "set", objective: "Tests pass" });
+  const goalResult = pendingGoal.then(value => {
+    goalSettled = true;
+    return { value };
+  }, error => {
+    goalSettled = true;
+    return { error };
+  });
+  const native = await sent.promise;
+  assert.equal(goalSettled, false);
+  assert.deepEqual(inputs.map(input => input.message), ["/goal Tests pass"]);
+  assert.deepEqual(await f.store.readConversationLog("test"), []);
+  let stopDeadline;
+  let stopped;
+  try {
+    stopped = await Promise.race([
+      f.provider.interruptTurn(f.context),
+      new Promise((_, reject) => {
+        stopDeadline = setTimeout(() => reject(new Error("Stop waited for the pending native goal acknowledgement.")), 2000);
+      })
+    ]);
+  } finally { clearTimeout(stopDeadline); }
+  assert.equal(stopped.interrupted, true);
+  assert.equal(stopped.thread.id, native.options.sessionId);
+  assert.equal(native.stopped, true, "the original managed stop is confirmed without a goal acknowledgement");
+  const result = await goalResult;
+  assert.equal(result.value, undefined);
+  assert.equal(result.error?.code, "assistant_claude_turn_failed");
+  assert.equal(result.error?.message, "Claude stopped before acknowledging the prompt.");
+  assert.equal(inputs.length, 1, "Stop never resends or replaces the original goal message");
+  const metadata = (await f.store.readSession("test")).metadata;
+  assert.equal(JSON.parse(metadata[`claude_conversation_${native.options.sessionId}`]).executionId, "");
+  assert.equal(metadata.runtime, undefined);
+  assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
+  assert.deepEqual(await f.store.readConversationLog("test"), []);
+  assert.equal(events.some(event => event.type === "accepted" || event.type === "transcript"), false);
+  await native.options.onEvent({ type: "user", uuid: inputs[0].messageId, session_id: native.options.sessionId });
+  assert.deepEqual(await f.store.readConversationLog("test"), [], "a late acknowledgement cannot recreate the stopped admission");
+});
+
+test("main Claude canonical goal acknowledgement leaves Stop available and cannot commit a failed goal", { timeout: 15000 }, async t => {
+  const sent = Promise.withResolvers();
+  const inputs = [];
+  const f = await boundMainFixture(t, { configureProcess(native) {
+    native.client.send = async (message, input) => {
+      inputs.push({ message, ...input });
+      sent.resolve(native);
+    };
+  } });
+  const canonical = await f.open();
+  const events = [];
+  canonical.subscribe(event => events.push(event));
+  let committed = 0;
+  const pending = f.provider.updateGoal({ ...f.context, canonicalGoal: true, onGoalResult: () => { committed++; } }, {
+    action: "set", expectedSegmentId: null, objective: "Tests pass", messageId: "unacknowledged-goal"
+  }).then(value => ({ value }), error => ({ error }));
+  const native = await sent.promise;
+  assert.equal(committed, 0);
+  assert.deepEqual(inputs.map(input => input.message), ["/goal Tests pass"]);
+  let deadline;
+  try {
+    assert.deepEqual(await Promise.race([canonical.cancel(), new Promise((_, reject) => {
+      deadline = setTimeout(() => reject(new Error("Canonical Stop waited for goal acknowledgement.")), 2000);
+    })]), { stopped: true });
+  } finally { clearTimeout(deadline); }
+  const result = await pending;
+  assert.equal(result.value, undefined);
+  assert.equal(result.error?.code, "assistant_claude_turn_failed");
+  assert.equal(result.error?.message, "Claude stopped before acknowledging the prompt.");
+  assert.equal(native.stopped, true);
+  assert.equal(committed, 0, "a rejected command never reaches the original application post-result policy");
+  assert.equal(inputs.length, 1);
+  assert.deepEqual(await f.store.readConversationLog("test"), []);
+  assert.equal((await f.store.readSession("test")).metadata.runtime, undefined);
+  assert.equal(events.some(event => event.type === "accepted" || event.type === "transcript"), false);
+  await native.options.onEvent({ type: "user", uuid: inputs[0].messageId, session_id: native.options.sessionId });
+  assert.deepEqual(await f.store.readConversationLog("test"), []);
+  assert.deepEqual(await canonical.inspectDelivery({ messageId: "unacknowledged-goal" }), {
+    status: "unknown", messageId: "unacknowledged-goal"
+  });
+  assert.equal(inputs.length, 1, "inspection never resends an unproven goal command");
+});
+
+
+test("main Claude terminal service uses the actual manager, shared runtime and native receipt owner", { timeout: 30000 }, async t => {
+  let removeFixture;
+  const f = await fixture({ after(callback) { removeFixture = callback; } });
+  let service;
+  t.after(async () => {
+    try { await service?.close(); }
+    finally { await removeFixture(); }
+  });
+  const store = createVibe64SessionStore({ projectContextRoot: f.root, projectRuntimeRoot: path.join(f.root, "runtime") });
+  await store.createSession({ sessionId: "test", runtimeKind: "genesis",
+    metadata: { ...f.context.session.metadata, label: "BoundClaude" } });
+  const runtime = { ...f.context.runtime, stateRoot: path.join(f.root, "runtime"),
+    projectContextRoot: f.root, store, getSession: id => store.readSession(id) };
+  const projectService = {
+    ...f.providerOptions.projectService,
+    createRuntime: () => runtime,
+    createSessionStore: () => store,
+    currentServiceDataRoot: () => path.join(f.root, "service-data"),
+    currentTargetRoot: () => f.root,
+    readCurrentProject: async () => ({ path: f.root, projectContextRoot: f.root,
+      sourceRoot: f.context.session.metadata.source_path, slug: "claude-main-fixture" }),
+    projectInspectionEnvironment: async () => ({ VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" }),
+    projectExecutionEnvironment: async () => ({}),
+    readEnv: async () => ({ ok: true, records: [] }),
+    runInProjectContext: async (_context, operation) => operation(),
+    saveEnvUserValues: async () => ({ ok: true })
+  };
+  // Only native inference is synthetic. The service, manager, provider, shared
+  // runtime, managed process transport and original session store are real.
+  const command = path.join(f.root, "service-claude.cjs");
+  const tracePath = path.join(f.root, "service-claude-trace.jsonl");
+  const goalAcknowledgementGate = path.join(f.root, "hold-goal-acknowledgement");
+  await writeFile(command, `#!${process.execPath}
+const { createInterface } = require('node:readline');
+const { appendFileSync, existsSync, mkdirSync } = require('node:fs');
+const path = require('node:path');
+const args = process.argv.slice(2);
+const emit = value => process.stdout.write(JSON.stringify(value) + '\\n');
+const trace = value => appendFileSync(${JSON.stringify(tracePath)}, JSON.stringify(value) + '\\n');
+trace({ args, pid: process.pid });
+if (args[0] === 'auth') {
+  emit({ loggedIn: true, authMethod: 'claude.ai', email: 'owner@example.test' });
+  process.exit(0);
+}
+const flag = args.includes('--resume') ? '--resume' : '--session-id';
+const conversationId = args[args.indexOf(flag) + 1];
+const directory = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', process.cwd().replace(/[^a-zA-Z0-9]/gu, '-'));
+mkdirSync(directory, { recursive: true });
+const record = value => appendFileSync(path.join(directory, conversationId + '.jsonl'), JSON.stringify(value) + '\\n');
+createInterface({ input: process.stdin }).on('line', async line => {
+  const frame = JSON.parse(line);
+  trace({ frame });
+  if (frame.type === 'control_request') {
+    emit({ type: 'control_response', response: { subtype: 'success', request_id: frame.request_id,
+      response: { models: [{ value: 'sonnet', supportedEffortLevels: ['high'] }] } } });
+    if (frame.request.subtype === 'interrupt') emit({ type: 'result', subtype: 'success', terminal_reason: 'aborted_streaming', result: '' });
+    return;
+  }
+  if (frame.type !== 'user') return;
+  record(frame);
+  const text = frame.message.content;
+  if (text.startsWith('/goal ')) {
+    while (existsSync(${JSON.stringify(goalAcknowledgementGate)})) await new Promise(resolve => setTimeout(resolve, 5));
+    const condition = text.slice(6);
+    record({ type: 'attachment', timestamp: new Date().toISOString(), attachment: {
+      type: 'goal_status', condition: condition === 'clear' ? 'Tests pass' : condition, sentinel: true, met: condition === 'clear'
+    } });
+    emit(frame);
+    if (condition === 'clear') emit({ type: 'result', subtype: 'success', result: '' });
+    return;
+  }
+  emit(frame);
+  emit({ type: 'stream_event', event: { type: 'message_start', message: { id: frame.uuid + '-reply' } } });
+  emit({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } });
+  emit({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Service progress' } } });
+});
+`, { mode: 0o700 });
+  const publications = [];
+  const streamed = Promise.withResolvers();
+  service = createTerminalService({ projectService,
+    env: { ...f.providerOptions.env, VIBE64_CLAUDE_COMMAND: command,
+      VIBE64_SYSTEM_ROOT: path.join(f.root, "system"), VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
+    codexTerminalController: { codexToolHomeRequired: false,
+      codexAppServerProviderOptions: { systemRoot: path.join(f.root, "system") } },
+    publishSessionChanged: { agentTerminal: async (_sessionId, event) => {
+      publications.push(event);
+      if (event.reason === "assistant-stream" && event.payload.conversationStream.messages.some(message => message.text === "Service progress")) streamed.resolve();
+    } }
+  });
+  const actor = { username: "service-owner", role: "owner" };
+  const options = { runtime, vibe64User: actor };
+  const actions = createActionCatalogue();
+  registerVibe64ActionContext(actions, {
+    projectContext: { projectsRoot: path.dirname(f.root), async readWorkspaceProject() {
+      return { project: { projectRoot: f.root, projectRuntimeRoot: runtime.stateRoot } };
+    } },
+    resolveUser: async () => actor,
+    authorizeProject: async ({ slug }) => assert.equal(slug, "claude-main-fixture")
+  });
+  const sessions = createSessionService({ actions, project: projectService, terminals: service });
+  actions.register({ contributorId: "test.claude-main-goals", domain: "vibe64",
+    actions: [...createSessionActions({ sessions }), ...createTerminalActions({ terminals: service })]
+      .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
+  const goalFacade = await sessions.browserConversations.open({
+    id: mainConversationId({ projectSlug: "claude-main-fixture", sessionId: "test" }), context: { channel: "internal", surface: "app" }
+  });
+  const goalProject = (await actions.execute({ actionId: ACTION_READ_CONVERSATION_CONTEXT,
+    input: { projectSlug: "claude-main-fixture", sessionId: "test" }, context: { channel: "internal", surface: "app" } })).project;
+  // Keep raw service calls in the same project namespace; each command still supplies its own actor.
+  await runWithProjectRequestContext({ ...goalProject, vibe64User: null }, async () => {
+    const emptyGoalRead = await goalFacade.readGoal();
+    assert.equal(emptyGoalRead.status, "available");
+    assert.equal(emptyGoalRead.goal, null);
+    const state = await service.agentSessionState("test", { ...options, session: await store.readSession("test") });
+    assert.ok(state.thread.id);
+    assert.equal(emptyGoalRead.target.segmentId, `claude:${state.thread.id}`,
+      "the empty-goal read returns its selected identity without a second target lookup");
+    const trace = async () => {
+      try { return (await readFile(tracePath, "utf8")).trim().split("\n").filter(Boolean).map(JSON.parse); }
+      catch (error) { if (error.code === "ENOENT") return []; throw error; }
+    };
+    assert.equal((await trace()).some(row => row.args?.includes("--print")), false, "inspection does not start native inference");
+    const request = { message: "Work", messageId: "service-main" };
+    const sent = await service.sendAgentMessage("test", request, options);
+    assert.equal(sent.delivered, true);
+    assert.equal(sent.thread.id, state.thread.id);
+    await streamed.promise;
+    assert.ok(publications.some(event => event.reason === "claude-stream-message-delivered"));
+    assert.equal((await service.agentSessionState("test", { ...options, session: await store.readSession("test") })).turn.active, true);
+    assert.equal((await service.sendAgentMessage("test", request, options)).duplicate, true);
+    let rows = await store.readConversationLog("test");
+    assert.deepEqual(rows.flatMap(turn => turn.messages).filter(message => message.role === "user").map(message => message.messageId), ["service-main"]);
+    assert.equal(rows[0].metadata.actorId, actor.username);
+    assert.equal((await trace()).filter(row => row.frame?.type === "user").length, 1, "duplicate delivery never invokes native Send again");
+    assert.equal((await trace()).filter(row => row.args?.includes("--print")).length, 1);
+    const stopped = await service.interruptAgentTurn("test", {}, options);
+    assert.equal(stopped.interrupted, true);
+    const nativePid = (await trace()).find(row => row.args?.includes("--print")).pid;
+    assert.throws(() => process.kill(nativePid, 0), { code: "ESRCH" }, "Stop returns only after the managed native process has exited");
+    assert.equal((await service.agentSessionState("test", { ...options, session: await store.readSession("test") })).turn.active, false);
+    assert.equal(JSON.parse((await store.readSession("test")).metadata[`claude_conversation_${state.thread.id}`]).executionId, "");
+
+    async function startGoal(input, representation) {
+      const before = (await trace()).filter(row => row.frame?.type === "user").length;
+      const deadline = Date.now() + 5000;
+      let result;
+      for (;;) {
+        result = representation?.canonical
+          ? await goalFacade.updateGoal(input)
+          : await service.updateAgentGoal("test", { ...options, ...input }, representation);
+        if (result?.ok !== false || result.code !== "vibe64_agent_write_mode_busy" || result.retryable !== true) break;
+        assert.equal((await trace()).filter(row => row.frame?.type === "user").length, before,
+          "the original write-mode busy response rejects before native goal admission");
+        if (Date.now() >= deadline) break;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      return result;
+    }
+    const started = await startGoal({ action: "set", objective: "Tests pass" });
+    assert.equal(started.ok, true, JSON.stringify(started));
+    assert.equal(started.threadId, state.thread.id);
+    assert.equal(started.goal.status, "active");
+    const goal = { threadId: started.threadId, createdAt: started.goal.createdAt, objective: started.goal.objective };
+    await assert.rejects(service.updateAgentGoal("test", { ...options, ...goal, action: "pause", createdAt: -1 }), /goal changed/u);
+    const paused = await service.updateAgentGoal("test", { ...options, ...goal, action: "pause" });
+    assert.equal(paused.goal.status, "paused");
+    assert.equal((await service.readAgentGoal("test", options)).goal.status, "paused");
+    assert.deepEqual((await trace()).filter(row => row.frame?.type === "user").map(row => row.frame.message.content), ["Context: Work", "/goal Tests pass"]);
+    assert.equal((await trace()).filter(row => row.args?.includes("--print")).length, 2);
+    rows = await store.readConversationLog("test");
+    assert.equal(rows.flatMap(turn => turn.messages).filter(message => message.role === "user").length, 2);
+    assert.equal(rows.some(turn => turn.metadata.runtime), false);
+    const metadata = (await store.readSession("test")).metadata;
+    assert.equal(metadata.runtime, undefined);
+    assert.equal(JSON.parse(metadata.assistant_changeover).engines.claude.pending, undefined);
+    assert.equal(metadata.claude_conversation_id, state.thread.id);
+
+    await service.updateAgentGoal("test", { ...options, ...goal, action: "cancel" });
+    const routedSelection = { ...defineVibe64AssistantSelection(f.context.assistantSelection), selectionSource: "explicit" };
+    await createAssistantRoutingStore({ systemRoot: path.join(f.root, "system") }).write({
+      claude: { senior: routedSelection, junior: routedSelection }
+    }, 0);
+    await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "senior", workflowEngineId: "claude" }));
+    await writeFile(goalAcknowledgementGate, "hold");
+    let canonicalSettled = false;
+    const canonicalCommand = { action: "set", expectedSegmentId: `claude:${state.thread.id}`,
+      objective: "Verify the service", messageId: "service-canonical-goal" };
+    const canonicalResult = startGoal(canonicalCommand, { canonical: true }).then(value => {
+      canonicalSettled = true;
+      return { value };
+    }, error => {
+      canonicalSettled = true;
+      return { error };
+    });
+    const nativeObjective = assistantModePrompt("senior", canonicalCommand.objective);
+    const frameDeadline = Date.now() + 5000;
+    while (!(await trace()).some(row => row.frame?.type === "user" && row.frame.message.content === `/goal ${nativeObjective}`)) {
+      if (canonicalSettled) {
+        const result = await canonicalResult;
+        assert.fail(`Canonical goal ended before dispatch: ${result.error?.message || JSON.stringify(result)}`);
+      }
+      assert.ok(Date.now() < frameDeadline, "canonical service goal reached the original native sender");
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.equal(canonicalSettled, false);
+    assert.equal((await store.readSession("test")).metadata.assistant_routing_goal, undefined,
+      "preparing and writing native history does not commit the application goal pin before acknowledgement");
+    assert.equal((await store.readConversationLog("test")).some(turn => turn.user?.messageId === canonicalCommand.messageId), false);
+    await rm(goalAcknowledgementGate);
+    const accepted = await canonicalResult;
+    assert.equal(accepted.error, undefined);
+    assert.equal(accepted.value.status, "accepted");
+    assert.equal(accepted.value.messageId, canonicalCommand.messageId);
+    assert.doesNotMatch(JSON.stringify(accepted.value), /"(?:nativeResult|session|threadId)"\s*:/u);
+    let pinned = JSON.parse((await store.readSession("test")).metadata.assistant_routing_goal);
+    assert.equal(pinned.objective, canonicalCommand.objective);
+    assert.equal(pinned.selection.engineId, "claude");
+    assert.equal(pinned.status, "active");
+    const readView = await goalFacade.readGoal();
+    const visible = readView.goal;
+    assert.equal(readView.target.segmentId, `claude:${state.thread.id}`);
+    assert.equal(readView.target.capabilities.goalBudgets, false);
+    assert.equal(readView.target.capabilities.goalCommands.set.delivery, "message");
+    assert.equal(readView.target.capabilities.goalCommands.pause.delivery, "control");
+    assert.equal(visible.objective, canonicalCommand.objective);
+    const nativeHistory = await readClaudeHistory({ configRoot: f.providerOptions.env.CLAUDE_CONFIG_DIR,
+      workdir: f.context.session.metadata.source_path, conversationId: state.thread.id });
+    assert.equal(nativeHistory.goal.objective, nativeObjective);
+    assert.equal(visible.id, createHash("sha256").update(JSON.stringify([
+      state.thread.id, nativeHistory.goal.createdAt, nativeObjective
+    ])).digest("hex"), "display decoration never changes the canonical native identity");
+    const pinBeforeDuplicate = (await store.readSession("test")).metadata.assistant_routing_goal;
+    const nativeMessagesBeforeDuplicate = (await trace()).filter(row => row.frame?.type === "user").length;
+    const duplicateGoal = await startGoal({ ...canonicalCommand, objective: "A changed retry" }, { canonical: true });
+    assert.equal(duplicateGoal.duplicate, true);
+    assert.equal(duplicateGoal.turnId, accepted.value.turnId);
+    assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate);
+    assert.equal((await store.readSession("test")).metadata.assistant_routing_goal, pinBeforeDuplicate,
+      "an existing UUID has no new native result and cannot commit a different goal pin");
+    const differentSelection = { ...f.context.assistantSelection, engineId: "codex", agentId: "codex",
+      modelProviderId: "openai", modelId: "gpt-6-astra" };
+    await store.writeMetadataValue("test", "assistant_selection", JSON.stringify(differentSelection));
+    const stoppingOptions = { runtime, vibe64User: { username: "reader", role: "member" } };
+    const pinnedRead = await service.readAgentGoal("test", stoppingOptions, { canonical: true });
+    assert.equal(pinnedRead.goal.id, visible.id);
+    assert.equal(pinnedRead.target.segmentId, canonicalCommand.expectedSegmentId);
+    assert.equal(pinnedRead.routing.selection.engineId, "claude");
+    const stoppedGoal = await service.updateAgentGoal("test", { ...stoppingOptions, action: "pause",
+      expectedSegmentId: canonicalCommand.expectedSegmentId, expectedGoalId: visible.id }, { canonical: true });
+    assert.equal(stoppedGoal.status, "paused");
+    assert.equal((await store.readSession("test")).metadata.assistant_selection, JSON.stringify(differentSelection),
+      "read and Pause retain the pinned goal target without rebinding the visible chat");
+    pinned = JSON.parse((await store.readSession("test")).metadata.assistant_routing_goal);
+    assert.equal(pinned.status, "paused");
+    assert.equal(pinned.selection.engineId, "claude");
+    rows = await store.readConversationLog("test");
+    assert.equal(rows.filter(turn => turn.user?.messageId === canonicalCommand.messageId).length, 1);
+    assert.equal(rows.some(turn => turn.metadata.runtime), false);
+    assert.equal((await store.readSession("test")).metadata.runtime, undefined);
+  });
+});
+
+
+test("Claude native status frames preserve forwarding before usage and goal publication", async (t) => {
+  const f = await fixture(t);
+  const events = [];
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    async publishSessionChanged(_id, event) {
+      if (["claude-goal", "claude-plan-usage"].includes(event.reason)) events.push(["published", event.reason]);
+    }
+  });
+  t.after(() => release.resolve());
+  const context = { ...f.context, async onEvent(event) {
+    if (event.type !== "provider-event") return;
+    events.push(["forwarded", event]);
+    if (event.event.type === "rate_limit_event") {
+      entered.resolve();
+      await release.promise;
+    }
+  } };
+  const sent = await provider.sendMessage(context, { message: "Hello", messageId: "status-order" });
+  const native = f.processes[0];
+  let usageReads = 0;
+  native.client.request = async request => {
+    assert.equal(request.subtype, "get_usage");
+    usageReads++;
+    return { rate_limits_available: true, rate_limits: { seven_day: { utilization: 25 } } };
+  };
+  await provider.readPlanUsage(context);
+  await provider.readPlanUsage(context);
+  assert.equal(usageReads, 1);
+  events.length = 0;
+  const usageFrame = { type: "rate_limit_event", session_id: sent.thread.id };
+  const received = native.options.onEvent(usageFrame);
+  await entered.promise;
+  const forwarded = frame => ({ type: "provider-event", event: frame, providerId: "claude",
+    threadId: sent.thread.id, turnId: sent.turn.id });
+  assert.deepEqual(events, [["forwarded", forwarded(usageFrame)]]);
+  await provider.readPlanUsage(context);
+  assert.equal(usageReads, 1, "forwarding completes before the cached usage is invalidated");
+  release.resolve();
+  await received;
+  assert.deepEqual(events, [["forwarded", forwarded(usageFrame)], ["published", "claude-plan-usage"]]);
+  await provider.readPlanUsage(context);
+  assert.equal(usageReads, 2);
+
+  events.length = 0;
+  const goalFrame = { type: "active_goal", session_id: sent.thread.id };
+  await native.options.onEvent(goalFrame);
+  assert.deepEqual(events, [["forwarded", forwarded(goalFrame)], ["published", "claude-goal"]]);
+  await provider.readPlanUsage(context);
+  assert.equal(usageReads, 2, "a goal update does not invalidate account usage");
+  assert.equal(f.processes.length, 1);
 });

@@ -8,7 +8,7 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createRuntimePackage, RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
-import { buildNodeBundle } from "../../tooling/release/server-build.mjs";
+import { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle } from "../../tooling/release/server-build.mjs";
 import { verifyRuntime } from "../../tooling/release/verify-runtime.mjs";
 
 const execute = promisify(execFile);
@@ -52,6 +52,85 @@ test("bundles relocate module URLs without rewriting generated worker source", a
   }
 });
 
+test("bundled assistant file runtime preserves lazy optional SQL imports after relocation", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-assistant-sql-bundle-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const appRoot = path.join(root, "source");
+  await mkdir(appRoot);
+  await symlink(path.join(sourceRoot, "node_modules"), path.join(appRoot, "node_modules"));
+  const entryPoint = path.join(appRoot, "entry.mjs");
+  await writeFile(entryPoint, `
+    import assert from "node:assert/strict";
+    import { AssistantFeature } from "@jskit-ai/assistant-runtime/server";
+    import { createConversationRuntime, createFileConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
+    import { createActionProvider } from "@jskit-ai/kernel/server/actions";
+    import { createCapabilityRuntime, defineProvider } from "@jskit-ai/kernel/shared/capabilities";
+    const conversations = createConversationRuntime({
+      storage: createFileConversationStorage({ directory: ${JSON.stringify(path.join(root, "conversations"))} }),
+      authorize: ({ context }) => context.actor?.id === "42",
+      connections: { resolve() { throw new Error("Reading must not invoke inference."); } }
+    });
+    const conversation = await conversations.open({ id: "chat", context: { actor: { id: "42" } },
+      configuration: { integrationId: "selected", systemPrompt: "Answer briefly." } });
+    const valueProvider = (capability, value) => defineProvider({ id: capability,
+      provides: { value: capability }, setup: () => ({ value }) });
+    const routes = [];
+    let assistant, actions;
+    const host = createCapabilityRuntime({ providers: [createActionProvider(),
+      valueProvider("runtime.config", {
+        surfaceDefinitions: { home: { enabled: true, requiresWorkspace: false } },
+        assistantSurfaces: { home: { settingsSurfaceId: "home", configScope: "global" } }
+      }),
+      valueProvider("runtime.env", {}),
+      valueProvider("runtime.http", { router: { register(...route) { routes.push(route); } } }),
+      valueProvider("runtime.database", { get knex() { throw new Error("File storage must not touch the host database."); } }),
+      valueProvider("assistant.conversations", conversations),
+      AssistantFeature,
+      defineProvider({ id: "observer", requires: { assistant: "assistant.runtime", actions: "runtime.actions" },
+        setup(values) { ({ assistant, actions } = values); return {}; } })
+    ] });
+    try {
+      await host.start();
+      assert.equal(assistant.conversationRuntime, conversations);
+      assert.equal(assistant.services.config, null);
+      assert.equal(assistant.services.chat, undefined);
+      assert.equal((await conversation.read()).id, "chat");
+      assert.ok(actions.listDefinitions().some(entry => entry.id === "assistant.conversation.read"));
+      assert.ok(routes.some(([method, path]) => method === "GET" && path.endsWith("/:conversationId")));
+      console.log("relocated file-backed assistant ready without SQL");
+    } finally {
+      await host.shutdown();
+      await conversations.close();
+    }
+  `);
+  const outfile = path.join(root, "relocated/entry.mjs");
+  const result = await buildNodeBundle({ appRoot, entryPoint, outfile, plugins: [{
+    name: "reject-assistant-database-resolution",
+    setup(build) {
+      build.onResolve({ filter: /^(?:@jskit-ai\/database-runtime|knex)(?:\/|$)/ }, args => ({
+        errors: [{ text: `Unexpected database resolution: ${args.path}` }]
+      }));
+    }
+  }] });
+  const imports = Object.values(result.metafile.outputs).flatMap(output => output.imports);
+  const sqlImports = imports.filter(entry => entry.path.includes("/repositories/"));
+  assert.deepEqual(sqlImports.map(entry => entry.path).sort(), ASSISTANT_SQL_RUNTIME_ENTRIES.map(entry => `./${entry}`).sort());
+  assert.ok(sqlImports.every(entry => entry.external && entry.kind === "dynamic-import"));
+  assert.ok(!Object.keys(result.metafile.inputs).some(entry =>
+    /\/repositories\/(?:assistantConfigRepository|conversationsRepository|messagesRepository|repositoryPersistenceUtils)\.js$/u.test(entry)));
+  const child = await execute(process.execPath, ["--input-type=module", "--eval", `
+    import { registerHooks } from "node:module";
+    registerHooks({ resolve(specifier, context, nextResolve) {
+      if (/^(?:@jskit-ai\\/database-runtime|knex)(?:\\/|$)/.test(specifier)) {
+        throw new Error("Unexpected database import: " + specifier);
+      }
+      return nextResolve(specifier, context);
+    } });
+    await import(${JSON.stringify(pathToFileURL(outfile).href)});
+  `], { cwd: path.dirname(outfile), timeout: 10000 });
+  assert.match(child.stdout, /relocated file-backed assistant ready without SQL/u);
+});
+
 test("runtime release relocates, runs native and browser services, and packs without the development graph", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-runtime-package-test-"));
   try {
@@ -61,6 +140,8 @@ test("runtime release relocates, runs native and browser services, and packs wit
       await cp(path.join(sourceRoot, entry), path.join(appRoot, entry), { recursive: true });
     }
     await symlink(path.join(sourceRoot, "node_modules"), path.join(appRoot, "node_modules"));
+    const installedAssistantDatabase = await readFile(path.join(appRoot, "node_modules/@jskit-ai/database-runtime/package.json"), "utf8")
+      .catch(error => { if (error.code === "ENOENT") return null; throw error; });
     await mkdir(path.join(appRoot, "dist/assets"), { recursive: true });
     await writeFile(path.join(appRoot, "dist/index.html"), '<!doctype html><script type="module" src="/assets/proof.js"></script>');
     await writeFile(path.join(appRoot, "dist/assets/proof.js"), 'export const ready = true;');
@@ -125,6 +206,15 @@ test("runtime release relocates, runs native and browser services, and packs wit
     assert.match(codexProcess.stdout, /packaged Codex child, model catalogue and history adapter ready/u);
     await assert.rejects(readFile(descriptor), { code: "ENOENT" });
     const manifest = JSON.parse(await readFile(path.join(installed, "package.json"), "utf8"));
+    for (const entry of ASSISTANT_SQL_RUNTIME_ENTRIES) {
+      assert.ok(RUNTIME_ENTRIES.includes(entry));
+      assert.ok((await readFile(path.join(installed, entry), "utf8")).length > 0);
+    }
+    if (installedAssistantDatabase === null) {
+      assert.equal(manifest.dependencies["@jskit-ai/database-runtime"], undefined);
+      assert.ok(!manifest.bundleDependencies.includes("@jskit-ai/database-runtime"));
+      await assert.rejects(readFile(path.join(installed, "node_modules/@jskit-ai/database-runtime/package.json")), { code: "ENOENT" });
+    }
     assert.ok(manifest.dependencies["node-pty"]);
     assert.ok(manifest.dependencies["genesis-compiler"]);
     for (const driver of ["mysql2", "pg"]) {

@@ -1,5 +1,17 @@
+import { createSessionConversationBinding, prepareSessionConversationDisposal } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import { opencodeTerminalNamespace } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
+import { registerVibe64ActionContext } from "../../packages/vibe64-core/src/server/actionContext.js";
+import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
+import { createService as createSessionService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import assert from "node:assert/strict";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
@@ -27,6 +39,25 @@ import {
 } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 
 import { agents, controllerHarness, providerDefinition } from "../fixtures/opencodeController.js";
+
+function throughCommonScopedConversation(controller) {
+  const provider = controller.provider;
+  const runtime = createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context, input, operation }) => operation === "dispose"
+      ? prepareSessionConversationDisposal(provider, id, context, input)
+      : createSessionConversationBinding(provider, id, context) }
+  });
+  const native = (method) => async (sessionId, input = {}, options = {}) => {
+    const conversation = await runtime.open({ id: sessionId, representation: "native",
+      context: { ...options, sessionId, scopedConversationId: input.conversationId } });
+    return conversation[method](input);
+  };
+  return { ...controller,
+    startConversationTurn: native("send"), readConversation: native("read"),
+    waitForConversationTurn: native("wait"), stopConversation: native("cancel"),
+    deleteConversation: native("dispose") };
+}
 
 test("OpenCode conversation events retain exact text snapshots and deltas for live replies", async (t) => {
   const harness = await controllerHarness({ providerEvents: [
@@ -1073,27 +1104,34 @@ test("OpenCode persists a user message and its display attachments only after up
   assert.equal(idle?.[1]?.payload?.agentSession?.turn?.state, "idle");
 });
 
-test("OpenCode reuses an established session without repeating setup or model switches", async (t) => {
-  const harness = await controllerHarness({
+for (const throughCommonMain of [false, true]) {
+  test(`OpenCode reuses an established session without repeating setup or model switches${throughCommonMain ? " through the common Main handle" : ""}`, async (t) => {
+  const fixtureOptions = {
     assistantResponses: ["First turn", "Second turn"],
     withCommandBoundary: true
-  });
-  t.after(async () => {
+  };
+  const harness = throughCommonMain
+    ? await boundMainOpenCodeFixture(t, fixtureOptions)
+    : await controllerHarness(fixtureOptions);
+  if (!throughCommonMain) t.after(async () => {
     await harness.controller.closeAllForProject();
     await rm(harness.root, { force: true, recursive: true });
   });
+  const sendMessage = throughCommonMain
+    ? (sessionId, input, options) => harness.manager.sendMessage(sessionId, input, { ...harness.context, ...options, sessionId })
+    : (...args) => harness.controller.sendMessage(...args);
   const options = {
     runtime: harness.runtime,
     session: harness.session,
     vibe64User: { username: "ada" }
   };
 
-  await harness.controller.sendMessage("session-1", {
+  await sendMessage("session-1", {
     message: "First",
     messageId: "client-message-fast-path-1"
   }, options);
   await harness.controller.waitForTurn("session-1", options);
-  await harness.controller.sendMessage("session-1", {
+  await sendMessage("session-1", {
     message: "Second",
     messageId: "client-message-fast-path-2"
   }, options);
@@ -1114,6 +1152,7 @@ test("OpenCode reuses an established session without repeating setup or model sw
   assert.equal(Object.hasOwn(harness.promptCalls[0].input.prompt, "turnContext"), false);
   assert.equal(Object.hasOwn(harness.promptCalls[1].input.prompt, "turnContext"), false);
 });
+}
 
 test("OpenCode renders explicit Deslop through Genesis and leaves later follow-ups ordinary", async (t) => {
   const harness = await controllerHarness({
@@ -2062,6 +2101,7 @@ test("non-project ephemeral conversations use OpenCode's guarded host agent with
   const harness = await controllerHarness({
     helperResponse: "The trusted host snapshot needs attention."
   });
+  harness.controller = throughCommonScopedConversation(harness.controller);
   t.after(async () => {
     await harness.controller.closeAllForProject();
     await rm(harness.root, { force: true, recursive: true });
@@ -2133,6 +2173,7 @@ test("non-project ephemeral conversations use OpenCode's guarded host agent with
 test("scoped OpenCode helpers retain bounded policy and cleanup without rebinding main chat", async (t) => {
   const limit = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS.request_routing.maxOutputCharacters;
   const harness = await controllerHarness({ helperResponse: "x".repeat(limit + 1) });
+  harness.controller = throughCommonScopedConversation(harness.controller);
   t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
   await harness.controller.ensureSession("session-1");
   const before = structuredClone(harness.session);
@@ -2173,6 +2214,7 @@ test("scoped OpenCode helpers retain bounded policy and cleanup without rebindin
 test("sequential scoped OpenCode helpers reuse the service after removing their private conversations", async (t) => {
   const deleted = [];
   const harness = await controllerHarness({ helperResponse: "Plan", beforeDeleteSession: id => deleted.push(id) });
+  harness.controller = throughCommonScopedConversation(harness.controller);
   t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
   for (const id of ["router_first", "router_second"]) {
     const assistantScope = { id, environment: {}, workdir: path.join(harness.root, id),
@@ -2723,40 +2765,538 @@ for (const [label, failure, expected] of [
   });
 }
 
-
-test("OpenCode conversation-only Undo retries exact message deletion and never calls file revert", async (t) => {
-  const rows = [];
-  const deletions = [];
-  let failAfterDelete = true;
-  const client = {
-    health: async () => ({ healthy: true }),
-    sessionStatus: async () => ({ type: "idle" }),
-    messages: async () => ({ data: rows }),
-    forDirectory() { return this; },
-    async deleteMessage(_id, id) {
-      deletions.push(id);
-      rows.splice(rows.findIndex((row) => row.id === id), 1);
-      if (failAfterDelete) { failAfterDelete = false; throw new Error("delete response lost"); }
-      return true;
+async function boundMainOpenCodeFixture(t, options = {}) {
+  let conversations;
+  const harness = await controllerHarness({ ...options,
+    async onSessionChanged(id, event) {
+      await options.onSessionChanged?.(id, event);
+      if (conversations) await conversations.publishNative({ namespace: opencodeTerminalNamespace(id), sessionId: id, event });
     }
-  };
-  const h = await controllerHarness({ serverClient: client });
-  t.after(async () => {
-    await h.controller.closeAllForProject();
-    await rm(h.root, { force: true, recursive: true });
   });
-  h.session.metadata.opencode_conversation_id = "ses_rewind";
-  // These IDs are the provider's deterministic ordinary prompt IDs.
-  const { createHash } = await import("node:crypto");
-  const id = (value) => `msg_vibe64_${createHash("sha256").update(value).digest("hex").slice(0, 40)}`;
-  rows.push({ id: id("first"), type: "user" }, { id: "answer-1", type: "assistant" },
-    { id: id("second"), type: "user" }, { id: "answer-2", type: "assistant" }, { id: "tool-2", type: "assistant" });
-  const plan = await h.controller.rewindConversation("session-1", { messageId: "second", previousMessageId: "first" });
-  await assert.rejects(h.controller.rewindConversation("session-1", plan), /delete response lost/);
-  await h.controller.rewindConversation("session-1", plan);
-  await h.controller.rewindConversation("session-1", plan);
-  assert.deepEqual(deletions, ["tool-2", "answer-2", id("second")]);
-  assert.deepEqual(rows.map((row) => row.id), [id("first"), "answer-1"]);
-  rows.push({ id: "unexpected", type: "user" });
-  await assert.rejects(h.controller.rewindConversation("session-1", plan), /conversation changed/);
+  const store = createVibe64SessionStore({ projectContextRoot: harness.root,
+    projectRuntimeRoot: path.join(harness.root, "runtime") });
+  await store.createSession({ sessionId: "session-1", runtimeKind: "genesis" });
+  for (const [key, value] of Object.entries(harness.session.metadata)) await store.writeMetadataValue("session-1", key, value);
+  // The existing fake native client selects its response by this saved identity.
+  // Mirror fixture metadata only; every durable write uses the actual app store.
+  const writeMetadata = store.writeMetadataValue;
+  store.writeMetadataValue = async (id, key, value) => {
+    const result = await writeMetadata(id, key, value);
+    harness.session.metadata[key] = value;
+    return result;
+  };
+  harness.runtime.store = store;
+  harness.runtime.getSession = id => store.readSession(id);
+  const context = { runtime: harness.runtime, sessionId: "session-1", providerId: "opencode",
+    vibe64User: { id: "owner", username: "Owner", role: "owner" } };
+  conversations = createConversationRuntime({ authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+      ? prepareSessionConversationDisposal(provider, id, context, input)
+      : createSessionConversationBinding(provider, id, {
+      ...context, prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
+    }) }
+  });
+  const provider = harness.controller.provider;
+  const manager = createSessionAgentManager({ conversationRuntime: conversations, providers: [provider],
+    readAssistantAccess: async () => ({ available: true, ownerOnly: false,
+      connectionIdentity: harness.connection.fingerprint, endpointCode: harness.connection.endpointCode })
+  });
+  t.after(async () => {
+    try { await conversations.close(); await harness.controller.closeAllForProject(); }
+    finally { await rm(harness.root, { force: true, recursive: true }); }
+  });
+  return { ...harness, store, conversations, provider, manager, context,
+    open: (representation = "canonical") => conversations.open({ id: "session-1", context, representation }) };
+}
+
+test("main OpenCode binds the original receipt, stream, steering and native identity", { timeout: 15000 }, async t => {
+  const first = { pending: true, text: "First partial" };
+  const second = { pending: true, text: "Steered partial" };
+  const streamed = Promise.withResolvers();
+  const f = await boundMainOpenCodeFixture(t, { assistantResponses: [first, second],
+    onSessionChanged(_id, event) {
+      if (event.reason === "assistant-stream" && event.payload.conversationStream.messages.length) streamed.resolve();
+    }
+  });
+  const canonical = await f.open();
+  const events = [];
+  const unsubscribe = await canonical.subscribe(event => events.push(event));
+  t.after(unsubscribe);
+  assert.equal((await canonical.read()).engine, "opencode");
+  assert.equal(f.processStarts.length, 0, "passive opening must not start native work");
+  const sent = await f.manager.sendMessage(f.context.sessionId, { message: "Initial task", messageId: "bound-open-first" }, f.context);
+  assert.equal(sent.delivered, true, JSON.stringify(sent));
+  await streamed.promise;
+  assert.equal((await canonical.read()).status, "working");
+  assert.equal((await f.manager.sessionState(f.context.sessionId, f.context)).thread.id, sent.thread.id);
+  assert.equal(f.promptCalls[0].input.delivery, "queue");
+  const steered = await f.manager.sendMessage(f.context.sessionId, { message: "Make it shorter", messageId: "bound-open-steer" }, f.context);
+  assert.equal(steered.deliveryMode, "steer");
+  assert.equal(f.promptCalls[1].input.delivery, "steer");
+  assert.equal(steered.thread.id, sent.thread.id);
+  second.pending = false;
+  second.text = "Finished more briefly.";
+  await f.controller.waitForTurn("session-1");
+  const saved = await f.store.readConversationLog("session-1");
+  assert.deepEqual(saved.filter(turn => turn.user).map(turn => turn.user.messageId), ["bound-open-first", "bound-open-steer"]);
+  assert.ok(saved.some(turn => turn.messages.some(message => message.text === "Finished more briefly.")));
+  assert.ok(saved.some(turn => turn.metadata.actorId === "Owner"));
+  assert.ok(events.some(event => event.type === "transcript" && event.patch.turn.user?.messageId === "bound-open-first"));
+  const count = f.promptCalls.length;
+  assert.equal((await f.manager.sendMessage(f.context.sessionId, { message: "Initial task", messageId: "bound-open-first" }, f.context)).duplicate, true);
+  assert.equal(f.promptCalls.length, count, "the original authored receipt must prevent a second native prompt");
+  assert.equal(f.processStarts.length, 1);
+  const session = await f.store.readSession("session-1");
+  assert.equal(session.metadata.opencode_conversation_id, sent.thread.id);
+  assert.equal(session.metadata.runtime, undefined);
+  assert.equal(saved.some(turn => turn.metadata.runtime), false);
+});
+
+test("main OpenCode Stop retains failed native cleanup and permits the original retry", { timeout: 15000 }, async t => {
+  let attempts = 0;
+  const f = await boundMainOpenCodeFixture(t, { assistantResponses: [{ pending: true, text: "" }],
+    interrupt: async () => ++attempts > 1 });
+  const sent = await f.manager.sendMessage(f.context.sessionId, { message: "Continue working", messageId: "bound-open-stop" }, f.context);
+  assert.equal(sent.delivered, true, JSON.stringify(sent));
+  await assert.rejects(f.manager.interruptTurn(f.context.sessionId, {}, f.context), { code: "vibe64_opencode_interrupt_unconfirmed" });
+  assert.equal((await f.manager.sessionState(f.context.sessionId, f.context)).turn.active, true);
+  const stopped = await f.manager.interruptTurn(f.context.sessionId, {}, f.context);
+  assert.equal(stopped.turn.state, "interrupted");
+  assert.equal(stopped.turn.active, false);
+  assert.equal(f.promptCalls.length, 1);
+  assert.equal(attempts, 2);
+  const next = await f.manager.sendMessage(f.context.sessionId, { message: "A new task", messageId: "bound-open-after-stop" }, f.context);
+  assert.equal(next.delivered, true, JSON.stringify(next));
+  assert.equal(f.promptCalls.at(-1).input.delivery, "queue");
+  await f.controller.waitForTurn("session-1");
+});
+
+
+async function mainOpenCodeServiceFixture(t, { actions = null, onSessionChanged = null, ...options } = {}) {
+  let removeFixture;
+  const f = await boundMainOpenCodeFixture({ after(callback) { removeFixture = callback; } }, options);
+  let service;
+  t.after(async () => {
+    try { await service?.close(); }
+    finally { await removeFixture(); }
+  });
+  await f.store.writeMetadataValue("session-1", "label", "BoundOpenCode");
+  const projectService = {
+    ...f.controllerOptions.projectService,
+    createRuntime: () => f.runtime,
+    createSessionStore: () => f.store,
+    currentTargetRoot: () => f.root,
+    readCurrentProject: async () => ({ path: f.root, projectContextRoot: f.root,
+      sourceRoot: f.session.metadata.source_path, slug: "opencode-main-fixture" }),
+    projectInspectionEnvironment: async () => ({ VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" }),
+    projectExecutionEnvironment: async () => ({}),
+    readEnv: async () => ({ ok: true, records: [] }),
+    runInProjectContext: async (_context, operation) => operation(),
+    saveEnvUserValues: async () => ({ ok: true })
+  };
+  const publications = [];
+  service = createTerminalService({ actions, projectService,
+    env: { ...f.controllerOptions.env, VIBE64_SYSTEM_ROOT: path.join(f.root, "system"),
+      VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
+    codexTerminalController: { codexToolHomeRequired: false,
+      codexAppServerProviderOptions: { systemRoot: path.join(f.root, "system") } },
+    opencodeTerminalController: f.controllerOptions,
+    publishSessionChanged: { agentTerminal: async (id, event) => {
+      publications.push(event);
+      await onSessionChanged?.(id, event);
+    } }
+  });
+  service.configureAssistantRuntime({
+    listConnections: f.controllerOptions.listConnections,
+    resolveConnection: f.controllerOptions.resolveConnection,
+    readAssistantAccess: async () => ({ available: true, ownerOnly: false,
+      connectionIdentity: f.connection.fingerprint, endpointCode: f.connection.endpointCode })
+  });
+  return { ...f, service, projectService, publications };
+}
+
+test("main OpenCode terminal service retains original admission, streaming and Stop", { timeout: 30000 }, async t => {
+  const response = { pending: true, text: "Service progress" };
+  const streamed = Promise.withResolvers();
+  const f = await mainOpenCodeServiceFixture(t, {
+    assistantResponses: [response],
+    onSessionChanged(_id, event) {
+      if (event.reason === "assistant-stream" && event.payload.conversationStream.messages.some(message => message.text === "Service progress")) streamed.resolve();
+    }
+  });
+  const { service, publications } = f;
+  const actor = { id: "service-owner", username: "service-owner", role: "owner" };
+  const options = { runtime: f.runtime, vibe64User: actor };
+  assert.equal((await service.agentSessionState("session-1", options)).ok, true);
+  assert.equal(f.processStarts.length, 0, "state inspection does not start a native server");
+  const request = { message: "Work", messageId: "service-open-main" };
+  const sent = await service.sendAgentMessage("session-1", request, options);
+  assert.equal(sent.delivered, true, JSON.stringify(sent));
+  await streamed.promise;
+  assert.equal(f.processStarts.length, 1);
+  assert.equal((await service.agentSessionState("session-1", options)).thread.id, sent.thread.id);
+  assert.equal((await service.sendAgentMessage("session-1", request, options)).duplicate, true);
+  assert.equal(f.promptCalls.length, 1, "an authored duplicate never starts another native prompt");
+  assert.ok(publications.some(event => event.reason === "opencode-server-message-delivered"));
+  const stopped = await service.interruptAgentTurn("session-1", options);
+  assert.equal(stopped.ok, true, JSON.stringify(stopped));
+  assert.equal((await service.agentSessionState("session-1", options)).turn.active, false);
+  const rows = await f.store.readConversationLog("session-1");
+  assert.deepEqual(rows.filter(turn => turn.user).map(turn => turn.user.messageId), [request.messageId]);
+  assert.equal(rows[0].metadata.actorId, actor.username);
+  assert.equal(rows.some(turn => turn.metadata.runtime), false);
+  const metadata = (await f.store.readSession("session-1")).metadata;
+  assert.equal(metadata.runtime, undefined);
+  assert.equal(metadata.opencode_conversation_id, sent.thread.id);
+  assert.equal(JSON.parse(metadata.assistant_changeover).engines.opencode.pending, undefined);
+});
+
+
+test("main OpenCode preserves immediate native duplicates and ownership conflicts over an existing monitor", { timeout: 10000 }, async t => {
+  const f = await boundMainOpenCodeFixture(t, { assistantResponses: [{ pending: true, text: "Still working" }] });
+  const request = { message: "Keep working", messageId: "already-native" };
+  const original = await f.controller.sendMessage("session-1", request, f.context);
+  assert.equal(original.delivered, true);
+  const context = { ...f.context, turnOwnership: { threadId: original.thread.id, turnId: original.turn.id, reusable: false } };
+  const promptly = async operation => {
+    let timer;
+    try { return await Promise.race([operation, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Original immediate result waited for an unrelated native monitor.")), 750);
+    })]); } finally { clearTimeout(timer); }
+  };
+  const conflict = await promptly(f.manager.sendMessage(context.sessionId, { message: "Another user's instruction", messageId: "wrong-owner" }, context));
+  assert.equal(conflict.code, "vibe64_agent_turn_owner_conflict");
+  assert.equal(conflict.delivered, false);
+  const duplicate = await promptly(f.manager.sendMessage(f.context.sessionId, request, f.context));
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.delivered, true);
+  assert.equal(f.promptCalls.length, 1);
+  assert.equal((await f.controller.sessionState("session-1")).turn.active, true);
+  assert.equal((await f.manager.interruptTurn(f.context.sessionId, {}, f.context)).turn.active, false);
+});
+
+test("main OpenCode closes its retained native owner when the session is unreadable or removed", { timeout: 15000 }, async t => {
+  for (const unavailable of ["unreadable", "removed"]) {
+    const f = await boundMainOpenCodeFixture(t, { assistantResponses: [{ pending: true, text: "Still working" }] });
+    const handle = await f.open("native");
+    const sent = await f.manager.sendMessage(f.context.sessionId, {
+      message: "Keep working until closed", messageId: `close-${unavailable}`
+    }, f.context);
+    assert.equal(sent.delivered, true);
+    f.runtime.getSession = async () => {
+      if (unavailable === "unreadable") throw new Error("Session storage is unavailable.");
+      return null;
+    };
+    const closed = await f.manager.closeSession(f.context.sessionId, { ...f.context, session: null });
+    assert.equal(closed.ok, true, JSON.stringify(closed));
+    assert.equal(closed.processExitProof.exited, true);
+    assert.equal(f.processStops.length, 1, "the original native cleanup still stops its process");
+    await assert.rejects(handle.read(), { code: "conversation_closed" });
+    assert.equal((await f.manager.closeSession(f.context.sessionId, { ...f.context, session: null })).ok, true,
+      "an absent common entry falls back to the original idempotent resource close");
+  }
+});
+
+test("main OpenCode close retires delayed initialization without deleting a later binding", { timeout: 15000 }, async t => {
+  for (const outcome of ["resolve", "reject"]) {
+    const f = await boundMainOpenCodeFixture(t);
+    const readSession = f.runtime.getSession;
+    const waiting = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    let reads = 0;
+    f.runtime.getSession = (...args) => {
+      // First read builds the real host binding; the second is the retained
+      // entry's initialization read, before a provider has been opened.
+      if (++reads === 2) {
+        waiting.resolve();
+        return release.promise;
+      }
+      return readSession(...args);
+    };
+    const opening = f.open("native");
+    opening.catch(() => {});
+    t.after(() => release.resolve(null));
+    await waiting.promise;
+    assert.equal((await f.manager.closeSession(f.context.sessionId, f.context)).ok, true,
+      "resource cleanup does not await the blocked initialization read");
+    const replacement = await f.open("native");
+    if (outcome === "resolve") release.resolve(await readSession("session-1"));
+    else release.reject(new Error("The retired initialization read failed."));
+    await assert.rejects(opening, outcome === "resolve"
+      ? { code: "conversation_closed" } : /retired initialization read failed/);
+    f.runtime.getSession = async () => { throw new Error("Do not reopen the replacement to close it."); };
+    assert.equal((await f.manager.closeSession(f.context.sessionId, f.context)).ok, true);
+    await assert.rejects(replacement.read(), { code: "conversation_closed" },
+      "the late retired initializer must not remove the replacement from the retained map");
+    assert.equal(f.processStarts.length, 0, "passive binding and cleanup never start native work");
+  }
+});
+
+test("Main OpenCode browser facade keeps original action authority and live native state", { timeout: 30000 }, async t => {
+  const actions = createActionCatalogue();
+  const access = { allowed: true, user: { ...os.userInfo(), role: "owner" } };
+  const response = { pending: true, text: "Service progress" };
+  const privatePublication = Promise.withResolvers();
+  const deniedPublication = Promise.withResolvers();
+  const f = await mainOpenCodeServiceFixture(t, {
+    actions,
+    assistantResponses: [response],
+    onSessionChanged(_id, event) {
+      if (event.reason === "assistant-stream" &&
+          event.payload.conversationStream.messages.some(message => message.text === "Private progress")) {
+        privatePublication.resolve();
+      }
+    }
+  });
+  registerVibe64ActionContext(actions, {
+    projectContext: {
+      projectsRoot: path.dirname(f.runtime.projectContextRoot),
+      async readWorkspaceProject() {
+        return { project: { projectRoot: f.runtime.projectContextRoot, projectRuntimeRoot: f.runtime.stateRoot } };
+      }
+    },
+    resolveUser: async () => access.user,
+    async authorizeProject({ slug }) {
+      if (!access.allowed || slug !== "opencode-main-fixture") {
+        deniedPublication.resolve();
+        throw Object.assign(new Error("Project access denied."), { statusCode: 403 });
+      }
+    }
+  });
+  const sessions = createSessionService({ actions, project: f.projectService, terminals: f.service });
+  actions.register({ contributorId: "test.main-opencode-sessions", domain: "vibe64-sessions",
+    actions: createSessionActions({ sessions }).map(definition => ({
+      channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition
+    })) });
+  const id = mainConversationId({ projectSlug: "opencode-main-fixture", sessionId: "session-1" });
+  const context = { surface: "app", channel: "internal", requestMeta: { request: {
+    headers: { host: "localhost", origin: "http://localhost", "x-jskit-surface": "app" }
+  } } };
+  const facade = await sessions.browserConversations.open({ id, context });
+  const before = (await f.store.readSession("session-1")).metadata;
+  const initial = await facade.read();
+  assert.equal(initial.id, id);
+  assert.equal(initial.engine, "opencode");
+  assert.equal(initial.pagination.limit, 20);
+  assert.deepEqual(initial.conversationLog, await f.store.readConversationLog("session-1"));
+  assert.equal(initial.configuration, undefined);
+  assert.equal(initial.capabilities.goals, false);
+  assert.equal(initial.capabilities.goalCommands, undefined);
+  assert.equal(f.processStarts.length, 0, "the browser read never prepares a native provider");
+  assert.deepEqual((await f.store.readSession("session-1")).metadata, before);
+
+  const events = [];
+  const streamed = Promise.withResolvers();
+  const release = await facade.subscribe(event => {
+    events.push(event);
+    if (event.type === "message" && event.text === "Service progress") streamed.resolve();
+  });
+  try {
+    const input = { messageId: "main-opencode-browser-send", text: "Read the actual source" };
+    const sent = await facade.send(input);
+    assert.equal(sent.ok, true, JSON.stringify(sent));
+    assert.equal(sent.delivered, true);
+    await streamed.promise;
+    assert.equal((await facade.read()).status, "working");
+    assert.equal(f.processStarts.length, 1);
+    assert.equal((await facade.send(input)).delivered, true);
+    assert.equal(f.promptCalls.length, 1, "the original receipt prevents duplicate native dispatch");
+    for (const field of ["session", "turnId", "threadId", "nativeIdentity", "nativeResult", "status", "workdir"]) {
+      assert.equal(Object.hasOwn(sent, field), false, `Product acceptance must not expose ${field}`);
+    }
+    assert.ok(events.every(event => event.conversationId === id &&
+      !Object.hasOwn(event, "session") && !Object.hasOwn(event, "nativeResult")));
+
+    const eventCount = events.length;
+    access.allowed = false;
+    response.text = "Private progress";
+    // Observe the original native publication and the original action owner's
+    // denial before issuing another operation; a rejected read cannot satisfy
+    // this per-event authorization proof.
+    await Promise.all([privatePublication.promise, deniedPublication.promise]);
+    assert.equal(events.length, eventCount, "revoked project access stops retained browser publications");
+    await assert.rejects(facade.read(), { statusCode: 403 });
+    await assert.rejects(facade.send({ messageId: "revoked", text: "Do not send" }), { statusCode: 403 });
+    assert.equal(f.promptCalls.length, 1);
+    access.allowed = true;
+    const stopped = await facade.cancel();
+    assert.equal(stopped.ok, true, JSON.stringify(stopped));
+    assert.equal((await facade.read()).status, "ready");
+
+    const rows = await f.store.readConversationLog("session-1");
+    assert.deepEqual(rows.filter(turn => turn.user).map(turn => turn.user.messageId), [input.messageId]);
+    assert.equal(rows[0].metadata.actorId, access.user.username);
+    assert.equal(rows.some(turn => turn.metadata.runtime), false);
+    const metadata = (await f.store.readSession("session-1")).metadata;
+    assert.equal(metadata.runtime, undefined);
+    assert.equal(metadata.opencode_conversation_id, f.promptCalls[0].id);
+    assert.equal(JSON.parse(metadata.assistant_changeover).engines.opencode.pending, undefined);
+  } finally {
+    access.allowed = true;
+    release();
+  }
+});
+
+test("OpenCode renewal preserves ACK-write and stop failure ordering while retrying one native seed", { timeout: 15000 }, async (t) => {
+  const handover = renewalHandover();
+  const handoverHash = sessionRenewalHandoverHash(handover);
+  const acknowledgement = JSON.stringify({
+    handoverHash, message: "I am ready to continue from the approved handover.",
+    schemaVersion: "vibe64.session-renewal-acknowledgement.v1",
+    sourceCommit: renewalSource.commit, status: "ready"
+  });
+  const metadataReached = Promise.withResolvers();
+  const releaseMetadata = Promise.withResolvers();
+  const metadataFailure = new Error("The private successor metadata write failed.");
+  let historyReads = 0;
+  let allowStop = false;
+  const stoppedMetadata = [];
+  const harness = await controllerHarness({
+    assistantResponses: [acknowledgement],
+    beforeMessages() { historyReads += 1; },
+    beforePrompt() {
+      assert.equal(historyReads, 2, "Freshness and receipt history remain separate reads before dispatch");
+    },
+    stop() {
+      stoppedMetadata.push({ ...harness.session.metadata });
+      return { exited: allowStop, signal: "SIGTERM" };
+    }
+  });
+  const writeMetadata = harness.runtime.store.writeMetadataValue;
+  harness.runtime.store.writeMetadataValue = async (...args) => {
+    if (args[1] === "agent_renewal_seed_operation_id") {
+      metadataReached.resolve();
+      await releaseMetadata.promise;
+      throw metadataFailure;
+    }
+    return writeMetadata(...args);
+  };
+  t.after(async () => {
+    releaseMetadata.resolve();
+    allowStop = true;
+    harness.runtime.store.writeMetadataValue = writeMetadata;
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const input = { handover, handoverHash, oldThreadId: "predecessor-thread",
+    operationKey: "renewal:ordered-seed", source: renewalSource };
+  const options = { runtime: harness.runtime, session: harness.session };
+  const seeding = harness.controller.seedSessionRenewalHandover("session-1", input, options);
+  const rejectedWrite = assert.rejects(seeding, error => error === metadataFailure);
+  await metadataReached.promise;
+  assert.equal(harness.promptCalls.length, 1);
+  assert.equal(harness.processStops.length, 0, "Cleanup waits for the original metadata transaction");
+  releaseMetadata.resolve();
+  await rejectedWrite;
+  assert.equal(harness.processStops.length, 0, "A rejected metadata write does not enter cleanup");
+
+  harness.runtime.store.writeMetadataValue = writeMetadata;
+  await assert.rejects(harness.controller.seedSessionRenewalHandover("session-1", input, options),
+    { code: "vibe64_opencode_stop_unverified" });
+  assert.equal(harness.promptCalls.length, 1, "Accepted history is reconciled after the write failure");
+  assert.equal(stoppedMetadata.length, 1);
+  assert.equal(stoppedMetadata[0].agent_renewal_seed_operation_id, input.operationKey);
+  assert.equal(stoppedMetadata[0].agent_renewal_seed_handover_hash, handoverHash);
+  assert.equal(stoppedMetadata[0].agent_briefing_delivered, "yes");
+  assert.equal(stoppedMetadata[0].agent_briefing_delivered_at,
+    stoppedMetadata[0].agent_renewal_seed_acknowledged_at);
+
+  allowStop = true;
+  const result = await harness.controller.seedSessionRenewalHandover("session-1", input, options);
+  assert.equal(result.ok, true);
+  assert.equal(result.reconciled, true);
+  assert.equal(result.freshThread, false);
+  assert.equal(result.subscriptionDeferred, true);
+  assert.equal(result.acknowledgement.status, "ready");
+  assert.equal(result.handoverHash, handoverHash);
+  assert.equal(result.operationId, input.operationKey);
+  assert.deepEqual(result.source, renewalSource);
+  assert.deepEqual(result.processExitProof, { exited: true, signal: "SIGTERM" });
+  assert.equal(result.threadId, harness.session.metadata.agent_renewal_seed_thread_id);
+  assert.equal(result.turnId, harness.session.metadata.agent_renewal_seed_turn_id);
+  assert.equal(result.acknowledgedAt, harness.session.metadata.agent_renewal_seed_acknowledged_at);
+  assert.equal(harness.promptCalls.length, 1, "A failed native stop never resends the accepted seed");
+  assert.equal(stoppedMetadata.length, 2);
+  assert.equal(harness.userMessages.length, 0, "Hidden seeding creates no Main authored row");
+});
+
+test("OpenCode renewal rejects changed and unrelated native histories before dispatch", { timeout: 15000 }, async (t) => {
+  const handover = renewalHandover();
+  const handoverHash = sessionRenewalHandoverHash(handover);
+  let historyReads = 0;
+  const harness = await controllerHarness({
+    assistantResponses: [handover], beforeMessages() { historyReads += 1; }
+  });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const options = { runtime: harness.runtime, session: harness.session };
+  const { thread: { id: threadId } } = await harness.controller.ensureSession("session-1", options);
+  await assert.rejects(harness.controller.generateSessionRenewalHandover("session-1", {
+    operationId: "renewal:changed-predecessor", expectedThreadId: "different-thread", source: null
+  }, options), error => {
+    assert.equal(error.code, "vibe64_session_renewal_thread_mismatch");
+    assert.equal(error.statusCode, 409);
+    assert.deepEqual(error.details, { actualThreadId: threadId, expectedThreadId: "different-thread" });
+    return true;
+  });
+  const seed = { handover, handoverHash, operationId: "renewal:identity-seed", source: renewalSource };
+  for (const identity of [{ expectedThreadId: "different-thread" }, { oldThreadId: threadId }]) {
+    await assert.rejects(harness.controller.seedSessionRenewalHandover("session-1", { ...seed, ...identity }, options), error => {
+      assert.equal(error.code, "vibe64_session_renewal_fresh_thread_required");
+      assert.equal(error.statusCode, 409);
+      assert.deepEqual(error.details, { actualThreadId: threadId,
+        expectedThreadId: identity.expectedThreadId || "", forbiddenThreadId: identity.oldThreadId || "" });
+      return true;
+    });
+  }
+  assert.equal(historyReads, 0, "Identity rejection precedes native history and source prompt validation");
+  assert.equal(harness.promptCalls.length, 0);
+
+  const generated = await harness.controller.generateSessionRenewalHandover("session-1", {
+    operationId: "renewal:exact-predecessor", expectedThreadId: threadId, source: renewalSource
+  }, options);
+  assert.equal(generated.threadId, threadId);
+  assert.equal(generated.handover, handover);
+  assert.equal(generated.handoverHash, handoverHash);
+  assert.equal(harness.session.metadata.agent_renewal_handover_hash, handoverHash);
+  assert.equal(harness.processStops.length, 0, "Generating the handover does not close its predecessor");
+  const readsBeforeSeed = historyReads;
+  await assert.rejects(harness.controller.seedSessionRenewalHandover("session-1", {
+    ...seed, expectedThreadId: threadId, oldThreadId: "another-predecessor"
+  }, options), error => {
+    assert.equal(error.code, "vibe64_session_renewal_fresh_thread_required");
+    assert.equal(error.statusCode, 409);
+    assert.deepEqual(error.details, { threadId });
+    assert.match(error.message, /contains unrelated conversation/);
+    return true;
+  });
+  assert.equal(historyReads, readsBeforeSeed + 1);
+  assert.equal(harness.promptCalls.length, 1, "Unrelated successor history is rejected before another dispatch");
+});
+
+test("OpenCode renewal leaves an accepted seed available when ACK validation fails", { timeout: 15000 }, async (t) => {
+  const handover = renewalHandover();
+  const harness = await controllerHarness({ assistantResponses: ["{}"] });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const input = { handover, handoverHash: sessionRenewalHandoverHash(handover),
+    operationId: "renewal:invalid-ack", oldThreadId: "predecessor-thread", source: renewalSource };
+  const options = { runtime: harness.runtime, session: harness.session };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await assert.rejects(harness.controller.seedSessionRenewalHandover("session-1", input, options), error => {
+      assert.equal(error.code, "vibe64_session_renewal_acknowledgement_invalid");
+      assert.equal(error.details.handoverPromptAccepted, true);
+      assert.equal(error.details.threadId, harness.session.metadata.opencode_conversation_id);
+      assert.ok(error.details.turnId);
+      assert.ok(error.details.clientMessageId);
+      return true;
+    });
+    assert.equal(harness.promptCalls.length, 1);
+    assert.equal(harness.processStops.length, 0, "An invalid ACK does not enter native cleanup");
+    assert.equal(harness.session.metadata.agent_renewal_seed_acknowledged_at, undefined);
+  }
 });

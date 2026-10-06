@@ -8,10 +8,13 @@ import test from "node:test";
 import { promisify } from "node:util";
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { registerRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";
+import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/actions.js";
 import { testRouteApp } from "./vibe64RouteTestHelpers.js";
 
 const exec = promisify(execFile);
@@ -128,18 +131,32 @@ test("HTTP Files routes retain trusted identity and stream binary uploads/downlo
     request.vibe64User = { username: "test", role: request.headers["x-test-role"] || "member" };
   });
   const app = testRouteApp();
-  registerRoutes(app.http, { sourceEditor: service, routeRelativePath: "vibe64", projectContext: {
+  const projectContext = {
     projectsRoot: root,
     async readWorkspaceProject({ slug }) {
       if (!["one", "two"].includes(slug)) throw Object.assign(new Error("Missing project"), { code: "vibe64_project_route_unavailable" });
       return { project: { path: path.join(root, slug) } };
     }
-  } });
+  };
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "source", domain: "source", actions: createSourceEditorActions({ sourceEditor: service }).map((action) => ({
+    channels: ["api"], surfaces: ["app"], ...action
+  })) });
+  registerVibe64ActionContext(actions, { projectContext,
+    resolveUser: async ({ request }) => request.vibe64User, authorizeProject: async () => {}
+  });
+  server.addHook("preHandler", async (request) => {
+    request.executeAction = ({ actionId, input, context }) => actions.execute({ actionId, input,
+      context: { ...context, channel: "api", surface: "app", requestMeta: { request } }
+    });
+  });
+  registerRoutes(app.http, { sourceEditor: service, routeRelativePath: "vibe64", projectContext });
   for (const route of app.registeredRoutes) server.route({ method: route.method, url: route.path, handler: route.handler, bodyLimit: route.options.bodyLimit });
   await server.listen({ host: "127.0.0.1", port: 0 });
   t.after(() => server.close());
   const base = `http://127.0.0.1:${server.server.address().port}/api/app/one/vibe64/sessions/shared-id/files`;
-  assert.equal((await fetch(`${base}/session/file?path=private.txt&vibe64User[role]=owner`)).status, 403);
+  const spoofed = await fetch(`${base}/session/file?path=private.txt&vibe64User[role]=owner`);
+  assert.equal(spoofed.status, 403, await spoofed.text());
   assert.equal((await fetch(`${base}/session/file?path=private.txt`, { headers: { "x-test-role": "owner" } })).status, 200);
   const data = new FormData();
   const bytes = new Uint8Array([0, 251, 128, 10]);

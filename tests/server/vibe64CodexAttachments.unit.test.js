@@ -19,6 +19,8 @@ import { PassThrough, Readable } from "node:stream";
 import test from "node:test";
 import Fastify from "fastify";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
+import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import {
@@ -42,9 +44,7 @@ import {
 import {
   registerRoutes
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
-import {
-  createCodexTerminalController
-} from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
+import { createCodexSessionRegistration } from "../../packages/vibe64-terminals/src/server/service.js";
 import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
@@ -838,7 +838,7 @@ test("Codex controller renews accepted attachments in the selected session sourc
       });
       const old = new Date(Date.now() - 20 * 60 * 1000);
       await utimes(result.path, old, old);
-      const controller = createCodexTerminalController({
+      const { attachments: controller } = createCodexSessionRegistration({
         env: {
           VIBE64_RUNTIME_NAMESPACE: "test",
           VIBE64_WORKSPACE: "test"
@@ -875,40 +875,39 @@ test("Codex controller renews accepted attachments in the selected session sourc
   }
 });
 
-test("controller upload, renewal, and cleanup all use its configured attachment root", async () => {
+test("shared upload, Codex renewal, and cleanup use the configured attachment root", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-controller-env-test-"));
   const processRoot = path.join(root, "process-root");
   const configuredRoot = path.join(root, "configured-root");
   const sessionId = "controller-configured-root-session";
   const executionRoot = path.join(root, "sessions", "active", sessionId, "source");
-  const controller = createCodexTerminalController({
-    env: {
-      [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: configuredRoot,
-      VIBE64_RUNTIME_NAMESPACE: "test",
-      VIBE64_WORKSPACE: "test"
-    },
-    projectService: {
-      createRuntime() {
-        return {
-          async getSession() {
-            return {
-              metadata: {
-                source_kind: "session_clone",
-                source_path: executionRoot,
-                source_path_authority: "managed_session_source"
-              },
-              sessionId,
-              sessionRoot: path.join(root, "runtime", sessionId)
-            };
-          }
-        };
-      }
-    }
+  const env = {
+    [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: configuredRoot,
+    VIBE64_RUNTIME_NAMESPACE: "test",
+    VIBE64_WORKSPACE: "test"
+  };
+  const store = createVibe64SessionStore({
+    projectContextRoot: root,
+    projectRuntimeRoot: path.join(root, "runtime")
   });
+  const runtime = { store, getSession: (id) => store.readSession(id) };
+  const projectService = { createRuntime: () => runtime };
+  const attachments = createSessionAttachments({ env, projectService });
+  const { attachments: controller } = createCodexSessionRegistration({ env, projectService });
   try {
+    await store.createSession({
+      metadata: {
+        source_kind: "session_clone",
+        source_path: executionRoot,
+        source_path_authority: "managed_session_source"
+      },
+      runtimeKind: "genesis",
+      sessionId,
+      status: VIBE64_SESSION_STATUS.ACTIVE
+    });
     await mkdir(executionRoot, { recursive: true });
     await withAttachmentRoot(processRoot, async () => {
-      const upload = await controller.uploadAttachment(sessionId, {
+      const upload = await attachments.uploadAttachment({ sessionId }, {
         fileName: "configured.txt",
         stream: Readable.from(["configured"])
       });
@@ -924,7 +923,7 @@ test("controller upload, renewal, and cleanup all use its configured attachment 
         retained: [upload.attachmentId]
       });
       assert.ok((await fileMtime(upload.path)) > old.getTime());
-      assert.deepEqual(await controller.deleteAttachment(sessionId, {
+      assert.deepEqual(await attachments.deleteAttachment({ sessionId }, {
         attachmentId: upload.attachmentId
       }), {
         attachmentId: upload.attachmentId,
@@ -937,70 +936,77 @@ test("controller upload, renewal, and cleanup all use its configured attachment 
   }
 });
 
-test("controller rejects persisted and in-flight session-closing attachment admission", async () => {
+test("shared attachment admission rejects persisted and in-flight session closing", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-closing-session-test-"));
-  const session = (sessionId, closingReason = "") => ({
-    metadata: {
-      source_kind: "session_clone",
-      source_path: path.join(root, "managed", "sessions", "active", sessionId, "source"),
-      source_path_authority: "managed_session_source",
-      ...(closingReason ? { session_closing_reason: closingReason } : {})
-    },
-    sessionId,
-    sessionRoot: path.join(root, "runtime", sessionId)
+  const metadata = (sessionId, closingReason = "") => ({
+    source_kind: "session_clone",
+    source_path: path.join(root, "managed", "sessions", "active", sessionId, "source"),
+    source_path_authority: "managed_session_source",
+    ...(closingReason ? { session_closing_reason: closingReason } : {})
   });
-  const controllerEnv = {
+  const env = {
     [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: root,
     VIBE64_RUNTIME_NAMESPACE: "test",
     VIBE64_WORKSPACE: "test"
   };
+  const store = createVibe64SessionStore({
+    projectContextRoot: root,
+    projectRuntimeRoot: path.join(root, "runtime")
+  });
   try {
-    const persistedController = createCodexTerminalController({
-      env: controllerEnv,
-      projectService: {
-        createRuntime() {
-          return {
-            async getSession() {
-              return session("persisted-closing", "archived");
-            }
-          };
-        }
-      }
+    await store.createSession({
+      metadata: metadata("persisted-closing", "archived"),
+      runtimeKind: "genesis",
+      sessionId: "persisted-closing",
+      status: VIBE64_SESSION_STATUS.ACTIVE
     });
-    const persisted = await persistedController.uploadAttachment("persisted-closing", {
+    await store.createSession({
+      metadata: metadata("in-flight-closing"),
+      runtimeKind: "genesis",
+      sessionId: "in-flight-closing",
+      status: VIBE64_SESSION_STATUS.ACTIVE
+    });
+    const runtime = { store, getSession: (id) => store.readSession(id) };
+    const persistedAttachments = createSessionAttachments({
+      env,
+      projectService: { createRuntime: () => runtime }
+    });
+    await assert.rejects(persistedAttachments.uploadAttachment({ sessionId: "persisted-closing" }, {
       fileName: "blocked.txt",
       stream: Readable.from(["blocked"])
+    }), {
+      code: "vibe64_agent_attachment_session_unavailable",
+      statusCode: 409,
+      message: "This session is closing. Attachments cannot be added now."
     });
-    assert.equal(persisted.ok, false);
-    assert.equal(persisted.code, "vibe64_agent_attachment_session_unavailable");
-    assert.equal(persisted.statusCode, 409);
-    assert.match(persisted.error, /Session is archived/u);
 
     let sessionReads = 0;
-    const racingController = createCodexTerminalController({
-      env: controllerEnv,
+    const racingAttachments = createSessionAttachments({
+      env,
       projectService: {
         createRuntime() {
           return {
-            async getSession() {
+            store,
+            async getSession(sessionId) {
               sessionReads += 1;
-              return session(
-                "in-flight-closing",
-                sessionReads > 1 ? "deleting" : ""
-              );
+              if (sessionReads > 1) {
+                await store.writeMetadataValue(sessionId, "session_closing_reason", "deleting");
+              }
+              return store.readSession(sessionId);
             }
           };
         }
       }
     });
-    const racing = await racingController.uploadAttachment("in-flight-closing", {
+    await assert.rejects(racingAttachments.uploadAttachment({ sessionId: "in-flight-closing" }, {
       fileName: "race.txt",
       stream: Readable.from(["blocked"])
+    }), {
+      code: "vibe64_agent_attachment_session_unavailable",
+      statusCode: 409,
+      message: "This session is closing. Attachments cannot be added now."
     });
-    assert.equal(sessionReads, 2, JSON.stringify(racing));
-    assert.equal(racing.ok, false);
-    assert.equal(racing.code, "vibe64_agent_attachment_session_unavailable");
-    assert.match(racing.error, /Session is deleting/u);
+    assert.equal(sessionReads, 2);
     assert.deepEqual(await attachmentIds(root), []);
     assert.deepEqual(await attachmentDataPaths(root), []);
   } finally {

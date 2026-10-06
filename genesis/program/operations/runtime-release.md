@@ -142,6 +142,15 @@ Package metadata, licenses and non-code assets remain in small bundled packages.
 Native modules and packages with dynamic runtime loading remain explicit pinned
 npm dependencies. Their installed sizes are separate from the Vibe64 tarball.
 
+The assistant feature's three SQL repository modules remain separate compiled
+entries at their original package paths. The server retains their existing lazy
+imports behind the SQL capability branch, so a supplied file-backed conversation
+runtime neither loads nor installs the optional assistant database package.
+When that package is installed for SQL storage, the materializer includes it
+using the existing optional-dependency rule. The relocated assistant proof rejects
+database loading while composing the actual file-backed runtime; the release
+proof checks that the repository entries survive relocation.
+
 Hosted consumers pass their own helper entrypoints, external packages and
 minification choice to this public builder. They consume the materialized
 runtime, including installed external dependencies, without needing npm on the

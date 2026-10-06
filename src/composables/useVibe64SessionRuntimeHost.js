@@ -174,12 +174,12 @@ function useVibe64SessionRuntimeHost(props, emit) {
     summarySession: selectedListSession
   });
   const mounted = {
-    session: computed(() => conversationRuntime.value.mounted.session.value),
-    detailState: computed(() => conversationRuntime.value.mounted.detailState.value),
-    agentConnectionError: computed(() => conversationRuntime.value.mounted.agentConnectionError.value),
-    agentConnectionStatus: computed(() => conversationRuntime.value.mounted.agentConnectionStatus.value),
-    refresh: options => conversationRuntime.value.mounted.refresh(options),
-    retryAgentConnection: (...args) => conversationRuntime.value.mounted.retryAgentConnection(...args)
+    session: computed(() => conversationRuntime.value?.mounted.session.value || null),
+    detailState: computed(() => conversationRuntime.value?.mounted.detailState.value || {}),
+    agentConnectionError: computed(() => conversationRuntime.value?.mounted.agentConnectionError.value || ""),
+    agentConnectionStatus: computed(() => conversationRuntime.value?.mounted.agentConnectionStatus.value || "initializing"),
+    refresh: options => conversationRuntime.value?.mounted.refresh(options),
+    retryAgentConnection: (...args) => conversationRuntime.value?.mounted.retryAgentConnection(...args)
   };
   const selectedSession = mounted.session;
   const selectedSessionArchived = computed(() => isArchivedVibe64Session(selectedSession.value || {}));
@@ -336,7 +336,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     archive: props.sessionData.archive,
     renewal: renewalModel
   });
-  const conversationLog = computed(() => conversationRuntime.value.conversationLog);
+  const conversationLog = computed(() => conversationRuntime.value?.conversationLog || null);
   const selection = proxyRefs({
     isArchived: selectedSessionArchived,
     selectedSession,
@@ -421,7 +421,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }
 
   function sendAgentMessage(input = {}) {
-    return conversationRuntime.value.sendAgentMessage(input);
+    return conversationRuntime.value?.sendAgentMessage(input) ?? false;
   }
 
   async function retryWorkspaceSetup() {
@@ -503,7 +503,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }
 
   async function cancelAgentMessage(messageId = "") {
-    return conversationRuntime.value.cancelMessage(String(messageId || "").trim());
+    return conversationRuntime.value?.cancelMessage(String(messageId || "").trim()) ?? false;
   }
 
   function setAutopilotBusy(busy = false) {

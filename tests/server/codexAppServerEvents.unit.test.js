@@ -3,10 +3,12 @@ import test from "node:test";
 
 import {
   classifyCodexAppServerEvent,
-  codexAppServerContextRefreshReason,
   codexAppServerErrorText,
   codexAppServerNotificationUsageLimitExceeded,
-  codexAppServerOutputOwnerTurnId,
+  codexAppServerOutputOwnerTurnId
+} from "@jskit-ai/assistant-core/testing/native-codex";
+import {
+  codexAppServerContextRefreshReason,
   codexAppServerProviderThreadAssistantSegments
 } from "@jskit-ai/assistant-core/server/codex-events";
 

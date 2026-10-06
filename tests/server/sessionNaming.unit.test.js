@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createSessionNaming, parseSessionName } from "../../packages/vibe64-terminals/src/server/sessionNaming.js";
+import { markHistoricalConversationRewound } from "./vibe64TestHelpers.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-session-name-"));
@@ -100,7 +101,7 @@ test("manual rename wins while a nonblocking Helper is working and close waits f
 test("later messages including after rewind do not backfill names", async (t) => {
   const f = await fixture(t);
   const first = await f.store.writeConversationUserMessage("original-id", { messageId: "first", text: "First" });
-  await f.store.rewindConversationLog("original-id", [first.turnId]);
+  await markHistoricalConversationRewound(f.store, "original-id", [first.turnId]);
   await f.store.writeConversationUserMessage("original-id", { messageId: "second", text: "Second" });
   f.naming.start(f.context, "second");
   await f.naming.close();

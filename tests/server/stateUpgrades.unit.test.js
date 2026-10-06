@@ -7,6 +7,8 @@ import { promisify } from "node:util";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runStateUpgrades } from "../../packages/vibe64-core/src/server/stateUpgrades.js";
+import { upgradeSessionConversations, inspectConversationUndoRetirement } from "../../packages/vibe64-runtime/src/server/conversationStorageUpgrade.js";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 import { upgradeAssistantHelpers } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
 import { upgradeAssistantPlans } from "../../packages/vibe64-accounts/src/server/assistantPlanUpgrade.js";
 import { upgradeCompletedDiscussionPlan } from "../../packages/vibe64-accounts/src/server/completedDiscussionPlanUpgrade.js";
@@ -21,7 +23,7 @@ import { RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
 const exec = promisify(execFile);
 const id = "20260923-codex-login-id";
 const routingId = "20260923-routing-v2";
-const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan", "20260929-plan-history", "20260930-auto-implementation-continuation"];
+const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan", "20260929-plan-history", "20260930-auto-implementation-continuation", "20261002-colleague-conversation", "20261002-session-conversations", "20261003-conversation-native-journal", "20261003-conversation-undo-retirement"];
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
 async function fixture(t) {
@@ -37,7 +39,7 @@ async function fixture(t) {
       await mkdir(path.dirname(markerPath), { recursive: true });
       await writeFile(markerPath, typeof value === "string" ? value : JSON.stringify(value));
     },
-    run: (apply = false) => runStateUpgrades({ systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, report: (level, message) => messages.push({ level, message }) })
+    run: (apply = false) => runStateUpgrades({ systemRoot, apply, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, inspectConversationUndoRetirement, report: (level, message) => messages.push({ level, message }) })
   };
 }
 
@@ -122,6 +124,26 @@ test("fresh and disconnected installations preserve login state and record the o
     await f.run(true);
     assert.equal(await readCodexLoginId(f.systemRoot), "");
     assert.equal(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied.length, upgradeIds.length);
+  }
+  // Explicit setup must record real no-ops before current session creation.
+  // A missing ledger is not permission to mark already-seeded state current.
+  const preferences = JSON.stringify({ mode: "senior", review: false, workflowEngineId: "opencode" });
+  for (const initializedBeforeSeed of [true, false]) {
+    const f = await fixture(t);
+    if (initializedBeforeSeed) await f.run(true);
+    const store = createVibe64SessionStore({ projectContextRoot: f.root,
+      projectRuntimeRoot: path.join(f.systemRoot, "projects/example") });
+    await store.createSession({ runtimeKind: "genesis", sessionId: "seeded" });
+    await store.writeMetadataValue("seeded", "assistant_routing", preferences);
+    if (initializedBeforeSeed) {
+      const ledger = await readFile(f.ledgerPath, "utf8");
+      assert.deepEqual(await f.run(true), { pending: [], applied: [] });
+      assert.equal(await readFile(f.ledgerPath, "utf8"), ledger);
+    } else {
+      await assert.rejects(f.run(true), /20260923-routing-v2: .*invalid chat mode/u);
+      await assert.rejects(stat(f.ledgerPath), { code: "ENOENT" });
+    }
+    assert.equal(await store.readMetadataValue("seeded", "assistant_routing"), preferences);
   }
 });
 
@@ -224,9 +246,9 @@ test("a crash after routing publication but before its ledger entry resumes the 
   await mkdir(path.dirname(routingPath), { recursive: true });
   const original = JSON.stringify({ schemaVersion: 1, revision: 4, orchestrators: {} });
   await writeFile(routingPath, original);
-  await assert.rejects(runStateUpgrades({ systemRoot: f.systemRoot, apply: true, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, report: () => {},
+  await assert.rejects(runStateUpgrades({ systemRoot: f.systemRoot, apply: true, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, inspectConversationUndoRetirement, report: () => {},
     upgradeAssistantRouting: (context) => upgradeAssistantRouting({ ...context, report: (_level, message) => {
-      if (message.startsWith("Published routing state:")) throw new Error("lost before ledger commit");
+      if (message.startsWith("Published state:")) throw new Error("lost before ledger commit");
     } })
   }), /lost before ledger commit/u);
   assert.deepEqual(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied.map((entry) => entry.id), [id]);

@@ -175,7 +175,8 @@ const SessionPanel = componentFromSfcTemplate(
           selectedSessionId: "session-1"
         }),
         sessionData: reactive({
-          sessionsApiPath: "/api/vibe64/sessions"
+          sessionsApiPath: "/api/vibe64/sessions",
+          sessionList: { unavailableItems: [], isLoading: false }
         }),
         sessionTooltip: createVibe64SessionTooltipState(),
         setRuntimeBusy: vi.fn(),

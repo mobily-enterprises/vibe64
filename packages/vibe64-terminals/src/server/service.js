@@ -1,18 +1,142 @@
+import {
+  createCodexSessionRenewalPreparation
+} from "./sessionRenewalReceipts.js";
+import {
+  createCodexContextRefreshMarker,
+  recordCodexContextUsageSignal
+} from "./codexContextRenewalSignals.js";
+import {
+  CODEX_TURN_OUTCOME,
+  codexAppServerResultDeliveryFailureMessage,
+  writeCodexTurnOutcomeNotice
+} from "./codexTurnOutcomeNotice.js";
+import {
+  conversationActorMetadata,
+  codexDeliveredConversationMetadata as deliveredConversationMetadata,
+  codexTerminalConversationMetadata as terminalConversationMetadata
+} from "./conversationActor.js";
+import {
+  createCodexConversationStorage
+} from "./codexConversationStorage.js";
+import {
+  createCodexHelperThreadLedger,
+  codexHelperThreadLedgerOwner
+} from "./codexHelperThreadLedger.js";
+import {
+  getStudioProjectContext
+} from "@local/vibe64-core/server/studioProjectContext";
+import {
+  createPersonalAiProfileStore
+} from "@local/vibe64-core/server/personalAiProfile";
+import {
+  VIBE64_OUTPUTS_CLIENT_REFRESH_PAYLOAD
+} from "@local/vibe64-core/server/sessionRealtimeEvents";
+import {
+  codexAppServerHelperIsolation
+} from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import {
+  createCodexAppServerRunOwner
+} from "@jskit-ai/assistant-core/server/codex-turn";
+import {
+  createCodexSessionTurnCheckpoint
+} from "./sessionTurnCheckpoint.js";
+import {
+  vibe64ErrorResponse
+} from "@local/vibe64-core/server/serverResponses";
+import {
+  createCodexAppServerProviderOwner
+} from "@jskit-ai/assistant-core/server/codex-provider";
+import {
+  createCodexInteractiveTerminals
+} from "./codexInteractiveTerminals.js";
+import {
+  codexAppServerTaskFinishedAfterRun,
+  createCodexStartupHealth,
+  createCodexUnavailableWorktreeHandler
+} from "./codexStartupHealth.js";
+import {
+  createCodexSessionProviderHost,
+  codexAppServerAdmissionError,
+  CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE,
+  runWithCodexAppServerProjectContext
+} from "./codexSessionProviderHost.js";
+import {
+  createCodexRuntimeHost,
+  createCodexSessionRuntimeHost
+} from "./codexRuntimeHost.js";
+import {
+  createCodexAccountPreparation
+} from "./codexAccountPreparation.js";
+import {
+  createCodexSessionEnvironment
+} from "./codexSessionEnvironment.js";
+import {
+  createCodexAssistantCatalog
+} from "./codexAssistantCatalog.js";
+import {
+  createCodexConversationPreparation
+} from "./codexConversationPreparation.js";
+import {
+  createCodexHelperPreparation
+} from "./codexHelperPreparation.js";
+import {
+  createCodexLifecyclePreparation
+} from "./codexLifecyclePreparation.js";
+import {
+  createCodexScopedConversationPreparation,
+  codexAppServerConversationResponse,
+  codexAppServerExpiredEphemeralConversation
+} from "./codexScopedConversationPreparation.js";
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createProjectServices } from "./projectServices.js";
+import {
+  actorHomeEnv,
+  appCredentialContext,
+  createVibe64ConversationExecution,
+  runVibe64Command
+} from "@local/vibe64-execution/server";
+import {
+  codexAppServerRuntimeBaseDir,
+  codexAppServerRuntimeDir,
+  codexAppServerRuntimeHost,
+  CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
+  assertCodexAuthPreflightReady,
+  createCodexAppServerAgentProvider
+} from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { STUDIO_MANAGED_CLAUDE_COMMAND, STUDIO_MANAGED_CODEX_COMMAND } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 import { manageWorkPlan, readWorkPlanPage } from "./assistantWorkPlan.js";
 import { assertSessionRepositoryReview, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
-import { createClaudeSessionAgentProvider } from "./agent/providers/claudeSessionAgentProvider.js";
+import { createClaudeConversationHost } from "./agent/providers/claudeConversationHost.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
-import { createCodexTerminalController } from "./codexTerminal.js";
 import { createAssistantRouting } from "./assistantRouting.js";
 import { assistantModePrompt, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createSessionConversations } from "./sessionConversations.js";
-import { readConversationRewindState, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, rewindLastConversationTurn, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
-import { createSessionAttachments } from "./sessionAttachments.js";
+import {
+  createOpenCodeMainMessagePreparation,
+  createSessionConversationBinding,
+  prepareSessionConversationActivity,
+  prepareSessionConversationCreation,
+  prepareSessionConversationRenewal,
+  prepareSessionConversationRenewalProof,
+  prepareSessionConversationReadiness,
+  prepareSessionConversationDisposal,
+  prepareProjectConversationCleanup,
+  prepareConversationRuntimeInvalidation,
+  prepareConversationReconciliation,
+  prepareConversationSubscriptionReset,
+  prepareSessionDetachedConversationCleanup,
+  prepareSessionConversationStorage,
+  publishMainConversationEvent
+} from "./mainConversationBinding.js";
+import { rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, sendWithAssistantChangeover } from "./assistantChangeover.js";
+import {
+  createSessionAttachments,
+  createCodexSessionAttachmentRenewal
+} from "./sessionAttachments.js";
 import { createProviderUsage } from "./providerUsage.js";
 import {
   createSessionAgentManager
@@ -23,7 +147,21 @@ import {
 import {
   createOpenCodeSessionAgentProvider
 } from "./agent/providers/opencodeSessionAgentProvider.js";
-import { createOpenCodeTerminalController } from "./opencodeTerminal.js";
+import { createOpenCodeSharedRuntime } from "@jskit-ai/assistant-core/server/opencode-process";
+import { createOpenCodeLifecyclePreparation } from "./openCodeLifecyclePreparation.js";
+import { createOpenCodeConversationAccounts } from "./openCodeConversationAccounts.js";
+import { createOpenCodeConversationPresentation } from "./openCodeConversationPresentation.js";
+import { createOpenCodeConversationEvents } from "./openCodeConversationEvents.js";
+import { createOpenCodeScopedPreparation } from "./openCodeScopedPreparation.js";
+import { createOpenCodeInteractiveTerminals } from "./openCodeInteractiveTerminals.js";
+import { createOpenCodeSessionRenewalPreparation } from "./sessionRenewalReceipts.js";
+import {
+  createOpenCodeServerProcess,
+  createOpenCodeHostPreparation,
+  readOpenCodeCatalog,
+  readOpenCodeZenModelIds,
+  verifyOpenCodeApiKey
+} from "./opencodeServerProcess.js";
 import process from "node:process";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -31,7 +169,7 @@ import { createAgentEnvCommandService } from "./agentEnvCommand.js";
 import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createAgentSessionCommandService } from "./agentSessionCommand.js";
-import { closeAgentSessionCommandEnvironment } from "./agentCommandEnvironment.js";
+import { closeAgentSessionCommandEnvironment, prepareAgentSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { createCodexGitCommandService } from "./codexGitCommand.js";
 import {
   checkSessionUpdates as checkManagedSessionUpdates,
@@ -69,13 +207,15 @@ import {
   inspectGenesisAgentIntegrations,
   inspectGenesisSkills,
   syncGenesisAgentIntegrations,
-  syncGenesisSkills
+  syncGenesisSkills,
+  vibe64HostContextEnvironment
 } from "@local/vibe64-genesis/server";
 import {
   codexTerminalNamespace,
   directoryExists,
   ensureTerminalSessionSourceGitSelfContained,
   outputTargetTerminalNamespace,
+  opencodeTerminalNamespace,
   terminalSessionSourceRoot,
   terminalWorktreePath,
   terminalProjectScopeKey,
@@ -113,7 +253,8 @@ import {
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
   VIBE64_SESSION_STATUS,
-  vibe64AgentRunStateIsActive
+  vibe64AgentRunStateIsActive,
+  normalizeVibe64AgentRunState
 } from "@local/vibe64-runtime/server/sessionStore";
 import {
   sessionIsClosing
@@ -138,6 +279,456 @@ import {
 import {
   createSessionPromptHintsService
 } from "./sessionPromptHints.js";
+
+const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
+const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
+const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
+function normalizeText(value) {
+  return String(value || "").trim();
+}
+
+function codexAppServerPromptDeliveryEnabledByDefault({
+  env = process.env
+} = {}) {
+  const configured = normalizeText(env.VIBE64_CODEX_APP_SERVER_PROMPTS).toLowerCase();
+  if (["0", "false", "no", "off"].includes(configured)) {
+    return false;
+  }
+  if (["1", "true", "yes", "on"].includes(configured)) {
+    return true;
+  }
+  return true;
+}
+
+const CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED = codexAppServerPromptDeliveryEnabledByDefault();
+
+function createCodexSessionRegistration({
+  connectionStatus = async () => true,
+  listConnections = async () => [],
+  agentDatabaseCommand = null,
+  agentEnvCommand = null,
+  agentPreviewCommand = null,
+  agentSessionCommand = null,
+  codexAuthPreflight = assertCodexAuthPreflightReady,
+  codexAppServerActiveReconcileMs = CODEX_APP_SERVER_ACTIVE_RECONCILE_MS,
+  codexAppServerDaemonWellbeingMs = CODEX_APP_SERVER_DAEMON_WELLBEING_MS,
+  codexAppServerProviderOptions = {},
+  codexAppServerProviderFactory = createCodexAppServerAgentProvider,
+  codexAppServerPromptDeliveryEnabled = CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED,
+  codexHelperThreadLedgerFactory = createCodexHelperThreadLedger,
+  codexToolHomeRequired = false,
+  codexToolHomeSource = "",
+  env = process.env,
+  codexGitCommand = null,
+  logger = null,
+  projectService,
+  publishConversation = null,
+  publishSessionChanged = async () => null,
+  runCommand = runVibe64Command
+} = {}) {
+  const initialCodexRuntime = codexRuntimeContext({
+    env,
+    providerOptions: codexAppServerProviderOptions,
+    toolHomeSource: codexToolHomeSource
+  });
+  if (initialCodexRuntime?.ok === false) {
+    throw new Error(initialCodexRuntime.error || "Codex runtime context could not be resolved.");
+  }
+  codexAppServerProviderOptions = initialCodexRuntime.providerOptions;
+  codexToolHomeSource = initialCodexRuntime.toolHomeSource;
+  const codexRuntimeHost = createCodexRuntimeHost({ env, codexAppServerProviderOptions, codexToolHomeSource });
+  const {
+    codexAppServerProviderKeyFields,
+  } = codexRuntimeHost;
+  const studioRuntimeProfile = getStudioProjectContext().runtimeProfile || {};
+  const localRuntime = studioRuntimeProfile.local === true ||
+    ["local", "local-editor"].includes(normalizeText(studioRuntimeProfile.mode).toLowerCase());
+  const personalProfileStore = localRuntime && normalizeText(codexAppServerProviderOptions.systemRoot)
+    ? createPersonalAiProfileStore({
+        systemRoot: codexAppServerProviderOptions.systemRoot
+      })
+    : null;
+
+  const providerConnections = createCodexProviderConnectionStore({ systemRoot: codexAppServerProviderOptions.systemRoot });
+  const codexAccountPreparation = createCodexAccountPreparation({
+    runtimeHost: codexRuntimeHost,
+    providerConnections,
+    codexToolHomeRequired,
+    codexAuthPreflight,
+    codexToolHomeSource,
+    codexAppServerProviderOptions
+  });
+
+  const codexSessionEnvironment = createCodexSessionEnvironment({
+    agentDatabaseCommand,
+    agentEnvCommand,
+    agentPreviewCommand,
+    agentSessionCommand,
+    codexGitCommand,
+    env,
+    projectService,
+    runCommand
+  });
+
+  const codexSessionRuntimeHost = createCodexSessionRuntimeHost({
+    runtimeHost: codexRuntimeHost,
+    accountPreparation: codexAccountPreparation,
+    sessionEnvironment: codexSessionEnvironment,
+    projectService,
+    runCommand
+  });
+  const {
+    createRuntimeForSession,
+    createStoreForSession,
+    sessionHasCodexAppServerRuntime,
+    codexAppServerOutputContext
+  } = codexSessionRuntimeHost;
+  const codexRenewalPreparation = createCodexSessionRenewalPreparation({
+    runtimeHost: codexRuntimeHost,
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    sessionEnvironment: codexSessionEnvironment
+  });
+  const codexSessionProviderHost = createCodexSessionProviderHost({
+    runtimeHost: codexRuntimeHost,
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    sessionEnvironment: codexSessionEnvironment,
+    providerConnections,
+    env,
+    logger,
+    // The native owner consumes these preparations only after construction.
+    get runOwner() { return codexAppServerRunOwner; }
+  });
+  const {
+    codexAppServerSessionProviderContext,
+    codexAppServerConnectionPolicy,
+    codexAppServerRecoveryEvent
+  } = codexSessionProviderHost;
+
+  const codexAppServerProviderOwner = createCodexAppServerProviderOwner({
+    runtimeRoot: codexAppServerRuntimeBaseDir({ env }),
+    exitUnverifiedCode: "vibe64_codex_runtime_exit_unverified",
+    requiredStopCode: "vibe64_session_renewal_process_exit_unverified",
+    runtimeCloseError: "Vibe64 Codex app-server runtime close failed.",
+    onRecoveryEvent: codexAppServerRecoveryEvent,
+    debugLog: (event, details) => vibe64SessionDebugLog(`server.codexTerminal.${event}`, details),
+    debugError: vibe64SessionDebugError,
+    runtimeBusyCode: CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
+    providerFactory: codexAppServerProviderFactory === createCodexAppServerAgentProvider
+      ? null : codexAppServerProviderFactory,
+    prepareNativeHost(parameters) {
+      const host = codexAppServerRuntimeHost(parameters);
+      host.parameters.runtimeDir ||= codexAppServerRuntimeDir(parameters);
+      return host;
+    }
+  });
+  const codexAppServerRenewalSessionClosures = new WeakSet();
+  const checkpointCodexAppServerTurn = createCodexSessionTurnCheckpoint({ projectService, publishSessionChanged });
+  const codexAppServerRunOwner = createCodexAppServerRunOwner({
+    namespace: codexTerminalNamespace,
+    normalizeRunState: normalizeVibe64AgentRunState,
+    debugLog: (event, details) => vibe64SessionDebugLog(`server.codexTerminal.${event}`, details),
+    debugError: vibe64SessionDebugError,
+    createRuntime: createRuntimeForSession,
+    createStore: createStoreForSession,
+    async publish(sessionId, event) {
+      const { nativeGoal: _nativeGoal, ...publicEvent } = event;
+      return publishMainConversationEvent(
+        codexTerminalNamespace, publishSessionChanged, publishConversation, sessionId, event, publicEvent
+      );
+    },
+    providerSessions: {
+      owner: codexAppServerProviderOwner,
+      wellbeingMs: codexAppServerDaemonWellbeingMs,
+      keyFields: codexAppServerProviderKeyFields,
+      context: codexAppServerSessionProviderContext,
+      outputContext: codexAppServerOutputContext,
+      connectionPolicy: codexAppServerConnectionPolicy
+    },
+    helperThreads: {
+      ledgerOwner: { ...codexHelperThreadLedgerOwner,
+        createCodexHelperThreadLedger: codexHelperThreadLedgerFactory },
+      applicationName: "Vibe64"
+    },
+    conversationPreparation: {
+      context: codexAppServerConversationPreparation,
+      scope: codexAppServerEphemeralScopePreparation,
+      execution: codexAppServerConversationExecution,
+      control: codexAppServerConversationControl,
+      admissionError: codexAppServerAdmissionError,
+      isolation: codexAppServerHelperIsolation,
+      response: codexAppServerConversationResponse,
+      expired: codexAppServerExpiredEphemeralConversation,
+      failure: error => vibe64ErrorResponse(error, {
+        fallbackCode: "vibe64_terminal_request_failed",
+        fallbackMessage: "Vibe64 terminal request failed."
+      })
+    },
+    serverClosingError: {
+      message: "The Vibe64 server is shutting down and cannot acquire Codex runtimes.",
+      code: "vibe64_server_stopping",
+      retryable: true
+    },
+    storeReadError: "Vibe64 session store does not support agent-run reads.",
+    sessionIdRequiredError: "Vibe64 session ID is required.",
+    turnClaimsUnsupportedError: "Vibe64 session runtime does not support Codex turn claims.",
+    turnAlreadyRunningError: "Codex is already working on this Vibe64 session.",
+    messageIdPrefix: "vibe64:",
+    idlePublishPayload: VIBE64_OUTPUTS_CLIENT_REFRESH_PAYLOAD,
+    checkpoint: checkpointCodexAppServerTurn,
+    messageMetadata: {
+      actor: currentConversationActorMetadata,
+      delivered: deliveredConversationMetadata,
+      terminal: terminalConversationMetadata
+    },
+    deliveryStateMetadataKey: "assistant_changeover",
+    hasRuntime: sessionHasCodexAppServerRuntime,
+    admissionTaskFinished: codexAppServerTaskFinishedAfterRun,
+    outcomeNotice: writeCodexAppServerTurnOutcomeNotice,
+    resultDeliveryFailureMessage: codexAppServerResultDeliveryFailureMessage,
+    orphanedPromptMessage: "Vibe64 restarted before Codex confirmed the message. Your message is safe; retry it.",
+    onNotificationSignal: recordCodexAppServerProductSignal,
+    captureContext: currentProjectRequestContext,
+    runInContext: runWithCodexAppServerProjectContext,
+    activeReconcileMs: codexAppServerActiveReconcileMs,
+    steerFailedCode: CODEX_AGENT_TURN_STEER_FAILED_CODE,
+    interruptFailedCode: CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE,
+    errorPrefix: "vibe64_"
+  });
+  const codexHelperPreparation = createCodexHelperPreparation({
+    runtimeHost: codexRuntimeHost,
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    accountPreparation: codexAccountPreparation,
+    providerHost: codexSessionProviderHost,
+    runOwner: codexAppServerRunOwner
+  });
+  const codexConversationStorage = createCodexConversationStorage({ projectService, runOwner: codexAppServerRunOwner });
+  const codexAttachments = createCodexSessionAttachmentRenewal({
+    sessionRuntimeHost: codexSessionRuntimeHost, sessionEnvironment: codexSessionEnvironment
+  });
+  const codexStartupHealth = createCodexStartupHealth(publishSessionChanged);
+  const blockCodexAppServerForUnavailableWorktree = createCodexUnavailableWorktreeHandler({
+    runOwner: codexAppServerRunOwner,
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    health: codexStartupHealth
+  });
+  const codexConversationPreparation = createCodexConversationPreparation({
+    projectService,
+    runtimeHost: codexRuntimeHost,
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    accountPreparation: codexAccountPreparation,
+    sessionEnvironment: codexSessionEnvironment,
+    health: codexStartupHealth,
+    unavailableWorktree: blockCodexAppServerForUnavailableWorktree,
+    enabled: codexAppServerPromptDeliveryEnabled,
+    publishSessionChanged,
+    checkpoint: checkpointCodexAppServerTurn
+  });
+  const codexLifecyclePreparation = createCodexLifecyclePreparation({
+    projectService,
+    runtimeHost: codexRuntimeHost,
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    sessionEnvironment: codexSessionEnvironment,
+    providerHost: codexSessionProviderHost,
+    conversationPreparation: codexConversationPreparation,
+    helperPreparation: codexHelperPreparation,
+    health: codexStartupHealth,
+    runtimeLifecycle: codexAppServerRunOwner.runtimeLifecycle,
+    renewalSessionClosures: codexAppServerRenewalSessionClosures,
+    enabled: codexAppServerPromptDeliveryEnabled
+  });
+  const codexAssistantCatalog = createCodexAssistantCatalog({
+    accountPreparation: codexAccountPreparation,
+    runtimeHost: codexRuntimeHost,
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    conversationPreparation: codexConversationPreparation,
+    helperPreparation: codexHelperPreparation,
+    providerOwner: codexAppServerProviderOwner,
+    runOwner: codexAppServerRunOwner,
+    providerFactory: codexAppServerProviderFactory,
+    enabled: codexAppServerPromptDeliveryEnabled
+  });
+  const codexScopedConversationPreparation = createCodexScopedConversationPreparation({
+    conversationPreparation: codexConversationPreparation,
+    helperPreparation: codexHelperPreparation,
+    runtimeHost: codexRuntimeHost,
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    accountPreparation: codexAccountPreparation,
+    sessionEnvironment: codexSessionEnvironment,
+    actorMetadata: currentConversationActorMetadata,
+    enabled: codexAppServerPromptDeliveryEnabled
+  });
+  const markCodexAppServerContextRefreshPending = createCodexContextRefreshMarker({ projectService, runOwner: codexAppServerRunOwner });
+
+  function recordCodexAppServerProductSignal(kind, { store, sessionId, threadId, notification, reason }) {
+    if (kind === "usage") {
+      return recordCodexContextUsageSignal(store, sessionId, notification, { expectedThreadId: threadId });
+    }
+    if (kind === "context_refresh") {
+      return markCodexAppServerContextRefreshPending(sessionId, threadId, notification, { reason });
+    }
+    return null;
+  }
+
+  function currentConversationActorMetadata(vibe64User = null) {
+    return conversationActorMetadata({
+      personalProfileStore,
+      vibe64User
+    });
+  }
+
+  const codexInteractiveTerminals = createCodexInteractiveTerminals({
+    env,
+    projectService,
+    runCommand,
+    runtimeHost: codexRuntimeHost,
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    accountPreparation: codexAccountPreparation,
+    sessionEnvironment: codexSessionEnvironment,
+    runOwner: codexAppServerRunOwner,
+    withThreadReadiness: codexConversationPreparation.threadReadiness,
+    unavailableWorktree: blockCodexAppServerForUnavailableWorktree
+  });
+
+  async function writeCodexAppServerTurnOutcomeNotice(
+    runtime,
+    sessionId = "",
+    threadId = "",
+    turnId = "",
+    outcome = CODEX_TURN_OUTCOME.PROVIDER_FAILURE,
+    detail = "",
+    { usageLimitExceeded = false } = {}
+  ) {
+    return writeCodexTurnOutcomeNotice({
+      detail,
+      outcome,
+      publishSessionChanged,
+      sessionId,
+      store: runtime?.store,
+      threadId,
+      turnId,
+      usageLimitExceeded
+    });
+  }
+
+  function codexAppServerEphemeralScopePreparation(sessionId = "", input = {}, scope = {}) {
+    return codexScopedConversationPreparation.scope(sessionId, input, scope);
+  }
+
+  function codexAppServerConversationPreparation(sessionId = "", input = {}, options) {
+    return codexScopedConversationPreparation.context(sessionId, input, options);
+  }
+
+  function codexAppServerConversationExecution(sessionId, input, options, context, conversationState, operation, identity = {}) {
+    return codexScopedConversationPreparation.execution(sessionId, input, options, context, conversationState, operation, identity);
+  }
+
+  function codexAppServerConversationControl(sessionId, input, operation) {
+    return codexScopedConversationPreparation.control(sessionId, input, operation);
+  }
+
+  const provider = createCodexSessionAgentProvider({
+    connectionStatus,
+    listConnections,
+    runOwner: codexAppServerRunOwner,
+    providerOwner: codexAppServerProviderOwner,
+    conversationPreparation: codexConversationPreparation,
+    lifecyclePreparation: codexLifecyclePreparation,
+    helperPreparation: codexHelperPreparation,
+    renewalPreparation: codexRenewalPreparation,
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    storage: codexConversationStorage,
+    catalog: codexAssistantCatalog,
+    terminals: codexInteractiveTerminals,
+    attachments: codexAttachments,
+    enabled: codexAppServerPromptDeliveryEnabled,
+    env,
+    publishSessionChanged,
+    checkpoint: checkpointCodexAppServerTurn
+  });
+  return Object.freeze({
+    provider,
+    terminals: codexInteractiveTerminals,
+    accounts: codexAccountPreparation,
+    catalog: codexAssistantCatalog,
+    attachments: codexAttachments
+  });
+}
+
+function createOpenCodeSessionRegistration({
+  agentDatabaseCommand = null,
+  agentEnvCommand = null,
+  agentPreviewCommand = null,
+  agentSessionCommand = null,
+  codexGitCommand = null,
+  command = "opencode",
+  createServerProcess = createOpenCodeServerProcess,
+  env = process.env,
+  getAssistantManager = () => null,
+  listConnections = async () => [],
+  prepareCommandEnvironment = prepareAgentSessionCommandEnvironment,
+  projectService,
+  publishSessionChanged: publishApplicationSessionChanged = async () => null,
+  publishConversation,
+  readCatalogCommand = readOpenCodeCatalog,
+  readZenModelsCommand = readOpenCodeZenModelIds,
+  recordGitActor = writeSessionGitCommandActor,
+  resolveConnection = async () => null,
+  verifyConnectionCommand = verifyOpenCodeApiKey
+} = {}) {
+  if (!projectService) {
+    throw new TypeError("OpenCode terminal controllers require vibe64.project.");
+  }
+  const publishSessionChanged = publishMainConversationEvent.bind(
+    null, opencodeTerminalNamespace, publishApplicationSessionChanged, publishConversation
+  );
+  const sharedRuntime = createOpenCodeSharedRuntime({
+    onStop: details => vibe64SessionDebugLog("server.opencode.shared-process.stop", details)
+  });
+  const { turns, temporaryConversations } = sharedRuntime;
+  const hostPreparation = createOpenCodeHostPreparation({
+    agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
+    codexGitCommand, command, createServerProcess, env, getAssistantManager,
+    listConnections, prepareCommandEnvironment, projectService, resolveConnection,
+    sharedRuntime
+  });
+  const presentation = createOpenCodeConversationPresentation({ getAssistantManager, publishSessionChanged, turns, temporaryConversations });
+  const events = createOpenCodeConversationEvents({ projectService, publishSessionChanged, sharedRuntime, presentation });
+  const mainMessagePreparation = createOpenCodeMainMessagePreparation({
+    projectService, env, recordGitActor, hostPreparation, events, presentation
+  });
+  const { contextFor } = mainMessagePreparation;
+  const accounts = createOpenCodeConversationAccounts({
+    command, createServerProcess, env, listConnections, readCatalogCommand,
+    readZenModelsCommand, sharedRoots: hostPreparation.sharedRoots, verifyConnectionCommand,
+    mainMessagePreparation, resolveConnection
+  });
+  const scopedPreparation = createOpenCodeScopedPreparation({
+    projectService, contextFor, hostPreparation, events, publishSessionChanged, prepareSessionCleanup
+  });
+
+  const lifecyclePreparation = createOpenCodeLifecyclePreparation({
+    projectService, getAssistantManager, sharedRuntime, hostPreparation,
+    mainMessagePreparation, events, presentation, resolveConnection
+  });
+  const renewalPreparation = createOpenCodeSessionRenewalPreparation({
+    mainMessagePreparation, hostPreparation, lifecyclePreparation
+  });
+
+  const terminals = createOpenCodeInteractiveTerminals({
+    sharedRuntime, contextFor, hostPreparation, env, recordGitActor
+  });
+
+  function prepareSessionCleanup(sessionId = "", options = {}) {
+    return lifecyclePreparation.prepareSessionCleanup(sessionId, options);
+  }
+
+  const provider = createOpenCodeSessionAgentProvider({
+    sharedRuntime, hostPreparation, accounts, mainMessagePreparation, scopedPreparation,
+    lifecyclePreparation, renewalPreparation, terminals, publishSessionChanged,
+    prepareSessionCleanup
+  });
+  return { provider, hostPreparation, accounts, terminals };
+}
 
 const AGENT_WRITE_WAIT_MS = 60_000;
 
@@ -417,6 +1008,7 @@ async function closeTerminalControllersForSession(sessionId = "", controllers = 
 }
 
 function createService({
+  actions = null,
   authorizeCodexGitActorAccess = null,
   codexTerminalController = {},
   env = process.env,
@@ -539,8 +1131,10 @@ function createService({
       ? assistantRuntime.resolveConnection(selection)
       : codexProviderConnections.read(selection.modelProviderId)
   });
-  const codex = createCodexTerminalController({
+  const codex = createCodexSessionRegistration({
     ...codexTerminalController,
+    listConnections: codexProviderConnections.list,
+    connectionStatus: (context) => assistantRuntime.codexConnectionStatus(context),
     agentDatabaseCommand,
     agentEnvCommand,
     agentPreviewCommand,
@@ -552,9 +1146,91 @@ function createService({
     env,
     logger,
     projectService,
-    publishSessionChanged: publishAgentSessionChanged
+    publishSessionChanged: publishAgentSessionChanged,
+    publishConversation: event => mainConversations.publishNative(event)
   });
-  const opencode = createOpenCodeTerminalController({
+  const mainConversations = createConversationRuntime({
+    engine: "codex",
+    async authorize({ context, conversationId }) {
+      if (context?.sessionId !== conversationId) return false;
+      const authority = context.browserAuthority;
+      if (!authority) return true; // Existing, already-authorized manager callers.
+      if (!actions || authority.sessionId !== conversationId) return false;
+      const grant = await actions.execute({
+        actionId: "vibe64.sessions.conversation.context.read",
+        input: { projectSlug: authority.projectSlug, sessionId: conversationId },
+        context: authority.requestContext
+      });
+      return grant.actor.id === authority.actorId;
+    },
+    host: {
+      nativeTools: true,
+      conversation({ id, context, input, options, operation }) {
+        if (operation === "closeProject") {
+          return prepareProjectConversationCleanup(
+            sessionAgent.conversationProvider(context.providerId), context, input
+          );
+        }
+        if (operation === "invalidateRuntimes") {
+          return prepareConversationRuntimeInvalidation(
+            sessionAgent.conversationProvider(context.providerId), context, input
+          );
+        }
+        if (operation === "reconcileSessions") {
+          return prepareConversationReconciliation(
+            sessionAgent.conversationProvider(context.providerId), context, input, options
+          );
+        }
+        if (operation === "releaseRenewalPredecessorProcessExitProof" || operation === "releaseRenewalSuccessorProcessExitProof") {
+          return prepareSessionConversationRenewalProof(
+            sessionAgent.conversationProvider(context.providerId), id, context, input, operation
+          );
+        }
+        if (operation === "inspectTemporaryActivity") {
+          return prepareSessionConversationActivity(sessionAgent.conversationProvider(context.providerId), id, context);
+        }
+        if (operation === "unsubscribeSessions") {
+          return prepareConversationSubscriptionReset(
+            sessionAgent.conversationProvider(context.providerId), context, input
+          );
+        }
+        return (async () => {
+          if (operation === "listNativeConversationStorage" || operation === "retireConversationHistory") {
+            return prepareSessionConversationStorage(
+              sessionAgent.conversationProvider(input.engineId), id, context, input
+            );
+          }
+          if (operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation") {
+            return prepareSessionDetachedConversationCleanup(
+              sessionAgent.conversationProvider(context.providerId), id, context, input,
+              operation === "interruptDetachedConversation" ? "interruptDetachedChatTurn" : "deleteDetachedChatThread"
+            );
+          }
+          if (operation !== "create" && operation !== "ensure" && operation !== "dispose" &&
+              operation !== "generateRenewalHandover" && operation !== "seedRenewalHandover" && context.temporaryConversationId && !context.scopedConversationId && !context.assistantScope) {
+            return sessionConversations.conversationBinding(id, context);
+          }
+          const engine = context.providerId || context.assistantSelection?.engineId || vibe64AssistantSelectionFromMetadata(context.session?.metadata).engineId;
+          const provider = sessionAgent.conversationProvider(engine, "codex");
+          if (operation === "generateRenewalHandover" || operation === "seedRenewalHandover") {
+            return prepareSessionConversationRenewal(provider, id, context, input);
+          }
+          if (operation === "create") return prepareSessionConversationCreation(provider, id, context, input);
+          if (operation === "ensure") return prepareSessionConversationReadiness(provider, id, context);
+          if (operation === "dispose") return prepareSessionConversationDisposal(provider, id, context, input);
+          // Scoped work already has its own authorized host and native identity;
+          // opening its existing handle must not hydrate a project session.
+          if (context.assistantScope) return createSessionConversationBinding(provider, id, context);
+          const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
+          return createSessionConversationBinding(provider, id, {
+            ...context, runtime,
+            prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
+          });
+        })();
+      }
+    }
+  });
+  const opencode = createOpenCodeSessionRegistration({
     ...opencodeTerminalController,
     agentDatabaseCommand,
     agentEnvCommand,
@@ -567,30 +1243,27 @@ function createService({
     listConnections: (context) => assistantRuntime.listConnections(context),
     projectService,
     publishSessionChanged: publishAgentSessionChanged,
+    publishConversation: event => mainConversations.publishNative(event),
     resolveConnection: (context) => assistantRuntime.resolveConnection(context)
   });
   const sessionAttachments = createSessionAttachments({ projectService, env });
-  const claudeProvider = createClaudeSessionAgentProvider({
+  const claudeProvider = createClaudeConversationHost({
     env, projectService, publishSessionChanged: publishAgentSessionChanged,
+    publishConversation: event => mainConversations.publishNative(event),
     systemRoot: codexProviderOptions.systemRoot,
     codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
     connectionStatus: (context) => assistantRuntime.claudeConnectionStatus(context)
   });
   const sessionAgent = createSessionAgentManager({
     attachments: sessionAttachments,
+    conversationRuntime: mainConversations,
     readProviderUsage: providerUsage.read,
     resolveAssistantUser: (user) => assistantRuntime.resolveAssistantUser(user),
     readRoutingConfiguration: () => createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read(),
     providers: [
       claudeProvider,
-      createCodexSessionAgentProvider({
-        listConnections: codexProviderConnections.list,
-        connectionStatus: (context) => assistantRuntime.codexConnectionStatus(context),
-        controller: codex
-      }),
-      createOpenCodeSessionAgentProvider({
-        controller: opencode
-      })
+      codex.provider,
+      opencode.provider
     ],
     async readAssistantAccess(context) {
       if (context.engineId === "claude") {
@@ -611,7 +1284,7 @@ function createService({
       }
       const available = await assistantRuntime.codexConnectionStatus(context);
       try {
-        return { ...await codex.assistantAccess(context), available };
+        return { ...await codex.accounts.assistantAccess(context), available };
       } catch (error) {
         if (available) throw error;
         return { available: false, ownerOnly: true, connectionIdentity: "" };
@@ -660,7 +1333,8 @@ function createService({
       const result = await prepareAssistantChangeover(sessionId, context);
       if (result?.ok === false) throw Object.assign(new Error(result.error || "The previous assistant could not stop."), result);
     }
-    if (selection.engineId === "codex") await codex.prepareModelRouting(sessionId, selection, context);
+    const preparation = sessionAgent.prepareSelection(sessionId, selection, context);
+    if (preparation) await preparation;
   }
 
   const sessionNaming = createSessionNaming({ agent: sessionAgent, publishSessionChanged: publishAgentSessionChanged, logger });
@@ -677,7 +1351,9 @@ function createService({
     async dispatch(sessionId, input, context) {
       requireCompletedConversationRewind(context.session);
       await prepareAgentSkillsInsideAgentWrite(sessionId, context);
-      return sendWithAssistantChangeover(sessionId, input, context, sessionAgent);
+      return ["codex", "claude", "opencode"].includes(vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId)
+        ? sessionAgent.sendMessage(sessionId, input, context)
+        : sendWithAssistantChangeover(sessionId, input, context, sessionAgent);
     }
   });
 
@@ -787,6 +1463,21 @@ function createService({
       inspectSource: false
     });
     return { ...options, runtime, session };
+  }
+
+  async function applyAgentGoalReadResult(sessionId, context, result) {
+    const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    if (pinned && result.status === "available") {
+      const status = result.goal?.status || "complete";
+      if (pinned.status !== status) {
+        await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({ ...pinned, status }));
+        await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed" });
+      }
+      if (result.goal) return { ...result, goal: { ...result.goal,
+        objective: result.goal.objective === assistantModePrompt(pinned.mode, pinned.objective) ? pinned.objective : result.goal.objective },
+        routing: { mode: pinned.mode, selection: pinned.selection } };
+    }
+    return result;
   }
 
   async function invalidateWorkspaceSetup(context, diagnostic = "Run this session's declared setup steps after updating its source.") {
@@ -1734,14 +2425,16 @@ function createService({
   }
 
   sessionConversations = createSessionConversations({
+    actions,
+    conversationRuntime: mainConversations,
     systemRoot: codexProviderOptions.systemRoot,
-    prepareSelection: (sessionId, selection, context) => selection.engineId === "codex"
-      ? codex.prepareModelRouting(sessionId, selection, context) : null,
+    prepareSelection: (sessionId, selection, context) => sessionAgent.prepareSelection(sessionId, selection, context),
     sessionAgent,
     attachments: sessionAttachments,
     runAgentWrite: runMainAgentWrite,
     prepareAgentSkills: prepareAgentSkillsInsideAgentWrite,
-    publishSessionChanged: publishAgentSessionChanged
+    publishSessionChanged: publishAgentSessionChanged,
+    publishConversation: event => mainConversations.publishNative(event)
   });
   const service = {
     ...sessionConversations,
@@ -2452,19 +3145,13 @@ function createService({
     },
 
     closeGlobalCodexTerminal(terminalSessionId) {
-      return codex.closeGlobalTerminal(terminalSessionId);
+      return codex.terminals.closeGlobalTerminal(terminalSessionId);
     },
 
     async closeOutputTargetTerminal(sessionId, terminalSessionId) {
       const result = await outputTarget.closeTerminal(sessionId, terminalSessionId);
       await publishTerminalSessionChanged("outputTargetClosed", sessionId, "output-target-closed");
       return result;
-    },
-
-    createAgentConversation(sessionId, input = {}, options = {}) {
-      return runMainAgentWrite(sessionId, options, (context) => (
-        sessionAgent.createConversation(sessionId, input, context)
-      ), { operation: "create-agent-conversation" });
     },
 
     async listAgentConversationStorage(sessionId, options = {}) {
@@ -2582,7 +3269,9 @@ function createService({
           const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
           if (temporary?.ok === false || temporary?.active) fail("Finish temporary assistant work before replacing native context.");
         }
-        const result = await replaceNativeConversation(sessionId, input, context, sessionAgent);
+        const conversation = ["codex", "claude", "opencode"].includes(vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId)
+          ? await mainConversations.open({ id: sessionId, context: { ...context, sessionId }, representation: "native" }) : null;
+        const result = await replaceNativeConversation(sessionId, input, context, sessionAgent, conversation);
         await publishAgentSessionChanged(sessionId, { reason: "native-conversation-replaced" });
         return result;
       }, { operation: "replace-agent-conversation" });
@@ -2603,41 +3292,11 @@ function createService({
       return sessionAgent.runEphemeralChatTurn(scope, input, options);
     },
 
-    deleteAgentConversation(sessionId, input = {}, options = {}) {
-      return sessionAgent.deleteConversation(sessionId, input, options);
-    },
-
     deleteEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
       return sessionAgent.deleteEphemeralConversation(scope, {
         ...input,
         ephemeral: input.persistent !== true
       }, options);
-    },
-
-    async runDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
-      if (input.executionProfile) {
-        return sessionAgent.runDetachedChatTurn(
-          sessionId,
-          input,
-          await assistantSessionOptions(sessionId, options)
-        );
-      }
-      return runMainAgentWrite(sessionId, options, (context) => (
-        sessionAgent.runDetachedChatTurn(sessionId, input, context)
-      ), { operation: "run-temporary-chat" });
-    },
-
-    async streamDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
-      if (input.executionProfile) {
-        return sessionAgent.streamDetachedChatTurn(
-          sessionId,
-          input,
-          await assistantSessionOptions(sessionId, options)
-        );
-      }
-      return runMainAgentWrite(sessionId, options, (context) => (
-        sessionAgent.streamDetachedChatTurn(sessionId, input, context)
-      ), { operation: "stream-temporary-chat" });
     },
 
     deleteDetachedAgentChatThread(sessionId, input = {}, options = {}) {
@@ -2675,6 +3334,57 @@ function createService({
       return sessionAgent.requireAssistantAccessForSelection(assistantSelection, options);
     },
 
+    createConversationHost(scope) {
+      const credentialHome = appCredentialContext();
+      if (credentialHome.ok === false) throw new Error(credentialHome.error);
+      return {
+        workdir: scope.workdir, stateDirectory: path.join(scope.runtimeRoot, "native"),
+        env: { ...actorHomeEnv(credentialHome, env),
+          CODEX_HOME: path.join(codexProviderOptions.toolHomeSource, ".codex"),
+          CLAUDE_CONFIG_DIR: env.CLAUDE_CONFIG_DIR || path.join(credentialHome.home, ".claude") },
+        commands: { codex: codexProviderOptions.codexCommand || STUDIO_MANAGED_CODEX_COMMAND,
+          claude: env.VIBE64_CLAUDE_COMMAND || STUDIO_MANAGED_CLAUDE_COMMAND,
+          opencode: opencodeTerminalController.command || env.VIBE64_OPENCODE_COMMAND || "opencode" },
+        execution: createVibe64ConversationExecution({ credentialHome,
+          execution: { ownerId: scope.id }, operationId: "conversation", label: "Assistant conversation" }),
+        opencode: input => opencode.hostPreparation.conversationHost(input),
+        async codex({ providerId }) {
+          // Same account/runtime scope as main chat. The conversation's workdir
+          // and command environment belong to its thread, not this service.
+          const options = { ...codexProviderOptions,
+            ...(providerId === "openai" ? {} : await codexProviderConnections.runtimeOptions(providerId)),
+            executionMode: "", executionRoot: "", workdir: "", project: {}, session: {},
+            terminalEnv: await vibe64HostContextEnvironment(codexAppServerRuntimeBaseDir({ env })), userKey: "" };
+          options.runtimeDir ||= codexAppServerRuntimeDir(options);
+          return { ...codexAppServerRuntimeHost(options), options };
+        }
+      };
+    },
+
+    async resolveConversationConfiguration(assistantSelection, systemPrompt, options = {}) {
+      await sessionAgent.requireAssistantAccessForSelection(assistantSelection, options);
+      const { engineId, modelProviderId, modelId, variantId } = assistantSelection;
+      const nativeAccount = engineId === "codex" && modelProviderId === "openai" ||
+        engineId === "claude" && modelProviderId === "anthropic";
+      return { engine: engineId, configuration: { systemPrompt, model: modelId,
+        ...(!nativeAccount ? { integrationId: modelProviderId } : {}), ...(variantId ? { effort: variantId } : {}) } };
+    },
+
+    async resolveConversationConnection({ integrationId, assistantSelection }, options = {}) {
+      await sessionAgent.requireAssistantAccessForSelection(assistantSelection, options);
+      if (integrationId !== assistantSelection.modelProviderId) throw new Error("The requested connection differs from the authorized assistant selection.");
+      let connection;
+      if (assistantSelection.engineId === "opencode") connection = await assistantRuntime.resolveConnection(assistantSelection);
+      else if (assistantSelection.engineId === "claude") connection = await codexProviderConnections.claudeProviderSettings(integrationId);
+      else {
+        await codexProviderConnections.runtimeOptions(integrationId);
+        connection = await codexProviderConnections.read(integrationId);
+      }
+      if (!connection?.apiKey) throw new Error("Reconnect the selected AI account before continuing.");
+      return { providerId: integrationId, model: assistantSelection.modelId, apiKey: connection.apiKey,
+        ...(connection.canonicalUrl ? { baseURL: connection.canonicalUrl } : {}) };
+    },
+
     listAssistantCapabilities(input = {}, options = {}) {
       return sessionAgent.listCapabilities(input, options);
     },
@@ -2710,7 +3420,7 @@ function createService({
 
     verifyAssistantConnection(input = {}, options = {}) {
       void options;
-      return opencode.verifyConnection(input);
+      return opencode.accounts.verifyConnection(input);
     },
 
     resolveAssistantSelection(input = {}, options = {}) {
@@ -2875,24 +3585,6 @@ function createService({
       }, { operation: "complete-integration-continuation", waitMs: AGENT_WRITE_WAIT_MS });
     },
 
-    async readConversationRewindState(sessionId, options = {}) {
-      const context = await assistantSessionOptions(sessionId, options);
-      const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata, { required: false });
-      return selection ? readConversationRewindState(context.runtime.store, sessionId, sessionConversationKey(context.session)) : null;
-    },
-
-    async rewindConversation(sessionId, input = {}, options = {}) {
-      await sessionAgent.requireAssistantAccess(sessionId, await assistantSessionOptions(sessionId, options));
-      await assistantRouting.cancel(sessionId, options);
-      return runMainAgentWrite(sessionId, options, async (context) => {
-        await sessionAgent.requireAssistantAccess(sessionId, context);
-        if (sessionHasActiveAgentRun(context.session)) {
-          return { ok: false, error: "Stop the assistant before undoing a turn." };
-        }
-        return rewindLastConversationTurn(sessionId, input, context, sessionAgent);
-      }, { operation: "rewind-conversation" });
-    },
-
     async sendAgentMessage(sessionId, input = {}, options = {}) {
       const startedAt = Date.now();
       const username = (currentProjectRequestContext()?.vibe64User || options.vibe64User)?.username || null;
@@ -2942,24 +3634,21 @@ function createService({
       }
     },
 
-    async readAgentGoal(sessionId, options = {}) {
+    async readAgentGoal(sessionId, options = {}, { canonical = false } = {}) {
       const context = await assistantSessionOptions(sessionId, options);
-      const result = await sessionAgent.readGoal(sessionId, context);
-      const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
-      if (pinned && result.status === "available") {
-        const status = result.goal?.status || "complete";
-        if (pinned.status !== status) {
-          await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({ ...pinned, status }));
-          await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed" });
-        }
-        if (result.goal) return { ...result, goal: { ...result.goal,
-          objective: result.goal.objective === assistantModePrompt(pinned.mode, pinned.objective) ? pinned.objective : result.goal.objective },
-          routing: { mode: pinned.mode, selection: pinned.selection } };
-      }
-      return result;
+      let view;
+      let target;
+      const result = await sessionAgent.readGoal(sessionId, { ...context, canonicalGoal: canonical,
+        ...(canonical ? { async onGoalResult(nativeResult, readTarget) {
+          view = await applyAgentGoalReadResult(sessionId, context, nativeResult);
+          target = readTarget;
+        } } : {}) });
+      if (!canonical) return applyAgentGoalReadResult(sessionId, context, result);
+      return { status: view.status, goal: result ? { ...result, objective: view.goal.objective } : null,
+        target, ...(view.routing ? { routing: view.routing } : {}) };
     },
 
-    async updateAgentGoal(sessionId, input = {}) {
+    async updateAgentGoal(sessionId, input = {}, { canonical = false } = {}) {
       if (["set", "resume"].includes(input.action)) {
         return runMainAgentWrite(sessionId, input, async (context) => {
           requireCompletedConversationRewind(context.session);
@@ -2978,24 +3667,32 @@ function createService({
           }
           await prepareAgentSkillsInsideAgentWrite(sessionId, context);
           const prepared = await assistantRouting.prepareGoal(sessionId, input, context);
-          const result = await sessionAgent.updateGoal(sessionId, prepared.input, prepared.context);
-          if (result?.ok !== false && prepared.pinned) {
-            await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify(prepared.pinned));
-          }
-          return result;
+          const completeResult = async result => {
+            if (result?.ok !== false && prepared.pinned) {
+              await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify(prepared.pinned));
+            }
+            return result;
+          };
+          const result = await sessionAgent.updateGoal(sessionId, prepared.input, { ...prepared.context, canonicalGoal: canonical,
+            ...(canonical ? { onGoalResult: completeResult } : {}) });
+          return canonical ? result : completeResult(result);
         }, { operation: input.action === "set" ? "set-agent-goal" : "resume-agent-goal" });
       }
       const context = await assistantSessionOptions(sessionId, input);
       const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+      const completeResult = async result => {
+        if (result?.ok !== false && result.status === "available" && pinned) {
+          await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({
+            ...pinned, status: result.goal?.status || "complete"
+          }));
+          await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed" });
+        }
+        return result;
+      };
       const result = await sessionAgent.updateGoal(sessionId, pinned && input.objective === pinned.objective
-        ? { ...input, objective: assistantModePrompt(pinned.mode, input.objective) } : input, context);
-      if (result?.ok !== false && result.status === "available" && pinned) {
-        await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({
-          ...pinned, status: result.goal?.status || "complete"
-        }));
-        await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed" });
-      }
-      return result;
+        ? { ...input, objective: assistantModePrompt(pinned.mode, input.objective) } : input,
+      { ...context, canonicalGoal: canonical, ...(canonical ? { onGoalResult: completeResult } : {}) });
+      return canonical ? result : completeResult(result);
     },
 
     async readAgentPlanUsage(sessionId, options = {}) {
@@ -3034,7 +3731,7 @@ function createService({
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         if (selection.engineId === "codex" && (context.session.metadata.agent_identity_provider !== "codex" ||
             !context.session.metadata.agent_identity_conversation_id)) {
-          await codex.prepareModelRouting(sessionId, selection, context);
+          await sessionAgent.prepareSelection(sessionId, selection, context);
         }
         const result = await sessionAgent.ensureSession(sessionId, context);
         if (result?.ok !== false) await assistantRouting.reconcile(sessionId, context);
@@ -3098,6 +3795,7 @@ function createService({
         })]);
         const failures = [...routing, native].filter((result) => result.status === "rejected").map((result) => result.reason);
         if (failures.length) throw new AggregateError(failures, "Assistant runtime shutdown did not complete successfully.");
+        await mainConversations.close();
         return native.value;
       }
       return sessionAgent.invalidateRuntimes(input, {
@@ -3127,6 +3825,34 @@ function createService({
       return reconcileAgentSessions(sessions, options);
     },
 
+    async openBrowserConversation(sessionId, options = {}) {
+      if (!options.browserAuthority || options.browserAuthority.sessionId !== sessionId) {
+        throw Object.assign(new Error("Main browser conversations require current project access."), {
+          code: "conversation_forbidden", statusCode: 403
+        });
+      }
+      const context = await assistantSessionOptions(sessionId, options);
+      const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
+      if (!["codex", "claude", "opencode"].includes(selection.engineId)) {
+        throw Object.assign(new Error("This Main conversation's engine is not connected to the browser facade yet."), {
+          code: "conversation_unsupported", statusCode: 400
+        });
+      }
+      return mainConversations.open({ id: sessionId,
+        context: { ...context, sessionId, assistantSelection: selection, providerId: selection.engineId } });
+    },
+
+    async openTemporaryBrowserConversation(sessionId, conversationId, options = {}) {
+      const authority = options.browserAuthority;
+      if (!authority || authority.sessionId !== sessionId || authority.conversationId !== conversationId) {
+        throw Object.assign(new Error("Temporary browser conversations require current project access."), {
+          code: "conversation_forbidden", statusCode: 403
+        });
+      }
+      const context = await assistantSessionOptions(sessionId, options);
+      return mainConversations.open({ id: sessionId, context: { ...context, sessionId, temporaryConversationId: conversationId } });
+    },
+
     agentSessionState(sessionId, options = {}) {
       return sessionAgent.sessionState(sessionId, options);
     },
@@ -3137,19 +3863,15 @@ function createService({
     prepareRoutingSelection,
 
     globalCodexTerminalState() {
-      return codex.globalTerminalState();
+      return codex.terminals.globalTerminalState();
     },
 
     readGlobalCodexTerminal(terminalSessionId) {
-      return codex.readGlobalTerminal(terminalSessionId);
+      return codex.terminals.readGlobalTerminal(terminalSessionId);
     },
 
     readAgentTerminal(sessionId, terminalSessionId, options = {}) {
       return sessionAgent.readTerminal(sessionId, terminalSessionId, options);
-    },
-
-    readAgentConversation(sessionId, input = {}, options = {}) {
-      return sessionAgent.readConversation(sessionId, input, options);
     },
 
     readEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
@@ -3221,26 +3943,11 @@ function createService({
       }, { operation: "start-agent-terminal" });
     },
 
-    startAgentConversationTurn(sessionId, input = {}, options = {}) {
-      void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId).catch((error) => {
-        logOperationalEvent(logger, "warn", { event: "vibe64.prompt_hints.cleanup_failed", error: error.message, sessionId },
-          "Prompt suggestion cleanup will be retried on session close.");
-      });
-      return runMainAgentWrite(sessionId, options, async (context) => {
-        await prepareAgentSkillsInsideAgentWrite(sessionId, context);
-        return sessionAgent.startConversationTurn(sessionId, input, context);
-      }, { operation: "start-agent-turn" });
-    },
-
     startEphemeralAgentConversationTurn(scope = {}, input = {}, options = {}) {
       return sessionAgent.startEphemeralConversationTurn(scope, {
         ...input,
         ephemeral: input.persistent !== true
       }, options);
-    },
-
-    stopAgentConversation(sessionId, input = {}, options = {}) {
-      return sessionAgent.stopConversation(sessionId, input, options);
     },
 
     stopEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
@@ -3252,7 +3959,7 @@ function createService({
 
     async startGlobalCodexTerminal(options = {}) {
       await authorizeGlobalCodexTerminal(options);
-      return codex.startGlobalTerminal();
+      return codex.terminals.startGlobalTerminal();
     },
 
     async startOutputTargetTerminal(sessionId, input = {}) {
@@ -3277,7 +3984,7 @@ function createService({
     },
 
     subscribeGlobalCodexTerminal(terminalSessionId, subscriber) {
-      return codex.subscribeGlobalTerminal(terminalSessionId, subscriber);
+      return codex.terminals.subscribeGlobalTerminal(terminalSessionId, subscriber);
     },
 
     subscribeOutputTargetTerminal(sessionId, terminalSessionId, subscriber) {
@@ -3298,10 +4005,6 @@ function createService({
       return runMainAgentWrite(sessionId, options, (context) => (
         sessionAgent.deleteAttachment(sessionId, input, context)
       ), { operation: "delete-agent-attachment" });
-    },
-
-    waitForAgentConversationTurn(sessionId, input = {}, options = {}) {
-      return sessionAgent.waitForConversationTurn(sessionId, input, options);
     },
 
     waitForEphemeralAgentConversationTurn(scope = {}, input = {}, options = {}) {
@@ -3331,7 +4034,7 @@ function createService({
 
     async writeGlobalCodexTerminal(terminalSessionId, data, options = {}) {
       await authorizeGlobalCodexTerminal(options);
-      return codex.writeGlobalTerminal(terminalSessionId, data);
+      return codex.terminals.writeGlobalTerminal(terminalSessionId, data);
     },
 
     resizeAgentTerminal(sessionId, terminalSessionId, size, options = {}) {
@@ -3339,7 +4042,7 @@ function createService({
     },
 
     resizeGlobalCodexTerminal(terminalSessionId, size) {
-      return codex.resizeGlobalTerminal(terminalSessionId, size);
+      return codex.terminals.resizeGlobalTerminal(terminalSessionId, size);
     },
 
     writeOutputTargetTerminal(sessionId, terminalSessionId, data) {
@@ -3432,6 +4135,8 @@ function startProjectRuntimeDormancyCleanupSchedule({
 }
 
 export {
+  createCodexSessionRegistration,
+  createOpenCodeSessionRegistration,
   createService,
   projectRuntimeDormancyState,
   startProjectRuntimeDormancyCleanupSchedule,

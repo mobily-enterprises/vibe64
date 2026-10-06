@@ -1,3 +1,4 @@
+import { constants } from "node:os";
 import {
   stopCaptureExecution
 } from "./engines/capture.js";
@@ -88,8 +89,21 @@ function vibe64CapacityRejectedResult(execution = {}, {
 }
 
 async function inspectVibe64Service(executionId) {
-  if (installedProvider) return installedProvider.inspectExecution(executionId);
-  return inspectDetachedExecution(executionId);
+  if (!installedProvider) return inspectDetachedExecution(executionId);
+  const result = await installedProvider.inspectExecution(executionId);
+  // The execution gateway translates host observations; native-agent adapters
+  // must not know systemd's child-status codes or mistake an absent unit for exit 0.
+  const reason = String(result.execMainCode || "");
+  const status = String(result.execMainStatus ?? "");
+  const exited = ["1", "exited"].includes(reason);
+  const killed = ["2", "3", "killed", "dumped"].includes(reason);
+  const signal = result.signal || (killed ? (status.startsWith("SIG") ? status
+    : Object.entries(constants.signals).find(([, number]) => String(number) === status)?.[0]) : null);
+  return { ...result,
+    running: exited || killed || result.scopeEmpty === true ? false : result.scopeEmpty === false ? true : null,
+    exitCode: exited && /^\d+$/u.test(status) ? Number(status) : null,
+    signal: signal || null
+  };
 }
 
 async function stopVibe64Execution(executionId = "", options = {}) {

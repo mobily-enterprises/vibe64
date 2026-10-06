@@ -3,16 +3,24 @@ import { EventEmitter } from "node:events";
 import { routeLocationKey } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const http = vi.hoisted(() => ({ request: vi.fn() }));
+const http = vi.hoisted(() => ({ request: vi.fn(), transport: null }));
 vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
-  getHttpWebClient: () => http
+  getHttpWebClient: () => ({ request: (...args) => http.transport.request(...args) })
 }));
+
+vi.mock("@jskit-ai/assistant-core/client", async (importOriginal) => ({
+  ...await importOriginal(), assistantHttpClient: { request: (...args) => http.transport.request(...args) }
+}));
+import { provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
+import { createTemporaryConversationFixture, temporaryCanonicalPath, temporaryRequestBody } from "./helpers/temporaryConversationFixture.js";
 
 import { useVibe64TemporaryAi } from "../../src/composables/useVibe64TemporaryAi.js";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
 const SESSION_PATH = "/api/app/project-a/vibe64/sessions/session-1";
-const CONVERSATION_PATH = `${SESSION_PATH}/temporary-conversations/conversation-1`;
+let createdId = "conversation-1";
+let CONVERSATION_PATH = `${SESSION_PATH}/temporary-conversations/${createdId}`;
+const canonicalPath = () => temporaryCanonicalPath(createdId);
 const CLOSED_CONVERSATION = {
   reason: "temporary-conversation-closed",
   conversationId: "conversation-1",
@@ -47,10 +55,10 @@ function mountTemporaryAi({
       return () => null;
     }
   });
-  app.provide("jskit.realtime.runtime.client.socket", socket);
+  provideConversationFixture(app, http.transport.attach(socket), viewer.value?.actorKey || "owner");
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
   app.provide(routeLocationKey, { params: { slug: "project-a" } });
-  app.mount({});
+  app.runWithContext(() => app.mount({}));
   mountedApps.add(app);
   const task = openTask ? temporary.openTask({ draft: "Repair this conflict.", recoveryOperation: "update" }) : null;
   return {
@@ -70,7 +78,13 @@ describe("temporary AI mounted lifetime", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     http.request.mockReset();
-    http.request.mockResolvedValue({ ok: true, status: "inProgress" });
+    http.request.mockResolvedValue({ ok: true });
+    createdId = "conversation-1";
+    CONVERSATION_PATH = `${SESSION_PATH}/temporary-conversations/${createdId}`;
+    http.transport = createTemporaryConversationFixture({ request: (...args) => http.request(...args), created(id) {
+      createdId = id;
+      CONVERSATION_PATH = `${SESSION_PATH}/temporary-conversations/${id}`;
+    } });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
     vi.stubGlobal("window", {
       addEventListener: vi.fn(),
@@ -104,6 +118,7 @@ describe("temporary AI mounted lifetime", () => {
     expect(reloaded.temporary.open.value).toBe(false);
     reloaded.temporary.showWorkspace();
     expect(reloaded.temporary.activeTask.value).toMatchObject(saved);
+    expect(reloaded.temporary.activeTask.value.unread).toBe(false);
     expect(reloaded.temporary.open.value).toBe(true);
   });
 
@@ -141,7 +156,7 @@ describe("temporary AI mounted lifetime", () => {
     firstSave.resolve({ ok: true });
     await vi.waitFor(() => expect(patchCount).toBe(2));
     const settings = http.request.mock.calls.filter(([, options]) => options?.method === "PATCH")
-      .map(([, options]) => options.body.agentSettings.model);
+      .map(([, options]) => temporaryRequestBody(options).agentSettings.model);
     expect(settings).toEqual(["first", "second"]);
     temporary.updateDraft("conversation-1", "Next question");
     await vi.advanceTimersByTimeAsync(300);
@@ -254,12 +269,12 @@ describe("temporary AI mounted lifetime", () => {
 
   it("coalesces routing events while a conversation read is pending", async () => {
     const reading = Promise.withResolvers();
-    http.request.mockImplementation(async (url) => url === CONVERSATION_PATH ? reading.promise : {
+    http.request.mockImplementation(async (url) => url === canonicalPath() ? reading.promise : {
       ok: true, conversations: [{ conversationId: "conversation-1", status: "routing", messages: [] }]
     });
     const { temporary, socket } = mountTemporaryAi({ openTask: false });
     await vi.advanceTimersByTimeAsync(0);
-    const reads = () => http.request.mock.calls.filter(([url]) => url === CONVERSATION_PATH);
+    const reads = () => http.request.mock.calls.filter(([url]) => url === canonicalPath());
     expect(reads()).toHaveLength(1);
     for (let i = 0; i < 10; i += 1) {
       socket.emit("vibe64.session.changed", { ...CLOSED_CONVERSATION,
@@ -273,7 +288,9 @@ describe("temporary AI mounted lifetime", () => {
     expect(temporary.activeTask.value.busy).toBe(false);
     expect(temporary.activeTask.value.messages.at(-1).text).toBe("Done.");
     await vi.advanceTimersByTimeAsync(2000);
-    expect(reads()).toHaveLength(1);
+    // The shared reader coalesces these invalidations into one latest read
+    // after the in-flight snapshot; it does not keep a progress poll running.
+    expect(reads()).toHaveLength(2);
   });
 
   it("observes a new turn after the stopped turn's pending read settles", async () => {
@@ -281,9 +298,9 @@ describe("temporary AI mounted lifetime", () => {
     let turn = 0;
     let reads = 0;
     http.request.mockImplementation(async (url, options) => {
-      if (url.endsWith("/turns")) return { ok: true, status: "inProgress", runId: `turn-${++turn}` };
-      if (url.endsWith("/stop")) return { ok: true, status: "interrupted" };
-      if (url === CONVERSATION_PATH && options.method === "GET") {
+      if (url.endsWith("/messages")) return { ok: true, status: "inProgress", runId: `turn-${++turn}` };
+      if (url.endsWith("/cancel")) return { ok: true, status: "interrupted" };
+      if (url === canonicalPath() && options.method === "GET") {
         reads += 1;
         return reads === 1 ? oldRead.promise : { ok: true, status: "completed", runId: "turn-2",
           messages: [{ id: "new-reply", role: "assistant", text: "Second turn finished." }] };
@@ -299,12 +316,13 @@ describe("temporary AI mounted lifetime", () => {
     temporary.updateDraft("conversation-1", "Second task");
     await temporary.send("conversation-1");
     expect(reads).toBe(1);
-    expect(temporary.activeTask.value.runId).toBe("turn-2");
+    expect(temporary.activeTask.value.delivery.state.messages).toEqual([]);
     oldRead.resolve({ ok: true, status: "completed", runId: "turn-1", messages: [
       { id: "old-reply", role: "assistant", text: "Stale response" }
     ] });
     await vi.advanceTimersByTimeAsync(0);
     expect(reads).toBe(2);
+    expect(temporary.activeTask.value.runId).toBe("turn-2");
     expect(temporary.activeTask.value.busy).toBe(false);
     expect(temporary.activeTask.value.messages.at(-1).text).toBe("Second turn finished.");
   });
@@ -330,11 +348,13 @@ describe("temporary AI mounted lifetime", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(current().delivery.state.sending).toBe(true);
     expect(turns()).toHaveLength(1);
-    expect(http.request).toHaveBeenLastCalledWith(`${CONVERSATION_PATH}/turns`, expect.objectContaining({
+    expect(http.request).toHaveBeenLastCalledWith(`${canonicalPath()}/messages`, expect.objectContaining({
       body: expect.objectContaining({
         messageId,
-        agentSettings: expect.objectContaining({ model: "original-model" }),
-        presentation: expect.objectContaining({ draft: "" })
+        data: expect.objectContaining({
+          agentSettings: expect.objectContaining({ model: "original-model" }),
+          presentation: expect.objectContaining({ draft: "" })
+        })
       })
     }));
     temporary.updateDraft(task.id, "A draft typed while startup is pending.");
@@ -373,7 +393,7 @@ describe("temporary AI mounted lifetime", () => {
     expect(temporary.activeTask.value.delivery.state.messages[0]).toMatchObject({
       text: displayMessage, payload: { message, displayMessage }
     });
-    starting.reject(new Error("Provider unavailable."));
+    starting.resolve({ ok: false, error: "Provider unavailable." });
     await expect(sending).resolves.toMatchObject({ started: false });
     expect(temporary.activeTask.value.draft).toBe("");
     const failed = temporary.activeTask.value.delivery.state.messages[0];
@@ -384,9 +404,9 @@ describe("temporary AI mounted lifetime", () => {
     temporary.updateDraft(temporary.activeTask.value.id, displayMessage);
     await expect(temporary.send(temporary.activeTask.value.id, { retryMessageId: failed.id })).resolves.toBe(true);
     expect(temporary.activeTask.value.draft).toBe(displayMessage);
-    const sends = http.request.mock.calls.filter(([url]) => url.endsWith("/turns"));
+    const sends = http.request.mock.calls.filter(([url]) => url.endsWith("/messages"));
     expect(sends).toHaveLength(2);
-    for (const [, options] of sends) expect(options.body).toMatchObject({ messageId: failed.id, message, displayMessage });
+    for (const [, options] of sends) expect(temporaryRequestBody(options)).toMatchObject({ messageId: failed.id, message, displayMessage });
   });
 
   it.each(["empty", "instructions", "label", "new reply"])("restored repair Retry leaves the independent %s draft untouched", async (draftKind) => {
@@ -398,7 +418,7 @@ describe("temporary AI mounted lifetime", () => {
     http.request.mockImplementation(async (url, options) => {
       if (options?.method === "POST") return { ok: true, status: "inProgress", runId: "repair-turn" };
       if (options?.method === "PATCH") return { ok: true };
-      if (url === CONVERSATION_PATH) return { ok: true, status: "inProgress", runId: "repair-turn" };
+      if (url === canonicalPath()) return { ok: true, status: "inProgress", runId: "repair-turn" };
       return { conversations: [{ conversationId: "conversation-1", recoveryOperation: "update", status: "failed",
         draft, messages: [], routingMetadata: { assistant_routing_request: JSON.stringify(request) }
       }] };
@@ -411,7 +431,7 @@ describe("temporary AI mounted lifetime", () => {
     expect(temporary.activeTask.value.busy).toBe(true);
     const sends = http.request.mock.calls.filter(([, options]) => options?.method === "POST");
     expect(sends).toHaveLength(1);
-    expect(sends[0][1].body).toMatchObject({ messageId: "repair-request", message, displayMessage });
+    expect(temporaryRequestBody(sends[0][1])).toMatchObject({ messageId: "repair-request", message, displayMessage });
     await vi.advanceTimersByTimeAsync(250);
     expect(http.request).toHaveBeenLastCalledWith(CONVERSATION_PATH, expect.objectContaining({
       method: "PATCH", body: expect.objectContaining({ presentation: expect.objectContaining({ draft: expectedDraft }) })
@@ -422,11 +442,11 @@ describe("temporary AI mounted lifetime", () => {
     const { temporary, task } = mountTemporaryAi();
     temporary.updateAttachments(task.id, [{ attachmentId: "original-file", fileName: "first.txt" }]);
     http.request.mockResolvedValueOnce({ ok: true, conversationId: "conversation-1" })
-      .mockRejectedValueOnce(new Error("Provider unavailable."));
+      .mockResolvedValueOnce({ ok: false, error: "Provider unavailable." });
     await expect(temporary.send(task.id)).resolves.toBe(false);
     const failed = temporary.activeTask.value.delivery.state.messages[0];
     expect(failed).toMatchObject({ text: "Repair this conflict.", status: "failed", error: "Provider unavailable." });
-    const originalBody = http.request.mock.calls.find(([path]) => path.endsWith("/turns"))[1].body;
+    const originalBody = temporaryRequestBody(http.request.mock.calls.find(([path]) => path.endsWith("/messages"))[1]);
     temporary.updateDraft(task.id, "A newer question.");
     temporary.updateAgentSetting(task.id, "model", "another-model");
     temporary.updateAttachments(task.id, [
@@ -435,7 +455,7 @@ describe("temporary AI mounted lifetime", () => {
     ]);
     http.request.mockResolvedValueOnce({ ok: true, status: "completed", runId: "turn-1" });
     await expect(temporary.send(task.id, { retryMessageId: failed.id })).resolves.toBe(true);
-    const bodies = http.request.mock.calls.filter(([path]) => path.endsWith("/turns")).map(([, options]) => options.body);
+    const bodies = http.request.mock.calls.filter(([path]) => path.endsWith("/messages")).map(([, options]) => temporaryRequestBody(options));
     expect(bodies).toEqual([originalBody, {
       ...originalBody, presentation: { ...originalBody.presentation, draft: "A newer question." }
     }]);
@@ -443,33 +463,33 @@ describe("temporary AI mounted lifetime", () => {
     expect(temporary.activeTask.value.delivery.state.messages).toEqual([]);
     expect(temporary.activeTask.value.attachments.map((file) => file.attachmentId)).toEqual(["new-file"]);
     await vi.advanceTimersByTimeAsync(250);
-    expect(http.request).toHaveBeenLastCalledWith(CONVERSATION_PATH, expect.objectContaining({
-      method: "PATCH", body: expect.objectContaining({
+    expect(http.request.mock.calls.filter(([, options]) => options.method === "PATCH").at(-1)).toEqual([
+      CONVERSATION_PATH, expect.objectContaining({ method: "PATCH", body: expect.objectContaining({
         attachmentIds: ["new-file"], presentation: expect.objectContaining({ draft: "A newer question." })
-      })
-    }));
+      }) })
+    ]);
   });
 
   it("a fresh Send owns a new request even when an earlier failed request has identical text", async () => {
     const { temporary, task } = mountTemporaryAi();
     http.request.mockResolvedValueOnce({ ok: true, conversationId: "conversation-1" })
-      .mockRejectedValueOnce(new Error("Provider unavailable."));
+      .mockResolvedValueOnce({ ok: false, error: "Provider unavailable." });
     await expect(temporary.send(task.id)).resolves.toBe(false);
     const failed = temporary.activeTask.value.delivery.state.messages[0];
     expect(temporary.activeTask.value.draft).toBe("");
     temporary.updateDraft(task.id, failed.text);
     http.request.mockResolvedValueOnce({ ok: true, status: "completed", runId: "new-turn" });
     await expect(temporary.send(task.id)).resolves.toBe(true);
-    const sends = http.request.mock.calls.filter(([url]) => url.endsWith("/turns"));
+    const sends = http.request.mock.calls.filter(([url]) => url.endsWith("/messages"));
     expect(sends[1][1].body.messageId).not.toBe(failed.id);
-    expect(sends[1][1].body.message).toBe(failed.payload.message);
+    expect(sends[1][1].body.text).toBe(failed.payload.message);
     expect(temporary.activeTask.value.draft).toBe("");
     expect(temporary.activeTask.value.delivery.find(failed.id).status).toBe("failed");
   });
 
   it.each(["editMessage", "cancelMessage"])("%s removes the failed entry without losing a newer draft", async (action) => {
     const { temporary, task } = mountTemporaryAi();
-    http.request.mockRejectedValueOnce(new Error("Provider unavailable."));
+    http.request.mockResolvedValueOnce({ ok: false, error: "Provider unavailable." });
     await temporary.send(task.id);
     const messageId = temporary.activeTask.value.delivery.state.messages[0].id;
     temporary.updateDraft(task.id, "My next question.");
@@ -633,7 +653,7 @@ describe("temporary AI mounted lifetime", () => {
       .mockResolvedValueOnce({ ok: true, runId: "turn-1", status: "inProgress" })
       .mockReturnValueOnce(poll.promise);
     await temporary.send(task.id);
-    expect(http.request).toHaveBeenLastCalledWith(CONVERSATION_PATH, { method: "GET" });
+    expect(http.request).toHaveBeenLastCalledWith(canonicalPath(), expect.objectContaining({ method: "GET" }));
     const stateBefore = temporary.activeTask.value;
     unmount();
     expect(fetch).not.toHaveBeenCalled();
@@ -725,10 +745,18 @@ describe("temporary AI mounted lifetime", () => {
     const closing = temporary.closeTask(task.id);
     const retired = expect(closing).resolves.toBeUndefined();
     unmount();
+    const callsAtRetirement = http.request.mock.calls.length;
     const stateBefore = temporary.activeTask.value;
     deletion.resolve(response);
     await retired;
-    expect(http.request).toHaveBeenCalledTimes(6);
+    expect(http.request.mock.calls.filter(([, options]) => options.method !== "GET")
+      .map(([path, options]) => [path, options.method])).toEqual([
+      [`${SESSION_PATH}/temporary-conversations`, "POST"],
+      [`${canonicalPath()}/messages`, "POST"],
+      [`${canonicalPath()}/cancel`, "POST"],
+      [CONVERSATION_PATH, "DELETE"]
+    ]);
+    expect(http.request).toHaveBeenCalledTimes(callsAtRetirement);
     expect(onTaskFinished).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
     expect(temporary.activeTask.value).toBe(stateBefore);
@@ -767,11 +795,19 @@ describe("temporary AI mounted lifetime", () => {
     http.request.mockResolvedValueOnce({
       ok: true, status: "completed", outcome: { kind: "complete" }, text: "Repaired."
     });
+    http.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(onTaskFinished).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       id: task.id, status: "completed", outcomeKind: "complete", recoveryOperation: "update"
     }));
-    expect(http.request).toHaveBeenCalledTimes(5);
+    expect(http.request.mock.calls.filter(([, options]) => options.method !== "GET")
+      .map(([path, options]) => [path, options.method])).toEqual([
+      [`${SESSION_PATH}/temporary-conversations`, "POST"],
+      [`${canonicalPath()}/messages`, "POST"]
+    ]);
+    const callsAtCompletion = http.request.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(1300);
+    expect(http.request).toHaveBeenCalledTimes(callsAtCompletion);
     expect(fetch).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -779,13 +815,13 @@ describe("temporary AI mounted lifetime", () => {
   it("restores a running server conversation after reload and streams subsequent messages", async () => {
     const { task, temporary, unmount } = mountTemporaryAi();
     http.request
-      .mockResolvedValueOnce({ ok: true, conversationId: "conversation-1" })
+      .mockResolvedValueOnce({ ok: true, conversationId: createdId })
       .mockResolvedValueOnce({ ok: true, runId: "turn-1", status: "inProgress" });
     await temporary.send(task.id);
     unmount();
     expect(http.request.mock.calls.some(([, options]) => options.method === "DELETE")).toBe(false);
     http.request.mockResolvedValueOnce({ ok: true, conversations: [{
-      conversationId: "conversation-1", title: "Saved task", status: "inProgress", runId: "turn-1",
+      conversationId: createdId, title: "Saved task", status: "inProgress", runId: "turn-1",
       goal: { status: "active", objective: "Finish the repair" },
       draft: "My next question", messages: [{ id: "user", role: "user", text: "Repair this conflict." }]
     }] });
@@ -795,7 +831,7 @@ describe("temporary AI mounted lifetime", () => {
     ] });
     const restored = mountTemporaryAi();
     await vi.advanceTimersByTimeAsync(0);
-    const chat = restored.temporary.tasks.value.find((candidate) => candidate.conversationId === "conversation-1");
+    const chat = restored.temporary.tasks.value.find((candidate) => candidate.conversationId === createdId);
     expect(chat).toMatchObject({ busy: true, draft: "My next question", title: "Saved task" });
     expect(chat.goal).toMatchObject({ status: "active", objective: "Finish the repair" });
     expect(chat.messages.at(-1).text).toBe("Working on");
@@ -805,6 +841,7 @@ describe("temporary AI mounted lifetime", () => {
     ] });
     // Remove the fixture's unrelated blank tab before its save timer fires.
     await restored.temporary.closeTask(restored.task.id);
+    http.transport.notify();
     await vi.advanceTimersByTimeAsync(650);
     expect(restored.temporary.activeTask.value.messages.at(-1).text).toBe("Work finished.");
     expect(restored.temporary.activeTask.value.busy).toBe(false);
@@ -932,9 +969,12 @@ describe("temporary AI mounted lifetime", () => {
     if (method === "PATCH") await vi.advanceTimersByTimeAsync(250);
     else await expect(temporary.send("conversation-1")).resolves.toBe(false);
     expect(temporary.tasks.value).toEqual([]);
+    const callsAtRemoval = http.request.mock.calls.length;
     await expect(temporary.send("conversation-1")).resolves.toBe(false);
     await vi.advanceTimersByTimeAsync(2000);
-    expect(http.request.mock.calls.map(([, options]) => options.method)).toEqual(["GET", method]);
+    expect(http.request.mock.calls.filter(([path]) => path !== canonicalPath())
+      .map(([, options]) => options.method)).toEqual(["GET", method]);
+    expect(http.request).toHaveBeenCalledTimes(callsAtRemoval);
   });
 
   it.each(["poll", "stopTask", "closeTask"])("ignores a late %s failure after another browser closes the conversation", async (operation) => {
@@ -947,9 +987,9 @@ describe("temporary AI mounted lifetime", () => {
     await vi.advanceTimersByTimeAsync(0);
     http.request.mockReturnValueOnce(response.promise);
     let pending;
-    if (operation === "poll") await vi.advanceTimersByTimeAsync(650);
+    if (operation === "poll") { http.transport.notify(); await vi.advanceTimersByTimeAsync(650); }
     else pending = temporary[operation](task.id);
-    socket.emit("vibe64.session.changed", CLOSED_CONVERSATION);
+    socket.emit("vibe64.session.changed", { ...CLOSED_CONVERSATION, conversationId: task.id });
     expect(temporary.tasks.value).toEqual([]);
     const calls = http.request.mock.calls.length;
     response.resolve({ ok: false, error: "Connection lost." });

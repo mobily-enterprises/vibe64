@@ -101,10 +101,6 @@
             </template>
             <v-list aria-label="Session actions" density="compact" min-width="17rem">
               <v-list-item
-                :disabled="rewindDisabled" :prepend-icon="mdiUndo" title="Undo last turn"
-                :subtitle="rewindHint" min-height="48" @click="openConversationRewind"
-              />
-              <v-list-item
                 v-if="githubProject" min-height="48"
                 :prepend-icon="mdiSourcePull" :title="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
                 :subtitle="sessionPullRequest?.number ? `PR #${sessionPullRequest.number}` : 'Propose this work for merging'"
@@ -138,10 +134,6 @@
           </v-menu>
         </div>
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--expanded">
-          <v-btn
-            aria-label="Undo last turn" :title="rewindHint" :disabled="rewindDisabled"
-            :icon="mdiUndo" height="var(--session-action-size, 48px)" width="var(--session-action-size, 48px)" variant="text" @click="openConversationRewind"
-          />
           <v-btn
             v-if="githubProject" :icon="mdiSourcePull" height="var(--session-action-size, 48px)" width="var(--session-action-size, 48px)" variant="text"
             :aria-label="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
@@ -524,6 +516,7 @@
                   <Vibe64AgentPlanUsage
                     :active="props.active && !props.sessionSelectionArchived"
                     :session="props.session"
+                    :conversation-runtime="props.conversationRuntime"
                     :sessions-api-path="props.sessionsApiPath"
                   />
                   <Vibe64WorkPlan :session="props.session" :sessions-api-path="props.sessionsApiPath" :active="props.active && conversationLogVisible" :busy="agentActive" />
@@ -793,22 +786,6 @@
       </div>
     </section>
 
-    <v-dialog :model-value="Boolean(rewindTarget)" :persistent="rewindCommand.isRunning" max-width="34rem" @update:model-value="!$event && (rewindTarget = null)">
-      <v-card title="Undo last turn?">
-        <v-card-text>
-          Remove your last message and the AI’s replies from the conversation. Project files and databases stay as they are.
-          <p class="mt-3 text-body-medium" style="white-space: pre-wrap; overflow-wrap: anywhere">{{ rewindTarget?.text }}</p>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn :disabled="rewindCommand.isRunning" @click="rewindTarget = null">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" :disabled="rewindDisabled" :aria-busy="rewindCommand.isRunning" @click="confirmConversationRewind">
-            {{ rewindCommand.isRunning ? 'Undoing…' : 'Undo last turn' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
     <v-dialog v-model="saveWorkConfirmOpen" max-width="30rem" aria-label="Save changes" scrollable>
       <v-card rounded="xl">
         <v-card-title>Save changes</v-card-title>
@@ -864,10 +841,6 @@ import { Vibe64ProjectVoiceLauncher } from "@local/vibe64-voice/client";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
-import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
-import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
-import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import {
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
@@ -892,7 +865,6 @@ import {
   mdiSend,
   mdiSourcePull,
   mdiStop,
-  mdiUndo,
 } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
@@ -935,7 +907,7 @@ import {
   useVibe64SessionTypingPresence
 } from "@/composables/useVibe64SessionTypingPresence.js";
 import {
-  VIBE64_SESSION_CHANGED_EVENT, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID, vibe64SessionPath
+  VIBE64_SESSION_CHANGED_EVENT
 } from "@/lib/vibe64SessionRequestConfig.js";
 
 const emit = defineEmits(vibe64AutopilotViewEmits);
@@ -1256,43 +1228,6 @@ async function retryAutomaticReview() {
 }
 const conversationAssistantLabel = computed(() => props.session?.assistantSelection
   ? vibe64AssistantSelectionLabel(props.session.assistantSelection) : "Assistant");
-const rewindTarget = ref(null);
-const rewindCommand = useCommand({
-  access: "never", ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID,
-  apiSuffix: VIBE64_SESSIONS_API_SUFFIX, placementSource: "vibe64.sessions.conversation-rewind",
-  buildCommandOptions: (_model, { context }) => ({ method: "POST", path: context.path }),
-  buildRawPayload: (_model, { context }) => vibe64RealtimeOriginPayload({ turnId: context.turnId }),
-  onRunSuccess: (response) => {
-    if (response?.ok === false) throw vibe64ApiError(response, "The turn could not be undone.");
-  },
-  fallbackRunError: "The turn could not be undone. Retry Undo last turn to check it.",
-  suppressSuccessMessage: true
-});
-const rewindLastTurn = computed(() => props.conversationLog?.rewind || null);
-const rewindDisabled = computed(() => !(rewindTarget.value || rewindLastTurn.value) || !assistantDirectAllowed.value ||
-  agentActive.value || composerSending.value || interrupting.value || rewindCommand.isRunning ||
-  props.conversationLog?.loading || props.sessionSelectionArchived || sourceOperationsSuspended.value);
-const rewindHint = computed(() => agentActive.value ? "Stop the assistant before undoing a turn" :
-  !rewindLastTurn.value ? "Undo stops at the last AI switch" : "Undo the last conversation turn; keep project files");
-function openConversationRewind() {
-  if (rewindDisabled.value) return;
-  rewindTarget.value = { sessionId: sessionId.value, turnId: rewindLastTurn.value.turnId, text: rewindLastTurn.value.text };
-}
-async function confirmConversationRewind() {
-  if (rewindDisabled.value || !rewindTarget.value) return;
-  const target = rewindTarget.value;
-  try {
-    const response = await rewindCommand.run({ turnId: target.turnId,
-      path: vibe64SessionPath(readRefOrGetterValue(props.sessionsApiPath), target.sessionId, "/conversation-rewind") });
-    if (sessionId.value !== target.sessionId) return;
-    rewindTarget.value = null;
-    if (!composerDraft.value.trim()) prefillComposer(response.text);
-    await props.conversationLog?.reload?.();
-  } catch {
-    // The command owns error feedback; retain this exact target for a retry.
-  }
-}
-watch([sessionId, () => props.session?.assistantSelection?.engineId], () => { rewindTarget.value = null; });
 const updateHandledInRepair = computed(() => Boolean(
   (saveWorkActivityIsUpdate.value || saveWorkError.value) && temporaryAiWorkspace.value?.updateRepairVisible
 ));

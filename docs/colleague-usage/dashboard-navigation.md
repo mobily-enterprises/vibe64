@@ -10,7 +10,11 @@ to choose a tool and **Back to dashboard** to return from its detail. **Show cha
 returns to the coding conversation. Preview and Dashboard retain their own selected
 state when hidden; leaving the preview does not stop its application.
 
-Files and Changes show session source and work. AI Terminal shows the coding agent's
+Files provides **Repo** for source and **Drop Zone** for exchanging files with the
+selected session. Choose an area to browse its folders and files; searching is
+optional. The workspace owner also sees the read-only **Session** area.
+Access follows the signed-in account; changing a link cannot select another role.
+Changes shows the session's source changes. AI Terminal shows the coding agent's
 native terminal; an enlarged terminal has **Exit full screen**. This leaves it
 running, while **Close terminal** stops that terminal. Subsystems presents the
 project's declared structure; asking the coding agent to investigate or update it

@@ -2,16 +2,18 @@ import { constants } from "node:fs";
 import { copyFile, mkdir, open, readFile, readdir, rename, rm, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { prepareConversationAttachmentMessage } from "@jskit-ai/assistant-core/shared/conversation";
 import {
   conversationAttachmentContentType,
   conversationAttachmentReference,
   normalizeVibe64ConversationAttachments
 } from "@local/vibe64-runtime/shared";
-import { terminalSessionSourceRoot } from "./terminalShared.js";
+import { terminalSessionSourceRoot, vibe64Result } from "./terminalShared.js";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import {
   cleanupCodexAttachments as cleanupUploads,
+  renewCodexAttachments,
   storeCodexAttachment as storeUpload,
   withUploadedAgentAttachment
 } from "./codexAttachments.js";
@@ -124,17 +126,7 @@ function createSessionAttachments({ projectService, env = process.env }) {
         const number = attachment.contentType.startsWith("image/") ? ++imageNumber : ++fileNumber;
         attachment.reference = conversationAttachmentReference(attachment, number);
       }
-      const references = attachments.map((attachment) => `${attachment.reference} ${JSON.stringify(attachment.fileName)}: ${JSON.stringify(attachment.path)}`);
-      const message = String(input.message ?? input.prompt ?? "");
-      return {
-        ...input,
-        attachments,
-        displayAttachments: normalizeVibe64ConversationAttachments(attachments),
-        ...(attachments.length ? {
-          displayMessage: input.displayMessage ?? message,
-          message: `${message}\n\nAttached files:\n${references.join("\n")}`
-        } : {})
-      };
+      return prepareConversationAttachmentMessage(input, attachments, normalizeVibe64ConversationAttachments(attachments));
     },
     async deleteConversationAttachments(context, { conversationId }) {
       const { runtime, executionRoot, sessionId } = await attachmentContext(context);
@@ -188,4 +180,39 @@ function createSessionAttachments({ projectService, env = process.env }) {
   };
 }
 
-export { createSessionAttachments };
+function createCodexSessionAttachmentRenewal({ sessionRuntimeHost, sessionEnvironment }) {
+  const { createRuntimeForSession } = sessionRuntimeHost;
+  const { codexAttachmentEnv } = sessionEnvironment;
+
+  async function renewAttachments(sessionId, attachmentIds = []) {
+    return vibe64Result(async () => {
+      if (!Array.isArray(attachmentIds) || attachmentIds.length < 1) {
+        return {
+          missing: [],
+          ok: true,
+          retained: []
+        };
+      }
+      const runtime = await createRuntimeForSession();
+      const session = await runtime.getSession(sessionId);
+      const executionRoot = terminalSessionSourceRoot(session);
+      if (!executionRoot) {
+        return {
+          code: "vibe64_agent_attachment_source_root_missing",
+          error: "Vibe64 Codex session source root is not available.",
+          ok: false
+        };
+      }
+      return {
+        ...await renewCodexAttachments(executionRoot, sessionId, attachmentIds, {
+          env: codexAttachmentEnv()
+        }),
+        ok: true
+      };
+    });
+  }
+
+  return Object.freeze({ renewAttachments });
+}
+
+export { createCodexSessionAttachmentRenewal, createSessionAttachments };

@@ -573,8 +573,10 @@ describe("session renewal dialog", () => {
     expect(autopilotSource).toContain('@click="requestSessionRenewal(sessionActionsTrigger)"');
     expect(autopilotSource).toContain('@click="requestSessionRenewal($event.currentTarget)"');
     expect(autopilotSource).toContain("returnFocusTarget: returnFocusTarget?.$el || returnFocusTarget");
-    expect(autopilotSource).toMatch(/height="48"[\s\S]*?:icon="mdiAutorenew"[\s\S]*?width="48"/u);
-    expect(autopilotSource).toMatch(/:aria-label="temporaryAiHasUnreadMessages[^"\n]+"[\s\S]*?height="48"[\s\S]*?width="48"/u);
+    expect(autopilotSource).toMatch(/height="var\(--session-action-size, 48px\)"[\s\S]*?:icon="mdiAutorenew"[\s\S]*?width="var\(--session-action-size, 48px\)"/u);
+    expect(autopilotSource).toMatch(/:aria-label="temporaryAiHasUnreadMessages[^"\n]+"[\s\S]*?height="var\(--session-action-size, 48px\)"[\s\S]*?width="var\(--session-action-size, 48px\)"/u);
+    expect(autopilotSource).toContain("@container studio-chat-pane (min-width: 32.01rem) and (max-width: 40rem)");
+    expect(autopilotSource).toContain("--session-action-size: 44px;");
     expect(autopilotSource).toContain(":aria-label=\"sessionActionsLabel\"");
     expect(autopilotSource).toContain('sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : ""');
     expect(autopilotSource).toContain('].filter(Boolean).join(": ")');

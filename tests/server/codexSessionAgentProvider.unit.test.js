@@ -1,5 +1,10 @@
+import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapter.js";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
+import { prepareSessionConversationActivity, prepareSessionConversationDisposal, prepareSessionConversationRenewalProof, prepareSessionDetachedConversationCleanup } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import { codexTerminalNamespace } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
+import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 
 import {
   effectiveVibe64AgentExecutionSettings,
@@ -8,7 +13,8 @@ import {
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
-  VIBE64_PROMPT_HINT_OUTPUT_SCHEMA
+  VIBE64_PROMPT_HINT_OUTPUT_SCHEMA,
+  vibe64AgentExecutionProfileAuditSnapshot
 } from "../../packages/vibe64-runtime/src/shared/index.js";
 import {
   codexAppServerHelperTurnSettings
@@ -16,9 +22,52 @@ import {
 import {
   CODEX_HELPER_PROFILE_REVISION,
   CODEX_HELPER_WORKLOAD_LIMITS,
-  createCodexSessionAgentProvider,
   resolveCodexHelperExecutionProfile
 } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
+
+// These adapter units mock the public runtime boundary. The original actual
+// service/runtime/native-owner cases remain in codexTemporaryConversationLifecycle.
+function createCodexMainFixture(controller, open) {
+  const conversationRuntime = { open };
+  const provider = createCodexSessionAgentProvider({ controller, conversationRuntime });
+  return { provider: scopedRequestFixture(provider, controller), manager: createSessionAgentManager({ providers: [provider], conversationRuntime }) };
+}
+
+// Scoped Start cases below are request-codec units with the original mocked
+// next boundary. They do not manufacture a native ID/scope or claim admission.
+function scopedRequestFixture(provider, controller) {
+  return { ...provider, startConversationTurn(context, input) {
+    const request = provider.prepareConversationRequest("startConversationTurn", context, input);
+    return controller.startConversationTurn(context.sessionId, request.input);
+  } };
+}
+
+// These creation cases retain their original request-codec/mock boundary.
+// Actual runtime creation is covered by the original scoped/service fixtures.
+function creationRequestFixture(options) {
+  const provider = createCodexSessionAgentProvider(options);
+  return { ...provider, createConversation(context, input = {}) {
+    const request = provider.prepareConversationRequest("createConversation", context, input);
+    return options.controller.createConversation(context.sessionId, request.input, request.context);
+  } };
+}
+
+// This original unit controls the next invocation boundary and checks only the
+// trusted renewal request/options codec. Actual runtime/driver behavior is
+// exercised by the original lifecycle renewal cases through codexMainConversation.
+function renewalRequestFixture(options) {
+  const provider = createCodexSessionAgentProvider(options);
+  return { ...provider,
+    generateSessionRenewalHandover(context, input = {}) {
+      const request = provider.prepareConversationRequest("generateSessionRenewalHandover", context, input);
+      return options.controller.generateSessionRenewalHandover(context.sessionId, request.input, request.context);
+    },
+    seedSessionRenewalHandover(context, input = {}) {
+      const request = provider.prepareConversationRequest("seedSessionRenewalHandover", context, input);
+      return options.controller.seedSessionRenewalHandover(context.sessionId, request.input, request.context);
+    }
+  };
+}
 
 test("Codex picker discovers new models and thinking levels and preserves the validated selection for execution", async () => {
   let model = "gpt-6-astra";
@@ -116,26 +165,33 @@ test("Codex adapter forwards trusted renewal operations without selecting a help
   const calls = [];
   const runtime = { stateRoot: "/runtime/project" };
   const session = { sessionId: "session-1" };
-  const provider = createCodexSessionAgentProvider({
+  const provider = renewalRequestFixture({
     controller: {
-      async closeAllForSession(sessionId, options) {
-        calls.push(["close", sessionId, options]);
-        return { closed: true, ok: true };
+      prepareConversationHost(sessionId, context, mode) {
+        if (mode === "renewalProof") return {
+          native: {
+            providerOwner: { releasePreparedRuntimeProof(prepared) {
+              calls.push([prepared.operation, sessionId, prepared.options]);
+              return { ok: true, released: true };
+            } },
+            preparation: {
+              predecessor: options => ({ operation: "release-proof", options }),
+              successor: options => ({ operation: "release-successor-proof", options })
+            }
+          }
+        };
+        return { namespace: codexTerminalNamespace(sessionId), cleanupOptions: context,
+          native: { runOwner: { async closeSession(id, options) {
+            calls.push(["close", id, options]);
+            return { closed: true, ok: true };
+          } }, preparation: { cleanup: options => options } } };
       },
       async generateSessionRenewalHandover(sessionId, input, options) {
         calls.push(["generate", sessionId, input, options]);
         return { ok: true, turnId: "turn-old" };
       },
-      async releaseRenewalPredecessorProcessExitProof(sessionId, options) {
-        calls.push(["release-proof", sessionId, options]);
-        return { ok: true, released: true };
-      },
       async releaseRenewalPredecessorAttachments(sessionId, options) {
         calls.push(["release-attachments", sessionId, options]);
-        return { ok: true, released: true };
-      },
-      async releaseRenewalSuccessorProcessExitProof(sessionId, options) {
-        calls.push(["release-successor-proof", sessionId, options]);
         return { ok: true, released: true };
       },
       async seedSessionRenewalHandover(sessionId, input, options) {
@@ -166,21 +222,31 @@ test("Codex adapter forwards trusted renewal operations without selecting a help
   await provider.seedSessionRenewalHandover(context, {
     operationId: "renewal:seed"
   });
-  await provider.closeSession(context);
+  const conversationRuntime = createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context, input, operation }) => {
+      if (operation === "releaseRenewalPredecessorProcessExitProof" || operation === "releaseRenewalSuccessorProcessExitProof") {
+        return prepareSessionConversationRenewalProof(provider, id, context, input, operation);
+      }
+      return prepareSessionConversationDisposal(provider, id, context, input);
+    } }
+  });
+  const manager = createSessionAgentManager({ providers: [provider], conversationRuntime });
+  await manager.closeSession(session.sessionId, context);
   await provider.releaseRenewalPredecessorAttachments(context, {
     renewalId: "renewal-1"
   });
-  await provider.releaseRenewalPredecessorProcessExitProof(context, {
+  await manager.releaseRenewalPredecessorProcessExitProof(session.sessionId, {
     renewalId: "renewal-1"
-  });
+  }, context);
   const successorAuthorization = {
     renewalId: "renewal-1",
     successorSessionId: session.sessionId
   };
-  await provider.releaseRenewalSuccessorProcessExitProof(context, {
+  await manager.releaseRenewalSuccessorProcessExitProof(session.sessionId, {
     authorization: successorAuthorization,
     renewalId: "renewal-1"
-  });
+  }, context);
 
   assert.deepEqual(calls.map(([name]) => name), [
     "generate",
@@ -221,28 +287,20 @@ test("Codex adapter forwards the authenticated Vibe64 user to every human turn",
   const actor = { userId: "user-1" };
   const calls = [];
   const controller = {
-    async runDetachedChatTurn(_sessionId, input) {
-      calls.push(["detached", input]);
-      return { ok: true, text: "done" };
-    },
     async startConversationTurn(_sessionId, input) {
       calls.push(["temporary", input]);
       return { ok: true, runId: "turn-1" };
-    },
-    async streamDetachedChatTurn(_sessionId, input) {
-      calls.push(["stream", input]);
-      return { ok: true, text: "done" };
     },
     async writeTerminal(_sessionId, _terminalSessionId, _data, input) {
       calls.push(["terminal", input]);
       return { ok: true };
     }
   };
-  const provider = createCodexSessionAgentProvider({ controller });
+  const provider = scopedRequestFixture(createCodexSessionAgentProvider({ controller }), controller);
   const context = { sessionId: "session-1", vibe64User: actor };
 
-  await provider.runDetachedChatTurn(context, { prompt: "Detached" });
-  await provider.streamDetachedChatTurn(context, { prompt: "Streamed" });
+  const main = provider.prepareConversationRequest("sendMessage", context, { message: "Main" });
+  calls.push(["main", main.input]);
   await provider.startConversationTurn(context, { message: "Temporary" });
   await provider.writeTerminal(context, {
     data: "Native input",
@@ -251,8 +309,7 @@ test("Codex adapter forwards the authenticated Vibe64 user to every human turn",
   });
 
   assert.deepEqual(calls.map(([kind]) => kind), [
-    "detached",
-    "stream",
+    "main",
     "temporary",
     "terminal"
   ]);
@@ -262,14 +319,25 @@ test("Codex adapter forwards the authenticated Vibe64 user to every human turn",
 });
 
 test("Codex adapter reports every active Temporary AI turn", async () => {
-  const provider = createCodexSessionAgentProvider({
-    controller: {
-      hasActiveTemporaryConversation(sessionId) {
-        assert.equal(sessionId, "session-1");
-        return true;
-      }
+  const runOwner = {
+    hasActiveTemporaryConversation(sessionId) {
+      assert.equal(sessionId, "session-1");
+      return true;
     }
+  };
+  const adapter = createCodexSessionAgentProvider({ controller: {}, runOwner });
+  const conversationRuntime = createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context }) => prepareSessionConversationActivity(adapter, id, context) }
   });
+  // Keep the original provider-envelope assertion at its original boundary;
+  // the actual adapter projects activity read through the runtime and driver.
+  const provider = {
+    hasActiveTemporaryConversation: context => adapter.projectConversationResult(
+      "hasActiveTemporaryConversation",
+      () => conversationRuntime.inspectNativeTemporaryActivity({ id: context.sessionId, context })
+    )
+  };
 
   assert.deepEqual(await provider.hasActiveTemporaryConversation({
     sessionId: "session-1"
@@ -287,27 +355,25 @@ test("Codex adapter never presents an unconfirmed delivery claim as active assis
     threadId: "thread-1",
     turnId: ""
   };
-  const provider = createCodexSessionAgentProvider({
-    controller: {
-      async terminalState() {
-        return { codexAgentTurn: providerTurn, ok: true };
-      }
+  const { manager } = createCodexMainFixture({}, async () => ({
+    async read() {
+      return { codexAgentTurn: providerTurn, ok: true };
     }
-  });
+  }));
 
-  const unconfirmed = await provider.sessionState({ sessionId: "session-1" });
+  const unconfirmed = await manager.sessionState("session-1");
   assert.equal(unconfirmed.turn, null);
 
   providerTurn.state = "active";
   providerTurn.status = "inProgress";
   providerTurn.turnId = "turn-1";
   providerTurn.phase = "compacting";
-  const confirmed = await provider.sessionState({ sessionId: "session-1" });
+  const confirmed = await manager.sessionState("session-1");
   assert.equal(confirmed.turn?.active, true);
   assert.equal(confirmed.turn?.id, "turn-1");
   assert.equal(confirmed.turn?.phase, "compacting");
   providerTurn.active = false;
-  assert.equal((await provider.sessionState({ sessionId: "session-1" })).turn.phase, "");
+  assert.equal((await manager.sessionState("session-1")).turn.phase, "");
 });
 
 test("Codex adapter preserves the hydrated session context when sending a message", async () => {
@@ -315,23 +381,19 @@ test("Codex adapter preserves the hydrated session context when sending a messag
   const session = { sessionId: "session-1" };
   const turnOwnership = { threadId: "thread-1", turnId: "turn-1" };
   let receivedOptions = null;
-  const provider = createCodexSessionAgentProvider({
-    controller: {
-      async sendMessage(sessionId, _input, options) {
-        assert.equal(sessionId, session.sessionId);
-        receivedOptions = options;
-        return { delivered: true, ok: true };
-      }
-    }
+  const { manager } = createCodexMainFixture({}, async ({ id: sessionId, context: options }) => {
+    assert.equal(sessionId, session.sessionId);
+    receivedOptions = options;
+    return { async send() { return { value: { delivered: true, ok: true } }; } };
   });
 
-  await provider.sendMessage({
+  await manager.sendMessage(session.sessionId, {
+    message: "Hello"
+  }, {
     runtime,
     session,
     sessionId: session.sessionId,
     turnOwnership
-  }, {
-    message: "Hello"
   });
 
   assert.equal(receivedOptions.runtime, runtime);
@@ -488,7 +550,7 @@ test("Codex declares one provider-owned helper capability with limits for every 
 
 });
 
-test("Codex adapter resolves the live profile before a detached run and returns only its audit snapshot", async () => {
+test("Codex scoped creation keeps discovered profile context and the original audit snapshot", async () => {
   const calls = [];
   const abortController = new AbortController();
   const runtime = Object.freeze({ stateRoot: "/runtime/project-a" });
@@ -500,7 +562,7 @@ test("Codex adapter resolves the live profile before a detached run and returns 
         data: [catalogModel()]
       };
     },
-    async runDetachedChatTurn(sessionId, input, options) {
+    async createConversation(sessionId, input, options) {
       calls.push(["run", sessionId, input, options]);
       return {
         ok: true,
@@ -508,7 +570,7 @@ test("Codex adapter resolves the live profile before a detached run and returns 
       };
     }
   };
-  const provider = createCodexSessionAgentProvider({ controller });
+  const provider = creationRequestFixture({ controller });
   const resolution = await provider.resolveExecutionProfile({
     assistantSelection: { modelId: "gpt-5.6-luna" },
     runtime,
@@ -516,7 +578,7 @@ test("Codex adapter resolves the live profile before a detached run and returns 
     sessionId: "session-a",
     signal: abortController.signal
   }, helperRequest());
-  const result = await provider.runDetachedChatTurn({
+  await provider.createConversation({
     runtime,
     session,
     sessionId: "session-a"
@@ -524,6 +586,8 @@ test("Codex adapter resolves the live profile before a detached run and returns 
     executionProfile: resolution,
     prompt: "Explain this bounded excerpt."
   });
+
+  const audit = vibe64AgentExecutionProfileAuditSnapshot(resolution);
 
   assert.equal(calls[0][0], "catalog");
   assert.deepEqual(calls[0][2], {
@@ -536,15 +600,15 @@ test("Codex adapter resolves the live profile before a detached run and returns 
   assert.equal(calls[1][2].executionProfile.model, "gpt-5.6-luna");
   assert.equal(calls[1][3].runtime, runtime);
   assert.equal(calls[1][3].session, session);
-  assert.equal(result.executionProfile.model, "gpt-5.6-luna");
-  assert.equal(result.executionProfile.revision, CODEX_HELPER_PROFILE_REVISION);
-  assert.equal(Object.hasOwn(result.executionProfile, "enforcement"), false);
+  assert.equal(audit.model, "gpt-5.6-luna");
+  assert.equal(audit.revision, CODEX_HELPER_PROFILE_REVISION);
+  assert.equal(Object.hasOwn(audit, "enforcement"), false);
 });
 
 test("Codex helper changes affect the next task while an already resolved task keeps its model", async () => {
-  const provider = createCodexSessionAgentProvider({ controller: {
+  const provider = creationRequestFixture({ controller: {
     executionProfileModelCatalog: async () => ({ data: [catalogModel(), catalogModel({ model: "chosen-helper" })] }),
-    async runDetachedChatTurn(_sessionId, input) {
+    async createConversation(_sessionId, input) {
       assert.equal(input.executionProfile.model, "chosen-helper");
       return { ok: true, text: "Done" };
     }
@@ -555,38 +619,31 @@ test("Codex helper changes affect the next task while an already resolved task k
   context.assistantSelection = { modelId: "gpt-5.6-luna" };
   const next = await provider.resolveExecutionProfile(context, helperRequest());
   assert.equal(next.model, "gpt-5.6-luna");
-  const result = await provider.runDetachedChatTurn(context, { executionProfile: first, prompt: "Continue" });
-  assert.equal(result.executionProfile.model, "chosen-helper");
+  await provider.createConversation(context, { executionProfile: first, prompt: "Continue" });
+  const audit = vibe64AgentExecutionProfileAuditSnapshot(first);
+  assert.equal(audit.model, "chosen-helper");
 });
 
-test("Codex adapter publishes the resolved audit profile before a streamed detached turn", async () => {
-  const events = [];
+test("Codex scoped creation forwards its captured profile and original context", async () => {
   const runtime = Object.freeze({ stateRoot: "/runtime/project-a" });
   const session = Object.freeze({ sessionId: "session-a" });
   const controller = {
-    async streamDetachedChatTurn(_sessionId, input, options = {}) {
+    async createConversation(_sessionId, input, options = {}) {
       assert.equal(input.executionProfile.model, "gpt-5.6-luna");
       assert.equal(options.runtime, runtime);
       assert.equal(options.session, session);
-      options.onEvent({
-        threadId: "helper-thread",
-        type: "thread"
-      });
       return {
         ok: true,
         text: "{\"answer\":\"Bounded answer\"}"
       };
     }
   };
-  const provider = createCodexSessionAgentProvider({ controller });
+  const provider = creationRequestFixture({ controller });
   const resolution = resolveCodexHelperExecutionProfile(helperRequest(), {
     data: [catalogModel()]
   }, "gpt-5.6-luna", "low");
 
-  const result = await provider.streamDetachedChatTurn({
-    onEvent(event) {
-      events.push(event);
-    },
+  await provider.createConversation({
     runtime,
     session,
     sessionId: "session-a"
@@ -595,13 +652,10 @@ test("Codex adapter publishes the resolved audit profile before a streamed detac
     prompt: "Explain this bounded excerpt."
   });
 
-  assert.deepEqual(events.map((event) => event.type), [
-    "execution-profile",
-    "thread"
-  ]);
-  assert.equal(events[0].executionProfile.model, "gpt-5.6-luna");
-  assert.equal(events[0].executionProfile.revision, CODEX_HELPER_PROFILE_REVISION);
-  assert.deepEqual(result.executionProfile, events[0].executionProfile);
+  const audit = vibe64AgentExecutionProfileAuditSnapshot(resolution);
+  assert.equal(audit.model, "gpt-5.6-luna");
+  assert.equal(audit.revision, CODEX_HELPER_PROFILE_REVISION);
+  assert.deepEqual(audit, resolution);
 });
 
 test("Codex adapter keeps chat delivery independent of upload leases and renews terminal attachments", async () => {
@@ -616,29 +670,6 @@ test("Codex adapter keeps chat delivery independent of upload leases and renews 
       renewals.push({ ids, sessionId });
       return retainedAttachmentLease(ids);
     },
-    async sendMessage(_sessionId, input) {
-      if (input.message === "steered") {
-        return {
-          delivered: true,
-          ok: true
-        };
-      }
-      if (input.message === "not accepted") {
-        return {
-          delivered: false,
-          newTurnRequired: true,
-          ok: true
-        };
-      }
-      if (input.message === "failed") {
-        return { ok: false };
-      }
-      return {
-        deliveryMode: "new_turn",
-        ok: true,
-        turnId: "main-turn"
-      };
-    },
     async startConversationTurn(_sessionId, input) {
       return input.message === "accepted"
         ? { ok: true, runId: "temporary-turn" }
@@ -648,25 +679,50 @@ test("Codex adapter keeps chat delivery independent of upload leases and renews 
       return input.accepted ? { ok: true } : { ok: false };
     }
   };
-  const provider = createCodexSessionAgentProvider({ controller });
+  async function send(input) {
+    if (input.message === "steered") {
+      return {
+        delivered: true,
+        ok: true
+      };
+    }
+    if (input.message === "not accepted") {
+      return {
+        delivered: false,
+        newTurnRequired: true,
+        ok: true
+      };
+    }
+    if (input.message === "failed") {
+      return { ok: false };
+    }
+    return {
+      deliveryMode: "new_turn",
+      ok: true,
+      turnId: "main-turn"
+    };
+  }
+  const { provider, manager } = createCodexMainFixture(controller, async () => ({
+    send: async input => ({ value: await send(input) })
+  }));
   const context = { sessionId: "session-a" };
 
-  const main = await provider.sendMessage(context, {
+  const main = await manager.sendMessage(context.sessionId, {
     attachmentIds: [attachmentIds.main],
     message: "accepted"
-  });
-  const mainSteered = await provider.sendMessage(context, {
+  }, context);
+  const mainSteered = await manager.sendMessage(context.sessionId, {
     attachmentIds: [attachmentIds.main],
     message: "steered"
-  });
-  const mainNotAccepted = await provider.sendMessage(context, {
+  }, context);
+  const mainNotAccepted = await manager.sendMessage(context.sessionId, {
     attachmentIds: [attachmentIds.main],
     message: "not accepted"
-  });
-  const mainFailed = await provider.sendMessage(context, {
+  }, context);
+  const mainFailed = await manager.sendMessage(context.sessionId, {
     attachmentIds: [attachmentIds.main],
     message: "failed"
-  });
+  }, context);
   const temporary = await provider.startConversationTurn(context, {
     attachmentIds: [attachmentIds.temporary],
     message: "accepted"
@@ -1090,10 +1146,6 @@ test("Codex adapter accepts ten terminal attachments and rejects eleven", async 
     async renewAttachments(_sessionId, ids) {
       return retainedAttachmentLease(ids);
     },
-    async sendMessage(_sessionId, input) {
-      calls.push(["main", input.attachmentIds.length]);
-      return { ok: true, turnId: "main-turn" };
-    },
     async startConversationTurn(_sessionId, input) {
       calls.push(["temporary", input.attachmentIds.length]);
       return { ok: true, runId: "temporary-turn" };
@@ -1103,15 +1155,20 @@ test("Codex adapter accepts ten terminal attachments and rejects eleven", async 
       return { ok: true };
     }
   };
-  const provider = createCodexSessionAgentProvider({ controller });
+  const { provider, manager } = createCodexMainFixture(controller, async () => ({
+    async send(input) {
+      calls.push(["main", input.attachmentIds.length]);
+      return { value: { ok: true, turnId: "main-turn" } };
+    }
+  }));
   const context = { sessionId: "session-a" };
   const ten = Array.from({ length: 10 }, (_value, index) => `attachment-${index}`);
   const eleven = [...ten, "attachment-10"];
 
-  assert.equal((await provider.sendMessage(context, {
+  assert.equal((await manager.sendMessage(context.sessionId, {
     attachmentIds: ten,
     message: "ten"
-  })).ok, true);
+  }, context)).ok, true);
   assert.equal((await provider.startConversationTurn(context, {
     attachmentIds: ten,
     message: "ten"
@@ -1206,16 +1263,23 @@ test("Codex adapter propagates explicit runtime and session through detached cle
   const session = Object.freeze({ sessionId: "session-a" });
   const calls = [];
   const provider = createCodexSessionAgentProvider({
-    controller: {
-      async deleteDetachedChatThread(sessionId, input, options) {
+    controller: { prepareConversationHost() { return { native: { runOwner: {
+      async deleteDetachedThread(sessionId, input, options) {
         calls.push(["delete", sessionId, input, options]);
         return { ok: true, status: "deleted" };
       },
-      async interruptDetachedChatTurn(sessionId, input, options) {
+      async interruptDetachedTurn(sessionId, input, options) {
         calls.push(["interrupt", sessionId, input, options]);
         return { interrupted: true, ok: true };
       }
-    }
+    } } }; } }
+  });
+  const conversations = createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context, input, operation }) => prepareSessionDetachedConversationCleanup(
+      provider, id, context, input,
+      operation === "deleteDetachedConversation" ? "deleteDetachedChatThread" : "interruptDetachedChatTurn"
+    ) }
   });
   const context = {
     runtime,
@@ -1228,8 +1292,8 @@ test("Codex adapter propagates explicit runtime and session through detached cle
     turnId: "helper-turn"
   };
 
-  await provider.deleteDetachedChatThread(context, deleteInput);
-  await provider.interruptDetachedChatTurn(context, interruptInput);
+  await conversations.deleteNativeDetachedConversation({ id: context.sessionId, context, input: deleteInput });
+  await conversations.interruptNativeDetachedConversation({ id: context.sessionId, context, input: interruptInput });
 
   assert.deepEqual(calls.map(([operation]) => operation), ["delete", "interrupt"]);
   assert.equal(calls[0][1], "session-a");

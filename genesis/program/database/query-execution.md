@@ -56,11 +56,44 @@ Cancellation uses that same map and current project/session authority; success
 acknowledges the driver request, not settled execution, rollback or undone changes.
 
 
-Database copilot embeds the shared JSKIT conversation element. Its adapter maps
-SQL and table metadata into message actions, keeps configuration hidden and
-server-owned, and uses its existing bounded schema/read-only query backend.
-Copilot history remains transient in the database workspace; it is not copied
-into the main project conversation.
+Database copilot uses the bounded-task mode of JSKIT's supplied conversation
+binding and the shared element. The original HTTP command owns admission,
+pending state and errors; JSKIT owns the moved local draft, ordered request
+history, submission and late-result fence. Vibe64 supplies the existing endpoint,
+input/final-row mappings, captured table and SQL result placement. It keeps
+configuration hidden and server-owned and uses the same bounded schema/read-only
+backend. Copilot history remains transient in the mounted workspace, with no
+canonical chat receipt or live subscription. It is not copied into Main history.
+Session hydration clears history but retains the draft; hiding the panel does not
+cancel an admitted question. Modifier-Enter submits, while ordinary Enter adds a
+line. The same command exception remains visible without automatic resend.
+
+`runDatabaseAssistant()` delegates the original response-count and abort ordering
+and the structured reply/tool protocol to JSKIT's `runBoundedAssistantToolLoop()`.
+It permits four completed responses, each with the existing 90-second Helper
+deadline; SQL execution stays outside that response timer. A response may finish
+the answer or request one schema/read-query operation. Operation four completes
+and its result is bounded before the original limit error; no fifth response or
+automatic recovery is attempted. Vibe64 supplies database instructions, a final
+answer schema and its two authorized actions. It retains schema and SQL
+permissions, result summaries, failure presentation and cleanup.
+The scoped Helper runner enters the same JSKIT runtime's original
+`runScopedTurn()` coordinator and retains one native conversation across responses.
+JSKIT derives closed final-or-tool response alternatives from that final schema
+and the existing action catalogue, validates the completed response, selects and
+executes one action through `createConversationTools()`, and constructs the next
+untrusted-result prompt. Vibe64 no longer parses an action envelope or builds
+result prompts. The existing strict schema validator bounds the largest
+alternative within the unchanged Helper profile; it does not add their sizes.
+The private catalogue closes over the admitted schema and reader function; it is
+not exposed to HTTP, general automation or native Helper tools. Native tools stay
+disabled. The action callbacks retain original lookup/read order, summaries and
+result bounds and return data. Strict execution retains the safe in-memory call
+result then rethrows the original host exception, with no additional response.
+This explicit transient mode creates no authored turn, durable tool journal or
+restart replay. The existing parent cleanup artifact and query reservation owner
+remain the only application lifetime authorities. Canonical JSKIT tool consumers
+continue requiring their durable reservation and result writes.
 
 Database access follows the host's project membership policy independently of
 AI access. Members can inspect schema, browse data, arrange diagrams and run

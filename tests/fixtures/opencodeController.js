@@ -1,12 +1,13 @@
+import { readSessionConversationContext, createSessionConversationBinding, prepareSessionConversationDisposal, prepareSessionConversationRenewal, prepareSessionConversationReadiness, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation, prepareSessionConversationStorage, prepareSessionConversationActivity } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
-import { createConversationStreams } from "@jskit-ai/assistant-core/server/conversation";
+import { createConversationRuntime, createConversationStreams } from "@jskit-ai/assistant-core/server/conversation";
 import os from "node:os";
 import path from "node:path";
 import { serializeVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/index.js";
 import { startTerminalSession } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
 import { openCodeAssistantCapabilities } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js";
-import { createOpenCodeTerminalController } from "../../packages/vibe64-terminals/src/server/opencodeTerminal.js";
+import { createOpenCodeSessionRegistration } from "../../packages/vibe64-terminals/src/server/service.js";
 
 const providerDefinition = {
   id: "deepseek",
@@ -237,6 +238,13 @@ async function controllerHarness({
 
   function client(directory = "") {
     return {
+      allowConversationAttachments,
+      listConversationChildren,
+      readConversationStoragePage,
+      readConversationStorage: readConversationStorage || (async (id, options) => {
+        const native = await (serverClient || client()).readSession(id, options);
+        return { ...native, directory: native.location?.directory };
+      }),
       async *events(id, { onReady, signal } = {}) {
         if (events) {
           yield* events(id, { onReady, signal });
@@ -268,6 +276,7 @@ async function controllerHarness({
         upstreamSessions.delete(id);
         return true;
       },
+      async prepareDirectory() {},
       async health() {
         if (failNextHealth) {
           failNextHealth = false;
@@ -395,14 +404,12 @@ async function controllerHarness({
         throw startError;
       }
       const started = {
-        allowConversationAttachments,
-        listConversationChildren,
-        readConversationStoragePage,
-        readConversationStorage: readConversationStorage || (async (id, options) => {
-          const native = await (serverClient || client()).readSession(id, options);
-          return { ...native, directory: native.location?.directory };
-        }),
-        client: serverClient || client(),
+        client: serverClient ? {
+          readConversationStorage: client().readConversationStorage,
+          readConversationStoragePage,
+          listConversationChildren,
+          ...serverClient
+        } : client(),
         options,
         workdir: options.workdir,
         async startAttachedTerminal(input) {
@@ -485,7 +492,157 @@ async function controllerHarness({
       return { ok: true };
     }
   };
-  const createController = () => createOpenCodeTerminalController(controllerOptions);
+  // These original controller-only cases exercise the retained native owner.
+  // Product admission/runtime integration is covered by boundMainOpenCodeFixture.
+  const createController = () => {
+    const { provider, hostPreparation, accounts, terminals } = createOpenCodeSessionRegistration(controllerOptions);
+    const controller = {
+      provider,
+      prepareConversationHost: provider.prepareConversationHost,
+      conversationHost: hostPreparation.conversationHost,
+      ...accounts,
+      ...terminals
+    };
+    // Observe the same native maps as the original controller waiter. Acquiring
+    // this inert descriptor does not read context or start native work.
+    const nativeOwner = controller.prepareConversationHost(session.sessionId, {}, "activity").native.owner;
+    const { monitors, turns, turnSnapshot: openCodeTurnSnapshot } = nativeOwner;
+    async function contextFor(sessionId = "", options = {}) {
+      return readSessionConversationContext("opencode", controllerOptions.projectService, sessionId, options);
+    }
+    const conversations = createConversationRuntime({
+      authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+      host: { conversation: ({ id, context, input, options, operation }) => {
+        if (operation === "dispose") return prepareSessionConversationDisposal(provider, id, context, input);
+        if (operation === "inspectTemporaryActivity") return prepareSessionConversationActivity(provider, id, context);
+        if (!operation && context.nativeTestConversationId) return (async () => {
+          const { namespace, native } = await controller.prepareConversationHost(id, context.nativeTestOptions, "scoped");
+          return { sessionId: id, engine: provider.id, namespace: `${namespace}\0${context.nativeTestConversationId}`,
+            native: { ...native, scoped: {
+              conversationId: context.nativeTestConversationId, context: context.nativeTestOptions
+            } } };
+        })();
+        if (operation === "generateRenewalHandover" || operation === "seedRenewalHandover") {
+          return prepareSessionConversationRenewal(provider, id, context, input);
+        }
+        if (operation === "listNativeConversationStorage" || operation === "retireConversationHistory") {
+          return prepareSessionConversationStorage(provider, id, context, input);
+        }
+        if (operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation") {
+          return (async () => {
+            const { native } = await controller.prepareConversationHost(id, context.nativeTestOptions, "detachedCleanup");
+            return { sessionId: id, engine: provider.id, native, input, context: context.nativeTestOptions };
+          })();
+        }
+        if (operation === "reconcileSessions") return prepareConversationReconciliation(provider, context, input, options);
+        if (operation === "closeProject") return prepareProjectConversationCleanup(provider, context, input);
+        if (operation === "invalidateRuntimes") return prepareConversationRuntimeInvalidation(provider, context, input);
+        return operation === "ensure"
+          ? prepareSessionConversationReadiness(provider, id, context)
+          : createSessionConversationBinding(provider, id, context);
+      } }
+    });
+    const binding = (sessionId, options) => createSessionConversationBinding(provider, sessionId, {
+      runtime,
+      ...(sessionId === session.sessionId ? { session } : {}),
+      ...options
+    });
+    async function scopedOperation(method, sessionId, input = {}, options = {}) {
+      const requestedId = input?.conversationId || input?.threadId;
+      const conversationId = typeof requestedId === "string" ? requestedId.trim() : "";
+      if (typeof sessionId !== "string" || !sessionId.trim() || !conversationId) {
+        // The original native boundary owns missing-id refusals and legacy
+        // implicit creation. No placeholder identity is passed to open().
+        const { native: { owner, preparation } } = await controller.prepareConversationHost(sessionId, options, "scoped");
+        if (method === "send") return owner.runPreparedConversationTurn(await preparation.turn(input, options));
+        const prepared = await preparation.existing(input, options);
+        return method === "read" ? owner.readPreparedConversation(prepared, input)
+          : owner.waitPreparedConversationTurn(prepared, input);
+      }
+      const conversation = await conversations.open({ id: sessionId, representation: "native",
+        context: { ...options, sessionId, nativeTestConversationId: conversationId, nativeTestOptions: options } });
+      return conversation[method](input);
+    }
+    // Preserve the original native assertions through the retained start/wait
+    // workflow. Wait returns the same tracked completion promise, including its
+    // final result projection; use the admitted native ID, never a made-up scope.
+    async function runDetachedChatTurn(sessionId, input = {}, options = {}) {
+      const started = await scopedOperation("send", sessionId, input, options);
+      return scopedOperation("wait", sessionId, {
+        conversationId: started.conversationId
+      }, options);
+    }
+    return { ...controller,
+      async closeAllForSession(sessionId = "", options = {}) {
+        const context = { ...options, sessionId };
+        return (await conversations.disposeNative(provider.prepareConversationRequest("closeSession", context))).result;
+      },
+      hasActiveTemporaryConversation(sessionId) {
+        return conversations.inspectNativeTemporaryActivity({ id: sessionId, context: { sessionId } });
+      },
+      startConversationTurn: (sessionId, input = {}, options = {}) => scopedOperation("send", sessionId, input, options),
+      readConversation: (sessionId, input = {}, options = {}) => scopedOperation("read", sessionId, input, options),
+      waitForConversationTurn: (sessionId, input = {}, options = {}) => scopedOperation("wait", sessionId, input, options),
+      listNativeConversationStorage(sessionId, binding, current = {}) {
+        return conversations.listNativeConversationStorage({ id: sessionId, context: { ...current, sessionId }, binding });
+      },
+      retireConversationHistory(sessionId, binding, current = {}) {
+        return conversations.retireNativeConversationHistory({ id: sessionId, context: { ...current, sessionId }, binding });
+      },
+      deleteConversation(sessionId, input = {}, current = {}) {
+        return conversations.deleteNativeDetachedConversation({
+          id: sessionId, context: { sessionId, nativeTestOptions: current }, input
+        });
+      },
+      stopConversation(sessionId, input = {}, current = {}) {
+        return conversations.interruptNativeDetachedConversation({
+          id: sessionId, context: { sessionId, nativeTestOptions: current }, input
+        });
+      },
+      generateSessionRenewalHandover: (sessionId, input = {}, options = {}) => conversations.generateNativeRenewalHandover({
+        id: sessionId, context: { ...options, sessionId }, input
+      }),
+      seedSessionRenewalHandover: (sessionId, input = {}, options = {}) => conversations.seedNativeRenewalHandover({
+        id: sessionId, context: { ...options, sessionId }, input
+      }),
+      reconcileSessions: (sessions = [], options = {}) => provider.projectConversationResult("reconcileSessions", () =>
+        conversations.reconcileNativeSessions({ context: { providerId: provider.id, transportId: provider.transportId }, sessions, options })),
+      invalidateRuntimes: (input = {}) => provider.projectConversationResult("invalidateRuntimes", () =>
+        conversations.invalidateNativeRuntimes({ context: { providerId: provider.id, transportId: provider.transportId }, input })),
+      closeAllForProject: (input = {}) => provider.projectConversationResult("closeProject", () =>
+        conversations.closeNativeProject({ context: { providerId: provider.id, transportId: provider.transportId }, input })),
+      ensureSession: (sessionId, options = {}) => conversations.ensureNativeConversation({
+        id: sessionId, context: { ...options, sessionId }
+      }),
+      runDetachedChatTurn,
+      streamDetachedChatTurn: runDetachedChatTurn,
+      async createConversation(sessionId = "", input = {}, options = {}) {
+        const { native: { owner, preparation } } = await controller.prepareConversationHost(sessionId, options, "create");
+        return owner.createPreparedConversation(await preparation.creation(input, options));
+      },
+      async waitForTurn(sessionId = "", options = {}) {
+        const context = await contextFor(sessionId, options);
+        return monitors.get(context.key) || openCodeTurnSnapshot(turns.get(context.key));
+      },
+      async sendMessage(sessionId = "", input = {}, options = {}) {
+        const { native: { owner, preparation } } = await binding(sessionId, options);
+        return owner.sendPreparedMessage(await preparation.message(input, options), options);
+      },
+      async inspectMessageAdmission(sessionId = "", input = {}, options = {}) {
+        const { native: { owner, preparation } } = await binding(sessionId, options);
+        return owner.inspectPreparedMessage(await preparation.inspection(input, options));
+      },
+      async interruptTurn(sessionId, input = {}, options = {}) {
+        void input;
+        const { native: { owner, preparation } } = await binding(sessionId, options);
+        return owner.interruptPreparedTurn(await preparation.interruption(options));
+      },
+      async sessionState(sessionId, options = {}) {
+        const { native: { owner, preparation } } = await binding(sessionId, options);
+        return owner.readSessionState(options, preparation.state);
+      }
+    };
+  };
   const controller = createController();
 
   return {

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -71,6 +71,14 @@ function projectRuntimeRoot(targetRoot) {
   return resolveVibe64ProjectRuntimeRoot(targetRoot);
 }
 
+// Seed completed historical state without retaining an application Undo API.
+async function markHistoricalConversationRewound(store, sessionId, turnIds) {
+  const file = path.join(store.paths(sessionId).conversationLogRoot, "transcript.json");
+  const record = JSON.parse(await readFile(file, "utf8"));
+  record.rewound = [...new Set([...record.rewound, ...turnIds])];
+  await writeFile(file, `${JSON.stringify(record)}\n`);
+}
+
 function renderTestGenesisPrompt({ action = {} } = {}) {
   const promptId = String(action.promptId || action.id || "test");
   return {
@@ -84,6 +92,7 @@ function renderTestGenesisPrompt({ action = {} } = {}) {
 }
 
 export {
+  markHistoricalConversationRewound,
   managedSessionSourceRoot,
   projectRuntimeRoot,
   renderTestGenesisPrompt,

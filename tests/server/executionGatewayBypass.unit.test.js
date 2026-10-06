@@ -37,17 +37,6 @@ const DIRECT_EXECUTION_PATTERNS = Object.freeze([
 ]);
 
 const DIRECT_EXECUTION_ALLOWLIST = new Map([
-  ["packages/vibe64-runtime/src/server/codexAppServerProcess.js", {
-    "child_process import": { count: 1, reason: "Managed execution leader owns the history adapter and native Codex child." },
-    "spawn call": { count: 1, reason: "Native Codex shares the managed leader's execution lifetime." }
-  }],
-  ["packages/vibe64-runtime/src/server/codexModelCatalog.js", {
-    "child_process import": { count: 1, reason: "The managed Codex leader exports metadata within its existing execution, with bounded output, timeout and cancellation." }
-  }],
-  ["packages/vibe64-terminals/src/server/claudeStdioBridge.js", {
-    "child_process import": { count: 1, reason: "Managed execution bridge owns native Claude stdio." },
-    "spawn call": { count: 1, reason: "Claude runs inside the bridge's existing managed execution scope." }
-  }],
   ["packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js", {
     "child_process import": { count: 1, reason: "The native OpenCode plugin reads Genesis instructions inside its existing managed execution scope." },
     "execFile call": { count: 1, reason: "A fixed Node composer inherits the managed process group, with bounded output and a timeout; it does not run user commands." }

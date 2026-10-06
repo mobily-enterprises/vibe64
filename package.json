@@ -86,18 +86,18 @@
     "@codemirror/view": "^6.43.4",
     "@fastify/static": "^10.1.4",
     "@fastify/websocket": "^11.2.0",
-    "@jskit-ai/assistant-core": "0.1.199",
-    "@jskit-ai/connector-google-calendar": "0.1.38",
-    "@jskit-ai/connectors-catalog": "0.1.38",
-    "@jskit-ai/connectors-core": "0.1.38",
-    "@jskit-ai/connectors-web": "0.1.38",
-    "@jskit-ai/http-runtime": "0.1.219",
-    "@jskit-ai/http-web": "0.1.66",
-    "@jskit-ai/kernel": "0.1.221",
-    "@jskit-ai/payments-core": "0.1.38",
-    "@jskit-ai/realtime": "0.1.218",
-    "@jskit-ai/shell-web": "0.1.225",
-    "@jskit-ai/uploads-runtime": "0.1.196",
+    "@jskit-ai/assistant-core": "0.1.201",
+    "@jskit-ai/connector-google-calendar": "0.1.40",
+    "@jskit-ai/connectors-catalog": "0.1.40",
+    "@jskit-ai/connectors-core": "0.1.40",
+    "@jskit-ai/connectors-web": "0.1.40",
+    "@jskit-ai/http-runtime": "0.1.221",
+    "@jskit-ai/http-web": "0.1.68",
+    "@jskit-ai/kernel": "0.1.223",
+    "@jskit-ai/payments-core": "0.1.40",
+    "@jskit-ai/realtime": "0.1.220",
+    "@jskit-ai/shell-web": "0.1.227",
+    "@jskit-ai/uploads-runtime": "0.1.198",
     "@local/current-app": "0.1.0",
     "@local/main": "0.1.0",
     "@local/studio-health": "0.1.0",
@@ -126,7 +126,7 @@
     "dompurify": "3.4.15",
     "execa": "^9.6.1",
     "fastify": "^5.7.4",
-    "genesis-compiler": "1.7.7",
+    "genesis-compiler": "1.7.8",
     "genesis-stack": "1.1.4",
     "get-port": "^7.2.0",
     "json-rest-schema": "^1.0.16",
@@ -144,9 +144,9 @@
     "@local/vibe64-voice": "0.1.0"
   },
   "devDependencies": {
-    "@jskit-ai/agent-docs": "0.1.193",
-    "@jskit-ai/config-eslint": "0.1.218",
-    "@jskit-ai/jskit-catalog": "0.1.246",
+    "@jskit-ai/agent-docs": "0.1.195",
+    "@jskit-ai/config-eslint": "0.1.220",
+    "@jskit-ai/jskit-catalog": "0.1.248",
     "@playwright/test": "1.61.1",
     "@vitejs/plugin-vue": "^6.0.9",
     "esbuild": "0.28.2",
@@ -157,6 +157,9 @@
     "vitest": "^5.0.1"
   },
   "overrides": {
+    "@vitejs/plugin-vue@^6.0.9": {
+      "vite": "$vite"
+    },
     "vitepress": {
       "vite": "6.4.3"
     }

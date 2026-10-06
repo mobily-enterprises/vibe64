@@ -1,3 +1,4 @@
+import { createSessionConversationBinding, prepareSessionConversationDisposal } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -5,14 +6,26 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import Fastify from "fastify";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { createCapabilityHttpRuntime } from "@jskit-ai/kernel/server/http";
+import { createCapabilityRuntime } from "@jskit-ai/kernel/shared/capabilities";
+import { AssistantFeature } from "@jskit-ai/assistant-runtime/server";
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
+import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import { registerVibe64ActionContext } from "../../packages/vibe64-core/src/server/actionContext.js";
+import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
+import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { createService as createSessionService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { Vibe64ConversationsProvider } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js";
+import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { Readable } from "node:stream";
 import { codexAppServerThreadSettings, codexAppServerTurnSettings } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
 import { createProviderUsage } from "../../packages/vibe64-terminals/src/server/providerUsage.js";
 import { createCodexProviderConnectionStore } from "../../packages/vibe64-core/src/server/codexProviderConnections.js";
 
-import {
-  createCodexTerminalController
-} from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
+import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
+import { prepareCodexModelRouting } from "../../packages/vibe64-terminals/src/server/nativeConversationRetirement.js";
 import {
   codexTerminalNamespace
 } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
@@ -128,6 +141,7 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
     },
     async currentRuntimeInfo() {
       captures.onCurrentRuntimeInfo?.();
+      if (captures.currentRuntimeInfoWait) await captures.currentRuntimeInfoWait;
       return {
         ...captures.runtimeInfo,
         executionMode: providerOptions.executionMode || "interactive"
@@ -272,7 +286,7 @@ function createProvider(calls, subscribers, captures, providerOptions = {}) {
     async resumeThread(threadId, settings) {
       calls.push(["resume", threadId]);
       captures.resumes.push({ settings, threadId });
-      return { id: threadId };
+      return Object.hasOwn(captures, "resumeThreadResult") ? captures.resumeThreadResult : { id: threadId };
     },
     async readThread(threadId) {
       calls.push(["read", threadId]);
@@ -605,11 +619,31 @@ test("source explanations preserve one pre-resolved profile through the terminal
   await withConversationController(async ({
     calls,
     captures,
+    projectContextRoot,
+    projectRuntimeRoot,
     projectService,
     session,
     subscribers,
     temporaryRoot
   }) => {
+    const store = createVibe64SessionStore({
+      projectContextRoot,
+      projectRuntimeRoot,
+      projectSessionSourceRoot: path.join(temporaryRoot, "managed", "sessions")
+    });
+    await store.createSession({
+      metadata: session.metadata,
+      runtimeKind: "genesis",
+      sessionId: session.sessionId
+    });
+    const runtime = {
+      async getSession(sessionId) {
+        return store.readSession(sessionId);
+      },
+      projectContextRoot,
+      stateRoot: projectRuntimeRoot,
+      store
+    };
     const codexToolHomeSource = path.join(temporaryRoot, "codex-tool-home");
     await mkdir(path.join(codexToolHomeSource, ".codex"), { recursive: true });
     await writeFile(
@@ -625,8 +659,11 @@ test("source explanations preserve one pre-resolved profile through the terminal
     });
     const terminalProjectService = {
       ...projectService,
+      createRuntime() {
+        return runtime;
+      },
       createSessionStore() {
-        return {};
+        return store;
       },
       async readCurrentProject() {
         return {
@@ -1561,7 +1598,7 @@ function createDeterministicHold() {
 }
 
 test("routing refuses to relocate an existing Codex conversation into another provider home", async () => {
-  await withConversationController(async ({ controller }) => {
+  await withConversationController(async () => {
     for (const saved of [
       { codex_routing_home_provider: "deepseek", codex_conversation_id: "saved-thread" },
       { codex_routing_home_provider: "zai-coding-plan", codex_conversation_id: "saved-thread" },
@@ -1571,7 +1608,7 @@ test("routing refuses to relocate an existing Codex conversation into another pr
       const metadata = { ...saved };
       const writes = [];
       const runtime = { store: { writeMetadataValue: async (...args) => writes.push(args) } };
-      await assert.rejects(controller.prepareModelRouting("session-1", { modelProviderId: "deepseek" }, {
+      await assert.rejects(prepareCodexModelRouting("session-1", { modelProviderId: "deepseek" }, {
         runtime, session: { metadata }
       }), { code: "vibe64_codex_history_unsupported", statusCode: 409 });
       assert.deepEqual(metadata, saved);
@@ -1580,17 +1617,46 @@ test("routing refuses to relocate an existing Codex conversation into another pr
     const writes = [];
     const runtime = { store: { writeMetadataValue: async (...args) => writes.push(args) } };
     const metadata = {};
-    await controller.prepareModelRouting("session-1", { modelProviderId: "deepseek" }, { runtime, session: { metadata } });
+    await prepareCodexModelRouting("session-1", { modelProviderId: "deepseek" }, { runtime, session: { metadata } });
     assert.deepEqual(metadata, { codex_routing_home_provider: "openai" });
     assert.deepEqual(writes, [["session-1", "codex_routing_home_provider", "openai"]]);
     metadata.agent_identity_provider = "codex";
     metadata.agent_identity_model_provider = "deepseek";
     metadata.agent_identity_conversation_id = "shared-thread";
-    await controller.prepareModelRouting("session-1", { modelProviderId: "openai" }, { runtime, session: { metadata } });
+    await prepareCodexModelRouting("session-1", { modelProviderId: "openai" }, { runtime, session: { metadata } });
     assert.equal(writes.length, 1, "A shared Codex home remains pinned across provider changes.");
     assert.equal(metadata.agent_identity_conversation_id, "shared-thread");
   });
 });
+
+// Preserve the actual controller/provider fixture and route its scoped native
+// commands through the supplied common handle and application binding owner.
+function throughCommonScopedConversation(controller, persistentContext = null) {
+  const provider = controller.conversationProvider;
+  const runtime = createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context, input, operation }) => operation === "dispose"
+      ? prepareSessionConversationDisposal(provider, id, context, input)
+      : createSessionConversationBinding(provider, id, context) }
+  });
+  const native = (method) => async (sessionId, input = {}, options = {}) => {
+    const conversation = await runtime.open({ id: sessionId, representation: "native",
+      context: { ...options, sessionId, scopedConversationId: input.conversationId } });
+    return conversation[method](input);
+  };
+  if (persistentContext) {
+    const manager = createSessionAgentManager({ providers: [provider], conversationRuntime: runtime });
+    return { ...controller, closeAllForSession: () => runtime.close(),
+      ...Object.fromEntries(["startConversationTurn", "readConversation", "waitForConversationTurn", "stopConversation", "deleteConversation"]
+        .map(method => [method, (sessionId, input = {}, options = {}) => manager[method](sessionId, input, {
+          ...persistentContext, ...options, sessionId
+        })])) };
+  }
+  return { ...controller,
+    startConversationTurn: native("send"), readConversation: native("read"),
+    waitForConversationTurn: native("wait"), stopConversation: native("cancel"),
+    deleteConversation: native("dispose") };
+}
 
 async function withConversationController(operation, {
   promptHints = null,
@@ -1722,6 +1788,7 @@ async function withConversationController(operation, {
     }
   };
   const controller = createCodexTerminalController({
+    nativeTestContext: { runtime: projectService.createRuntime(), session },
     codexAppServerProviderFactory(providerOptions) {
       captures.onProviderFactory?.();
       return createProvider(calls, subscribers, captures, providerOptions);
@@ -1797,16 +1864,19 @@ function restartedCaptures(source = {}, overrides = {}) {
 }
 
 function createRestartedController({
+  session,
   calls = [],
   captures,
   codexHelperThreadLedgerFactory,
   projectService,
   subscribers = new Set()
 } = {}) {
-  const projectRuntimeRoot = projectService.createRuntime().stateRoot;
+  const runtime = projectService.createRuntime();
+  const projectRuntimeRoot = runtime.stateRoot;
   const agentRuntimeRoot = projectService.agentRuntimeRoot ||
     path.join(projectRuntimeRoot, "agent-runtimes");
   return createCodexTerminalController({
+    ...(session ? { nativeTestContext: { runtime, session } } : {}),
     codexAppServerProviderFactory(providerOptions) {
       return createProvider(calls, subscribers, captures, providerOptions);
     },
@@ -1821,7 +1891,9 @@ function createRestartedController({
 }
 
 async function withAgentMessageController(operation, {
+  actions = null,
   throughTerminalService = false,
+  bindConversation = false,
   codexAppServerActiveReconcileMs = 60_000
 } = {}) {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-message-"));
@@ -1923,6 +1995,7 @@ async function withAgentMessageController(operation, {
     codexAppServerDaemonWellbeingMs: 60_000,
     logger: { warn: (event) => captures.onDiagnostic?.(event) },
     publishSessionChanged: async (sessionId, event) => captures.onSessionChanged?.(sessionId, event),
+    ...(bindConversation ? { publishConversation: event => captures.onConversationChanged?.(event) } : {}),
     codexToolHomeRequired: false,
     codexToolHomeSource,
     codexAppServerProviderFactory(providerOptions) {
@@ -2152,6 +2225,7 @@ async function withAgentMessageController(operation, {
   };
   const terminalService = throughTerminalService
     ? createTerminalService({
+        actions,
         codexTerminalController: controllerOptions,
         env: controllerOptions.env,
         publishSessionChanged: { agentTerminal: controllerOptions.publishSessionChanged },
@@ -2185,6 +2259,171 @@ async function withAgentMessageController(operation, {
     await rm(temporaryRoot, { force: true, recursive: true });
   }
 }
+
+test("the common Codex entry uses the original main journal, receipt files and cleanup owner", { timeout: 15_000 }, async () => {
+  await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
+    const actor = { preferredName: "Ada", role: "owner", username: "ada-owner" };
+    const unrelatedActor = { preferredName: "Other", role: "owner", username: "other-owner" };
+    const hostProvider = controller.conversationProvider;
+    const common = createConversationRuntime({ engine: "codex", authorize: async () => true,
+      host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+        ? prepareSessionConversationDisposal(hostProvider, id, context, input)
+        : createSessionConversationBinding(hostProvider, id, {
+        ...context, prepareInput: async input => {
+          const prepared = await Promise.resolve(input);
+          return { ...prepared, vibe64User: actor, actorContext: unrelatedActor };
+        }
+      }) }
+    });
+    captures.onConversationChanged = event => common.publishNative(event);
+    captures.onProviderCreated = provider => {
+      let goal = null;
+      provider.readGoal = async () => ({ goal });
+      provider.setGoal = async (threadId, input) => ({ goal: goal = { ...input, threadId,
+        status: "active", createdAt: 10, updatedAt: 10, tokensUsed: 0, timeUsedSeconds: 0 } });
+      provider.setGoalStatus = async (_threadId, status) => ({ goal: goal = { ...goal, status } });
+      provider.clearGoal = async () => { goal = null; return {}; };
+      provider.interruptTurn = async () => { provider.status = "interrupted"; return { interrupted: true }; };
+    };
+    const before = (await runtime.getSession(sessionId)).metadata;
+    const readSession = runtime.getSession;
+    runtime.getSession = async () => { throw new Error("Passive native status must not hydrate the full session history"); };
+    try {
+      const passive = await common.open({ id: sessionId, context: { runtime }, representation: "native" });
+      assert.equal((await passive.read()).ok, true);
+    } finally { runtime.getSession = readSession; }
+    const conversation = await common.open({ id: sessionId, context: { runtime } });
+    assert.equal((await conversation.read()).segmentId, null);
+    assert.equal(await conversation.readGoal(), null);
+    assert.deepEqual((await runtime.getSession(sessionId)).metadata, before, "opening and reading do not reconstruct runtime state");
+    assert.equal(captures.provider, null, "reading an unstarted main conversation does not acquire a provider");
+    const goal = await conversation.updateGoal({ action: "set", expectedSegmentId: null, expectedGoalId: null, objective: "Keep the fixture small" });
+    assert.equal(goal.status, "active");
+    assert.equal((await store.readConversationLog(sessionId)).length, 0, "the original first Set does not manufacture an authored message");
+    await conversation.updateGoal({ action: "cancel", expectedSegmentId: (await conversation.read()).segmentId, expectedGoalId: goal.id });
+    const canonicalEvents = [];
+    const unsubscribe = await conversation.subscribe(event => canonicalEvents.push(event));
+    const selected = (await runtime.getSession(sessionId)).metadata.assistant_selection;
+    const native = await common.open({ id: sessionId, context: { runtime }, representation: "native" });
+    const exactObjective = " Keep this exact pinned goal ";
+    const pinnedGoal = await native.updateGoal({ action: "set", threadId: captures.provider.threadId, objective: exactObjective });
+    assert.equal(pinnedGoal.ok, true);
+    assert.equal(pinnedGoal.goal.objective, exactObjective);
+    assert.equal(pinnedGoal.goal.createdAt, 10, "the native result keeps the original numeric expectation");
+    const pinnedSession = await runtime.getSession(sessionId);
+    const pinned = await common.open({ id: sessionId, representation: "native", context: {
+      runtime, session: pinnedSession, assistantSelection: JSON.parse(selected)
+    } });
+    await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify({
+      ...JSON.parse(selected), engineId: "opencode", modelProviderId: "deepseek"
+    }));
+    const readPinned = await pinned.readGoal();
+    assert.equal(readPinned.status, "available");
+    assert.equal(readPinned.threadId, captures.provider.threadId);
+    assert.deepEqual(readPinned.goal, pinnedGoal.goal);
+    const expectedGoal = { threadId: readPinned.threadId, objective: exactObjective, createdAt: 10 };
+    assert.equal((await pinned.updateGoal({ ...expectedGoal, action: "pause" })).goal.status, "paused");
+    assert.equal((await pinned.updateGoal({ ...expectedGoal, action: "cancel" })).goal, null);
+    await assert.rejects(pinned.send({ messageId: "stale-selected-native-send", message: "Do not send this" }),
+      /selected assistant changed/);
+    assert.equal(captures.turns.length, 0, "pinned controls cannot loosen ordinary Send selection");
+    await store.writeMetadataValue(sessionId, "assistant_selection", selected);
+
+    let durableBeforeClear = false;
+    const writeMetadata = store.writeMetadataValue;
+    store.writeMetadataValue = async (id, name, value) => {
+      if (name === "assistant_changeover") {
+        const state = JSON.parse(value);
+        if (state.lastEngine === "codex" && !state.engines.codex.pending) {
+          durableBeforeClear = await store.conversationMessageIdExists(id, "bound-main-message");
+          assert.equal(durableBeforeClear, true, "the original receipt file precedes clearing the original pending journal");
+        }
+      }
+      return writeMetadata(id, name, value);
+    };
+    const receipt = await conversation.send({ messageId: "bound-main-message", text: "Keep the original owner" });
+    assert.equal(receipt.status, "accepted");
+    const duplicate = await native.send({ messageId: "bound-main-message", message: "Keep the original owner" });
+    assert.deepEqual(duplicate, { value: { ok: true, delivered: true, messageId: "bound-main-message", duplicate: true } });
+    assert.equal(Object.hasOwn(duplicate, "session"), false, "the original duplicate result has no later session snapshot");
+    assert.ok(canonicalEvents.some(event => event.type === "accepted"));
+    assert.ok(canonicalEvents.every(event => !Object.hasOwn(event, "session") && !Object.hasOwn(event, "nativeResult")));
+    unsubscribe();
+
+    assert.equal(durableBeforeClear, true);
+    assert.equal(captures.threadStarts.length, 1);
+    const history = await store.readConversationLog(sessionId);
+    assert.equal(history[0].user.text, "Keep the original owner");
+    assert.equal(history[0].user.messageId, "bound-main-message");
+    assert.equal(history[0].metadata.actorId, actor.username,
+      "the final awaited application actor wins over a mismatched neutral input field");
+    assert.equal(history[0].metadata.actorDisplayName, actor.preferredName);
+    assert.equal(history[0].metadata.runtime, undefined, "original main history is not rewritten with runtime-v3 metadata");
+    assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).outerTurnId, "bound-main-message");
+    assert.equal((await conversation.read()).segmentId, `codex:${captures.provider.threadId}`);
+    assert.equal((await conversation.cancel()).stopped, true);
+    const identity = (await conversation.read()).segmentId;
+    const replacement = { operationId: "bound-main-replace", expectedSegmentId: identity, reason: "renewal", briefing: "Keep the original owner." };
+    await conversation.replace(replacement);
+    assert.equal((await conversation.read()).segmentId, null);
+    assert.equal((await conversation.replace(replacement)).duplicate, true, "replacement retry retains the saved original operation after identity release");
+    await assert.rejects(conversation.updateGoal({ action: "set", expectedSegmentId: null, expectedGoalId: null, objective: "Continue" }),
+      { code: "conversation_replacement_briefing_pending" });
+    await conversation.dispose();
+    assert.ok(captures.stopRuntimes > 0, "dispose uses the original shared runtime cleanup owner");
+    assert.equal((await runtime.getSession(sessionId)).metadata.runtime, undefined);
+    await common.close();
+  }, { bindConversation: true });
+});
+
+test("native main handles preserve a failed delivery with a known native turn identity", { timeout: 15_000 }, async () => {
+  await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
+    const hostProvider = controller.conversationProvider;
+    const common = createConversationRuntime({ engine: "codex", authorize: async () => true,
+      host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+        ? prepareSessionConversationDisposal(hostProvider, id, context, input)
+        : createSessionConversationBinding(hostProvider, id, {
+        ...context, prepareInput: async input => input
+      }) }
+    });
+    captures.onConversationChanged = event => common.publishNative(event);
+    captures.onProviderCreated = provider => {
+      provider.interruptTurn = async () => { provider.status = "interrupted"; return { interrupted: true }; };
+    };
+    captures.onSendTurn = ({ provider }) => { provider.status = "failed"; };
+    await store.writeMetadataValue(sessionId, "assistant_changeover", JSON.stringify({
+      lastEngine: "opencode", engines: { opencode: { seen: {} } }
+    }));
+    const native = await common.open({ id: sessionId, context: { runtime }, representation: "native" });
+    const canonical = await common.open({ id: sessionId, context: { runtime } });
+    const events = [];
+    await canonical.subscribe(event => events.push(event));
+    let sending = 0;
+    const messageId = "native-failed-result";
+    const result = await native.send({ messageId, message: "Native request body", displayMessage: "Visible authorship",
+      async onPromptSending() {
+        sending += 1;
+        const state = JSON.parse(await store.readMetadataValue(sessionId, "assistant_changeover"));
+        assert.equal(state.engines.codex.pending.attempted, false, "original callback precedes the journal mark");
+      }
+    });
+    assert.equal(result.value.ok, false);
+    assert.equal(result.value.error, "Codex turn failed.");
+    assert.equal(result.nativeIdentity.turnId, "turn-1");
+    assert.equal(Object.hasOwn(result, "session"), true, "the original failure snapshot is returned only to this native invocation");
+    assert.equal(sending, 1);
+    assert.ok(captures.renderPrompts[0].request.endsWith("Native request body"));
+    assert.equal(await store.conversationMessageIdExists(sessionId, messageId), false);
+    const pending = JSON.parse(await store.readMetadataValue(sessionId, "assistant_changeover")).engines.codex.pending;
+    assert.equal(pending.messageId, messageId);
+    assert.equal(pending.attempted, true);
+    assert.equal(pending.displayMessage, "Visible authorship");
+    assert.equal(events.some(event => event.type === "accepted"), false);
+    assert.ok(events.every(event => !Object.hasOwn(event, "session") && !Object.hasOwn(event, "nativeResult")));
+    assert.equal((await runtime.getSession(sessionId)).metadata.runtime, undefined);
+    await common.close();
+  }, { bindConversation: true });
+});
 
 test("Codex Stop reports unconfirmed command exit even when its native turn already became idle", async () => {
   await withAgentMessageController(async ({ captures, controller, sessionId }) => {
@@ -3874,124 +4113,138 @@ test("agent messages reject while a FINALIZING turn retains its provider turn id
   });
 });
 
-test("completion during steer starts one ordinary turn with the same message id", async () => {
-  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
-    const started = await controller.sendMessage(sessionId, {
-      message: "Start the original turn.",
-      messageId: "message-steer-original"
-    });
-    assert.equal(started.ok, true, JSON.stringify(started));
+for (const throughTerminalService of [false, true]) {
+  test(`completion during steer starts one ordinary turn with the same message id${throughTerminalService ? " through the common Main manager" : ""}`, async () => {
+    await withAgentMessageController(async ({ captures, controller: originalController, sessionId, store, terminalService }) => {
+      const controller = terminalService
+        ? { async sendMessage(...args) {
+            const result = await terminalService.sendAgentMessage(...args);
+            return { ...result, turnId: result.turn?.id };
+          } }
+        : originalController;
+      const started = await controller.sendMessage(sessionId, {
+        message: "Start the original turn.",
+        messageId: "message-steer-original"
+      });
+      assert.equal(started.ok, true, JSON.stringify(started));
 
-    captures.onSteerTurn = ({ provider }) => {
+      captures.onSteerTurn = ({ provider }) => {
+        provider.status = "completed";
+        const error = new Error("The original turn completed before steering.");
+        error.code = -32602;
+        error.method = "turn/steer";
+        throw error;
+      };
+      const messageId = "message-steer-completed-race";
+      const result = await controller.sendMessage(sessionId, {
+        message: "Continue as an ordinary turn.",
+        messageId
+      });
+
+      assert.equal(result.ok, true, JSON.stringify(result));
+      assert.equal(result.deliveryMode, "new_turn");
+      assert.equal(result.turnId, "turn-2");
+      assert.equal(captures.steers.length, 1);
+      assert.equal(captures.turns.length, 2);
+      assert.equal(captures.turns[1].settings.clientUserMessageId, messageId);
+      const session = await store.readSession(sessionId);
+      const agentRun = session.agentRuns.find(({ id }) => id === "codex_app_server");
+      assert.equal(agentRun?.outerTurnId, messageId);
+      assert.equal(agentRun?.providerTurnId, "turn-2");
+      const conversationLog = await store.readConversationLog(sessionId);
+      assert.equal(conversationLog.filter((turn) => (
+        turn.user?.text === "Continue as an ordinary turn."
+      )).length, 1);
+    }, { throughTerminalService });
+  });
+
+  test(`a delayed start notification from a completed turn cannot replace the next chat turn${throughTerminalService ? " through the common Main manager" : ""}`, async () => {
+    await withAgentMessageController(async ({ captures, controller: originalController, sessionId, store, terminalService }) => {
+      const controller = terminalService
+        ? { async sendMessage(...args) {
+            const result = await terminalService.sendAgentMessage(...args);
+            return { ...result, turnId: result.turn?.id };
+          } }
+        : originalController;
+      captures.finalText = (turnId) => turnId === "turn-1"
+        ? "First response."
+        : "Second response.";
+      const first = await controller.sendMessage(sessionId, {
+        message: "Complete the first turn.",
+        messageId: "message-before-delayed-start"
+      });
+      assert.equal(first.ok, true, JSON.stringify(first));
+
+      const provider = captures.provider;
+      const threadId = provider.threadId;
+      const firstTurnId = provider.turnId;
+      emitCodexNotification(captures.subscribers, assistantItemCompleted({
+        itemId: "first-final",
+        phase: "final_answer",
+        text: "First response.",
+        threadId,
+        turnId: firstTurnId
+      }));
       provider.status = "completed";
-      const error = new Error("The original turn completed before steering.");
-      error.code = -32602;
-      error.method = "turn/steer";
-      throw error;
-    };
-    const messageId = "message-steer-completed-race";
-    const result = await controller.sendMessage(sessionId, {
-      message: "Continue as an ordinary turn.",
-      messageId
-    });
+      emitCodexNotification(captures.subscribers, turnCompleted({
+        threadId,
+        turnId: firstTurnId
+      }));
+      await waitForSessionValue(
+        () => store.readConversationLog(sessionId),
+        (conversation) => conversation.some((turn) => turn.assistant?.text === "First response."),
+        "the first response to persist"
+      );
 
-    assert.equal(result.ok, true, JSON.stringify(result));
-    assert.equal(result.deliveryMode, "new_turn");
-    assert.equal(result.turnId, "turn-2");
-    assert.equal(captures.steers.length, 1);
-    assert.equal(captures.turns.length, 2);
-    assert.equal(captures.turns[1].settings.clientUserMessageId, messageId);
-    const session = await store.readSession(sessionId);
-    const agentRun = session.agentRuns.find(({ id }) => id === "codex_app_server");
-    assert.equal(agentRun?.outerTurnId, messageId);
-    assert.equal(agentRun?.providerTurnId, "turn-2");
-    const conversationLog = await store.readConversationLog(sessionId);
-    assert.equal(conversationLog.filter((turn) => (
-      turn.user?.text === "Continue as an ordinary turn."
-    )).length, 1);
+      const second = await controller.sendMessage(sessionId, {
+        message: "Complete the next turn.",
+        messageId: "message-after-delayed-start"
+      });
+      assert.equal(second.ok, true, JSON.stringify(second));
+      assert.equal(second.turnId, "turn-2");
+
+      const secondTurnId = provider.turnId;
+      emitCodexNotification(captures.subscribers, turnStarted({
+        threadId,
+        turnId: firstTurnId
+      }));
+      emitCodexNotification(captures.subscribers, assistantItemCompleted({
+        itemId: "second-final",
+        phase: "final_answer",
+        text: "Second response.",
+        threadId,
+        turnId: secondTurnId
+      }));
+      provider.status = "completed";
+      emitCodexNotification(captures.subscribers, turnCompleted({
+        threadId,
+        turnId: secondTurnId
+      }));
+
+      const conversation = await waitForSessionValue(
+        () => store.readConversationLog(sessionId),
+        (value) => value.some((turn) => turn.assistant?.text === "Second response."),
+        "the second response to survive the delayed start notification"
+      );
+      assert.deepEqual(
+        conversation.map((turn) => turn.assistant?.text).filter(Boolean),
+        ["First response.", "Second response."]
+      );
+      const run = await waitForSessionValue(
+        () => store.readAgentRun(sessionId, "codex_app_server"),
+        (value) => value?.providerTurnId === secondTurnId &&
+          value?.state === VIBE64_AGENT_RUN_STATE.COMPLETED,
+        "the second turn to finish without adopting the completed turn"
+      );
+      assert.equal(run?.providerTurnId, secondTurnId);
+      assert.equal(run?.state, VIBE64_AGENT_RUN_STATE.COMPLETED);
+      assert.equal(run?.events.some((event) => (
+        event.kind === "codex-app-server-turn-continued" &&
+        event.providerTurnId === firstTurnId
+      )), false);
+    }, { throughTerminalService });
   });
-});
-
-test("a delayed start notification from a completed turn cannot replace the next chat turn", async () => {
-  await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
-    captures.finalText = (turnId) => turnId === "turn-1"
-      ? "First response."
-      : "Second response.";
-    const first = await controller.sendMessage(sessionId, {
-      message: "Complete the first turn.",
-      messageId: "message-before-delayed-start"
-    });
-    assert.equal(first.ok, true, JSON.stringify(first));
-
-    const provider = captures.provider;
-    const threadId = provider.threadId;
-    const firstTurnId = provider.turnId;
-    emitCodexNotification(captures.subscribers, assistantItemCompleted({
-      itemId: "first-final",
-      phase: "final_answer",
-      text: "First response.",
-      threadId,
-      turnId: firstTurnId
-    }));
-    provider.status = "completed";
-    emitCodexNotification(captures.subscribers, turnCompleted({
-      threadId,
-      turnId: firstTurnId
-    }));
-    await waitForSessionValue(
-      () => store.readConversationLog(sessionId),
-      (conversation) => conversation.some((turn) => turn.assistant?.text === "First response."),
-      "the first response to persist"
-    );
-
-    const second = await controller.sendMessage(sessionId, {
-      message: "Complete the next turn.",
-      messageId: "message-after-delayed-start"
-    });
-    assert.equal(second.ok, true, JSON.stringify(second));
-    assert.equal(second.turnId, "turn-2");
-
-    const secondTurnId = provider.turnId;
-    emitCodexNotification(captures.subscribers, turnStarted({
-      threadId,
-      turnId: firstTurnId
-    }));
-    emitCodexNotification(captures.subscribers, assistantItemCompleted({
-      itemId: "second-final",
-      phase: "final_answer",
-      text: "Second response.",
-      threadId,
-      turnId: secondTurnId
-    }));
-    provider.status = "completed";
-    emitCodexNotification(captures.subscribers, turnCompleted({
-      threadId,
-      turnId: secondTurnId
-    }));
-
-    const conversation = await waitForSessionValue(
-      () => store.readConversationLog(sessionId),
-      (value) => value.some((turn) => turn.assistant?.text === "Second response."),
-      "the second response to survive the delayed start notification"
-    );
-    assert.deepEqual(
-      conversation.map((turn) => turn.assistant?.text).filter(Boolean),
-      ["First response.", "Second response."]
-    );
-    const run = await waitForSessionValue(
-      () => store.readAgentRun(sessionId, "codex_app_server"),
-      (value) => value?.providerTurnId === secondTurnId &&
-        value?.state === VIBE64_AGENT_RUN_STATE.COMPLETED,
-      "the second turn to finish without adopting the completed turn"
-    );
-    assert.equal(run?.providerTurnId, secondTurnId);
-    assert.equal(run?.state, VIBE64_AGENT_RUN_STATE.COMPLETED);
-    assert.equal(run?.events.some((event) => (
-      event.kind === "codex-app-server-turn-continued" &&
-      event.providerTurnId === firstTurnId
-    )), false);
-  });
-});
+}
 
 test("an idle thread notification completes its currently owned turn without a provider turn id", async () => {
   await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
@@ -5337,7 +5590,7 @@ test("temporary conversations start turns without resuming a nonexistent rollout
 });
 
 test("temporary Repair conversations do not depend on failed helper cleanup after a restart", async () => {
-  await withConversationController(async ({ captures, controller, projectRuntimeRoot, projectService,
+  await withConversationController(async ({ session, captures, controller, projectRuntimeRoot, projectService,
     simulateControllerCrash, subscribers }) => {
     const executionProfile = sourceExplanationHelperProfile();
     const pending = controller.runDetachedChatTurn("session-1", {
@@ -5364,7 +5617,7 @@ test("temporary Repair conversations do not depend on failed helper cleanup afte
         return { id: threadId };
       }
     });
-    const restarted = createRestartedController({ calls, captures: restartedState, projectService });
+    const restarted = createRestartedController({ session, calls, captures: restartedState, projectService });
     const conversation = await restarted.createConversation("session-1", {
       ephemeral: true
     });
@@ -5564,6 +5817,7 @@ test("scoped Codex helper cancellation before thread creation releases its catal
 
 test("scoped Codex helpers enforce the selected bounded profile without touching the main session", async () => {
   await withConversationController(async ({ captures, controller, session, subscribers, temporaryRoot }) => {
+    controller = throughCommonScopedConversation(controller);
     const workdir = path.join(temporaryRoot, "helper-work");
     await mkdir(workdir);
     const scope = { id: "router_job", environment: {}, workdir, runtimeRoot: path.join(temporaryRoot, "helper-runtime"),
@@ -5612,6 +5866,7 @@ test("scoped Codex helpers enforce the selected bounded profile without touching
 
 test("scoped Codex helpers reject oversized output and keep their original deadline when waiting", async () => {
   for (const oversized of [true, false]) await withConversationController(async ({ captures, controller, subscribers, temporaryRoot }) => {
+    controller = throughCommonScopedConversation(controller);
     const scope = { id: "bounded_job", environment: {}, workdir: temporaryRoot, runtimeRoot: path.join(temporaryRoot, "helper-runtime"),
       stableContext: "Use supplied text only." };
     const options = { assistantScope: scope };
@@ -5636,8 +5891,144 @@ test("scoped Codex helpers reject oversized output and keep their original deadl
   });
 });
 
+test("scoped Codex helpers reject a changed account before exposing completion", async () => {
+  await withConversationController(async ({ captures, controller, subscribers, temporaryRoot }) => {
+    controller = throughCommonScopedConversation(controller);
+    const scope = { id: "account_fence", environment: {}, workdir: temporaryRoot,
+      runtimeRoot: path.join(temporaryRoot, "helper-runtime"), stableContext: "Use supplied text only." };
+    const options = { assistantScope: scope };
+    const executionProfile = sourceExplanationHelperProfile();
+    const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
+    assert.equal(created.ok, true, JSON.stringify(created));
+    const input = { ephemeral: true, conversationId: created.conversationId, executionProfile, message: "Answer",
+      outputSchema: sourceExplanationOutputSchema() };
+    const started = await controller.startConversationTurn(scope.id, input, options);
+    assert.equal(started.ok, true, JSON.stringify(started));
+    const pending = controller.waitForConversationTurn(scope.id, { ...input, runId: started.runId }, options);
+    captures.runtimeInfo.accountIdentitySignature = TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE;
+    completeDetachedTurn(subscribers, { text: '{"answer":"Do not expose this account-stale reply."}',
+      threadId: created.conversationId, turnId: started.runId });
+    const result = await pending;
+    assert.equal(result.ok, false, JSON.stringify(result));
+    assert.equal(result.code, "vibe64_codex_helper_ownership_blocked");
+    assert.match(result.error, /selected Codex account changed/u);
+    const current = await controller.readConversation(scope.id, input, options);
+    assert.equal(current.status, "failed");
+    assert.equal(current.rawText, "");
+    assert.equal(current.message, "");
+    assert.deepEqual(captures.interrupts, [], "account validation must not interrupt an already completed native turn");
+    assert.equal((await controller.deleteConversation(scope.id, input, options)).ok, true);
+    assert.deepEqual(captures.deletes, [created.conversationId], "the parent keeps the original exact cleanup identity");
+  });
+});
+
+test("scoped Codex helpers accept a same-account refresh through completion", async () => {
+  await withConversationController(async ({ captures, controller, subscribers, temporaryRoot }) => {
+    controller = throughCommonScopedConversation(controller);
+    const scope = { id: "account_refresh", environment: {}, workdir: temporaryRoot,
+      runtimeRoot: path.join(temporaryRoot, "helper-runtime"), stableContext: "Use supplied text only." };
+    const options = { assistantScope: scope };
+    const executionProfile = sourceExplanationHelperProfile();
+    const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
+    assert.equal(created.ok, true, JSON.stringify(created));
+    const input = { ephemeral: true, conversationId: created.conversationId, executionProfile, message: "Answer",
+      outputSchema: sourceExplanationOutputSchema() };
+    const started = await controller.startConversationTurn(scope.id, input, options);
+    assert.equal(started.ok, true, JSON.stringify(started));
+    const pending = controller.waitForConversationTurn(scope.id, { ...input, runId: started.runId }, options);
+    captures.runtimeInfo.authStateSignature = `v1:${"c".repeat(24)}`;
+    completeDetachedTurn(subscribers, { text: '{"answer":"The same account still owns this reply."}',
+      threadId: created.conversationId, turnId: started.runId });
+    const result = await pending;
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.rawText, '{"answer":"The same account still owns this reply."}');
+    assert.equal(result.status, "completed");
+    assert.deepEqual(captures.interrupts, []);
+    assert.equal((await controller.deleteConversation(scope.id, input, options)).ok, true);
+  });
+});
+
+test("scoped Codex helpers require an authoritative account identity before Send", async () => {
+  for (const accountIdentitySignature of ["", "not-an-account-signature"]) {
+    await withConversationController(async ({ captures, controller, temporaryRoot }) => {
+      controller = throughCommonScopedConversation(controller);
+      const scope = { id: "account_required", environment: {}, workdir: temporaryRoot,
+        runtimeRoot: path.join(temporaryRoot, "helper-runtime"), stableContext: "Use supplied text only." };
+      const options = { assistantScope: scope };
+      const executionProfile = sourceExplanationHelperProfile();
+      const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
+      assert.equal(created.ok, true, JSON.stringify(created));
+      const input = { ephemeral: true, conversationId: created.conversationId, executionProfile, message: "Answer",
+        outputSchema: sourceExplanationOutputSchema() };
+      captures.runtimeInfo.accountIdentitySignature = accountIdentitySignature;
+      const rejected = await controller.startConversationTurn(scope.id, input, options);
+      assert.equal(rejected.ok, false, JSON.stringify(rejected));
+      assert.equal(rejected.code, "vibe64_codex_helper_ownership_blocked");
+      assert.match(rejected.error, /stable selected-account identity/u);
+      assert.deepEqual(captures.turns, []);
+      assert.equal((await controller.readConversation(scope.id, input, options)).status, "ready");
+      captures.runtimeInfo.accountIdentitySignature = TEST_ACCOUNT_IDENTITY_SIGNATURE;
+      assert.equal((await controller.deleteConversation(scope.id, input, options)).ok, true);
+    });
+  }
+});
+
+test("scoped Codex completion keeps admission busy and cannot overwrite Stop during its account check", { timeout: 10_000 }, async () => {
+  await withConversationController(async ({ captures, controller, subscribers, temporaryRoot }) => {
+    controller = throughCommonScopedConversation(controller);
+    const scope = { id: "account_completion_stop", environment: {}, workdir: temporaryRoot,
+      runtimeRoot: path.join(temporaryRoot, "helper-runtime"), stableContext: "Use supplied text only." };
+    const options = { assistantScope: scope };
+    const executionProfile = sourceExplanationHelperProfile();
+    const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
+    assert.equal(created.ok, true, JSON.stringify(created));
+    const input = { ephemeral: true, conversationId: created.conversationId, executionProfile, message: "Answer",
+      messageId: "first-account-check", outputSchema: sourceExplanationOutputSchema() };
+    const started = await controller.startConversationTurn(scope.id, input, options);
+    assert.equal(started.ok, true, JSON.stringify(started));
+    const pending = controller.waitForConversationTurn(scope.id, { ...input, runId: started.runId }, options);
+    const hold = createDeterministicHold();
+    captures.currentRuntimeInfoWait = hold.wait;
+    captures.onCurrentRuntimeInfo = () => hold.enter();
+    try {
+      completeDetachedTurn(subscribers, { text: '{"answer":"This late result must not revive the stopped turn."}',
+        threadId: created.conversationId, turnId: started.runId });
+      await hold.entered;
+      const validating = await controller.readConversation(scope.id, input, options);
+      assert.equal(validating.status, "inProgress");
+      assert.equal(validating.rawText, "");
+      const blocked = await controller.startConversationTurn(scope.id, { ...input,
+        message: "A different request", messageId: "second-account-check" }, options);
+      assert.equal(blocked.ok, false);
+      assert.equal(blocked.code, "vibe64_temporary_conversation_turn_active");
+      assert.equal(captures.turns.length, 1);
+      const stopped = await controller.stopConversation(scope.id, { ...input, runId: started.runId }, options);
+      assert.equal(stopped.ok, true, JSON.stringify(stopped));
+      assert.deepEqual(captures.interrupts, [{ threadId: created.conversationId, turnId: started.runId }]);
+      assert.equal((await controller.readConversation(scope.id, input, options)).status, "interrupted");
+      hold.release();
+      const rejected = await pending;
+      assert.equal(rejected.ok, false, JSON.stringify(rejected));
+      assert.match(rejected.error, /scoped helper turn is unavailable/u);
+      const current = await controller.readConversation(scope.id, input, options);
+      assert.equal(current.status, "interrupted");
+      assert.equal(current.runId, started.runId);
+      assert.equal(current.rawText, "");
+      assert.equal(current.message, "");
+      assert.equal(captures.interrupts.length, 1, "settling the late result must not issue another Stop");
+    } finally {
+      captures.currentRuntimeInfoWait = null;
+      captures.onCurrentRuntimeInfo = null;
+      hold.release();
+      await pending;
+    }
+    assert.equal((await controller.deleteConversation(scope.id, input, options)).ok, true);
+  });
+});
+
 test("scoped Codex helper cleanup after a restart deletes its captured native thread", async () => {
   await withConversationController(async ({ captures, controller, projectService, temporaryRoot }) => {
+    controller = throughCommonScopedConversation(controller);
     const scope = { id: "restart_job", environment: {}, workdir: temporaryRoot, runtimeRoot: path.join(temporaryRoot, "helper-runtime"),
       stableContext: "Use supplied text only." };
     const options = { assistantScope: scope };
@@ -5645,7 +6036,7 @@ test("scoped Codex helper cleanup after a restart deletes its captured native th
     const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
     assert.equal(created.ok, true, JSON.stringify(created));
     const after = restartedCaptures(captures);
-    const restarted = createRestartedController({ captures: after, projectService });
+    const restarted = throughCommonScopedConversation(createRestartedController({ captures: after, projectService }));
     after.failDeletes = 1;
     const input = { ephemeral: true, executionProfile, conversationId: created.conversationId };
     const failed = await restarted.deleteConversation(scope.id, input, options);
@@ -5704,7 +6095,7 @@ test("temporary turns remain active for renewal until completion", async () => {
       ephemeral: true
     });
 
-    assert.equal(controller.hasActiveTemporaryConversation("session-1"), false);
+    assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
     const turn = await controller.startConversationTurn("session-1", {
       conversationId: conversation.conversationId,
       ephemeral: true,
@@ -5712,7 +6103,7 @@ test("temporary turns remain active for renewal until completion", async () => {
     });
 
     assert.equal(turn.ok, true, JSON.stringify(turn));
-    assert.equal(controller.hasActiveTemporaryConversation("session-1"), true);
+    assert.equal(await controller.hasActiveTemporaryConversation("session-1"), true);
 
     emitCodexNotification(subscribers, codexEvent({
       message: "The focused issue is fixed.",
@@ -5720,7 +6111,7 @@ test("temporary turns remain active for renewal until completion", async () => {
     }));
     emitCodexNotification(subscribers, turnCompleted());
     await flushPromises();
-    assert.equal(controller.hasActiveTemporaryConversation("session-1"), false);
+    assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
   });
 });
 
@@ -5740,7 +6131,7 @@ test("temporary turns remain active past the helper deadline and accept their ev
         conversationId: conversation.conversationId
       });
       assert.equal(working.status, "inProgress", JSON.stringify(working));
-      assert.equal(controller.hasActiveTemporaryConversation("session-1"), true);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), true);
       emitCodexNotification(subscribers, codexEvent({ message: "Checking the actual repair." }));
       t.mock.timers.tick(180_001);
       emitCodexNotification(subscribers, codexEvent({
@@ -5753,7 +6144,7 @@ test("temporary turns remain active past the helper deadline and accept their ev
       });
       assert.equal(completed.status, "completed");
       assert.equal(completed.message, "The repair is ready to verify.");
-      assert.equal(controller.hasActiveTemporaryConversation("session-1"), false);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
     });
   } finally {
     t.mock.timers.reset();
@@ -5780,7 +6171,7 @@ for (const failure of ["disconnect", "replacement"]) {
         });
         assert.equal(failed.status, "failed");
         assert.match(failed.error, /Connection to Codex was lost/u);
-        assert.equal(controller.hasActiveTemporaryConversation("session-1"), false);
+        assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
         emitCodexNotification(subscribers, codexEvent({ message: "Late obsolete response.", phase: "final_answer" }));
         emitCodexNotification(subscribers, turnCompleted());
         await flushPromises();
@@ -5817,7 +6208,7 @@ test("temporary repair remains active until Codex confirms the interrupt", async
     try {
       await hold.entered;
       assert.equal(settled, false);
-      assert.equal(controller.hasActiveTemporaryConversation("session-1"), true);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), true);
       assert.equal((await controller.readConversation("session-1", input)).status, "inProgress");
       const blocked = await controller.startConversationTurn("session-1", {
         conversationId: input.conversationId, ephemeral: true, message: "Start another repair."
@@ -5826,7 +6217,7 @@ test("temporary repair remains active until Codex confirms the interrupt", async
       assert.equal(blocked.code, "vibe64_temporary_conversation_turn_active");
       hold.release();
       assert.equal((await stopping).ok, true);
-      assert.equal(controller.hasActiveTemporaryConversation("session-1"), false);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
       assert.equal((await controller.readConversation("session-1", input)).status, "interrupted");
     } finally {
       hold.release();
@@ -5871,7 +6262,7 @@ for (const operation of ["stop", "delete"]) {
       captures[operation === "stop" ? "failInterrupts" : "failDeletes"] = 1;
       const failed = await controller[`${operation}Conversation`]("session-1", input);
       assert.equal(failed.ok, false, JSON.stringify(failed));
-      assert.equal(controller.hasActiveTemporaryConversation("session-1"), true);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), true);
       emitCodexNotification(subscribers, codexEvent({ message: "Still inspecting the conflict." }));
       await flushPromises();
       const working = await controller.readConversation("session-1", input);
@@ -5880,7 +6271,7 @@ for (const operation of ["stop", "delete"]) {
       assert.ok(working.progressUpdates.some((update) => update.text === "Still inspecting the conflict."));
       const retried = await controller[`${operation}Conversation`]("session-1", input);
       assert.equal(retried.ok, true, JSON.stringify(retried));
-      assert.equal(controller.hasActiveTemporaryConversation("session-1"), false);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
     });
   });
 }
@@ -5903,7 +6294,7 @@ test("long-running temporary turns still stop on request", async (t) => {
       assert.equal((await controller.readConversation("session-1", {
         conversationId: conversation.conversationId
       })).status, "interrupted");
-      assert.equal(controller.hasActiveTemporaryConversation("session-1"), false);
+      assert.equal(await controller.hasActiveTemporaryConversation("session-1"), false);
     });
   } finally {
     t.mock.timers.reset();
@@ -8440,7 +8831,7 @@ test("renewal freeze cannot cross persisted helper runtime identity recovery", a
         });
       }
     });
-    const restartedController = createRestartedController({
+    const restartedController = createRestartedController({ session,
       captures: restarted,
       projectService
     });
@@ -8648,7 +9039,7 @@ test("start verification cleanup failure records the orphan until deletion is re
 });
 
 test("a completed result is not exposed when READY ownership cannot be persisted", async () => {
-  await withConversationController(async ({
+  await withConversationController(async ({ session,
     captures,
     projectRuntimeRoot,
     projectService,
@@ -8671,7 +9062,7 @@ test("a completed result is not exposed when READY ownership cannot be persisted
         }
       });
     };
-    const failingController = createRestartedController({
+    const failingController = createRestartedController({ session,
       captures,
       codexHelperThreadLedgerFactory: failingLedgerFactory,
       projectService,
@@ -8885,7 +9276,7 @@ test("a completed helper thread survives a controller crash and resumes only aft
     const restartedCalls = [];
     const restartedSubscribers = new Set();
     const restarted = restartedCaptures(captures);
-    const restartedController = createRestartedController({
+    const restartedController = createRestartedController({ session,
       calls: restartedCalls,
       captures: restarted,
       projectService,
@@ -8916,7 +9307,7 @@ test("a completed helper thread survives a controller crash and resumes only aft
 });
 
 test("a missing helper runtime retires stale ownership before provider identity comparison", async () => {
-  await withConversationController(async ({
+  await withConversationController(async ({ session,
     captures,
     controller,
     projectRuntimeRoot,
@@ -8947,7 +9338,7 @@ test("a missing helper runtime retires stale ownership before provider identity 
     captures.environmentVersion = "two";
     const restartedSubscribers = new Set();
     const restarted = restartedCaptures(captures);
-    const restartedController = createRestartedController({
+    const restartedController = createRestartedController({ session,
       captures: restarted,
       projectService,
       subscribers: restartedSubscribers
@@ -8976,7 +9367,7 @@ test("a missing helper runtime retires stale ownership before provider identity 
 });
 
 test("provider context drift retires a verified stale helper runtime", async () => {
-  await withConversationController(async ({
+  await withConversationController(async ({ session,
     captures,
     controller,
     projectRuntimeRoot,
@@ -9001,7 +9392,7 @@ test("provider context drift retires a verified stale helper runtime", async () 
     captures.environmentVersion = "two";
     const restartedSubscribers = new Set();
     const restarted = restartedCaptures(captures);
-    const restartedController = createRestartedController({
+    const restartedController = createRestartedController({ session,
       captures: restarted,
       projectService,
       subscribers: restartedSubscribers
@@ -9063,7 +9454,7 @@ test("startup inventory retires READY ownership missing after a helper runtime r
     const restarted = restartedCaptures(captures, {
       helperThreadIds: []
     });
-    const restartedController = createRestartedController({
+    const restartedController = createRestartedController({ session,
       captures: restarted,
       projectService,
       subscribers: restartedSubscribers
@@ -9138,7 +9529,7 @@ test("an active helper turn is interrupted and deleted during crash reconciliati
     simulateControllerCrash();
 
     const restarted = restartedCaptures(captures);
-    const restartedController = createRestartedController({
+    const restartedController = createRestartedController({ session,
       captures: restarted,
       projectService
     });
@@ -9162,7 +9553,7 @@ test("an active helper turn is interrupted and deleted during crash reconciliati
 });
 
 test("startup reconciliation deletes a thread orphaned before its first ledger write", async () => {
-  await withConversationController(async ({
+  await withConversationController(async ({ session,
     captures,
     projectService,
     simulateControllerCrash,
@@ -9180,7 +9571,7 @@ test("startup reconciliation deletes a thread orphaned before its first ledger w
       });
     };
     captures.failDeletes = 1;
-    const failedController = createRestartedController({
+    const failedController = createRestartedController({ session,
       captures,
       codexHelperThreadLedgerFactory: failingLedgerFactory,
       projectService,
@@ -9204,7 +9595,7 @@ test("startup reconciliation deletes a thread orphaned before its first ledger w
     const restarted = restartedCaptures(captures, {
       helperThreadIds: ["conversation-1"]
     });
-    const restartedController = createRestartedController({
+    const restartedController = createRestartedController({ session,
       captures: restarted,
       projectService
     });
@@ -9341,7 +9732,7 @@ test("helper project lifecycle gate releases after a rejected thread start", asy
 });
 
 test("an account switch blocks persisted helper ownership without deleting it", async () => {
-  await withConversationController(async ({
+  await withConversationController(async ({ session,
     captures,
     controller,
     projectRuntimeRoot,
@@ -9369,7 +9760,7 @@ test("an account switch blocks persisted helper ownership without deleting it", 
         accountIdentitySignature: TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE
       }
     });
-    const switchedController = createRestartedController({
+    const switchedController = createRestartedController({ session,
       captures: switched,
       projectService
     });
@@ -9388,7 +9779,7 @@ test("an account switch blocks persisted helper ownership without deleting it", 
     }).readAll()).records.length, 1);
 
     const original = restartedCaptures(captures);
-    const cleanupController = createRestartedController({
+    const cleanupController = createRestartedController({ session,
       captures: original,
       projectService
     });
@@ -9404,7 +9795,7 @@ test("an account switch blocks persisted helper ownership without deleting it", 
 });
 
 test("a same-account auth refresh can resume persisted helper ownership", async () => {
-  await withConversationController(async ({
+  await withConversationController(async ({ session,
     captures,
     controller,
     projectService,
@@ -9432,7 +9823,7 @@ test("a same-account auth refresh can resume persisted helper ownership", async 
         authStateSignature: `v1:${"c".repeat(24)}`
       }
     });
-    const refreshedController = createRestartedController({
+    const refreshedController = createRestartedController({ session,
       captures: refreshed,
       projectService,
       subscribers: refreshedSubscribers
@@ -9477,7 +9868,7 @@ test("an archived session retires its persisted helper thread during reconciliat
     simulateControllerCrash();
 
     const restarted = restartedCaptures(captures);
-    const restartedController = createRestartedController({
+    const restartedController = createRestartedController({ session,
       captures: restarted,
       projectService
     });
@@ -9689,7 +10080,7 @@ for (const [outcome, deleteFailures] of [
   ["retry after deletion failure", 1]
 ]) {
   test(`account-switch cleanup deletes only its persisted helper: ${outcome}`, async () => {
-    await withConversationController(async ({ captures, controller, projectRuntimeRoot, projectService,
+    await withConversationController(async ({ session, captures, controller, projectRuntimeRoot, projectService,
       simulateControllerCrash, subscribers }) => {
       const executionProfile = sourceExplanationHelperProfile();
       const pending = controller.runDetachedChatTurn("session-1", {
@@ -9722,7 +10113,7 @@ for (const [outcome, deleteFailures] of [
         failDeletes: deleteFailures,
         stopRuntimeResult: { stopped: false, processExitVerified: false }
       });
-      const restarted = createRestartedController({ captures: switched, projectService });
+      const restarted = createRestartedController({ session, captures: switched, projectService });
       const result = await restarted.deleteDetachedChatThread("session-1", {
         executionProfile, threadId: first.threadId
       });
@@ -9771,7 +10162,7 @@ test("helper admission retries same-account cleanup without a controller restart
 
 for (const failureIndex of [0, 1]) {
   test(`mixed account-switch cleanup keeps failure visible at position ${failureIndex}`, async () => {
-    await withConversationController(async ({ captures, controller, projectRuntimeRoot, projectService,
+    await withConversationController(async ({ session, captures, controller, projectRuntimeRoot, projectService,
       simulateControllerCrash, subscribers }) => {
       captures.uniqueThreadIds = true;
       for (let index = 1; index <= 2; index += 1) {
@@ -9815,7 +10206,7 @@ for (const failureIndex of [0, 1]) {
           return { id: threadId };
         }
       });
-      const restarted = createRestartedController({ captures: switched, projectService });
+      const restarted = createRestartedController({ session, captures: switched, projectService });
       await assert.rejects(restarted.executionProfileModelCatalog("session-1"), {
         code: "vibe64_codex_helper_ownership_blocked"
       });
@@ -10443,7 +10834,7 @@ test("temporary Codex retains ownership after observation loss and retries the s
     const pending = await controller.readConversation(sessionId, { conversationId, ephemeral: true });
     assert.equal(pending.status, "inProgress");
     assert.match(pending.error, /stop is not yet confirmed/);
-    assert.equal(controller.hasActiveTemporaryConversation(sessionId), true);
+    assert.equal(await controller.hasActiveTemporaryConversation(sessionId), true);
     const blocked = await controller.startConversationTurn(sessionId, {
       conversationId, ephemeral: true, message: "Must not overlap"
     });
@@ -10452,7 +10843,7 @@ test("temporary Codex retains ownership after observation loss and retries the s
     captures.stopRuntimeResult = { stopped: true };
     const stopped = await controller.stopConversation(sessionId, { conversationId, ephemeral: true, runId: turn.runId });
     assert.equal(stopped.ok, true, JSON.stringify(stopped));
-    assert.equal(controller.hasActiveTemporaryConversation(sessionId), false);
+    assert.equal(await controller.hasActiveTemporaryConversation(sessionId), false);
     assert.equal(captures.stopRuntimes, 3);
     assert.equal(captures.turns.length, 1);
   });
@@ -11157,7 +11548,7 @@ test("shared Codex runtime loss settles providers that own only temporary conver
       await firstProvider.failObservation(new Error("Observation lost"));
       assert.equal(captures.stopRuntimes, 1);
       for (const [id, conversationId] of [[sessionId, first.conversationId], [secondId, second.conversationId]]) {
-        assert.equal(controller.hasActiveTemporaryConversation(id), false);
+        assert.equal(await controller.hasActiveTemporaryConversation(id), false);
         assert.equal((await controller.readConversation(id, { conversationId, ephemeral: true })).status, "interrupted");
         assert.deepEqual(await store.readConversationLog(id), []);
       }
@@ -11235,6 +11626,9 @@ for (const fallback of [false, true]) {
 
 test("durable Codex chats keep native history and goal ownership across browser and controller lifetimes", async () => {
   await withConversationController(async ({ captures, controller, subscribers, projectService, calls, session }) => {
+    const context = { runtime: await projectService.createRuntime(), session, routingConversationId: "saved-temporary" };
+    controller = throughCommonScopedConversation(controller, context);
+    const events = [];
     captures.persistentHistory = [];
     const { conversationId } = await controller.createConversation("session-1", { persistent: true });
     assert.notEqual(captures.threads.at(-1).ephemeral, true);
@@ -11242,7 +11636,12 @@ test("durable Codex chats keep native history and goal ownership across browser 
       assert.ok(subscribers.size, "observation must exist before Send");
       execFileSync("sh", ["-c", "printf 'Saved edit' > durable-edit.txt"], { cwd: settings.cwd });
     };
-    await controller.startConversationTurn("session-1", { conversationId, persistent: true, messageId: "input", message: "Edit files" });
+    const started = await controller.startConversationTurn("session-1", {
+      conversationId, persistent: true, messageId: "input", message: "Edit files"
+    }, { onEvent: event => events.push(structuredClone(event)) });
+    emitCodexNotification(subscribers, { method: "item/agentMessage/delta", params: {
+      threadId: conversationId, turnId: started.runId, itemId: "answer", delta: "Edited."
+    } });
     captures.persistentHistory.push({ id: "turn-1", status: "completed", items: [
       { id: "user", type: "userMessage", clientId: "input", content: [{ type: "inputText", text: "Edit files" }] },
       { id: "thought", type: "reasoning", summary: ["Checking files"] },
@@ -11253,8 +11652,13 @@ test("durable Codex chats keep native history and goal ownership across browser 
     let result = await controller.readConversation("session-1", { conversationId, persistent: true, messageId: "input" });
     assert.equal(result.admitted, true);
     assert.equal(result.status, "inProgress", "an active goal owns the interval between native turns");
-    assert.equal(controller.hasActiveTemporaryConversation("session-1"), true);
+    assert.equal(await controller.hasActiveTemporaryConversation("session-1"), true);
     assert.deepEqual(result.messages.map((message) => message.text), ["Checking files", "Edited."]);
+    const firstOutputId = events[0].message.outputId;
+    assert.match(firstOutputId, /^codex-[a-f0-9]{64}$/u);
+    assert.equal(result.messages[1].outputId, firstOutputId, "saved output keeps its exact native live-item identity");
+    assert.notEqual(result.messages[1].id, firstOutputId, "history and live identities remain distinct");
+    assert.equal(Object.hasOwn(result.messages[0], "outputId"), false, "reasoning does not acquire an assistant-item identity");
     assert.equal(calls.some(([method]) => method === "stopObserved"), false, "browser reads must not stop work");
     captures.persistentHistory.push({ id: "turn-2", status: "completed", items: [
       { id: "answer", type: "agentMessage", phase: "final_answer", text: "Edited again." }
@@ -11263,13 +11667,18 @@ test("durable Codex chats keep native history and goal ownership across browser 
     assert.equal(new Set(result.messages.map((message) => message.id)).size, 3,
       "provider item ids reused by another turn must remain distinct");
     for (const message of result.messages) assert.match(message.id, /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u);
+    const secondOutputId = result.messages.at(-1).outputId;
+    assert.match(secondOutputId, /^codex-[a-f0-9]{64}$/u);
+    assert.notEqual(secondOutputId, firstOutputId, "another native turn reusing the item id has its own output identity");
     await controller.closeAllForSession("session-1");
     assert.equal(captures.persistentGoal.status, "paused");
     assert.deepEqual(captures.deletes, [], "runtime shutdown must preserve durable native chats");
-    const restarted = createRestartedController({ captures, projectService, subscribers: new Set() });
+    const restarted = throughCommonScopedConversation(createRestartedController({ captures, projectService, subscribers: new Set() }), context);
     try {
       result = await restarted.readConversation("session-1", { conversationId, persistent: true });
       assert.equal(result.messages.at(-1).text, "Edited again.");
+      assert.deepEqual(result.messages.filter(message => message.role === "assistant").map(message => message.outputId),
+        [firstOutputId, secondOutputId], "native output identities survive controller restart");
       assert.equal(captures.turns.length, 1, "restoration must not send a new turn");
       await restarted.stopConversation("session-1", { conversationId, persistent: true });
       await restarted.deleteConversation("session-1", { conversationId, persistent: true });
@@ -11339,6 +11748,12 @@ test("persistent Codex streams reply deltas from Send through completion", async
     emitCodexNotification(subscribers, { method: "item/agentMessage/delta", params: { ...params, delta: "world" } });
     assert.equal(events[1].text, "world");
     assert.equal(events[1].messageId, "answer");
+    assert.deepEqual(events[1].message.nativeIdentity, { threadId: conversationId, turnId: started.runId });
+    assert.equal(events[1].message.turnId, `${conversationId}:${started.runId}`);
+    assert.equal(events[1].message.delta, "world");
+    assert.match(events[1].message.messageId, /^codex-[a-f0-9]{64}$/u);
+    assert.equal(events[1].message.outputId, events[1].message.messageId);
+    assert.notEqual(events[1].message.messageId, events[1].messageId, "normalized output identity does not reuse a bare provider item id");
     emitCodexNotification(subscribers, { method: "turn/completed", params: {
       threadId: conversationId, turn: { id: started.runId, status: "completed" }
     } });
@@ -11394,7 +11809,10 @@ test("persistent Codex waits beyond three minutes but retains completion, Stop, 
 });
 
 test("temporary Codex steers its exact active native conversation without starting a second turn", async () => {
-  await withConversationController(async ({ captures, controller, calls }) => {
+  await withConversationController(async ({ captures, controller, calls, projectService, session }) => {
+    controller = throughCommonScopedConversation(controller, {
+      runtime: await projectService.createRuntime(), session, routingConversationId: "saved-temporary"
+    });
     captures.persistentHistory = [];
     const { conversationId } = await controller.createConversation("session-1", { persistent: true });
     const first = await controller.startConversationTurn("session-1", { conversationId, persistent: true, messageId: "first", message: "Investigate" });
@@ -11405,6 +11823,791 @@ test("temporary Codex steers its exact active native conversation without starti
     assert.equal(captures.turns.length, 1);
     assert.deepEqual(calls.find(([kind]) => kind === "steer")[1], {
       threadId: conversationId, turnId: first.runId, message: "Read logs first", options: { clientUserMessageId: "guidance" }
+    });
+  });
+});
+
+test("Main browser facade uses the original native owner and action authority without Colleague", { timeout: 30_000 }, async () => {
+  const actions = createActionCatalogue();
+  const access = { allowed: true, user: { ...os.userInfo(), role: "owner" } };
+  await withAgentMessageController(async ({ captures, projectService, runtime, sessionId, store, terminalService }) => {
+    registerVibe64ActionContext(actions, {
+      projectContext: {
+        projectsRoot: path.dirname(runtime.projectContextRoot),
+        async readWorkspaceProject() {
+          return { project: { projectRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot } };
+        }
+      },
+      resolveUser: async () => access.user,
+      async authorizeProject({ slug }) {
+        if (!access.allowed || slug !== "test-project") {
+          throw Object.assign(new Error("Project access denied."), { statusCode: 403 });
+        }
+      }
+    });
+    const sessions = createSessionService({ actions, project: projectService, terminals: terminalService });
+    actions.register({ contributorId: "test.main-terminals", domain: "vibe64-terminals",
+      actions: createTerminalActions({ terminals: terminalService }).map(definition => ({
+        channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition
+      })) });
+    actions.register({ contributorId: "test.main-sessions", domain: "vibe64-sessions",
+      actions: createSessionActions({ sessions }).map(definition => ({
+        channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition
+      })) });
+    const app = Fastify();
+    const http = createCapabilityHttpRuntime({ fastify: app, actions });
+    const config = {
+      surfaceDefinitions: { app: { enabled: true, requiresWorkspace: false } },
+      assistantSurfaces: { app: { settingsSurfaceId: "app", configScope: "global" } }
+    };
+    const hosting = createCapabilityRuntime({
+      providers: [Vibe64ConversationsProvider, AssistantFeature],
+      inputs: { "runtime.actions": actions, "runtime.http": http, "runtime.config": config,
+        "runtime.env": {}, "vibe64.sessions": sessions }
+    });
+    let release;
+    try {
+      await hosting.start();
+      http.start();
+      await app.ready();
+      assert.equal(hosting.diagnostics().capabilityIds.includes("vibe64.colleague"), false);
+      assert.equal(hosting.diagnostics().providerOrder.filter(id => id === "assistant.runtime").length, 1);
+      assert.equal(http.router.list().filter(route => route.method === "GET" &&
+        route.path === "/api/assistant/:surfaceId/conversations/:conversationId").length, 1);
+      assert.equal(actions.listDefinitions().some(action => action.id === "vibe64.colleague.conversation.subscribe"), false);
+
+      const id = mainConversationId({ projectSlug: "test-project", sessionId });
+      const url = `/api/assistant/app/conversations/${encodeURIComponent(id)}`;
+      const headers = { host: "localhost", origin: "http://localhost", "x-jskit-surface": "app" };
+      async function request(method, suffix = "", payload) {
+        return app.inject({ method, url: `${url}${suffix}`, headers, ...(payload ? { payload } : {}) });
+      }
+      const before = (await store.readSession(sessionId)).metadata;
+      for (let index = 1; index <= 23; index += 1) {
+        await store.writeConversationUserMessage(sessionId, { messageId: `historical-${index}`, text: `Earlier question ${index}` });
+        await store.writeConversationAssistantMessage(sessionId, { messageId: `historical-answer-${index}`, text: `Earlier answer ${index}` });
+      }
+      const history = await store.readConversationLog(sessionId);
+      const initial = await request("GET");
+      assert.equal(initial.statusCode, 200, initial.body);
+      assert.equal(initial.json().id, id);
+      assert.equal(initial.json().pagination.limit, 20);
+      assert.deepEqual(initial.json().conversationLog, history.slice(3));
+      assert.equal(initial.json().configuration, undefined);
+      assert.equal(initial.json().capabilities.goals, true);
+      assert.equal(captures.provider, null, "opening a browser reader does not prepare a native provider");
+      const initialGoal = await request("GET", "/goal");
+      assert.equal(initialGoal.statusCode, 200, initialGoal.body);
+      assert.equal(initialGoal.json().status, "available");
+      assert.equal(initialGoal.json().goal, null);
+      assert.equal(initialGoal.json().target.segmentId, null);
+      assert.equal(initialGoal.json().target.capabilities.goalCommands.set.delivery, "control");
+      assert.equal(captures.provider, null, "canonical goal reads retain original passive preparation");
+      assert.deepEqual((await store.readSession(sessionId)).metadata, before);
+      const older = await request("GET", `?beforeTurnId=${encodeURIComponent(initial.json().pagination.nextBeforeTurnId)}&limit=20`);
+      assert.equal(older.statusCode, 200, older.body);
+      assert.deepEqual(older.json().conversationLog, history.slice(0, 3));
+
+      const requestContext = { surface: "app", channel: "internal", requestMeta: { request: { headers } } };
+      const events = [];
+      await actions.execute({ actionId: "vibe64.conversation.subscribe",
+        input: { targetSurfaceId: "app", conversationId: id }, context: requestContext,
+        deps: { onEvent: event => events.push(event), onRelease: value => { release = value; } } });
+      const retained = await sessions.browserConversations.open({ id, context: requestContext });
+      captures.onProviderCreated = provider => {
+        provider.interruptTurn = async () => { provider.status = "interrupted"; return { interrupted: true }; };
+      };
+      for (const forged of [{ actor: { id: "forged" } }, { context: { sessionId } }, { host: { nativeTools: true } }]) {
+        const rejected = await request("POST", "/messages", { messageId: "forged", text: "Never send", ...forged });
+        assert.equal(rejected.statusCode, 400, rejected.body);
+      }
+      assert.equal(captures.turns.length, 0);
+      const input = { messageId: "main-browser-send", text: "Read the actual source", data: {
+        displayMessage: "A visible request", originId: "main-browser-test"
+      } };
+      const sent = await request("POST", "/messages", input);
+      assert.equal(sent.statusCode, 202, sent.body);
+      assert.equal(sent.json().ok, true, sent.body);
+      assert.equal(sent.json().delivered, true);
+      for (const field of ["session", "turnId", "threadId", "nativeIdentity", "status", "workdir"]) {
+        assert.equal(Object.hasOwn(sent.json(), field), false, `Product acceptance must not fabricate or expose ${field}`);
+      }
+      const duplicate = await request("POST", "/messages", input);
+      assert.equal(duplicate.statusCode, 202, duplicate.body);
+      assert.deepEqual(duplicate.json(), { ok: true, delivered: true, messageId: input.messageId, refreshRecommended: false },
+        "the original session result projects delivery, without the native owner's duplicate field");
+      assert.equal(captures.turns.length, 1);
+      assert.equal(captures.threadStarts.length, 1);
+      const accepted = (await store.readConversationLog(sessionId)).filter(turn => turn.user?.messageId === input.messageId);
+      assert.equal(accepted.length, 1);
+      assert.equal(accepted[0].user.text, "A visible request");
+      assert.equal(accepted[0].metadata.runtime, undefined, "the original history has no reconstructed runtime-v3 metadata");
+      assert.equal((await terminalService.agentSessionState(sessionId, { runtime })).turn.id, captures.provider.turnId);
+      assert.ok(events.some(event => event.type === "accepted"));
+      assert.ok(events.every(event => event.conversationId === id && !Object.hasOwn(event, "session") && !Object.hasOwn(event, "nativeResult")));
+
+      const eventCount = events.length;
+      access.allowed = false;
+      assert.equal((await request("GET")).statusCode, 403);
+      await assert.rejects(retained.read(), { statusCode: 403 });
+      for (const subscriber of captures.subscribers) subscriber({ method: "item/agentMessage/delta", params: {
+        threadId: captures.provider.threadId, turnId: captures.provider.turnId, itemId: "revoked-live-reply", delta: "Private progress"
+      } });
+      await waitForSessionValue(() => store.readConversationStream(sessionId),
+        stream => stream?.messages.some(message => message.text === "Private progress"), "the existing owner to publish after access revocation");
+      assert.equal(events.length, eventCount, "the same runtime reauthorizes each retained browser publication");
+      assert.equal((await request("POST", "/messages", { messageId: "revoked", text: "Do not send" })).statusCode, 403);
+      assert.equal(captures.turns.length, 1);
+      access.allowed = true;
+      const postTurnWrites = [];
+      const runSessionExclusive = store.runSessionExclusive;
+      const onSessionChanged = captures.onSessionChanged;
+      let idlePublished = false;
+      captures.onSessionChanged = async (id, event) => {
+        if (id === sessionId && event.reason === "codex-app-server-turn-idle") idlePublished = true;
+        await onSessionChanged?.(id, event);
+      };
+      store.runSessionExclusive = (...args) => {
+        const pending = runSessionExclusive(...args);
+        if (idlePublished && args[0] === sessionId && args[1] === "agent-write-mode" &&
+            ["assistant-routing", "prepare-workspace"].includes(args[3]?.operation)) {
+          postTurnWrites.push({ operation: args[3].operation, pending });
+        }
+        return pending;
+      };
+      try {
+        const stopped = await request("POST", "/cancel", {});
+        assert.equal(stopped.statusCode, 200, stopped.body);
+        assert.equal(stopped.json().ok, true, stopped.body);
+        assert.equal(stopped.json().operationOutcome, "interrupted", stopped.body);
+        assert.equal(Object.hasOwn(stopped.json(), "interrupted"), false,
+          "the original normal Stop result does not flatten its native RPC result");
+        assert.equal(captures.provider.status, "interrupted");
+        const stoppedRun = await store.readAgentRun(sessionId, "codex_app_server");
+        assert.equal(stoppedRun.active, false);
+        assert.equal(stoppedRun.providerStatus, "interrupted");
+        assert.deepEqual(postTurnWrites.map(write => write.operation).sort(), ["assistant-routing", "prepare-workspace"],
+          "the original idle publication schedules both application write operations");
+        // Native Stop does not await the original background routing/setup work.
+        // Join those exact gate promises before the single zero-wait selection.
+        await Promise.all(postTurnWrites.map(write => write.pending));
+      } finally {
+        store.runSessionExclusive = runSessionExclusive;
+        captures.onSessionChanged = onSessionChanged;
+      }
+      const selected = await request("POST", "/selection", { selection: {
+        assistantRouting: { mode: "senior", review: false, workflowEngineId: "codex" }
+      } });
+      assert.equal(selected.statusCode, 200, selected.body);
+      assert.equal(selected.json().ok, true, selected.body);
+      assert.equal(JSON.parse((await store.readSession(sessionId)).metadata.assistant_routing).mode, "senior");
+      assert.equal(captures.turns.length, 1, "selecting the existing workflow changes policy without sending work");
+      const goal = await request("POST", "/goal", { action: "set", expectedSegmentId: null,
+        objective: "Reject client representation flags", canonical: true });
+      assert.equal(goal.statusCode, 400, goal.body);
+      assert.equal(captures.turns.length, 1, "the canonical route cannot accept a client representation flag");
+      assert.equal((await store.readSession(sessionId)).metadata.runtime, undefined);
+    } finally {
+      access.allowed = true;
+      release?.();
+      await hosting.shutdown();
+      await app.close();
+    }
+  }, { actions, throughTerminalService: true });
+});
+
+test("Main browser delivery inspection preserves original receipts while native work continues", { timeout: 15_000 }, async () => {
+  await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
+    let authorized = true;
+    const hostProvider = controller.conversationProvider;
+    const common = createConversationRuntime({ engine: "codex", authorize: async () => authorized,
+      host: { nativeTools: true, conversation: ({ id, context, input, operation }) => operation === "dispose"
+        ? prepareSessionConversationDisposal(hostProvider, id, context, input)
+        : createSessionConversationBinding(hostProvider, id, {
+        ...context, prepareInput: async input => input
+      }) }
+    });
+    captures.onConversationChanged = event => common.publishNative(event);
+    captures.onProviderCreated = provider => {
+      provider.interruptTurn = async () => { provider.status = "interrupted"; return { interrupted: true }; };
+    };
+    try {
+      const conversation = await common.open({ id: sessionId, context: { runtime } });
+      assert.deepEqual(await conversation.inspectDelivery({ messageId: "never-sent" }), { status: "unknown", messageId: "never-sent" });
+      assert.equal(captures.provider, null, "inspection without a native identity cannot start a provider");
+      const sent = await conversation.send({ messageId: "inspect-working", text: "Keep working" });
+      assert.equal((await conversation.read()).status, "working");
+      assert.deepEqual(await conversation.inspectDelivery({ messageId: "inspect-working" }), {
+        status: "accepted", messageId: "inspect-working", turnId: sent.turnId, duplicate: true
+      }, "an actual authored receipt remains readable during the original active turn");
+      await waitForSessionValue(() => store.readMetadataValue(sessionId, "assistant_changeover"),
+        value => value && !JSON.parse(value).engines.codex.pending, "the original send to finish its journal commit");
+      const originalHistory = await store.readConversationLog(sessionId);
+      const originalJournal = await store.readMetadataValue(sessionId, "assistant_changeover");
+      const nativeHistory = (await captures.provider.readThread()).turns;
+      captures.threadSnapshotTurns = [...nativeHistory, {
+        id: "native-receipt-only", status: "completed", items: [{ type: "userMessage", id: "native-item-only",
+          clientId: "native-only-accepted", content: [{ type: "text", text: "Known only to native history" }] }]
+      }];
+      const nativeOnly = await conversation.inspectDelivery({ messageId: "native-only-accepted" });
+      assert.deepEqual(nativeOnly, { status: "accepted", messageId: "native-only-accepted", duplicate: true });
+      assert.equal(Object.hasOwn(nativeOnly, "turnId"), false, "native identity is not a fabricated authored turn");
+      assert.deepEqual(await conversation.inspectDelivery({ messageId: "still-unknown" }), { status: "unknown", messageId: "still-unknown" });
+      assert.deepEqual(await store.readConversationLog(sessionId), originalHistory);
+      assert.equal(await store.readMetadataValue(sessionId, "assistant_changeover"), originalJournal);
+      assert.equal(captures.turns.length, 1, "inspection never resubmits a prompt");
+
+      const readThread = captures.provider.readThread;
+      captures.provider.readThread = async (...args) => {
+        const result = await readThread(...args);
+        authorized = false;
+        return result;
+      };
+      await assert.rejects(conversation.inspectDelivery({ messageId: "native-only-accepted" }), { code: "conversation_forbidden" });
+      authorized = true;
+      captures.provider.readThread = readThread;
+      assert.equal((await conversation.cancel()).stopped, true);
+      await conversation.wait();
+
+      const journal = JSON.parse(await store.readMetadataValue(sessionId, "assistant_changeover"));
+      const pending = { messageId: "recovered-pending", threadId: captures.provider.threadId, attempted: true,
+        message: "Retained native prompt", displayMessage: "Retained authored text", displayAttachments: [],
+        turnMetadata: { engineId: "codex" }, seen: journal.engines.codex.seen };
+      journal.engines.codex.pending = pending;
+      await store.writeMetadataValue(sessionId, "assistant_changeover", JSON.stringify(journal));
+      captures.threadSnapshotTurns.push({ id: "native-pending", status: "completed", items: [{
+        type: "userMessage", id: "native-pending-item", clientId: pending.messageId,
+        content: [{ type: "text", text: pending.message }]
+      }] });
+      const writeMetadata = store.writeMetadataValue;
+      let receiptBeforeClear = false;
+      store.writeMetadataValue = async (id, name, value) => {
+        if (name === "assistant_changeover" && !JSON.parse(value).engines.codex.pending) {
+          receiptBeforeClear = await store.conversationMessageIdExists(sessionId, pending.messageId);
+          assert.equal(receiptBeforeClear, true, "the original recovery owner writes the authored receipt before clearing its journal");
+        }
+        return writeMetadata(id, name, value);
+      };
+      let recovered;
+      try { recovered = await conversation.inspectDelivery({ messageId: pending.messageId }); }
+      finally { store.writeMetadataValue = writeMetadata; }
+      assert.equal(recovered.status, "accepted");
+      const row = (await store.readConversationLog(sessionId)).find(turn => turn.user?.messageId === pending.messageId);
+      assert.equal(row.user.text, pending.displayMessage);
+      assert.equal(recovered.turnId, row.turnId);
+      assert.equal(receiptBeforeClear, true);
+      assert.equal(JSON.parse(await store.readMetadataValue(sessionId, "assistant_changeover")).engines.codex.pending, undefined);
+      assert.equal(captures.turns.length, 1, "recovery uses native evidence without sending again");
+      assert.equal((await store.readSession(sessionId)).metadata.runtime, undefined);
+    } finally {
+      authorized = true;
+      await common.close();
+    }
+  }, { bindConversation: true });
+});
+
+test("Main Codex canonical goals preserve original result policy, pinned targets and passive availability", { timeout: 15_000 }, async t => {
+  await withAgentMessageController(async ({ captures, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
+    const options = { runtime, vibe64User: { ...os.userInfo(), role: "owner" } };
+    await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
+    const selection = { ...JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection), selectionSource: "explicit" };
+    await createAssistantRoutingStore({ systemRoot: controllerOptions.env.VIBE64_SYSTEM_ROOT }).write({
+      codex: { senior: selection, junior: selection }
+    }, 0);
+    await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "senior", workflowEngineId: "codex" }));
+    const actions = createActionCatalogue();
+    registerVibe64ActionContext(actions, {
+      projectContext: { projectsRoot: path.dirname(runtime.projectContextRoot), async readWorkspaceProject() {
+        return { project: { projectRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot } };
+      } },
+      resolveUser: async () => options.vibe64User,
+      authorizeProject: async ({ slug }) => assert.equal(slug, "test-project")
+    });
+    const sessions = createSessionService({ actions, project: projectService, terminals: terminalService });
+    actions.register({ contributorId: "test.canonical-main-goals", domain: "vibe64",
+      actions: [...createSessionActions({ sessions }), ...createTerminalActions({ terminals: terminalService })]
+        .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
+    const goalFacade = await sessions.browserConversations.open({
+      id: mainConversationId({ projectSlug: "test-project", sessionId }), context: { channel: "internal", surface: "app" }
+    });
+    const goalProject = (await actions.execute({ actionId: ACTION_READ_CONVERSATION_CONTEXT,
+      input: { projectSlug: "test-project", sessionId }, context: { channel: "internal", surface: "app" } })).project;
+    // Keep raw service calls in the same project namespace; each command still supplies its own actor.
+    await runWithProjectRequestContext({ ...goalProject, vibe64User: null }, async () => {
+      const acknowledgement = createDeterministicHold();
+      const releaseAcknowledgement = () => acknowledgement.release();
+      t.signal.addEventListener("abort", releaseAcknowledgement, { once: true });
+      let goal = null;
+      let available = true;
+      let clearFailure = null;
+      const nativeCalls = [];
+      captures.onProviderCreated = provider => {
+        provider.isAvailable = () => available && provider.closed === 0;
+        provider.readGoal = async threadId => { nativeCalls.push(["read", threadId]); return { goal }; };
+        provider.setGoal = async (threadId, input) => {
+          nativeCalls.push(["set", threadId, input]);
+          assert.ok(captures.subscribers.size, "the original observer exists before goal activation");
+          assert.equal(captures.threadStarts.length, 1);
+          goal = { ...input, threadId, status: "active", createdAt: 100, tokensUsed: 0, timeUsedSeconds: 0 };
+          acknowledgement.enter();
+          await acknowledgement.wait;
+          return { goal };
+        };
+        provider.setGoalStatus = async (threadId, status) => {
+          nativeCalls.push(["status", threadId, status]);
+          goal = { ...goal, status };
+          return { goal };
+        };
+        provider.clearGoal = async threadId => {
+          nativeCalls.push(["clear", threadId]);
+          if (clearFailure) throw clearFailure;
+          goal = null;
+          return {};
+        };
+        provider.interruptTurn = async () => assert.fail("An initial goal command has no ordinary turn to interrupt");
+      };
+      const writeMetadata = store.writeMetadataValue;
+      const pinWrites = [];
+      store.writeMetadataValue = async (id, name, value) => {
+        if (name === "assistant_routing_goal") {
+          const pin = JSON.parse(value);
+          const namespace = codexTerminalNamespace(id);
+          const admission = freezeTerminalNamespaceAdmission(namespace, { owner: "canonical-goal-policy-proof" });
+          try {
+            assert.equal(admission.ok, true, "application result policy runs after the original namespace admission releases");
+          } finally { if (admission.ok) thawTerminalNamespaceAdmission(namespace, { owner: "canonical-goal-policy-proof" }); }
+          assert.equal((await store.readAgentRun(id, "codex_app_server")).providerGoalStatus, goal?.status || "",
+            "the original goal reconciliation precedes the application pin");
+          pinWrites.push(pin);
+        }
+        return writeMetadata(id, name, value);
+      };
+      let setting;
+      let stopping;
+      try {
+        const firstRead = await goalFacade.readGoal();
+        assert.equal(firstRead.status, "available");
+        assert.equal(firstRead.goal, null);
+        assert.equal(firstRead.target.segmentId, null);
+        assert.equal(firstRead.target.capabilities.goalBudgets, true);
+        assert.equal(captures.provider, null, "an unstarted goal read does not acquire a native provider");
+        let settled = false;
+        setting = goalFacade.updateGoal({ action: "set", expectedSegmentId: null,
+          expectedGoalId: null, objective: "Keep the original control", tokenBudget: 5000 })
+          .then(value => { settled = true; return { value }; }, error => { settled = true; return { error }; });
+        await waitForSessionValue(() => ({ settled, dispatched: nativeCalls.some(([kind]) => kind === "set") }),
+          value => value.settled || value.dispatched, "canonical goal dispatch");
+        if (settled) assert.fail(`Canonical Set ended before native acknowledgement: ${JSON.stringify(await setting)}`);
+        assert.equal(settled, false);
+        assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, undefined);
+        assert.equal((await store.readConversationLog(sessionId)).length, 0);
+        assert.equal((await store.runSessionExclusive(sessionId, "agent-write-mode", () => null)).acquired, false,
+          "the original service Set owns agent-write admission through its acknowledgement");
+        let stopSettled = false;
+        stopping = terminalService.interruptAgentTurn(sessionId, {}, { ...options, session: await store.readSession(sessionId) })
+          .then(value => { stopSettled = true; return { value }; }, error => { stopSettled = true; return { error }; });
+        await flushPromises();
+        assert.equal(stopSettled, false, "service Stop waits for the original routing admission gate");
+        assert.equal(settled, false);
+        assert.equal(nativeCalls.some(([kind]) => kind === "status" || kind === "clear"), false);
+        acknowledgement.release();
+        const completed = await setting;
+        assert.equal(completed.error, undefined);
+        const stopped = await stopping;
+        assert.equal(stopped.error, undefined);
+        assert.equal(stopped.value.ok, true, JSON.stringify(stopped.value));
+        assert.equal(stopped.value.operationOutcome, "already_idle", "ordinary Stop does not pause the native goal");
+        assert.equal(nativeCalls.some(([kind]) => kind === "status" || kind === "clear"), false);
+        const created = completed.value;
+        assert.equal(created.status, "active", JSON.stringify(created));
+        assert.equal(created.tokenBudget, 5000);
+        assert.equal(created.updatedAt, undefined, "the raw native fixture has no invented update timestamp");
+        assert.equal(pinWrites.length, 1);
+        assert.equal(pinWrites[0].objective, "Keep the original control");
+        const threadId = captures.provider.threadId;
+        const segmentId = `codex:${threadId}`;
+        assert.equal(created.id, createHash("sha256").update(JSON.stringify([threadId, 100, goal.objective])).digest("hex"));
+        assert.equal(nativeCalls.filter(([kind]) => kind === "set").length, 1);
+        assert.equal(captures.turns.length, 0, "native controls never manufacture a prompt turn");
+        assert.doesNotMatch(JSON.stringify(created), /"(?:nativeResult|session|threadId|completeResult)"\s*:/u);
+        const readView = await goalFacade.readGoal();
+        const visible = readView.goal;
+        assert.equal(readView.target.segmentId, segmentId);
+        assert.equal(readView.target.capabilities.goalCommands.pause.delivery, "control");
+        assert.equal(visible.id, created.id);
+        assert.equal(visible.objective, "Keep the original control", "display decoration does not replace the native identity tuple");
+        const exactPin = (await store.readSession(sessionId)).metadata.assistant_routing_goal;
+        available = false;
+        const providerCount = captures.providerOptions.length;
+        const readsBeforeUnavailable = nativeCalls.filter(([kind]) => kind === "read").length;
+        assert.deepEqual(await terminalService.readAgentGoal(sessionId, options), { status: "unavailable", goal: null });
+        await assert.rejects(terminalService.readAgentGoal(sessionId, options, { canonical: true }), {
+          code: "conversation_goal_unavailable", statusCode: 503
+        });
+        assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, exactPin);
+        assert.equal(captures.providerOptions.length, providerCount);
+        assert.equal(nativeCalls.filter(([kind]) => kind === "read").length, readsBeforeUnavailable,
+          "passive unavailable reads neither acquire a provider nor request native status");
+        available = true;
+        const differentSelection = { ...selection, engineId: "claude", agentId: "claude", modelProviderId: "anthropic", modelId: "sonnet" };
+        await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(differentSelection));
+        const stopOptions = { runtime, vibe64User: { username: "reader", role: "member" } };
+        const pinnedRead = await terminalService.readAgentGoal(sessionId, stopOptions, { canonical: true });
+        assert.equal(pinnedRead.goal.id, created.id);
+        assert.equal(pinnedRead.target.segmentId, segmentId);
+        assert.equal(pinnedRead.routing.selection.engineId, "codex");
+        const controls = { ...stopOptions, expectedSegmentId: segmentId, expectedGoalId: created.id };
+        const callsBeforeStale = nativeCalls.filter(([kind]) => kind !== "read").length;
+        await assert.rejects(terminalService.updateAgentGoal(sessionId, { ...controls, action: "pause", expectedGoalId: "stale" }, { canonical: true }), /goal changed/);
+        assert.equal(nativeCalls.filter(([kind]) => kind !== "read").length, callsBeforeStale);
+        assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, exactPin);
+        const paused = await terminalService.updateAgentGoal(sessionId, { ...controls, action: "pause" }, { canonical: true });
+        assert.equal(paused.status, "paused");
+        assert.deepEqual(nativeCalls.filter(([kind]) => kind === "status"), [["status", threadId, "paused"]]);
+        const pausedPin = (await store.readSession(sessionId)).metadata.assistant_routing_goal;
+        assert.equal(JSON.parse(pausedPin).status, "paused");
+        await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(selection));
+        const resumed = await terminalService.updateAgentGoal(sessionId, { ...options, action: "resume",
+          expectedSegmentId: segmentId, expectedGoalId: created.id }, { canonical: true });
+        assert.equal(resumed.status, "active");
+        assert.equal(resumed.id, created.id);
+        assert.deepEqual(nativeCalls.filter(([kind]) => kind === "status"), [["status", threadId, "paused"], ["status", threadId, "active"]]);
+        const resumedPin = (await store.readSession(sessionId)).metadata.assistant_routing_goal;
+        assert.equal(JSON.parse(resumedPin).objective, "Keep the original control");
+        await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(differentSelection));
+        clearFailure = new Error("Native clear was rejected");
+        await assert.rejects(terminalService.updateAgentGoal(sessionId, { ...controls, action: "cancel" }, { canonical: true }), error => error === clearFailure);
+        assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, resumedPin);
+        assert.equal(goal.status, "active");
+        clearFailure = null;
+        assert.equal(await terminalService.updateAgentGoal(sessionId, { ...controls, action: "cancel" }, { canonical: true }), null);
+        assert.equal(JSON.parse((await store.readSession(sessionId)).metadata.assistant_routing_goal).status, "complete");
+        assert.equal((await store.readSession(sessionId)).metadata.assistant_selection, JSON.stringify(differentSelection),
+          "pinned read and stop controls do not rebind the visible assistant");
+        assert.deepEqual((await store.readConversationLog(sessionId)), []);
+        const metadata = (await store.readSession(sessionId)).metadata;
+        assert.equal(metadata.runtime, undefined);
+        assert.equal(metadata.assistant_changeover, undefined);
+        assert.equal(captures.turns.length, 0);
+      } finally {
+        acknowledgement.release();
+        available = true;
+        try { await Promise.all([setting, stopping]); }
+        finally {
+          store.writeMetadataValue = writeMetadata;
+          t.signal.removeEventListener("abort", releaseAcknowledgement);
+        }
+      }
+    });
+  }, { throughTerminalService: true });
+});
+
+test("concurrent Main reconciliation retains the cached fallback until prune can finish", { timeout: 15_000 }, async (t) => {
+  const previousDebug = process.env.VIBE64_SESSION_DEBUG;
+  const diagnostics = [];
+  const debug = t.mock.method(console, "info", (line) => {
+    const prefix = "[VIBE64_SESSION_DEBUG] ";
+    if (typeof line === "string" && line.startsWith(prefix)) {
+      diagnostics.push(JSON.parse(line.slice(prefix.length)));
+    }
+  });
+  process.env.VIBE64_SESSION_DEBUG = "1";
+  try {
+    await withAgentMessageController(async ({ captures, controller, runtime, sessionId }) => (
+      runWithProjectRequestContext({ targetRoot: runtime.projectContextRoot }, async () => {
+        assert.equal((await controller.ensureThread(sessionId)).ok, true);
+        const provider = captures.provider;
+        const threadId = provider.threadId;
+        const loaded = createDeterministicHold();
+        const fallback = createDeterministicHold();
+        const pending = [];
+        const settled = { first: false, second: false, prune: false };
+        const previousCreated = captures.onProviderCreated;
+        const getSession = runtime.getSession;
+        const decorated = [];
+        let listAttempts = 0;
+        let resumeAttempts = 0;
+        let observeSecond = false;
+        let secondRead = false;
+        const decorate = (current) => {
+          const listLoadedThreads = current.listLoadedThreads;
+          const resumeThread = current.resumeThread;
+          decorated.push({ current, listLoadedThreads, resumeThread });
+          current.listLoadedThreads = async () => {
+            listAttempts += 1;
+            loaded.enter();
+            await loaded.wait;
+            return { data: [] };
+          };
+          current.resumeThread = async (...args) => {
+            resumeAttempts += 1;
+            fallback.enter();
+            await fallback.wait;
+            return resumeThread(...args);
+          };
+        };
+        decorate(provider);
+        captures.onProviderCreated = (current) => {
+          previousCreated?.(current);
+          decorate(current);
+        };
+        runtime.getSession = (...args) => {
+          if (observeSecond) secondRead = true;
+          return getSession(...args);
+        };
+        try {
+          const first = controller.reconcileThreads([{ sessionId }])
+            .finally(() => { settled.first = true; });
+          pending.push(first);
+          await waitForSessionValue(() => listAttempts, (value) => value === 1, "the first loaded-thread attempt");
+
+          // No helper records exist, and the first caller is held in the provider.
+          // This read follows the second caller's reconciliation generation increment.
+          observeSecond = true;
+          const second = controller.reconcileThreads([{ sessionId }])
+            .finally(() => { settled.second = true; });
+          pending.push(second);
+          await waitForSessionValue(() => secondRead, Boolean, "the second Main reconciliation to enter");
+          observeSecond = false;
+
+          loaded.release();
+          await waitForSessionValue(() => resumeAttempts, (value) => value === 1, "the native readiness fallback");
+          const prune = controller.reconcileThreads([])
+            .finally(() => { settled.prune = true; });
+          pending.push(prune);
+          const waiting = await waitForSessionValue(
+            () => diagnostics.find((entry) => entry.event === "server.codexTerminal.appServerThread.reconcile.pruneWait.start"),
+            Boolean,
+            "prune to wait for the cached fallback"
+          );
+          assert.equal(waiting.pendingCount, 1);
+          assert.deepEqual(settled, { first: false, second: false, prune: false });
+          assert.equal(listAttempts, 1);
+          assert.equal(resumeAttempts, 1);
+          assert.equal(provider.closed, 0, "prune must not release the provider while native readiness is pending");
+          assert.equal(diagnostics.some((entry) => entry.event === "server.codexTerminal.appServerThread.reconcile.pruneWait.done"), false);
+
+          fallback.release();
+          const [firstResult, secondResult, pruned] = await Promise.all([first, second, prune]);
+          assert.equal(firstResult.ok, true, JSON.stringify(firstResult));
+          assert.equal(secondResult.ok, true, JSON.stringify(secondResult));
+          assert.equal(pruned.ok, true, JSON.stringify(pruned));
+          assert.equal(firstResult.results[0].codexThreadId, threadId);
+          assert.deepEqual(secondResult.results[0], firstResult.results[0]);
+          assert.equal(listAttempts, 1, "both reconcilers must share the same loaded attempt");
+          assert.equal(resumeAttempts, 1, "both reconcilers must share the same readiness fallback");
+          assert.equal(provider.closed, 1);
+          assert.equal(diagnostics.filter((entry) => entry.event === "server.codexTerminal.appServerThread.reconcile.pruneWait.done").length, 1);
+
+          const fresh = controller.reconcileThreads([{ sessionId }]);
+          pending.push(fresh);
+          const freshResult = await fresh;
+          assert.equal(freshResult.ok, true, JSON.stringify(freshResult));
+          assert.equal(freshResult.results[0].providerKey, firstResult.results[0].providerKey);
+          assert.equal(freshResult.results[0].codexThreadId, threadId);
+          assert.equal(listAttempts, 2, "settled reconciliation must release its cache entry");
+          assert.equal(resumeAttempts, 2);
+          assert.notEqual(captures.provider, provider);
+          assert.equal(captures.threadStarts.length, 1);
+          assert.equal(captures.turns.length, 0, "reconciliation must not send a new turn");
+        } finally {
+          loaded.release();
+          fallback.release();
+          await Promise.allSettled(pending);
+          runtime.getSession = getSession;
+          captures.onProviderCreated = previousCreated;
+          for (const { current, listLoadedThreads, resumeThread } of decorated) {
+            current.listLoadedThreads = listLoadedThreads;
+            current.resumeThread = resumeThread;
+          }
+        }
+      })
+    ));
+  } finally {
+    debug.mock.restore();
+    if (previousDebug === undefined) delete process.env.VIBE64_SESSION_DEBUG;
+    else process.env.VIBE64_SESSION_DEBUG = previousDebug;
+  }
+});
+
+test("ordinary detached resume preserves its target and falls back to start only for a falsy native result", {
+  timeout: 15_000
+}, async (t) => {
+  for (const missingThread of [false, true]) {
+    await t.test(missingThread ? "falsy resume starts a replacement" : "successful resume retains its target", async () => {
+      await withConversationController(async ({ calls, captures, controller, projectRuntimeRoot, session, subscribers }) => {
+        const requestedThreadId = "retained-interactive-thread";
+        const threadId = missingThread ? "conversation-1" : requestedThreadId;
+        const prompt = "Continue this ordinary detached conversation.";
+        const text = "The ordinary detached answer.";
+        const events = [];
+        let subscribersAtSend = 0;
+        if (missingThread) captures.resumeThreadResult = null;
+        captures.onSendTurn = () => { subscribersAtSend = subscribers.size; };
+        const pending = controller.streamDetachedChatTurn(session.sessionId, {
+          ephemeral: true,
+          prompt,
+          threadId: requestedThreadId
+        }, { onEvent: event => events.push(event) });
+        void pending.catch(() => null);
+        await Promise.race([
+          waitForCapturedTurns(captures, 1),
+          pending.then(result => assert.fail(`Detached turn ended before native Send: ${JSON.stringify(result)}`))
+        ]);
+        completeDetachedTurn(subscribers, { text, threadId, turnId: "turn-1" });
+        const result = await pending;
+
+        const threadSettings = codexAppServerThreadSettings({
+          cwd: session.metadata.source_path,
+          hostContext: {
+            conversationKind: "temporary",
+            scope: "session",
+            session: {
+              managedDatabaseRefresh: false,
+              managedEnvironment: false,
+              managedGit: false,
+              managedPreview: false
+            }
+          }
+        });
+        assert.deepEqual(captures.resumes, [{ settings: threadSettings, threadId: requestedThreadId }]);
+        assert.deepEqual(captures.threads, missingThread ? [{ ...threadSettings, ephemeral: true }] : []);
+        assert.deepEqual(calls.filter(([operation]) => ["resume", "thread", "turn"].includes(operation)).map(([operation]) => operation),
+          missingThread ? ["resume", "thread", "turn"] : ["resume", "turn"]);
+        assert.equal("ephemeral" in captures.resumes[0].settings, false);
+        assert.equal(captures.resumes[0].settings.sandbox, "danger-full-access");
+        assert.deepEqual(captures.resumes[0].settings.config, {
+          model_reasoning_effort: "xhigh", model_reasoning_summary: "concise"
+        });
+        assert.deepEqual(captures.turns, [{
+          input: [prompt],
+          settings: codexAppServerTurnSettings({ cwd: session.metadata.source_path }),
+          threadId
+        }]);
+        assert.deepEqual(captures.turns[0].settings.sandboxPolicy, {
+          networkAccess: "enabled", type: "externalSandbox"
+        });
+        assert.ok(subscribersAtSend > 0, "The existing detached watcher is subscribed before native Send");
+        assert.deepEqual(result, { ok: true, text, threadId, turnId: "turn-1" });
+        assert.deepEqual(events.filter(event => ["thread", "turn", "completed"].includes(event.type)), [
+          { threadId, type: "thread" },
+          { status: "inProgress", threadId, turnId: "turn-1", type: "turn" },
+          { status: "completed", text, threadId, turnId: "turn-1", type: "completed" }
+        ]);
+        assert.ok(events.some(event => event.type === "notification"), "Native notifications reach the ordinary stream");
+        assert.ok(events.every(event => event.threadId === threadId), "Every stream event keeps the selected native target");
+        assert.equal(captures.configReads.length, 0);
+        assert.equal(captures.hookLists.length, 1);
+        assert.deepEqual(captures.deletes, []);
+        assert.deepEqual(await createCodexHelperThreadLedger({ projectRuntimeRoot }).readAll(), { failures: [], records: [] });
+      });
+    });
+  }
+});
+
+
+test("startup unsubscribe preserves no-thread isolation and retries retained cleanup failures", async (t) => {
+  await t.test("a missing native thread does not read the project namespace", async () => {
+    await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+      const session = await store.readSession(sessionId);
+      let namespaceReads = 0;
+      const slug = {
+        toString() {
+          namespaceReads += 1;
+          throw new Error("Unexpected project namespace read.");
+        }
+      };
+      await runWithProjectRequestContext({ slug }, async () => {
+        assert.throws(() => codexTerminalNamespace(sessionId), /Unexpected project namespace read/u);
+        namespaceReads = 0;
+        const result = await controller.unsubscribeKnownAppServerThreads([
+          null, "", session, ` ${sessionId} `, { id: sessionId }
+        ]);
+        assert.deepEqual(result, {
+          failed: [],
+          ok: true,
+          results: [{ ok: true, providerOptions: null, sessionId, status: "notSubscribed" }],
+          sessionCount: 1
+        });
+        assert.equal(namespaceReads, 0);
+        assert.equal(captures.provider, null);
+        assert.deepEqual(captures.providerOptions, []);
+      });
+    });
+  });
+
+  await t.test("unsubscribe and finally-retirement failures retain the same provider for retry", async () => {
+    await withAgentMessageController(async ({ captures, controller, sessionId, store }) => {
+      const prepared = await controller.ensureThread(sessionId);
+      assert.equal(prepared.ok, true, JSON.stringify(prepared));
+      const session = await store.readSession(sessionId);
+      const provider = captures.provider;
+      const providerCount = captures.providerOptions.length;
+      const close = provider.close;
+      const calls = [];
+      let rejectUnsubscribe = true;
+      let rejectClose = true;
+      provider.unsubscribeThread = async (threadId) => {
+        calls.push(["unsubscribe", threadId]);
+        if (rejectUnsubscribe) throw new Error("Startup unsubscribe rejected.");
+        return { status: "unsubscribed" };
+      };
+      provider.close = () => {
+        calls.push(["close"]);
+        if (rejectClose) throw Object.assign(new Error("Retained client close rejected."), {
+          code: "test_retained_client_close",
+          retryable: true
+        });
+        return close.call(provider);
+      };
+      try {
+        const failedUnsubscribe = await controller.unsubscribeKnownAppServerThreads([session]);
+        assert.deepEqual(failedUnsubscribe, {
+          failed: [{ error: "Startup unsubscribe rejected.", sessionId }],
+          ok: false,
+          results: [],
+          sessionCount: 1
+        });
+        assert.deepEqual(calls, [["unsubscribe", provider.threadId]]);
+        assert.equal(provider.closed, 0);
+
+        rejectUnsubscribe = false;
+        const failedRetirement = await controller.unsubscribeKnownAppServerThreads([session]);
+        assert.equal(failedRetirement.ok, false);
+        assert.deepEqual(failedRetirement.failed, [{
+          code: "test_retained_client_close",
+          error: "Retained client close rejected.",
+          retryable: true,
+          sessionId
+        }]);
+        assert.equal(failedRetirement.results.length, 1);
+        assert.equal(failedRetirement.results[0].status, "unsubscribed");
+        assert.equal(failedRetirement.results[0].threadId, provider.threadId);
+        assert.equal(failedRetirement.sessionCount, 1);
+        assert.deepEqual(calls, [
+          ["unsubscribe", provider.threadId], ["unsubscribe", provider.threadId], ["close"]
+        ]);
+        assert.equal(provider.closed, 0);
+
+        rejectClose = false;
+        const retried = await controller.unsubscribeKnownAppServerThreads([session]);
+        assert.equal(retried.ok, true, JSON.stringify(retried));
+        assert.deepEqual(retried.failed, []);
+        assert.equal(retried.results.length, 1);
+        assert.equal(retried.results[0].status, "unsubscribed");
+        assert.equal(retried.results[0].threadId, provider.threadId);
+        assert.equal(retried.sessionCount, 1);
+        assert.deepEqual(calls, [
+          ["unsubscribe", provider.threadId], ["unsubscribe", provider.threadId], ["close"],
+          ["unsubscribe", provider.threadId], ["close"]
+        ]);
+        assert.equal(provider.closed, 1);
+        assert.equal(captures.provider, provider);
+        assert.equal(captures.providerOptions.length, providerCount);
+      } finally {
+        delete provider.unsubscribeThread;
+        provider.close = close;
+      }
     });
   });
 });

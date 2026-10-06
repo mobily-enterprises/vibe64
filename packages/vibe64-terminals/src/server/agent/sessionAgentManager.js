@@ -1,4 +1,5 @@
 import path from "node:path";
+import { openMainConversation } from "../mainConversationBinding.js";
 import { requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "../assistantChangeover.js";
 import { ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROUTING_ASSIGNMENTS, recommendedRoutingAssignments,
   routingAssignmentSelection, routingModelChoices, resolveAssistantPurpose, hasConnectedAssistantModels } from "@local/vibe64-runtime/shared/assistantRouting";
@@ -29,10 +30,6 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 
 const SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE = "vibe64_agent_provider_binding_conflict";
-const EXECUTION_PROFILE_RESOLUTION_METHODS = new Set([
-  "runDetachedChatTurn",
-  "streamDetachedChatTurn"
-]);
 const EXECUTION_PROFILE_RESOLUTION_FIELDS = new Set([
   "limits",
   "policy",
@@ -41,18 +38,29 @@ const EXECUTION_PROFILE_RESOLUTION_FIELDS = new Set([
   "revision",
   "thinking"
 ]);
+const CONVERSATION_COMMANDS = Object.freeze({
+  sendMessage: (conversation, request) => conversation.send(request.input),
+  sessionState: conversation => conversation.read(),
+  inspectMessageAdmission: (conversation, request) => conversation.inspectDelivery(request.input),
+  interruptTurn: (conversation, request) => Object.hasOwn(request, "input") ? conversation.cancel(request.input) : conversation.cancel(),
+  readGoal: conversation => conversation.readGoal(),
+  updateGoal: (conversation, request) => conversation.updateGoal(request.input),
+  readConversation: (conversation, request) => conversation.read(request.input),
+  startConversationTurn: (conversation, request) => conversation.send(request.input),
+  waitForConversationTurn: (conversation, request) => conversation.wait(request.input),
+  stopConversation: (conversation, request) => conversation.cancel(request.input),
+  deleteConversation: (conversation, request) => conversation.dispose(request.input)
+});
+const SCOPED_CONVERSATION_METHODS = new Set(["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"]);
 const AI_METHODS = new Set([
-  "rewindConversation",
   "createConversation",
   "ensureSession",
   "generateSessionRenewalHandover",
   "resolveExecutionProfile",
-  "runDetachedChatTurn",
   "seedSessionRenewalHandover",
   "sendMessage",
   "startConversationTurn",
   "startTerminal",
-  "streamDetachedChatTurn",
   "writeTerminal"
 ]);
 const EPHEMERAL_ASSISTANT_SCOPE_FIELDS = new Set([
@@ -236,6 +244,7 @@ function untrustedExecutionProfileResolutionError(provider = {}, sessionId = "",
 
 function createSessionAgentManager({
   attachments = null,
+  conversationRuntime,
   defaultProviderId = "codex",
   readAssistantAccess = async () => ({ ownerOnly: false }),
   readProviderUsage = null,
@@ -435,6 +444,113 @@ function createSessionAgentManager({
     return (await requireAccessContext(provider, sessionId, options)).access;
   }
 
+  function conversationOperation(provider, method) {
+    if (!provider.conversationOperations?.includes(method)) return null;
+    if (method === "closeProject") return (context, input) => {
+      if (!conversationRuntime) throw new TypeError("Native project cleanup requires the shared runtime.");
+      return provider.projectConversationResult(method, () =>
+        conversationRuntime.closeNativeProject({ context, input }));
+    };
+    if (method === "invalidateRuntimes") return (context, input) => {
+      if (!conversationRuntime) throw new TypeError("Native runtime invalidation requires the shared runtime.");
+      return provider.projectConversationResult(method, () =>
+        conversationRuntime.invalidateNativeRuntimes({ context, input }));
+    };
+    if (method === "reconcileSessions") return (context, sessions, options) => {
+      if (!conversationRuntime) throw new TypeError("Native reconciliation requires the shared runtime.");
+      return provider.projectConversationResult(method, () =>
+        conversationRuntime.reconcileNativeSessions({ context, sessions, options }));
+    };
+    if (method === "unsubscribeSessions") return (context, sessions) => {
+      if (!conversationRuntime) throw new TypeError("Native subscription reset requires the shared runtime.");
+      return provider.projectConversationResult(method, () =>
+        conversationRuntime.unsubscribeNativeSessions({ context, sessions }));
+    };
+    if (method === "hasActiveTemporaryConversation") return context => {
+      if (!conversationRuntime) throw new TypeError("Native activity requires the shared runtime.");
+      return provider.projectConversationResult(method, () =>
+        conversationRuntime.inspectNativeTemporaryActivity({ id: context.sessionId, context }));
+    };
+    if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return (context, input) => {
+      if (!conversationRuntime) throw new TypeError("Historical native cleanup requires the shared runtime.");
+      return method === "interruptDetachedChatTurn"
+        ? conversationRuntime.interruptNativeDetachedConversation({ id: context.sessionId, context, input })
+        : conversationRuntime.deleteNativeDetachedConversation({ id: context.sessionId, context, input });
+    };
+    if (method === "listNativeConversationStorage" || method === "retireConversationHistory") return (context, binding) => {
+      if (!conversationRuntime) throw new TypeError("Native history storage requires the shared runtime.");
+      return method === "listNativeConversationStorage"
+        ? conversationRuntime.listNativeConversationStorage({ id: context.sessionId, context, binding })
+        : conversationRuntime.retireNativeConversationHistory({ id: context.sessionId, context, binding });
+    };
+    if (method === "ensureSession") return context => {
+      if (!conversationRuntime) throw new TypeError("Native conversation readiness requires the shared runtime.");
+      return provider.projectConversationResult(method, () =>
+        conversationRuntime.ensureNativeConversation({ id: context.sessionId, context }));
+    };
+    if (method === "closeSession") return async context => {
+      if (!conversationRuntime) throw new TypeError("Native conversation cleanup requires the shared runtime.");
+      const closed = await conversationRuntime.disposeNative(provider.prepareConversationRequest(method, context));
+      if (!closed) throw new TypeError("Native conversation cleanup requires its configured conversation host.");
+      return closed.result;
+    };
+    if (method === "createConversation") return (context, input) => {
+      if (!conversationRuntime) throw new TypeError("Native conversation creation requires the shared runtime.");
+      return conversationRuntime.createNativeConversation({ id: context.sessionId, context, input });
+    };
+    if (method === "releaseRenewalPredecessorProcessExitProof" || method === "releaseRenewalSuccessorProcessExitProof") return (context, input) => {
+      if (!conversationRuntime) throw new TypeError("Native renewal proof release requires the shared runtime.");
+      return method === "releaseRenewalPredecessorProcessExitProof"
+        ? conversationRuntime.releaseNativeRenewalPredecessorProcessExitProof({ id: context.sessionId, context, input })
+        : conversationRuntime.releaseNativeRenewalSuccessorProcessExitProof({ id: context.sessionId, context, input });
+    };
+    if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return (context, input) => {
+      if (!conversationRuntime) throw new TypeError("Native renewal requires the shared runtime.");
+      // Preserve the provider's original input/options projection before its result boundary.
+      const request = provider.prepareConversationRequest(method, context, input);
+      const current = request.context === context ? context : {
+        ...request.context, sessionId: context.sessionId, providerId: context.providerId
+      };
+      return provider.projectConversationResult(method, () => method === "generateSessionRenewalHandover"
+        ? conversationRuntime.generateNativeRenewalHandover({ id: context.sessionId, context: current, input: request.input })
+        : conversationRuntime.seedNativeRenewalHandover({ id: context.sessionId, context: current, input: request.input }));
+    };
+    const command = CONVERSATION_COMMANDS[method];
+    if (!command || typeof provider.prepareConversationRequest !== "function" ||
+        typeof provider.projectConversationResult !== "function") {
+      throw new TypeError("Conversation operations require their request and result adapters.");
+    }
+    const scoped = SCOPED_CONVERSATION_METHODS.has(method);
+    return (context, input) => {
+      if (!conversationRuntime || !scoped && context.assistantScope) {
+        throw new TypeError("Conversation operations require the shared runtime and their original session or scope.");
+      }
+      // Request normalization retains its original position outside the Codex
+      // result/error boundary. Only the original OpenCode context read is async.
+      const prepared = provider.prepareConversationRequest(method, context, input);
+      const dispatch = request => {
+        if (scoped) {
+          if (!(context.assistantScope || context.routingConversationId && input.persistent === true) ||
+              request.scopedConversationId === undefined) {
+            throw new TypeError("A retained conversation operation requires its original scope and native identity.");
+          }
+          return conversationRuntime.open({ id: context.sessionId, representation: "native",
+            context: { ...context, scopedConversationId: request.scopedConversationId }
+          }).then(conversation => command(conversation, request));
+        }
+        if (Object.hasOwn(request, "value")) return request.value;
+        return provider.projectConversationResult(method, async () => {
+          const goalOperation = method === "readGoal" ? "read" : method === "updateGoal" ? "update" : "";
+          const conversation = await openMainConversation(conversationRuntime,
+            context.canonicalGoal && goalOperation ? { ...context, goalOperation } : context,
+            request.prepareInput, context.canonicalGoal && goalOperation ? "canonical" : "native");
+          return command(conversation, request);
+        });
+      };
+      return prepared && typeof prepared.then === "function" ? prepared.then(dispatch) : dispatch(prepared);
+    };
+  }
+
   function goalOptions(options) {
     const pinned = JSON.parse(options.session?.metadata?.assistant_routing_goal || "null");
     if (!pinned?.selection || ["complete", "completed"].includes(pinned.status)) return options;
@@ -470,7 +586,7 @@ function createSessionAgentManager({
         expectedConnectionIdentity: terminalBinding.connectionIdentity };
     }
     const provider = boundTerminal ? providerById.get(terminalBinding.providerId) : bindSession(sessionId, operationOptions);
-    const operation = attachments?.[method] || provider[method];
+    const operation = attachments?.[method] || conversationOperation(provider, method) || provider[method];
     if (typeof operation !== "function") {
       throw new TypeError(`Assistant provider ${provider.id} does not implement ${method}().`);
     }
@@ -499,8 +615,7 @@ function createSessionAgentManager({
         : null;
       let providerInput = executionProfileRequest || input;
       if (method !== "resolveExecutionProfile" && hasOwn(input, "executionProfile")) {
-        if (EXECUTION_PROFILE_RESOLUTION_METHODS.has(method) || context.assistantScope &&
-            ["createConversation", "startConversationTurn"].includes(method)) {
+        if (context.assistantScope && ["createConversation", "startConversationTurn"].includes(method)) {
           if (looksLikeExecutionProfileResolution(input.executionProfile)) {
             providerInput = {
               ...input,
@@ -557,7 +672,11 @@ function createSessionAgentManager({
         throw new TypeError("Bounded helpers accept supplied text only; start a new request to change their input.");
       }
       if (attachments && !options.attachmentsPrepared && ["sendMessage", "startConversationTurn"].includes(method)) {
-        providerInput = await attachments.prepareMessage(context, providerInput, { durable: method === "sendMessage" });
+        if (method === "sendMessage" && provider.conversationOperations?.includes(method) && conversationRuntime && !context.assistantScope) {
+          // The original sender chooses historical attachment IDs before this
+          // same authorized storage resolver prepares their native input.
+          context.prepareMessage = input => attachments.prepareMessage(context, input, { durable: true });
+        } else providerInput = await attachments.prepareMessage(context, providerInput, { durable: method === "sendMessage" });
       }
       if (method === "writeTerminal" && provider.id === "opencode") {
         providerInput = { ...providerInput, input: { ...input.input, attachments: [] } };
@@ -595,10 +714,11 @@ function createSessionAgentManager({
 
   async function callProvider(method = "", input = {}, options = {}) {
     const provider = providerFor(options);
-    if (typeof provider[method] !== "function") {
+    const operation = conversationOperation(provider, method) || provider[method];
+    if (typeof operation !== "function") {
       throw new TypeError(`Assistant provider ${provider.id} does not implement ${method}().`);
     }
-    return agentOperationResult(provider, "", await provider[method]({
+    return agentOperationResult(provider, "", await operation.call(provider, {
       providerId: provider.id,
       transportId: provider.transportId
     }, input, options));
@@ -610,10 +730,11 @@ function createSessionAgentManager({
       ? [providerFor(options)]
       : [...providerById.values()];
     const results = await Promise.all(targets.map(async (provider) => {
-      if (typeof provider[method] !== "function") {
+      const operation = conversationOperation(provider, method) || provider[method];
+      if (typeof operation !== "function") {
         throw new TypeError(`Assistant provider ${provider.id} does not implement ${method}().`);
       }
-      return agentOperationResult(provider, "", await provider[method]({
+      return agentOperationResult(provider, "", await operation.call(provider, {
         providerId: provider.id,
         transportId: provider.transportId
       }, input, options));
@@ -955,60 +1076,14 @@ function createSessionAgentManager({
   }
 
   async function runEphemeralChatTurn(scope = {}, input = {}, options = {}) {
-    // Bounded features keep their own task/cache and cleanup reference. Compose
-    // the existing scoped lifecycle without binding the working conversation.
     const executionProfile = input.executionProfile;
     if (!executionProfile) throw new TypeError("A bounded assistant turn requires an execution profile.");
     const profileSnapshot = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
-    const request = { ...input, ephemeral: true, message: input.prompt || input.message };
-    options.signal?.throwIfAborted();
-    let conversationId = normalizeText(input.conversationId || input.threadId);
-    if (!conversationId) {
-      const created = await ephemeralScopeMethod("createConversation")(scope, request, options);
-      if (created?.ok === false) return created;
-      conversationId = normalizeText(created.conversationId);
-      if (!conversationId) throw new Error("The helper did not return its conversation identity.");
+    if (typeof conversationRuntime?.runScopedTurn !== "function") {
+      throw new TypeError("A bounded assistant turn requires the supplied conversation runtime.");
     }
-    // Await ownership before starting: Stop or a failed parent write must not
-    // leave an unidentified native turn running.
-    await options.onEvent?.({ type: "thread", threadId: conversationId });
-    options.signal?.throwIfAborted();
-    const started = await ephemeralScopeMethod("startConversationTurn")(scope, { ...request, conversationId }, options);
-    if (started?.ok === false) return { ...started, threadId: conversationId };
-    const runId = normalizeText(started.runId);
-    await options.onEvent?.({ type: "turn", threadId: conversationId, turnId: runId, status: started.status });
-    if (options.signal?.aborted) {
-      const stopped = await ephemeralScopeMethod("stopConversation")(scope, { ...request, conversationId, runId }, options);
-      if (stopped?.ok === false) return { ...stopped, threadId: conversationId, turnId: runId };
-      options.signal.throwIfAborted();
-    }
-    let stop;
-    const interrupt = () => {
-      stop ||= ephemeralScopeMethod("stopConversation")(scope, { ...request, conversationId, runId }, options);
-      void stop.catch(() => {});
-    };
-    options.signal?.addEventListener("abort", interrupt, { once: true });
-    let result;
-    let failure;
-    try {
-      result = await ephemeralScopeMethod("waitForConversationTurn")(scope, { ...request, conversationId, runId }, options);
-      options.signal?.throwIfAborted();
-    } catch (error) { failure = error; }
-    finally {
-      options.signal?.removeEventListener("abort", interrupt);
-    }
-    try {
-      const stopped = await stop;
-      if (stopped?.ok === false) throw Object.assign(new Error(stopped.error || "The helper could not confirm a stop."), { code: stopped.code });
-    } catch (error) {
-      if (failure && error !== failure) error.cause = failure;
-      failure = error;
-    }
-    if (failure) throw failure;
-    return { ...result, threadId: conversationId, turnId: runId,
-      text: result.rawText || result.text || result.message || "", executionProfile: profileSnapshot,
-      ...(["failed", "cancelled", "interrupted"].includes(result.status) ? { ok: false,
-        error: result.error || "The helper stopped before completing its answer." } : {}) };
+    return conversationRuntime.runScopedTurn({ operations: manager, scope, input, context: options,
+      executionProfile: profileSnapshot });
   }
 
   async function closeSession(sessionId = "", options = {}) {
@@ -1025,9 +1100,10 @@ function createSessionAgentManager({
       sessionId: id,
       transportId: provider.transportId
     };
-    const result = typeof provider.closeSession !== "function"
+    const operation = conversationOperation(provider, "closeSession") || provider.closeSession;
+    const result = typeof operation !== "function"
       ? agentOperationResult(provider, id, { closed: false, ok: true })
-      : agentOperationResult(provider, id, await provider.closeSession(context));
+      : agentOperationResult(provider, id, await operation.call(provider, context));
     if (result.ok !== false) {
       bindings.delete(id);
       bindingTokens.delete(id);
@@ -1095,7 +1171,12 @@ function createSessionAgentManager({
     return result;
   }
 
-  return Object.freeze({
+  const manager = Object.freeze({
+    conversationProvider(providerId, fallbackProviderId) {
+      const provider = providerById.get(providerId) || providerById.get(fallbackProviderId);
+      if (!provider) throw providerNotImplementedError(providerId);
+      return provider;
+    },
     resolveAssistantPurpose: resolvePurpose,
     inspectRoutingConfiguration,
     inspectAssistantPurposes,
@@ -1114,23 +1195,35 @@ function createSessionAgentManager({
       options = goalOptions(options);
       const provider = providerFor({ ...options, providerId: sessionAgentProviderId(options,
         bindings.get(bindingKey(sessionId, options)) || defaultProviderId) });
-      if (typeof provider.readGoal !== "function") {
-        return { status: "unsupported", goal: null };
+      const operation = conversationOperation(provider, "readGoal") || provider.readGoal;
+      if (typeof operation !== "function") {
+        const result = { status: "unsupported", goal: null };
+        if (!options.canonicalGoal) return result;
+        await options.onGoalResult?.(result, {
+          segmentId: null, capabilities: { goals: false, goalBudgets: false, goalCommands: {} }
+        });
+        return null;
       }
-      return provider.readGoal({ sessionId, runtime: options.runtime, session: options.session,
+      if (options.canonicalGoal && !["claude", "codex"].includes(provider.id)) throw Object.assign(new Error("Canonical goal policy is not connected for this assistant."), {
+        code: "conversation_unsupported"
+      });
+      return operation.call(provider, { sessionId, runtime: options.runtime, session: options.session,
+        ...(options.canonicalGoal ? { canonicalGoal: true, onGoalResult: options.onGoalResult } : {}),
         assistantSelection: sessionAssistantSelection(options), vibe64User: assistantUser(options) });
     },
     // Local storage work is explicitly invoked by trusted host code. It neither
     // selects the current assistant nor authorizes a model inference.
     retireConversationHistory(sessionId, binding, options = {}) {
       const provider = providerById.get(binding.engineId);
-      if (typeof provider?.retireConversationHistory !== "function") throw new TypeError("Native history retirement is unavailable for this engine.");
-      return provider.retireConversationHistory({ ...options, sessionId }, binding);
+      const operation = provider && (conversationOperation(provider, "retireConversationHistory") || provider.retireConversationHistory);
+      if (typeof operation !== "function") throw new TypeError("Native history retirement is unavailable for this engine.");
+      return operation.call(provider, { ...options, sessionId }, binding);
     },
     listNativeConversationStorage(sessionId, binding, options = {}) {
       const provider = providerById.get(binding.engineId);
-      if (typeof provider?.listNativeConversationStorage !== "function") throw new TypeError("Native history inventory is unavailable for this engine.");
-      return provider.listNativeConversationStorage({ ...options, sessionId }, binding);
+      const operation = provider && (conversationOperation(provider, "listNativeConversationStorage") || provider.listNativeConversationStorage);
+      if (typeof operation !== "function") throw new TypeError("Native history inventory is unavailable for this engine.");
+      return operation.call(provider, { ...options, sessionId }, binding);
     },
     async updateGoal(sessionId, input = {}, options = {}) {
       const stopping = ["pause", "cancel"].includes(input.action);
@@ -1141,10 +1234,15 @@ function createSessionAgentManager({
           bindings.get(bindingKey(sessionId, options)) || defaultProviderId) })
         : bindSession(sessionId, options);
       const authorization = stopping ? null : await requireAccessContext(provider, sessionId, options);
-      if (typeof provider.updateGoal !== "function") {
+      const operation = conversationOperation(provider, "updateGoal") || provider.updateGoal;
+      if (typeof operation !== "function") {
         throw new TypeError("This assistant does not support goal controls.");
       }
-      return provider.updateGoal({ sessionId, runtime: options.runtime, session: options.session,
+      if (options.canonicalGoal && !["claude", "codex"].includes(provider.id)) throw Object.assign(new Error("Canonical goal policy is not connected for this assistant."), {
+        code: "conversation_unsupported"
+      });
+      return operation.call(provider, { sessionId, runtime: options.runtime, session: options.session,
+        ...(options.canonicalGoal ? { canonicalGoal: true, onGoalResult: options.onGoalResult } : {}),
         assistantSelection: sessionAssistantSelection(options), vibe64User: authorization ? authorization.vibe64User : assistantUser(options) }, input);
     },
     async assistantAccess(sessionId = "", options = {}) {
@@ -1274,7 +1372,8 @@ function createSessionAgentManager({
       const results = [];
       for (const [providerId, providerSessions] of grouped) {
         const provider = providerById.get(providerId);
-        if (typeof provider.reconcileSessions !== "function") {
+        const operation = conversationOperation(provider, "reconcileSessions") || provider.reconcileSessions;
+        if (typeof operation !== "function") {
           throw new TypeError(
             `Assistant provider ${provider.id} does not implement reconcileSessions().`
           );
@@ -1287,12 +1386,16 @@ function createSessionAgentManager({
             });
           }
         }
-        results.push(agentOperationResult(provider, "", await provider.reconcileSessions({
+        results.push(agentOperationResult(provider, "", await operation.call(provider, {
           providerId: provider.id,
           transportId: provider.transportId
         }, providerSessions, options)));
       }
       return Object.freeze({ ok: true, results: Object.freeze(results) });
+    },
+    prepareSelection(sessionId, selection, context) {
+      const provider = providerFor({ engineId: selection.engineId });
+      return provider.prepareSelection?.(sessionId, selection, context) ?? null;
     },
     async resolveSelection(input = {}, options = {}) {
       const provider = providerFor({ engineId: input?.engineId });
@@ -1302,7 +1405,6 @@ function createSessionAgentManager({
       );
     },
     readConversation: sessionMethod("readConversation"),
-    rewindConversation: sessionMethod("rewindConversation"),
     readEphemeralConversation: ephemeralScopeMethod("readConversation"),
     resolveExecutionProfile: sessionMethod("resolveExecutionProfile"),
     readTerminal(sessionId = "", terminalSessionId = "", options = {}) {
@@ -1311,7 +1413,6 @@ function createSessionAgentManager({
     resizeTerminal(sessionId = "", terminalSessionId = "", size = {}, options = {}) {
       return callSessionProvider("resizeTerminal", sessionId, { size, terminalSessionId }, options);
     },
-    runDetachedChatTurn: sessionMethod("runDetachedChatTurn"),
     runEphemeralChatTurn,
     releaseRenewalPredecessorAttachments,
     releaseRenewalPredecessorProcessExitProof,
@@ -1327,7 +1428,6 @@ function createSessionAgentManager({
     startTerminal: sessionMethod("startTerminal"),
     stopConversation: sessionMethod("stopConversation"),
     stopEphemeralConversation: ephemeralScopeMethod("stopConversation"),
-    streamDetachedChatTurn: sessionMethod("streamDetachedChatTurn"),
     subscribeTerminal(sessionId = "", terminalSessionId = "", subscriber = null, options = {}) {
       return callSessionProvider("subscribeTerminal", sessionId, { subscriber, terminalSessionId }, options);
     },
@@ -1341,6 +1441,7 @@ function createSessionAgentManager({
       return callSessionProvider("writeTerminal", sessionId, { data, input, terminalSessionId }, options);
     }
   });
+  return manager;
 }
 
 export {

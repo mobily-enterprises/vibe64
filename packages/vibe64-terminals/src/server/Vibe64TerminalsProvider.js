@@ -67,9 +67,10 @@ function createVibe64TerminalsFeature({
       channels: ["api", "automation", "internal"],
       surfaces: ["app"]
     },
-    setup({ env, events, fastify, http, logger, project, uploads }) {
+    setup({ env, events, fastify, http, logger, project, uploads }, { actionCatalogue }) {
       const sessionChanged = createSessionChangedPublisher(events);
       const terminals = createService({
+        actions: actionCatalogue,
         codexTerminalController,
         env: terminalsProviderEnv(env),
         logger,

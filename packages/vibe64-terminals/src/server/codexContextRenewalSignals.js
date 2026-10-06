@@ -1,9 +1,22 @@
 import {
+  codexContextUsageFromNotification, codexAppServerContextRefreshReason,
+  codexAppServerNotificationEvent, codexAppServerNotificationItemId, codexAppServerNotificationTurnId
+} from "@jskit-ai/assistant-core/server/codex-events";
+import { codexAppServerTurnStateFromAgentRun } from "@jskit-ai/assistant-core/server/codex-turn";
+import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
+import { vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
+import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 
 const CONTEXT_COMPACTION_REASON = "context_compacted";
-const CODEX_TOKEN_USAGE_METHOD = "thread/tokenUsage/updated";
+const CODEX_CONTEXT_REFRESH_PENDING_METADATA = Object.freeze([
+  "codex_context_refresh_pending",
+  "codex_context_refresh_pending_at",
+  "codex_context_refresh_reason",
+  "codex_context_refresh_thread_id",
+  "codex_context_refresh_turn_id"
+]);
 
 function nonNegativeInteger(value) {
   if (value === null || value === undefined || String(value).trim() === "") {
@@ -21,51 +34,6 @@ function contextCompactionKey({
 } = {}) {
   const fields = [reason, threadId, turnId, eventId].map(normalizeText);
   return fields.slice(1).some(Boolean) ? fields.join(":") : "";
-}
-
-function codexContextUsageFromNotification(notification = {}) {
-  if (normalizeText(notification?.method) !== CODEX_TOKEN_USAGE_METHOD) {
-    return null;
-  }
-  const params = notification?.params && typeof notification.params === "object"
-    ? notification.params
-    : {};
-  const tokenUsage = params.tokenUsage && typeof params.tokenUsage === "object"
-    ? params.tokenUsage
-    : {};
-  const last = tokenUsage.last && typeof tokenUsage.last === "object"
-    ? tokenUsage.last
-    : {};
-  const total = tokenUsage.total && typeof tokenUsage.total === "object"
-    ? tokenUsage.total
-    : {};
-  const usedTokens = nonNegativeInteger(last.totalTokens);
-  const inputTokens = nonNegativeInteger(last.inputTokens);
-  const cumulativeTokens = nonNegativeInteger(total.totalTokens);
-  const windowTokens = nonNegativeInteger(tokenUsage.modelContextWindow);
-  const threadId = normalizeText(params.threadId);
-  const turnId = normalizeText(params.turnId);
-  if (
-    !threadId ||
-    !turnId ||
-    usedTokens === null ||
-    inputTokens === null ||
-    cumulativeTokens === null ||
-    !windowTokens ||
-    usedTokens > windowTokens ||
-    inputTokens > usedTokens ||
-    cumulativeTokens < usedTokens
-  ) {
-    return null;
-  }
-  return Object.freeze({
-    cumulativeTokens,
-    inputTokens,
-    threadId,
-    turnId,
-    usedTokens,
-    windowTokens
-  });
 }
 
 async function recordCodexContextUsageSignal(store, sessionId = "", notification = {}, {
@@ -184,7 +152,132 @@ async function recordCodexContextRenewalSignal(store, sessionId = "", {
   });
 }
 
+async function writeCodexAppServerContextRefreshPending(store, sessionId = "", {
+  reason = "",
+  threadId = "",
+  turnId = ""
+} = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!normalizedSessionId || typeof store?.writeMetadataValue !== "function") {
+    return null;
+  }
+  const at = new Date().toISOString();
+  await store.mutateSession(normalizedSessionId, async () => {
+    await Promise.all([
+      store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_pending", "yes"),
+      store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_pending_at", at),
+      store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_reason", reason),
+      store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_thread_id", threadId),
+      store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_turn_id", turnId)
+    ]);
+  });
+  return {
+    at,
+    reason,
+    threadId,
+    turnId
+  };
+}
+
+async function clearCodexAppServerContextRefreshPending(store, sessionId = "", {
+  deliveredAt = new Date().toISOString(),
+  delivery = "prompt",
+  reason = "",
+  threadId = "",
+  turnId = ""
+} = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!normalizedSessionId || !store) {
+    return false;
+  }
+  await store.mutateSession(normalizedSessionId, async () => {
+    await Promise.all([
+      ...(typeof store.deleteMetadataValues === "function"
+        ? [store.deleteMetadataValues(normalizedSessionId, CODEX_CONTEXT_REFRESH_PENDING_METADATA)]
+        : CODEX_CONTEXT_REFRESH_PENDING_METADATA.map((name) => store.deleteMetadataValue?.(normalizedSessionId, name))),
+      store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivered_at", deliveredAt),
+      store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivery", delivery),
+      store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivered_reason", reason),
+      store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivered_thread_id", threadId),
+      store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivered_turn_id", turnId)
+    ].filter(Boolean));
+  });
+  return true;
+}
+
+// This application receipt keeps the original bounded read and stale-thread fence.
+// Native event interpretation remains in the existing shared codecs.
+function createCodexContextRefreshMarker({ projectService, runOwner }) {
+  const { readAgentRunForSession: readCodexAppServerAgentRunForSession } = runOwner;
+  function normalizeText(value) {
+    return String(value || "").trim();
+  }
+
+  async function markCodexAppServerContextRefreshPending(sessionId = "", threadId = "", notification = {}, {
+    reason = codexAppServerContextRefreshReason(notification)
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId);
+    if (!reason || !normalizedSessionId || !normalizedThreadId) {
+      return null;
+    }
+
+    const store = await projectService.createSessionStore({ sessionId: normalizedSessionId });
+    const [
+      run,
+      briefingDelivered,
+      currentThreadId
+    ] = await Promise.all([
+      readCodexAppServerAgentRunForSession(store, normalizedSessionId),
+      store.readMetadataValue(normalizedSessionId, "agent_briefing_delivered"),
+      store.readMetadataValue(normalizedSessionId, "agent_identity_conversation_id")
+    ]);
+    if (normalizeText(briefingDelivered) !== "yes") {
+      return null;
+    }
+    const normalizedCurrentThreadId = normalizeText(currentThreadId);
+    if (normalizedCurrentThreadId && normalizedCurrentThreadId !== normalizedThreadId) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerContextRefresh.staleThread", {
+        currentThreadId: normalizedCurrentThreadId,
+        reason,
+        sessionId: normalizedSessionId,
+        threadId: normalizedThreadId
+      });
+      return null;
+    }
+
+    const turn = codexAppServerTurnStateFromAgentRun(run || {}, normalizeVibe64AgentRunState);
+    const turnId = normalizeText(codexAppServerNotificationTurnId(notification) || turn.turnId);
+    await recordCodexContextRenewalSignal(store, normalizedSessionId, {
+      eventId: normalizeText(
+        codexAppServerNotificationItemId(notification) ||
+        codexAppServerNotificationEvent(notification)?.id
+      ),
+      reason,
+      threadId: normalizedThreadId,
+      turnId
+    });
+    const pending = await writeCodexAppServerContextRefreshPending(store, normalizedSessionId, {
+      reason,
+      threadId: normalizedThreadId,
+      turnId
+    });
+    vibe64SessionDebugLog("server.codexTerminal.appServerContextRefresh.pending", {
+      reason,
+      sessionId: normalizedSessionId,
+      threadId: normalizedThreadId,
+      turnId
+    });
+    return pending;
+  }
+
+  return markCodexAppServerContextRefreshPending;
+}
+
 export {
+  createCodexContextRefreshMarker,
+  clearCodexAppServerContextRefreshPending,
+  writeCodexAppServerContextRefreshPending,
   CONTEXT_COMPACTION_REASON,
   codexContextUsageFromNotification,
   contextCompactionKey,

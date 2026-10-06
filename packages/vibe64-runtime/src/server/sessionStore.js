@@ -1,4 +1,11 @@
-import { createConversationStreams, createConversationTranscript } from "@jskit-ai/assistant-core/server/conversation";
+import {
+  conversationMessageIdentity, conversationMessageVersion,
+  createConversationStorage, createConversationStreams, createConversationTranscript,
+  createConversationOperationLease as createSessionOperationLease,
+  beginConversationOperation as beginSessionOperation,
+  finishConversationOperation as finishSessionOperation,
+  conversationAgentRunRecord, conversationAgentRunEvent
+} from "@jskit-ai/assistant-core/server/conversation";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { parseIntegrationSetupRequest } from "../shared/integrationSetupRequest.js";
@@ -122,7 +129,6 @@ const CONVERSATION_MESSAGE_ROLES = deepFreeze([
   "thinking",
   "user"
 ]);
-const CONVERSATION_MESSAGE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const CONVERSATION_MESSAGE_FILE_PATTERN =
   /^(user|assistant|commentary|system|thinking)\.(\d{8}T\d{9}Z)(?:\.([A-Za-z0-9][A-Za-z0-9_-]{0,127}))?\.md$/u;
 const CONVERSATION_TURN_ID_PATTERN = /^\d{6}$/u;
@@ -506,33 +512,6 @@ function enqueueSessionMutation(key, operation) {
   return queued;
 }
 
-function createSessionOperationLease() {
-  let resolveIdle = () => null;
-  const idle = new Promise((resolve) => {
-    resolveIdle = resolve;
-  });
-  return {
-    idle,
-    operations: 0,
-    resolveIdle
-  };
-}
-
-function beginSessionOperation(lease) {
-  lease.operations += 1;
-  return {
-    active: true
-  };
-}
-
-function finishSessionOperation(lease, participant) {
-  participant.active = false;
-  lease.operations -= 1;
-  if (lease.operations === 0) {
-    lease.resolveIdle();
-  }
-}
-
 function delay(milliseconds = 0) {
   return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
@@ -856,13 +835,6 @@ function timestampForSessionId(date) {
     .replaceAll(":", "-");
 }
 
-function timestampForConversationFile(date) {
-  return toDate(date)
-    .toISOString()
-    .replace(/[-:]/gu, "")
-    .replace(".", "");
-}
-
 function isoFromConversationTimestamp(timestamp = "") {
   const value = normalizeText(timestamp);
   const match = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(\d{3})Z$/u);
@@ -1092,43 +1064,6 @@ function conversationTurnRoot(sessionPaths, turnId) {
     throw vibe64Error(`Invalid vibe64 conversation turn id: ${normalizedTurnId || "(empty)"}`, "vibe64_invalid_conversation_turn_id");
   }
   return path.join(sessionPaths.conversationLogRoot, normalizedTurnId);
-}
-
-function conversationMessageFileName(role = "", date, messageId = "") {
-  const normalizedRole = normalizeText(role);
-  if (!CONVERSATION_MESSAGE_ROLES.includes(normalizedRole)) {
-    throw vibe64Error(`Invalid vibe64 conversation role: ${normalizedRole || "(empty)"}`, "vibe64_invalid_conversation_role");
-  }
-  const normalizedMessageId = normalizeText(messageId);
-  if (normalizedMessageId && !CONVERSATION_MESSAGE_ID_PATTERN.test(normalizedMessageId)) {
-    throw vibe64Error(
-      `Invalid vibe64 conversation message id: ${normalizedMessageId}`,
-      "vibe64_invalid_conversation_message_id"
-    );
-  }
-  const idSuffix = normalizedMessageId ? `.${normalizedMessageId}` : "";
-  return `${normalizedRole}.${timestampForConversationFile(date)}${idSuffix}.md`;
-}
-
-function nextConversationTurnId(turnIds = []) {
-  const latest = [...turnIds]
-    .filter((turnId) => CONVERSATION_TURN_ID_PATTERN.test(turnId))
-    .map((turnId) => Number.parseInt(turnId, 10))
-    .filter((turnId) => Number.isSafeInteger(turnId) && turnId > 0)
-    .sort((left, right) => left - right)
-    .at(-1) || 0;
-  return String(latest + 1).padStart(6, "0");
-}
-
-function conversationMessageIdentity(turnId, message) {
-  return `${turnId}/${message.role}/${["user", "assistant", "system"].includes(message.role)
-    ? "" : message.messageId || message.at}`;
-}
-
-function conversationMessageVersion(message) {
-  return createHash("sha256").update(JSON.stringify({
-    role: message.role, text: message.text, attachments: message.attachments || []
-  })).digest("hex");
 }
 
 function createVibe64SessionStore({
@@ -2189,15 +2124,10 @@ function createVibe64SessionStore({
     }
     try {
       const record = JSON.parse(runText);
-      return isPlainObject(record)
-        ? {
-            ...record,
-            active: vibe64AgentRunStateIsActive(record.state),
-            events: Array.isArray(record.events) ? record.events.filter(isPlainObject) : [],
-            id: normalizedRunId,
-            state: normalizeVibe64AgentRunState(record.state)
-          }
-        : null;
+      return conversationAgentRunRecord(record, normalizedRunId, {
+        normalizeState: normalizeVibe64AgentRunState,
+        isActive: vibe64AgentRunStateIsActive
+      });
     } catch {
       throw vibe64Error(
         `Invalid vibe64 agent run: ${normalizedRunId}`,
@@ -2240,35 +2170,11 @@ function createVibe64SessionStore({
         events: [],
         id: normalizedRunId
       };
-      const eventAt = normalizeText(event.at || patch.updatedAt) || now().toISOString();
-      const state = normalizeVibe64AgentRunState(patch.state || event.state || previous.state);
-      const terminalState = vibe64AgentRunStateIsTerminal(state);
-      const eventRecord = {
-        ...event,
-        at: eventAt,
-        kind: normalizeText(event.kind || state || "updated"),
-        message: normalizeText(event.message || patch.message),
-        state
-      };
-      const record = {
-        ...previous,
-        ...patch,
-        active: !terminalState,
-        events: [
-          ...(Array.isArray(previous.events) ? previous.events : []),
-          eventRecord
-        ],
-        finishedAt: terminalState
-          ? normalizeText(patch.finishedAt || previous.finishedAt) || eventAt
-          : "",
-        id: normalizedRunId,
-        startedAt: normalizeText(previous.startedAt || patch.startedAt) || eventAt,
-        state,
-        updatedAt: eventAt
-      };
-      if (!terminalState && !Object.hasOwn(patch, "error")) {
-        record.error = "";
-      }
+      const record = conversationAgentRunEvent(previous, normalizedRunId, { event, patch }, {
+        now,
+        normalizeState: normalizeVibe64AgentRunState,
+        isTerminal: vibe64AgentRunStateIsTerminal
+      });
       await writeJsonFile(agentRunFilePath(sessionPaths, normalizedRunId), record);
       return record;
     });
@@ -2404,45 +2310,27 @@ function createVibe64SessionStore({
     };
   }
 
-  async function readConversationTurn(sessionPaths, turnId) {
+  async function readLegacyConversationTurn(sessionPaths, turnId) {
     const fileNames = sortedFileNames(
       await readDirectoryEntries(conversationTurnRoot(sessionPaths, turnId)),
       (name) => CONVERSATION_MESSAGE_FILE_PATTERN.test(name)
     );
     const messages = (await Promise.all(
       fileNames.map((fileName) => readConversationMessage(sessionPaths, turnId, fileName))
-    )).filter((message) => message && message.text);
-    const storedUser = messages.find((message) => message.role === "user") || null;
-    const assistant = messages.find((message) => message.role === "assistant") || null;
-    const commentary = messages.filter((message) => message.role === "commentary");
-    const system = messages.find((message) => message.role === "system") || null;
-    const thinking = messages.filter((message) => message.role === "thinking");
-    const activity = [...thinking, ...commentary]
-      .sort((left, right) => left.at.localeCompare(right.at));
+    )).filter(Boolean);
     const [attachments, metadata] = await Promise.all([
       readConversationTurnAttachments(sessionPaths, turnId),
       readConversationTurnMetadata(sessionPaths, turnId)
     ]);
-    const integrationSetup = await readIntegrationSetupDecision(sessionPaths, turnId, assistant);
-    const user = storedUser && attachments.length
-      ? { ...storedUser, attachments }
-      : storedUser;
     return {
-      assistant,
-      commentary,
-      messages: [system, user, ...activity, assistant].filter(Boolean),
-      ...(metadata ? { metadata } : {}),
-      ...(integrationSetup ? { integrationSetup } : {}),
-      ...(system ? { system } : {}),
-      thinking,
-      turnId,
-      user
+      messages: messages.map((message) => message.role === "user" && attachments.length ? { ...message, attachments } : message),
+      ...(metadata ? { metadata } : {})
     };
   }
 
   async function readIntegrationSetupDecision(sessionPaths, turnId, assistant) {
     const request = parseIntegrationSetupRequest(assistant);
-    if (!request || !(await conversationTurnIds(sessionPaths)).includes(turnId)) return null;
+    if (!request) return null;
     const requestId = createHash("sha256").update(assistant.text).digest("hex");
     const text = await readTextIfExists(path.join(
       conversationTurnRoot(sessionPaths, turnId), "integration-setup.json"
@@ -2626,7 +2514,10 @@ function createVibe64SessionStore({
         "vibe64_invalid_conversation_turn_metadata"
       );
     }
+    const other = { ...value };
+    for (const key of ["actorDisplayName", "actorId", "engineId", "assistantSelection", "assistantRouting", "nativeMessageVersions"]) delete other[key];
     return {
+      ...other,
       actorDisplayName: normalizeText(value.actorDisplayName),
       actorId: normalizeText(value.actorId),
       ...(["claude", "codex", "opencode"].includes(value.engineId) ? { engineId: value.engineId } : {}),
@@ -2642,161 +2533,122 @@ function createVibe64SessionStore({
     };
   }
 
-  async function conversationTurnIds(sessionPaths, includeRewound = false) {
-    const ids = sortedDirectoryNames(
-      await readDirectoryEntries(sessionPaths.conversationLogRoot),
-      (name) => CONVERSATION_TURN_ID_PATTERN.test(name)
-    );
-    if (includeRewound) return ids;
-    const source = await readTextIfExists(path.join(sessionPaths.conversationLogRoot, "rewound.json"));
-    const rewound = source ? JSON.parse(source) : [];
-    return ids.filter((id) => !rewound.includes(id));
+  function conversationRecordJson(record) {
+    return { version: 1, metadata: record.metadata, rewound: record.rewound, turns: [...record.turns] };
   }
 
-  async function rewindConversationLog(sessionId, turnIds) {
-    return mutateSession(sessionId, async (paths) => {
-      const ids = await conversationTurnIds(paths, true);
-      if (!Array.isArray(turnIds) || !turnIds.length || turnIds.some((id) => !ids.includes(id))) {
-        throw vibe64Error("The conversation changed. Refresh before undoing a turn.", "vibe64_conversation_changed");
+  function parseConversationRecord(source) {
+    let value;
+    try { value = JSON.parse(source); } catch {
+      throw vibe64Error("Conversation storage is not valid JSON. Restore it before continuing.", "vibe64_invalid_conversation_storage");
+    }
+    if (value?.version !== 1 || !isPlainObject(value.metadata) || !Array.isArray(value.rewound) || !Array.isArray(value.turns) ||
+        value.turns.some((entry) => !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string" || !CONVERSATION_TURN_ID_PATTERN.test(entry[0]) ||
+          !isPlainObject(entry[1]) || !Array.isArray(entry[1].messages) ||
+          (entry[1].metadata !== undefined && !isPlainObject(entry[1].metadata)) ||
+          entry[1].messages.some((message) => !isPlainObject(message) || !CONVERSATION_MESSAGE_ROLES.includes(message.role) ||
+            typeof message.text !== "string" || typeof message.at !== "string" || !Number.isFinite(Date.parse(message.at)) ||
+            (message.messageId !== undefined && typeof message.messageId !== "string"))) ||
+        new Set(value.turns.map(([id]) => id)).size !== value.turns.length ||
+        value.rewound.some((id) => !value.turns.some(([turnId]) => turnId === id))) {
+      throw vibe64Error("Conversation storage has an unsupported or damaged format. Restore it before continuing.", "vibe64_invalid_conversation_storage");
+    }
+    return { metadata: value.metadata, rewound: value.rewound, turns: new Map(value.turns) };
+  }
+
+  async function readConversationRecord(sessionPaths) {
+    try {
+      return parseConversationRecord(await readFile(path.join(sessionPaths.conversationLogRoot, "transcript.json"), "utf8"));
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error;
+    }
+    const entries = await readDirectoryEntries(sessionPaths.conversationLogRoot);
+    if (entries.some((entry) => CONVERSATION_TURN_ID_PATTERN.test(entry.name) || ["rewound.json", "message-ids.json"].includes(entry.name))) {
+      throw vibe64Error("This conversation needs the offline state upgrade. Stop services and run the candidate upgrade-state command before opening it.",
+        "vibe64_conversation_upgrade_required");
+    }
+    return { turns: new Map(), metadata: {}, rewound: [] };
+  }
+
+  // The session lease owns cross-process exclusion; JSKIT owns the transaction.
+  // One rename publishes messages, native receipts and runtime metadata together.
+  function conversationRecordTransaction(sessionPaths, callback, write = false, newTurnMetadata = null) {
+    let record;
+    const storage = createConversationStorage({
+      async readRecord() { record = await readConversationRecord(sessionPaths); return record; },
+      async writeRecord(_scope, next) {
+        const document = conversationRecordJson(next);
+        parseConversationRecord(JSON.stringify(document));
+        await writeJsonFile(path.join(sessionPaths.conversationLogRoot, "transcript.json"), document);
       }
-      const file = path.join(paths.conversationLogRoot, "rewound.json");
-      const source = await readTextIfExists(file);
-      // Keep the original messages and identities for deduplication. New turns
-      // must never reuse the IDs of an undone exchange.
-      await writeJsonFile(file, [...new Set([...(source ? JSON.parse(source) : []), ...turnIds])]);
     });
-  }
-
-  async function readConversationTail(sessionId, { userLimit = 2 } = {}) {
-    return withReadableSessionPaths(sessionId, async (paths) => {
-      const turns = [];
-      let users = 0;
-      for (const id of (await conversationTurnIds(paths)).reverse()) {
-        const turn = await readConversationTurn(paths, id);
-        turns.unshift(turn);
-        if (turn.user && ++users >= userLimit) break;
-      }
-      return turns;
-    });
-  }
-
-  async function readFirstUserMessage(sessionId) {
-    return withReadableSessionPaths(sessionId, async (paths) => {
-      for (const turnId of await conversationTurnIds(paths, true)) {
-        const files = sortedFileNames(await readDirectoryEntries(conversationTurnRoot(paths, turnId)),
-          (name) => CONVERSATION_MESSAGE_FILE_PATTERN.exec(name)?.[1] === "user");
-        if (files.length) return readConversationMessage(paths, turnId, files[0]);
-      }
-      return null;
-    });
-  }
-
-  async function conversationMessageIdExistsFromPaths(sessionPaths, messageId = "") {
-    const normalizedMessageId = normalizeText(messageId);
-    if (!normalizedMessageId) {
-      return false;
-    }
-    if (!CONVERSATION_MESSAGE_ID_PATTERN.test(normalizedMessageId)) {
-      throw vibe64Error(
-        `Invalid vibe64 conversation message id: ${normalizedMessageId}`,
-        "vibe64_invalid_conversation_message_id"
-      );
-    }
-    return (await readConversationMessageIds(sessionPaths)).has(normalizedMessageId);
-  }
-
-  async function readConversationMessageIds(sessionPaths) {
-    const saved = await readTextIfExists(path.join(sessionPaths.conversationLogRoot, "message-ids.json"));
-    if (saved) {
-      try {
-        const ids = JSON.parse(saved);
-        if (Array.isArray(ids) && ids.every((id) => typeof id === "string" && CONVERSATION_MESSAGE_ID_PATTERN.test(id))) {
-          return new Set(ids);
-        }
-      } catch { /* The transcript can rebuild a damaged derived index. */ }
-    }
-    const ids = new Set();
-    const turnIds = await conversationTurnIds(sessionPaths, true);
-    // Only legacy sessions or interrupted writes need a scan. Bound filesystem
-    // concurrency without paying one event-loop wait per historical turn.
-    for (let offset = 0; offset < turnIds.length; offset += 16) {
-      await Promise.all(turnIds.slice(offset, offset + 16).map(async (turnId) => {
-        for (const entry of await readDirectoryEntries(conversationTurnRoot(sessionPaths, turnId))) {
-          const match = entry.isFile() && entry.name.match(CONVERSATION_MESSAGE_FILE_PATTERN);
-          if (match?.[3]) ids.add(match[3]);
-        }
-      }));
-    }
-    return ids;
-  }
-
-  function conversationTransaction(sessionPaths, newTurnMetadata = null) {
-    return {
-      listTurnIds: () => conversationTurnIds(sessionPaths),
-      nextTurnId: async () => nextConversationTurnId(await conversationTurnIds(sessionPaths, true)),
-      readTurn: (turnId) => readConversationTurn(sessionPaths, turnId),
-      hasMessage: (messageId) => conversationMessageIdExistsFromPaths(sessionPaths, messageId),
-      async appendMessage(turnId, { role, text, messageId, at, attachments = [], turnMetadata = null }) {
-        const ids = await readConversationMessageIds(sessionPaths);
-        const indexPath = path.join(sessionPaths.conversationLogRoot, "message-ids.json");
-        // Invalidate before writing the transcript. A crash leaves no complete
-        // index, so the next lookup reconstructs it instead of missing a receipt.
-        // This runs under the existing session mutation lock.
-        await rm(indexPath, { force: true });
-        const turnRoot = conversationTurnRoot(sessionPaths, turnId);
-        const displayAttachments = normalizeVibe64ConversationAttachments(attachments);
-        if (displayAttachments.length) {
-          await writeJsonFile(path.join(turnRoot, CONVERSATION_TURN_ATTACHMENTS_FILE), displayAttachments);
-        }
-        const savedMetadata = await readConversationTurnMetadata(sessionPaths, turnId);
-        let metadata = turnMetadata
-          ? normalizeConversationTurnMetadata(turnMetadata)
-          : savedMetadata;
-        if (!savedMetadata && !metadata?.assistantSelection && newTurnMetadata) {
-          metadata = normalizeConversationTurnMetadata({ ...newTurnMetadata, ...metadata });
-        }
-        if (!savedMetadata && !metadata?.assistantSelection) {
+    return storage[write ? "write" : "read"](sessionPaths.conversationLogRoot, (transaction) => callback({
+      ...transaction,
+      async listTurnIds() { return (await transaction.listTurnIds()).filter((id) => !record.rewound.includes(id)); },
+      async readTurn(id) {
+        const turn = await transaction.readTurn(id);
+        if (!turn || record.rewound.includes(id)) return turn;
+        const integrationSetup = await readIntegrationSetupDecision(sessionPaths, id, turn.assistant);
+        return integrationSetup ? { ...turn, integrationSetup } : turn;
+      },
+      async appendMessage(id, message) {
+        const saved = await transaction.readTurn(id);
+        let metadata = message.turnMetadata ? normalizeConversationTurnMetadata({ ...saved?.metadata, ...message.turnMetadata }) : saved?.metadata;
+        if (!saved && !metadata?.assistantSelection && newTurnMetadata) metadata = normalizeConversationTurnMetadata({ ...newTurnMetadata, ...metadata });
+        if (!saved && !metadata?.assistantSelection) {
           const selection = vibe64AssistantSelectionFromMetadata(await readMetadataFromPaths(sessionPaths), { required: false });
           if (selection && (!metadata?.engineId || metadata.engineId === selection.engineId)) {
             metadata = normalizeConversationTurnMetadata({ ...metadata, engineId: selection.engineId, assistantSelection: selection });
           }
         }
-        if (metadata?.engineId && role !== "thinking") {
-          const message = { role, text, messageId, at, attachments: displayAttachments };
-          // Preserve what the engine originally received/produced even when a
-          // bubble is edited before the next Send or the first engine switch.
+        if (metadata?.engineId && message.role !== "thinking") {
           metadata.nativeMessageVersions = { ...metadata.nativeMessageVersions,
-            [conversationMessageIdentity(turnId, message)]: conversationMessageVersion(message) };
+            [conversationMessageIdentity(id, message)]: conversationMessageVersion(message) };
         }
-        if (metadata) {
-          await writeJsonFile(
-            path.join(turnRoot, CONVERSATION_TURN_METADATA_FILE),
-            metadata
-          );
-        }
-        await writeTextFile(path.join(turnRoot, conversationMessageFileName(role, toDate(at), messageId)), `${text}\n`);
-        if (messageId) ids.add(messageId);
-        await writeJsonFile(indexPath, [...ids]);
+        await transaction.appendMessage(id, { ...message, ...(metadata ? { turnMetadata: metadata } : {}) });
       },
-      async replaceAssistant(turnId, { text, at }) {
-        await rm(path.join(sessionPaths.conversationLogRoot, "message-ids.json"), { force: true });
-        const turnRoot = conversationTurnRoot(sessionPaths, turnId);
-        const assistantFiles = sortedFileNames(
-          await readDirectoryEntries(turnRoot),
-          (name) => name.startsWith("assistant.") && CONVERSATION_MESSAGE_FILE_PATTERN.test(name)
-        );
-        const assistantFile = assistantFiles[0] || conversationMessageFileName("assistant", toDate(at));
-        const metadata = await readConversationTurnMetadata(sessionPaths, turnId) || {};
-        const key = conversationMessageIdentity(turnId, { role: "assistant" });
-        if (assistantFiles.length && !metadata.nativeMessageVersions?.[key]) {
-          const original = await readConversationMessage(sessionPaths, turnId, assistantFile);
-          metadata.nativeMessageVersions = { ...metadata.nativeMessageVersions, [key]: conversationMessageVersion(original) };
-          await writeJsonFile(path.join(turnRoot, CONVERSATION_TURN_METADATA_FILE), metadata);
+      async replaceAssistant(id, message) {
+        const previous = await transaction.readTurn(id);
+        const metadata = previous?.metadata || {};
+        const key = conversationMessageIdentity(id, { role: "assistant" });
+        if (previous?.assistant && !metadata.nativeMessageVersions?.[key]) {
+          await transaction.updateTurnMetadata(id, { nativeMessageVersions: {
+            ...metadata.nativeMessageVersions, [key]: conversationMessageVersion(previous.assistant)
+          } });
         }
-        await writeTextFile(path.join(turnRoot, assistantFile), `${text}\n`);
-        await Promise.all(assistantFiles.slice(1).map((name) => rm(path.join(turnRoot, name), { force: true })));
+        await transaction.replaceAssistant(id, message);
       }
-    };
+    }));
+  }
+
+  async function readConversationTurn(sessionPaths, turnId) {
+    return conversationRecordTransaction(sessionPaths, async (transaction) => await transaction.readTurn(turnId) || {
+      turnId, user: null, assistant: null, thinking: [], commentary: [], messages: []
+    });
+  }
+
+  async function readConversationTail(sessionId, { userLimit = 2 } = {}) {
+    return withConversationTransaction(sessionId, async (transaction) => {
+      const turns = [];
+      let users = 0;
+      for (const id of (await transaction.listTurnIds()).reverse()) {
+        const turn = await transaction.readTurn(id);
+        turns.unshift(turn);
+        if (turn.user && ++users >= userLimit) break;
+      }
+      return turns;
+    }, false);
+  }
+
+  async function readFirstUserMessage(sessionId) {
+    return withReadableSessionPaths(sessionId, async (paths) => {
+      const record = await readConversationRecord(paths);
+      for (const turn of record.turns.values()) {
+        const user = turn.messages.find((message) => message.role === "user");
+        if (user) return user;
+      }
+      return null;
+    });
   }
 
   function conversationPaths(sessionPaths, conversationId) {
@@ -2848,18 +2700,23 @@ function createVibe64SessionStore({
     const operation = write ? mutateSession : withReadableSessionPaths;
     return operation(sessionId, (paths) => {
       const scopedPaths = typeof scope === "string" ? paths : conversationPaths(paths, scope.conversationId);
-      const run = () => callback(conversationTransaction(scopedPaths, typeof scope === "string" ? null : scope.turnMetadata));
+      const run = () => conversationRecordTransaction(scopedPaths, callback, write, typeof scope === "string" ? null : scope.turnMetadata);
       // Nested session mutations can have concurrent participants. Serialize
       // transcript writes within that lease as well as between root mutations.
       return write ? enqueueSessionMutation(scopedPaths.conversationLogRoot, run) : run();
     });
   }
 
+  const conversationStorage = Object.freeze({
+    read: (scope, callback) => withConversationTransaction(scope, callback, false),
+    write: (scope, callback) => withConversationTransaction(scope, callback, true)
+  });
+
   const {
     readConversationLog,
     readConversationLogPage,
     conversationMessageIdExists,
-    writeConversationUserMessage,
+    writeConversationUserMessage: appendUserMessage,
     writeConversationAssistantMessage,
     upsertConversationAssistantMessage,
     writeConversationCommentaryMessage,
@@ -2867,26 +2724,32 @@ function createVibe64SessionStore({
     writeConversationSystemMessage
   } = createConversationTranscript({
     clock: now,
-    storage: {
-      read: (scope, callback) => withConversationTransaction(scope, callback, false),
-      write: (scope, callback) => withConversationTransaction(scope, callback, true)
-    }
+    storage: conversationStorage
   });
 
-  function readConversationStream(sessionId) {
-    return conversationStreams.read(paths(sessionId).sessionRoot);
+  function writeConversationUserMessage(scope, input) {
+    return appendUserMessage(scope, { ...input, attachments: normalizeVibe64ConversationAttachments(input?.attachments) });
   }
 
-  function updateConversationStream(sessionId, message) {
-    return conversationStreams.update(paths(sessionId).sessionRoot, message);
+  function conversationStreamScope(scope) {
+    return typeof scope === "string" ? paths(scope).sessionRoot
+      : conversationPaths(paths(scope.sessionId), scope.conversationId).conversationRoot;
   }
 
-  function completeConversationStreamMessage(sessionId, messageId) {
-    return conversationStreams.complete(paths(sessionId).sessionRoot, messageId);
+  function readConversationStream(scope) {
+    return conversationStreams.read(conversationStreamScope(scope));
   }
 
-  function clearConversationStream(sessionId) {
-    return conversationStreams.clear(paths(sessionId).sessionRoot);
+  function updateConversationStream(scope, message) {
+    return conversationStreams.update(conversationStreamScope(scope), message);
+  }
+
+  function completeConversationStreamMessage(scope, messageId) {
+    return conversationStreams.complete(conversationStreamScope(scope), messageId);
+  }
+
+  function clearConversationStream(scope) {
+    return conversationStreams.clear(conversationStreamScope(scope));
   }
 
   async function readManifest(sessionId) {
@@ -4981,37 +4844,9 @@ function createVibe64SessionStore({
     ));
   }
 
-  // The stopped-service upgrade owns backups and publication. This operation
-  // only stages routing changes, using this store's native/archive layout.
   async function prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform, transformTurnMetadata, transformHelperRecord, includePlans = false }) {
-    const relativeScratch = path.relative(normalizedStateRoot, temporaryRoot || normalizedStateRoot);
-    if (!path.isAbsolute(temporaryRoot || "") || typeof transform !== "function" ||
-        !(relativeScratch === ".." || relativeScratch.startsWith(`..${path.sep}`))) {
-      throw new Error("Routing upgrade requires a transform and scratch directory outside project state.");
-    }
-    const checkedPath = async (filePath, directory = false) => {
-      let info;
-      try { info = await lstat(filePath); } catch (error) {
-        if (isMissingPathError(error)) return false;
-        throw error;
-      }
-      if (directory ? !info.isDirectory() : !info.isFile()) {
-        throw new Error(`Routing upgrade requires a regular ${directory ? "directory" : "file"}: ${filePath}`);
-      }
-      return true;
-    };
-    const inventory = async (root) => {
-      if (!await checkedPath(root, true)) return [];
-      const entries = await readDirectoryEntries(root);
-      if (entries.some((entry) => entry.isSymbolicLink())) {
-        throw new Error(`Routing upgrade inventory contains a symbolic link: ${root}. Inspect it before upgrading.`);
-      }
-      return entries.sort((left, right) => left.name.localeCompare(right.name));
-    };
-    const readRegularText = async (filePath) => await checkedPath(filePath) ? readTextIfExists(filePath) : "";
-    await checkedPath(temporaryRoot, true);
-    const updates = [];
-    const inspect = async (sessionPaths) => {
+    if (typeof transform !== "function") throw new Error("Routing upgrade requires a transform.");
+    const inspectSession = async (sessionPaths, { checkedPath, inventory, readRegularText }) => {
       await checkedPath(sessionPaths.sessionRoot, true);
       await checkedPath(sessionPaths.manifestPath);
       await readManifestFromPaths(sessionPaths);
@@ -5106,6 +4941,39 @@ function createVibe64SessionStore({
       }
       return changes;
     };
+    return prepareSessionStateUpgrade({ temporaryRoot, inspectSession, transformRenewal: transform });
+  }
+
+  // Stage through the session/archive owner. The offline publisher owns backups.
+  async function prepareSessionStateUpgrade({ temporaryRoot, inspectSession, transformRenewal }) {
+    const relativeScratch = path.relative(normalizedStateRoot, temporaryRoot || normalizedStateRoot);
+    if (!path.isAbsolute(temporaryRoot || "") || typeof inspectSession !== "function" ||
+        !(relativeScratch === ".." || relativeScratch.startsWith(`..${path.sep}`))) {
+      throw new Error("Session upgrade requires an inspector and scratch directory outside project state.");
+    }
+    const checkedPath = async (filePath, directory = false) => {
+      let info;
+      try { info = await lstat(filePath); } catch (error) {
+        if (isMissingPathError(error)) return false;
+        throw error;
+      }
+      if (directory ? !info.isDirectory() : !info.isFile()) {
+        throw new Error(`Session upgrade requires a regular ${directory ? "directory" : "file"}: ${filePath}`);
+      }
+      return true;
+    };
+    const inventory = async (root) => {
+      if (!await checkedPath(root, true)) return [];
+      const entries = await readDirectoryEntries(root);
+      if (entries.some((entry) => entry.isSymbolicLink())) {
+        throw new Error(`Session upgrade inventory contains a symbolic link: ${root}. Inspect it before upgrading.`);
+      }
+      return entries.sort((left, right) => left.name.localeCompare(right.name));
+    };
+    const readRegularText = async (filePath) => await checkedPath(filePath) ? readTextIfExists(filePath) : "";
+    await checkedPath(temporaryRoot, true);
+    const updates = [];
+    const inspect = (sessionPaths) => inspectSession(sessionPaths, { checkedPath, inventory, readRegularText });
     const rootPaths = paths();
     await checkedPath(normalizedStateRoot, true);
     await checkedPath(rootPaths.sessionsRoot, true);
@@ -5125,7 +4993,7 @@ function createVibe64SessionStore({
         if (!rawRecord) throw new Error(`Session archive ${sessionId} is incomplete. Finish archive recovery before upgrading.`);
         let parsed;
         try { parsed = JSON.parse(rawRecord); }
-        catch { throw new Error(`Invalid session archive record: ${metadataPath}. Inspect it before upgrading routing.`); }
+        catch { throw new Error(`Invalid session archive record: ${metadataPath}. Inspect it before upgrading sessions.`); }
         const record = sessionArchiveRecordFromJson(parsed, { archivePath: filePath, metadataPath });
         if (record.sessionId !== sessionId) throw new Error(`Session archive identity does not match ${filePath}.`);
         await validateSessionArchive(filePath);
@@ -5147,23 +5015,78 @@ function createVibe64SessionStore({
         }, { temporaryRoot });
       }
     };
-    for (const entry of await inventory(renewalStateRoot())) {
-      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-      const sessionId = assertValidVibe64SessionId(entry.name.slice(0, -".json".length));
-      const filePath = renewalStatePath(sessionId);
-      const original = await readRegularText(filePath);
-      let renewal;
-      try { renewal = JSON.parse(original); }
-      catch { throw new Error(`Invalid session renewal record: ${filePath}. Inspect it before upgrading routing.`); }
-      if (!isPlainObject(renewal) || renewal.sessionId !== sessionId) throw new Error(`Session renewal identity does not match ${filePath}.`);
-      const next = await transform({ sessionId, metadata: {}, conversations: [], renewal: structuredClone(renewal) });
-      if (next.renewal && JSON.stringify(next.renewal) !== JSON.stringify(renewal)) {
-        updates.push({ filePath, original, contents: `${JSON.stringify(next.renewal)}\n` });
+    if (transformRenewal) {
+      for (const entry of await inventory(renewalStateRoot())) {
+        if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+        const sessionId = assertValidVibe64SessionId(entry.name.slice(0, -".json".length));
+        const filePath = renewalStatePath(sessionId);
+        const original = await readRegularText(filePath);
+        let renewal;
+        try { renewal = JSON.parse(original); }
+        catch { throw new Error(`Invalid session renewal record: ${filePath}. Inspect it before upgrading sessions.`); }
+        if (!isPlainObject(renewal) || renewal.sessionId !== sessionId) throw new Error(`Session renewal identity does not match ${filePath}.`);
+        const next = await transformRenewal({ sessionId, metadata: {}, conversations: [], renewal: structuredClone(renewal) });
+        if (next.renewal && JSON.stringify(next.renewal) !== JSON.stringify(renewal)) {
+          updates.push({ filePath, original, contents: `${JSON.stringify(next.renewal)}\n` });
+        }
       }
     }
     await inspectArchives(rootPaths.archivedSessionsRoot);
     return updates;
   }
+
+  async function prepareConversationStorageUpgrade({ temporaryRoot }) {
+    return prepareSessionStateUpgrade({ temporaryRoot, async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText }) {
+      await checkedPath(sessionPaths.sessionRoot, true);
+      await checkedPath(sessionPaths.manifestPath);
+      await readManifestFromPaths(sessionPaths);
+      const changes = [];
+      const scopes = [sessionPaths];
+      for (const entry of await inventory(sessionPaths.conversationsRoot)) {
+        if (!entry.isDirectory()) continue;
+        scopes.push(conversationPaths(sessionPaths, entry.name));
+      }
+      for (const scope of scopes) {
+        const entries = await inventory(scope.conversationLogRoot);
+        const filePath = path.join(scope.conversationLogRoot, "transcript.json");
+        const original = await checkedPath(filePath) ? await readRegularText(filePath) : null;
+        const legacy = [];
+        const turns = new Map();
+        for (const entry of entries) {
+          if (!entry.isDirectory() || !CONVERSATION_TURN_ID_PATTERN.test(entry.name)) continue;
+          const turnRoot = conversationTurnRoot(scope, entry.name);
+          for (const file of await inventory(turnRoot)) {
+            if (!CONVERSATION_MESSAGE_FILE_PATTERN.test(file.name) &&
+                ![CONVERSATION_TURN_ATTACHMENTS_FILE, CONVERSATION_TURN_METADATA_FILE].includes(file.name)) continue;
+            const sourcePath = path.join(turnRoot, file.name);
+            const contents = await readRegularText(sourcePath);
+            legacy.push({ filePath: sourcePath, original: contents, contents: null });
+          }
+          turns.set(entry.name, await readLegacyConversationTurn(scope, entry.name));
+        }
+        let rewound = [];
+        for (const name of ["rewound.json", "message-ids.json"]) {
+          const sourcePath = path.join(scope.conversationLogRoot, name);
+          if (!await checkedPath(sourcePath)) continue;
+          const contents = await readRegularText(sourcePath);
+          if (name === "rewound.json") rewound = JSON.parse(contents);
+          legacy.push({ filePath: sourcePath, original: contents, contents: null });
+        }
+        if (original !== null) {
+          parseConversationRecord(original);
+          if (legacy.length) throw new Error(`Conversation has both current and legacy records: ${filePath}. Inspect the upgrade backup before retrying.`);
+        } else if (legacy.length || turns.size) {
+          const contents = `${JSON.stringify(conversationRecordJson({ turns, metadata: {}, rewound }), null, 2)}\n`;
+          parseConversationRecord(contents);
+          // Publish the complete record first. Retry follows the prepared manifest
+          // and retires old files only after all original bytes are backed up.
+          changes.push({ filePath, original: null, contents }, ...legacy);
+        }
+      }
+      return changes;
+    } });
+  }
+
 
   return {
     createSession,
@@ -5174,7 +5097,9 @@ function createVibe64SessionStore({
     publishSessionArchive,
     prepareRenewalSessionArchive,
     prepareAssistantRoutingStateUpgrade,
+    prepareConversationStorageUpgrade,
     conversationMessageIdExists,
+    conversationStorage,
     deleteMetadataValue,
     deleteMetadataValues,
     detachRenewedSessionForArchive,
@@ -5212,7 +5137,6 @@ function createVibe64SessionStore({
     readIntegrationSetupRequest,
     readConversationLogPage,
     readCurrentSession,
-    rewindConversationLog,
     readConversationTail,
     readManifest,
     readMetadata,

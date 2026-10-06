@@ -239,7 +239,7 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement = 
       if (denied) return { ...denied, statusCode: 403 };
       return aiConnectionService[operation](input);
     }
-  }, { projectScoped: false, ownerRequired: true }));
+  }, { projectScoped: false }));
 }
 
 export {

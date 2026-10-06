@@ -5,15 +5,19 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
+import { upgradeSessionConversations } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 
 async function fixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "v64-message-index-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const create = () => createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
+  const systemRoot = path.join(root, "state");
+  const create = () => createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(systemRoot, "projects/example") });
   const store = create();
   await store.createSession({ sessionId: "test", runtimeKind: "genesis" });
   const log = store.paths("test").conversationLogRoot;
-  return { store, create, log, index: path.join(log, "message-ids.json") };
+  return { store, create, log, index: path.join(log, "message-ids.json"),
+    upgrade: () => upgradeSessionConversations({ systemRoot, apply: true,
+      backupRoot: path.join(systemRoot, "upgrades/backups/20261002-session-conversations"), report: () => {} }) };
 }
 
 test("message receipts survive restarts without scanning historical turn directories", async (t) => {
@@ -23,6 +27,8 @@ test("message receipts survive restarts without scanning historical turn directo
     await fs.mkdir(turn, { recursive: true });
     await fs.writeFile(path.join(turn, `user.20260921T120000000Z.old-${i}.md`), "Old request\n");
   }
+  await assert.rejects(f.store.conversationMessageIdExists("test", "old-1"), { code: "vibe64_conversation_upgrade_required" });
+  await f.upgrade();
   assert.equal(await f.store.conversationMessageIdExists("test", "old-1"), true);
   await f.store.writeConversationUserMessage("test", { messageId: "new-request", text: "New request" });
   const restarted = f.create();
@@ -46,19 +52,24 @@ test("message receipts survive restarts without scanning historical turn directo
   assert.equal(await restarted.writeConversationUserMessage("test", { messageId: "new-request", text: "Retry" }), null);
 });
 
-test("interrupted and damaged indexes rebuild from durable messages, including undone turns", async (t) => {
-  const f = await fixture(t);
-  const turn = await f.store.writeConversationUserMessage("test", { messageId: "first", text: "First" });
-  await f.store.rewindConversationLog("test", [turn.turnId]);
-  assert.equal(await f.store.conversationMessageIdExists("test", "first"), true);
-  await fs.rm(f.index);
-  const interruptedTurn = path.join(f.log, "000002");
-  await fs.mkdir(interruptedTurn, { recursive: true });
-  await fs.writeFile(path.join(interruptedTurn, "user.20260921T120000000Z.accepted-before-crash.md"), "Accepted\n");
-  assert.equal(await f.create().conversationMessageIdExists("test", "accepted-before-crash"), true);
-  await fs.writeFile(f.index, "broken JSON");
-  await f.store.writeConversationUserMessage("test", { messageId: "next", text: "Next" });
-  assert.deepEqual(new Set(JSON.parse(await fs.readFile(f.index, "utf8"))), new Set(["first", "accepted-before-crash", "next"]));
+test("offline conversion recovers missing or damaged legacy indexes from durable messages, including undone turns", async (t) => {
+  for (const damaged of [false, true]) await t.test(damaged ? "damaged" : "missing", async t => {
+    const f = await fixture(t);
+    for (const [id, messageId, text] of [["000001", "first", "First"], ["000002", "accepted-before-crash", "Accepted"]]) {
+      await fs.mkdir(path.join(f.log, id), { recursive: true });
+      await fs.writeFile(path.join(f.log, id, `user.20260921T120000000Z.${messageId}.md`), `${text}\n`);
+    }
+    await fs.writeFile(path.join(f.log, "rewound.json"), '["000001"]');
+    if (damaged) await fs.writeFile(f.index, "broken JSON");
+    await f.upgrade();
+    assert.equal(await f.store.conversationMessageIdExists("test", "first"), true);
+    assert.equal(await f.create().conversationMessageIdExists("test", "accepted-before-crash"), true);
+    await f.store.writeConversationUserMessage("test", { messageId: "next", text: "Next" });
+    const record = JSON.parse(await fs.readFile(path.join(f.log, "transcript.json"), "utf8"));
+    assert.deepEqual(new Set(record.turns.flatMap(([, turn]) => turn.messages.map(message => message.messageId))),
+      new Set(["first", "accepted-before-crash", "next"]));
+    assert.equal(await f.store.writeConversationUserMessage("test", { messageId: "first", text: "Retry hidden message" }), null);
+  });
 });
 
 test("separate store instances serialize receipt updates and preserve duplicate protection", async (t) => {

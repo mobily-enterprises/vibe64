@@ -233,7 +233,7 @@ test("apply backs up every changed file and preserves credentials, history, rece
   assert.equal(renewal.approved.text, "Retain the exact reviewed handover");
   assert.equal(renewal.successor.attempt, 2);
   assert.ok(manifest.files.some((entry) => entry.path.endsWith("session-renewals/active.json")));
-  const published = f.messages.filter((item) => item.message.startsWith("Published routing state:"));
+  const published = f.messages.filter((item) => item.message.startsWith("Published state:"));
   assert.ok(published.at(-1).message.endsWith("codex-helper-model.json"));
   assert.equal(JSON.stringify(f.messages).includes("DO-NOT-LOG"), false);
   const completed = await snapshot(f.systemRoot);
@@ -250,7 +250,7 @@ test("each interrupted publication resumes its prepared choices and original bac
     const before = await snapshot(f.systemRoot);
     let publications = 0;
     await assert.rejects(f.run(true, (_level, message) => {
-      if (failureAt === 0 && message.startsWith("Verified ") || message.startsWith("Published routing state:") && ++publications === failureAt) {
+      if (failureAt === 0 && message.startsWith("Verified ") || message.startsWith("Published state:") && ++publications === failureAt) {
         throw new Error("simulated interruption");
       }
     }), /simulated interruption/u);

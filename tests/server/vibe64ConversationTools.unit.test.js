@@ -26,7 +26,6 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
     async stopTemporaryConversation() { return { ok: false, code: "vibe64_busy", error: "The conversation is closing." }; }
   };
   const sessions = {
-    async rewindConversation(sessionId, input) { calls.push({ sessionId, input }); return { ok: true, text: `  ${"🙂".repeat(8000)}\n`, nativeCheckpoint: "private-checkpoint" }; },
     async updateAssistantSelection(sessionId, input) { calls.push({ sessionId, input }); return { ok: true, sessionId, assistantSelection: { engineId: "codex", modelId: "previous-model" }, metadata: {
       assistant_routing: JSON.stringify({ ...input.assistantRouting, workflowEngineId: "codex" }),
       assistant_routing_request: JSON.stringify({ status: "completed", resolvedMode: "senior" })
@@ -52,7 +51,8 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const catalog = createServiceToolCatalog(actions, { maxDirectTools: 100 });
   const context = { surface: "app" };
   const toolSet = catalog.resolveToolSet(context);
-  assert.equal(toolSet.tools.length, 37);
+  assert.equal(toolSet.tools.length, 36);
+  assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.sessions.conversation.rewind"), false);
   assert.equal(toolSet.tools.some((tool) => tool.actionId.includes("attachment") || tool.actionId.includes("repository")), false);
   async function execute(actionId, input) {
     const tool = toolSet.tools.find((entry) => entry.actionId === actionId);
@@ -81,20 +81,9 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(main.result.turns[0].assistant.length, 4000);
   assert.equal(main.result.turns[0].truncated, true);
   assert.equal(JSON.stringify(main).includes("secret"), false);
-  assert.equal(main.result.rewindTurnId, "000010");
-  assert.equal(main.result.rewindPending, false);
+  assert.equal(Object.hasOwn(main.result, "rewindTurnId"), false);
+  assert.equal(Object.hasOwn(main.result, "rewindPending"), false);
   assert.equal(JSON.stringify(main).includes("private-full-prompt"), false);
-  const undone = await execute("vibe64.sessions.conversation.rewind", { sessionId: "session-1", turnId: "000010" });
-  assert.equal(undone.ok, true, JSON.stringify(undone));
-  assert.equal(undone.result.restoredText, `  ${"🙂".repeat(7998)}`);
-  assert.equal(undone.result.truncated, true);
-  assert.equal(JSON.stringify(undone).includes("private-checkpoint"), false);
-  assert.equal(calls.at(-1).input.vibe64User.username, "member");
-  const rewindCallCount = calls.length;
-  for (const input of [{}, { sessionId: "", turnId: "000010" }, { sessionId: "session-1", turnId: "latest" }]) {
-    assert.equal((await execute("vibe64.sessions.conversation.rewind", input)).ok, false);
-  }
-  assert.equal(calls.length, rewindCallCount);
   assert.equal(read.result.status, "inProgress");
   assert.equal(read.result.messages.length, 12);
   assert.equal(read.result.messages[0].id, "message-13");

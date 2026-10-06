@@ -4,6 +4,11 @@ People can open one or more clearly separate, short-lived AI tasks for focused
 help without adding those exchanges to the main project conversation or
 session history.
 
+The shared HTTP route carries the project, session and saved temporary-chat
+identity in one selector. The application server permits route parameters up
+to 1024 characters so generated repair chats reach the same authorized route
+as restored chats; saved identities and history are unchanged.
+
 Temporary creation and preference updates expose typed Custom/Senior/Junior routing
 inputs through their canonical actions; Auto remains Main-only. Colleague's
 bounded results report saved chat mode, workflow, review preference and whether
@@ -32,6 +37,68 @@ When saved AI settings need a state upgrade, restoration reports the administrat
 stop, upgrade and restart steps. It never converts old settings during a read.
 Restore failures retain a readable retry action in a tonal error notice.
 
+Before a native conversation ID exists, the same session-agent manager completes
+its original access and execution-profile checks, then uses the common runtime's
+server-only creation operation. The common application owner prepares the original
+input and selected native facilities without opening Main or creating a placeholder.
+The Codex and OpenCode drivers call their existing creation owners; Claude's same
+owner allocates the UUID, acquires the entry, records the scoped profile and
+persistence flag, and completes the original second save before returning. The
+parent task or saved Temporary chat still records that actual identity before Start.
+
+JSKIT assistant-core's existing `codexTurn.js` run owner executes scoped/persistent
+Codex creation from authorized settings and registers results in the original maps.
+It also owns start deduplication, duplicate and active-turn selection, native resume
+and dispatch, native observation, paginated history projection, turn-start watchers,
+active-turn steering, Send-result settlement, persistent
+native Stop, ordinary scoped interruption/deletion and completion waits. The
+watcher retains its original deadline before Send; completion and failed-turn
+interruption use the exact native identity.
+Provider-loss recovery, pending-start draining, renewal activity and explicit
+close use that same state. Vibe64 retains profile and account admission,
+output-limit validation, task-result parsing, checkpoints and completion
+publication. Its result projection remains inside the shared completion promise,
+so a rejected result follows the original interruption and retry behavior.
+The existing checkpoint facility carries the temporary turn's exact outer identity.
+Vibe64 retains namespace admission and Helper ownership receipts. The scoped
+Codex driver calls the same run owner for acquisition, cached or persistent reads,
+Start, wait, Stop and deletion. Shared native interrupt/delete commands run inside
+the original admission boundary, then settle the captured watcher/map after its
+release. Scoped deletion requires the original provider owner's verified runtime
+exit; Vibe64 supplies its authorized execution configuration and cleanup policy.
+Vibe64's scoped preparation retains authorized context, profile and permission settings,
+input/output limits and observation-loss admission. Its Helper account capture stays
+after native resume and before the shared watcher and Send. The run owner invokes
+the existing provider and verified Helper isolation owner from that preparation;
+Public supplies no executable create, resume or dispatch callback on this path.
+The same run owner also restores Helper ownership before native model discovery
+and account description. It preserves original provider reuse, account-acquisition
+gating and the per-connection catalog cache; Vibe64 retains authorized scoped
+preparation, workload deadlines and returned profile/account policy.
+
+OpenCode uses JSKIT's extracted observer to wait for the event channel before
+dispatch, propagate observation loss and await closure. Its extracted steering
+operation follows the newly submitted input and restores the prior input when
+native dispatch fails. Application authorization, execution-profile policy,
+checkpointing, run publication and durable temporary-chat identity remain here.
+Its original temporary records, native creation, model/agent selection, Start,
+Steer, reads, completion waits, Stop, deletion and target draining now use the
+same JSKIT shared runtime, reached directly by the common OpenCode driver.
+The binding supplies exact native identity and application preparation to that
+same owner. Vibe64 retains
+profile and context authority, prompt and result limits, exact receipt projection
+and registry publication. The shared owner performs acquisition, compares the
+retained profile and opens the original native observer using those prepared
+values. The shared owner records native selection before awaiting
+that registry write, and attaches the original completion notices before Start
+returns admission. A bounded Helper keeps its saved completion when a caller
+supplies another wait timeout. Persistent Stop retains its native idle check;
+ordinary Main Stop remains acknowledgement-only. Native deletion still precedes
+observer retirement and registry publication. Vibe64 retains authorized target
+selection, scoped Helper release and the parent's durable cleanup receipt.
+An uncertain delivery is inspected by its original message identity rather than
+replayed; an unreadable or absent receipt remains uncertain.
+
 ## Sources
 
 - `src/lib/vibe64ThinkingPresentation.js`
@@ -49,7 +116,7 @@ Restore failures retain a readable retry action in a tonal error notice.
 - `src/lib/vibe64AssistantHost.js`
 - `src/components/studio/Vibe64SessionPanel.vue`
 
-- `packages/vibe64-terminals/src/server/agent/providers/claudeSessionAgentProvider.js`
+- `packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js`
 
 - `packages/vibe64-runtime/src/server/codexAppServerProvider.js`
 - `packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js`
@@ -58,14 +125,15 @@ Restore failures retain a readable retry action in a tonal error notice.
 - `packages/vibe64-database-tools/src/server/schemaAccess.js`
 - `packages/vibe64-database-tools/src/server/service.js`
 - `packages/vibe64-terminals/src/server/codexHelperThreadLedger.js`
-- `packages/vibe64-terminals/src/server/codexTerminal.js`
+- `packages/vibe64-terminals/src/server/codexScopedConversationPreparation.js`
+- `packages/vibe64-terminals/src/server/codexHelperPreparation.js`
 - `packages/vibe64-terminals/src/server/sessionConversations.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-sessions/src/server/sessionPresence.js`
 - `src/composables/useVibe64SessionTypingPresence.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
-- `packages/vibe64-terminals/src/server/opencodeTerminal.js`
+- `packages/vibe64-terminals/src/server/openCodeScopedPreparation.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
 - `packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js`
@@ -90,6 +158,19 @@ without Edit/Cancel or another native submission. Saved history and accepted
 routing state clear stale delivery errors, including a late HTTP failure after
 an exact receipt. Pending entries are reconciled only against actual history;
 synthetic routing rows never acknowledge delivery.
+Direct temporary messages can be saved before native admission. Their read-only
+projection carries `receipt: false` until the exact requested native message is
+confirmed; routed rows written after admission retain the normal receipt contract.
+The shared delivery owner keeps that provisional row visible once, with its
+pending or uncertain status. Native read failures leave Check delivery available.
+Its explicit check retains the captured request and cannot start it again while
+admission is unknown. Historical checks use the row's recorded selection and
+retained native binding, without consulting another conversation for acceptance.
+The qualifier never enters saved history, routing metadata, prompt history or
+message fingerprints. The original logical record remains authoritative. Its
+canonical server facade and Temporary browser use the common read, subscription
+and delivery operations. Each task acquires the supplied retained binding with
+its existing logical ID; it has no second delivery record or private reader.
 
 Session and temporary-conversation actions resolve their project and acting user
 through the shared action boundary. The acting user is trusted context, never
@@ -133,17 +214,17 @@ Native conversation IDs are scoped to that temporary chat. A fresh repair can
 start even when the main chat retains Codex history in an older provider home;
 neither chat's existing history is moved or converted. A chat with its own
 unsupported history reports the required action as a conflict, not a server error.
-Creation and polling release that lock before looking up mode availability.
+Creation and reading release that lock before looking up mode availability.
 Slow provider catalogue reads therefore do not block sibling Router updates or
 draft saves; native admission and transcript reconciliation remain serialized.
 Connected Codex history reads reuse their existing native observer. They do not
 rebuild the execution environment; Send and reconnection still prepare it.
 The existing filesystem lock admits local waiters in arrival order, so repeated
-polls cannot overtake a pending routing update or cancellation. Wait timeouts
+reads cannot overtake a pending routing update or cancellation. Wait timeouts
 still apply, and filesystem ownership continues to protect separate processes.
-Realtime routing updates share an already pending conversation read instead of
-starting overlapping polls. A replaced turn resumes polling after the older
-read settles; closed views and changed actors still discard that response.
+Realtime routing updates use the supplied reader's existing in-flight request
+and one queued latest read. A replaced turn is observed after the older read
+settles; closed views and changed actors still discard the obsolete response.
 Native idle events and read-time reconciliation finish the admitted turn without
 starting another model. Closing or stopping a chat cancels pending delivery and
 cleans up retained helpers. Service shutdown drains pending delivery before
@@ -218,6 +299,48 @@ as main chat in Codex, Claude Code, and OpenCode. They use normal execution sett
 the same session write coordination and skill preparation. There is no temporary
 permission mode or R/O–R/W toggle. Preview screenshots and console/network
 diagnostics attach to the selected conversation through the normal upload path.
+After the original coordinator has saved a native conversation ID, its admitted
+Send, read, wait, Stop and delete operations acquire the same JSKIT scoped native
+handle used by the existing provider. That handle keeps the real parent session,
+temporary routing context and native identity; it does not create a Helper scope
+or a second state record. Explicit Close still owns native deletion, while runtime
+shutdown preserves durable native history. JSKIT's existing scoped owner now
+performs the original persistent read/reconciliation, duplicate and active-steering
+decisions, demand creation, Start and exact native receipt inspection. These
+operations run inside the existing application write lease and use its actual
+transcript, stream and admitted session-agent operations. They create no copied
+state, additional queue or delivery journal. Direct provisional rows remain
+unconfirmed until exact native admission; routing policy still writes its receipt
+after admission. A failed native read cannot prove acceptance or trigger replay.
+Vibe64 retains discovery, draft saves, Router and repair policy, authorized model
+and skill preparation, attachment/receipt content, record layout and explicit
+Close policy, routing-helper cleanup, attachments and logical-record deletion.
+The shared persistent owner also performs the original idle/Stop/retain sequence
+before engine changeover, canonical receipt recovery through the existing
+continuity owner, and Stop/delete over retained native histories. Each successful
+history retirement is saved before proceeding; failures retain the same retryable
+closing record. Native and routing contexts keep their original stores and
+write-lease order, without a second journal. The same sessions-owned AssistantFeature now accepts
+the project/session/logical-chat selector. Its common runtime handle delegates
+Send, Stop and selection to the original authorized actions; read and delivery
+inspection use the original logical write owner. It creates no native thread or
+runtime metadata on open. Its native segment stays absent until the original
+coordinator has saved the actual native ID.
+
+Codex's existing scoped subscription, Claude's normalized message callback and
+OpenCode's existing completion observer publish into the same scoped stream
+owner. Original transcript reconciliation publishes the saved turns and retires
+their exact live identities. No additional native observer or per-delta read is
+installed. Each shared subscription rechecks project access before forwarding.
+Closing this presentation handle preserves the saved chat and its native work;
+only the original explicit Close performs destructive cleanup. The Temporary
+Vue consumer acquires the same supplied binding dynamically for each task.
+Subscription starts only after its original Create saves the requested logical
+ID. Hidden mounted tasks retain that reader; removal, actor changes and unmount
+release it without stopping native work. The application keeps collection,
+Create, settings/draft PATCH and explicit Close policy. The shared prepared Send
+registers its optimistic entry before the original save/Create sequence and owns
+the sole canonical HTTP request, abort handle, receipt and uncertainty state.
 Only conversation persistence and cleanup differ. The server stores each chat's
 identity, settings, draft and repair state below its session's `conversations/`
 directory. Each chat uses the existing JSKIT transcript policy with a separate
@@ -264,7 +387,7 @@ While mounted, each task tracks unread assistant text in browser-local state.
 New or streamed reply text received outside the active visible conversation
 marks that task's tab, the expanded incognito button and the compact session
 actions trigger/menu entry. Viewing a task clears only its own indicator;
-opening the actions menu does not mark messages read. Unchanged polls, user
+opening the actions menu does not mark messages read. Unchanged snapshots, user
 messages and reasoning-only updates do not create unread replies. The compact
 trigger preserves independent renewal attention after unread replies clear.
 Restored history starts as a baseline rather than announcing old replies.
@@ -278,16 +401,21 @@ Explicit Close is one server operation: retain the closing record, pause any goa
 confirm native work stopped, delete the native conversation, remove its owned
 attachments, then delete the record and transcript. A failure retains the record
 and offers the same Close again, including after reload. File edits remain.
+For Claude, the retained JSKIT conversation owner coordinates verified Stop and
+active native-transcript deletion, then awaits Vibe64's saved metadata and scoped
+receipt removal before retiring the entry. The original deletion guard and
+application receipt storage remain in Vibe64; archival history retirement
+remains a separate preservation workflow.
 After deletion succeeds, the session realtime event identifies the closed
 conversation. Other browsers remove only that project's matching session tab,
-cancel its pending saves and polls, and ignore late responses that would restore
+cancel its pending saves, release its reader, and ignore late responses that would restore
 it. Reconnection reconciles the saved collection to recover missed closures while
 preserving new local drafts. A closed-conversation API error also removes the
 stale tab; Send never recreates a chat closed by another browser.
 Closing an incomplete Update repair requires confirmation that partial edits
 will remain and may still need repair. Closing waits for Stop and provider
 deletion to succeed; a failure leaves the chat available for retry, and a failed
-Stop resumes progress polling. Update verification must finish before its repair can be closed. A Close during
+Stop leaves the existing live reader active. Update verification must finish before its repair can be closed. A Close during
 conversation creation waits for creation and prevents a pending Send. Stop does not reset source files, HEAD, or the
 index, and a late response cannot turn a cancelled repair into an automatic
 Update. Partial application edits remain subject to review; cancellation does
@@ -295,10 +423,11 @@ not claim the application is repaired.
 Stop errors appear above the composer and Close errors inside the confirmation,
 so a notification cannot cover the retry control. Visible repair results do not
 also raise a duplicate toast; background completion still notifies the person.
-An unavailable progress read keeps the draft and Stop available and retries the
-existing read loop. It does not report completion or send another turn. Only a
-confirmed terminal state, expired conversation, or successful Stop releases the
-composer for another send.
+An unavailable progress read keeps the draft and Stop available. Subsequent
+native events and reconnects invalidate the same supplied reader; there is no
+private polling loop. A read failure does not report completion, erase the
+durable chat or send another turn. Confirmed native state and the original
+admission policy govern the next Send.
 Task attachments use the shared upload queue, text references and preview/download
 dialog. The shared attachment service retains sent and saved draft files under
 an explicit conversation owner. Closing removes only that owner's files and
@@ -309,9 +438,12 @@ Assistant replies use the same formatted text presentation as normal chat,
 including lists, bold text, code, and links. User-authored text stays literal.
 Raw HTML remains text, and executable or data-URL links are not made clickable.
 Main and temporary chats use the same JSKIT conversation element, transcript,
-composer and collapsible progress components. Both use JSKIT's
-`createAssistantMessageDelivery` for pending entries, failed delivery and receipt
-matching. Temporary Send inserts its user bubble before waiting for a draft save,
+composer and collapsible progress components. Their supplied bindings own
+pending entries, failed delivery and receipt matching. The shared prepared-submit
+binding chooses Send or Steer from the application's native-working eligibility,
+checks uncertain receipts without resending, and removes only accepted composer
+attachments. Router admission and repair payloads remain application policy.
+Temporary Send inserts its user bubble before waiting for a draft save,
 conversation creation or native admission. The shared element overlays that entry
 on canonical history and replaces it once by message identity. Resend keeps the
 original message ID, text, settings and attachment IDs, while preserving a newer
@@ -392,7 +524,7 @@ observable until completion, Stop, deletion, or loss/replacement of the shared
 provider connection. Short helper turns retain their bounded deadlines.
 
 OpenCode temporary Start returns the accepted turn immediately, keeping Stop
-available while the existing controller observes completion. Conversation reads
+available while the same JSKIT native owner observes completion. Conversation reads
 retain working or failed state for that turn. Stop requires provider confirmation
 within five seconds; a refusal or timeout leaves the turn available for retry.
 A confirmed Stop cancels only that conversation's pending reads. Deleting a
@@ -414,6 +546,15 @@ It keeps the
 session directory and normal command boundary. Ordinary temporary replies have
 no forced result schema. Update repair explicitly requests its structured
 completion result for verification; this format does not change permissions.
+
+The bounded native output-schema validator originally owned by
+`codexAppServerSessionBridge.js` now lives in JSKIT assistant-core's
+`conversation/structuredOutput.js`. The Public bridge retains Helper profile
+and error policy. OpenCode's original `openCodeDetachedPrompt` and
+`openCodeStructuredOutput` now live in the shared `conversation/openCodeTurn.js`
+owner, used by both the Public terminal and common native driver. Claude and
+Codex forward the validated schema through their existing native turn settings;
+the direct-API engine rejects that unsupported configuration before inference.
 
 The temporary composer remains editable during work. Steer sends guidance to
 its current native conversation and keeps Stop available. The server retains
@@ -462,7 +603,12 @@ provenance covers scope, actor, connection and destination and cannot be restore
 as inference authority from a saved JSON snapshot. Input/output limits, deadlines
 and tool restrictions remain provider-enforced. Lifecycle operations carry the
 same scope and provider settings, without the parent session's runtime or binding.
-Codex wait retains the original deadline and interrupts the exact turn on timeout;
+Codex wait retains the original deadline and interrupts the exact turn on timeout.
+A bounded Codex Helper also retains its admitted native account signature until
+completion. Public validates that same signature before exposing the result;
+a same-account credential refresh remains valid. The shared run owner keeps the
+Helper busy during validation, and a late check cannot revive a stopped turn.
+The parent retains its original cleanup receipt and retry ownership.
 OpenCode wait retains bounded-output validation even with an explicit timeout.
 Claude applies the helper's output limit to answer text and structured results;
 reasoning keeps the normal block-size limit instead of consuming that allowance.
@@ -472,9 +618,34 @@ Claude reports its managed execution ID before inference so the parent request
 can retain it for restart cleanup. Cleanup uses the captured native reference and
 must verify stop; it does not authorize another inference. Cancellation before
 native thread creation also releases any catalogue runtime owned by that scope.
-The manager also composes these scoped operations into one bounded helper turn,
-awaiting the parent's native-identity event before starting. Abort during startup
-stops the late native turn; abort while waiting stops that same scoped turn.
+The same JSKIT runtime owns the original bounded helper coordinator through
+`runScopedTurn`. The manager supplies its existing admitted operations and keeps
+the required live-profile validation and audit snapshot. The shared coordinator
+awaits the parent's native-identity event before starting. Abort during startup
+stops the late native turn; abort while waiting stops that same scoped turn,
+retaining Stop-failure precedence over an earlier wait or abort error.
+Scoped Codex, Claude and OpenCode Send, read, wait, Stop and explicit deletion
+enter the same JSKIT conversation runtime through its native representation.
+Each native driver invokes its existing shared owner: Codex's run owner,
+Claude's conversation owner, or OpenCode's shared runtime. Application bindings
+supply the authorized scope, native identity and original preparation; they open
+no main session store, copied transcript or additional delivery journal. Before a native
+ID exists, the shared coordinator invokes the same admitted creation operation
+and awaits the parent's thread receipt; it creates no placeholder identity or
+second runtime. Repeated responses reuse the supplied native conversation ID and
+return the actual new turn ID. Native wait keeps the exact run and original deadline. A failed
+delete or provider-exit proof retains the common handle and the feature receipt
+for retry. Runtime shutdown releases the original scope's provider resources;
+it does not clear the feature's durable cleanup reference or delete its paths.
+OpenCode's private scoped preparation retains the guarded profile, authorized
+context, original input/output/deadline bounds, historical message identities
+and product publication. Its lazy cleanup descriptor is read only after
+successful native deletion; the same shared runtime owns lifecycle and reuse.
+Claude's original authorized entry acquisition supplies the same retained entry
+to its shared owner for each operation. Session close still drains those entries
+and closes its terminals before an explicitly requested cached-binding release.
+After restart, its parent's captured managed-execution receipt still drives verified Stop
+before native history or the retained scoped record is removed.
 Save naming, suggestions, source explanations and database help resolve effective
 Helper through this seam. Each feature retains its own durable helper-cleanup
 references, exact destination and connection identity; the last main-chat model
@@ -493,9 +664,9 @@ ID and never substitute the local login ID. OpenCode tasks
 use the same model-advertised response-limit policy as the main conversation,
 and any narrower task-specific limit remains authoritative.
 
-Codex restores durable helper ownership only while its exact managed runtime
-and provider context remain current. If the runtime has disappeared, Vibe64
-atomically retires the stale ownership. If the provider context changed under
+The shared Codex Helper owner restores durable ownership only while its exact
+managed runtime and provider context remain current. If the runtime has disappeared,
+it atomically retires the stale ownership. If the provider context changed under
 the same account, it first verifies retirement of the earlier runtime and then
 retires the ownership, allowing a fresh bounded helper instead of reporting a
 false account conflict. A real account change cannot adopt or delete the earlier
@@ -511,6 +682,28 @@ The runtime owner notifies the waiting task only after verified retirement and
 durable ownership removal. The task uses that acknowledgement for its exact
 thread instead of interrupting or deleting it again. Failed retirement retains
 ownership and remains reportable and retryable through the same runtime owner.
+
+The original native Helper interruption, thread deletion and invalid-request
+read-back proof live in JSKIT assistant-core's `codexProvider.js`. Its shared
+Helper lifecycle writes cleanup-required ownership before invoking that operation
+and removes the durable receipt only after success. It also owns native cleanup
+coalescing and provider retirement. Native conversation commands call that same
+Helper owner directly at the original control-inspection point; a returned
+retirement promise still releases application admission before settling. Vibe64
+retains account/profile authorization, authorized storage locations, application
+cleanup policy and retry/error presentation. Scoped preparation supplies its
+existing verified isolation owner once for compatibility checks and execution.
+
+The original detached Codex turn watcher, immediate status handling, provider
+failure detail grace and completion wait belong to JSKIT's existing run owner.
+Its conversation commands project the native thread ID after ordinary or Helper
+acquisition. The same Helper owner retains the pending-start map and awaited
+ACTIVE receipt: dispatch failure retires the Helper before releasing that map
+entry, while successful dispatch releases it before waiting for completion.
+Account rechecks and the READY receipt also belong to that owner. Vibe64's
+current bounded tasks use the common scoped runtime and retain account/profile
+authorization, output limits and result presentation. Previously saved Helper
+receipts keep their existing interrupt/delete cleanup.
 
 Database Copilot begins with bounded database identity and object counts, plus
 the exact selected table attached to each user question. The current selection
@@ -542,8 +735,9 @@ OpenCode applies the selection only to the temporary native session; its shared
 process retains the main session's configuration. Catalogue failures are shown
 with Retry, and unavailable selections cannot be applied or executed.
 An unfinished native goal fixes the temporary chat's mode and model and suppresses
-automatic review. Its observed goal reaches the mode menu after restoration and
-polling; an omitted goal in a failed read cannot clear an earlier observation.
+automatic review. Its observed goal reaches the mode menu through restoration,
+canonical reads and live updates; an omitted goal in a failed read cannot clear
+an earlier observation.
 Native completion first saves the final reply through the ordinary snapshot
 owner. Review then checks the saved reply for the composer's structured questions;
 an unanswered question retains the coding model and waits for the user's answer.

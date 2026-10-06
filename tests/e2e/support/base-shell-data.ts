@@ -138,4 +138,4 @@ export {
 export {
   directChatSessionId,
   directChatSessionPayload
-} from "./base-shell/codex-data";
+} from "./base-shell/codex-data.ts";

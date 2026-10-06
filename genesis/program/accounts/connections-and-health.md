@@ -69,9 +69,10 @@ have bounded Colleague presentations; other account actions remain excluded.
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
 - `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js`
-- `packages/vibe64-terminals/src/server/codexTerminal.js`
+- `packages/vibe64-terminals/src/server/codexAccountPreparation.js`
+- `packages/vibe64-terminals/src/server/codexAssistantCatalog.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
-- `packages/vibe64-terminals/src/server/opencodeTerminal.js`
+- `packages/vibe64-terminals/src/server/openCodeConversationAccounts.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
 - `packages/studio-health/src/server/service.js`
@@ -321,13 +322,12 @@ The nested development editor preserves native credential context while keeping
 its own runtime state.
 
 The connection store supplies included OpenCode Big Pickle, with no Codex login
-required. Live native OpenCode checks show that its free provider rejects the
-restricted, tool-free profile used by Router and background helpers. Pickle remains
-eligible for Senior, Junior and shared Backup, but is not
-recommended for Helper or Router; previews reject those helper purposes before
-sending. Helper choices, assignment validation and its form hint use the
-restricted background workload policy, so chat-only models cannot appear usable
-for that role. Another connected model is needed for Auto and background assistance.
+required. Managed OpenCode Helper turns retain native tool definitions while the
+trusted session registry and execution plugin deny tool execution in restricted
+non-project workloads. Routing therefore admits available Big Pickle for Router
+and Helper as well as Senior, Junior and shared Backup. Catalogue availability,
+account access and the actual execution profile remain authoritative; accepting a
+routing assignment does not grant a Helper coding access.
 New OpenCode keys are checked against the complete trusted provider
 catalogue and verified before replacing a working connection. The browser cannot
 supply a network route, verification model or access policy. Only redacted
@@ -349,12 +349,28 @@ endpoint. API and Coding Plan credentials, connection identities and routing
 selections remain separate even though both use the `glm-5.3` model ID.
 The existing GLM history handling applies to both routes. OpenCode keeps its
 regular Chat Completions integration.
+JSKIT supplies native protocol endpoints, model capabilities, Codex catalogue/
+thread configuration and Claude's provider environment. The shared Codex
+configuration facility interprets live catalogue responses and reasoning options,
+projects native model labels, and formats configured-only catalogue rows without
+performing discovery. This subsystem retains offered choices, product labels,
+recommended effort, account policy, credential storage and verification before
+replacement. Its curated filtering and preferred defaults use the original native
+row identity/default fields; native metadata alone never grants connection access.
 The browser submits only a provider id and key. Connections use the provider's
 name automatically, and the browser cannot set an endpoint. The existing host Codex-management policy authorizes reads and
 mutations, and lists never return keys.
 
-A bounded request to the selected orchestrator's protocol checks a new key before changing a working
-connection. The optional `codexDisabled` field records an unsuccessful Codex
+The connection store delegates Codex's private `config.toml` serialization and
+Responses key probe to JSKIT's existing Codex configuration owner, and its
+Messages key probe to JSKIT's Claude process/account owner. These operations
+retain the original single bounded request, native response validation and
+sanitized failure wording. Vibe64 still authorizes the curated provider/key,
+checks the selected orchestrator before its optional counterpart, serializes
+changes, invalidates owned runtimes before writing private files, and publishes
+the existing connection generation. Failed verification does not reach runtime
+invalidation or key writes; failed exit proof retains the original retry state.
+The optional `codexDisabled` field records an unsuccessful Codex
 check; absence means Codex remains enabled, as it was for every previously
 saved key. `claudeReady` retains its independent opt-in meaning. The numbered
 native-provider-readiness release boundary needs no historical conversion or
@@ -392,6 +408,9 @@ to 30 seconds while native credential and account-file metadata is unchanged.
 Changes invalidate the result immediately; failures are not cached. The wrapper
 does not read those files' contents. On macOS, where credentials can live in the
 keychain, only concurrent reads are shared.
+JSKIT owns this native status interpretation and cache. Vibe64 supplies the
+managed command, credential context and capture policy; the common conversation
+runtime uses the same reader through its supplied execution facility.
 Model and allowance reads reuse a running process owned by the current account.
 When no such process exists, a temporary query publishes cached results only
 after verified process exit. Failed cleanup stays owned for retry

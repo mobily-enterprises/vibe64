@@ -204,11 +204,10 @@ function sessionPullRequestTool() {
 
 function conversationLogTool() {
   return {
-    description: "Read a bounded page of Main conversation text in a session. Returns up to six turns with stable turn IDs and nextBeforeTurnId for older pages. Truncated text is explicitly marked; use Colleague's conversation summary for a large range. Status/phase comes from session inspection, not from silence in this log. rewindTurnId identifies the current Undo candidate independently of the requested history page; rewindPending means that exact Undo needs recovery. The Undo service rechecks access, idle work and native boundaries before removing it.",
+    description: "Read a bounded page of Main conversation text in a session. Returns up to six turns with stable turn IDs and nextBeforeTurnId for older pages. Truncated text is explicitly marked; use Colleague's conversation summary for a large range. Status/phase comes from session inspection, not from silence in this log.",
     output: { mode: "replace", schema: createSchema({
       ok: { type: "boolean", required: true }, error: shortText,
       nextBeforeTurnId: shortText, hasMoreBefore: { type: "boolean", required: true },
-      rewindTurnId: shortText, rewindPending: { type: "boolean", required: false },
       turns: { type: "array", required: true, items: createSchema({
         turnId: shortText,
         user: { type: "string", maxLength: 2000, required: true },
@@ -221,29 +220,11 @@ function conversationLogTool() {
       const turns = all.slice(-6);
       const hasMoreBefore = result.pagination?.hasMoreBefore === true || all.length > turns.length;
       return { ok: result.ok === true, ...(result.error ? { error: String(result.error).slice(0, 256) } : {}),
-        ...(result.rewind ? { rewindTurnId: String(result.rewind.turnId || "").slice(0, 256), rewindPending: result.rewind.pending === true } : {}),
         hasMoreBefore, nextBeforeTurnId: hasMoreBefore ? turns[0]?.turnId || "" : "",
         turns: turns.map((turn) => ({ turnId: turn.turnId,
           user: String(turn.user?.text || "").slice(0, 2000), assistant: String(turn.assistant?.text || "").slice(0, 4000),
           truncated: String(turn.user?.text || "").length > 2000 || String(turn.assistant?.text || "").length > 4000
         })) };
-    }
-  };
-}
-
-function conversationRewindTool() {
-  return {
-    description: "Undo the last Main conversation exchange only when the user requests that removal. First read its conversation log and inspect the session; use the exact reported rewindTurnId while the agent is idle. This removes the prompt and following conversation activity from visible and native history, but does not undo project files, database changes or already performed actions. The service enforces current-turn, AI-boundary and active-goal guards. A retry of the same turnId resumes or returns that Undo; never choose another turn after an uncertain result. restoredText is the removed prompt, bounded and marked when truncated; it is not automatically resent or placed in the browser composer.",
-    output: { mode: "replace", schema: createSchema({
-      ok: { type: "boolean", required: true }, error: { ...shortText, maxLength: 512 }, code: shortText,
-      restoredText: { type: "string", noTrim: true, maxLength: 16000, required: false },
-      truncated: { type: "boolean", required: true }
-    }) },
-    transformResult(result) {
-      const characters = typeof result.text === "string" ? Array.from(result.text) : null;
-      return { ok: result.ok === true, truncated: (characters?.length || 0) > 8000,
-        ...(characters ? { restoredText: characters.slice(0, 8000).join("") } : {}),
-        ...Object.fromEntries(["error", "code"].flatMap((key) => typeof result[key] === "string" ? [[key, result[key].slice(0, key === "error" ? 512 : 256)]] : [])) };
     }
   };
 }
@@ -300,4 +281,4 @@ function renewalTool(description, { includeDraft = false } = {}) {
   };
 }
 
-export { assistantAccessTool, conversationLogTool, conversationOperationTool, conversationRewindTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool };
+export { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool };

@@ -1,7 +1,8 @@
 # Connect AI accounts and choose Model routing
 
 Open **AI Accounts** in Management. No project or coding session is required.
-Hosted connection changes require the workspace owner. A member's permitted models
+The local standalone editor does not require a hosted workspace login to open AI
+Accounts. Hosted connection changes require the workspace owner. A member's permitted models
 can differ from the owner's subscription models; account connection alone does not
 grant every collaborator use of it.
 
@@ -10,6 +11,24 @@ validation; subscription login can require an external browser, one-time code or
 authorization code. You perform provider consent and secret entry. Wait for the
 saved connected state, and use **Refresh** or **Check saved key** when offered.
 Do not reconnect or resend a key solely because a status request was interrupted.
+For Claude, a failed status check is distinct from being signed out. Retry the
+status check before starting another login; Colleague can recheck readiness,
+while provider consent remains your step.
+If an existing Claude conversation reports that its account changed, reconnect
+the original Claude account or start a new session. Replacing a saved, authorized
+external-provider API key does not require a new Claude conversation. Its next
+message uses the updated connection; you do not need to close and reopen the chat.
+If a background Codex task reports that its selected account changed, its answer
+is not accepted. Check the intended connection in **AI Accounts**, then retry the
+original task once that connection is ready. A normal credential refresh for the
+same account does not invalidate the answer. Colleague can inspect readiness;
+provider login and secret entry still require you. This applies on desktop and
+mobile.
+
+Claude's plan allowance shows only valid provider-reported usage windows. A
+missing allowance does not mean unlimited usage. If a model-list or allowance
+request reports that process cleanup could not be confirmed, ask the workspace
+operator to restore the execution service before retrying the request.
 
 After connecting, the **[provider] connected** screen names the orchestrator you
 selected. For example, connecting DeepSeek through Codex shows only Codex's
@@ -48,3 +67,4 @@ For one main conversation, open its chat mode menu and choose **Custom**. Select
 list includes the available models from each connected provider for that
 orchestrator, including a connected GLM Coding Plan under OpenCode. **Configure
 more AIs** opens account setup if the required provider is not connected.
+Claude Code uses its selected provider for background model calls as well.

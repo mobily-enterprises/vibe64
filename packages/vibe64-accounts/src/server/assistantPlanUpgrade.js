@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/studioProjectContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { publishAssistantRoutingUpgrade } from "./assistantRoutingUpgrade.js";
+import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
 
 function convertPlan(text) {
   const status = /^Status: (drafting|ready|blocked|paused|implemented|active|completed)\r?$/mu.exec(text)?.[1];
@@ -36,7 +36,7 @@ function upgradePlanSession({ metadata, conversations, plans = [] }) {
 
 async function upgradeAssistantPlans(context) {
   const { systemRoot, report } = context;
-  return publishAssistantRoutingUpgrade({ ...context, prepareUpdates: async temporaryRoot => {
+  return publishStateUpgradeFiles({ ...context, prepareUpdates: async temporaryRoot => {
     const updates = [];
     for (const projectRuntimeRoot of await listProjectRuntimeRoots(systemRoot)) {
       const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });

@@ -3,15 +3,19 @@ import test from "node:test";
 import { mkdir, readFile, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { createSessionConversations } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
-import { createCodexTerminalController } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
+import { prepareCodexModelRouting } from "../../packages/vibe64-terminals/src/server/nativeConversationRetirement.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
+import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
+import { temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
+import { ACTION_READ_CONVERSATION_CONTEXT } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 import {
@@ -179,23 +183,125 @@ async function conversationFixture(root, engineId = "codex") {
   Object.assign(sessionAgent, { resolveAssistantPurpose: (input, options) => manager.resolveAssistantPurpose(input, options),
     requireAssistantAccessForSelection: async () => {} });
   const events = [];
-  const restart = (overrides = {}) => createSessionConversations({
-    systemRoot: root,
-    sessionAgent,
-    attachments,
-    prepareAgentSkills: async () => {},
-    runAgentWrite: async (sessionId, options, operation, lockOptions) => {
-      const result = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-        const session = await runtime.getSession(sessionId);
-        return operation({ ...options, runtime, session });
-      }, lockOptions);
-      return result.value;
-    },
-    publishSessionChanged: async (...args) => { events.push(args); },
-    ...overrides
-  });
+  const restart = (overrides = {}) => {
+    let service;
+    const conversationRuntime = overrides.conversationRuntime || createConversationRuntime({
+      authorize: async () => true,
+      host: { conversation: ({ id, context }) => service.conversationBinding(id, context) }
+    });
+    service = createSessionConversations({
+      systemRoot: root,
+      sessionAgent,
+      conversationRuntime,
+      attachments,
+      prepareAgentSkills: async () => {},
+      runAgentWrite: async (sessionId, options, operation, lockOptions) => {
+        const result = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
+          const session = await runtime.getSession(sessionId);
+          return operation({ ...options, runtime, session });
+        }, lockOptions);
+        return result.value;
+      },
+      publishSessionChanged: async (...args) => { events.push(args); },
+      ...overrides
+    });
+    return service;
+  };
   return { attachments, events, native, restart, service: restart(), runtime, store, selection, sessionAgent, capabilities };
 }
+
+test("temporary provisional rows require exact native admission across read failure and restart without replay", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    const admitted = new Set();
+    let readFailure = false;
+    const reads = [];
+    const originalStart = f.sessionAgent.startConversationTurn;
+    f.sessionAgent.readConversation = async (_id, input) => {
+      reads.push({ conversationId: input.conversationId, messageId: input.messageId });
+      if (readFailure) throw new Error("Native history unavailable");
+      return { ok: true, ...f.native, admitted: admitted.has(input.messageId) };
+    };
+    f.sessionAgent.startConversationTurn = async (id, input, context) => {
+      if (input.messageId === "uncertain-steer") {
+        await input.onPromptSending?.({ threadId: input.conversationId });
+        f.native.starts += 1;
+        readFailure = true;
+        throw new Error("Native acknowledgement lost");
+      }
+      const result = await originalStart(id, input, context);
+      admitted.add(input.messageId);
+      return result;
+    };
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Begin" });
+    const input = { conversationId: "chat", messageId: "uncertain-steer", message: "Continue carefully", submissionKind: "steer" };
+    const response = await f.service.startTemporaryConversationTurn("one", input);
+    assert.equal(response.ok, false);
+    assert.equal(response.delivered, false);
+    assert.equal(response.status, "uncertain");
+    assert.equal(response.readError, true);
+    assert.equal(response.messageId, input.messageId);
+    assert.equal(response.messages.find(message => message.id === input.messageId).receipt, false);
+    assert.equal(response.messages.find(message => message.id === "first").receipt, undefined);
+    assert.equal(f.native.starts, 2);
+    await f.service.close();
+    const restored = f.restart();
+    await assert.rejects(restored.startTemporaryConversationTurn("one", input), /Native history unavailable/);
+    const failedRead = await restored.readTemporaryConversation("one", { conversationId: "chat" });
+    assert.equal(failedRead.readError, true);
+    assert.equal(failedRead.messages.find(message => message.id === input.messageId).receipt, false);
+    readFailure = false;
+    for (let check = 0; check < 2; check += 1) {
+      const unknown = await restored.startTemporaryConversationTurn("one", input);
+      assert.equal(unknown.ok, false);
+      assert.equal(unknown.delivered, false);
+      assert.equal(unknown.code, "vibe64_changeover_delivery_unconfirmed");
+      assert.equal(f.native.starts, 2);
+    }
+    admitted.add(input.messageId);
+    const accepted = await restored.startTemporaryConversationTurn("one", input);
+    assert.equal(accepted.delivered, true);
+    const observed = await restored.readTemporaryConversation("one", { conversationId: "chat" });
+    assert.equal(observed.messages.find(message => message.id === input.messageId).receipt, undefined);
+    assert.equal(f.native.starts, 2);
+    assert.ok(reads.some(read => read.conversationId === "native" && read.messageId === input.messageId));
+    const turns = await f.store.readConversationLog({ sessionId: "one", conversationId: "chat" });
+    assert.equal(turns.filter(turn => turn.user?.messageId === input.messageId).length, 1);
+    assert.equal(turns.some(turn => turn.messages.some(message => Object.hasOwn(message, "receipt"))), false);
+    assert.equal(JSON.stringify(await f.store.readSessionConversation("one", "chat")).includes('"receipt"'), false);
+    await restored.close();
+  });
+});
+
+test("temporary historical provisional receipt inspection uses its recorded native binding", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    await f.store.writeConversationUserMessage({ sessionId: "one", conversationId: "chat" }, {
+      text: "Earlier direct message", messageId: "historical", turnMetadata: { assistantSelection: f.selection }
+    });
+    const otherSelection = { ...f.selection, engineId: "opencode", agentId: "build", modelProviderId: "deepseek" };
+    await f.store.writeSessionConversation("one", "chat", {
+      assistantSelection: otherSelection, providerConversationId: "current-other-thread",
+      nativeBindings: { codex: { conversationId: "original-codex-thread", assistantSelection: f.selection, agentSettings: {}, runId: "original-turn" } }
+    });
+    const reads = [];
+    f.sessionAgent.readConversation = async (_id, input, context) => {
+      reads.push({ threadId: input.conversationId, messageId: input.messageId, selection: context.assistantSelection });
+      return { ok: true, admitted: true, runId: "original-turn", status: "completed", messages: [] };
+    };
+    const result = await f.service.startTemporaryConversationTurn("one", {
+      conversationId: "chat", messageId: "historical", message: "Earlier direct message"
+    });
+    assert.equal(result.delivered, true);
+    assert.deepEqual(reads, [{ threadId: "original-codex-thread", messageId: "historical", selection: f.selection }]);
+    assert.equal(f.native.starts, 0);
+    assert.equal((await f.store.readSessionConversation("one", "chat")).providerConversationId, "current-other-thread");
+    assert.equal((await f.store.readConversationLog({ sessionId: "one", conversationId: "chat" })).length, 1);
+    await f.service.close();
+  });
+});
 
 test("a fresh Update repair routes independently of its parent's older Codex history", async () => {
   await withTemporaryRoot(async (root) => {
@@ -209,8 +315,7 @@ test("a fresh Update repair routes independently of its parent's older Codex his
     };
     for (const [key, value] of Object.entries(parentHistory)) await f.store.writeMetadataValue("one", key, value);
     const parent = await f.store.readSession("one");
-    const codex = createCodexTerminalController({ env: {}, codexAppServerProviderOptions: { systemRoot: root } });
-    const service = f.restart({ prepareSelection: codex.prepareModelRouting });
+    const service = f.restart({ prepareSelection: prepareCodexModelRouting });
     await service.createTemporaryConversation("one", { conversationId: "repair", presentation: { recoveryOperation: "update" } });
     await service.startTemporaryConversationTurn("one", {
       conversationId: "repair", messageId: "fix-update", message: "Fix this Update problem without losing work."
@@ -1157,5 +1262,274 @@ test("temporary Custom changes orchestrator with conversation context and leaves
     assert.equal(f.calls.starts[1].selection.engineId, "opencode");
     assert.match(f.calls.starts[1].input.message, /bicycle is blue/);
     assert.deepEqual((await f.store.readSession("one")).metadata, main);
+  });
+});
+
+test("temporary canonical facade uses the original logical record, actions, stream and exact native receipts", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await conversationFixture(root);
+    const user = { username: "owner", role: "owner" };
+    const project = { slug: "unit_project" };
+    const accepted = new Set();
+    const actionCalls = [];
+    let allowed = true;
+    let readFailure = false;
+    let revokeDuringRead = false;
+    let onEvent;
+    let common;
+    let definitions;
+    const actions = { async execute({ actionId, input, context }) {
+      if (!allowed) throw Object.assign(new Error("Access revoked"), { code: "conversation_forbidden" });
+      if (actionId === ACTION_READ_CONVERSATION_CONTEXT) {
+        assert.deepEqual(input, { projectSlug: project.slug, sessionId: "one" });
+        return { actor: { id: user.username }, user, project };
+      }
+      actionCalls.push({ actionId, input });
+      return actionById(definitions, actionId).execute(input, { ...context, vibe64Action: { user, project } });
+    } };
+    const originalStart = f.sessionAgent.startConversationTurn;
+    f.sessionAgent.startConversationTurn = async (id, input, options) => {
+      onEvent = options.onEvent;
+      const result = await originalStart(id, input, options);
+      accepted.add(input.messageId);
+      return result;
+    };
+    f.sessionAgent.readConversation = async (_id, input) => {
+      if (readFailure) throw new Error("Native history unavailable");
+      if (revokeDuringRead) allowed = false;
+      return { ok: true, ...f.native, admitted: accepted.has(input.messageId) };
+    };
+    let service;
+    common = createConversationRuntime({
+      authorize: async ({ context, conversationId }) => allowed && context?.sessionId === conversationId,
+      host: { conversation: ({ id, context }) => service.conversationBinding(id, context) }
+    });
+    service = f.restart({ actions, conversationRuntime: common, publishConversation: event => common.publishNative(event) });
+    definitions = createTerminalActions({ terminals: service });
+    const terminals = { ...service, openBrowserConversation() { throw new Error("Unexpected Main open"); },
+      async openTemporaryBrowserConversation(sessionId, conversationId, options) {
+        return common.open({ id: sessionId, context: { ...options, sessionId, temporaryConversationId: conversationId,
+          runtime: f.runtime, session: await f.runtime.getSession(sessionId) } });
+      }
+    };
+    const facade = createMainBrowserConversations({ actions, terminals });
+    assert.ok(facade.conversationSelectionSchema.getFieldDefinitions().assistantRouting.schema.getFieldDefinitions().mode.enum.includes("auto"));
+    assert.equal(facade.conversationDataSchema.getFieldDefinitions().planRevision.maxLength, undefined);
+    const open = conversationId => facade.open({
+      id: temporaryConversationId({ projectSlug: project.slug, sessionId: "one", conversationId }),
+      context: { requestMeta: { request: { vibe64User: user } } }
+    });
+    await service.createTemporaryConversation("one", { conversationId: "chat", presentation: { draft: "Saved draft" } });
+    await service.createTemporaryConversation("one", { conversationId: "peer" });
+    const original = await f.store.readSessionConversation("one", "chat");
+    const mainMetadata = (await f.runtime.getSession("one")).metadata;
+    const browser = await open("chat");
+    const peer = await open("peer");
+    const first = await browser.read();
+    assert.equal(first.segmentId, null);
+    assert.equal(first.presentation.draft, "Saved draft");
+    assert.equal(first.capabilities.goals, false);
+    assert.equal(first.capabilities.wake, false);
+    assert.equal(f.native.starts, 0);
+    assert.deepEqual(await f.store.readSessionConversation("one", "chat"), original);
+    await assert.rejects(browser.select({ assistantRouting: { mode: "auto" } }), /Auto is available in Main chat only/);
+    const events = [];
+    const peerEvents = [];
+    await browser.subscribe(event => events.push(event));
+    await peer.subscribe(event => peerEvents.push(event));
+    const sent = await browser.send({ messageId: "canonical-input", text: "Change this file." });
+    assert.equal(sent.delivered, true);
+    assert.equal(f.native.lastInput.messageId, "canonical-input");
+    assert.equal(actionCalls.find(call => call.actionId === ACTION_START_TEMPORARY_CONVERSATION_TURN).input.conversationId, "chat");
+    assert.equal((await browser.send({ messageId: "canonical-input", text: "Change this file." })).delivered, true);
+    assert.equal(f.native.starts, 1);
+    await onEvent({ type: "message", threadId: "native", turnId: "turn-1",
+      message: { messageId: "live-answer", outputId: "exact-output", role: "assistant", text: "Editing" } });
+    const live = await browser.read();
+    assert.equal(live.segmentId, "codex:native");
+    assert.equal(live.streaming.messages[0].text, "Editing");
+    assert.equal(live.conversationLog[0].user.receipt, undefined);
+    assert.equal(peerEvents.length, 0);
+    assert.equal((await peer.read()).segmentId, null);
+    f.native.messages = [{ id: "saved-answer", outputId: "exact-output", role: "assistant", text: "Edited.", complete: true }];
+    f.native.status = "completed";
+    await service.afterTemporaryTurn("one", { conversationId: "native", temporaryRun: { active: false, state: "completed", providerTurnId: "turn-1" } });
+    assert.ok(events.some(event => event.type === "transcript" && event.patch.turn.assistant?.text === "Edited."));
+    assert.ok(events.some(event => event.type === "message-complete" && !event.streaming.messages.length));
+    const completed = await browser.read();
+    assert.equal(completed.streaming.messages.length, 0);
+    assert.equal(completed.conversationLog[0].assistant.messageId, "saved-answer");
+    assert.equal((await browser.inspectDelivery({ messageId: "canonical-input" })).turnId, completed.conversationLog[0].turnId);
+    accepted.add("native-only");
+    const nativeOnly = await browser.inspectDelivery({ messageId: "native-only" });
+    assert.equal(nativeOnly.status, "accepted");
+    assert.equal(Object.hasOwn(nativeOnly, "turnId"), false);
+    readFailure = true;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      assert.equal((await browser.inspectDelivery({ messageId: "unknown" })).status, "unknown");
+    }
+    assert.equal(f.native.starts, 1);
+    readFailure = false;
+    await browser.cancel();
+    await browser.select({ assistantRouting: { mode: "junior" } });
+    assert.equal(f.native.starts, 1);
+    assert.equal((await f.store.readConversationLog({ sessionId: "one", conversationId: "chat" })).length, 1);
+    assert.deepEqual((await f.runtime.getSession("one")).metadata, mainMetadata);
+    assert.deepEqual(await f.store.readConversationLog("one"), []);
+    revokeDuringRead = true;
+    await assert.rejects(browser.read(), error => error.code === "conversation_forbidden");
+    revokeDuringRead = false;
+    const beforeRevokedPublication = events.length;
+    await service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { title: "Changed privately" } });
+    assert.equal(events.length, beforeRevokedPublication, "each publication rechecks the retained reader's access");
+    allowed = true;
+    await service.updateTemporaryConversation("one", { conversationId: "chat", presentation: { title: "Still requires a new subscription" } });
+    assert.equal(events.length, beforeRevokedPublication, "a revoked subscriber is removed rather than revived");
+    await common.close();
+    assert.ok(await f.store.readSessionConversation("one", "chat"));
+    assert.equal(f.native.deletes, 0);
+    await service.close();
+  });
+});
+
+test("temporary canonical inspection recovers the original foreign receipt before clearing its pending journal", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await temporaryChangeoverFixture(root);
+    await f.send("junior", "first");
+    await f.finish("Done");
+    f.failures.loseAdmission = true;
+    f.options.vibe64User = { role: "member", username: "member" };
+    await assert.rejects(f.send("junior", "second"), /Lost native admission reply/);
+    const pending = await f.record();
+    const sourceState = JSON.parse(pending.routingMetadata.assistant_changeover);
+    assert.equal(sourceState.engines.opencode.pending.messageId, "second");
+    const restored = f.restart();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      assert.deepEqual(await restored.inspectTemporaryConversationDelivery("one", {
+        conversationId: "chat", messageId: "second"
+      }, f.options), { status: "unknown", messageId: "second" });
+    }
+    assert.equal(f.calls.starts.length, 2);
+    assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_changeover).engines.opencode.pending.messageId, "second");
+    f.failures.loseAdmission = false;
+    f.failures.read = false;
+    const writeRecord = f.store.writeSessionConversation;
+    let checkedClear = false;
+    f.store.writeSessionConversation = async (sessionId, conversationId, patch) => {
+      if (patch.routingMetadata?.assistant_changeover &&
+          !JSON.parse(patch.routingMetadata.assistant_changeover).engines.opencode.pending) {
+        const turns = await f.store.readConversationLog({ sessionId, conversationId });
+        assert.equal(turns.filter(turn => turn.user?.messageId === "second").length, 1);
+        checkedClear = true;
+      }
+      return writeRecord(sessionId, conversationId, patch);
+    };
+    const recovered = await restored.inspectTemporaryConversationDelivery("one", {
+      conversationId: "chat", messageId: "second"
+    }, f.options);
+    assert.equal(recovered.status, "accepted");
+    assert.equal(typeof recovered.turnId, "string");
+    assert.equal(checkedClear, true);
+    assert.equal(f.calls.starts.length, 2);
+    assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_changeover).engines.opencode.pending, undefined);
+    await restored.close();
+  });
+});
+
+
+test("temporary repair model preferences survive recovered completion in either write order", async (t) => {
+  for (const order of ["preferences-first", "completion-first"]) await t.test(order, async () => {
+    await withTemporaryRoot(async (root) => {
+      const f = await temporaryChangeoverFixture(root);
+      const main = (await f.store.readSession("one")).metadata;
+      await f.service.updateTemporaryConversation("one", { conversationId: "chat",
+        assistantRouting: { mode: "custom", override: f.helper } }, f.options);
+      await f.service.startTemporaryConversationTurn("one", {
+        conversationId: "chat", messageId: "original", message: "Preserve the booking validation."
+      }, f.options);
+      await f.store.writeSessionConversation("one", "chat", { recoveryOperation: "update" });
+      await f.service.stopTemporaryConversation("one", { conversationId: "chat" }, f.options);
+      assert.equal(JSON.parse((await f.record()).routingMetadata.assistant_routing_request).status, "sent");
+
+      const preferencesWritten = Promise.withResolvers();
+      const completionWritten = Promise.withResolvers();
+      const writes = [];
+      let exclusiveCalls = 0;
+      let recovery;
+      let updating;
+      let accessHeld = false;
+      const bounded = async (promise, label) => {
+        let timer;
+        try {
+          return await Promise.race([promise, new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`Did not reach ${label} in ${order}`)), 5000);
+          })]);
+        } finally { clearTimeout(timer); }
+      };
+      const writeRecord = f.store.writeSessionConversation;
+      const exclusive = f.store.runSessionExclusive;
+      const requireAccess = f.sessionAgent.requireAssistantAccessForSelection;
+      f.store.writeSessionConversation = async (...args) => {
+        const result = await writeRecord(...args);
+        const preferences = JSON.parse(result.routingMetadata?.assistant_routing || "null");
+        const request = JSON.parse(result.routingMetadata?.assistant_routing_request || "null");
+        if (request?.messageId === "original") {
+          if (preferences?.mode === "senior" && preferences.override?.modelId === f.senior.modelId && !writes.includes("preferences")) {
+            writes.push("preferences"); preferencesWritten.resolve();
+          }
+          if (request.status === "done" && !writes.includes("completion")) {
+            writes.push("completion"); completionWritten.resolve();
+          }
+        }
+        return result;
+      };
+      f.store.runSessionExclusive = (...args) => {
+        if (args[1] !== "agent-write-mode" || ++exclusiveCalls !== 2) return exclusive(...args);
+        // Snapshot recovery is the second admission. Hold it before entering
+        // the existing lock, never while owning the metadata mutation.
+        recovery = (async () => {
+          if (order === "preferences-first") await bounded(preferencesWritten.promise, "preferences write");
+          return exclusive(...args);
+        })();
+        return recovery;
+      };
+      f.sessionAgent.requireAssistantAccessForSelection = async (...args) => {
+        await requireAccess(...args);
+        if (order === "completion-first" && args[0].modelId === f.senior.modelId) {
+          accessHeld = true;
+          // The normal access check precedes the update's final persistence.
+          await bounded(completionWritten.promise, "completion write");
+        }
+      };
+      try {
+        updating = f.service.updateTemporaryConversation("one", { conversationId: "chat",
+          assistantRouting: { mode: "custom", override: f.senior } }, f.options);
+        const changed = await updating;
+        await bounded(completionWritten.promise, "completion write");
+        await recovery;
+        assert.ok(recovery, "the update snapshot recovered the missed completion");
+        assert.deepEqual(writes, order === "preferences-first" ? ["preferences", "completion"] : ["completion", "preferences"]);
+        assert.equal(accessHeld, order === "completion-first");
+        const saved = await f.record();
+        const preferences = JSON.parse(saved.routingMetadata.assistant_routing);
+        assert.equal(preferences.mode, "senior");
+        assert.equal(preferences.workflowEngineId, "codex");
+        assert.equal(preferences.override.modelId, f.senior.modelId);
+        assert.deepEqual(JSON.parse(changed.routingMetadata.assistant_routing), preferences);
+        assert.equal(JSON.parse(saved.routingMetadata.assistant_routing_request).status, "done");
+        if (order === "completion-first") {
+          assert.equal(JSON.parse(changed.routingMetadata.assistant_routing_request).status, "done");
+        }
+        assert.equal(f.calls.starts.length, 1, "completion recovery does not start another turn");
+        assert.deepEqual((await f.store.readSession("one")).metadata, main);
+      } finally {
+        preferencesWritten.resolve(); completionWritten.resolve();
+        await Promise.allSettled([updating, recovery].filter(Boolean));
+        f.store.writeSessionConversation = writeRecord;
+        f.store.runSessionExclusive = exclusive;
+        f.sessionAgent.requireAssistantAccessForSelection = requireAccess;
+        await f.service.close();
+      }
+    });
   });
 });

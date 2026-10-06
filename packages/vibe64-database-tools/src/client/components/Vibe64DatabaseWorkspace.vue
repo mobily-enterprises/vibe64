@@ -529,7 +529,7 @@
 <script setup>
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
-import { conversationTurnsFromMessages } from "@jskit-ai/assistant-core/shared/conversation";
+import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import {
   computed,
   inject,
@@ -630,7 +630,8 @@ const database = useVibe64DatabaseTools({
   sessionId: computed(() => props.sessionId)
 });
 const {
-  askAssistant,
+  assistantCommand,
+  assistantEndpoint,
   assistantBusy,
   cancelQuery,
   cancelling,
@@ -697,8 +698,6 @@ const insertIncluded = reactive({});
 const insertValidationError = ref("");
 const snippetDialog = ref(false);
 const snippetName = ref("");
-const assistantDraft = ref("");
-const assistantMessages = ref([]);
 const runButton = ref(null);
 const tableQueryStates = new Map();
 let lookupTimer = null;
@@ -745,35 +744,32 @@ const filteredResultRows = computed(() => {
   ));
 });
 
-const assistantAdapter = computed(() => ({
-  conversation: {
-    turns: conversationTurnsFromMessages(assistantMessages.value.map((message, index) => ({
-      ...message,
-      id: `database-${index}`,
-      text: message.content
-    }))),
-    assistantLabel: "Copilot",
-    visible: true,
-    variant: "task",
-    scrollKey: props.sessionId
+const assistantBinding = useAssistantConversation({
+  boundedTask: {
+    command: assistantCommand,
+    endpoint: assistantEndpoint,
+    scope: () => props.sessionId,
+    input: messages => ({ messages: messages.map(({ content: text, role, table }) => ({ content: text, role, table })) }),
+    result: result => ({ content: result.answer, intent: result.intent, role: "assistant", sql: result.sql }),
+    onResult(result, { message: { table } }) {
+      const lastQuery = result.queries?.at(-1)?.result;
+      if (lastQuery && activeView.value === "data" && table === selectedTableName.value) {
+        queryResult.value = lastQuery;
+        rememberSelectedTableState();
+      }
+    }
   },
-  composer: {
-    draft: assistantDraft.value,
-    disabled: assistantBusy.value,
-    submitOnModifierEnter: true,
-    pending: assistantBusy.value,
-    canSend: assistantCanRun.value && !assistantBusy.value && Boolean(assistantDraft.value.trim()),
+  active: assistantCanRun,
+  data: () => ({ table: assistantTableName.value }),
+  presentation: computed(() => ({
+    assistantLabel: "Copilot", visible: true, variant: "task",
+    submitOnEnter: false, submitOnModifierEnter: true,
     placeholder: assistantTableName.value ? "Ask about this table…" : "Ask about this database…",
     ariaLabel: "Message database copilot",
     submitAriaLabel: "Ask database copilot"
-  },
-  actions: {
-    setDraft(value) {
-      assistantDraft.value = value;
-    },
-    submit: askCopilot
-  }
-}));
+  }))
+});
+const assistantAdapter = assistantBinding.adapter;
 
 const resultTitle = computed(() => {
   if (!queryResult.value) return "Results";
@@ -807,7 +803,7 @@ watch([state, () => props.active, activeView], ([next, active]) => {
     sqlText.value = "";
     queryResult.value = null;
     filters.value = [];
-    assistantMessages.value = [];
+    assistantBinding.runtime.value.clearHistory();
     copilotOpen.value = false;
     diagramReturn.value = null;
     diagramSelections.overview = "";
@@ -1280,22 +1276,6 @@ function useAssistantSql(sql) {
   activeView.value = "data";
 }
 
-async function askCopilot() {
-  const content = assistantDraft.value.trim();
-  if (!content || assistantBusy.value || !assistantCanRun.value) return;
-  const table = assistantTableName.value;
-  const sessionId = props.sessionId;
-  assistantMessages.value.push({ content, role: "user", table });
-  assistantDraft.value = "";
-  const result = await askAssistant(assistantMessages.value.map(({ content: text, role, table }) => ({ content: text, role, table })));
-  if (!result || disposed || props.sessionId !== sessionId) return;
-  assistantMessages.value.push({ content: result.answer, intent: result.intent, role: "assistant", sql: result.sql });
-  const lastQuery = result.queries?.at(-1)?.result;
-  if (lastQuery && activeView.value === "data" && table === selectedTableName.value) {
-    queryResult.value = lastQuery;
-    rememberSelectedTableState();
-  }
-}
 </script>
 
 <style scoped>

@@ -12,6 +12,7 @@ import {
   outputStatusInputValidator,
   outputResultInputValidator,
   agentGoalInputValidator,
+  canonicalAgentGoalInputValidator,
   agentTerminalStartInputValidator,
   terminalInputValidator,
   globalTerminalInputValidator,
@@ -45,12 +46,15 @@ const ACTION_STOP_TEMPORARY_CONVERSATION = "vibe64.terminals.temporary-conversat
 const ACTION_DELETE_TEMPORARY_CONVERSATION = "vibe64.terminals.temporary-conversation.delete";
 const ACTION_GENERATE_SESSION_PROMPT_HINTS = "vibe64.terminals.prompt-hints.generate";
 const ACTION_CANCEL_SESSION_PROMPT_HINTS = "vibe64.terminals.prompt-hints.cancel";
+const ACTION_READ_CANONICAL_AGENT_GOAL = "vibe64.terminals.agent-goal.canonical.read";
+const ACTION_UPDATE_CANONICAL_AGENT_GOAL = "vibe64.terminals.agent-goal.canonical.update";
 
-function action({ assistant, execute, id, idempotency = "optional", input, kind = "command" }) {
+function action({ assistant, channels, execute, id, idempotency = "optional", input, kind = "command" }) {
   return withVibe64ActionContext({
     id,
     version: 1,
     kind,
+    ...(channels ? { channels } : {}),
     input,
     output: null,
     extensions: { assistant: assistant || { exclude: true } },
@@ -91,6 +95,10 @@ function createTerminalActions({ terminals } = {}) {
       execute: (input) => terminals.readAgentGoal(input.sessionId, { vibe64User: input.vibe64User || null }) }),
     action({ id: "vibe64.terminals.agent-goal.update", input: agentGoalInputValidator, idempotency: "none",
       execute: (input) => terminals.updateAgentGoal(input.sessionId, input) }),
+    action({ id: ACTION_READ_CANONICAL_AGENT_GOAL, channels: ["internal"], input: sessionInputValidator, kind: "query", idempotency: "none",
+      execute: (input) => terminals.readAgentGoal(input.sessionId, { vibe64User: input.vibe64User || null }, { canonical: true }) }),
+    action({ id: ACTION_UPDATE_CANONICAL_AGENT_GOAL, channels: ["internal"], input: canonicalAgentGoalInputValidator, idempotency: "none",
+      execute: (input) => terminals.updateAgentGoal(input.sessionId, input, { canonical: true }) }),
     action({ id: "vibe64.terminals.agent-plan-usage.read", input: sessionInputValidator, kind: "query", idempotency: "none",
       execute: (input) => terminals.readAgentPlanUsage(input.sessionId, { vibe64User: input.vibe64User || null }) }),
     action({ id: "vibe64.terminals.work-plan.read", input: workPlanReadInputValidator, kind: "query", idempotency: "none",
@@ -253,6 +261,8 @@ function terminalSnapshotActions({ prefix, global = false, read, close, write })
 }
 
 export {
+  ACTION_READ_CANONICAL_AGENT_GOAL,
+  ACTION_UPDATE_CANONICAL_AGENT_GOAL,
   ACTION_LIST_TEMPORARY_CONVERSATIONS,
   ACTION_UPDATE_TEMPORARY_CONVERSATION,
   ACTION_CANCEL_SESSION_PROMPT_HINTS,

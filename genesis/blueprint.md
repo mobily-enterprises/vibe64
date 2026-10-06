@@ -568,7 +568,6 @@ Reading saved Codex history after live delivery or a restart preserves each
 reply once, including when two separate replies contain the same text.
 History requests retain messages delivered live while the request was pending.
 A delayed partial update cannot remove an already displayed answer or progress.
-Deliberate Undo still removes its selected exchange through the saved history.
 Consecutive reasoning summaries form one collapsible progress group, regardless
 of storage rows or automatic goal turns. The latest group previews current
 reasoning while the assistant is working; ordinary messages separate groups.
@@ -926,13 +925,9 @@ creates its own conversation IDs; Vibe64 saves them across restarts and applicat
 switches. The next
 ordinary message carries recent history for a new application, or missed and
 corrected messages for a returning one, before the person's request. Choosing
-an AI alone sends nothing. When the assistant is idle, Undo last turn removes
-one prompt and its replies from the conversation, retaining earlier context.
-Undo stops at an AI switch: the removed turn and its predecessor must both use
-the currently selected assistant application. Files, databases, and external
-actions remain unchanged. The removed prompt returns to an empty composer for
-editing. An interrupted Undo can be retried without removing another turn. An unavailable old connection does not prevent
-choosing a connected replacement. Leaving a model's
+an AI alone sends nothing. An unavailable old connection does not prevent
+choosing a connected replacement. Conversation undo is unavailable; history and
+source control remain available. Leaving a model's
 thinking choice at its provider default leaves that choice to the provider
 instead of silently selecting another listed option. Vibe64 also respects each
 AI's declared response capacity rather than assuming every model can produce
