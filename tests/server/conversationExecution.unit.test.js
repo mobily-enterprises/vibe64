@@ -19,6 +19,56 @@ async function fixture(t, options = {}) {
     env: { PATH: process.env.PATH }, ...input }) };
 }
 
+test("finite capture uses the host account policy and preserves the gateway result and cancellation inputs", async () => {
+  const calls = [];
+  const credentialHome = { home: "/home/fixture" };
+  const controller = new AbortController();
+  const input = { command: "/managed/claude", args: ["auth", "status", "--json"],
+    cwd: credentialHome.home, credentialHome, baseEnv: { HOME: credentialHome.home },
+    mode: "capture", signal: controller.signal, timeout: 30_000, maxBuffer: 64 * 1024 };
+  const result = { ok: false, exitCode: 1, stdout: '{"loggedIn":false}',
+    error: "Not connected", execution: { id: "finite-account", state: "finished" } };
+  const commandRunner = async request => { calls.push(request); return result; };
+  const host = createVibe64ConversationExecution({ credentialHome, capturePurpose: "account", commandRunner });
+  assert.equal(await host.run(input), result);
+  const request = calls[0];
+  assert.equal(request.command, input.command);
+  assert.equal(request.args, input.args);
+  assert.equal(request.cwd, input.cwd);
+  assert.equal(request.baseEnv, input.baseEnv);
+  assert.equal(request.credentialHome, credentialHome);
+  assert.equal(request.signal, input.signal);
+  assert.equal(request.timeout, input.timeout);
+  assert.equal(request.maxBuffer, input.maxBuffer);
+  assert.equal(request.mode, "capture");
+  assert.equal(request.actor, "app");
+  assert.equal(request.inheritProcessEnv, false);
+  assert.equal(request.purpose, "account");
+  assert.equal(request.envPolicy, "auth");
+  assert.deepEqual(request.allowedRoots, [input.cwd]);
+  assert.deepEqual(request.runtimes, ["operator-clis", "node26"]);
+  assert.equal(request.execution, undefined);
+  for (const mode of [undefined, "detached", "pty"]) {
+    await assert.rejects(host.run({ ...input, mode }), /requires capture mode/u);
+  }
+  assert.equal(calls.length, 1, "Unsupported modes never reach the gateway.");
+  const defaultHost = createVibe64ConversationExecution({ purpose: "assistant", commandRunner });
+  await defaultHost.run(input);
+  assert.equal(calls[1].purpose, "assistant");
+});
+
+test("finite conversation capture uses the ordinary gateway without starting a streaming service", async t => {
+  const f = await fixture(t, { onStarted: () => assert.fail("Finite capture must not start a streaming service.") });
+  const result = await f.host.run({ command: process.execPath, args: ["-e",
+    "process.stdout.write('finite output'); process.stderr.write('finite diagnostic'); process.exitCode = 7"],
+    cwd: f.root, baseEnv: { PATH: process.env.PATH }, mode: "capture", timeout: 5_000, maxBuffer: 1024 });
+  assert.equal(result.ok, false);
+  assert.equal(result.exitCode, 7);
+  assert.equal(result.stdout, "finite output");
+  assert.equal(result.stderr, "finite diagnostic");
+  assert.equal(result.execution.lifecycle, "finite");
+});
+
 test("conversation execution preserves output and exit status after input EOF", { timeout: 10_000 }, async t => {
   const f = await fixture(t);
   const native = await f.start({ stream: true, args: ["--input-type=module", "-e", `

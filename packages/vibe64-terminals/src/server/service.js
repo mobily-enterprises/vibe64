@@ -3345,7 +3345,7 @@ function createService({
         commands: { codex: codexProviderOptions.codexCommand || STUDIO_MANAGED_CODEX_COMMAND,
           claude: env.VIBE64_CLAUDE_COMMAND || STUDIO_MANAGED_CLAUDE_COMMAND,
           opencode: opencodeTerminalController.command || env.VIBE64_OPENCODE_COMMAND || "opencode" },
-        execution: createVibe64ConversationExecution({ credentialHome,
+        execution: createVibe64ConversationExecution({ credentialHome, capturePurpose: "account",
           execution: { ownerId: scope.id }, operationId: "conversation", label: "Assistant conversation" }),
         opencode: input => opencode.hostPreparation.conversationHost(input),
         async codex({ providerId }) {

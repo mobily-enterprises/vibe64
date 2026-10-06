@@ -109,3 +109,35 @@ test("host path checks reject home, state and release symlinks outside their all
   await symlink(path.join(outside, "missing"), path.join(release, "dangling.pid"));
   assert.throws(() => canonicalPath(path.join(release, "dangling.pid"), { allowMissingLeaf: true }), { code: "ENOENT" });
 });
+
+test("the daemon's generic commands admit only exact private Colleague workspaces", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-colleague-path-security-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const home = path.join(root, "home");
+  const colleague = path.join(home, ".local/state/vibe64/colleague");
+  const userKey = Buffer.from("1001").toString("base64url");
+  const scopeId = `colleague_${"a".repeat(32)}`;
+  const workspace = path.join(colleague, userKey, scopeId);
+  const nested = path.join(workspace, "nested");
+  const sibling = path.join(home, ".local/state/vibe64/colleague-sibling", userKey, scopeId);
+  const malformedUser = path.join(colleague, "user.name", scopeId);
+  const malformedScope = path.join(colleague, userKey, "colleague_invalid");
+  const outside = path.join(root, "outside");
+  for (const directory of [nested, sibling, malformedUser, malformedScope, outside]) {
+    await mkdir(directory, { recursive: true });
+  }
+  const escapingScope = path.join(colleague, userKey, `colleague_${"b".repeat(32)}`);
+  const escapingUser = path.join(colleague, "other_user");
+  await symlink(outside, escapingScope);
+  await mkdir(path.join(outside, scopeId));
+  await symlink(outside, escapingUser);
+  const owner = { home, username: "v64d_workspace" };
+  const options = { operation: "vibe64-command", targetUser: owner };
+  assert.equal(resolveAllowedCwd(workspace, owner.username, options), workspace);
+  for (const refused of [home, colleague, path.dirname(workspace), nested, sibling,
+    malformedUser, malformedScope, escapingScope, path.join(escapingUser, scopeId)]) {
+    assert.throws(() => resolveAllowedCwd(refused, owner.username, options), undefined, refused);
+  }
+  assert.throws(() => resolveAllowedCwd(workspace, "v64d_another", options));
+  assert.throws(() => resolveAllowedCwd(workspace, owner.username, { ...options, operation: "github-workflow-command" }));
+});

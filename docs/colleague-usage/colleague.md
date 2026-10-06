@@ -44,6 +44,11 @@ remains unsent. Retry after the service is available again.
 If the first message needs model setup, the draft stays in the message box.
 Complete that setup, then send it again. If delivery is uncertain, use **Check
 delivery** before retrying; reconnecting does not automatically send it twice.
+Colleague prepares its selected native assistant and checks its connected account
+without requiring an open project. A host execution error during preparation
+does not by itself mean that account is disconnected. Ask the workspace operator
+to restore execution, then retry in the same conversation. Use **AI Accounts**
+to reconnect only when the account check asks you to sign in.
 If a model rejects a sent request, its error appears in the message box. Your
 request remains in the conversation; this is separate from **Reconnecting…**,
 which reports a failed connection check. Read the error before sending again.

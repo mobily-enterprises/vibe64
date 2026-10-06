@@ -2143,6 +2143,13 @@ function resolveAllowedCwd(cwd = "", ownerUsername = "", {
         return resolved;
       }
     }
+    const ownerColleagueRoot = path.join(targetUser.home, ".local", "state", "vibe64", "colleague");
+    if (existsSync(ownerColleagueRoot)) {
+      const parts = relativePathParts(canonicalPath(ownerColleagueRoot), resolved);
+      if (parts.length === 2 && /^[A-Za-z0-9_-]+$/u.test(parts[0]) && /^colleague_[a-f0-9]{32}$/u.test(parts[1])) {
+        return resolved;
+      }
+    }
   }
   if (operation === "codex-app-server" || operation === "opencode-app-server") {
     const resolved = canonicalPath(normalized);

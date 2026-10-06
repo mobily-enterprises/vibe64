@@ -15,7 +15,7 @@ const bridgePath = fileURLToPath(new URL("./engines/stdioBridge.js", import.meta
 export function createVibe64ConversationExecution({
   commandRunner = runVibe64Command, stopExecution = stopVibe64Execution, inspectExecution = inspectVibe64Service,
   credentialHome = { home: os.homedir() }, execution = {}, shimDirs = [],
-  purpose = "assistant", operationId = "conversation", label = "Assistant", logPath, onStarted
+  purpose = "assistant", capturePurpose = purpose, operationId = "conversation", label = "Assistant", logPath, onStarted
 } = {}) {
   const entries = new Map();
   async function stop(id, options = {}) {
@@ -64,6 +64,14 @@ export function createVibe64ConversationExecution({
   }
   return Object.freeze({
     stop,
+    async run(input = {}) {
+      if (input.mode !== "capture") throw new TypeError("Conversation execution requires capture mode.");
+      return commandRunner({
+        ...input, actor: "app", inheritProcessEnv: false,
+        credentialHome: input.credentialHome ?? credentialHome, allowedRoots: [input.cwd],
+        envPolicy: "auth", purpose: capturePurpose, runtimes: ["operator-clis", "node26"]
+      });
+    },
     async start({ command, args = [], cwd, env, stream = false } = {}) {
       if (!cwd || !path.isAbsolute(cwd)) throw new TypeError("Native execution requires an absolute workspace directory.");
       // A driver can isolate its own configuration/state without borrowing the
