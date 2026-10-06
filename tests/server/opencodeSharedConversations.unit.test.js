@@ -3,6 +3,7 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { createConversationRuntime, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
+import { genesisCommandShimDirectory } from "@local/vibe64-genesis/server";
 import { controllerHarness } from "../fixtures/opencodeController.js";
 
 async function fixture(t, options = {}) {
@@ -72,6 +73,7 @@ test("closing Colleague retains main chat's OpenCode server and binding", async 
   const f = await fixture(t);
   await f.colleague.send({ messageId: "first", text: "Hello" });
   await f.colleague.wait();
+  assert.deepEqual(f.processStarts[0].options.shimDirs, [genesisCommandShimDirectory()]);
   const main = await f.controller.ensureSession("session-1");
   assert.equal(f.processStarts.length, 1);
   await f.colleague.dispose();

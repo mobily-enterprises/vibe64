@@ -258,7 +258,7 @@ function createOpenCodeHostPreparation({
     }
     const roots = sharedRoots();
     return { runtime: sharedRuntime, runtimeDirectory: roots.root, registryPath: roots.registryPath,
-      databasePath: roots.dbPath, selected, prepareServer: () => prepareSharedProcess({}, options, selected) };
+      databasePath: roots.dbPath, selected, prepareServer: () => prepareSharedProcess({}, options, selected, [genesisCommandShimDirectory()]) };
   }
 
   async function prepareProcess(context = {}, options = {}) {
