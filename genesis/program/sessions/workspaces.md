@@ -175,6 +175,13 @@ Confirmed repository checks are reused across selection; first checks, explicit
 Refresh, source/canonical changes and bounded checks for out-of-band Git work
 remain. The assistant connection owner separately prepares an unverified provider
 after first loading, a real reconnection or an assistant-configuration change.
+An admitted internal creator can supply a server-reserved session ID through the
+service's second options argument. HTTP/action inputs cannot select that ID.
+The existing runtime/store validates and reserves it; the service still owns
+actor, capacity, source preparation and publication policy. Setup or publication
+failure does not falsify a session already saved. This seam alone adds no learner
+start control or training operation.
+
 Session text and metadata are replaced atomically, like the store's JSON records.
 Concurrent readers see a complete previous or next value during assistant changes;
 a failed replacement preserves the saved value. This does not make multiple

@@ -164,7 +164,7 @@ function sessionCreationPolicyHarness({
       creationInputs.push(input);
       await beforeCreate();
       const session = {
-        sessionId: `session-${nextSession}`,
+        sessionId: input.sessionId || `session-${nextSession}`,
         status: "active",
         workspaceSetup: {
           status: "unconfigured"
@@ -270,6 +270,9 @@ test("sessions expose only direct chat and source actions", () => {
   const contextRead = createSessionActions({ sessions: {} }).find(action => action.id === ACTION_READ_CONVERSATION_CONTEXT);
   assert.deepEqual(contextRead.channels, ["internal"]);
   assert.equal(contextRead.extensions?.assistant, undefined);
+  const createAction = createSessionActions({ sessions: {} }).find(action => action.id === ACTION_CREATE_SESSION);
+  const validated = createAction.input.schema.patch({ sessionId: "caller-supplied" });
+  assert.equal(validated.errors.sessionId.code, "FIELD_NOT_ALLOWED");
 });
 
 test("typing presence trusts the authenticated request user and never accepts a draft", async () => {
@@ -3293,34 +3296,48 @@ test("shared-session admission releases its lock before realtime publication", a
   });
 });
 
-test("post-creation setup and publication failures do not falsify a durable session", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    let publicationCalls = 0;
-    const harness = sessionCreationPolicyHarness({
-      managed: true,
-      async publishSessionChanged() {
-        publicationCalls += 1;
-        throw new Error("simulated realtime failure");
-      },
-      projectRuntimeRoot: projectRuntimeRoot(targetRoot),
-      scope: "project",
-      async startWorkspaceSetup() {
-        throw new Error("simulated setup start failure");
-      }
+for (const reservedSessionId of [undefined, "training-reserved-session"]) {
+  test(`post-creation setup and publication failures do not falsify a durable session (reserved=${reservedSessionId !== undefined})`, async () => {
+    await withTemporaryRoot(async (targetRoot) => {
+      let publicationCalls = 0;
+      const expectedSessionId = reservedSessionId || "session-1";
+      const actor = { username: "ada" };
+      const harness = sessionCreationPolicyHarness({
+        managed: true,
+        async publishSessionChanged(sessionId) {
+          assert.equal(sessionId, expectedSessionId);
+          publicationCalls += 1;
+          throw new Error("simulated realtime failure");
+        },
+        projectRuntimeRoot: projectRuntimeRoot(targetRoot),
+        scope: "project",
+        async startWorkspaceSetup({ session }) {
+          assert.equal(session.sessionId, expectedSessionId);
+          throw new Error("simulated setup start failure");
+        }
+      });
+
+      const accepted = await harness.service.createSession({
+        sessionId: "caller-supplied",
+        vibe64User: actor
+      }, { sessionId: reservedSessionId });
+
+      assert.equal(accepted.ok, true);
+      assert.equal(accepted.sessionId, expectedSessionId);
+      assert.equal(accepted.creation.canCreate, false);
+      assert.equal(publicationCalls, 1);
+      assert.equal(harness.openSessions.length, 1);
+      assert.equal(harness.creationInputs[0].sessionId, reservedSessionId);
+      assert.equal(Object.hasOwn(harness.creationInputs[0], "sessionId"), reservedSessionId !== undefined);
+      assertInitialPlanMetadata(harness.creationInputs[0].metadata, "ada");
+      assert.deepEqual(harness.creationInputs[0].sourceContext, { vibe64User: actor });
+      const rejected = await harness.service.createSession({}, { sessionId: "another-reserved-session" });
+      assert.equal(rejected.ok, false);
+      assert.equal(rejected.code, "vibe64_session_creation_limit");
+      assert.equal(harness.creationInputs.length, 1);
     });
-
-    const accepted = await harness.service.createSession();
-
-    assert.equal(accepted.ok, true);
-    assert.equal(accepted.sessionId, "session-1");
-    assert.equal(accepted.creation.canCreate, false);
-    assert.equal(publicationCalls, 1);
-    assert.equal(harness.openSessions.length, 1);
-    const rejected = await harness.service.createSession();
-    assert.equal(rejected.ok, false);
-    assert.equal(rejected.code, "vibe64_session_creation_limit");
   });
-});
+}
 
 test("new sessions publish running workspace preparation and its eventual result", async () => {
   const publications = [];

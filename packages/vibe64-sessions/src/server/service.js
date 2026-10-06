@@ -828,7 +828,8 @@ function createService({
       };
     },
 
-    async createSession(input = {}) {
+    // Only an internal caller may supply a server-reserved identity.
+    async createSession(input = {}, { sessionId } = {}) {
       return sessionResult(async () => {
         const vibe64User = trustedAssistantUser(input);
         const pullRequest = input.pullRequestNumber == null ? null : await project.resolvePullRequestSource({
@@ -856,6 +857,7 @@ function createService({
             selection: input.repositoryBranch, vibe64User
           }) : null;
           const session = await runtime.createSession({
+            ...(sessionId === undefined ? {} : { sessionId }),
             metadata: {
               ...(repositoryBranch ? { repository_branch: repositoryBranch.name } : {}),
               ...(pullRequest ? { github_pull_request: JSON.stringify(pullRequest) } : {}),
