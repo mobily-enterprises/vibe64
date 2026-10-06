@@ -1,9 +1,28 @@
-import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
+import { createCourseLock, readPinnedTopic } from "./catalogue.js";
 
 async function runTrainingCli(args, { write = text => console.log(text) } = {}) {
+  if (args[0] === "publish-manifest") {
+    const [, coursePath, ...directories] = args;
+    if (!coursePath || !directories.length) throw new Error("Usage: vibe64 training publish-manifest <course.json> <committed-topic-directory...>");
+    const course = JSON.parse(await readFile(coursePath, "utf8"));
+    const topics = [];
+    for (const directory of directories) topics.push(await readPinnedTopic(directory));
+    const lock = createCourseLock(course, topics);
+    const filename = path.join(path.dirname(path.resolve(coursePath)), "course.lock.json");
+    const temporary = `${filename}.tmp-${randomUUID()}`;
+    try {
+      await writeFile(temporary, `${canonicalJson(lock)}\n`, { flag: "wx" });
+      await rename(temporary, filename);
+    } finally {
+      await rm(temporary, { force: true });
+    }
+    write(JSON.stringify({ ok: true, courseId: lock.courseId, status: lock.status, lockPath: filename, topics: lock.topics.length }, null, 2));
+    return 0;
+  }
   const [command, directory, destination] = args;
   if (!["validate", "bundle"].includes(command) || !directory || (command === "bundle" && !destination) || args.length !== (command === "bundle" ? 3 : 2)) {
     throw new Error("Usage: vibe64 training validate <topic-directory> | bundle <topic-directory> <new-output-directory>");

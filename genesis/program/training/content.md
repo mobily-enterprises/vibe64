@@ -8,6 +8,7 @@ learner. The teaching runtime and hosted provisioning are not yet implemented.
 
 - `packages/vibe64-training/src/server/contentSchemas.js`
 - `packages/vibe64-training/src/server/content.js`
+- `packages/vibe64-training/src/server/catalogue.js`
 - `packages/vibe64-training/src/server/cli.js`
 - `bin/run.js`
 - `docs/training-content.md`
@@ -28,6 +29,14 @@ output and cleans only a newly owned failed output. Byte changes while copying f
 the command. Sorted path/hash/size manifests determine lesson identity; installed
 dependencies, Git state and unrelated documents are excluded. The topic manifest
 adds metadata, outline and ordered lesson identities. Nothing is fetched or executed.
+
+`vibe64 training publish-manifest <course.json> <committed-topic-directory...>`
+selects complete ordered topic releases. It validates clean repository roots and
+compares every included input against the exact Git commit before atomically
+replacing the sibling `course.lock.json`. Locks contain repository, immutable
+commit, manifest hash and ordered lesson identities. Released courses require
+released topics without required drafts. This is local authoring, with no Git
+push, remote release, installation or course enabling.
 
 Practical descriptors name evidence producers/checks; this facility validates their
 references but does not manufacture observations, run checks or evaluate progress.

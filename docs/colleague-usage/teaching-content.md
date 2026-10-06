@@ -23,6 +23,16 @@ output contains `bundle.json` and its exact input files. If the source changes
 during copying, validate again and retry with a new output. Validation and bundling
 do not publish anything, execute exercise scripts or prove the lesson works.
 
+To pin a course, the author prepares a `course.json` selecting whole topic releases
+and runs `vibe64 training publish-manifest <course.json> <committed-topic-directory...>`.
+Use the repository root for each topic, with its canonical GitHub repository URL
+in its package metadata. Commit all topic content first and leave the tree clean.
+Success writes `course.lock.json` beside the course file, including exact commits,
+manifest hashes and every lesson in topic order. Dirty or changed inputs require
+the author to commit the intended version and retry. A preview remains a preview;
+required draft lessons prevent a released course. This command does not publish
+a remote release, install a topic or make a learner course available.
+
 These are terminal authoring steps on desktop, with no separate mobile controls.
 Colleague can explain them and offer to ask a coding agent for help. It cannot run
 them itself or claim a draft lesson is ready for a learner. Human teaching review,

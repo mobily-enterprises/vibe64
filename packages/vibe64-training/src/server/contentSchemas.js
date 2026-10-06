@@ -31,6 +31,11 @@ const topicSchema = createSchema({
   lessons: list(createSchema({ code: id, descriptor: text,
     status: { ...text, enum: ["draft", "published"] }, required: { type: "boolean", required: true } }), 64)
 });
+const courseSchema = createSchema({
+  schemaVersion: version, courseId: id, title: text, release: text,
+  status: { ...text, enum: ["preview", "released"] },
+  topics: list(createSchema({ topicId: id, release: text }), 32)
+});
 const visualSchema = createSchema({
   schemaVersion: version, id, title: text, svg: text, controller: text,
   assets: { ...list(text, 32), required: false },
@@ -47,4 +52,4 @@ function validateContent(schema, value, label) {
   return validated;
 }
 
-export { lessonSchema, topicSchema, visualSchema, validateContent };
+export { courseSchema, lessonSchema, topicSchema, visualSchema, validateContent };

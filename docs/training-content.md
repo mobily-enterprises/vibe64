@@ -9,6 +9,7 @@ From an installed Vibe64 checkout/package:
 ```sh
 vibe64 training validate /absolute/path/to/learn-topic
 vibe64 training bundle /absolute/path/to/learn-topic /absolute/path/to/new-bundle
+vibe64 training publish-manifest /absolute/path/to/course.json /absolute/path/to/learn-topic
 ```
 
 In the public development checkout, use `node bin/run.js training ...` with the
@@ -84,3 +85,23 @@ hashes. A source file changing between validation and copying fails bundling.
 Conflicting hashes for a shared path across lessons fail validation rather than
 choosing one snapshot. An author must review content and actually test the exercise and visual before
 publishing; a successful schema check does not establish a working lesson.
+
+## Pin a course catalogue
+
+A `course.json` declares schema version 1, `courseId`, `title`, an exact three-part
+`release`, `status` (`preview` or `released`) and ordered `topics` containing
+`{topicId,release}`. A course selects whole topics; lesson selection or reordering
+is rejected. A released course requires released topics with no required drafts.
+
+Run `vibe64 training publish-manifest <course.json> <committed-topic-directory...>`
+with one canonical repository root for each selected topic. Each topic's package
+must declare `repository.url` as `https://github.com/<owner>/learn-<topic>.git`.
+Commit the topic and leave its working tree clean, including untracked files.
+The command validates the content and compares every included byte against the
+exact Git commit. Missing, duplicate, dirty or mismatched topics fail generation.
+
+Success atomically replaces `course.lock.json` beside `course.json`. The lock
+contains each repository, immutable commit, topic manifest hash and complete
+ordered lesson identities. If a topic changes during generation, commit the
+intended content and retry. This command generates local release material only;
+it does not push Git, create a remote release, install content or enable a course.

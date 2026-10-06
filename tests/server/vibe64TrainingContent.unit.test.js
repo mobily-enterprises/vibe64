@@ -3,8 +3,10 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import { bundleFiles, validateTopic } from "../../packages/vibe64-training/src/server/content.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
+import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-content-"));
@@ -208,4 +210,60 @@ test("source and output-parent symlink aliases cannot put generated output insid
   await assert.rejects(() => runTrainingCli(["bundle", alias, path.join(f.root, "output")]), /outside/u);
   await assert.rejects(() => runTrainingCli(["bundle", f.root, path.join(alias, "output")]), /outside/u);
   await assert.rejects(() => readFile(path.join(f.root, "output/bundle.json")), { code: "ENOENT" });
+});
+
+test("courses select complete ordered topics and cannot claim a preview is released", async t => {
+  const f = await fixture(t);
+  const result = await validateTopic(f.root);
+  const resolved = { topicId: result.topic.topicId, release: result.release, topicManifest: result.topicManifest,
+    topicHash: result.topicHash, repository: "example/learn-test-topic", commit: "a".repeat(40) };
+  const course = { schemaVersion: 1, courseId: "first-course", title: "First course", release: "0.1.0", status: "preview", topics: [{ topicId: "test-topic", release: "0.1.0" }] };
+  const lock = createCourseLock(course, [resolved]);
+  assert.equal(lock.topics[0].commit, resolved.commit);
+  assert.deepEqual(lock.topics[0].lessons, result.topicManifest.lessons);
+  assert.throws(() => createCourseLock({ ...course, lessons: ["LESSON-01"] }, [resolved]), /validation/iu);
+  assert.throws(() => createCourseLock({ ...course, status: "released" }, [resolved]), /released topic/u);
+  assert.throws(() => createCourseLock(course, []), /exactly one/u);
+  assert.throws(() => createCourseLock(course, [resolved, resolved]), /exactly one/u);
+  assert.throws(() => createCourseLock(course, [{ ...resolved, commit: "main" }]), /immutable commit/u);
+  assert.throws(() => createCourseLock(course, [{ ...resolved, topicHash: "b".repeat(64) }]), /identity mismatch/u);
+});
+
+test("pinned topic reads require the repository root and committed exact inputs", async t => {
+  const f = await fixture(t);
+  await f.write("package.json", { name: "learn-test-topic", version: "0.1.0", repository: { type: "git", url: "https://github.com/example/learn-test-topic.git" }, vibe64Training: f.topic });
+  const git = (...args) => execFileSync("git", ["-C", f.root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git("init", "--initial-branch=main");
+  await assert.rejects(() => readPinnedTopic(f.root));
+  git("add", ".");
+  git("-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "Fixture topic");
+  const commit = git("rev-parse", "HEAD");
+  const pinned = await readPinnedTopic(f.root);
+  assert.equal(pinned.commit, commit);
+  assert.equal(pinned.repository, "example/learn-test-topic");
+  assert.equal(pinned.topicHash, (await validateTopic(f.root)).topicHash);
+  await assert.rejects(() => readPinnedTopic(path.join(f.root, "training")), /repository root/u);
+  await f.write("training/checks/response.mjs", "// Changed check\n");
+  await assert.rejects(() => readPinnedTopic(f.root), /Commit the topic/u);
+  assert.equal(git("rev-parse", "HEAD"), commit);
+});
+
+test("publish-manifest writes a pinned whole-topic lock without changing source or publishing remotely", async t => {
+  const f = await fixture(t);
+  await f.write("package.json", { name: "learn-test-topic", version: "0.1.0", repository: { type: "git", url: "https://github.com/example/learn-test-topic.git" }, vibe64Training: f.topic });
+  const git = (...args) => execFileSync("git", ["-C", f.root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git("init", "--initial-branch=main"); git("add", ".");
+  git("-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "Fixture topic");
+  const catalogue = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-catalogue-"));
+  t.after(() => rm(catalogue, { recursive: true, force: true }));
+  const filename = path.join(catalogue, "course.json");
+  await writeFile(filename, JSON.stringify({ schemaVersion: 1, courseId: "first-course", title: "First", release: "0.1.0", status: "preview", topics: [{ topicId: "test-topic", release: "0.1.0" }] }));
+  const messages = [];
+  await runTrainingCli(["publish-manifest", filename, f.root], { write: text => messages.push(JSON.parse(text)) });
+  const lock = JSON.parse(await readFile(path.join(catalogue, "course.lock.json"), "utf8"));
+  assert.equal(lock.topics[0].commit, git("rev-parse", "HEAD"));
+  assert.equal(lock.topics[0].lessons.length, 1);
+  assert.equal(messages[0].status, "preview");
+  assert.equal(git("status", "--porcelain"), "");
+  assert.equal(git("remote"), "");
 });
