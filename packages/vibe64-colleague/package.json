@@ -42,10 +42,10 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/assistant-core": "0.1.201",
-    "@jskit-ai/kernel": "0.1.223",
-    "@jskit-ai/realtime": "0.1.220",
-    "@jskit-ai/shell-web": "0.1.227",
+    "@jskit-ai/assistant-core": "0.1.202",
+    "@jskit-ai/kernel": "0.1.224",
+    "@jskit-ai/realtime": "0.1.221",
+    "@jskit-ai/shell-web": "0.1.228",
     "@local/vibe64-core": "0.1.0",
     "@local/vibe64-accounts": "0.1.0",
     "@local/vibe64-terminals": "0.1.0",
@@ -54,7 +54,7 @@
     "vue": "^3.5.13",
     "vuetify": "^4.0.0",
     "@local/vibe64-voice": "0.1.0",
-    "@jskit-ai/assistant-voice": "0.1.1",
-    "@jskit-ai/assistant-runtime": "0.1.194"
+    "@jskit-ai/assistant-voice": "0.1.2",
+    "@jskit-ai/assistant-runtime": "0.1.195"
   }
 }

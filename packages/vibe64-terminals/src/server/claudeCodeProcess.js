@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { createVibe64ConversationExecution, shellQuote } from "@local/vibe64-execution/server";
 import { claudeCodeArguments as nativeClaudeArguments, claudeFlagSettings as nativeClaudeFlagSettings, createClaudeCodeProcess as startClaude } from "@jskit-ai/assistant-core/server/claude-process";
 
-const CLAUDE_CODE_VERSION = "2.1.283";
+const CLAUDE_CODE_VERSION = "2.1.289";
 
 
 function claudeFlagSettings({ toolFree = false, effort = "", providerEnv } = {}) {
