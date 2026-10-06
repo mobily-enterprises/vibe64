@@ -20,6 +20,19 @@ const pinSchema = createSchema({
 });
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
+function validateInstalledTopicPin(value, expected = {}) {
+  const pin = validateContent(pinSchema, value, "Installed topic pin");
+  if (!idPattern.test(pin.topicId) || !commitPattern.test(pin.commit) ||
+      pin.topicId !== (expected.topicId ?? pin.topicId) || pin.commit !== (expected.commit ?? pin.commit) ||
+      !/^\d+\.\d+\.\d+$/u.test(pin.release) || !repositoryPattern.test(pin.repository) || !hashPattern.test(pin.topicHash)) {
+    throw new Error("Installed pin does not match the requested topic, commit or canonical source identity.");
+  }
+  if (pin.topicHash !== (expected.topicHash ?? pin.topicHash)) {
+    throw new Error("Installed topic differs from the trusted course or attempt pin.");
+  }
+  return pin;
+}
+
 async function requirePath(filename, directory) {
   const stat = await lstat(filename);
   if (stat.isSymbolicLink() || await realpath(filename) !== filename) {
@@ -79,13 +92,7 @@ function createInstalledTrainingContent({ systemRoot } = {}) {
       for (const directory of [root, trainingRoot, contentRoot, topicRoot, snapshotRoot]) {
         await requirePath(directory, true);
       }
-      const pin = validateContent(pinSchema, JSON.parse((await boundedFile(path.join(snapshotRoot, "pin.json"), 4096)).toString("utf8")), "Installed topic pin");
-      if (pin.topicId !== topicId || pin.commit !== commit || !/^\d+\.\d+\.\d+$/u.test(pin.release) || !repositoryPattern.test(pin.repository) || !hashPattern.test(pin.topicHash)) {
-        throw new Error("Installed pin does not match the requested topic, commit or canonical source identity.");
-      }
-      if (pin.topicHash !== topicHash) {
-        throw new Error("Installed topic differs from the trusted course or attempt pin.");
-      }
+      const pin = validateInstalledTopicPin(JSON.parse((await boundedFile(path.join(snapshotRoot, "pin.json"), 4096)).toString("utf8")), { topicId, commit, topicHash });
       const bundle = JSON.parse((await boundedFile(path.join(snapshotRoot, "bundle.json"), 32 * 1024 * 1024)).toString("utf8"));
       const filesRoot = path.join(snapshotRoot, "files");
       const installedPaths = await inventory(filesRoot);
@@ -181,4 +188,4 @@ function createInstalledTrainingContent({ systemRoot } = {}) {
   return { readTopic, readLesson };
 }
 
-export { createInstalledTrainingContent };
+export { createInstalledTrainingContent, validateInstalledTopicPin };

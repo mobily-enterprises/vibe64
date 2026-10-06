@@ -1,9 +1,10 @@
 # Teaching content
 
 Vibe64 validates local topic repositories and produces reproducible lesson bundles.
-This authoring facility does not execute exercises, install topics or teach a
-learner. A read-only server facility now checks preinstalled pinned snapshots;
-there is no installer, learner progress, teaching runtime or hosted provisioning.
+This authoring facility does not execute exercises or teach a learner. Server-only
+facilities install exact verified snapshots from admitted owner-selected local
+sources and check pinned reads. There is no learner progress, teaching runtime,
+hosted provisioning or public installation action yet.
 
 ## Sources
 
@@ -12,6 +13,7 @@ there is no installer, learner progress, teaching runtime or hosted provisioning
 - `packages/vibe64-training/src/server/catalogue.js`
 - `packages/vibe64-training/src/server/cli.js`
 - `packages/vibe64-training/src/server/installedContent.js`
+- `packages/vibe64-training/src/server/contentInstaller.js`
 - `bin/run.js`
 - `docs/training-content.md`
 - `docs/templates/learn-topic/README.md`
@@ -19,6 +21,7 @@ there is no installer, learner progress, teaching runtime or hosted provisioning
 - `docs/colleague-usage/teaching-content.md`
 - `tests/server/vibe64TrainingContent.unit.test.js`
 - `tests/server/vibe64TrainingInstalledContent.unit.test.js`
+- `tests/server/vibe64TrainingContentInstaller.unit.test.js`
 
 ## Public contract
 
@@ -76,3 +79,24 @@ write, repair, fetch, run checks, enable a course or declare an assessment passe
 An absent or invalid snapshot reports reinstall guidance. Catalogue enablement is
 not part of a pinned read, so a future existing attempt can continue after its
 release is disabled; new-start permission remains the application action's job.
+
+
+## Verified installation
+
+`@local/vibe64-training/server/content-installer` accepts only a server-owned
+absolute system root, canonical local source repository and complete trusted pin.
+The admitted owner caller supplies permission and approved content selection; this
+service is not an HTTP/assistant action and does not enable a course. It reuses
+`readPinnedTopic`, the original CLI bundle and installed reader, rather than
+creating a second validator or copier. Pin validation is shared with the reader.
+
+A persistent per-revision OS file lock covers cooperating installation writers.
+The installer stages privately, verifies the clean source identity again and
+validates all staged bytes before atomic directory publication. Outside writers
+must not modify this owned namespace during publication. Matching verified retries
+are unchanged; existing empty, conflicting or corrupt destinations are refused.
+Alias/path containment checks precede owned mutations. Busy locks report a retryable
+409 without deleting their persistent inode. Failure removes only its own UUID
+stage; killed-writer stages remain for deliberate operator inspection. The service
+does not fetch Git, run authored code, recursively repair permissions, alter learner
+history or perform historical data upgrades.

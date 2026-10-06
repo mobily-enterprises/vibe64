@@ -117,9 +117,9 @@ it does not push Git, create a remote release, install content or enable a cours
 
 ## Server reads of installed snapshots
 
-This release also provides a read-only server API at
+This release provides a read-only server API at
 `@local/vibe64-training/server/installed-content`. It does not add a learner UI or
-an installation command. Create the reader with the server's absolute
+a terminal installation command. Create the reader with the server's absolute
 `systemRoot`. `readTopic({topicId,commit,topicHash})` requires the trusted topic
 hash from the course lock or saved attempt, then checks
 `training/content/<topicId>/<40-character-commit>/`, whose `pin.json` contains only
@@ -139,3 +139,42 @@ exercise/check scripts. They do not consult catalogue enablement: disabling a
 release must not silently substitute new content into an existing pinned attempt.
 Authorization to start a lesson and durable assessment progress are not provided
 by this API.
+
+
+## Owner-controlled snapshot installation
+
+`@local/vibe64-training/server/content-installer` exports
+`createTrainingContentInstaller({systemRoot}).installTopic({sourceRoot,pin})`.
+The caller is an admitted server/operator operation, not a learner or Colleague
+request. It chooses the canonical absolute system root and local topic repository.
+The exact schema-version-1 pin contains `topicId`, `release`, canonical `repository`,
+40-character `commit` and trusted `topicHash`, as well as `schemaVersion`. Map the
+course lock's topic `manifestHash` to `topicHash` at that owning operation.
+This low-level service does not authenticate callers, fetch Git repositories,
+enable courses or grant access. No browser/assistant install action or terminal
+install command is exposed yet.
+
+Installation reuses the clean committed-source proof, original bundle command
+and installed reader. It checks the approved identity before and after bundling,
+validates a new private staging snapshot and publishes the complete directory
+under `training/content/<topicId>/<commit>/`. A persistent per-revision file lock
+excludes cooperating installers. A busy revision returns
+`VIBE64_TRAINING_INSTALL_BUSY` (409); retry after that operation finishes.
+Atomic directory rename provides complete visibility under that lock; outside
+processes must not modify this installer-owned namespace during publication.
+
+A matching verified snapshot returns `installed:false`, without rewriting it;
+the prepared source need not still exist for this retry. A newly installed one
+returns `installed:true`. A different approved pin, malformed or changed snapshot,
+empty destination, dirty source, symlink or directory alias is refused. Existing
+content is preserved. Check the exact source and pin before retrying; do not delete
+a learner's pinned revision or substitute a newer one as an automatic repair.
+
+Only the new invocation's UUID staging directory is removed on failure. A process
+killed during staging can leave `training/.install-<UUID>` behind; an operator may
+inspect and remove that particular abandoned stage after confirming its writer
+has stopped. It is not a published snapshot. Persistent files under
+`training/.install-locks/` are lock identities, not stale work indicators: do not
+unlink them to clear contention. New private parent directories use mode 0700
+and the pin uses 0600; existing paths are not recursively repaired. Installation
+runs no authored exercise, check or visual controller.

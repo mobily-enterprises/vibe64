@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Vibe64 teaching content validation, deterministic bundles and pinned installed reads.",
+  "description": "Vibe64 teaching content validation, deterministic bundles and verified pinned snapshot installation and reads.",
   "exports": {
     "./server/cli": "./src/server/cli.js",
     "./server/content": "./src/server/content.js",
-    "./server/installed-content": "./src/server/installedContent.js"
+    "./server/installed-content": "./src/server/installedContent.js",
+    "./server/content-installer": "./src/server/contentInstaller.js"
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.1.225"

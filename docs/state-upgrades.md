@@ -160,6 +160,24 @@ must define path validation, backup completion, interrupted retries and recovery
 a path declaration alone does not enforce a script's write scope. Until then,
 the implemented script-owned backup contract above remains authoritative.
 
+## Teaching pinned snapshots
+
+The schema-version-1 cache under `training/content/<topicId>/<commit>/` is created
+only by an explicit admitted owner installation. The new installer uses the
+existing pin/bundle shape; no existing snapshot needs conversion or a numbered
+historical repair. Readers never create or repair snapshots. Matching verified
+retries remain unchanged, while corrupt or conflicting state requires deliberate
+operator inspection. A future stored-format change needs a new numbered upgrade
+and script-owned backup proof before modification.
+
+Per-revision files under `training/.install-locks/` are persistent OS lock
+identities; do not unlink them to clear contention. Interrupted private UUID
+staging can be inspected and removed only after its writer is known to have
+stopped. Installed content is reconstructible from its exact Git revision and
+trusted course pin. This cache policy does not back up learner progress: durable
+`training/users` state has a separate recovery requirement and is not yet provided
+by this installation facility.
+
 ## Catalog
 
 `20260925-native-conversation-lifecycle` records the additive native replacement

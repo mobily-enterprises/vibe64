@@ -51,3 +51,13 @@ exact verified revision. A newer bundle or a draft is not a substitute for the
 missing lesson, and retrying must not reset learning history. Colleague can explain
 this recovery and offer to formulate the request; it cannot reinstall content.
 There is still no learner start/install control in this authoring release.
+
+
+The application also has a server-only verified-snapshot installation facility.
+It is not a visible control, a Colleague tool or a terminal authoring command.
+An admitted owner operation must select the canonical local source and exact
+course pin. Colleague can explain this boundary and offer to help contact the
+workspace owner through the supported conversation actions; it cannot choose a
+filesystem path, install content or grant course access. A busy installation can
+be retried after its current operation finishes. Existing invalid content requires
+owner inspection; it must not be replaced automatically during lesson reads.
