@@ -1,5 +1,25 @@
 # Subsystems
 
+## `training` Teaching content
+
+Owns versioned local topic/lesson/visual validation and reproducible authoring
+bundles. Consumes the existing CLI entry point without changing editor launch.
+No learner progress, hosted provisioning or teaching runtime exists in this first
+authoring increment. JSKIT and Genesis do not own teaching semantics. Topic source
+and generated bundles are author-controlled files, rather than database tables.
+
+### Program
+
+- `genesis/program/training/content.md`
+
+### Data owned
+
+- Nothing.
+
+### Data used
+
+- Nothing.
+
 ## `projects` Project definition
 
 Owns project discovery, the portable collaboration, engineering and deployment

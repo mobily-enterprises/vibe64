@@ -8,6 +8,10 @@ and live connections.
 Vibe64 is the visual, managed shell around Genesis for people building software
 with an AI coding agent.
 
+Teaching authors can validate local topic content and produce reproducible lesson
+bundles through the Vibe64 command. Draft lessons stay labelled as drafts. This
+authoring facility does not yet install a course, start an exercise or teach a learner.
+
 Colleague is a separate conversation for discussing ideas and operating Vibe64
 across projects. It knows the selected project and session, can open their views
 and ask coding agents for help through the same operations the UI uses. It has

@@ -11,6 +11,7 @@
     "vibe64": "bin/run.js"
   },
   "files": [
+    "docs/training-content.md",
     "app.json",
     "bin/",
     "config/",
@@ -114,6 +115,7 @@
     "@local/vibe64-source-editor": "0.1.0",
     "@local/vibe64-system-graph": "0.1.0",
     "@local/vibe64-terminals": "0.1.0",
+    "@local/vibe64-training": "0.1.0",
     "@mdi/js": "^7.4.47",
     "@socket.io/redis-adapter": "^8.3.0",
     "@tanstack/vue-query": "^5.90.5",

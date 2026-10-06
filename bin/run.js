@@ -384,7 +384,10 @@ async function runLauncher({
 }
 
 if (isDirectCliExecution()) {
-  runLauncher().then((exitCode) => {
+  const command = process.argv[2] === "training"
+    ? import("../packages/vibe64-training/src/server/cli.js").then(({ runTrainingCli }) => runTrainingCli(process.argv.slice(3)))
+    : runLauncher();
+  command.then((exitCode) => {
     process.exitCode = exitCode;
   }).catch((error) => {
     console.error("Failed to run Vibe64:", error);
