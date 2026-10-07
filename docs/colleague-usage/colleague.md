@@ -74,6 +74,10 @@ Changing its selection keeps this conversation and its saved replies. A changed
 engine, provider, model, agent or effort starts a fresh native conversation for
 the next message; choosing the same selection retains the current one. Applying
 the selection does not send a message.
+If Colleague reports that its previous native turn must be stopped, click its
+existing **Stop** control before selecting a model, including the same model.
+A failed response can leave native cleanup unfinished; selecting a model does
+not silently stop it or resend the request.
 This also applies when selecting a connected provider under OpenCode. Vibe64
 hands the retained chat context to that provider without starting a fresh
 Colleague chat or resetting your lesson. A pending delivery keeps its original

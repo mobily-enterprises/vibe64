@@ -4036,3 +4036,61 @@ test("a completed goal commentary wakes the original native Colleague once witho
   await changed(f);
   assert.deepEqual((await f.native.trace()).filter(row => row.method === "turn/start"), starts);
 });
+
+// R06's original active/lost-wait quartet and Stop-before-model-change triplet.
+// This genuine oversized native tool/cleanup refusal is NOT the old waiter timeout.
+test("Colleague requires explicit Stop before model selection after native tool failure leaves its turn active", async t => {
+  const f = await fixture(t, [{ mode: "active-tool-refusal", tool: {
+    actionId: "vibe64.test.operate", input: { value: "x".repeat(COLLEAGUE_TOOL_PAYLOAD_LIMIT + 1) }
+  } }], { native: true });
+  const historyPath = path.join(f.root, "controlled-native", "codex-history.json");
+  const refusalPath = historyPath + ".refuse-interrupt";
+  await writeFile(refusalPath, "refuse");
+  try {
+    await f.send("Wait for this response.");
+    const failed = await f.service.wait(f.context);
+    assert.equal(failed.status, "failed", failed.error);
+    assert.equal(failed.messages.filter(message => message.role === "assistant").length, 0);
+    const trace = await f.native.trace();
+    const starts = trace.filter(row => row.method === "turn/start");
+    assert.equal(starts.length, 1);
+    assert.deepEqual(f.observations.mutations, []);
+    assert.ok(trace.some(row => row.toolResponse?.error?.message?.includes("size limit")),
+      "The real application-tool size owner rejects the native request before an effect");
+    assert.ok(trace.some(row => row.method === "turn/interrupt"), "The real driver attempts native cleanup");
+    const history = JSON.parse(await readFile(historyPath, "utf8"));
+    assert.equal(history.id, starts[0].params.threadId);
+    assert.equal(history.turns.length, 1);
+    assert.equal(history.turns[0].status, "inProgress", "The worker settled while the original native turn remains active");
+    assert.equal(history.turns[0].items[0].clientId, "user-1");
+    assert.equal(trace.some(row => row.notification?.method === "turn/completed"), false);
+    await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.model.select",
+      input: { assistantSelection: selection }, context: f.context }), /previous native turn/);
+    await rm(refusalPath, { force: true });
+    await f.service.stop({}, f.context);
+    const selected = await f.actions.execute({ actionId: "vibe64.colleague.model.select",
+      input: { assistantSelection: { ...selection, modelId: "another-model" } }, context: f.context });
+    assert.equal(selected.assistantSelection.modelId, "another-model");
+    assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1,
+      "Stop and model selection never replay the admitted request");
+    assert.deepEqual(f.observations.mutations, []);
+  } finally {
+    await rm(refusalPath, { force: true });
+    await f.service.stop({}, f.context);
+  }
+});
+
+test("an unchanged settled Colleague model retains its exact native thread without another request", async t => {
+  const f = await fixture(t, [{ text: "The original answer." }], { native: true });
+  await f.send("Keep this conversation.");
+  const before = await f.service.wait(f.context);
+  assert.equal(before.status, "ready", before.error);
+  const historyPath = path.join(f.root, "controlled-native", "codex-history.json");
+  const history = JSON.parse(await readFile(historyPath, "utf8"));
+  const selected = await f.actions.execute({ actionId: "vibe64.colleague.model.select",
+    input: { assistantSelection: selection }, context: f.context });
+  assert.deepEqual(selected.messages, before.messages);
+  assert.deepEqual(JSON.parse(await readFile(historyPath, "utf8")), history);
+  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1);
+  assert.deepEqual(f.observations.mutations, []);
+});

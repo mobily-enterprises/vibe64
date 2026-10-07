@@ -105,6 +105,10 @@ export async function createControlledColleagueNativeCommands(root, responses) {
       if (method === "thread/goal/get") return reply({ goal: thread?.goal || null });
       if (method === "thread/unsubscribe") { state.loaded = false; return reply({ status: "unsubscribed" }); }
       if (method === "turn/interrupt") {
+        if (existsSync(file + ".refuse-interrupt")) {
+          ws.send(JSON.stringify({ id, error: { code: -32602, message: "Controlled native interrupt refusal" } }));
+          return;
+        }
         if (state.runningTurn?.id === params.turnId) state.runningTurn.status = "interrupted";
         save();
         reply({});
@@ -137,6 +141,9 @@ export async function createControlledColleagueNativeCommands(root, responses) {
             await callTool(turn, "assistant_action_contract", { actionId: response.tool.actionId, version: 1 });
             await callTool(turn, "assistant_action_execute", { actionId: response.tool.actionId, version: 1, input: response.tool.input });
           } catch (error) {
+            // This probe retains actual native activity after the tool owner's
+            // refusal. Only the original explicit Stop may settle this turn.
+            if (response.mode === "active-tool-refusal") return;
             turn.status = "failed"; save();
             emitTurn("turn/completed", { turn: { ...turn, error: { message: error.message } } });
             return;

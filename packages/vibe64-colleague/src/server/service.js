@@ -1275,7 +1275,13 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         const pendingRequest = state.record.conversationMetadata?.runtime?.replacement?.request;
         state.requestContext = context;
         const scoped = { ...actionContext(state, { clientId: "", focus: null }), assistantSelection: selected };
+        const conversation = state.record.conversationMetadata?.runtime ? await openConversation(state, scoped) : null;
+        const current = await conversation?.read();
+        if (current?.status === "working") throw failure("Stop Colleague's previous native turn before changing its model.");
         if (!state.record.conversationMetadata?.runtime || !changed && !pendingRequest) {
+          // Preserve the native binding while retaining the common owner's
+          // failed-cleanup and storage guards for an unchanged selection.
+          if (conversation) await conversation.configure(settings.configuration);
           const previous = state.record.assistantSelection;
           state.record.assistantSelection = selected;
           try { await persist(state); } catch (error) { state.record.assistantSelection = previous; throw error; }
@@ -1283,8 +1289,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         }
         // The common runtime owns the native change and continuity. Publish the
         // product selection in the same record commit as its final configuration.
-        const conversation = await openConversation(state, scoped);
-        const current = await conversation.read();
         state.selecting = { ...settings, assistantSelection: selected };
         try {
           // A pending request keeps its original policy, including historical

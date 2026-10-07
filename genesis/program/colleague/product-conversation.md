@@ -111,6 +111,11 @@ selection input reaches the original `model.select` action, which retains
 catalogue revision, account access, active-work guards and the atomic selection
 commit with the runtime configuration. The former private model route is removed;
 there is no second selection implementation or browser access to native settings.
+Prepared selections first inspect the common runtime's current native status;
+an unchanged selection also crosses its configuration guard before its product
+preference is committed. This preserves the native
+binding while requiring explicit Stop after unconfirmed native cleanup, even
+when the product worker has already settled as failed.
 Each operation and live observation rechecks the original request's current
 authority; an actor change cannot reuse an earlier person's conversation scope.
 The sessions-owned conversation provider supplies the local request guard and
