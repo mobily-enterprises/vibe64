@@ -68,8 +68,10 @@ startup/current capture through the existing owner, retaining earlier pending
 delivery and the typed draft; visible return alone cannot restart recording.
 Document visibility is separate from avatar collapse and mounted-body eligibility.
 Voice retains no independent chat history and never changes the typed draft.
-JSKIT's hands-free Pause finalizes the current utterance before muting, including
-the microphone's buffered tail. It submits through this same binding. Explicit
+JSKIT's hands-free Pause stops new microphone input immediately while retaining
+the buffered tail for its original final flush. A matching stale endpoint rejection
+releases only that rejected commit; pending admission retains its existing ordering
+before finalizing the newer recording. It submits through this same binding. Explicit
 avatar-hold recordings and interrupted submissions retain words for review.
 Explicit resume keeps an unfinished continuous capture open. Once it finishes,
 new capture gets its own recording identity.

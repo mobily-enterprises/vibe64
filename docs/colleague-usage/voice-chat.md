@@ -21,9 +21,10 @@ Use the single **Talk** button. Tap it to listen hands-free and send after a
 pause. You can keep speaking and send typed steering while the agent works or
 reads its reply aloud. Recognized words appear in a temporary user bubble as
 you speak. Tap **Pause** to finish the current utterance and pause the microphone;
-the completed words are sent automatically. If an earlier message is still
-awaiting admission, Pause mutes capture and finishes the new utterance once that
-admission settles, preserving both sets of words. Sending does not disable Talk:
+new microphone input stops immediately while the remaining audio is interpreted,
+then the completed words are sent automatically. If an earlier message is still
+awaiting admission, Pause retains the captured audio and finishes the new utterance
+once that admission settles, preserving both sets of words. Sending does not disable Talk:
 tap again to resume an open recording or start a fresh one after it finishes.
 The idle microphone is crossed out; it appears active only while actually
 listening and unmuted. Hold **Talk** for push-to-talk,
