@@ -8,7 +8,7 @@ import { latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/s
 import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
-  ROUTING_REASONS, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingFromMetadata,
+  ROUTING_REASONS, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingFromMetadata,
   assistantRoutingPrompt, parseRoutingDecision, assistantReviewRoutingPrompt, parseReviewRoutingDecision
 } from "@local/vibe64-runtime/shared/assistantRouting";
 
@@ -466,6 +466,14 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       }
       if (input.submissionKind === "steer") throw failure("That turn has finished. Send this as a new request.", "conversation_not_steerable");
       if (running.has(key)) throw failure("This conversation is preparing a request. Cancel it or wait before sending another.");
+      if (state?.messageId !== input.messageId && assistantRoutingRequestCanBeReplaced(state)) {
+        state.stopped = true;
+        state.review = false;
+        state.reviewStatus = "cancelled";
+        state.status = "done";
+        delete state.error;
+        await save(context, state);
+      }
       if (assistantRoutingStatusIsPending(state?.status) && state.messageId !== input.messageId) throw failure("Resolve or cancel the pending request before sending another.");
       if (state?.helper && state.messageId !== input.messageId) throw failure("Retry cleanup of the previous routing helper before sending another request.");
       if (state?.messageId !== input.messageId && state?.status === "sent" && needsReview(state)) {

@@ -43,7 +43,8 @@ const VIBE64_AGENT_HELPER_WORKLOAD_LIMITS = Object.freeze({
   }),
   [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.REQUEST_ROUTING]: Object.freeze({
     maxInputCharacters: 128_000,
-    maxOutputCharacters: 2_500,
+    // Review decisions include two bounded strings, with JSON escaping overhead.
+    maxOutputCharacters: 8_192,
     timeoutMs: 60_000
   }),
   [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SESSION_TITLE]: Object.freeze({

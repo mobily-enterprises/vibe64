@@ -730,6 +730,23 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(props.sendAgentMessage).not.toHaveBeenCalled();
     expect(view.composerDraft.value).toBe("Retain this draft.");
   });
+  it("enables Send for failed unsent handoffs while retaining delivery and helper guards", async () => {
+    const { props, view } = await createViewWithProps();
+    view.composerDraft.value = "Continue implementation.";
+    for (const status of ["review_pending", "planning_pending", "implementation_pending"]) {
+      props.session.metadata.assistant_routing_request = JSON.stringify({ status, error: "Helper schema rejected.", helper: null });
+      expect(view.composerCanSubmit.value).toBe(true);
+    }
+    for (const blocked of [
+      { status: "review_uncertain" }, { status: "review_sending" },
+      { status: "review_pending", attemptedMessageId: "attempt" },
+      { status: "review_pending", helper: { conversationId: "helper" } },
+      { status: "review_pending", error: "" }
+    ]) {
+      props.session.metadata.assistant_routing_request = JSON.stringify({ error: "Failed", ...blocked });
+      expect(view.composerCanSubmit.value).toBe(false);
+    }
+  });
   it("keeps chat available for steering while Codex is working", async () => {
     const view = await createView({
       session: {

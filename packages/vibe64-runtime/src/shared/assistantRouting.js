@@ -60,6 +60,12 @@ function assistantRoutingStatusIsPending(status) {
   return ["routing", "sending", "uncertain", "review_pending", "review_sending", "review_uncertain", "planning_pending", "planning_sending", "planning_uncertain", "implementation_pending", "implementation_sending", "implementation_uncertain"].includes(status);
 }
 
+// A new request can replace a failed handoff only before any delivery attempt.
+function assistantRoutingRequestCanBeReplaced(request) {
+  return ["review_pending", "planning_pending", "implementation_pending"].includes(request?.status) &&
+    Boolean(request.error) && !request.helper && !request.attemptedMessageId;
+}
+
 function hasConnectedAssistantModels(engine) {
   return engine?.modelProviders?.some((provider) => provider.connected && provider.models?.length > 0) === true;
 }
@@ -428,4 +434,4 @@ export { ASSISTANT_MODES, ASSISTANT_ROUTING_METADATA, ASSISTANT_ROUTING_ROLES, A
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_PURPOSE_ROLES, ROUTING_REASONS, routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences,
   assistantRoutingFromMetadata, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantReviewRoutingPrompt, parseReviewRoutingDecision,
-  assistantModeLabel, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingStatusLabel };
+  assistantModeLabel, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel };

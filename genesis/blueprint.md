@@ -525,6 +525,9 @@ or explicit pause. Its explanation and next step remain visible. A partial resul
 is presented as implementation incomplete, not plan completion. Two consecutive
 turns without reported progress or eight automatic continuations stop for a new
 user request. Router judges recorded evidence; Senior verifies the actual work.
+If an automatic handoff fails before sending, a new request can replace it
+without claiming that its review completed. Unconfirmed deliveries still require
+a delivery check.
 Stop, native questions, failed execution and changed access remain authoritative.
 Existing requests gain no continuation authority during upgrade or reload.
 A failed decision holds review for explicit Retry review or Stop. Pending

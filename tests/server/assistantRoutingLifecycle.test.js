@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { readWorkPlan, readWorkPlanPage, manageWorkPlan, workPlanPath } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
@@ -113,6 +114,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
       request: { allowProviderModelFallback: false, reasoning: true, summary: false } }),
     createEphemeralConversation: async () => ({ ok: true, conversationId: "helper-1" }),
     startEphemeralConversationTurn: async (scope, input, options) => {
+      validateConversationOutputSchema(input.outputSchema, input.executionProfile.limits);
       helperCalls++;
       if (input.outputSchema.properties.decision) router.reviewInputs.push(input);
       else assert.match(input.message, /agreed required-field/);
@@ -1996,4 +1998,34 @@ test("a recovered completed continuation cannot automatically start another turn
   assert.equal(f.sends.length, 2);
   assert.equal(f.state().status, "review_pending");
   assert.match(f.state().error, /disconnected/);
+});
+
+for (const status of ["review_pending", "planning_pending", "implementation_pending"]) {
+  test(`a new request replaces a failed unsent ${status} handoff`, async (t) => {
+    const f = await fixture(t, { mode: "junior", review: false });
+    await f.service.send("session-1", request, f.context);
+    const previous = { ...f.state(), status, error: "Helper output schema can exceed the resolved output limit.", helper: null };
+    delete previous.attemptedMessageId;
+    f.metadata.assistant_routing_request = JSON.stringify(previous);
+    await f.service.send("session-1", { ...request, messageId: "replacement", message: "Continue the implementation." }, f.context);
+    assert.equal(f.sends.length, 2);
+    assert.equal(f.state().messageId, "replacement");
+    assert.equal(f.state().status, "sent");
+  });
+}
+
+test("new requests cannot replace unconfirmed or still-owned handoffs", async (t) => {
+  const f = await fixture(t, { mode: "junior", review: false });
+  await f.service.send("session-1", request, f.context);
+  for (const blocked of [
+    { status: "review_uncertain" }, { status: "review_sending" },
+    { status: "review_pending", attemptedMessageId: "review-attempt" },
+    { status: "review_pending", helper: { conversationId: "owned-helper" } },
+    { status: "review_pending", error: "" }
+  ]) {
+    f.metadata.assistant_routing_request = JSON.stringify({ ...f.state(), helper: null, attemptedMessageId: undefined,
+      error: "Not confirmed", ...blocked });
+    await assert.rejects(f.service.send("session-1", { ...request, messageId: "replacement" }, f.context), /pending request/);
+    assert.equal(f.sends.length, 1);
+  }
 });

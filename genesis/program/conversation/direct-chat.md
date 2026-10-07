@@ -3233,3 +3233,15 @@ response delivery and confirmed native failure retain their existing distinct
 outcomes. The application notice keeps its stable per-thread/turn identity, saved
 changes and original continuation instructions. This is new-event presentation,
 not a historical notice repair or a persisted-format change.
+
+## Failed automatic handoff recovery
+
+An errored review, planning or implementation handoff with no helper and no
+attempted message permits a new chat request. The routing owner replaces only
+that unsent handoff after checking there is no active native turn or live routing
+task. It retains normal authority and admission for the new request. Unknown
+receipts, helper cleanup and active preparation continue to block replacement.
+The composer uses the same shared eligibility predicate; output speech is not
+an admission condition. Router's existing request-routing workload allows 8,192
+output characters, accommodating its bounded review schema including JSON
+escaping. The original lifecycle tests now use the actual shared schema validator.

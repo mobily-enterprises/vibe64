@@ -178,3 +178,12 @@ Executing the current plan requires it to be Active. A missing or Completed plan
 is explained without reviving an old task. Independent work does not need a plan.
 Junior can update checklist progress; only Senior can manage its lifecycle and
 explicitly mark it Completed after verifying the evidence.
+
+If an automatic handoff failed before its message was sent, you can type a new
+request and use the ordinary **Send** button (or speak a new request). Sending
+replaces that failed, unsent handoff; it does not mark its review completed.
+The previous coding history, plan and file changes remain. **Retry review** still
+retries the original handoff, and **Stop** cancels it without sending new work.
+A handoff with unconfirmed delivery still requires **Check delivery** first.
+Colleague can explain these choices and offer to help you continue; sending new
+work requires your direct request or accepted offer.

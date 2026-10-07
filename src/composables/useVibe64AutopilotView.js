@@ -1,5 +1,5 @@
 import { chatTurnsWithRouting, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
-import { assistantRoutingStatusIsPending, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, nextTick, ref, unref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -424,7 +424,7 @@ function useVibe64AutopilotView(props, emit, {
   const routingRequest = computed(() => {
     try { return JSON.parse(props.session?.metadata?.assistant_routing_request || "null"); } catch { return null; }
   });
-  const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status));
+  const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value?.status) && !assistantRoutingRequestCanBeReplaced(routingRequest.value));
   const routingStatusLabel = computed(() => assistantRoutingStatusLabel(routingRequest.value));
   function restoreCancelledMessage(messageId) {
     const message = messageDelivery.value?.find(messageId);
