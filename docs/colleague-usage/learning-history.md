@@ -12,8 +12,11 @@ record. Leaving or hiding Colleague does not end the lesson.
 
 An admitted fresh start after retirement keeps the earlier evidence with its
 original identity. A lesson that declares an exercise uses a new exercise
-project/session; a no-exercise lesson creates neither. Only passes for the same
-exact topic pin and lesson code/hash contribute to that lesson's completion.
+project/session; a no-exercise lesson creates neither. Passes for the same
+lesson code and unchanged content hash contribute to that lesson's completion,
+even when an enabled newer topic or course release adds another lesson or changes
+its ordering. The old attempt keeps its original pin and evidence; starting a
+new release does not rewrite it or switch an active lesson automatically.
 Explain which assessments already passed and which practical tasks remain; an
 old observation is not proof that the new Preview runs. Changed content retains
 history but requires its own assessment. These internal changes add no new

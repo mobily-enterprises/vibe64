@@ -68,7 +68,7 @@ function createTrainingTeachingBrief({ systemRoot } = {}) {
         remainingAssessmentIds: lesson.lesson.assessments.filter(value => !passed.includes(value.id)).map(value => value.id),
         submissions: attempt.learning?.submissions || [],
         retainedPasses: state.progress.attempts.filter(value => value.ended &&
-          canonicalJson(value.pin.topic) === canonicalJson(pin.topic) && canonicalJson(value.pin.lesson) === canonicalJson(pin.lesson))
+          canonicalJson(value.pin.lesson) === canonicalJson(pin.lesson))
           .flatMap(value => (value.learning?.submissions || []).filter(result => result.outcome === "passed")
             .map(submission => ({ attemptId: value.attemptId, pin: value.pin, submission }))),
         resume: attempt.learning?.resume || null

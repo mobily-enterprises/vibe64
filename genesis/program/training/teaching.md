@@ -454,7 +454,8 @@ errors require truthful recovery rather than claiming the view opened or is heal
 The original learner-state pass predicate now serves both completion counts and
 the read-only brief's pinned assessment IDs. `passedAssessmentIds` and
 `remainingAssessmentIds` derive from content-validated current and retained
-attempts with the same topic/lesson pin and rubric revision; the existing
+attempts with the same lesson code/hash and rubric revision, including across
+topic/course revisions; the existing
 completion return shape stays unchanged. The action projection exposes those
 bounded curriculum facts alongside the untouched resume checkpoint and receipts.
 A saved pending question may already have passed, so start/resume guidance requires

@@ -15,6 +15,7 @@ import { createTrainingContentInstaller } from "../../packages/vibe64-training/s
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createInstalledTrainingCatalogue } from "@local/vibe64-training/server/installed-catalogue";
 import { createTrainingLearnerState, passedAssessmentIds } from "../../packages/vibe64-training/src/server/learnerState.js";
+import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
 
 async function fixture(t, { published = true, learning = false } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "vibe64-learner-state-"));
@@ -2228,7 +2229,10 @@ test("exact-pin completion unions historical passes without rebinding receipts a
   assert.deepEqual(passedAssessmentIds(history.active, lesson, history.progress.attempts), ["answer-one", "exercise-practice"]);
   const anotherTopic = { ...history.active, pin: { ...history.active.pin,
     topic: { ...history.active.pin.topic, commit: "b".repeat(40) } } };
-  assert.deepEqual(passedAssessmentIds(anotherTopic, lesson, history.progress.attempts), []);
+  assert.deepEqual(passedAssessmentIds(anotherTopic, lesson, history.progress.attempts), ["answer-one", "exercise-practice"]);
+  const anotherLesson = { ...history.active, pin: { ...history.active.pin,
+    lesson: { ...history.active.pin.lesson, code: "INTRO-02" } } };
+  assert.deepEqual(passedAssessmentIds(anotherLesson, lesson, history.progress.attempts), []);
   const wrongRubric = structuredClone(history.progress.attempts);
   for (const attempt of wrongRubric) {
     for (const submission of attempt.learning?.submissions || []) submission.rubricRevision = "0".repeat(64);
@@ -2277,4 +2281,55 @@ test("documented staged restore preserves ended history and its exact pinned rec
   assert.equal(restored.completion, null);
   assert.deepEqual(restored.progress.attempts[0].learning, old.active.learning);
   assert.equal(restored.progress.attempts[0].ended.reason, "discard");
+});
+
+
+test("unchanged lesson completion survives a new installed topic and course revision without rebinding evidence", async t => {
+  const f = await learningFixture(t);
+  await f.save("question-before-topic-update", "answer-one");
+  await f.record(f.answer("answer-one", "answer-before-topic-update"));
+  await f.record(f.observation("exercise", "practice-before-topic-update"));
+  const old = await f.state.readState({ actor: f.actor });
+  const ended = await f.state.endAttempt({ actor: f.actor, attemptId: f.attemptId,
+    requestId: "end-before-topic-update", expectedRevision: old.revision, reason: "restart" });
+  const originalProgress = await fs.readFile(f.paths.progress, "utf8");
+  const descriptor = JSON.parse(await fs.readFile(path.join(f.sourceRoot, "package.json"), "utf8"));
+  descriptor.version = "0.1.1";
+  await f.write("package.json", descriptor);
+  await fs.appendFile(path.join(f.sourceRoot, "training/outline.md"), "\nA revised course introduction with the same lesson.\n");
+  execFileSync("git", ["-C", f.sourceRoot, "add", "."], { stdio: "ignore" });
+  execFileSync("git", ["-C", f.sourceRoot, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+    "-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "Revised topic, unchanged lesson"], { stdio: "ignore" });
+  const pinned = await readPinnedTopic(f.sourceRoot);
+  const topic = { schemaVersion: 1, topicId: pinned.topicId, release: pinned.release,
+    repository: pinned.repository, commit: pinned.commit, topicHash: pinned.topicHash };
+  const pin = { course: { courseId: "reordered-intro-course", release: "0.2.0" }, topic,
+    lesson: { code: f.pin.lesson.code, hash: pinned.topicManifest.lessons[0].hash } };
+  assert.notEqual(topic.commit, f.pin.topic.commit);
+  assert.notEqual(topic.topicHash, f.pin.topic.topicHash);
+  assert.equal(pin.lesson.hash, f.pin.lesson.hash, "Only the topic and course changed; assessment content is identical.");
+  await createTrainingContentInstaller({ systemRoot: f.systemRoot }).installTopic({ sourceRoot: f.sourceRoot, pin: topic });
+  assert.equal(await fs.readFile(f.paths.progress, "utf8"), originalProgress, "Installing new content cannot migrate learner records.");
+  const reserved = await f.reserve({ requestId: "start-new-topic", expectedRevision: ended.revision, pin });
+  const current = await f.state.resumeAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId });
+  assert.deepEqual(current.completion, { lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash,
+    required: 6, passed: 2, completed: false });
+  const saved = await f.state.readState({ actor: f.actor, includeCompletion: true });
+  assert.deepEqual(saved.progress.attempts[0], ended.attempt, "Earlier pins, rubric and exact answer/practical receipts remain immutable.");
+  assert.deepEqual(saved.active.learning?.submissions || [], [], "Historical evidence is counted, never copied to the fresh attempt.");
+  assert.notEqual(saved.active.attemptId, f.attemptId);
+  assert.notEqual(saved.active.projectSlug, old.active.projectSlug);
+  const brief = await createTrainingTeachingBrief({ systemRoot: f.systemRoot }).readBrief({ actor: f.actor, attemptId: saved.active.attemptId });
+  assert.deepEqual(brief.learning.passedAssessmentIds, ["answer-one", "exercise-practice"]);
+  assert.deepEqual(brief.learning.remainingAssessmentIds, ["answer-two", "answer-three", "workspace-practice", "colleague-practice"]);
+  assert.deepEqual(brief.learning.retainedPasses, ended.attempt.learning.submissions.map(submission => ({
+    attemptId: f.attemptId, pin: f.pin, submission
+  })), "Colleague receives the original provenance for passes counted across topic revisions.");
+  const beforeRead = await treeState(f.systemRoot);
+  assert.equal((await f.state.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 2);
+  assert.deepEqual(await treeState(f.systemRoot), beforeRead, "Completion reads do not rewrite progress.");
+  const other = { uid: 43, username: "another-learner" };
+  const otherReserved = await f.state.reserveAttempt({ actor: other, requestId: "start-another-learner", expectedRevision: 0, pin });
+  const isolated = await f.state.resumeAttempt({ actor: other, attemptId: otherReserved.attempt.attemptId });
+  assert.equal(isolated.completion.passed, 0, "Identical content does not transfer another person's evidence.");
 });

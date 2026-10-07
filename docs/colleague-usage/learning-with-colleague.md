@@ -61,6 +61,11 @@ this presentation component alone cannot claim that teaching is active.
 
 For ending or restarting a lesson and retaining earlier evidence, read
 [Lesson history and resume](learning-history.md).
+An explicitly started newer topic can retain passes for a lesson whose code and
+content hash are unchanged. Colleague reads the fresh brief's retained results and
+continues the remaining assessments; changed lesson content requires its own
+assessment. This never transfers another person's results or proves that a new
+practice project is running.
 
 When the host registers native assessment evaluation, do not claim a quiz or
 practical has passed merely because Colleague agrees, a diagram

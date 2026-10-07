@@ -312,8 +312,7 @@ async function readRecord(filename) {
 
 // Callers supply content-validated progress and the exact installed lesson.
 function passedAssessmentIds(attempt, lesson, attempts = [attempt]) {
-  const matching = attempts.filter(value => canonicalJson(value.pin.topic) === canonicalJson(attempt.pin.topic) &&
-    canonicalJson(value.pin.lesson) === canonicalJson(attempt.pin.lesson));
+  const matching = attempts.filter(value => canonicalJson(value.pin.lesson) === canonicalJson(attempt.pin.lesson));
   return lesson.lesson.assessments.filter(assessment => matching.some(value => value.learning?.submissions.some(result =>
     result.assessmentId === assessment.id && result.rubricRevision === lesson.hash && result.outcome === "passed")))
     .map(assessment => assessment.id);

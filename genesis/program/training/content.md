@@ -344,8 +344,11 @@ At most eight attempts are retained, in reservation order. Ended revisions and
 request identities are validated, and only the final unended attempt can be
 active. Capacity refusal preserves every receipt and retry identity; the pilot
 has no automatic pruning or multicourse scheduler. Completion unions passed
-assessment IDs only for the identical topic pin and lesson code/hash. Different
-content keeps historical evidence but contributes no pass to the current lesson.
+assessment IDs for the identical lesson code/hash across validated topic and
+course pins for that learner. Topic-only changes do not invalidate an unchanged
+lesson. Different lesson content keeps historical evidence but contributes no pass
+to the current lesson. This read projection never rewrites pins or copies receipts
+into a new attempt; existing exact installed-pin validation remains authoritative.
 The original teaching brief and shared action projections identify historical
 passes by their original attempt/submission IDs and native provenance, separately
 from current submissions. `learning.read` includes ended history; `lesson.end`

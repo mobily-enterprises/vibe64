@@ -21,6 +21,9 @@ storage retains bounded assessment evidence and resume state against that pin,
 and derives completion from every required assessment rather than a teacher
 claim. A read-only teaching brief supplies lesson instructions and saved evidence
 without exposing source files or executable visual controllers.
+A learner who explicitly starts another release keeps passes for an unchanged
+lesson, even when other lessons or their order change. Earlier evidence keeps
+its original identity; changed lesson content requires its own assessment.
 The server can retain owner-approved course releases and their enablement without
 changing their exact content. Disabling a release blocks future admissions while
 existing pinned attempts continue. This internal facility adds no learner course
