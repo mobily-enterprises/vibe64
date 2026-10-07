@@ -467,6 +467,8 @@ Shared provider-connection actions enforce owner and host management policy;
 HTTP and machine callers retain the same credential/revision service checks.
 The same routing owner supplies bounded Colleague read/preview/save presentations
 and paged role choices; there is no second routing store or permission policy.
+The existing connection list supplies an owner-only, bounded Colleague projection
+of regular Z.AI saved setup facts. Account writes and paid consent remain excluded.
 
 ### Program
 

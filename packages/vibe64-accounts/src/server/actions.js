@@ -1,4 +1,5 @@
 import { modelRoutingTool } from "./routingAssistantContracts.js";
+import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import {
   aiConnectionInputValidators,
@@ -233,8 +234,41 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement = 
     version: 1, kind: ["list", "catalog"].includes(operation) ? "query" : "command",
     input, output: null, idempotency: "none",
     audit: { actionName: `vibe64.accounts.ai-connections.${operation}` }, observability: {},
-    extensions: { assistant: { exclude: true } },
+    extensions: { assistant: operation === "list" ? {
+      description: "Read the owner's saved regular Z.AI API connection status for account setup, without a project. Returns only saved connection, preferred-provider, default-model and model-access policy facts. A missing connection is null; unavailable means the host has no connection store. This does not verify current credentials, balance, model entitlement or running conversations. Regular Z.AI and a Personal Coding Plan are separate connections. Use Model routing read for actual future workflow assignments and offered choices; the preferred provider/default model is not the Senior assignment or Colleague's model. The person must register, enter the key and consent to paid models in AI Accounts. Never request a key in chat or infer setup completion from a quiz answer.",
+      output: { mode: "replace", schema: createSchema({
+        ok: { type: "boolean", required: true },
+        unavailable: { type: "boolean", required: true },
+        error: { type: "string", maxLength: 512, required: false },
+        zai: { type: "object", nullable: true, required: true, schema: createSchema({
+          modelProviderId: { type: "string", enum: ["zai"], required: true },
+          connected: { type: "boolean", required: true },
+          preferred: { type: "boolean", required: true },
+          defaultModelId: { type: "string", maxLength: 512, required: true },
+          modelAccessMode: { type: "string", enum: ["recommended", "all"], nullable: true, required: true }
+        }) }
+      }) },
+      transformResult(result) {
+        if (result.ok !== true) return {
+          ok: false, unavailable: false, zai: null,
+          error: "Saved AI connection status could not be read. Open AI Accounts for details."
+        };
+        const connection = result.connections.find(row => row.modelProviderId === "zai");
+        return { ok: true, unavailable: result.unavailable === true, zai: connection ? {
+          modelProviderId: "zai", connected: connection.connected === true,
+          preferred: connection.preferred === true,
+          defaultModelId: String(connection.defaultModelId || "").slice(0, 512),
+          modelAccessMode: ["recommended", "all"].includes(connection.modelAccess?.mode)
+            ? connection.modelAccess.mode : null
+        } : null };
+      }
+    } : { exclude: true } },
     async execute(input) {
+      if (operation === "list" && input.vibe64User && input.vibe64User.role !== "owner") {
+        throw Object.assign(new Error("Only the workspace owner can read saved AI connection status."), {
+          code: "vibe64_owner_required", statusCode: 403
+        });
+      }
       const denied = await requireAiManagement({ vibe64User: input.vibe64User });
       if (denied) return { ...denied, statusCode: 403 };
       return aiConnectionService[operation](input);

@@ -122,7 +122,9 @@ Colleague can inspect shared Model routing without an open project, search role
 choices, preview their effect for the owner and collaborators, and save explicitly
 requested changes through the normal owner and revision checks. It distinguishes
 these future workflow choices from running agents, session chat modes and its own
-model. Account connection and credential entry remain in AI Accounts. Complete
+model. The owner can also ask for saved regular Z.AI setup facts without exposing
+a key or changing settings. Saved facts do not prove current paid-model access.
+Account connection and credential entry remain in AI Accounts. Complete
 product-operation coverage remains in progress.
 
 Colleague opens one written conversation with optional speech controls from its

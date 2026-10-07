@@ -66,6 +66,24 @@ offers assistance without changing anything for a how-to question. Connection,
 consent and model-access operations that are not exposed to it must be completed
 in the actual account UI; it should recheck status after the person finishes.
 
+For regular Z.AI setup, ask Colleague “Is my regular Z.AI connection saved?”
+The workspace owner can get a fresh, read-only check without opening a project.
+It reports the saved connection, preferred provider, default model and whether
+the account's model policy is recommended-only or unlocked. It never reads out
+the key, key hint or fingerprint. A Personal Coding Plan is a separate connection;
+it does not satisfy this check. If connection storage is unavailable, Colleague
+reports that instead of saying you are disconnected. On desktop and phone,
+registration, masked **API key** entry and paid-model consent remain your steps
+in **AI Accounts**. If a check fails, reopen AI Accounts and inspect its saved state;
+do not paste a key into chat or reconnect solely because of a failed read.
+
+Saved state is not a live key, credit or paid-model entitlement check. In particular,
+full **GLM-4.7** uses paid regular-API credit and differs from free **GLM-4.7-Flash**.
+The preferred provider/default-model badge does not prove future Senior routing
+or change Colleague's model. Ask for the actual routing before changing only the
+requested future workflow role. A correct lesson answer establishes understanding,
+not successful account setup or model execution.
+
 For one main conversation, open its chat mode menu and choose **Custom**. Select
 **Orchestrator**, then **Model** and **Thinking**, and press **Apply**. The model
 list includes the available models from each connected provider for that

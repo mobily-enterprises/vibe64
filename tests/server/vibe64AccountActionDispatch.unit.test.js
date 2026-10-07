@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createActions, createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/actions.js";
+import { createAiConnectionService } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
+import { createAiConnectionStore } from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
 import { registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
 import { testReply, testRouteApp, findRegisteredRoute, withLocalRequestBypass } from "./vibe64RouteTestHelpers.js";
 
@@ -120,4 +126,109 @@ test("all account operations use project-independent canonical contracts and aut
     ]) await assert.rejects(actions.execute({ actionId: `vibe64.accounts.${operation}`, input, context: { channel: "automation", surface: "app" } }), { code: "ACTION_VALIDATION_FAILED" }, operation);
     assert.equal(calls.length, count);
   });
+});
+
+test("Colleague reads saved Z.AI facts through the original owner without credentials or account effects", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-zai-status-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const filePath = path.join(root, "connections.json");
+  let verifications = 0;
+  let changes = 0;
+  const store = createAiConnectionStore({ filePath,
+    async verifyConnection() { verifications++; return { ok: true }; },
+    async onConnectionChanged() { changes++; }
+  });
+  let service = createAiConnectionService({ aiConnections: store });
+  const owner = { username: "owner", role: "owner" };
+  let actor = owner;
+  let managementAllowed = true;
+  let reads = 0;
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({
+    aiConnectionService: { async list() { reads++; return service.list(); } },
+    requireAiManagement: () => managementAllowed ? null : { ok: false, error: "private-host-error" }
+  }).map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+  registerVibe64ActionContext(actions, { resolveUser: async () => actor,
+    authorizeProject() { assert.fail("Saved connection status must work without a project."); } });
+  const catalog = createServiceToolCatalog(actions);
+  const context = { channel: "automation", surface: "app" };
+  const toolSet = catalog.resolveToolSet(context);
+  assert.deepEqual(toolSet.tools.map(tool => tool.actionId), ["vibe64.accounts.ai-connections.list"]);
+  const tool = toolSet.tools[0];
+  assert.doesNotThrow(() => catalog.toOpenAiToolSchema(tool));
+  const execute = (input = {}) => catalog.executeToolCall({ toolName: tool.name, toolSet, context,
+    argumentsText: JSON.stringify(input) });
+  let response = await execute();
+  assert.equal(response.ok, true, JSON.stringify(response));
+  assert.deepEqual(response.result, { ok: true, unavailable: false, zai: null });
+  await assert.rejects(readFile(filePath), { code: "ENOENT" }, "status must not create account state");
+
+  const revision = `sha256:${"a".repeat(64)}`;
+  const connect = (id) => store.upsertConnection({ modelProviderId: id, apiKey: "fixture-private-secret-1234", providerRevision: revision },
+    { provider: { id, definitionRevision: revision } });
+  await connect("zai-coding-plan");
+  response = await execute();
+  assert.deepEqual(response.result, { ok: true, unavailable: false, zai: null }, "a Coding Plan is not a regular API connection");
+  await connect("zai");
+  for (const mode of ["recommended", "all"]) {
+    if (mode === "all") await store.updateModelAccess("zai", { unlocked: true });
+    const before = await readFile(filePath, "utf8");
+    const effectCounts = [verifications, changes];
+    response = await execute();
+    assert.equal(response.ok, true, JSON.stringify(response));
+    assert.deepEqual(response.result, { ok: true, unavailable: false, zai: {
+      modelProviderId: "zai", connected: true, preferred: true,
+      defaultModelId: "glm-4.7-flash", modelAccessMode: mode
+    } });
+    assert.doesNotMatch(JSON.stringify(response), /secret|1234|keyHint|fingerprint|providerRevision|connections\.json|Coding Plan/);
+    assert.equal(await readFile(filePath, "utf8"), before);
+    assert.deepEqual([verifications, changes], effectCounts, "reading does not verify, unlock, invalidate or publish");
+  }
+  const api = await actions.execute({ actionId: tool.actionId, input: {}, context: { channel: "api", surface: "app" } });
+  assert.equal(api.connections.length, 3, "the original UI list retains every connection");
+  assert.ok(api.connections.find(row => row.modelProviderId === "zai").keyHint);
+
+  const localActors = [];
+  const requireLocalManagement = ({ vibe64User }) => { localActors.push(vibe64User); return null; };
+  const localActions = createActionCatalogue();
+  localActions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({
+    aiConnectionService: service, requireAiManagement: requireLocalManagement
+  }).map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+  assert.deepEqual(await localActions.execute({ actionId: tool.actionId, input: {}, context: { channel: "api", surface: "app" } }), api,
+    "standalone loopback account reads retain their existing host policy without a hosted owner identity");
+  const localApp = testRouteApp();
+  registerRoutes(localApp.http, { accounts: { subscribeAuthTerminal() {} }, aiConnectionService: service,
+    requireAiManagement: requireLocalManagement, fastify: localApp.fastify, projectScoped: false,
+    routeRelativePath: "vibe64/accounts", routeSurface: "app" });
+  const localRequest = { hostname: "localhost", ip: "127.0.0.1", query: {},
+    executeAction({ actionId, input }) {
+      return localActions.execute({ actionId, input, context: { channel: "api", surface: "app", requestMeta: { request: localRequest } } });
+    }
+  };
+  const localReply = testReply();
+  await findRegisteredRoute(localApp, { method: "GET", path: "/api/vibe64/accounts/ai-connections" }).handler(localRequest, localReply);
+  assert.equal(localReply.statusCode, 200);
+  assert.deepEqual(localReply.payload, api);
+  assert.deepEqual(localActors, [undefined, null, undefined], "the original action/route lanes supply no hosted actor");
+
+  const beforeReads = reads;
+  for (const input of [{ vibe64User: owner }, { apiKey: "fixture-private-secret" }, { modelProviderId: "zai-coding-plan" }]) {
+    assert.equal((await execute(input)).ok, false);
+  }
+  actor = { username: "member", role: "member" };
+  assert.equal((await execute()).ok, false, "owner permission is enforced even without a host policy check");
+  actor = null;
+  assert.equal((await execute()).ok, false);
+  assert.equal(reads, beforeReads);
+  actor = owner;
+  managementAllowed = false;
+  response = await execute();
+  assert.equal(response.ok, true, JSON.stringify(response));
+  assert.deepEqual(response.result, { ok: false, unavailable: false, zai: null,
+    error: "Saved AI connection status could not be read. Open AI Accounts for details." });
+  assert.equal(reads, beforeReads);
+  managementAllowed = true;
+  service = createAiConnectionService();
+  response = await execute();
+  assert.deepEqual(response.result, { ok: true, unavailable: true, zai: null });
 });

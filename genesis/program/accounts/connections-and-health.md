@@ -16,7 +16,18 @@ runtime invalidation and change publication. HTTP field selection derives from
 the action schema; a URL provider takes precedence over body input. Login
 WebSockets retain their transport adapter and the four retired Helper endpoints
 remain 410 notices with no operation to expose. Model routing read/preview/save
-have bounded Colleague presentations; other account actions remain excluded.
+have bounded Colleague presentations. The existing connection list also supplies
+an owner-only assistant projection of regular Z.AI saved connection, preferred
+provider, default model and model-access mode, without key hints, fingerprints,
+other connections or credential paths. Its HTTP result remains the original
+complete sanitized UI list. Missing regular Z.AI and unavailable storage are
+distinct; a Coding Plan does not satisfy this check. Saved facts do not prove
+current credentials, credit, entitlement, Senior routing or Colleague selection.
+Registration, key entry and paid-model consent remain human UI operations.
+The newly exposed list rejects a trusted non-owner as well as enforcing host
+management policy. Hosted context freshly resolves the actor and rejects missing
+authentication before execution; standalone retains its original authorized
+loopback/no-login lane. Other account actions remain excluded.
 
 ## Sources
 
