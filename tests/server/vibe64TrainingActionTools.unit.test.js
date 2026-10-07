@@ -307,7 +307,7 @@ test("unconfirmed checkpoint and unavailable teaching preserve native causes and
 test("training queries share API/tool catalogue contracts and fresh member authority without project or writes", async t => {
   const f = await fixture(t);
   const c = f.register();
-  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "learning.read", "teaching-brief.read", "lesson.start", "lesson.resume", "lesson.end"].map(value => `vibe64.training.${value}`).sort());
+  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "learning.read", "teaching-brief.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].map(value => `vibe64.training.${value}`).sort());
   let before = await inventory(f.systemRoot);
   for (const name of ["courses.list", "learning.read"]) {
     const api = await c.execute(name);
@@ -731,4 +731,74 @@ test("resumed lesson brief projects remaining coverage while retaining the passe
     /After success, read teaching-brief.read/u);
   assert.doesNotMatch(JSON.stringify(api), excluded);
   assert.deepEqual(await inventory(f.systemRoot), before);
+});
+
+
+test("retained continuation uses fresh member authority and bounded native input on API and tools", async t => {
+  const f = await fixture(t);
+  const saved = await f.reserve();
+  const input = { attemptId: saved.attempt.attemptId, requestId: "continue-one", expectedRevision: saved.revision };
+  const calls = [];
+  const c = f.register({ async continueLesson(value) {
+    calls.push(value);
+    return { ...saved, sourceRoot: "/PRIVATE_SOURCE", setup: { status: "pending", command: "PRIVATE_SHELL" }, previewReady: true };
+  } });
+  const before = await inventory(f.systemRoot);
+  const api = await c.execute("lesson.continue", input);
+  const tool = await c.tool("lesson.continue", input);
+  assert.equal(tool.ok, true, JSON.stringify(tool));
+  assert.deepEqual(tool.result, api);
+  assert.equal(api.active.attemptId, saved.attempt.attemptId);
+  assert.equal(api.previewReady, false);
+  assert.equal(api.setupStatus, "pending");
+  assert.doesNotMatch(JSON.stringify(api), excluded);
+  assert.deepEqual(calls, [{ actor: f.auth.user, ...input }, { actor: f.auth.user, ...input }]);
+  for (const change of [{ requestId: "x".repeat(19) }, { requestId: "bad/path" }, { requestId: "" },
+    { attemptId: "../attempt" }, { expectedRevision: -1 }, { pin: f.pin }, { actor: f.auth.user }, { path: "/PRIVATE_SOURCE" }]) {
+    await assert.rejects(c.execute("lesson.continue", { ...input, ...change }), { code: "ACTION_VALIDATION_FAILED" });
+  }
+  f.auth.user = { uid: 43, username: "another-member", role: "member" };
+  await c.tool("lesson.continue", input);
+  assert.deepEqual(calls.at(-1), { actor: f.auth.user, ...input });
+  f.auth.user = null;
+  assert.equal((await c.tool("lesson.continue", input)).ok, false);
+  assert.equal(calls.length, 3);
+  assert.deepEqual(await inventory(f.systemRoot), before);
+});
+
+test("continuation unavailability and native save failure retain state without leaking source", async t => {
+  const f = await fixture(t);
+  const saved = await f.reserve();
+  const input = { attemptId: saved.attempt.attemptId, requestId: "continue-one", expectedRevision: saved.revision };
+  const before = await inventory(f.systemRoot);
+  const unavailable = await f.register().tool("lesson.continue", input);
+  assert.equal(unavailable.ok, true);
+  assert.equal(unavailable.result.available, false);
+  assert.equal(unavailable.result.ok, false);
+  assert.match(unavailable.result.error, /original progress/u);
+  const c = f.register({ async continueLesson() {
+    throw Object.assign(new Error("Cannot rename /PRIVATE_SOURCE/progress.json"), { code: "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED", statusCode: 409 });
+  } });
+  const failure = await c.tool("lesson.continue", input);
+  assert.equal(failure.ok, false);
+  assert.doesNotMatch(JSON.stringify(failure), excluded);
+  await assert.rejects(c.execute("lesson.continue", input), error => error.code === "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED" && error.statusCode === 409);
+  assert.deepEqual(await inventory(f.systemRoot), before);
+});
+
+test("ended continuation replay projects its own history and actual successor without claiming preparation", async t => {
+  const f = await fixture(t);
+  const saved = await f.reserve();
+  const ended = await f.learners.endAttempt({ actor: f.auth.user, attemptId: saved.attempt.attemptId,
+    requestId: "end-one", expectedRevision: saved.revision, reason: "discard" });
+  const successor = await f.learners.reserveAttempt({ actor: f.auth.user, requestId: "start-two", expectedRevision: ended.revision, pin: f.pin });
+  const c = f.register({ async continueLesson() { return { ...ended, active: successor.attempt, replayed: true, previewReady: true }; } });
+  const result = await c.tool("lesson.continue", { attemptId: saved.attempt.attemptId, requestId: "continue-one", expectedRevision: saved.revision });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.result.attempt.attemptId, ended.attempt.attemptId);
+  assert.equal(result.result.active.attemptId, successor.attempt.attemptId);
+  assert.equal(result.result.replayed, true);
+  assert.equal(result.result.previewReady, false);
+  assert.equal(result.result.completion, null);
+  assert.doesNotMatch(JSON.stringify(result), excluded);
 });

@@ -129,7 +129,7 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
     id: `vibe64.training.${name}`, version: 1,
     kind: name.endsWith("read") || name.endsWith("list") ? "query" : "command",
     input: { mode: "create", schema: createSchema(fields) }, output: null,
-    idempotency: ["lesson.start", "lesson.resume", "lesson.end"].includes(name) ? "domain_native" : "none",
+    idempotency: ["lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].includes(name) ? "domain_native" : "none",
     extensions: { assistant: { alwaysAvailable: true, description, output: resultOutput } },
     async execute(input, context) {
       const actor = authenticatedVibe64User(context);
@@ -145,6 +145,7 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
 
   const unavailable = (operation = "preparation") => ({ ok: false, available: false,
     error: operation === "end" ? "Lesson retirement is unavailable in this installation. Reading learning state does not end an attempt or dispose of its exercise."
+      : operation === "continue" ? "Retained lesson continuation is unavailable in this installation. Keep the original progress and ask the owner to restore the exercise."
       : "Lesson exercise preparation is unavailable in this installation. Reading learning state and teaching content does not prepare an exercise." });
   const endedResult = result => ({ ok: true, available: true, revision: result.revision,
     attempt: active(result.attempt), active: active(result.active), replayed: result.replayed === true,
@@ -190,9 +191,14 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
       if (typeof exercises?.prepareLesson !== "function") return unavailable();
       return prepared(await exercises.prepareLesson({ actor, attemptId: input.attemptId }));
     }),
+    definition("lesson.continue", { attemptId, requestId: { ...requestId, maxLength: 18 }, expectedRevision: revision
+    }, "Continue only after the person's direct request or accepted offer for a fresh exercise of an ended saved lesson. Read learning.read and use this learner's exact ended attempt ID and current revision. The host derives its original installed pin; a disabled old release may continue, but arbitrary new admission remains disabled. If the lesson is still active, explain and use lesson.end only when the person requested that retirement. Use a stable continuation request ID of at most 18 characters and keep it on retries. This creates a fresh attempt and exercise only when declared, retaining genuine passes for unchanged lesson content and their original evidence. It does not Stop, close, archive, delete or overwrite the old project. Another active attempt is not adopted or ended. An ended replay returns its retained target and actual current active state without preparing a successor. After success, read teaching-brief.read for the returned attempt and continue remaining assessments; setup is not running Preview or a new practical pass. An unavailable host or uncertain save is not successful recovery.", async (input, actor) => {
+      if (typeof exercises?.continueLesson !== "function") return unavailable("continue");
+      return prepared(await exercises.continueLesson({ actor, ...pick(input, ["attemptId", "requestId", "expectedRevision"]) }));
+    }),
     definition("lesson.end", { attemptId, requestId, expectedRevision: revision,
       reason: { ...text, enum: ["restart", "discard"] }
-    }, "End only after the person's direct request or accepted offer to retire this exact learning attempt. Use its saved attempt ID, current learning revision and a stable end request ID. This retires learning while retaining the exercise and all historical evidence. It does not Stop, close, archive or delete anything; use those original authorised operations separately if requested. Retry the same end identity after an uncertain save. Replaying an old end cannot end a newer attempt; a fresh exercise requires a separately admitted new start.", async (input, actor) => {
+    }, "End only after the person's direct request or accepted offer to retire this exact learning attempt. Use its saved attempt ID, current learning revision and a stable end request ID. This retires learning while retaining the exercise and all historical evidence. It does not Stop, close, archive or delete anything; use those original authorised operations separately if requested. Retry the same end identity after an uncertain save. Replaying an old end cannot end a newer attempt; a fresh exercise requires a separately requested lesson.continue of the ended pin, or a new enabled lesson.start.", async (input, actor) => {
       if (typeof exercises?.endLesson !== "function") return unavailable("end");
       const result = await exercises.endLesson({ actor, ...pick(input, ["attemptId", "requestId", "expectedRevision", "reason"]) });
       if (result?.ok === false || !result?.attempt?.ended) {

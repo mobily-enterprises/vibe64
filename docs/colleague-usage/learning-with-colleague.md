@@ -59,7 +59,7 @@ Authenticated visual tool delivery and speech correlation are separate host work
 this presentation component alone cannot claim that teaching is active.
 
 
-For ending or restarting a lesson and retaining earlier evidence, read
+For explicitly ending a lesson and continuing its retained pin in a fresh exercise, read
 [Lesson history and resume](learning-history.md).
 An explicitly started newer topic can retain passes for a lesson whose code and
 content hash are unchanged. Colleague reads the fresh brief's retained results and

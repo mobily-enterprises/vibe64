@@ -24,6 +24,10 @@ without exposing source files or executable visual controllers.
 A learner who explicitly starts another release keeps passes for an unchanged
 lesson, even when other lessons or their order change. Earlier evidence keeps
 its original identity; changed lesson content requires its own assessment.
+With a supported lesson host, a learner can explicitly end a saved attempt and
+ask Colleague to continue its original pin in a fresh exercise, even after release
+disablement. This retains valid passes and the old project without taking over a
+different active lesson. New starts still require an enabled release.
 The server can retain owner-approved course releases and their enablement without
 changing their exact content. Disabling a release blocks future admissions while
 existing pinned attempts continue. This internal facility adds no learner course

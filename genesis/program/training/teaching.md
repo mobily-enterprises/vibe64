@@ -191,13 +191,13 @@ action catalogue below projects its returned facts.
 
 ## Shared lesson operations
 
-`packages/vibe64-training/src/server/actions.js` provides six original-catalogue
+`packages/vibe64-training/src/server/actions.js` provides seven shared-catalogue
 operations: courses list, learning read, teaching-brief read, lesson start,
-lesson resume and lesson end. They use Core's fresh actor context and expose bounded teaching
+lesson resume, lesson end and retained-pin lesson continuation. They use Core's fresh actor context and expose bounded teaching
 text and saved facts without source paths, executable controllers or shell
 authority. API and assistant tools use the same projections. A host supplies the
 existing exercise preparation/retirement owner; without its relevant method,
-start/resume/end reports unavailable. `learning.read` includes bounded ended history;
+start/resume/end/continue reports unavailable. `learning.read` includes bounded ended history;
 the brief's retained-pass projection preserves original attempt/submission IDs
 without learner IDs, repository/source paths, rubric file references or executable
 bytes. Readers do not reserve or repair state. An ended start replay returns its
@@ -208,6 +208,14 @@ retains the exercise and all history. It does not Stop, close, archive or delete
 those are separate existing authorised operations. Neither old replay can retire
 or reactivate a successor. Preparing a lesson never claims Preview
 is running, and these operations alone do not implement guided assessment.
+`lesson.continue` accepts an ended attempt ID, stable request of at most 18
+characters and the current expected learning revision. The host derives the exact
+pin from that actor's verified history; the model cannot supply a pin or source.
+It uses the original reservation and preparation owners. An independent active
+attempt is refused, including a same-pin admission racing the supplied revision.
+An exact retired continuation replay returns its own target and actual active
+state without preparing a successor. Missing host/content or capacity refusal
+retains history; no new storage format or historical repair is introduced.
 
 New-start guidance requires a course-list and learning-state read in the same
 teaching turn. Earlier chat results can name a disabled release. Catalogue topic
