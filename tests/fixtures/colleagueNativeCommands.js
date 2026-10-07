@@ -97,7 +97,17 @@ export async function createControlledColleagueNativeCommands(root, responses) {
       }
       if (method === "thread/read") return reply({ thread: { ...thread,
         status: { type: !state.loaded ? "notLoaded" : state.runningTurn?.status === "inProgress" ? "active" : "idle" } } });
-      if (method === "thread/turns/list") return reply({ data: [...thread.turns].reverse(), nextCursor: null });
+      if (method === "thread/turns/list") {
+        const data = structuredClone([...thread.turns].reverse());
+        const delayMs = params.itemsView === "full" ? state.completionReadDelayMs || 0 : 0;
+        if (delayMs) {
+          state.completionReadDelayMs = 0;
+          log({ historyReadHeld: { threadId: thread.id, turnId: state.runningTurn.id, delayMs } });
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          log({ historyReadReturned: { threadId: thread.id, turnId: state.runningTurn.id } });
+        }
+        return reply({ data, nextCursor: null });
+      }
       if (method === "thread/resume") { state.loaded = true; thread.modelProvider = params.modelProvider;
         thread.environment = params.config.shell_environment_policy.set;
         thread.goalsEnabled = params.config.features.goals; save(); return reply({ thread, modelProvider: thread.modelProvider }); }
@@ -157,6 +167,12 @@ export async function createControlledColleagueNativeCommands(root, responses) {
           return;
         }
         if (response.mode === "completion-before-delayed-final") {
+          if (response.readDelayMs) {
+            // The existing read-only contract tool waits for canonical input
+            // admission before this fixture publishes native completion.
+            await callTool(turn, "assistant_action_contract", { actionId: "vibe64.test.operate", version: 1 });
+          }
+          state.completionReadDelayMs = response.readDelayMs || 0;
           turn.status = "completed";
           save();
           emitTurn("turn/completed", { turn: { id: turn.id, status: turn.status } });

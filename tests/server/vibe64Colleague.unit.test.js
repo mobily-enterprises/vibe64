@@ -4338,3 +4338,37 @@ for (const delayMs of [200, 1500]) {
     }
   });
 }
+
+
+for (const delayMs of [1000, 2000]) {
+  test(`Colleague native slow first history read preserves its post-read grace for final at ${delayMs}ms`, async t => {
+    const f = await fixture(t, [{ mode: "completion-before-delayed-final", readDelayMs: 600,
+      delayMs, text: "Exact final after the slow read." }], { native: true });
+    try {
+      await f.send("Keep the slow-read request.", "user-1");
+      await until(async () => (await f.native.trace()).some(row => row.historyReadHeld));
+      const held = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+      assert.equal(held.conversationMetadata.runtime.binding.codexAppServerRun.state, "finalizing",
+        "The delayed full-history read must follow native completion and canonical finalization");
+      const result = await f.service.wait(f.context);
+      assert.equal(result.status, delayMs === 1000 ? "ready" : "failed", result.error);
+      if (delayMs === 2000) assert.match(result.error, /assistant result text was not received/);
+      assert.deepEqual(result.messages.filter(row => row.role === "user").map(row => row.text), ["Keep the slow-read request."]);
+      assert.deepEqual(result.messages.filter(row => row.role === "assistant").map(row => row.text),
+        delayMs === 1000 ? ["Exact final after the slow read."] : []);
+      const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+      assert.equal(saved.conversationLog.find(turn => turn.user?.messageId === "user-1").metadata.runtime.status,
+        delayMs === 1000 ? "complete" : "failed");
+      assert.deepEqual(f.observations.mutations, []);
+      const trace = await f.native.trace();
+      const turns = trace.filter(row => row.method === "turn/start");
+      assert.equal(turns.length, 1, "No repeat native request or inference");
+      assert.equal(turns[0].params.clientUserMessageId, "user-1");
+      assert.deepEqual(trace.filter(row => row.historyReadHeld).map(row => row.historyReadHeld),
+        [{ threadId: turns[0].params.threadId, turnId: trace.find(row => row.notification?.method === "turn/started").notification.params.turn.id, delayMs: 600 }]);
+      assert.equal(trace.filter(row => row.historyReadReturned).length, 1);
+    } finally {
+      await f.service.stop({}, f.context);
+    }
+  });
+}

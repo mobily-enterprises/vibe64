@@ -127,11 +127,15 @@ native owner keeps its existing notification callback and outcome policy.
 Colleague supplies its original 500ms missing-final grace through the common
 runtime's server-owned `limits.codexFinalizingGraceMs`. The generic Codex driver
 passes it to its existing run owner and journal; Main's supplied owner and the
-standalone default retain 10000ms. The common journal measures from its saved
-completion time, unlike the old detached watcher's interval after its first
-history read. The original malformed-envelope correction and failed-status
-detail interval remain separate parity obligations. No second timer or watcher
-is introduced by this duration setting.
+standalone default retain 10000ms. Colleague also explicitly enables
+`limits.codexFinalizingGraceAfterHistoryRead`, starting its interval after the
+first exact history read as the original detached watcher did. The existing
+timer retains that first local clock through repeated or held expiry reads;
+current turn, Stop, successor and goal checks prevent obsolete recovery. Main
+and the standalone default keep their completion-based clock. Native completion
+timestamps and persisted metadata are unchanged. The original malformed-envelope
+correction and failed-status detail interval remain separate parity obligations.
+No second timer owner or watcher is introduced.
 On missing-result expiry, the generic driver projects the original
 `response_delivery_failure` checkpoint as failed delivery and rejects its waiter
 with the native owner's missing-text error. The native turn remains completed;

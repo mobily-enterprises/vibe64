@@ -85,6 +85,7 @@ existing cleanup. If cleanup cannot be confirmed, use **Stop** before continuing
 This recovery does not resend your request or use another turn's answer.
 If Codex finishes without delivering answer text, Colleague briefly checks for
 that exact reply, then reports missing output instead of waiting indefinitely.
+A slow first history check does not consume its brief wait for a late reply.
 Your message remains in history; this check does not send it again.
 This also applies when selecting a connected provider under OpenCode. Vibe64
 hands the retained chat context to that provider without starting a fresh
