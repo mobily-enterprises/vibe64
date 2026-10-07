@@ -150,6 +150,16 @@ delivery**, which checks its existing receipt without sending again. If the plan
 or conversation changed, stop the handoff and send a fresh request. Direct
 Senior, Junior and Custom modes do not automatically continue.
 
+When **Review pending** appears before implementation is finished, choose **Stop**
+beside **Retry review** in the notice. This cancels the pending handoff, preserves
+the conversation, source changes and unfinished plan, and frees the composer.
+Then send “Continue implementation of the remaining plan items” or choose Junior
+for a direct implementation request. The same **Stop** control is available for
+pending planning and implementation handoffs. If delivery is uncertain, use
+**Check delivery** first; cancelling a handoff does not prove an attempted message
+was never delivered. Colleague can explain this recovery and offer to stop the
+pending work or send your explicit continuation through its existing actions.
+
 When ready, Auto starts one separate Senior review, even when Senior implemented
 it or both roles use the same model. The **Deslop** switch adds behavior-preserving
 cleanup to that review. A failed Router decision leaves **Retry review** for an

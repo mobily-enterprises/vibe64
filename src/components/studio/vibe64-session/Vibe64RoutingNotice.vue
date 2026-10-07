@@ -8,7 +8,7 @@
       <v-btn variant="text" min-height="48" :disabled="retrying" @click="$emit('retry')">
         {{ retryLabel }}
       </v-btn>
-      <v-btn v-if="request.status === 'planning_pending'" variant="text" min-height="48" @click="$emit('skip')">
+      <v-btn v-if="request.status.endsWith('_pending')" variant="text" min-height="48" @click="$emit('skip')">
         Stop
       </v-btn>
     </div>

@@ -1,4 +1,6 @@
-import { createRenderer, h, nextTick, ref, ssrContextKey } from "vue";
+import { createRenderer, createSSRApp, h, nextTick, ref, ssrContextKey } from "vue";
+import { renderToString } from "vue/server-renderer";
+import { createVuetify } from "vuetify";
 import { afterEach, expect, it, vi } from "vitest";
 
 const feedback = vi.hoisted(() => ({ report: vi.fn() }));
@@ -89,6 +91,27 @@ it("shows recovery controls for a stopped planning handoff", () => {
   const f = mount({ status: "planning_pending", continuation: "planning", resolvedMode: "junior", assignments: { senior: { engineId: "codex", modelId: "gpt-6-astra" } } });
   expect(f.state().actionable).toBe(true);
   expect(f.state().label).toBe("Back to planning · Codex (gpt-6-astra not recorded)");
+});
+
+it("renders Stop beside retry for every unsent handoff, including recovered unfinished review", async () => {
+  for (const status of ["review_pending", "planning_pending", "implementation_pending"]) {
+    const pending = createSSRApp(RoutingNotice, { request: { messageId: "unfinished", status,
+      resolvedMode: "junior", error: "Scheduling disconnected before the handoff was sent." } });
+    pending.use(createVuetify());
+    const html = await renderToString(pending);
+    expect(html).toMatch(/>\s*Stop\s*</u);
+    expect(html).toContain("Scheduling disconnected before the handoff was sent.");
+  }
+});
+
+it("keeps Check delivery without an unsent-handoff Stop for uncertain delivery", async () => {
+  for (const status of ["review_uncertain", "planning_uncertain", "implementation_uncertain"]) {
+    const uncertain = createSSRApp(RoutingNotice, { request: { messageId: "unknown", status, resolvedMode: "junior" } });
+    uncertain.use(createVuetify());
+    const html = await renderToString(uncertain);
+    expect(html).toContain("Check delivery");
+    expect(html).not.toMatch(/>\s*Stop\s*</u);
+  }
 });
 
 

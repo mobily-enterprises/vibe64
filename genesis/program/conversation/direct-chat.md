@@ -1320,8 +1320,13 @@ outcome requiring a new user request; a review never schedules another review.
 
 The notice presents the outcome, explanation and next step through the existing
 chat surface. Pending implementation has Continue implementation or Check delivery;
-Router failure still offers explicit Retry review or Stop. A recovered completion
-never automatically launches another turn after restart. Classification runs
+Router failure still offers explicit Retry review or Stop. Pending review
+shows Stop alongside Retry review, allowing the person to
+cancel an unsent handoff and submit a new implementation request without marking
+the plan complete. Pending planning and implementation use that same Stop action;
+uncertain delivery retains Check delivery and the existing receipt safeguards.
+This uses the original interrupt/cancel owner and preserves source and history.
+An observed completion never automatically launches another turn after restart. Classification runs
 outside the session lock and Stop can suppress its late answer. Conversation or
 plan changes, malformed decisions, oversized input and cleanup failures retain
 unsent recovery instead of sending from stale evidence.
