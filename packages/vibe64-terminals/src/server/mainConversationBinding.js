@@ -313,6 +313,13 @@ export async function prepareSessionDetachedConversationCleanup(provider, sessio
   return { sessionId, engine: provider.id, native: host.native, input: request.input, context: request.context };
 }
 
+// Detached execution retains admitted context separately from the original
+// provider-specific native options, without opening a Main binding.
+export async function prepareSessionDetachedConversationRun(provider, sessionId, context, input, options) {
+  const host = await provider.prepareConversationHost(sessionId, context, "detached", input);
+  return { sessionId, engine: provider.id, native: host.native, context, input, options };
+}
+
 // Storage authority and engine selection come from the saved binding, independently
 // of the current assistant. The caller retains preservation and writer exclusion.
 export async function prepareSessionConversationStorage(provider, sessionId, context, binding) {

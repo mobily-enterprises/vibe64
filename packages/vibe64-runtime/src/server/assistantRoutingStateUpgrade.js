@@ -3,6 +3,10 @@ import {
   vibe64AssistantConversationKey,
   VIBE64_ASSISTANT_ENGINE_IDS
 } from "../shared/assistantSelection.js";
+import { assistantRoutingPreferences as currentPreferences, ASSISTANT_PURPOSE_ROLES } from "../shared/assistantRouting.js";
+import { validateAssistantRoutingConfiguration as validateV2 } from "@local/vibe64-core/server/stateUpgrades/routingV2Format";
+import { validateAssistantRoutingConfiguration as validateV3 } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
+import { validateAssistantRoutingConfiguration as validateV4 } from "@local/vibe64-core/server/assistantRoutingStore";
 
 const engines = new Set(Object.values(VIBE64_ASSISTANT_ENGINE_IDS));
 const modes = new Set(["plan", "code", "economy", "auto"]);
@@ -10,7 +14,68 @@ const requestStatuses = new Set([
   "routing", "sending", "uncertain", "sent", "failed", "cancelled", "done",
   "review_pending", "review_sending", "review_uncertain", "reviewing"
 ]);
+const nativeRequestStatuses = new Set([
+  ...requestStatuses, "planning", "planning_pending", "planning_sending", "planning_uncertain",
+  "implementation_pending", "implementation_sending", "implementation_uncertain"
+]);
 const record = (value) => value && typeof value === "object" && !Array.isArray(value);
+
+// Validate known native formats without translating their captured decisions.
+// Configuration snapshots omit schemaVersion; the enclosing request supplies it.
+function validateAssistantRoutingUpgradeRecord(value, { schemaVersion = 4, preferences = false, request = false } = {}) {
+  if (!record(value) || ![3, 4].includes(schemaVersion) ||
+      value.schemaVersion !== undefined && value.schemaVersion !== schemaVersion) {
+    throw new Error("Saved routing has an unsupported format. Use the matching release.");
+  }
+  const roles = new Set(["custom", "senior", "junior", "auto", "router", "review", "deslop",
+    schemaVersion === 3 ? "intern" : "helper", ...Object.keys(ASSISTANT_PURPOSE_ROLES).filter(role => role !== "helper")]);
+  for (const key of ["mode", "requestedMode", "resolvedMode", "role"]) {
+    if (value[key] !== undefined && value[key] !== "" && !roles.has(value[key])) {
+      throw new Error("Saved routing contains an unknown role. Inspect it before upgrading.");
+    }
+  }
+  if (preferences) currentPreferences(schemaVersion === 3 && value.mode === "intern" ? { ...value, mode: "junior" } : value);
+  if (value.workflowEngineId !== undefined) workflow(value.workflowEngineId, "Saved routing");
+  const legacyAdmission = value.configuration === undefined && value.admissionRequired === true;
+  if (request && (!value.mode || !record(value.configuration) && !legacyAdmission ||
+      !record(value.assignments) || !Object.keys(value.assignments).length ||
+      !nativeRequestStatuses.has(value.status))) {
+    throw new Error("Saved routing has an unsupported routing request. Inspect it before upgrading.");
+  }
+  for (const key of ["selection", "observedSelection", "effectiveSelection", "configuredSelection", "destination", "deliverySelection"]) {
+    if (value[key] != null) selection(value[key], "Saved routing");
+  }
+  if (value.configuration) {
+    const validate = schemaVersion === 3 ? validateV3 : validateV4;
+    validate({ ...value.configuration, schemaVersion: value.configuration.schemaVersion ?? schemaVersion });
+  }
+  if (value.assignments !== undefined) {
+    if (!record(value.assignments)) throw new Error("Saved routing assignments must be an object.");
+    for (const [role, assigned] of Object.entries(value.assignments)) {
+      if (!roles.has(role) || role === "auto") throw new Error("Saved routing contains an unknown assignment role.");
+      selection(assigned, "Saved routing assignment");
+    }
+  }
+  if (value.override) {
+    if (value.override.schema) selection(value.override, "Saved routing override");
+    else {
+      if (!value.override.selection) throw new Error("Saved routing override has no captured model selection.");
+      validateAssistantRoutingUpgradeRecord(value.override, { schemaVersion });
+    }
+  }
+  if (value.mode === "custom" && !preferences && !value.selection && !value.override && !value.assignments?.custom) {
+    throw new Error("Saved Custom routing has no captured model selection.");
+  }
+  if (value.decision) validateAssistantRoutingUpgradeRecord(value.decision, { schemaVersion });
+  if (value.seniorJuniorPair) {
+    if (!record(value.seniorJuniorPair) || Object.keys(value.seniorJuniorPair).some(role => !["senior", "junior"].includes(role))) {
+      throw new Error("Saved routing has an invalid workflow pair.");
+    }
+    for (const destination of Object.values(value.seniorJuniorPair)) validateAssistantRoutingUpgradeRecord(destination, { schemaVersion });
+  }
+  if (value.planCodePair) throw new Error("Saved native routing contains a legacy workflow pair.");
+  return value;
+}
 
 // Frozen preference validation for the published V2 migration.
 function assistantRoutingPreferences(value = {}) {
@@ -62,9 +127,31 @@ function requestWorkflow(request, label) {
 }
 
 function upgradeMetadata(metadata, currentSelection, label) {
-  const preferences = readRecord(metadata.assistant_routing, `${label} preferences`);
-  const request = readRecord(metadata.assistant_routing_request, `${label} request`);
-  const goal = readRecord(metadata.assistant_routing_goal, `${label} goal`);
+  const savedPreferences = readRecord(metadata.assistant_routing, `${label} preferences`);
+  const savedRequest = readRecord(metadata.assistant_routing_request, `${label} request`);
+  const savedGoal = readRecord(metadata.assistant_routing_goal, `${label} goal`);
+  const nativeRequest = savedRequest && [3, 4].includes(savedRequest.schemaVersion);
+  const nativeGoal = savedGoal && ["senior", "junior", "custom", "intern"].includes(savedGoal.mode);
+  const nativePreferences = savedPreferences && (["senior", "junior", "custom", "intern"].includes(savedPreferences.mode) ||
+    savedPreferences.mode === "auto" && (nativeRequest || nativeGoal));
+  if (nativeRequest) validateAssistantRoutingUpgradeRecord(savedRequest, { schemaVersion: savedRequest.schemaVersion, request: true });
+  if (nativeGoal) {
+    const schemaVersion = savedGoal.configuration?.schemaVersion ?? (savedGoal.mode === "intern" ||
+      savedRequest?.schemaVersion === 3 || Object.values(savedGoal.configuration?.orchestrators || {}).some(roles => Object.hasOwn(roles, "intern")) ? 3 : 4);
+    validateAssistantRoutingUpgradeRecord(savedGoal, { schemaVersion });
+    if (!savedGoal.selection) throw new Error(`${label} has an invalid explicit goal selection.`);
+  }
+  if (nativePreferences) validateAssistantRoutingUpgradeRecord(savedPreferences, { preferences: true,
+    schemaVersion: savedPreferences.mode === "intern" ? 3 : 4 });
+  const nativeWorkflows = [
+    nativePreferences && savedPreferences.workflowEngineId,
+    nativeRequest && !["done", "cancelled"].includes(savedRequest.status) && savedRequest.workflowEngineId,
+    nativeGoal && !["complete", "completed"].includes(savedGoal.status) && (savedGoal.workflowEngineId || savedGoal.selection.engineId)].filter(Boolean);
+  if (new Set(nativeWorkflows).size > 1) throw new Error(`${label} has conflicting unfinished workflow identities.`);
+  const preferences = nativePreferences ? null : savedPreferences;
+  const request = nativeRequest ? null : savedRequest;
+  const goal = nativeGoal ? null : savedGoal;
+  if ((nativeRequest || nativeGoal || nativePreferences) && !preferences && !request && !goal) return {};
   const unfinished = request && !["done", "cancelled"].includes(request.status);
   // Validate completed records too, but do not reinterpret their old role names.
   if (request) requestWorkflow(request, label);
@@ -76,6 +163,7 @@ function upgradeMetadata(metadata, currentSelection, label) {
   const goalSelection = goal ? selection(goal.selection, label) : null;
   const activeGoal = goal && !["complete", "completed"].includes(goal.status);
   const evidence = [
+    ...nativeWorkflows,
     preferences?.workflowEngineId && workflow(preferences.workflowEngineId, label),
     unfinished && requestWorkflow(request, label),
     activeGoal && (goal.workflowEngineId ? workflow(goal.workflowEngineId, label) : goalSelection.engineId)
@@ -85,6 +173,20 @@ function upgradeMetadata(metadata, currentSelection, label) {
   }
   const workflowEngineId = evidence[0] || currentSelection?.engineId;
   const changes = {};
+  if (request && !unfinished && [1, 2].includes(request.schemaVersion)) {
+    const assignments = Object.entries(request.assignments);
+    if (!assignments.length || assignments.some(([role]) => !["plan", "code", "economy", "router", "sharedBackup"].includes(role))) {
+      throw new Error(`${label} has invalid legacy terminal assignments.`);
+    }
+    for (const [, assigned] of assignments) selection(assigned, label);
+    if (request.configuration !== undefined) {
+      validateV2({ ...request.configuration, schemaVersion: request.configuration?.schemaVersion ?? request.schemaVersion }, { legacy: true });
+    } else {
+      // Later role upgrades advance this legacy tag to 4. Preserve explicit
+      // fresh-admission evidence rather than accepting any configuration-less 4.
+      changes.assistant_routing_request = JSON.stringify({ ...request, admissionRequired: true });
+    }
+  }
   if (workflowEngineId) {
     // Legacy direct chats retain their exact destination and editing behavior.
     let next = preferences;
@@ -92,7 +194,7 @@ function upgradeMetadata(metadata, currentSelection, label) {
     if (!next && unfinished) next = { mode: request.mode, review: request.review === true,
       ...(request.mode !== "auto" && request.assignments[request.mode] ? { override: selection(request.assignments[request.mode], label) } : {}) };
     next ||= { mode: "code", review: false, ...(currentSelection ? { override: currentSelection } : {}) };
-    changes.assistant_routing = JSON.stringify({ ...next, workflowEngineId });
+    if (!nativePreferences) changes.assistant_routing = JSON.stringify({ ...next, workflowEngineId });
   } else if (preferences || unfinished || activeGoal) {
     throw new Error(`${label} has no evidenced workflow identity. Repair its assistant selection before upgrading routing.`);
   }
@@ -157,6 +259,10 @@ function upgradeAssistantRoutingSession({ sessionId, metadata, conversations, re
   if (renewal?.successor?.assistantSelection && !["completed", "cancelled"].includes(renewal.status)) {
     const selected = selection(renewal.successor.assistantSelection, `Renewal of ${sessionId}`);
     const previous = renewal.successor.assistantRouting;
+    if (previous && ["senior", "junior", "custom", "intern"].includes(previous.mode)) {
+      validateAssistantRoutingUpgradeRecord(previous, { preferences: true, schemaVersion: previous.mode === "intern" ? 3 : 4 });
+      return result;
+    }
     const preferences = assistantRoutingPreferences(previous ||
       { mode: "code", review: false, override: selected, workflowEngineId: selected.engineId });
     if (!preferences.workflowEngineId) preferences.workflowEngineId = selected.engineId;
@@ -167,4 +273,4 @@ function upgradeAssistantRoutingSession({ sessionId, metadata, conversations, re
   return result;
 }
 
-export { upgradeAssistantRoutingSession };
+export { upgradeAssistantRoutingSession, validateAssistantRoutingUpgradeRecord };

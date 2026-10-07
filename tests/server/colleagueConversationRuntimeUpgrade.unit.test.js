@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-runtime-upgrade-"));
@@ -152,4 +152,30 @@ test("invalid versions and symlinked histories fail before any upgrade", async t
   await symlink(target, file);
   await assert.rejects(f.run(true), /regular file/);
   assert.deepEqual(JSON.parse(await readFile(target, "utf8")), original);
+});
+
+test("format 3 retains active and archived native journals and rejects malformed archived runtime state", async t => {
+  const f = await fixture(t);
+  const converted = upgradeConversationRuntimeState({ metadata: original.conversationMetadata, conversationLog: original.conversationLog });
+  const active = { ...original, schemaVersion: 3, scopeId: "colleague_fresh", runtimeId: "owner:colleague_fresh", conversationLog: [], conversationMetadata: {} };
+  const archived = { ...original, runtimeId: "owner", archivedAt: "2026-10-06T00:00:00.000Z", conversationMetadata: converted.metadata,
+    unconfirmedMessages: [], freshOperation: { operationId: "rotate", conversationId: active.scopeId } };
+  delete archived.schemaVersion;
+  active.previousConversations = [archived];
+  const file = await f.write("owner", active);
+  const before = await readFile(file, "utf8");
+  await f.run(false);
+  await f.run(true);
+  await upgradeColleagueConversations({ ...f, apply: true, report: () => {} });
+  await upgradeColleagueConversationHistory({ ...f, apply: true, report: () => {} });
+  assert.equal(await readFile(file, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  const broken = structuredClone(active);
+  broken.previousConversations[0].conversationMetadata.runtime.version = 99;
+  await writeFile(file, JSON.stringify(broken));
+  for (const upgrade of [upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory]) {
+    await assert.rejects(upgrade({ ...f, apply: true, report: () => {} }), /unsupported runtime version/);
+  }
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), broken);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
 });

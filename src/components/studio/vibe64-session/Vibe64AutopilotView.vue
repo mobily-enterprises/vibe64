@@ -334,6 +334,8 @@
       </div>
 
       <Vibe64ConversationLog
+        ref="conversationView"
+        :voice-runtime="props.active && !props.sessionSelectionArchived ? props.conversationRuntime : null"
         :working="agentStopVisible"
         :integration-action-pending="props.conversationLog?.integrationActionPending"
         :integration-connections="props.conversationLog?.integrationConnections"
@@ -343,12 +345,12 @@
         :assistant-label="conversationAssistantLabel"
         class="studio-autopilot__conversation"
         :error="props.conversationLog?.error"
+        :error-reloadable="props.conversationLog?.errorReloadable"
         :follow-latest-key="conversationFollowLatestKey"
         :has-more-before="props.conversationLog?.hasMoreBefore"
         :loading="props.conversationLog?.loading"
         :loading-more="props.conversationLog?.loadingMore"
         :load-more-error="props.conversationLog?.loadMoreError"
-        :reloadable="chatReloadAvailable"
         :reloading="chatReloading"
         :scroll-key="conversationScrollKey"
         :source-root="sessionSourceRoot"
@@ -365,8 +367,8 @@
         @connect-integration="connectIntegrationRequest"
         @check-integration="checkIntegrationRequest"
         @cancel-integration="cancelIntegrationRequest"
-        @reload="reloadChatPane"
         @resend-turn="resendOptimisticMessage"
+        @reload="reloadChatPane"
       >
         <template #hints>
           <AssistantComposerSupport
@@ -385,7 +387,7 @@
             </template>
           </AssistantComposerSupport>
         </template>
-        <template #composer>
+        <template #composer="{ composerBlocked, setVoiceFeedbackTarget }">
           <div
             class="studio-autopilot__composer"
             @focusout="handleComposerRegionFocusOut"
@@ -413,7 +415,7 @@
               :placeholder-affects-height="!composerPromptHintPreview"
               :rows="1"
               :session-id="sessionId"
-              :submit-enabled="composerCanSubmit"
+              :submit-enabled="composerCanSubmit && !composerBlocked"
               tab-to-submit
               @attachment-state-change="updateComposerAttachmentState"
               @attachments-change="updateComposerAttachments"
@@ -536,16 +538,16 @@
                       :icon="mdiStop" size="small" variant="text" class="studio-autopilot__composer-action"
                       @click="requestAgentInterrupt"
                     />
-                    <Vibe64ProjectVoiceLauncher v-if="props.active && !props.sessionSelectionArchived" :runtime="props.conversationRuntime" />
                     <v-btn
                       ref="composerSendButton" :aria-label="composerSubmitAriaLabel"
-                      :title="composerSubmitTitle" :disabled="!composerCanSubmit || !attachmentState.canSubmit"
+                      :title="composerSubmitTitle" :disabled="!composerCanSubmit || composerBlocked || !attachmentState.canSubmit"
                       :aria-busy="composerSending && !composerCanSubmit ? 'true' : undefined" color="primary" size="small" variant="flat"
                       :icon="composerSubmitMode === 'send' ? mdiSend : mdiArrowTopRight"
                       class="studio-autopilot__composer-action" @click="sendComposerMessage"
                     />
                   </div>
                 </div>
+                <div :ref="setVoiceFeedbackTarget" class="studio-autopilot__voice-feedback" />
               </template>
             </Vibe64AutopilotPromptTextarea>
           </div>
@@ -755,34 +757,42 @@
         class="studio-autopilot__right-pane-page"
         role="tabpanel"
       >
-        <Vibe64ProjectOnboarding
-          :active="props.active && props.projectPane === 'preview'"
-          :archived="props.sessionSelectionArchived"
-          :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
-          :can-ask="assistantJuniorAllowed"
-          :request-temporary-ai="startTemporaryAiTask"
+        <TrainingPreviewPresentation
+          :active="props.active && props.projectPane === 'preview' && !props.sessionSelectionArchived"
+          :project-slug="projectSlug"
           :session-id="selectedAssistantSessionId"
+          v-slot="{ appVisible, presentation }"
         >
-          <Vibe64OutputControls
-            :ask-codex-to-fix-preview-identity="assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null"
-            :attach-preview-file="attachPreviewFile"
-            :prepare-preview-file="attachPreviewFileProducer"
-            :auto-start-managed-preview="!props.sessionSelectionArchived"
-            button-label="Run"
-            button-size="small"
-            button-variant="tonal"
-            :busy="agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
-            class="studio-autopilot__preview-launch"
-            embedded-preview
-            :preview-displayed="props.projectPane === 'preview'"
-            :session="props.session"
-            :source-operations-suspended="sourceOperationsSuspended"
-            :toolbar-teleport-target="props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
-            :window-displayed="props.active"
-            @preview-attachment-state="updatePreviewAttachmentState"
-            @test-approval="updateTestApproval"
-          />
-        </Vibe64ProjectOnboarding>
+          <Vibe64ProjectOnboarding
+            :active="props.active && props.projectPane === 'preview'"
+            :archived="props.sessionSelectionArchived"
+            :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
+            :can-ask="assistantJuniorAllowed"
+            :request-temporary-ai="startTemporaryAiTask"
+            :session-id="selectedAssistantSessionId"
+            :presentation="presentation"
+          >
+            <Vibe64OutputControls
+              :ask-codex-to-fix-preview-identity="assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null"
+              :attach-preview-file="attachPreviewFile"
+              :prepare-preview-file="attachPreviewFileProducer"
+              :auto-start-managed-preview="!props.sessionSelectionArchived"
+              button-label="Run"
+              button-size="small"
+              button-variant="tonal"
+              :busy="agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
+              class="studio-autopilot__preview-launch"
+              embedded-preview
+              :preview-displayed="props.projectPane === 'preview' && appVisible"
+              :session="props.session"
+              :source-operations-suspended="sourceOperationsSuspended"
+              :toolbar-teleport-target="props.projectPane === 'preview' && appVisible ? props.previewToolbarTeleportTarget : ''"
+              :window-displayed="props.active"
+              @preview-attachment-state="updatePreviewAttachmentState"
+              @test-approval="updateTestApproval"
+            />
+          </Vibe64ProjectOnboarding>
+        </TrainingPreviewPresentation>
       </div>
     </section>
 
@@ -837,7 +847,6 @@
 </template>
 
 <script setup>
-import { Vibe64ProjectVoiceLauncher } from "@local/vibe64-voice/client";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
@@ -870,6 +879,7 @@ import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
+import TrainingPreviewPresentation from "@local/vibe64-training/client/preview-presentation";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64WorkPlan from "./Vibe64WorkPlan.vue";
@@ -945,6 +955,7 @@ const Vibe64DatabaseWorkspace = defineAsyncComponent(() => (
   import("@local/vibe64-database-tools/client").then((module) => module.loadVibe64DatabaseWorkspace())
 ));
 const composerInput = ref(null);
+const conversationView = ref(null);
 const composerSendButton = ref(null);
 const composerSettingsOpen = ref(false);
 const composerSettingsButton = ref(null);
@@ -1065,8 +1076,8 @@ const {
   cancelSaveWork,
   captureVisiblePreview,
   chatCollapsed,
-  chatReloadAvailable,
   chatReloading,
+  reloadChatPane,
   chatTurns,
   composerKey,
   composerAttachments,
@@ -1115,7 +1126,6 @@ const {
   previewAttachmentState,
   projectSlug,
   questionAnswers,
-  reloadChatPane,
   repositoryRecoverySending,
   repositoryOperationActive,
   retrySaveWork,
@@ -1212,6 +1222,7 @@ const composerAccessHint = computed(() => assistantRestrictionMessage.value || c
 const composerAssistantLabel = computed(() => {
   if (testApproval.value?.state === "waiting") return "Waiting for memory approval";
   if (!thinkingVisible.value) return typingLabel.value;
+  if (props.conversationLog?.error) return "";
   return assistantRestrictionMessage.value || thinkingLabel.value;
 });
 watch(agentActive, (active) => {
@@ -1340,7 +1351,7 @@ const sessionArchiveDisabled = computed(() => Boolean(
 ));
 
 async function sendComposerMessage() {
-  if (composerInput.value?.attachmentsCanSubmit?.() === false) {
+  if (conversationView.value?.composerBlocked || composerInput.value?.attachmentsCanSubmit?.() === false) {
     return false;
   }
   stopTypingOnSubmit();
@@ -1964,4 +1975,5 @@ onBeforeUnmount(() => {
     min-width: 3rem;
   }
 }
+.studio-autopilot__voice-feedback { flex: 1 1 100%; min-width: 0; }
 </style>

@@ -9,7 +9,7 @@ import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealt
 import { useQueryClient } from "@tanstack/vue-query";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { vibe64RealtimePayloadFromCurrentTab } from "@/lib/vibe64BrowserTabOrigin.js";
-import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
 import { invalidateGithubIssueQueries } from "@/lib/vibe64GithubProject.js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
@@ -165,6 +165,7 @@ function useVibe64AppPage() {
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value && chatCollapsed.value);
   const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value);
   const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
+  const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
   const layoutOwner = {
     get projectSlug() { return projectSlug.value; },
     get ready() { return projectPaneNavigationVisible.value; },
@@ -370,7 +371,9 @@ function useVibe64AppPage() {
     setPageTitle(title);
   }
 
-  function selectProjectPane(pane = "") {
+  function selectProjectPane(pane = "", event) {
+    const owner = learnerGestures?.value;
+    const ticket = pane === "preview" ? owner?.begin(event, "preview-select") : null;
     if (mobilePaneLayout.value) {
       setChatCollapsed(true);
     }
@@ -382,17 +385,21 @@ function useVibe64AppPage() {
       return;
     }
     void router.push(developmentBasePath.value);
+    if (ticket) void owner.finish(ticket);
   }
 
-  function openProject(project = {}) {
+  function openProject(project = {}, event) {
     const slug = String(project.slug || "").trim();
     if (!slug) {
       return;
     }
+    const owner = learnerGestures?.value;
+    const ticket = owner?.begin(event, "project-select", { projectSlug: slug });
     if (slug === projectSlug.value && route.path !== projectAppPath(slug)) {
       retryProjectRuntime();
     }
     void router.push(projectAppPath(slug));
+    if (ticket) void owner.finish(ticket);
   }
 
   async function closeProjectRuntimeForSlug(slug = "", {
@@ -508,14 +515,19 @@ function useVibe64AppPage() {
     selfTargetAutoSelectTimer = 0;
   }
 
-  function showProjectPane() {
+  function showProjectPane(event) {
     if (mobilePaneLayout.value) {
-      setChatCollapsed(true);
+      setChatCollapsed(true, event);
     }
   }
 
-  function setChatCollapsed(collapsed = false) {
+  function setChatCollapsed(collapsed = false, event) {
+    const owner = learnerGestures?.value;
+    const control = !collapsed ? "chat-show"
+      : mobilePaneLayout.value && !chatCollapsed.value && projectPane.value === "preview" ? "preview-select" : "";
+    const ticket = control ? owner?.begin(event, control) : null;
     chatCollapsed.value = Boolean(collapsed);
+    if (ticket) void owner.finish(ticket);
   }
 
   function syncMobilePaneLayout() {

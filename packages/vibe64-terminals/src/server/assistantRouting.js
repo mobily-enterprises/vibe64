@@ -464,7 +464,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         if (state?.autoExecution && needsReview(state)) task.steeringRequestId = state.messageId;
         direct = true; return;
       }
-      if (input.submissionKind === "steer") throw failure("That turn has finished. Send this as a new request.");
+      if (input.submissionKind === "steer") throw failure("That turn has finished. Send this as a new request.", "conversation_not_steerable");
       if (running.has(key)) throw failure("This conversation is preparing a request. Cancel it or wait before sending another.");
       if (assistantRoutingStatusIsPending(state?.status) && state.messageId !== input.messageId) throw failure("Resolve or cancel the pending request before sending another.");
       if (state?.helper && state.messageId !== input.messageId) throw failure("Retry cleanup of the previous routing helper before sending another request.");

@@ -16,6 +16,7 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
+  assertValidVibe64SessionId,
   vibe64SessionStatusIsOpen
 } from "@local/vibe64-runtime/server/sessionStore";
 import {
@@ -829,8 +830,18 @@ function createService({
     },
 
     // Only an internal caller may supply a server-reserved identity.
-    async createSession(input = {}, { sessionId } = {}) {
+    async createSession(input = {}, { sessionId, expectedCommit } = {}) {
       return sessionResult(async () => {
+        if (sessionId !== undefined) assertValidVibe64SessionId(sessionId);
+        if (expectedCommit !== undefined) {
+          if (sessionId === undefined || typeof expectedCommit !== "string" ||
+            !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/iu.test(expectedCommit)) {
+            throw new TypeError("An internal source commit requires a reserved session ID and a complete Git object ID.");
+          }
+          if (input.repositoryBranch != null || input.pullRequestNumber != null) {
+            throw new TypeError("An internal source commit cannot be combined with a branch or pull request selection.");
+          }
+        }
         const vibe64User = trustedAssistantUser(input);
         const pullRequest = input.pullRequestNumber == null ? null : await project.resolvePullRequestSource({
           number: input.pullRequestNumber, vibe64User
@@ -853,6 +864,12 @@ function createService({
           if (policy?.creation?.canCreate !== true) {
             throw sessionCreationLimitError(policy);
           }
+          if (sessionId !== undefined) {
+            if (typeof runtime.store?.assertSessionCreationAbsent !== "function") {
+              throw new TypeError("Reserved session creation requires the session store's absence check.");
+            }
+            await runtime.store.assertSessionCreationAbsent(sessionId);
+          }
           const repositoryBranch = input.repositoryBranch ? await project.resolveSessionBranch({
             selection: input.repositoryBranch, vibe64User
           }) : null;
@@ -868,6 +885,7 @@ function createService({
               created_by: text(vibe64User?.username || vibe64User?.name)
             },
             sourceContext: {
+              ...(expectedCommit === undefined ? {} : { expectedCommit }),
               ...(repositoryBranch ? { expectedCommit: repositoryBranch.commit } : {}),
               ...(pullRequest ? { expectedCommit: pullRequest.headCommit } : {}),
               vibe64User

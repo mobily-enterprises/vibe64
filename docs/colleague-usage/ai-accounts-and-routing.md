@@ -72,3 +72,11 @@ list includes the available models from each connected provider for that
 orchestrator, including a connected GLM Coding Plan under OpenCode. **Configure
 more AIs** opens account setup if the required provider is not connected.
 Claude Code uses its selected provider for background model calls as well.
+
+If an administrator's stopped-service upgrade reports an unsupported saved
+routing request even though the conversation uses current Senior, Junior, Auto
+or Custom, use the corrected candidate release's read-only upgrade preflight.
+Valid current choices and pending delivery receipts are preserved by the explicit
+upgrade. Do not reset the conversation or change its model to work around that
+error. Unknown or corrupt routing still needs administrator inspection before
+apply; Colleague can explain the recovery but cannot perform the host upgrade.

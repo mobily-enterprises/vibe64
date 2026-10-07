@@ -1,7 +1,9 @@
 import {
+  lstat,
   mkdir,
   mkdtemp,
   readdir,
+  realpath,
   rm
 } from "node:fs/promises";
 import path from "node:path";
@@ -32,6 +34,9 @@ function initialProjectError(result = {}, fallback = "Initial project materializ
 async function runGit(args = [], {
   allowedRoots = [],
   cwd = "",
+  input,
+  maxBuffer,
+  outputEncoding,
   runCommand = runVibe64Command
 } = {}) {
   const result = await runCommand({
@@ -42,6 +47,9 @@ async function runGit(args = [], {
     cwd,
     envPolicy: "project",
     gitSafeDirectories: allowedRoots,
+    ...(input === undefined ? {} : { input }),
+    ...(maxBuffer === undefined ? {} : { maxBuffer }),
+    ...(outputEncoding === undefined ? {} : { outputEncoding }),
     mode: "capture",
     purpose: "source",
     runtimes: ["git"],
@@ -295,7 +303,148 @@ async function initializeManagedProject({
   return result.materialization;
 }
 
+// Caller holds the existing project source lock, rereads project identity, and
+// has established that its initial session is absent. This does not create or
+// recover a session; existing session source must retain the learner's edits.
+async function verifyManagedProjectSource({
+  branch = "",
+  files,
+  projectRuntimeRoot = "",
+  runCommand = runVibe64Command
+} = {}) {
+  const runtimeRoot = absoluteRuntimeRoot(projectRuntimeRoot);
+  const maxFileBytes = 1024 * 1024;
+  const maxSourceBytes = 32 * maxFileBytes;
+  if (
+    projectRuntimeRoot !== runtimeRoot ||
+    typeof branch !== "string" || !branch || branch !== branch.trim() ||
+    !Array.isArray(files) || files.length > 512
+  ) {
+    throw vibe64Error(
+      "Source verification requires a normalized runtime root, an exact branch and at most 512 pinned files.",
+      "vibe64_managed_project_source_invalid"
+    );
+  }
+
+  const expected = new Map();
+  const expectedDirectories = new Set();
+  let sourceBytes = 0;
+  for (const file of files) {
+    const filename = file?.path;
+    if (
+      typeof filename !== "string" || !filename ||
+      filename.includes("\\") || filename.includes("\0") ||
+      path.posix.isAbsolute(filename) ||
+      filename.split("/").some(part => !part || part === "." || part === "..") ||
+      !Buffer.isBuffer(file.bytes) || file.bytes.length > maxFileBytes ||
+      expected.has(filename)
+    ) {
+      throw vibe64Error(
+        "Pinned source files require unique relative paths and Buffer bytes of at most 1 MiB.",
+        "vibe64_managed_project_source_invalid"
+      );
+    }
+    sourceBytes += file.bytes.length;
+    expected.set(filename, file.bytes);
+    const parts = filename.split("/");
+    for (let index = 1; index < parts.length; index += 1) {
+      expectedDirectories.add(parts.slice(0, index).join("/"));
+    }
+  }
+  if (sourceBytes > maxSourceBytes) {
+    throw vibe64Error("Pinned source exceeds 32 MiB.", "vibe64_managed_project_source_invalid");
+  }
+
+  const repositoryPath = resolveProjectCanonicalRepositoryPath({ projectRuntimeRoot: runtimeRoot });
+  const repositoryRoot = path.dirname(repositoryPath);
+  for (const directory of [runtimeRoot, repositoryRoot, repositoryPath]) {
+    const info = await lstat(directory);
+    if (!info.isDirectory() || await realpath(directory) !== directory) {
+      throw vibe64Error(
+        "Source verification refuses aliased canonical repository storage.",
+        "vibe64_managed_project_source_unsafe"
+      );
+    }
+  }
+  const commandOptions = {
+    allowedRoots: [runtimeRoot, repositoryRoot, repositoryPath],
+    cwd: repositoryRoot,
+    runCommand
+  };
+  await runGit(["check-ref-format", `refs/heads/${branch}`], commandOptions);
+  const gitArgs = ["--no-replace-objects", "--git-dir", repositoryPath];
+  const bare = await runGit([...gitArgs, "rev-parse", "--is-bare-repository"], commandOptions);
+  if (bare !== "true") {
+    throw vibe64Error(
+      "Source verification requires the canonical bare repository.",
+      "vibe64_managed_project_source_unsafe"
+    );
+  }
+  const commit = await runGit([
+    ...gitArgs, "rev-parse", "--verify", `refs/heads/${branch}^{commit}`
+  ], commandOptions);
+  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(commit)) {
+    throw vibe64Error("Canonical branch did not resolve to an exact commit.", "vibe64_managed_project_source_unsafe");
+  }
+
+  // Inspect the resolved immutable object, never a branch that can move between
+  // inventory and byte checks. Do not exclude unexpected canonical files.
+  const encodedListing = await runGit([...gitArgs, "ls-tree", "-r", "-t", "-z", "--long", commit], {
+    ...commandOptions,
+    maxBuffer: maxSourceBytes,
+    outputEncoding: "base64"
+  });
+  const listingBytes = Buffer.from(encodedListing, "base64");
+  const listing = listingBytes.toString("utf8");
+  const records = listing ? listing.split("\0") : [];
+  if (listing) records.pop();
+  if (
+    !listingBytes.equals(Buffer.from(listing, "utf8")) ||
+    (listing && !listing.endsWith("\0")) ||
+    records.length !== expected.size + expectedDirectories.size
+  ) {
+    throw vibe64Error(
+      "Canonical source inventory differs from the pinned exercise; inspect the project before retrying.",
+      "vibe64_managed_project_source_mismatch"
+    );
+  }
+  const seen = new Set();
+  for (const record of records) {
+    const directory = /^040000 tree ([a-f0-9]{40}|[a-f0-9]{64})\s+-\t([\s\S]+)$/u.exec(record);
+    if (directory) {
+      if (!expectedDirectories.delete(directory[2])) {
+        throw vibe64Error(
+          "Canonical source contains a directory outside the pinned exercise.",
+          "vibe64_managed_project_source_mismatch"
+        );
+      }
+      continue;
+    }
+    const match = /^100644 blob ([a-f0-9]{40}|[a-f0-9]{64})\s+(\d+)\t([\s\S]+)$/u.exec(record);
+    const bytes = match ? expected.get(match[3]) : undefined;
+    if (!match || !bytes || seen.has(match[3]) || Number(match[2]) !== bytes.length) {
+      throw vibe64Error(
+        "Canonical source must contain exactly the pinned ordinary nonexecutable files.",
+        "vibe64_managed_project_source_mismatch"
+      );
+    }
+    seen.add(match[3]);
+    const objectId = await runGit([...gitArgs, "hash-object", "--stdin", "--no-filters"], {
+      ...commandOptions,
+      input: bytes
+    });
+    if (objectId !== match[1]) {
+      throw vibe64Error(
+        `Canonical source bytes differ from the pinned exercise at ${match[3]}; inspect the project before retrying.`,
+        "vibe64_managed_project_source_mismatch"
+      );
+    }
+  }
+  return { branch, commit };
+}
+
 export {
   initializeManagedProject,
-  materializeInitialProject
+  materializeInitialProject,
+  verifyManagedProjectSource
 };

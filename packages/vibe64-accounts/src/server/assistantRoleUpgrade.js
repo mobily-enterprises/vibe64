@@ -3,6 +3,8 @@ import path from "node:path";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/studioProjectContext";
 import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
 import { validateAssistantRoutingConfiguration as validateV2 } from "@local/vibe64-core/server/stateUpgrades/routingV2Format";
+import { validateAssistantRoutingConfiguration as validateV4 } from "@local/vibe64-core/server/assistantRoutingStore";
+import { validateAssistantRoutingUpgradeRecord } from "@local/vibe64-runtime/server/assistantRoutingStateUpgrade";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
 
@@ -42,6 +44,11 @@ function configuration(value) {
 
 function routingRecord(value) {
   if (!object(value)) throw new Error("Saved routing must be an object.");
+  if (value.schemaVersion === 4 || ["custom", "helper"].some(role =>
+    [value.mode, value.requestedMode, value.resolvedMode, value.role].includes(role))) {
+    return validateAssistantRoutingUpgradeRecord(value, { schemaVersion: value.schemaVersion ?? 4,
+      request: value.schemaVersion === 4 });
+  }
   const next = { ...value };
   for (const field of ["mode", "requestedMode", "resolvedMode", "role"]) {
     if (next[field] !== undefined) next[field] = role(next[field]);
@@ -74,7 +81,8 @@ function metadata(value) {
     try { parsed = JSON.parse(value[field]); }
     catch { throw new Error(`Invalid ${field}. Inspect the saved routing before upgrading.`); }
     if (parsed === null) continue;
-    const next = routingRecord(parsed);
+    const next = field === "assistant_routing" && ["senior", "junior", "custom", "auto"].includes(parsed.mode)
+      ? validateAssistantRoutingUpgradeRecord(parsed, { preferences: true }) : routingRecord(parsed);
     if (JSON.stringify(next) !== JSON.stringify(parsed)) changes[field] = JSON.stringify(next);
   }
   return changes;
@@ -116,7 +124,8 @@ async function upgradeAssistantRoles(context) {
       let parsed;
       try { parsed = JSON.parse(original); } catch { throw new Error("Model routing is invalid JSON. Repair it before upgrading roles."); }
       if (!object(parsed)) throw new Error("Model routing must be an object. Repair it before upgrading roles.");
-      if (parsed.schemaVersion === 3) validateAssistantRoutingConfiguration(parsed);
+      if (parsed.schemaVersion === 4) validateV4(parsed);
+      else if (parsed.schemaVersion === 3) validateAssistantRoutingConfiguration(parsed);
       else {
         validateV2(parsed, { legacy: true });
         if (parsed.schemaVersion === 1) {

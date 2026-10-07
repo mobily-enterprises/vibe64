@@ -129,6 +129,7 @@ import {
   prepareConversationReconciliation,
   prepareConversationSubscriptionReset,
   prepareSessionDetachedConversationCleanup,
+  prepareSessionDetachedConversationRun,
   prepareSessionConversationStorage,
   publishMainConversationEvent
 } from "./mainConversationBinding.js";
@@ -253,6 +254,7 @@ import {
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
   VIBE64_SESSION_STATUS,
+  assertValidVibe64SessionId,
   vibe64AgentRunStateIsActive,
   normalizeVibe64AgentRunState
 } from "@local/vibe64-runtime/server/sessionStore";
@@ -323,6 +325,7 @@ function createCodexSessionRegistration({
   logger = null,
   projectService,
   publishConversation = null,
+  runNativeDetachedConversation,
   publishSessionChanged = async () => null,
   runCommand = runVibe64Command
 } = {}) {
@@ -453,6 +456,7 @@ function createCodexSessionRegistration({
       context: codexAppServerConversationPreparation,
       scope: codexAppServerEphemeralScopePreparation,
       execution: codexAppServerConversationExecution,
+      detached: (sessionId, input) => codexScopedConversationPreparation.detached(sessionId, input),
       control: codexAppServerConversationControl,
       admissionError: codexAppServerAdmissionError,
       isolation: codexAppServerHelperIsolation,
@@ -641,6 +645,7 @@ function createCodexSessionRegistration({
     terminals: codexInteractiveTerminals,
     attachments: codexAttachments,
     enabled: codexAppServerPromptDeliveryEnabled,
+    runNativeDetachedConversation,
     env,
     publishSessionChanged,
     checkpoint: checkpointCodexAppServerTurn
@@ -669,6 +674,7 @@ function createOpenCodeSessionRegistration({
   projectService,
   publishSessionChanged: publishApplicationSessionChanged = async () => null,
   publishConversation,
+  runNativeDetachedConversation,
   readCatalogCommand = readOpenCodeCatalog,
   readZenModelsCommand = readOpenCodeZenModelIds,
   recordGitActor = writeSessionGitCommandActor,
@@ -725,7 +731,7 @@ function createOpenCodeSessionRegistration({
   const provider = createOpenCodeSessionAgentProvider({
     sharedRuntime, hostPreparation, accounts, mainMessagePreparation, scopedPreparation,
     lifecyclePreparation, renewalPreparation, terminals, publishSessionChanged,
-    prepareSessionCleanup
+    prepareSessionCleanup, runNativeDetachedConversation
   });
   return { provider, hostPreparation, accounts, terminals };
 }
@@ -1131,6 +1137,7 @@ function createService({
       ? assistantRuntime.resolveConnection(selection)
       : codexProviderConnections.read(selection.modelProviderId)
   });
+  const runNativeDetachedConversation = request => mainConversations.runNativeDetachedConversation(request);
   const codex = createCodexSessionRegistration({
     ...codexTerminalController,
     listConnections: codexProviderConnections.list,
@@ -1147,7 +1154,8 @@ function createService({
     logger,
     projectService,
     publishSessionChanged: publishAgentSessionChanged,
-    publishConversation: event => mainConversations.publishNative(event)
+    publishConversation: event => mainConversations.publishNative(event),
+    runNativeDetachedConversation
   });
   const mainConversations = createConversationRuntime({
     engine: "codex",
@@ -1200,6 +1208,11 @@ function createService({
               sessionAgent.conversationProvider(input.engineId), id, context, input
             );
           }
+          if (operation === "runDetachedConversation") {
+            return prepareSessionDetachedConversationRun(
+              sessionAgent.conversationProvider(context.providerId), id, context, input, options
+            );
+          }
           if (operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation") {
             return prepareSessionDetachedConversationCleanup(
               sessionAgent.conversationProvider(context.providerId), id, context, input,
@@ -1244,13 +1257,15 @@ function createService({
     projectService,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event),
-    resolveConnection: (context) => assistantRuntime.resolveConnection(context)
+    resolveConnection: (context) => assistantRuntime.resolveConnection(context),
+    runNativeDetachedConversation
   });
   const sessionAttachments = createSessionAttachments({ projectService, env });
   const claudeProvider = createClaudeConversationHost({
     env, projectService, publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event),
     systemRoot: codexProviderOptions.systemRoot,
+    runNativeDetachedConversation,
     codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
     connectionStatus: (context) => assistantRuntime.claudeConnectionStatus(context)
   });
@@ -2517,6 +2532,13 @@ function createService({
       return workspaceSetup.isRunning(sessionId);
     },
 
+    async workspaceSetupIsPrepared(sessionId = "") {
+      const normalizedSessionId = assertValidVibe64SessionId(sessionId);
+      const runtime = await projectService.createRuntime({ inspectSource: false });
+      const session = await runtime.getSession(normalizedSessionId, { inspectSource: false });
+      return workspaceSetup.isPrepared({ runtime, session });
+    },
+
     waitForWorkspaceSetup(sessionId = "") {
       return workspaceSetup.wait(sessionId);
     },
@@ -3297,6 +3319,32 @@ function createService({
         ...input,
         ephemeral: input.persistent !== true
       }, options);
+    },
+
+    async runDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
+      if (input.executionProfile) {
+        return sessionAgent.runDetachedChatTurn(
+          sessionId,
+          input,
+          await assistantSessionOptions(sessionId, options)
+        );
+      }
+      return runMainAgentWrite(sessionId, options, (context) => (
+        sessionAgent.runDetachedChatTurn(sessionId, input, context)
+      ), { operation: "run-temporary-chat" });
+    },
+
+    async streamDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
+      if (input.executionProfile) {
+        return sessionAgent.streamDetachedChatTurn(
+          sessionId,
+          input,
+          await assistantSessionOptions(sessionId, options)
+        );
+      }
+      return runMainAgentWrite(sessionId, options, (context) => (
+        sessionAgent.streamDetachedChatTurn(sessionId, input, context)
+      ), { operation: "stream-temporary-chat" });
     },
 
     deleteDetachedAgentChatThread(sessionId, input = {}, options = {}) {

@@ -3,7 +3,11 @@ import { isDeepStrictEqual } from "node:util";
 
 const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 256 };
 const id = { ...text, maxLength: 64 };
-const list = (items, maxLength = 100) => ({ type: "array", required: true, maxLength, items });
+const list = (items, maxLength = 100) => ({
+  type: "array", required: true, maxLength, items,
+  validator: value => Array.isArray(value) && value.length > maxLength
+    ? `Expected at most ${maxLength} items.` : undefined
+});
 const version = { type: "integer", required: true, enum: [1] };
 const prerequisites = list(createSchema({ code: id }), 24);
 const assessment = createSchema({
@@ -52,4 +56,4 @@ function validateContent(schema, value, label) {
   return validated;
 }
 
-export { courseSchema, lessonSchema, topicSchema, visualSchema, validateContent };
+export { courseSchema, lessonSchema, topicSchema, visualSchema, validateContent, list };

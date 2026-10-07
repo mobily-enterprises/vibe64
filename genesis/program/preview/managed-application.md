@@ -33,6 +33,10 @@ Close, Stop and collapsible task details retain their own existing behavior.
 
 ## Sources
 
+- `src/lib/studioUrls.js`
+- `tests/client/vibe64ProjectScope.vitest.js`
+- `tests/server/vibe64TrainingVisualPlayer.browser.test.js`
+
 - `packages/vibe64-genesis/src/server/projectServices.js`
 - `packages/vibe64-terminals/src/server/projectServices.js`
 - `tests/server/projectServices.unit.test.js`
@@ -72,6 +76,13 @@ Close, Stop and collapsible task details retain their own existing behavior.
 - `src/composables/useVibe64OutputControlsSurface.js`
 
 ## Public contract
+
+The original Studio URL classifier keeps `/api/vibe64/training` and its slash
+descendants global on selected-project pages. The hosted visual-resource route
+selects the fresh authenticated learner's exact active attempt and installed pin;
+project URL scoping does not apply to that actor-owned read. The original resolver
+and HTTP client retain their existing project routing for session/output work.
+This changes no resource envelope, player, permission or learning-state owner.
 
 The embedded Preview frame delegates microphone and autoplay to its application
 origin, alongside clipboard writing. Secure-context requirements and the browser's

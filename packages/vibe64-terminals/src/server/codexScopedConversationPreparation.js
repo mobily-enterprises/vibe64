@@ -3,6 +3,7 @@ import { beginTerminalNamespaceOperation } from "@local/vibe64-execution/server/
 import { codexAppServerReadOnlyThreadSettings } from "@jskit-ai/assistant-core/server/codex-configuration";
 import {
   assertCodexAppServerHelperOutputWithinLimit,
+  codexAppServerHelperIsolation,
   codexAppServerThreadSettings,
   codexAppServerTurnSettings,
   codexAppServerHelperThreadResumePreparation,
@@ -11,6 +12,7 @@ import {
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import {
   normalizeVibe64AgentTaskResult,
+  effectiveVibe64AgentExecutionSettings,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 import { directoryExists, codexTerminalNamespace } from "./terminalShared.js";
@@ -59,6 +61,34 @@ function codexAppServerExpiredEphemeralConversation(conversationId = "", input =
     status: "failed"
   };
 }
+
+function codexDetachedChatTurnError(error, {
+  agentSettings = {},
+  executionProfile = null,
+  status = ""
+} = {}) {
+  const profile = isRecord(executionProfile) ? executionProfile : null;
+  const settings = profile || effectiveVibe64AgentExecutionSettings(agentSettings);
+  const terminalStatus = ["failed", "interrupted"].includes(normalizeText(status))
+    ? normalizeText(status)
+    : "";
+  const requestDetails = [
+    settings.model ? `model ${settings.model}` : "",
+    settings.request?.reasoning !== false && settings.thinking
+      ? `reasoning effort ${settings.thinking}`
+      : "",
+    terminalStatus ? `turn status ${terminalStatus}` : ""
+  ].filter(Boolean);
+  const message = normalizeText(error?.error || error?.message || error) || "Codex app-server turn failed.";
+  const contextualMessage = requestDetails.length && !message.includes("Request details:")
+    ? `${message}\n\nRequest details: ${requestDetails.join("; ")}.`
+    : message;
+  const contextualError = new Error(contextualMessage);
+  contextualError.code = error?.code;
+  contextualError.statusCode = error?.statusCode;
+  return contextualError;
+}
+
 
 function createCodexScopedConversationPreparation({
   conversationPreparation: codexConversationPreparation,
@@ -293,6 +323,54 @@ function createCodexScopedConversationPreparation({
     };
   }
 
+  function codexAppServerDetachedConversationPreparation(sessionId, input = {}) {
+    const admission = beginTerminalNamespaceOperation(codexTerminalNamespace(sessionId));
+    let prompt;
+    return {
+      admission,
+      get result() {
+        if (!codexAppServerPromptDeliveryEnabled) {
+          return codexAppServerControlDisabledResult();
+        }
+        prompt = normalizeText(input.prompt || input.message);
+        if (!prompt) {
+          return { code: "vibe64_codex_detached_prompt_empty", error: "Codex prompt is empty.", ok: false };
+        }
+        return undefined;
+      },
+      get prompt() { return prompt; },
+      execution(context) {
+        const executionProfile = isRecord(input.executionProfile) ? input.executionProfile : null;
+        return {
+          threadPreparation: executionProfile ? null : codexAppServerConversationThreadPreparation(context),
+          helperPreparation: executionProfile ? {
+            isolation: codexAppServerHelperIsolation,
+            start: () => codexAppServerHelperThreadStartPreparation({ executionProfile }),
+            resume: () => codexAppServerHelperThreadResumePreparation({ executionProfile }),
+            turn: threadId => prepareCodexAppServerHelperTurn({
+              executionProfile,
+              outputSchema: input.outputSchema,
+              prompt,
+              provider: context.provider,
+              threadId
+            })
+          } : null,
+          authorized: {
+            get turnSettings() {
+              return codexAppServerTurnSettings({ agentSettings: context.agentSettings, cwd: context.workdir });
+            }
+          },
+          validateOutput: text => assertCodexAppServerHelperOutputWithinLimit({ executionProfile, rawOutput: text }),
+          failure: (error, status) => codexDetachedChatTurnError(error, {
+            agentSettings: context.agentSettings,
+            executionProfile,
+            status
+          })
+        };
+      }
+    };
+  }
+
   function codexAppServerConversationControl(sessionId, input, operation) {
     if (!codexAppServerPromptDeliveryEnabled) {
       return { result: codexAppServerControlDisabledResult() };
@@ -321,6 +399,7 @@ function createCodexScopedConversationPreparation({
     context: codexAppServerConversationPreparation,
     scope: codexAppServerEphemeralScopePreparation,
     execution: codexAppServerConversationExecution,
+    detached: codexAppServerDetachedConversationPreparation,
     control: codexAppServerConversationControl
   };
 }

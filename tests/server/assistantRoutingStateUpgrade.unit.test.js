@@ -165,3 +165,58 @@ test("pending renewal upgrades its captured destination without taking the prede
   assert.equal(upgradeAssistantRoutingSession({ ...input, renewal: next }).renewal, undefined);
   assert.equal(upgradeAssistantRoutingSession({ ...input, renewal: { ...renewal, status: "completed" } }).renewal, undefined);
 });
+
+test("known native requests preserve completed and pending evidence byte-for-byte", () => {
+  for (const schemaVersion of [3, 4]) for (const mode of ["senior", "junior", "custom", "auto"]) for (const status of ["done", "sending", "uncertain", "planning_pending", "implementation_uncertain"]) {
+    const route = { ...pickle, selectionSource: "explicit" };
+    const captured = { revision: 1, orchestrators: { opencode: { senior: route, junior: route } } };
+    const saved = { schemaVersion, mode, resolvedMode: mode === "auto" ? "junior" : mode, status,
+      workflowEngineId: "opencode", assignments: { [mode === "auto" ? "junior" : mode]: route }, configuration: captured,
+      override: mode === "custom" ? { role: mode, selection: route } : undefined,
+      messageId: "native-message", attemptedMessageId: "native-message", threadId: "native-thread", turnId: "native-turn",
+      input: { message: "Exact message stays opaque" }, submittedBy: { username: "member" },
+      decision: { role: mode === "auto" ? "junior" : mode, effectiveSelection: route, connectionIdentity: "retained" } };
+    const metadata = { assistant_routing: JSON.stringify({ mode, review: false, workflowEngineId: "opencode",
+      ...(mode === "custom" ? { override: route } : {}) }, null, 2), assistant_routing_request: JSON.stringify(saved, null, 2) };
+    const input = session(metadata);
+    assert.deepEqual(upgradeAssistantRoutingSession(input), { metadata: {}, conversations: [] });
+    assert.equal(input.metadata.assistant_routing_request, metadata.assistant_routing_request);
+    assert.equal(saved.admissionRequired, undefined);
+  }
+});
+
+test("a native version tag cannot hide corrupt captured routing", () => {
+  const route = { ...pickle, selectionSource: "explicit" };
+  const saved = { schemaVersion: 4, mode: "senior", status: "done", workflowEngineId: "opencode",
+    assignments: { senior: route }, configuration: { revision: 1, orchestrators: { opencode: { senior: route, junior: route } } } };
+  for (const patch of [ { schemaVersion: 5 }, { mode: "unknown" }, { status: "unknown" },
+    { assignments: { plan: route } }, { assignments: { senior: {} } },
+    { configuration: { revision: 1, orchestrators: { opencode: { intern: route } } } },
+    { mode: "custom", assignments: {} }, { override: { role: "senior" } },
+    { decision: { role: "junior", effectiveSelection: {} } }, { planCodePair: {} } ]) {
+    const raw = JSON.stringify({ ...saved, ...patch });
+    const input = session({ assistant_routing_request: raw });
+    assert.throws(() => upgradeAssistantRoutingSession(input));
+    assert.equal(input.metadata.assistant_routing_request, raw);
+  }
+  assert.throws(() => upgradeAssistantRoutingSession(session({ assistant_routing: JSON.stringify({ mode: "custom" }) })));
+});
+
+
+test("only validated versioned legacy terminal records gain the existing admission restriction", () => {
+  for (const schemaVersion of [1, 2]) for (const status of ["done", "cancelled"]) {
+    const saved = request({ schemaVersion, status });
+    const result = upgradeAssistantRoutingSession(session({ assistant_routing_request: JSON.stringify(saved) }));
+    assert.deepEqual(parse(result, "assistant_routing_request"), { ...saved, admissionRequired: true });
+    assert.deepEqual(upgradeAssistantRoutingSession(session({ assistant_routing_request: JSON.stringify(saved), ...result.metadata })), { metadata: {}, conversations: [] });
+    for (const patch of [ { assignments: {} }, { assignments: { senior: planner } },
+      { assignments: { plan: {} } }, { configuration: null },
+      { configuration: { schemaVersion: 4, revision: 1, orchestrators: {} } },
+      { configuration: { schemaVersion: 1, revision: -1, orchestrators: {} } } ]) {
+      assert.throws(() => upgradeAssistantRoutingSession(session({ assistant_routing_request: JSON.stringify({ ...saved, ...patch }) })));
+    }
+  }
+  const native = { schemaVersion: 4, mode: "senior", status: "done", assignments: { senior: planner } };
+  assert.throws(() => upgradeAssistantRoutingSession(session({ assistant_routing_request: JSON.stringify(native) })));
+  assert.equal(native.admissionRequired, undefined);
+});

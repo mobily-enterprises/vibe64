@@ -3300,3 +3300,612 @@ test("OpenCode renewal leaves an accepted seed available when ACK validation fai
     assert.equal(harness.session.metadata.agent_renewal_seed_acknowledged_at, undefined);
   }
 });
+
+// R19 probes retain the original controller and its native protocol hooks.
+// These assertions describe required observations; they do not approve the
+// changed completion policy or substitute for real OpenCode inference.
+test("R19 completed tool-call rows retain native ownership until the actual idle final answer", { timeout: 15000 }, async (t) => {
+  const busyPolls = Promise.withResolvers();
+  const response = { messages: [] };
+  const created = Date.now();
+  let phase = "tool";
+  let statusReads = 0;
+  let harness;
+  harness = await controllerHarness({
+    assistantResponses: [response],
+    beforeMessages() {
+      const nativeInputId = harness.promptCalls[0].input.id;
+      response.messages = [
+        { id: nativeInputId, type: "user", text: "Use the tool and answer.", time: { created } },
+        phase === "tool"
+          ? { id: "r19-tool-message", type: "assistant", finish: "tool-calls",
+              content: [{ type: "tool", state: { status: "running" } }],
+              time: { created: created + 1, completed: created + 2 } }
+          : { id: "r19-final-message", type: "assistant", text: "The actual final answer.", finish: "stop",
+              time: { created: created + 3, completed: created + 4 } }
+      ];
+    },
+    sessionStatus: async () => {
+      statusReads += 1;
+      if (phase === "tool" && statusReads >= 3) busyPolls.resolve();
+      return { type: phase === "tool" ? "busy" : "idle" };
+    }
+  });
+  t.after(async () => {
+    phase = "final";
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  await harness.controller.sendMessage("session-1", { message: "Use the tool and answer.", messageId: "r19-tool-input" });
+  await busyPolls.promise;
+  assert.ok(statusReads >= 3, "A completed tool message must survive more than the original two completion polls.");
+  assert.equal((await harness.controller.sessionState("session-1")).turn.active, true);
+  assert.equal(harness.promptCalls.length, 1, "A completed tool call must not trigger empty-answer recovery.");
+  assert.equal(harness.checkpoints.length, 0, "Busy native work must not publish a completed source checkpoint.");
+  assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+  phase = "final";
+  const completed = await harness.controller.waitForTurn("session-1");
+  assert.equal(completed.state, "completed");
+  assert.equal((await harness.controller.sessionState("session-1")).turn.active, false);
+  assert.equal(harness.assistantMessages.at(-1).text, "The actual final answer.");
+  assert.equal(harness.promptCalls.length, 1);
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-tool-input"]);
+});
+
+test("R19 steering during awaited projection or status cannot complete the predecessor input", { timeout: 15000 }, async (t) => {
+  for (const boundary of ["projection", "status"]) {
+    await t.test(boundary, async (t) => {
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      const latestRead = Promise.withResolvers();
+      const response = { messages: [] };
+      const created = Date.now();
+      let historyReads = 0;
+      let statusReads = 0;
+      let finishLatest = false;
+      let harness;
+      harness = await controllerHarness({
+        assistantResponses: [response, response],
+        beforeMessages() {
+          historyReads += 1;
+          const first = harness.promptCalls[0].input.id;
+          response.messages = [
+            { id: first, type: "user", text: "First input", time: { created } },
+            { id: "r19-predecessor-answer", type: "assistant", text: historyReads === 1 ? "First snapshot" : "Updated predecessor snapshot",
+              finish: "stop", time: { created: created + 1, completed: created + 2 } }
+          ];
+          if (harness.promptCalls.length === 2) {
+            response.messages.push(
+              { id: harness.promptCalls[1].input.id, type: "user", text: "Latest input", time: { created: created + 3 } },
+              { id: "r19-latest-answer", type: "assistant", text: finishLatest ? "The latest answer." : "Latest progress",
+                time: { created: created + 4, ...(finishLatest ? { completed: created + 5 } : {}) } }
+            );
+            latestRead.resolve();
+          }
+        },
+        sessionStatus: async () => {
+          statusReads += 1;
+          if (boundary === "status" && statusReads === 2) {
+            entered.resolve();
+            await release.promise;
+          }
+          return { type: "idle" };
+        },
+        async onSessionChanged(_id, event) {
+          if (boundary === "projection" && event.reason === "assistant-stream" &&
+              event.payload.conversationStream.messages.some(message => message.text === "Updated predecessor snapshot") &&
+              harness.promptCalls.length === 1) {
+            entered.resolve();
+            await release.promise;
+          }
+        }
+      });
+      t.after(async () => {
+        finishLatest = true;
+        release.resolve();
+        await harness.controller.closeAllForProject();
+        await rm(harness.root, { force: true, recursive: true });
+      });
+      const first = await harness.controller.sendMessage("session-1", { message: "First input", messageId: `r19-${boundary}-first` });
+      const completion = harness.controller.waitForTurn("session-1");
+      await entered.promise;
+      const statusReadsBeforeSteering = statusReads;
+      const latest = await harness.controller.sendMessage("session-1", { message: "Latest input", messageId: `r19-${boundary}-latest` });
+      assert.equal(latest.deliveryMode, "steer");
+      assert.equal(latest.thread.id, first.thread.id);
+      assert.notEqual(harness.promptCalls[0].input.id, harness.promptCalls[1].input.id);
+      release.resolve();
+      const observation = await Promise.race([
+        latestRead.promise.then(() => "latest-history"),
+        completion.then(() => "premature-completion")
+      ]);
+      assert.equal(observation, "latest-history", "The old snapshot must not retire the monitor after steering.");
+      assert.equal((await harness.controller.sessionState("session-1")).turn.active, true);
+      if (boundary === "projection") {
+        assert.equal(statusReads, statusReadsBeforeSteering,
+          "A changed input after projection must be re-read before checking the predecessor's native status.");
+      }
+      assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+      finishLatest = true;
+      const completed = await completion;
+      assert.equal(completed.state, "completed");
+      assert.equal(harness.assistantMessages.at(-1).text, "The latest answer.");
+      assert.deepEqual(harness.userMessages.map(message => message.messageId),
+        [`r19-${boundary}-first`, `r19-${boundary}-latest`]);
+      assert.equal(harness.promptCalls.length, 2, "Following the admitted input must not submit a recovery or duplicate prompt.");
+    });
+  }
+});
+
+test("R19 completed errors wait for idle and a failed status observation retains the original failure cleanup", { timeout: 15000 }, async (t) => {
+  await t.test("completed error remains owned while busy and surfaces exactly when idle", async (t) => {
+    const busyPolls = Promise.withResolvers();
+    let busy = true;
+    let statusReads = 0;
+    const harness = await controllerHarness({
+      assistantResponses: [{ error: { name: "UnknownError", data: { message: "The completed native answer failed." } } }],
+      sessionStatus: async () => {
+        statusReads += 1;
+        if (busy && statusReads >= 3) busyPolls.resolve();
+        return { type: busy ? "busy" : "idle" };
+      }
+    });
+    t.after(async () => {
+      busy = false;
+      await harness.controller.closeAllForProject();
+      await rm(harness.root, { force: true, recursive: true });
+    });
+    await harness.controller.sendMessage("session-1", { message: "Answer", messageId: "r19-completed-error" });
+    await busyPolls.promise;
+    assert.equal((await harness.controller.sessionState("session-1")).turn.active, true);
+    assert.equal(harness.systemMessages.length, 0);
+    assert.equal(harness.checkpoints.length, 0);
+    assert.equal(harness.promptCalls.length, 1);
+    busy = false;
+    const completed = await harness.controller.waitForTurn("session-1");
+    assert.equal(completed.state, "failed");
+    assert.equal(completed.error, "The completed native answer failed.");
+    assert.equal((await harness.controller.sessionState("session-1")).turn.active, false);
+    assert.equal(harness.systemMessages.length, 1);
+    assert.match(harness.systemMessages[0].text, /The completed native answer failed\./u);
+    assert.equal(harness.promptCalls.length, 1, "A completed native error must not trigger empty-answer recovery.");
+  });
+  await t.test("failed success-path status read stops native work instead of declaring completion", async (t) => {
+    const interrupted = [];
+    let failStatus = true;
+    const harness = await controllerHarness({
+      assistantResponses: ["The observed answer.", "The next answer."],
+      sessionStatus: async () => {
+        if (failStatus) {
+          failStatus = false;
+          throw new Error("Controlled native status read failure.");
+        }
+        return { type: "idle" };
+      },
+      interrupt: async id => { interrupted.push(id); return true; }
+    });
+    t.after(async () => {
+      failStatus = false;
+      await harness.controller.closeAllForProject();
+      await rm(harness.root, { force: true, recursive: true });
+    });
+    const delivered = await harness.controller.sendMessage("session-1", { message: "Answer", messageId: "r19-status-read-failure" });
+    const failed = await harness.controller.waitForTurn("session-1");
+    assert.equal(failed.state, "failed");
+    assert.match(failed.error, /Controlled native status read failure\./u);
+    assert.deepEqual(interrupted, [delivered.thread.id]);
+    assert.equal((await harness.controller.sessionState("session-1")).turn.active, false);
+    assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+    assert.equal(harness.processStops.length, 0, "Confirmed native abort must not kill the shared server.");
+    assert.equal(harness.promptCalls.length, 1);
+    assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-status-read-failure"]);
+    await harness.controller.sendMessage("session-1", { message: "Next answer", messageId: "r19-after-status-failure" });
+    assert.equal((await harness.controller.waitForTurn("session-1")).state, "completed");
+    assert.equal(harness.assistantMessages.at(-1).text, "The next answer.");
+    assert.equal(harness.promptCalls.length, 2);
+  });
+});
+
+test("R19 native-admitted steering cannot retire its monitor while the authored-row commit is held", { timeout: 15000 }, async (t) => {
+  const secondRead = Promise.withResolvers();
+  const releaseRead = Promise.withResolvers();
+  const commitEntered = Promise.withResolvers();
+  const releaseCommit = Promise.withResolvers();
+  const continuedRead = Promise.withResolvers();
+  const response = { messages: [] };
+  const created = Date.now();
+  let historyReads = 0;
+  let steering;
+  let harness;
+  harness = await controllerHarness({
+    assistantResponses: [response, response],
+    async beforeMessages() {
+      historyReads += 1;
+      if (historyReads === 2) {
+        secondRead.resolve();
+        await releaseRead.promise;
+      }
+      response.messages = [
+        { id: harness.promptCalls[0].input.id, type: "user", text: "First input", time: { created } },
+        { id: "r19-committed-predecessor", type: "assistant", text: "Predecessor answer.", finish: "stop",
+          time: { created: created + 1, completed: created + 2 } }
+      ];
+      if (harness.promptCalls.length === 2) {
+        response.messages.push(
+          { id: harness.promptCalls[1].input.id, type: "user", text: "Admitted latest input", time: { created: created + 3 } },
+          { id: "r19-admitted-successor", type: "assistant", text: "The admitted latest answer.", finish: "stop",
+            time: { created: created + 4, completed: created + 5 } }
+        );
+      }
+      if (historyReads >= 3) continuedRead.resolve();
+    },
+    sessionStatus: async () => ({ type: "idle" })
+  });
+  const writeUser = harness.runtime.store.writeConversationUserMessage;
+  harness.runtime.store.writeConversationUserMessage = async (...args) => {
+    if (args[1].messageId === "r19-held-commit-latest") {
+      commitEntered.resolve();
+      await releaseCommit.promise;
+    }
+    return writeUser(...args);
+  };
+  t.after(async () => {
+    releaseRead.resolve();
+    releaseCommit.resolve();
+    await steering?.catch(() => {});
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const first = await harness.controller.sendMessage("session-1", { message: "First input", messageId: "r19-held-commit-first" });
+  const completion = harness.controller.waitForTurn("session-1");
+  await secondRead.promise;
+  steering = harness.controller.sendMessage("session-1", { message: "Admitted latest input", messageId: "r19-held-commit-latest" });
+  await commitEntered.promise;
+  assert.equal(harness.promptCalls.length, 2);
+  assert.equal(harness.promptCalls[1].input.delivery, "steer");
+  assert.notEqual(harness.promptCalls[0].input.id, harness.promptCalls[1].input.id);
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-held-commit-first"]);
+  releaseRead.resolve();
+  const observation = await Promise.race([
+    continuedRead.promise.then(() => "continued-observation"),
+    completion.then(() => "premature-completion")
+  ]);
+  assert.equal(observation, "continued-observation",
+    "Native-admitted steering must remain owned while its authored-row commit is held.");
+  assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+  releaseCommit.resolve();
+  const admitted = await steering;
+  assert.equal(admitted.deliveryMode, "steer");
+  assert.equal(admitted.thread.id, first.thread.id);
+  assert.equal((await harness.controller.waitForTurn("session-1")).state, "completed");
+  assert.equal(harness.assistantMessages.at(-1).text, "The admitted latest answer.");
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-held-commit-first", "r19-held-commit-latest"]);
+  assert.equal(harness.promptCalls.length, 2);
+});
+
+test("R19 two completed native B polls still await its original authored-row commit", { timeout: 15000 }, async (t) => {
+  const commitEntered = Promise.withResolvers();
+  const releaseCommit = Promise.withResolvers();
+  const twoCompletedPolls = Promise.withResolvers();
+  const response = { messages: [] };
+  const created = Date.now();
+  let completedBPolls = 0;
+  let completed = false;
+  let steering;
+  let harness;
+  harness = await controllerHarness({
+    assistantResponses: [response, response],
+    beforeMessages() {
+      const firstId = harness.promptCalls[0].input.id;
+      response.messages = [
+        { id: firstId, type: "user", text: "A", time: { created } },
+        { id: "r19-two-polls-a", type: "assistant", text: "A progress", time: { created: created + 1 } }
+      ];
+      if (harness.promptCalls.length === 2) {
+        response.messages.push(
+          { id: harness.promptCalls[1].input.id, type: "user", text: "B", time: { created: created + 2 } },
+          { id: "r19-two-polls-b", type: "assistant", text: "B finished.", finish: "stop",
+            time: { created: created + 3, completed: created + 4 } }
+        );
+      }
+    },
+    sessionStatus: async () => {
+      if (harness.promptCalls.length === 2) {
+        completedBPolls += 1;
+        if (completedBPolls === 2) twoCompletedPolls.resolve();
+      }
+      return { type: "idle" };
+    }
+  });
+  const writeUser = harness.runtime.store.writeConversationUserMessage;
+  harness.runtime.store.writeConversationUserMessage = async (...args) => {
+    if (args[1].messageId === "r19-two-polls-latest") {
+      commitEntered.resolve();
+      await releaseCommit.promise;
+    }
+    return writeUser(...args);
+  };
+  t.after(async () => {
+    releaseCommit.resolve();
+    await steering?.catch(() => {});
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { recursive: true, force: true });
+  });
+  const first = await harness.controller.sendMessage("session-1", { message: "A", messageId: "r19-two-polls-first" });
+  const completion = harness.controller.waitForTurn("session-1");
+  void completion.then(() => { completed = true; }, () => { completed = true; });
+  steering = harness.controller.sendMessage("session-1", { message: "B", messageId: "r19-two-polls-latest" });
+  await commitEntered.promise;
+  await twoCompletedPolls.promise;
+  for (let index = 0; index < 3; index += 1) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(completedBPolls, 2, "The original waiter reached its two completed/idle observations.");
+  assert.equal(completed, false, "A terminal native result must still await the authored-row commit.");
+  assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+  assert.equal(harness.checkpoints.length, 0);
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-two-polls-first"]);
+  releaseCommit.resolve();
+  const latest = await steering;
+  assert.equal(latest.deliveryMode, "steer");
+  assert.equal(latest.thread.id, first.thread.id);
+  assert.equal((await completion).state, "completed");
+  assert.equal(harness.assistantMessages.at(-1).text, "B finished.");
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-two-polls-first", "r19-two-polls-latest"]);
+  assert.equal(harness.promptCalls.length, 2);
+});
+
+test("R19 rejected Main B restores A observation without stopping or replaying", { timeout: 15000 }, async (t) => {
+  const response = { messages: [] };
+  const interrupted = [];
+  const created = Date.now();
+  let finishA = false;
+  let rejectedCallbacks = 0;
+  let harness;
+  harness = await controllerHarness({
+    assistantResponses: [response],
+    beforeMessages() {
+      response.messages = [
+        { id: harness.promptCalls[0].input.id, type: "user", text: "A", time: { created } },
+        { id: "r19-rejected-a", type: "assistant", text: finishA ? "A finished." : "A progress",
+          time: { created: created + 1, ...(finishA ? { completed: created + 2 } : {}) } }
+      ];
+    },
+    interrupt: async id => { interrupted.push(id); return true; }
+  });
+  t.after(async () => {
+    finishA = true;
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { recursive: true, force: true });
+  });
+  const first = await harness.controller.sendMessage("session-1", { message: "A", messageId: "r19-rejected-first" });
+  const completion = harness.controller.waitForTurn("session-1");
+  const owner = harness.controller.prepareConversationHost("session-1", {}, "activity").native.owner;
+  const tracked = [...owner.turns.values()].find(turn => turn.threadId === first.thread.id);
+  const previousAdmission = tracked.admission;
+  harness.failPrompt(Object.assign(new Error("Controlled B rejection"), {
+    code: "assistant_opencode_server_request_failed", statusCode: 400
+  }));
+  const rejected = await harness.controller.sendMessage("session-1", {
+    message: "B", messageId: "r19-rejected-latest", onPromptRejected() { rejectedCallbacks += 1; }
+  });
+  assert.equal(rejected.delivered, false);
+  assert.equal(rejected.code, "vibe64_opencode_server_request_failed");
+  assert.equal(rejectedCallbacks, 1);
+  assert.equal((await harness.controller.sessionState("session-1")).turn.active, true);
+  assert.equal(tracked.inputMessageId, harness.promptCalls[0].input.id);
+  assert.equal(tracked.admission, previousAdmission, "Rejection restores the same previous gate, not a resolved substitute.");
+  assert.deepEqual(interrupted, []);
+  assert.equal(harness.checkpoints.length, 0);
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-rejected-first"]);
+  finishA = true;
+  assert.equal((await completion).state, "completed");
+  assert.equal(harness.assistantMessages.at(-1).text, "A finished.");
+  assert.equal(harness.promptCalls.length, 2);
+});
+
+for (const stopConfirmed of [true, false]) {
+  test(`R19 unknown Main B retains its exact input and original Stop recovery: ${stopConfirmed ? "confirmed" : "unconfirmed"}`, { timeout: 15000 }, async (t) => {
+    const response = { messages: [] };
+    const interrupted = [];
+    const created = Date.now();
+    let processExited = stopConfirmed;
+    let nativeB = false;
+    let harness;
+    harness = await controllerHarness({
+      assistantResponses: [response],
+      beforeMessages() {
+        response.messages = [
+          { id: harness.promptCalls[0].input.id, type: "user", text: "A", time: { created } },
+          { id: "r19-unknown-a", type: "assistant", text: "A progress", time: { created: created + 1 } }
+        ];
+        if (nativeB) response.messages.push(
+          { id: harness.promptCalls[1].input.id, type: "user", text: "B", time: { created: created + 2 } },
+          { id: "r19-unknown-b", type: "assistant", text: "Native B was admitted.", finish: "stop",
+            time: { created: created + 3, completed: created + 4 } }
+        );
+      },
+      beforePrompt() {
+        if (harness.promptCalls.length === 2) {
+          nativeB = true;
+          throw Object.assign(new Error("Controlled lost B acknowledgement"), {
+            code: "assistant_opencode_server_request_failed", statusCode: 408
+          });
+        }
+      },
+      interrupt: async id => { interrupted.push(id); return stopConfirmed; },
+      stop: async () => ({ exited: processExited })
+    });
+    t.after(async () => {
+      processExited = true;
+      await harness.controller.closeAllForProject();
+      await rm(harness.root, { recursive: true, force: true });
+    });
+    const first = await harness.controller.sendMessage("session-1", { message: "A", messageId: "r19-unknown-first" });
+    const result = await harness.controller.sendMessage("session-1", { message: "B", messageId: "r19-unknown-latest" });
+    assert.equal(result.delivered, false);
+    assert.equal(result.code, "vibe64_opencode_server_request_failed");
+    const owner = harness.controller.prepareConversationHost("session-1", {}, "activity").native.owner;
+    const tracked = [...owner.turns.values()].find(turn => turn.threadId === first.thread.id);
+    assert.equal(tracked.inputMessageId, harness.promptCalls[1].input.id, "Unknown ACK must not restore A as if B were rejected.");
+    assert.deepEqual(interrupted, [first.thread.id]);
+    assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-unknown-first"]);
+    assert.equal(harness.promptCalls.length, 2);
+    assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+    const state = await harness.controller.sessionState("session-1");
+    assert.equal(state.turn.active, !stopConfirmed);
+    assert.equal(state.turn.status, "observation_lost");
+    if (stopConfirmed) {
+      assert.equal(harness.processStops.length, 0, "Confirmed native Stop retains the shared server.");
+      const admission = await harness.controller.inspectMessageAdmission("session-1", {
+        messageId: "r19-unknown-latest", threadId: first.thread.id
+      });
+      assert.equal(admission.admission, "accepted");
+      assert.equal(admission.turnId, harness.promptCalls[1].input.id);
+    } else {
+      assert.equal(harness.processStops.length, 1);
+      await assert.rejects(harness.controller.sendMessage("session-1", {
+        message: "Must not overlap", messageId: "r19-unknown-next"
+      }), /could not be verified/);
+      assert.equal(harness.promptCalls.length, 2, "An unconfirmed Stop must not dispatch another prompt.");
+      assert.equal((await harness.controller.sessionState("session-1")).turn.active, true);
+    }
+  });
+}
+
+test("R19 admitted Main B commit failure keeps native identity and never replays", { timeout: 15000 }, async (t) => {
+  const response = { messages: [] };
+  const interrupted = [];
+  const persistenceFailure = new Error("Controlled admitted B commit failure");
+  const created = Date.now();
+  let harness;
+  harness = await controllerHarness({
+    assistantResponses: [response, response],
+    beforeMessages() {
+      response.messages = [
+        { id: harness.promptCalls[0].input.id, type: "user", text: "A", time: { created } },
+        { id: "r19-failed-commit-a", type: "assistant", text: "A progress", time: { created: created + 1 } }
+      ];
+      if (harness.promptCalls.length === 2) response.messages.push(
+        { id: harness.promptCalls[1].input.id, type: "user", text: "B", time: { created: created + 2 } },
+        { id: "r19-failed-commit-b", type: "assistant", text: "Native B finished.", finish: "stop",
+          time: { created: created + 3, completed: created + 4 } }
+      );
+    },
+    interrupt: async id => { interrupted.push(id); return true; }
+  });
+  const writeUser = harness.runtime.store.writeConversationUserMessage;
+  harness.runtime.store.writeConversationUserMessage = async (...args) => {
+    if (args[1].messageId === "r19-failed-commit-latest") throw persistenceFailure;
+    return writeUser(...args);
+  };
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { recursive: true, force: true });
+  });
+  const first = await harness.controller.sendMessage("session-1", { message: "A", messageId: "r19-failed-commit-first" });
+  await assert.rejects(harness.controller.sendMessage("session-1", {
+    message: "B", messageId: "r19-failed-commit-latest"
+  }), error => error === persistenceFailure);
+  const owner = harness.controller.prepareConversationHost("session-1", {}, "activity").native.owner;
+  const tracked = [...owner.turns.values()].find(turn => turn.threadId === first.thread.id);
+  assert.equal(tracked.inputMessageId, harness.promptCalls[1].input.id);
+  assert.deepEqual(interrupted, [first.thread.id]);
+  assert.equal((await harness.controller.waitForTurn("session-1")).state, "failed");
+  assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-failed-commit-first"]);
+  const admission = await harness.controller.inspectMessageAdmission("session-1", {
+    messageId: "r19-failed-commit-latest", threadId: first.thread.id
+  });
+  assert.equal(admission.admission, "accepted");
+  assert.equal(admission.turnId, harness.promptCalls[1].input.id);
+  assert.equal(harness.promptCalls.length, 2);
+  assert.equal(harness.processStops.length, 0);
+});
+
+test("R19 Main B fences an awaited final A projection before checkpoint", { timeout: 15000 }, async (t) => {
+  const projectionEntered = Promise.withResolvers();
+  const releaseProjection = Promise.withResolvers();
+  let steering;
+  const harness = await controllerHarness({ assistantResponses: ["A finished.", "B finished."] });
+  const writeAssistant = harness.runtime.store.writeConversationAssistantMessage;
+  harness.runtime.store.writeConversationAssistantMessage = async (...args) => {
+    if (args[1].text === "A finished.") {
+      projectionEntered.resolve();
+      await releaseProjection.promise;
+    }
+    return writeAssistant(...args);
+  };
+  t.after(async () => {
+    releaseProjection.resolve();
+    await steering?.catch(() => {});
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { recursive: true, force: true });
+  });
+  const first = await harness.controller.sendMessage("session-1", { message: "A", messageId: "r19-final-projection-first" });
+  const completion = harness.controller.waitForTurn("session-1");
+  await projectionEntered.promise;
+  steering = harness.controller.sendMessage("session-1", { message: "B", messageId: "r19-final-projection-latest" });
+  const latest = await steering;
+  assert.equal(latest.deliveryMode, "steer");
+  assert.equal(latest.thread.id, first.thread.id);
+  assert.equal(harness.agentRunEvents.some(({ run }) => run.state === "completed"), false);
+  assert.equal(harness.checkpoints.length, 0);
+  releaseProjection.resolve();
+  assert.equal((await completion).state, "completed");
+  assert.equal(harness.assistantMessages.at(-1).text, "B finished.");
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-final-projection-first", "r19-final-projection-latest"]);
+  assert.equal(harness.promptCalls.length, 2);
+  assert.equal(harness.checkpoints.length, 1);
+});
+
+test("R19 Main B joins claimed A terminal cleanup before its own original monitor", { timeout: 15000 }, async (t) => {
+  const checkpointEntered = Promise.withResolvers();
+  const releaseCheckpoint = Promise.withResolvers();
+  const requestEntered = Promise.withResolvers();
+  let holdCheckpoint = true;
+  let startingB = false;
+  let next;
+  const harness = await controllerHarness({ assistantResponses: ["A finished.", "B finished."] });
+  const writeCheckpoint = harness.runtime.store.writeBackgroundTaskEvent;
+  harness.runtime.store.writeBackgroundTaskEvent = async (...args) => {
+    if (holdCheckpoint) {
+      checkpointEntered.resolve();
+      await releaseCheckpoint.promise;
+    }
+    return writeCheckpoint(...args);
+  };
+  const messageExists = harness.runtime.store.conversationMessageIdExists;
+  harness.runtime.store.conversationMessageIdExists = async (...args) => {
+    if (startingB) requestEntered.resolve();
+    return messageExists(...args);
+  };
+  t.after(async () => {
+    holdCheckpoint = false;
+    releaseCheckpoint.resolve();
+    await next?.catch(() => {});
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { recursive: true, force: true });
+  });
+  const first = await harness.controller.sendMessage("session-1", { message: "A", messageId: "r19-cleanup-first" });
+  const firstCompletion = harness.controller.waitForTurn("session-1");
+  await checkpointEntered.promise;
+  const owner = harness.controller.prepareConversationHost("session-1", {}, "activity").native.owner;
+  const tracked = [...owner.turns.values()].find(turn => turn.threadId === first.thread.id);
+  assert.equal(tracked.active, false, "Terminal ownership must be claimed before awaited checkpoint cleanup.");
+  startingB = true;
+  next = harness.controller.sendMessage("session-1", { message: "B", messageId: "r19-cleanup-latest" });
+  await requestEntered.promise;
+  for (let index = 0; index < 3; index += 1) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(harness.promptCalls.length, 1, "B must not attach to a retiring observer during its cleanup.");
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-cleanup-first"]);
+  holdCheckpoint = false;
+  releaseCheckpoint.resolve();
+  assert.equal((await firstCompletion).state, "completed");
+  const latest = await next;
+  assert.equal(latest.deliveryMode, "new_turn");
+  assert.equal(latest.thread.id, first.thread.id);
+  assert.equal((await harness.controller.waitForTurn("session-1")).state, "completed");
+  assert.equal(harness.assistantMessages.at(-1).text, "B finished.");
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r19-cleanup-first", "r19-cleanup-latest"]);
+  assert.equal(harness.promptCalls.length, 2);
+  assert.equal(harness.checkpoints.length, 2);
+});

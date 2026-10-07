@@ -15,9 +15,20 @@ import colleagueConversation from "./stateUpgrades/20261002-colleague-conversati
 import sessionConversations from "./stateUpgrades/20261002-session-conversations.js";
 import conversationNativeJournal from "./stateUpgrades/20261003-conversation-native-journal.js";
 import conversationUndoRetirement from "./stateUpgrades/20261003-conversation-undo-retirement.js";
+import trainingPreparation from "./stateUpgrades/20261006-training-preparation.js";
+import personalAssistantPreferences from "./stateUpgrades/20261006-personal-assistant-preferences.js";
+import routingFormatCompatibility from "./stateUpgrades/20261006-routing-format-compatibility.js";
+
+import colleagueConversationHistory from "./stateUpgrades/20261006-colleague-conversation-history.js";
+
+import trainingAssessments from "./stateUpgrades/20261006-training-assessments.js";
+import trainingAttemptHistory from "./stateUpgrades/20261007-training-attempt-history.js";
+import trainingQuestionAdmission from "./stateUpgrades/20261007-training-question-admission.js";
+import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.js";
 
 // Published entries are immutable. Append new upgrades in order; never remove one.
-const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement];
+
+const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy];
 
 async function readLedger(ledgerPath) {
   let source;
@@ -39,7 +50,7 @@ async function readLedger(ledgerPath) {
   return ledger;
 }
 
-async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, inspectConversationUndoRetirement,
+async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement,
   report = (level, message) => console.log(`[${level}] ${message}`) }) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) === path.parse(systemRoot).root) {
     throw new Error("State upgrades require an absolute, non-root Vibe64 system directory.");
@@ -74,6 +85,7 @@ async function runStateUpgrades({ systemRoot, apply = false, upgradeAssistantRou
       upgradeColleagueConversations,
       upgradeSessionConversations,
       upgradeColleagueConversationRuntime,
+      upgradeColleagueConversationHistory,
       inspectConversationUndoRetirement,
       backupRoot: path.join(upgradeRoot, "backups", upgrade.id),
       report: (level, message) => report(level, `${upgrade.id}: ${message}`)

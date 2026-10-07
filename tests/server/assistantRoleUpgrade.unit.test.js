@@ -199,3 +199,27 @@ test("malformed, conflicting and linked state stops preflight without changing d
   await assert.rejects(f.run(true), /regular file/);
   assert.deepEqual(JSON.parse(await readFile(f.file, "utf8")), oldConfiguration);
 });
+
+test("current configuration and Custom receipts pass the role owner unchanged", async t => {
+  const f = await fixture(t);
+  const current = { schemaVersion: 4, revision: 7, orchestrators: { codex: { senior, junior, helper: junior } } };
+  await f.config(current);
+  await f.store.createSession({ sessionId: "current", runtimeKind: "genesis" });
+  const saved = { schemaVersion: 4, mode: "custom", resolvedMode: "custom", status: "uncertain",
+    workflowEngineId: "codex", assignments: { custom: junior }, configuration: { revision: 7, orchestrators: current.orchestrators },
+    attemptedMessageId: "retained", threadId: "native", submittedBy: { username: "member" } };
+  const raw = JSON.stringify(saved, null, 2);
+  const preference = JSON.stringify({ mode: "custom", workflowEngineId: "codex", override: junior });
+  await f.store.writeMetadataValue("current", "assistant_routing_request", raw);
+  await f.store.writeMetadataValue("current", "assistant_routing", preference);
+  const before = await snapshot(f.systemRoot);
+  await f.run();
+  assert.deepEqual(await snapshot(f.systemRoot), before);
+  await f.run(true);
+  assert.equal(await f.store.readMetadataValue("current", "assistant_routing_request"), raw);
+  assert.equal(await f.store.readMetadataValue("current", "assistant_routing"), preference);
+  assert.deepEqual(JSON.parse(await readFile(f.file, "utf8")), current);
+  for (const patch of [{ assignments: { plan: junior } }, { configuration: oldConfiguration }, { status: "unknown" }]) {
+    assert.throws(() => upgradeAssistantRoleSession({ metadata: { assistant_routing_request: JSON.stringify({ ...saved, ...patch }) }, conversations: [] }));
+  }
+});

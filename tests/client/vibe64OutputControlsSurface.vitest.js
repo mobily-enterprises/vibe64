@@ -1,7 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createRenderer, markRaw, nextTick, reactive, ref, shallowRef } from "vue";
+import { MessageChannel } from "node:worker_threads";
+import { VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "../../src/lib/vibe64AssistantHost.js";
+
+const surfaceHost = vi.hoisted(() => ({ outputs: null, projectSlug: null }));
+vi.mock("@/composables/useVibe64OutputControls.js", async original => ({
+  ...await original(), useVibe64OutputControls: () => surfaceHost.outputs
+}));
+vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => surfaceHost.projectSlug }));
 
 import {
-  PREVIEW_BRIDGE_READY_MESSAGE_TYPE
+  PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
+  PREVIEW_BRIDGE_VERSION,
+  PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE
 } from "../../packages/vibe64-terminals/src/shared/launchPreviewProtocol.js";
 import {
   defaultPreviewIdentitySelection,
@@ -25,7 +36,8 @@ import {
   previewOpeningOverlayVisible,
   previewRouteFromUrl,
   previewUrlForRoute,
-  redactPreviewDebugDetails
+  redactPreviewDebugDetails,
+  useVibe64OutputControlsSurface
 } from "../../src/composables/useVibe64OutputControlsSurface.js";
 
 describe("Vibe64 launch controls surface", () => {
@@ -610,4 +622,212 @@ describe("Vibe64 launch controls surface", () => {
       previewUrl: ""
     });
   });
+});
+
+
+const mountedSurfaces = [];
+afterEach(() => {
+  for (const fixture of mountedSurfaces.splice(0)) fixture.dispose();
+  vi.unstubAllGlobals();
+});
+const instanceId = "11111111-1111-4111-8111-111111111111";
+const interactionId = "22222222-2222-4222-8222-222222222222";
+const requestId = "33333333-3333-4333-8333-333333333333";
+async function portFlush() {
+  await new Promise(resolve => setTimeout(resolve, 10));
+  await nextTick();
+}
+function mountOrientationSurface() {
+  // Supply the existing output owner's read state, not an alternate bridge.
+  const outputs = Object.fromEntries([
+    "launchButtonsDisabled", "loading", "loadError", "operationBusy", "launchError", "launchStarting", "launchWaiting",
+    "outputTargetsLoaded", "terminalDisplayed", "terminalDockVisible", "terminalExpanded", "terminalCanRestart",
+    "terminalCanRetry", "terminalCanStart", "terminalError", "terminalStatus", "terminalTitle", "terminalSubtitle",
+    "terminalCommandPreview", "terminalIndicatorLabel", "terminalIndicatorState", "terminalVisible", "terminalIsRunning",
+    "terminalPreviewRequiresProxy", "terminalWindowVisible", "terminalWindowStorageKey", "previewCanRestart", "previewCanShowLog",
+    "previewCanStart", "previewMessage", "previewIdentity", "outputExecution", "outputResults", "outputRuns", "visible", "launchStatusAttempt"
+  ].map(name => [name, ref(false)]));
+  const target = { id: "app", presentation: { kind: "web" } };
+  Object.assign(outputs, { activeOutputTarget: ref(target), outputTargets: ref([target]), previewState: ref("ready"),
+    terminal: ref({ metadata: { outputTargetId: "app" } }), terminalSessionId: ref("terminal-a"),
+    launchActions: ref([{ href: "https://preview.example.test/" }]), publishPreviewState: vi.fn(), refresh: vi.fn(async () => {}) });
+  surfaceHost.outputs = outputs;
+  surfaceHost.projectSlug = ref("practice");
+  const windowListeners = new Map();
+  const documentListeners = new Map();
+  const windowObject = { innerWidth: 1280, innerHeight: 800, location: { href: "https://studio.example.test/app" },
+    addEventListener(type, handler) { windowListeners.set(type, handler); },
+    removeEventListener(type) { windowListeners.delete(type); } };
+  const documentObject = { visibilityState: "visible", addEventListener(type, handler) { documentListeners.set(type, handler); },
+    removeEventListener(type) { documentListeners.delete(type); } };
+  vi.stubGlobal("window", windowObject);
+  vi.stubGlobal("document", documentObject);
+  vi.stubGlobal("MessageChannel", MessageChannel);
+  const props = reactive({ embeddedPreview: true, previewDisplayed: true, windowDisplayed: true,
+    session: { sessionId: "session-a" } });
+  const tickets = [];
+  const responses = [];
+  const owner = { beginExercise(frame, current) {
+    const ticket = { frame, current };
+    tickets.push(ticket);
+    return ticket;
+  }, async finishExercise(ticket, response) {
+    if (response && ticket.current()) responses.push({ ticket, response });
+    return true;
+  } };
+  const channel = shallowRef(owner);
+  let state;
+  const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode: () => null, nextSibling: () => null });
+  const app = renderer.createApp({ setup() { state = useVibe64OutputControlsSurface(props); return () => null; } });
+  app.provide(VIBE64_TRAINING_LEARNER_GESTURE_KEY, channel);
+  app.mount({});
+  const posts = [];
+  let rect = { left: 100, top: 100, right: 900, bottom: 700 };
+  let frame = markRaw({ dataset: { previewFrameRequestId: String(state.previewFrameRequestId.value) },
+    getBoundingClientRect: () => rect,
+    contentWindow: { postMessage(data, origin, ports = []) { posts.push({ data, origin, ports }); } } });
+  state.previewFrame.value = frame;
+  function announce(data = { type: "orientation-available", protocolVersion: 1, instanceId }, source = frame.contentWindow, origin = "https://preview.example.test") {
+    windowListeners.get("message")({ data, source, origin, ports: [] });
+  }
+  function load() {
+    state.handlePreviewFrameLoad({ currentTarget: frame });
+  }
+  function init() { return posts.findLast(post => post.data.type === "orientation-init"); }
+  function packet(type, fields = {}) {
+    const message = init();
+    message.ports[0].postMessage({ type, protocolVersion: 1, instanceId,
+      playerInstanceId: message.data.playerInstanceId, ...fields });
+  }
+  const fixture = { state, props, outputs, posts, tickets, responses, channel, owner, frame, windowListeners, documentListeners,
+    documentObject, windowObject, announce, load, init, packet,
+    replaceFrame() {
+      frame = markRaw({ ...frame, dataset: { previewFrameRequestId: String(state.previewFrameRequestId.value) },
+        contentWindow: { postMessage(data, origin, ports = []) { posts.push({ data, origin, ports }); } } });
+      state.previewFrame.value = frame;
+    },
+    setRect(value) { rect = value; },
+    dispose() {
+      app.unmount();
+      for (const post of posts) for (const port of post.ports) port.close();
+      expect(windowListeners.size).toBe(0);
+      expect(documentListeners.size).toBe(0);
+    } };
+  mountedSurfaces.push(fixture);
+  return fixture;
+}
+
+it("the original App frame keeps early readiness and transfers one real port before a correlated response", async () => {
+  const f = mountOrientationSurface();
+  f.announce();
+  expect(f.init()).toBeUndefined();
+  f.load();
+  expect(f.init().origin).toBe("https://preview.example.test");
+  expect(f.init().data).toEqual({ type: "orientation-init", protocolVersion: 1, playerInstanceId: expect.any(String) });
+  f.announce();
+  expect(f.posts.filter(post => post.data.type === "orientation-init")).toHaveLength(1);
+  f.packet("ready");
+  f.packet("button", { interactionId });
+  f.packet("request", { interactionId, method: "POST", path: "/api/greeting" });
+  f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+  await portFlush();
+  expect(f.responses).toHaveLength(1);
+  expect(f.tickets[0].frame).toEqual({ projectSlug: "practice", sessionId: "session-a",
+    frameRequestId: f.state.previewFrameRequestId.value, playerInstanceId: f.init().data.playerInstanceId, instanceId, interactionId });
+  expect(f.responses[0].response).toEqual({ requestId });
+  f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+  await portFlush();
+  expect(f.responses).toHaveLength(1);
+});
+
+it("the existing frame listener excludes other windows, origins, malformed phases and wrong identities", async () => {
+  const f = mountOrientationSurface();
+  f.load();
+  f.announce(undefined, {});
+  f.announce(undefined, f.frame.contentWindow, "https://foreign.example.test");
+  f.announce({ type: "orientation-available", protocolVersion: 1, instanceId, assessmentPassed: true });
+  expect(f.init()).toBeUndefined();
+  f.announce();
+  f.packet("button", { interactionId });
+  await portFlush();
+  expect(f.tickets).toHaveLength(0);
+  f.packet("ready");
+  f.packet("button", { interactionId });
+  f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+  await portFlush();
+  expect(f.responses).toHaveLength(0);
+  for (const invalid of [{ instanceId: requestId }, { playerInstanceId: requestId }, { protocolVersion: 2 }, { unexpected: true }]) {
+    f.packet("button", { interactionId });
+    f.packet("request", { interactionId, method: "POST", path: "/api/greeting", ...invalid });
+    f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+    await portFlush();
+  }
+  expect(f.responses).toHaveLength(0);
+});
+
+it("hiding App or document invalidates unfinished evidence but retains its single document port for a fresh press", async () => {
+  const f = mountOrientationSurface();
+  f.load(); f.announce(); f.packet("ready");
+  await portFlush();
+  for (const hide of [() => { f.props.previewDisplayed = false; }, () => { f.props.windowDisplayed = false; },
+    () => { f.documentObject.visibilityState = "hidden"; f.documentListeners.get("visibilitychange")(); }]) {
+    f.packet("button", { interactionId });
+    await portFlush();
+    hide();
+    expect(f.tickets.at(-1).current()).toBe(false);
+    f.props.previewDisplayed = true; f.props.windowDisplayed = true; f.documentObject.visibilityState = "visible";
+    f.packet("request", { interactionId, method: "POST", path: "/api/greeting" });
+    f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+    await portFlush();
+  }
+  expect(f.responses).toHaveLength(0);
+  expect(f.posts.filter(post => post.data.type === "orientation-init")).toHaveLength(1);
+  f.setRect({ left: -100, top: 100, right: -1, bottom: 200 });
+  f.packet("button", { interactionId });
+  await portFlush();
+  const count = f.tickets.length;
+  f.setRect({ left: 100, top: 100, right: 900, bottom: 700 });
+  f.packet("button", { interactionId });
+  f.packet("request", { interactionId, method: "POST", path: "/api/greeting" });
+  f.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" });
+  await portFlush();
+  expect(f.tickets).toHaveLength(count + 1);
+  expect(f.responses).toHaveLength(1);
+});
+
+it("reload, service and session replacement fence old real ports while native diagnostics retain their request identity", async () => {
+  const f = mountOrientationSurface();
+  f.load(); f.announce(); f.packet("ready"); f.packet("button", { interactionId });
+  await portFlush();
+  const oldPeer = f.init().ports[0];
+  const oldGeneration = f.state.previewFrameRequestId.value;
+  await f.state.reloadPreview();
+  expect(f.state.previewFrameRequestId.value).toBeGreaterThan(oldGeneration);
+  expect(f.tickets[0].current()).toBe(false);
+  oldPeer.postMessage({ type: "request", protocolVersion: 1, instanceId, interactionId,
+    playerInstanceId: f.init().data.playerInstanceId, method: "POST", path: "/api/greeting" });
+  await portFlush();
+  expect(f.responses).toHaveLength(0);
+  f.state.handlePreviewFrameLoad({ currentTarget: f.frame });
+  expect(f.state.previewFrameLoaded.value).toBe(false, "a stale native load cannot open the new generation");
+  f.replaceFrame();
+  f.load(); f.announce();
+  expect(f.posts.filter(post => post.data.type === "orientation-init")).toHaveLength(2);
+  f.packet("ready"); f.packet("button", { interactionId });
+  await portFlush();
+  f.outputs.terminalSessionId.value = "terminal-b";
+  expect(f.tickets.at(-1).current()).toBe(false);
+  await f.state.reloadPreview();
+  f.replaceFrame(); f.load();
+  f.announce({ type: PREVIEW_BRIDGE_READY_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION });
+  const diagnostics = f.state.requestPreviewDiagnostics();
+  const query = f.posts.at(-1).data;
+  expect(query.requestId).toEqual(expect.any(String));
+  f.announce({ type: PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE, requestId: query.requestId, diagnostics: { title: "Orientation app" } });
+  expect(await diagnostics).toEqual({ title: "Orientation app" });
+  f.announce(); f.packet("ready"); f.packet("button", { interactionId });
+  await portFlush();
+  f.props.session = { sessionId: "session-b" };
+  expect(f.tickets.at(-1).current()).toBe(false);
+  expect(f.responses).toHaveLength(0);
 });

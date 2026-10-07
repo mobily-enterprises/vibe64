@@ -13,11 +13,12 @@ import * as Vue from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { routeLocationKey } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { VIBE64_COLLEAGUE_PREVIEW_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { alternateVisualResource } from "../fixtures/trainingVisualFixture.js";
 import { provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
 import { createTemporaryConversationFixture, temporaryRequestBody } from "./helpers/temporaryConversationFixture.js";
 
-const mocks = vi.hoisted(() => ({ live: false, resource: null, query: null }));
+const mocks = vi.hoisted(() => ({ live: false, resource: null, query: null, visuals: [] }));
 vi.mock("@jskit-ai/assistant-core/client", async (importOriginal) => ({
   ...await importOriginal(), assistantHttpClient: { request: (...args) => getHttpWebClient().request(...args) }
 }));
@@ -25,6 +26,44 @@ vi.mock("vuetify/components/VBtn", () => ({ VBtn: passthroughComponent("button")
 vi.mock("vuetify/components/VAlert", () => ({ VAlert: passthroughComponent("aside") }));
 vi.mock("vuetify/components/VTextarea", () => ({ VTextarea: passthroughComponent("textarea") }));
 vi.mock("vuetify/components/VSkeletonLoader", () => ({ VSkeletonLoader: passthroughComponent("div") }));
+
+// Contract stand-in for the already browser-proven player; these cases verify
+// Preview composition/ownership, not controller transitions or sandbox proof.
+vi.mock("../../packages/vibe64-training/src/client/TrainingVisualPlayer.vue", async () => {
+  const Vue = await import("vue");
+  return { default: Vue.defineComponent({
+    props: { resource: Object, attemptId: String }, emits: ["state", "error"],
+    setup(props, { emit, expose }) {
+      const entry = { operations: [], disposed: false, semantic: { state: "overview", paused: false, labels: {} } };
+      const playerInstanceId = `fixture-${mocks.visuals.length + 1}`;
+      entry.ready = () => emit("state", { attemptId: props.attemptId, playerInstanceId,
+        phase: "ready", state: entry.semantic.state, description: "Current semantic display", error: "" });
+      entry.failMount = message => emit("error", message);
+      entry.state = value => emit("state", value);
+      entry.finish = (index, fields = {}) => {
+        const operation = entry.operations[index];
+        entry.semantic = { ...entry.semantic, ...fields };
+        entry.ready();
+        operation.resolve({ protocolVersion: 1, playerInstanceId, type: "completed", commandId: operation.input.commandId,
+          state: entry.semantic.state, description: "Actual completed display" });
+      };
+      expose({ command(input) {
+        structuredClone(input.parameters); // Original player sends plain bounded parameters across MessageChannel.
+        const pending = Promise.withResolvers();
+        entry.operations.push({ input, ...pending });
+        emit("state", { attemptId: props.attemptId, playerInstanceId, phase: "accepted",
+          state: entry.semantic.state, description: "Current semantic display", error: "" });
+        return pending.promise;
+      }, snapshot: async () => structuredClone(entry.semantic) });
+      Vue.onBeforeUnmount(() => {
+        entry.disposed = true;
+        for (const operation of entry.operations) operation.reject(new Error("The original player instance retired."));
+      });
+      mocks.visuals.push(entry);
+      return () => Vue.h("iframe", { title: props.resource.visual.title });
+    }
+  }) };
+});
 
 function passthroughComponent(element) {
   return Vue.defineComponent({
@@ -52,12 +91,14 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", async (importOrigina
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
   useVibe64ProjectSlug: () => Vue.ref("project-a")
 }));
+import PreviewPresentation from "../../packages/vibe64-training/src/client/TrainingPreviewPresentation.vue";
 import Onboarding from "../../src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import FixAction from "../../src/components/studio/Vibe64TemporaryAiFixAction.vue";
 import { useVibe64TemporaryAi } from "../../src/composables/useVibe64TemporaryAi.js";
 
 for (const [component, relativePath] of [
   [Onboarding, "src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue"],
+  [PreviewPresentation, "packages/vibe64-training/src/client/TrainingPreviewPresentation.vue"],
   [FixAction, "src/components/studio/Vibe64TemporaryAiFixAction.vue"]
 ]) {
   const filename = path.resolve(relativePath);
@@ -101,10 +142,14 @@ function nodeText(node) {
 
 // Real Onboarding setup/template, QueryClient, command, feedback and realtime;
 // only Vuetify presentation and the ready OutputControls slot are stand-ins.
-function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false } = {}) {
+function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false } = {}) {
   mocks.live = live;
-  const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, sessionId: "session-a" });
+  if (withPresentation) mocks.visuals = [];
+  const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, sessionId: "session-a", projectSlug: "project-a", presentation: null });
   const reads = [];
+  const visualReads = [];
+  const presentationHost = Vue.shallowRef(null);
+  const viewer = Vue.shallowRef({ actorKey: "member-42" });
   const writes = [];
   const conversationRequests = [];
   const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
@@ -118,6 +163,11 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   const colleaguePreview = Vue.shallowRef(null);
   const transport = {
     request(url, options) {
+      if (url.startsWith("/api/vibe64/training/attempts/")) {
+        const response = Promise.withResolvers();
+        visualReads.push({ url, options, ...response });
+        return response.promise;
+      }
       if (url.startsWith("/api/vibe64/sessions/") || url.startsWith("/api/assistant/app/conversations/")) {
         conversationRequests.push({ url, ...options });
         if (url.endsWith("/temporary-conversations")) {
@@ -148,7 +198,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
     }
   });
   const renderer = Vue.createRenderer({
-    createElement: (type) => ({ type, children: [], props: {}, parent: null }),
+    createElement: (type) => ({ type, children: [], props: {}, parent: null, style: {} }),
     createComment: (text) => ({ type: "comment", text, children: [], props: {} }),
     createText: (text) => ({ type: "text", text, children: [], props: {} }),
     insert(child, parent, anchor = null) {
@@ -178,18 +228,19 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
         });
         requestTemporaryAi.mockImplementation(temporary.startTask);
       }
-      return () => props.mounted ? Vue.h(Onboarding, {
-        active: onboardingActive(props),
-        archived: props.archived,
-        busy: props.busy,
-        canAsk: props.canAsk,
-        requestTemporaryAi,
-        sessionId: props.sessionId
-      }, { default: () => Vue.h(outputSlot) }) : null;
+      const appBody = ({ presentation = props.presentation } = {}) => Vue.h(Onboarding, {
+        active: onboardingActive(props), archived: props.archived, busy: props.busy, canAsk: props.canAsk,
+        requestTemporaryAi, sessionId: props.sessionId, presentation
+      }, { default: () => Vue.h(outputSlot) });
+      return () => !props.mounted ? null : withPresentation ? Vue.h(PreviewPresentation, {
+        ref: presentationHost, active: onboardingActive(props) && !props.archived,
+        projectSlug: props.projectSlug, sessionId: props.sessionId
+      }, { default: appBody }) : appBody();
     }
   });
   app.use(VueQueryPlugin, { queryClient });
   app.provide(VIBE64_COLLEAGUE_PREVIEW_KEY, colleaguePreview);
+  if (withPresentation) app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
   app.provide(Vue.ssrContextKey, { modules: new Set() });
   app.provide(routeLocationKey, Vue.reactive({ path: "/app/project/project-a", params: {}, query: {}, matched: [] }));
   app.provide("jskit.shell-web.runtime.web-error.client", feedback);
@@ -216,6 +267,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   app.mount(container);
   return {
     colleaguePreview, container, conversationRequests, feedback, listeners, outputs, props, reads, requestTemporaryAi, temporary, writes,
+    visualReads, presentationHost, viewer,
     button: (label) => findNode(container, (node) => node.type === "button" && nodeText(node).includes(label)),
     async projectChanged(projectSlug = "project-a") {
       for (const handler of listeners) handler({ projectSlug });
@@ -307,7 +359,7 @@ describe("Preview project onboarding", () => {
   it("reports the displayed setup screen and clears it when hidden or unmounted", async () => {
     const fixture = mountOnboarding();
     try {
-      expect({ ...fixture.colleaguePreview.value }).toEqual({ projectSlug: "project-a", sessionId: "session-a", screen: "checking-project-setup" });
+      expect({ ...fixture.colleaguePreview.value }).toEqual({ projectSlug: "project-a", sessionId: "session-a", screen: "checking-project-setup", presentation: null });
       await fixture.settleRead(0, opening("adoption"));
       expect(fixture.colleaguePreview.value.screen).toBe("existing-project-setup");
       expect(nodeText(fixture.container)).toContain("Set up this existing project");
@@ -762,4 +814,315 @@ describe("Preview project onboarding", () => {
       fixture.close();
     }
   });
+});
+
+const visualRequest = { attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", visualId: "alternate" };
+function visualResource(pause = true) {
+  const resource = alternateVisualResource();
+  if (pause) resource.visual.commands.push({ name: "pause", completionState: "unchanged", parameters: [] });
+  return resource;
+}
+
+it("rejects opening promptly when the original player reports a construction error without a state event", async () => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    await fixture.settleRead(0);
+    const handle = fixture.colleaguePreview.value.presentation;
+    const pending = handle.open(visualRequest).catch(error => error);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    fixture.visualReads[0].resolve(visualResource());
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    mocks.visuals[0].failMount("The diagram could not construct its player.");
+    expect((await pending).message).toBe("The diagram could not construct its player.");
+    expect(handle.state.phase).toBe("failed");
+    expect(fixture.outputs.mounted).toHaveBeenCalledOnce();
+    expect(fixture.outputs.unmounted).not.toHaveBeenCalled();
+    expect(fixture.writes).toHaveLength(0);
+  } finally { fixture.close(); }
+});
+
+it("publishes a live optional presentation handle through the original displayed Preview owner", async () => {
+  const fixture = mountOnboarding();
+  try {
+    const owner = fixture.colleaguePreview.value;
+    expect(owner.presentation).toBeNull();
+    const first = { state: { phase: "ready" } };
+    fixture.props.presentation = first;
+    await Vue.nextTick();
+    expect(fixture.colleaguePreview.value).toBe(owner);
+    expect(owner.presentation).toBe(fixture.props.presentation);
+    fixture.props.presentation = null;
+    await Vue.nextTick();
+    expect(owner.presentation).toBeNull();
+    expect(fixture.visualReads).toHaveLength(0);
+    expect(fixture.writes).toHaveLength(0);
+  } finally { fixture.close(); }
+});
+
+it("opens only after actual player readiness and preserves the original App slot through switch/collapse/reopen", async () => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    await fixture.settleRead(0);
+    const output = findNode(fixture.container, node => node.type === "output");
+    const owner = fixture.colleaguePreview.value;
+    const handle = owner.presentation;
+    let opened = false;
+    const pending = handle.open(visualRequest).then(value => { opened = true; return value; });
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    expect(fixture.visualReads[0].url).toBe(`/api/vibe64/training/attempts/${visualRequest.attemptId}/visuals/alternate`);
+    expect(fixture.visualReads[0].options).toEqual({ method: "GET" });
+    fixture.visualReads[0].resolve(visualResource());
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    expect(opened).toBe(false);
+    expect(handle.state.phase).toBe("loading");
+    mocks.visuals[0].ready();
+    expect(await pending).toEqual(expect.objectContaining({ ok: true, ...visualRequest, phase: "ready", visible: true }));
+    expect(fixture.colleaguePreview.value).toBe(owner);
+    expect(findNode(fixture.container, node => node.type === "output")).toBe(output);
+    expect(fixture.outputs.mounted).toHaveBeenCalledOnce();
+    fixture.button("Minimise presentation").props.onClick();
+    await vi.waitFor(() => expect(mocks.visuals[0].operations).toHaveLength(1));
+    expect(mocks.visuals[0].operations[0].input.name).toBe("pause");
+    mocks.visuals[0].finish(0, { paused: true });
+    await Vue.nextTick();
+    expect(handle.state.visible).toBe(false);
+    fixture.button("Restore presentation").props.onClick();
+    await Vue.nextTick();
+    expect(handle.state.visible).toBe(true);
+    expect(mocks.visuals[0].operations).toHaveLength(1);
+    expect(mocks.visuals[0].disposed).toBe(false);
+    expect((await handle.open(visualRequest)).playerInstanceId).toBe("fixture-1");
+    expect(fixture.visualReads).toHaveLength(1);
+    fixture.button("App preview").props.onClick();
+    await vi.waitFor(() => expect(mocks.visuals[0].operations).toHaveLength(2));
+    mocks.visuals[0].finish(1, { paused: true });
+    fixture.button("Colleague presentation").props.onClick();
+    await Vue.nextTick();
+    expect(findNode(fixture.container, node => node.type === "output")).toBe(output);
+    expect(fixture.outputs.unmounted).not.toHaveBeenCalled();
+    expect(mocks.visuals).toHaveLength(1);
+    expect(mocks.visuals[0].operations).toHaveLength(2);
+  } finally { fixture.close(); }
+});
+
+it("keeps accepted commands provisional, returns actual completion/snapshot and rejects wrong identities or hidden motion", async () => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    await fixture.settleRead(0);
+    const handle = fixture.colleaguePreview.value.presentation;
+    const opening = handle.open(visualRequest);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    fixture.visualReads[0].resolve(visualResource(false));
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    mocks.visuals[0].ready();
+    await opening;
+    for (const input of [{ ...visualRequest, visualId: "other" }, { ...visualRequest, attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }]) {
+      await expect(handle.command({ ...input, commandId: "command-one", name: "advance" })).rejects.toThrow("exact displayed");
+      await expect(handle.snapshot(input)).rejects.toThrow("exact displayed");
+    }
+    expect(mocks.visuals[0].operations).toHaveLength(0);
+    let completed = false;
+    const pending = handle.command({ ...visualRequest, commandId: "command-one", name: "advance", parameters: { label: "Seen" } })
+      .then(value => { completed = true; return value; });
+    await Vue.nextTick();
+    expect(completed).toBe(false);
+    expect(handle.state.phase).toBe("accepted");
+    mocks.visuals[0].finish(0, { state: "shown", labels: { caption: "Seen" } });
+    expect(await pending).toEqual({ ok: true, ...visualRequest, playerInstanceId: "fixture-1", phase: "completed",
+      commandId: "command-one", state: "shown", description: "Actual completed display" });
+    const snapshot = await handle.snapshot(visualRequest);
+    expect(snapshot.snapshot).toEqual({ state: "shown", paused: false, labels: { caption: "Seen" } });
+    expect(JSON.stringify(handle.state)).not.toContain("controller");
+    expect(Object.keys(handle)).toEqual(["open", "command", "snapshot", "armCue", "observeCue", "playback", "retireCue", "state"]);
+    fixture.props.projectPane = "dashboard";
+    await Vue.nextTick();
+    expect(handle.state.visible).toBe(false);
+    await expect(handle.command({ ...visualRequest, commandId: "hidden", name: "advance" })).rejects.toThrow("Show the lesson");
+    expect(mocks.visuals[0].operations).toHaveLength(1);
+    fixture.props.projectPane = "preview";
+    await Vue.nextTick();
+    expect(mocks.visuals[0].operations).toHaveLength(1);
+    const failed = handle.command({ ...visualRequest, commandId: "command-failed", name: "advance" });
+    const failure = Object.assign(new Error("The authored command failed."), { code: "interrupted" });
+    mocks.visuals[0].operations[1].reject(failure);
+    await expect(failed).rejects.toBe(failure);
+  } finally { fixture.close(); }
+});
+
+it.each(["actor", "session", "unmount"])("retires late resource responses on %s change without changing the App owner", async change => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    await fixture.settleRead(0);
+    const handle = fixture.colleaguePreview.value.presentation;
+    const pending = handle.open(visualRequest).catch(error => error);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    if (change === "actor") fixture.viewer.value = null;
+    if (change === "session") fixture.props.sessionId = "session-b";
+    if (change === "unmount") fixture.props.mounted = false;
+    await Vue.nextTick();
+    fixture.visualReads[0].resolve(visualResource());
+    expect(await pending).toBeInstanceOf(Error);
+    expect(handle.state.phase).toBe("closed");
+    expect(mocks.visuals).toHaveLength(0);
+    expect(fixture.writes).toHaveLength(0);
+  } finally { fixture.close(); }
+});
+
+it("retires pending actual readiness on account change and keeps resource failure retry read-only", async () => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    await fixture.settleRead(0);
+    const handle = fixture.colleaguePreview.value.presentation;
+    const failed = handle.open(visualRequest);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    fixture.visualReads[0].resolve({ id: "wrong" });
+    await expect(failed).rejects.toThrow("did not match");
+    expect(handle.state.phase).toBe("failed");
+    const pending = handle.open(visualRequest).catch(error => error);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(2));
+    fixture.visualReads[1].resolve(visualResource());
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    fixture.viewer.value = { actorKey: "member-43" };
+    await Vue.nextTick();
+    expect(await pending).toBeInstanceOf(Error);
+    expect(handle.state.phase).toBe("closed");
+    expect(mocks.visuals[0].disposed).toBe(true);
+    expect(fixture.writes).toHaveLength(0);
+  } finally { fixture.close(); }
+});
+
+const cueInput = { ...visualRequest, cueId: "cue-one", commandId: "transition-one", navigationId: "navigation-one",
+  conversationId: "conversation-a", turnId: "turn-a", clientId: "browser-a", name: "advance", parameters: {} };
+async function openCueFixture(fixture) {
+  await fixture.settleRead(0);
+  const handle = fixture.colleaguePreview.value.presentation;
+  const opening = handle.open(visualRequest);
+  await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+  fixture.visualReads[0].resolve(visualResource());
+  await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+  mocks.visuals[0].ready();
+  await opening;
+  const armed = await handle.armCue(cueInput);
+  expect(armed.phase).toBe("armed");
+  expect(armed.canonicalFinal).toBe(false);
+  expect(mocks.visuals[0].operations).toHaveLength(0);
+  return { handle, armed, final: { ...armed, outputId: "turn-a:reply-final", canonicalFinal: true, phase: "bound" } };
+}
+
+it.each(["audio-first", "visual-first"])("a cue waits for actual final identity and both real completion receipts: %s", async order => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    const { handle, armed, final } = await openCueFixture(fixture);
+    expect(handle.observeCue({ ...armed, outputId: "progress", canonicalFinal: false }, { readAloud: true })).toBe(false);
+    expect(handle.playback({ conversationId: "conversation-a", outputId: "progress", phase: "started" })).toBe(false);
+    expect(mocks.visuals[0].operations).toHaveLength(0);
+    expect(handle.observeCue(final, { readAloud: true })).toBe(true);
+    expect(handle.state.cue.phase).toBe("awaiting-audio");
+    expect(handle.playback({ conversationId: "other", outputId: final.outputId, phase: "started" })).toBe(false);
+    expect(handle.playback({ conversationId: "conversation-a", outputId: final.outputId, phase: "completed" })).toBe(true);
+    expect(mocks.visuals[0].operations).toHaveLength(0);
+    handle.playback({ conversationId: "conversation-a", outputId: final.outputId, phase: "started" });
+    await Vue.nextTick();
+    expect(mocks.visuals[0].operations).toHaveLength(1);
+    expect(mocks.visuals[0].operations[0].input.commandId).toBe(cueInput.commandId);
+    expect(handle.state.cue.visualPhase).toBe("accepted");
+    expect(handle.state.cue.phase).toBe("playing");
+    const completeAudio = () => handle.playback({ conversationId: "conversation-a", outputId: final.outputId, phase: "completed" });
+    if (order === "audio-first") {
+      completeAudio();
+      expect(handle.state.cue.phase).toBe("playing");
+    }
+    mocks.visuals[0].finish(0, { state: "shown" });
+    await vi.waitFor(() => expect(handle.state.cue.visualPhase).toBe("completed"));
+    if (order === "visual-first") {
+      expect(handle.state.cue.phase).toBe("playing");
+      completeAudio();
+    }
+    expect(handle.state.cue).toEqual(expect.objectContaining({ phase: "completed", visualPhase: "completed", audioPhase: "completed", state: "shown" }));
+    handle.playback({ conversationId: "conversation-a", outputId: final.outputId, phase: "started" });
+    expect(mocks.visuals[0].operations).toHaveLength(1);
+  } finally { fixture.close(); }
+});
+
+it("sound-off Continue waits for the final canonical explanation and never fabricates an audio receipt", async () => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    const { handle, final } = await openCueFixture(fixture);
+    expect(fixture.button("Continue")).toBeNull();
+    handle.observeCue(final, { readAloud: false });
+    await Vue.nextTick();
+    expect(mocks.visuals[0].operations).toHaveLength(0);
+    expect(handle.state.cue.phase).toBe("awaiting-continue");
+    fixture.button("Continue").props.onClick();
+    await Vue.nextTick();
+    expect(mocks.visuals[0].operations).toHaveLength(1);
+    mocks.visuals[0].finish(0, { state: "shown" });
+    await vi.waitFor(() => expect(handle.state.cue.phase).toBe("completed"));
+    expect(handle.state.cue.audioPhase).toBe("off");
+  } finally { fixture.close(); }
+});
+
+it("blocked/no-audio needs an explicit Continue; hidden and retired players cannot replay the cue", async () => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    const { handle, final } = await openCueFixture(fixture);
+    handle.observeCue(final, { readAloud: true });
+    handle.playback({ conversationId: "conversation-a", outputId: final.outputId, phase: "failed", reason: "no-audio" });
+    await Vue.nextTick();
+    expect(handle.state.cue.phase).toBe("awaiting-continue");
+    expect(mocks.visuals[0].operations).toHaveLength(0);
+    fixture.button("Minimise presentation").props.onClick();
+    await vi.waitFor(() => expect(mocks.visuals[0].operations).toHaveLength(1));
+    expect(mocks.visuals[0].operations[0].input.name).toBe("pause");
+    mocks.visuals[0].finish(0, { paused: true });
+    await Vue.nextTick();
+    expect(handle.state.cue.phase).toBe("interrupted");
+    fixture.button("Restore presentation").props.onClick();
+    handle.playback({ conversationId: "conversation-a", outputId: final.outputId, phase: "started" });
+    await Vue.nextTick();
+    expect(mocks.visuals[0].operations).toHaveLength(1);
+    await handle.armCue({ ...cueInput, cueId: "cue-two" });
+    mocks.visuals[0].state({ attemptId: visualRequest.attemptId, playerInstanceId: "reloaded-instance", phase: "loading" });
+    expect(handle.state.cue.phase).toBe("interrupted");
+    expect(handle.observeCue(final, { readAloud: true })).toBe(false);
+    fixture.viewer.value = null;
+    await Vue.nextTick();
+    expect(handle.state.cue).toBeUndefined();
+  } finally { fixture.close(); }
+});
+
+it("interrupting a running cue pauses the same original player and never reports completion", async () => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    const { handle, final } = await openCueFixture(fixture);
+    handle.observeCue(final, { readAloud: true });
+    handle.playback({ conversationId: "conversation-a", outputId: final.outputId, phase: "started" });
+    await Vue.nextTick();
+    handle.playback({ conversationId: "conversation-a", outputId: final.outputId, phase: "interrupted" });
+    await vi.waitFor(() => expect(mocks.visuals[0].operations).toHaveLength(2));
+    expect(mocks.visuals[0].operations[1].input.name).toBe("pause");
+    mocks.visuals[0].operations[0].reject(new Error("The authored transition was paused."));
+    mocks.visuals[0].finish(1, { paused: true });
+    await Vue.nextTick();
+    expect(handle.state.cue.phase).toBe("interrupted");
+    expect((await handle.snapshot(visualRequest)).snapshot.paused).toBe(true);
+    handle.playback({ conversationId: "conversation-a", outputId: final.outputId, phase: "completed" });
+    expect(handle.state.cue.phase).toBe("interrupted");
+  } finally { fixture.close(); }
+});
+
+it("a stopped armed cue ignores its late final identity and never starts motion", async () => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    const { handle, final } = await openCueFixture(fixture);
+    handle.retireCue("The learner stopped the explanation.");
+    await vi.waitFor(() => expect(mocks.visuals[0].operations).toHaveLength(1));
+    expect(mocks.visuals[0].operations[0].input.name).toBe("pause");
+    mocks.visuals[0].finish(0, { paused: true });
+    expect(handle.observeCue(final, { readAloud: true })).toBe(false);
+    handle.playback({ conversationId: "conversation-a", outputId: final.outputId, phase: "started" });
+    expect(handle.state.cue.phase).toBe("interrupted");
+    expect(handle.state.cue.outputId).toBe("");
+    expect(mocks.visuals[0].operations).toHaveLength(1);
+  } finally { fixture.close(); }
 });

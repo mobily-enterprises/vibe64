@@ -5,6 +5,7 @@ const VIBE64_AGENT_EXECUTION_PROFILE_IDS = Object.freeze({
 const VIBE64_AGENT_EXECUTION_WORKLOAD_IDS = Object.freeze({
   COMMIT_TITLE: "commit_title",
   CONVERSATION_SUMMARY: "conversation_summary",
+  TRAINING_ASSESSMENT: "training_assessment",
   VOICE_TURN: "voice_turn",
   DATABASE_ASSISTANT: "database_assistant",
   PROMPT_HINT: "prompt_hint",
@@ -21,6 +22,9 @@ const VIBE64_AGENT_HELPER_WORKLOAD_LIMITS = Object.freeze({
   }),
   [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.VOICE_TURN]: Object.freeze({
     maxInputCharacters: 12000, maxOutputCharacters: 512, timeoutMs: 10000
+  }),
+  [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.TRAINING_ASSESSMENT]: Object.freeze({
+    maxInputCharacters: 24_000, maxOutputCharacters: 8_192, timeoutMs: 120_000
   }),
   [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.CONVERSATION_SUMMARY]: Object.freeze({
     maxInputCharacters: 200_000,

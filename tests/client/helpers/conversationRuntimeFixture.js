@@ -57,10 +57,10 @@ export function provideConversationFixture(app, socket, actor = "local") {
 // The original composer fixture still supplies product session state and
 // service outcomes. Drafts, queued requests, receipts and retention now run
 // through the actual useAssistantConversation binding, without mocking it.
-export function attachConversationRuntime(props, viewer = { actorKey: "local" }) {
+export function attachConversationRuntime(props, viewer = { actorKey: "local" }, { steering = true, deferWhileWorking = false } = {}) {
   const transcript = reactive([]);
   const state = id => ({ id, segmentId: "fixture-thread", status: props.session?.agentSession?.turn?.active ? "working" : "ready",
-    capabilities: { steering: true, attachments: true }, conversationLog: transcript });
+    capabilities: { steering: toValue(steering), attachments: true }, conversationLog: transcript });
   const socket = createConversationFixtureSocket(state);
   const api = {
     readConversation: id => state(id),
@@ -76,7 +76,7 @@ export function attachConversationRuntime(props, viewer = { actorKey: "local" })
   const app = renderer.createApp({ setup() {
     const binding = useAssistantConversation({
       conversationId: () => props.session?.sessionId || "", actorKey: () => toValue(viewer)?.actorKey || "",
-      surfaceId: "app", hostSurfaceId: "app", workspaceSlug: "", api, socket,
+      surfaceId: "app", hostSurfaceId: "app", workspaceSlug: "", api, socket, deferWhileWorking,
       draftStorage: () => {
         try {
           const storage = typeof window !== "undefined" ? window.sessionStorage : null;

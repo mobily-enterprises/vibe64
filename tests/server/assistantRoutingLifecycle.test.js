@@ -1681,6 +1681,26 @@ test("Deslop with uncertain admission retains its task and checks the receipt wi
   assert.equal(f.state().status, "sent");
 });
 
+test("a finished turn rejects steering before admission and only an explicit new request starts work", async t => {
+  const f = await fixture(t, { mode: "junior", review: false });
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  const input = { ...request, messageId: "finished-turn-steer", submissionKind: "steer" };
+  const originalInput = structuredClone(input);
+  const originalMetadata = structuredClone(f.metadata);
+  await assert.rejects(f.service.send("session-1", input, f.context), {
+    code: "conversation_not_steerable", statusCode: 409,
+    message: "That turn has finished. Send this as a new request."
+  });
+  assert.deepEqual(input, originalInput);
+  assert.deepEqual(f.metadata, originalMetadata, "a definite rejection creates no routing request or native receipt");
+  assert.equal(f.sends.length, 0);
+  assert.equal(f.helperCalls(), 0);
+  assert.equal(await f.service.inspectDelivery("session-1", { messageId: input.messageId }, f.context), null);
+  await f.service.send("session-1", { ...input, messageId: "explicit-new-request", submissionKind: "send" }, f.context);
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.sends[0].input.messageId, "explicit-new-request");
+});
+
 test("a member cannot steer an active personal turn even when a shared fallback exists", async (t) => {
   const f = await fixture(t, { mode: "auto", review: true });
   const backup = sharedOpenCode(f, "zai", "glm-4.7");

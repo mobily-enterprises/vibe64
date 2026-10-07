@@ -96,3 +96,23 @@ test("Codex turn outcome notices publish only newly persisted entries", async ()
     reason: "codex-turn-outcome"
   }]]);
 });
+
+test("known control recovery and unknown interruptions never claim a provider failure", () => {
+  assert.match(codexTurnOutcomeNoticeMessage(CODEX_TURN_OUTCOME.CONTROL_RECONFIGURATION), /while Vibe64 restored its controls/u);
+  assert.equal(codexTurnOutcomeNoticeMessage(CODEX_TURN_OUTCOME.INTERRUPTED),
+    "Codex was interrupted before it finished. Saved file changes remain; send a message to continue.");
+  for (const outcome of ["", "unknown-native-cause"]) {
+    assert.equal(codexTurnOutcomeNoticeMessage(outcome),
+      "Codex could not finish. Saved file changes remain; send a message to continue.");
+    assert.doesNotMatch(codexTurnOutcomeNoticeMessage(outcome), /was interrupted/u);
+  }
+  for (const outcome of ["", "unknown-native-cause", CODEX_TURN_OUTCOME.INTERRUPTED, CODEX_TURN_OUTCOME.CONTROL_RECONFIGURATION]) {
+    assert.doesNotMatch(codexTurnOutcomeNoticeMessage(outcome), /provider failed|You stopped|Vibe64 restart/u);
+  }
+  assert.match(codexTurnOutcomeNoticeMessage(CODEX_TURN_OUTCOME.CONTROL_RECONFIGURATION, "Managed controls changed."),
+    /restored its controls.*Details: Managed controls changed\./u);
+  assert.match(codexTurnOutcomeNoticeMessage(CODEX_TURN_OUTCOME.PROVIDER_FAILURE), /provider failed/u);
+  assert.match(codexTurnOutcomeNoticeMessage(CODEX_TURN_OUTCOME.USER_CANCELLED), /^You stopped/u);
+  assert.match(codexTurnOutcomeNoticeMessage(CODEX_TURN_OUTCOME.SERVICE_RESTART), /Vibe64 restart/u);
+  assert.match(codexTurnOutcomeNoticeMessage(CODEX_TURN_OUTCOME.RESPONSE_DELIVERY_FAILURE), /could not recover its final response/u);
+});

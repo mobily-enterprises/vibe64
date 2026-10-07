@@ -230,3 +230,345 @@ test("server-derived paths reject traversal and symlink aliases throughout the i
     }
   }
 });
+
+
+test("declared visual reads return exact pinned SVG, controller and binary asset bytes without writes", async t => {
+  const f = await fixture(t);
+  const request = {
+    ...f.installed.pin,
+    lessonCode: "LESSON-01",
+    lessonHash: f.installed.bundle.lessons[0].hash,
+    visualId: "flow"
+  };
+  const original = await f.reader.readVisual(request);
+  assert.deepEqual(original.assets, []);
+  assert.deepEqual(original.visual, f.visual);
+
+  const visual = { ...f.visual, assets: ["labels.txt", "image.bin"] };
+  await f.write("training/visuals/flow/visual.json", visual);
+  await f.write("training/visuals/flow/labels.txt", "Client and server labels.\n");
+  await writeFile(path.join(f.source, "training/visuals/flow/image.bin"), Buffer.from([0, 255, 128, 10]));
+  const installed = await f.install();
+  const before = await treeState(f.systemRoot);
+  const result = await f.reader.readVisual({
+    ...installed.pin,
+    lessonCode: "LESSON-01",
+    lessonHash: installed.bundle.lessons[0].hash,
+    visualId: "flow"
+  });
+  assert.deepEqual(result.pin, installed.pin);
+  assert.equal(result.lessonCode, "LESSON-01");
+  assert.equal(result.lessonHash, installed.bundle.lessons[0].hash);
+  assert.equal(result.id, "flow");
+  assert.equal(result.descriptorPath, "training/visuals/flow/visual.json");
+  assert.deepEqual(result.visual, visual);
+  assert.deepEqual(Object.keys(result).sort(), [
+    "assets", "controller", "descriptorPath", "id", "lessonCode", "lessonHash", "pin", "svg", "visual"
+  ]);
+  assert.deepEqual([result.svg.path, result.controller.path, ...result.assets.map(file => file.path)],
+    ["diagram.svg", "controller.js", "labels.txt", "image.bin"].map(name => `training/visuals/flow/${name}`));
+  for (const file of [result.svg, result.controller, ...result.assets]) {
+    assert.equal(Buffer.isBuffer(file.bytes), true);
+    assert.deepEqual(Object.keys(file).sort(), ["bytes", "path"]);
+    assert.deepEqual(file.bytes, await readFile(path.join(installed.snapshotRoot, "files", file.path)));
+  }
+  assert.deepEqual(result.assets[1].bytes, Buffer.from([0, 255, 128, 10]));
+  assert.deepEqual(await f.reader.readVisual(request), original);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("visual reads require a declared ID and exact trusted published lesson pin", async t => {
+  const f = await fixture(t);
+  const { pin, bundle } = f.installed;
+  const request = { ...pin, lessonCode: "LESSON-01", lessonHash: bundle.lessons[0].hash, visualId: "flow" };
+  const before = await treeState(f.systemRoot);
+  for (const visualId of [undefined, "../diagram.svg", "/absolute", "flow/controller.js", 1]) {
+    await assert.rejects(() => f.reader.readVisual({ ...request, visualId }), /declared visual ID/u);
+  }
+  await assert.rejects(() => f.reader.readVisual({ ...request, visualId: "unknown" }), /not declared in this pinned lesson/u);
+  await assert.rejects(() => f.reader.readVisual({ ...request, topicHash: undefined }), /trusted 64-character topic hash/u);
+  await assert.rejects(() => f.reader.readVisual({ ...request, topicHash: "f".repeat(64) }), /trusted course or attempt pin/u);
+  await assert.rejects(() => f.reader.readVisual({ ...request, topicId: "../elsewhere" }), /valid topic ID/u);
+  await assert.rejects(() => f.reader.readVisual({ ...request, lessonCode: "LESSON-02", lessonHash: bundle.lessons[1].hash }), /draft and cannot be taught/u);
+  await assert.rejects(() => f.reader.readVisual({ ...request, lessonCode: "UNKNOWN" }), /not declared/u);
+  await assert.rejects(() => f.reader.readVisual({ ...request, lessonHash: "f".repeat(64) }), /content hash changed/u);
+  await assert.rejects(() => f.reader.readVisual({ ...request, commit: "f".repeat(40) }), error => error.code === "VIBE64_TRAINING_CONTENT_MISSING");
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("visual reads reject changed, missing and aliased resources without repairing them", async t => {
+  const f = await fixture(t);
+  const { pin, bundle, snapshotRoot } = f.installed;
+  const request = { ...pin, lessonCode: "LESSON-01", lessonHash: bundle.lessons[0].hash, visualId: "flow" };
+  for (const name of ["diagram.svg", "controller.js"]) {
+    const filename = path.join(snapshotRoot, "files/training/visuals/flow", name);
+    const bytes = await readFile(filename);
+    await writeFile(filename, Buffer.concat([bytes, Buffer.from("\nChanged after installation.\n")]));
+    let before = await treeState(f.systemRoot);
+    await assert.rejects(() => f.reader.readVisual(request), error =>
+      error.code === "VIBE64_TRAINING_CONTENT_INVALID" && /changed from its source files/u.test(error.message));
+    assert.deepEqual(await treeState(f.systemRoot), before);
+    await rm(filename);
+    before = await treeState(f.systemRoot);
+    await assert.rejects(() => f.reader.readVisual(request), error => error.code === "VIBE64_TRAINING_CONTENT_MISSING");
+    assert.deepEqual(await treeState(f.systemRoot), before);
+    await writeFile(`${filename}.actual`, bytes);
+    await symlink(`${name}.actual`, filename);
+    try {
+      before = await treeState(f.systemRoot);
+      await assert.rejects(() => f.reader.readVisual(request), /symlink or directory aliases/u);
+      assert.deepEqual(await treeState(f.systemRoot), before);
+    } finally {
+      await rm(filename);
+      await rename(`${filename}.actual`, filename);
+    }
+  }
+});
+
+test("visual reads preserve original descriptor bounds and topic-relative path rejection", async t => {
+  const f = await fixture(t);
+  const { pin, bundle, snapshotRoot } = f.installed;
+  const request = { ...pin, lessonCode: "LESSON-01", lessonHash: bundle.lessons[0].hash, visualId: "flow" };
+  const changes = [
+    { svg: "/absolute.svg" }, { controller: "../../../../outside.js" },
+    { description: "x".repeat(2001) },
+    { states: Array.from({ length: 33 }, (_, index) => `state-${index}`) },
+    { commands: Array.from({ length: 33 }, (_, index) => ({ ...f.visual.commands[0], name: `command-${index}` })) },
+    { commands: [{
+      ...f.visual.commands[0],
+      parameters: Array.from({ length: 9 }, (_, index) => ({ name: `parameter-${index}`, required: true, maxLength: 28 }))
+    }] },
+    { commands: [{ ...f.visual.commands[0], parameters: [{ name: "label", required: true, maxLength: 257 }] }] },
+    { assets: Array.from({ length: 33 }, (_, index) => `asset-${index}.txt`) }
+  ];
+  for (const change of changes) {
+    await f.write("files/training/visuals/flow/visual.json", { ...f.visual, ...change }, snapshotRoot);
+    const before = await treeState(f.systemRoot);
+    await assert.rejects(() => f.reader.readVisual(request), error => {
+      assert.equal(error.code, "VIBE64_TRAINING_CONTENT_INVALID");
+      assert.match(error.cause.message, change.svg || change.controller
+        ? /Invalid topic-relative path|Path escapes topic/u
+        : /Schema validation failed/u);
+      return true;
+    });
+    assert.deepEqual(await treeState(f.systemRoot), before);
+  }
+});
+
+
+test("exercise reads return only exact declared exercise-relative bytes without writes or modes", async t => {
+  const f = await fixture(t);
+  const { pin, bundle, snapshotRoot } = f.installed;
+  const request = { ...pin, lessonCode: "LESSON-01", lessonHash: bundle.lessons[0].hash };
+  const before = await treeState(f.systemRoot);
+  const result = await f.reader.readExercise(request);
+  assert.deepEqual(Object.keys(result).sort(), ["exercise", "files", "lessonCode", "lessonHash", "pin", "sourcePath"]);
+  assert.deepEqual(result.pin, pin);
+  assert.equal(result.lessonCode, "LESSON-01");
+  assert.equal(result.lessonHash, bundle.lessons[0].hash);
+  assert.deepEqual(result.exercise, f.lesson.exercise);
+  assert.equal(result.sourcePath, "training/exercises/app");
+  assert.deepEqual(result.files.map(file => file.path), ["genesis/stack.md", "genesis/version", "package.json", "server.mjs"]);
+  for (const file of result.files) {
+    assert.deepEqual(Object.keys(file).sort(), ["bytes", "path"]);
+    assert.equal(Buffer.isBuffer(file.bytes), true);
+    assert.deepEqual(file.bytes, await readFile(path.join(snapshotRoot, "files", result.sourcePath, file.path)));
+  }
+  // Caller paths cannot replace the descriptor's source selection.
+  assert.deepEqual(await f.reader.readExercise({ ...request, source: "../../visuals/flow", path: "/etc/passwd" }), result);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("exercise reads retain old pins, nested binary bytes and declared sequence metadata", async t => {
+  const f = await fixture(t);
+  const first = f.installed;
+  const originalRequest = { ...first.pin, lessonCode: "LESSON-01", lessonHash: first.bundle.lessons[0].hash };
+  const original = await f.reader.readExercise(originalRequest);
+  const exercise = { ...f.lesson.exercise, reuse: "sequence", sequenceId: "intro", sequenceMode: "create" };
+  await f.write("training/lessons/LESSON-01/lesson.json", {
+    ...f.lesson,
+    exercise,
+    checks: [{ ...f.lesson.checks[0], file: "../../exercises/app-other/health.mjs" }]
+  });
+  await f.write("training/exercises/app-other/health.mjs", "// A declared check outside this exercise directory.\n");
+  await f.write("training/exercises/app/src/message.bin", "");
+  const binary = Buffer.from([0, 255, 128, 10]);
+  await writeFile(path.join(f.source, "training/exercises/app/src/message.bin"), binary);
+  await f.write("training/exercises/app/node_modules/ignored.txt", "Installed dependency.\n");
+  await f.write("training/exercises/app/.genesis/derived.json", "Derived index.\n");
+  const second = await f.install();
+  const before = await treeState(f.systemRoot);
+  const result = await f.reader.readExercise({ ...second.pin, lessonCode: "LESSON-01", lessonHash: second.bundle.lessons[0].hash });
+  assert.notEqual(result.pin.commit, original.pin.commit);
+  assert.notEqual(result.lessonHash, original.lessonHash);
+  assert.deepEqual(result.exercise, exercise);
+  assert.deepEqual(result.files.map(file => file.path), [
+    "genesis/stack.md", "genesis/version", "package.json", "server.mjs", "src/message.bin"
+  ]);
+  assert.deepEqual(result.files.at(-1).bytes, binary);
+  assert.ok(second.bundle.lessons[0].manifest.files.some(file => file.path === "training/exercises/app-other/health.mjs"));
+  assert.deepEqual(await f.reader.readExercise(originalRequest), original);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("exercise reads reject absent exercises, drafts and mismatched trusted pins", async t => {
+  const f = await fixture(t);
+  const { pin, bundle } = f.installed;
+  const request = { ...pin, lessonCode: "LESSON-01", lessonHash: bundle.lessons[0].hash };
+  const before = await treeState(f.systemRoot);
+  await assert.rejects(() => f.reader.readExercise({ ...request, topicHash: undefined }), /trusted 64-character topic hash/u);
+  await assert.rejects(() => f.reader.readExercise({ ...request, topicHash: "f".repeat(64) }), /trusted course or attempt pin/u);
+  await assert.rejects(() => f.reader.readExercise({ ...request, lessonHash: "f".repeat(64) }), /content hash changed/u);
+  await assert.rejects(() => f.reader.readExercise({ ...request, lessonCode: "LESSON-02", lessonHash: bundle.lessons[1].hash }), /draft and cannot be taught/u);
+  await assert.rejects(() => f.reader.readExercise({ ...request, lessonCode: "UNKNOWN" }), /not declared/u);
+  await assert.rejects(() => f.reader.readExercise({ ...request, lessonCode: "../elsewhere" }), /declared lesson code/u);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+
+  await f.write("training/lessons/LESSON-01/lesson.json", {
+    ...f.lesson, exercise: undefined, checks: undefined, assessments: [f.lesson.assessments[0]]
+  });
+  const withoutExercise = await f.install();
+  const beforeAbsentRead = await treeState(f.systemRoot);
+  await assert.rejects(() => f.reader.readExercise({
+    ...withoutExercise.pin, lessonCode: "LESSON-01", lessonHash: withoutExercise.bundle.lessons[0].hash
+  }), /no declared bundled exercise/u);
+  assert.deepEqual(await treeState(f.systemRoot), beforeAbsentRead);
+});
+
+test("exercise reads reject changed, missing, aliased and escaping source content without repair", async t => {
+  const f = await fixture(t);
+  const { pin, bundle, snapshotRoot } = f.installed;
+  const request = { ...pin, lessonCode: "LESSON-01", lessonHash: bundle.lessons[0].hash };
+  const filename = path.join(snapshotRoot, "files/training/exercises/app/server.mjs");
+  const bytes = await readFile(filename);
+  await writeFile(filename, Buffer.concat([bytes, Buffer.from("\nChanged after installation.\n")]));
+  let before = await treeState(f.systemRoot);
+  await assert.rejects(() => f.reader.readExercise(request), error =>
+    error.code === "VIBE64_TRAINING_CONTENT_INVALID" && /changed from its source files/u.test(error.message));
+  assert.deepEqual(await treeState(f.systemRoot), before);
+  await rm(filename);
+  before = await treeState(f.systemRoot);
+  await assert.rejects(() => f.reader.readExercise(request), error =>
+    error.code === "VIBE64_TRAINING_CONTENT_INVALID" && /changed from its source files/u.test(error.message));
+  assert.deepEqual(await treeState(f.systemRoot), before);
+  await assert.rejects(() => lstat(filename), { code: "ENOENT" });
+  await writeFile(`${filename}.actual`, bytes);
+  await symlink("server.mjs.actual", filename);
+  try {
+    before = await treeState(f.systemRoot);
+    await assert.rejects(() => f.reader.readExercise(request), /symlink or directory aliases/u);
+    assert.deepEqual(await treeState(f.systemRoot), before);
+  } finally {
+    await rm(filename);
+    await rename(`${filename}.actual`, filename);
+  }
+  for (const source of ["/absolute", "../../../../outside"]) {
+    await f.write("files/training/lessons/LESSON-01/lesson.json", {
+      ...f.lesson, exercise: { ...f.lesson.exercise, source }
+    }, snapshotRoot);
+    before = await treeState(f.systemRoot);
+    await assert.rejects(() => f.reader.readExercise(request), error => {
+      assert.equal(error.code, "VIBE64_TRAINING_CONTENT_INVALID");
+      assert.match(error.cause.message, /Invalid topic-relative path|Path escapes topic/u);
+      return true;
+    });
+    assert.deepEqual(await treeState(f.systemRoot), before);
+  }
+});
+
+
+test("declared check reads preserve exact executable and ordered asset bytes at each pin without writes", async t => {
+  const f = await fixture(t);
+  const first = f.installed;
+  const originalRequest = { ...first.pin, lessonCode: "LESSON-01", lessonHash: first.bundle.lessons[0].hash, checkId: "health" };
+  const original = await f.reader.readCheck(originalRequest);
+  assert.deepEqual(original.check, f.lesson.checks[0]);
+  assert.deepEqual(original.assets, []);
+  assert.equal(original.file.path, "training/checks/health.mjs");
+  assert.deepEqual(original.file.bytes, await readFile(path.join(first.snapshotRoot, "files/training/checks/health.mjs")));
+
+  const check = { ...f.lesson.checks[0], assets: ["../../checks/labels.txt", "../../checks/config.bin"] };
+  await f.write("training/lessons/LESSON-01/lesson.json", { ...f.lesson, checks: [check] });
+  await f.write("training/checks/health.mjs", '// A changed, pinned check is returned without executing it.\n');
+  await f.write("training/checks/labels.txt", "The actual response identity.\n");
+  const binary = Buffer.from([0, 255, 128, 10]);
+  await writeFile(path.join(f.source, "training/checks/config.bin"), binary);
+  const installed = await f.install();
+  const request = { ...installed.pin, lessonCode: "LESSON-01", lessonHash: installed.bundle.lessons[0].hash, checkId: "health" };
+  const before = await treeState(f.systemRoot);
+  const result = await f.reader.readCheck(request);
+  assert.deepEqual(Object.keys(result).sort(), ["assets", "check", "file", "lessonCode", "lessonHash", "pin"]);
+  assert.deepEqual(result.pin, installed.pin);
+  assert.equal(result.lessonCode, "LESSON-01");
+  assert.equal(result.lessonHash, installed.bundle.lessons[0].hash);
+  assert.deepEqual(result.check, check);
+  assert.deepEqual([result.file.path, ...result.assets.map(value => value.path)],
+    ["training/checks/health.mjs", "training/checks/labels.txt", "training/checks/config.bin"]);
+  for (const file of [result.file, ...result.assets]) {
+    assert.deepEqual(Object.keys(file).sort(), ["bytes", "path"]);
+    assert.equal(Buffer.isBuffer(file.bytes), true);
+    assert.deepEqual(file.bytes, await readFile(path.join(installed.snapshotRoot, "files", file.path)));
+  }
+  assert.deepEqual(result.assets[1].bytes, binary);
+  assert.notDeepEqual(result.file.bytes, original.file.bytes);
+  assert.deepEqual(await f.reader.readCheck(originalRequest), original);
+  assert.deepEqual(await f.reader.readCheck({ ...request, file: "/etc/passwd", path: "../../exercises/app/server.mjs" }), result);
+  result.check.id = "caller-change";
+  result.file.bytes.fill(0);
+  result.assets[1].bytes.fill(0);
+  const reread = await f.reader.readCheck(request);
+  assert.deepEqual(reread.check, check);
+  assert.deepEqual(reread.file.bytes, await readFile(path.join(installed.snapshotRoot, "files/training/checks/health.mjs")));
+  assert.deepEqual(reread.assets[1].bytes, binary);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("check reads require a declared ID and exact trusted published lesson pin", async t => {
+  const f = await fixture(t);
+  const { pin, bundle } = f.installed;
+  const request = { ...pin, lessonCode: "LESSON-01", lessonHash: bundle.lessons[0].hash, checkId: "health" };
+  const before = await treeState(f.systemRoot);
+  for (const checkId of [undefined, "../health.mjs", "/absolute", "health/extra", "x".repeat(65), 1]) {
+    await assert.rejects(() => f.reader.readCheck({ ...request, checkId }), /declared check ID/u);
+  }
+  await assert.rejects(() => f.reader.readCheck({ ...request, checkId: "unknown" }), /not declared in this pinned lesson/u);
+  await assert.rejects(() => f.reader.readCheck({ ...request, topicHash: undefined }), /trusted 64-character topic hash/u);
+  await assert.rejects(() => f.reader.readCheck({ ...request, topicHash: "f".repeat(64) }), /trusted course or attempt pin/u);
+  await assert.rejects(() => f.reader.readCheck({ ...request, topicId: "../elsewhere" }), /valid topic ID/u);
+  await assert.rejects(() => f.reader.readCheck({ ...request, lessonHash: "f".repeat(64) }), /content hash changed/u);
+  await assert.rejects(() => f.reader.readCheck({ ...request, lessonCode: "UNKNOWN" }), /not declared/u);
+  await assert.rejects(() => f.reader.readCheck({ ...request, lessonCode: "LESSON-02", lessonHash: bundle.lessons[1].hash }), /draft and cannot be taught/u);
+  await assert.rejects(() => f.reader.readCheck({ ...request, commit: "f".repeat(40) }), { code: "VIBE64_TRAINING_CONTENT_MISSING" });
+  assert.deepEqual(await treeState(f.systemRoot), before);
+
+  await f.write("training/lessons/LESSON-01/lesson.json", { ...f.lesson, checks: undefined, assessments: [f.lesson.assessments[0]] });
+  const withoutCheck = await f.install();
+  const beforeAbsentRead = await treeState(f.systemRoot);
+  await assert.rejects(() => f.reader.readCheck({ ...withoutCheck.pin, lessonCode: "LESSON-01",
+    lessonHash: withoutCheck.bundle.lessons[0].hash, checkId: "health" }), /not declared in this pinned lesson/u);
+  assert.deepEqual(await treeState(f.systemRoot), beforeAbsentRead);
+});
+
+test("check reads reject changed executable or changed missing and aliased assets without repair", async t => {
+  for (const damage of ["executable", "asset", "missing", "alias"]) {
+    const f = await fixture(t);
+    await f.write("training/lessons/LESSON-01/lesson.json", { ...f.lesson,
+      checks: [{ ...f.lesson.checks[0], assets: ["../../checks/labels.txt"] }] });
+    await f.write("training/checks/labels.txt", "Pinned label.\n");
+    const installed = await f.install();
+    const filename = path.join(installed.snapshotRoot, "files/training/checks", damage === "executable" ? "health.mjs" : "labels.txt");
+    if (damage === "executable" || damage === "asset") await writeFile(filename, "Changed bytes.\n");
+    else {
+      await rm(filename);
+      if (damage === "alias") await symlink(path.join(f.source, "training/checks/labels.txt"), filename);
+    }
+    const before = await treeState(f.systemRoot);
+    await assert.rejects(() => f.reader.readCheck({ ...installed.pin, lessonCode: "LESSON-01",
+      lessonHash: installed.bundle.lessons[0].hash, checkId: "health" }), error =>
+      damage === "missing"
+        ? error.code === "VIBE64_TRAINING_CONTENT_MISSING" && /install that exact revision/u.test(error.message)
+        : error.code === "VIBE64_TRAINING_CONTENT_INVALID" && /reinstall/u.test(error.message) &&
+          (damage !== "alias" || /symlink or directory aliases/u.test(error.message)));
+    assert.deepEqual(await treeState(f.systemRoot), before);
+  }
+});

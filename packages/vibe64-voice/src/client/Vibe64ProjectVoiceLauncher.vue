@@ -3,12 +3,18 @@ import { mdiHeadset } from "@mdi/js";
 import { ref } from "vue";
 import { useVibe64Voice } from "./voiceHost.js";
 import { createProjectVoiceBinding } from "./projectVoiceBinding.js";
-const props = defineProps({ runtime: { type: Object, required: true } });
+const props = defineProps({
+  runtime: { type: Object, required: true },
+  binding: { type: Object, default: null }
+});
+const emit = defineEmits(["opened"]);
 const voice = useVibe64Voice();
 const error = ref("");
 async function open() {
   error.value = "";
-  try { await voice.open(createProjectVoiceBinding(props.runtime)); }
+  try {
+    if (await voice.open(props.binding || createProjectVoiceBinding(props.runtime))) emit("opened");
+  }
   catch (failure) { error.value = failure.message; }
 }
 </script>

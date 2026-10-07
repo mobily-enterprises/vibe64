@@ -3,8 +3,41 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { createCourseLock, readPinnedTopic } from "./catalogue.js";
+import { createTrainingContentInstaller } from "./contentInstaller.js";
+import { createInstalledTrainingCatalogue } from "./installedCatalogue.js";
 
 async function runTrainingCli(args, { write = text => console.log(text) } = {}) {
+  if (args[0] === "install-topic") {
+    const [, directory, systemRoot] = args;
+    if (args.length !== 3 || !directory || !systemRoot) throw new Error("Usage: vibe64 training install-topic <committed-topic-directory> <system-root>");
+    const sourceRoot = await realpath(directory);
+    const { topicId, release, repository, commit, topicHash } = await readPinnedTopic(sourceRoot);
+    const pin = { schemaVersion: 1, topicId, release, repository, commit, topicHash };
+    const result = await createTrainingContentInstaller({ systemRoot: path.resolve(systemRoot) }).installTopic({ sourceRoot, pin });
+    write(JSON.stringify({ ok: true, installed: result.installed, pin: result.pin }, null, 2));
+    return 0;
+  }
+  if (args[0] === "installed-courses") {
+    if (args.length !== 2 || !args[1]) throw new Error("Usage: vibe64 training installed-courses <system-root>");
+    const catalogue = await createInstalledTrainingCatalogue({ systemRoot: path.resolve(args[1]) }).readCatalogue();
+    write(JSON.stringify({ ok: true, ...catalogue }, null, 2));
+    return 0;
+  }
+  if (args[0] === "enable-course" || args[0] === "disable-course") {
+    const [command, first, second, systemRoot, revision] = args;
+    if (args.length !== 5 || !first || !second || !systemRoot || !/^(0|[1-9][0-9]*)$/u.test(revision || "") || !Number.isSafeInteger(Number(revision))) {
+      throw new Error(command === "enable-course"
+        ? "Usage: vibe64 training enable-course <course.json> <course.lock.json> <system-root> <expected-revision>"
+        : "Usage: vibe64 training disable-course <courseId> <release> <system-root> <expected-revision>");
+    }
+    const catalogue = createInstalledTrainingCatalogue({ systemRoot: path.resolve(systemRoot) });
+    const expectedRevision = Number(revision);
+    const result = command === "enable-course"
+      ? await catalogue.enableCourse({ course: JSON.parse(await readFile(first, "utf8")), lock: JSON.parse(await readFile(second, "utf8")), expectedRevision })
+      : await catalogue.disableCourse({ courseId: first, release: second, expectedRevision });
+    write(JSON.stringify({ ok: true, ...result }, null, 2));
+    return 0;
+  }
   if (args[0] === "publish-manifest") {
     const [, coursePath, ...directories] = args;
     if (!coursePath || !directories.length) throw new Error("Usage: vibe64 training publish-manifest <course.json> <committed-topic-directory...>");

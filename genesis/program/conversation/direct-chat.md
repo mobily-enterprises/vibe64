@@ -543,6 +543,11 @@ can retain those facts after the foreign model summarizes. It adds no model call
 and never rewrites the native rollout. Single-provider requests and ordinary text
 summaries trigger no recovery reads; helper models elsewhere do not enable it.
 This preserves recorded text, not the originating model's opaque internal state.
+For outgoing OpenAI requests, JSKIT's same adapter preserves historical function
+calls with incompatible identifiers and their paired results as labelled context
+in their original positions. It keeps valid calls and native history unchanged,
+rejects ambiguous identity or unsupported content, and adds no tool execution or
+model retry. Native compaction and fallback still belong to Codex.
 
 The application transcript is one `conversation-log/transcript.json` record per
 main or temporary conversation. JSKIT owns its nine-method transaction behavior;

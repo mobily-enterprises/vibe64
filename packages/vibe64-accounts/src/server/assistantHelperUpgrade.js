@@ -5,6 +5,7 @@ import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
+import { validateAssistantRoutingUpgradeRecord } from "@local/vibe64-runtime/server/assistantRoutingStateUpgrade";
 
 const object = value => value && typeof value === "object" && !Array.isArray(value);
 const json = value => `${JSON.stringify(value, null, 2)}\n`;
@@ -51,12 +52,22 @@ function upgradeHelperProfiles(value) {
 
 function routingRecord(value, { preferences = false, history = false } = {}) {
   if (!object(value)) throw new Error("Saved routing must be an object.");
+  const previousConfiguration = value.configuration?.schemaVersion === 3 ||
+    Object.values(value.configuration?.orchestrators || {}).some(roles => Object.hasOwn(roles, "intern"));
+  const currentRole = ["custom", "helper"].some(role =>
+    [value.mode, value.requestedMode, value.resolvedMode, value.role].includes(role));
+  const currentPreferences = preferences && ["senior", "junior", "auto"].includes(value.mode);
+  if (value.schemaVersion === 4 || value.schemaVersion === undefined && !previousConfiguration && (currentRole || currentPreferences)) {
+    return upgradeHelperProfiles(validateAssistantRoutingUpgradeRecord(value, { preferences, request: value.schemaVersion === 4 }));
+  }
+  if (value.mode === "custom") validateAssistantRoutingUpgradeRecord(value, { schemaVersion: 3, preferences,
+    request: value.schemaVersion === 3 });
   const previousChat = value.mode === "intern";
   const next = upgradeHelperProfiles(value);
   for (const key of ["mode", "requestedMode", "resolvedMode", "role", "purpose", "instructionPurpose"]) {
     if (next[key] === "intern") next[key] = history ? "helper" : "junior";
     if (["mode", "requestedMode", "resolvedMode", "role"].includes(key) && next[key] &&
-        !["senior", "junior", "helper", "router", "auto", "review", "deslop"].includes(next[key])) {
+        !["custom", "senior", "junior", "helper", "router", "auto", "review", "deslop"].includes(next[key])) {
       throw new Error("Saved routing contains an unknown role. Inspect it before upgrading.");
     }
   }

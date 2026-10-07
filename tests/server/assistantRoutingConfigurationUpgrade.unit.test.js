@@ -10,6 +10,7 @@ import { upgradeAssistantRoles } from "../../packages/vibe64-accounts/src/server
 import { upgradeAssistantRouting, upgradeAssistantRoutingConfiguration } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
 import { defineVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server";
+import routingFormatCompatibility from "../../packages/vibe64-core/src/server/stateUpgrades/20261006-routing-format-compatibility.js";
 
 const selection = (engineId, modelProviderId, modelId, selectionSource = "explicit") => ({
   schema: "vibe64.assistant-selection.v1", engineId, modelProviderId, modelId, selectionSource,
@@ -301,4 +302,93 @@ test("a newer pending renewal blocks the read-only upgrade instead of guessing i
   const before = await snapshot(f.systemRoot);
   await assert.rejects(f.run(), /unsupported format/);
   assert.deepEqual(await snapshot(f.systemRoot), before);
+});
+
+test("known configuration formats validate without replaying historical defaults", () => {
+  for (const schemaVersion of [3, 4]) {
+    const configuration = { schemaVersion, revision: 19, orchestrators: { opencode: {
+      senior: pickle, junior: pickle, [schemaVersion === 3 ? "intern" : "helper"]: pickle, router: null, sharedBackup: null
+    } } };
+    const before = structuredClone(configuration);
+    assert.equal(upgradeAssistantRoutingConfiguration({ configuration, historicalSelections: [astra] }), configuration);
+    assert.deepEqual(configuration, before);
+    assert.throws(() => upgradeAssistantRoutingConfiguration({ configuration, nativeHelpers: { codex: { modelId: "retained" } } }), /legacy helper/);
+    for (const corrupt of [ { ...configuration, schemaVersion: 5 }, { ...configuration, revision: -1 },
+      { ...configuration, orchestrators: { opencode: { plan: pickle } } },
+      { ...configuration, orchestrators: { opencode: { senior: astra } } } ]) {
+      assert.throws(() => upgradeAssistantRoutingConfiguration({ configuration: corrupt }));
+    }
+  }
+});
+
+test("original chained conversions retain no-configuration requests behind fresh admission", async t => {
+  const f = await fixture(t);
+  await f.run(true);
+  await upgradeAssistantRoles({ systemRoot: f.systemRoot, apply: true,
+    backupRoot: path.join(f.systemRoot, "upgrades/backups/20260926-assistant-role-names"), report: () => {} });
+  await upgradeAssistantHelpers({ systemRoot: f.systemRoot, apply: true,
+    backupRoot: path.join(f.systemRoot, "upgrades/backups/20260927-assistant-helper"), report: () => {} });
+  for (const sessionId of ["active", "archived"]) {
+    const saved = JSON.parse(await f.store.readMetadataValue(sessionId, "assistant_routing_request"));
+    assert.equal(saved.schemaVersion, 4);
+    assert.equal(saved.configuration, undefined);
+    assert.equal(saved.admissionRequired, true);
+    assert.equal(saved.status, "uncertain");
+    assert.equal(saved.attemptedMessageId, "original-message");
+    assert.equal(saved.threadId, "native-main");
+    assert.deepEqual(saved.submittedBy, { id: "member" });
+  }
+  const before = await snapshot(f.systemRoot);
+  for (const apply of [false, true]) {
+    await routingFormatCompatibility.run({ systemRoot: f.systemRoot, apply,
+      backupRoot: path.join(f.systemRoot, "upgrades/backups", routingFormatCompatibility.id),
+      upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, report: () => {} });
+    assert.deepEqual(await snapshot(f.systemRoot), before);
+  }
+  const saved = JSON.parse(await f.store.readMetadataValue("active", "assistant_routing_request"));
+  await f.store.writeMetadataValue("active", "assistant_routing_request", JSON.stringify({ ...saved, admissionRequired: false }));
+  await assert.rejects(routingFormatCompatibility.run({ systemRoot: f.systemRoot, apply: false,
+    backupRoot: path.join(f.systemRoot, "upgrades/backups", routingFormatCompatibility.id),
+    upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, report: () => {} }), /unsupported routing request/u);
+});
+
+test("terminal legacy versioned requests retain evidence across original conversions without a configuration", async t => {
+  for (const schemaVersion of [1, 2]) for (const status of ["done", "cancelled"]) {
+    const f = await fixture(t, { populated: false });
+    await mkdir(path.dirname(f.routingPath), { recursive: true });
+    await writeFile(f.routingPath, JSON.stringify(old()));
+    await f.store.createSession({ sessionId: "terminal", runtimeKind: "genesis" });
+    await f.store.writeMetadataValue("terminal", "assistant_selection", JSON.stringify(astra));
+    const original = { schemaVersion, mode: "auto", status,
+      assignments: { plan: astra, code: deepseek, economy: nativeHelper },
+      messageId: "terminal-message", attemptedMessageId: "terminal-message", threadId: "native-terminal", turnId: "turn-terminal",
+      submittedBy: { id: "member" }, input: { message: "Exact original completed request" } };
+    await f.store.writeMetadataValue("terminal", "assistant_routing_request", JSON.stringify(original));
+    await f.run(true);
+    const routed = JSON.parse(await f.store.readMetadataValue("terminal", "assistant_routing_request"));
+    assert.deepEqual(routed, { ...original, admissionRequired: true });
+    await upgradeAssistantRoles({ systemRoot: f.systemRoot, apply: true,
+      backupRoot: path.join(f.systemRoot, "upgrades/backups/20260926-assistant-role-names"), report: () => {} });
+    await upgradeAssistantHelpers({ systemRoot: f.systemRoot, apply: true,
+      backupRoot: path.join(f.systemRoot, "upgrades/backups/20260927-assistant-helper"), report: () => {} });
+    const saved = JSON.parse(await f.store.readMetadataValue("terminal", "assistant_routing_request"));
+    assert.equal(saved.schemaVersion, 4);
+    assert.equal(saved.configuration, undefined);
+    assert.equal(saved.admissionRequired, true);
+    for (const field of ["status", "messageId", "attemptedMessageId", "threadId", "turnId", "submittedBy", "input"]) {
+      assert.deepEqual(saved[field], original[field]);
+    }
+    assert.deepEqual(saved.assignments, { senior: astra, junior: deepseek, helper: nativeHelper });
+    const before = await snapshot(f.systemRoot);
+    await routingFormatCompatibility.run({ systemRoot: f.systemRoot, apply: true,
+      backupRoot: path.join(f.systemRoot, "upgrades/backups", routingFormatCompatibility.id),
+      upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, report: () => {} });
+    assert.deepEqual(await snapshot(f.systemRoot), before);
+    const raw = JSON.stringify({ ...saved, admissionRequired: false });
+    await f.store.writeMetadataValue("terminal", "assistant_routing_request", raw);
+    await assert.rejects(routingFormatCompatibility.run({ systemRoot: f.systemRoot, apply: false,
+      backupRoot: path.join(f.systemRoot, "upgrades/backups", routingFormatCompatibility.id),
+      upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, report: () => {} }), /unsupported routing request/u);
+    assert.equal(await f.store.readMetadataValue("terminal", "assistant_routing_request"), raw);
+  }
 });

@@ -2221,3 +2221,134 @@ test("plain session store finalizes a background task's visible summary", async 
     assert.equal(Object.hasOwn(task, "stage"), false);
   });
 });
+
+test("exact session creation absence is read-only and validates the requested identity", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    const before = await fs.readdir(targetRoot, { recursive: true });
+    await assert.rejects(fs.lstat(projectRuntimeRoot(targetRoot)), { code: "ENOENT" });
+    await store.assertSessionCreationAbsent("reserved-session");
+    for (const sessionId of ["", "../reserved-session", "session/child"]) {
+      await assert.rejects(store.assertSessionCreationAbsent(sessionId), { code: "vibe64_invalid_session_id" });
+    }
+    assert.deepEqual(await fs.readdir(targetRoot, { recursive: true }), before);
+    await assert.rejects(fs.lstat(projectRuntimeRoot(targetRoot)), { code: "ENOENT" });
+
+    await store.createSession({ sessionId: "reserved-session", runtimeKind: "genesis" });
+    const manifestPath = store.paths("reserved-session").manifestPath;
+    const manifest = await readFile(manifestPath, "utf8");
+    await assert.rejects(store.assertSessionCreationAbsent("reserved-session"), {
+      code: "vibe64_session_creation_state_conflict"
+    });
+    assert.equal(await readFile(manifestPath, "utf8"), manifest);
+  });
+});
+
+test("session creation absence refuses every exact lifecycle and source residue without repairing it", async (t) => {
+  const sessionId = "reserved-session";
+  const cases = [
+    ["manifest-less active record", "sessions/active/reserved-session"],
+    ["closing record", "sessions/closing/reserved-session"],
+    ["archive metadata alone", "sessions/archived/reserved-session.json", "file"],
+    ["archive payload alone", "sessions/archived/reserved-session.tar.gz", "file"],
+    ["creation directory stage", "sessions/active/.creating/reserved-session.123.crash"],
+    ["creation file stage", "sessions/active/.creating/reserved-session.123.crash", "file"],
+    ["archive stage", "sessions/archived/.staging/reserved-session-crash"],
+    ["prepared renewal", "sessions/archived/.renewals/reserved-session"],
+    ["building renewal", "sessions/archived/.renewals/.building/reserved-session"],
+    ["publishing renewal", "sessions/archived/.renewals/.publishing/reserved-session"],
+    ["renewal state alone", "session-renewals/reserved-session.json", "file"],
+    ["orphan source", "sessions/active/reserved-session/source", "source"],
+    ["partial source namespace", "sessions/active/reserved-session/.vibe64-source-preparing-crash", "source"],
+    ["source namespace alias", "sessions/active/reserved-session", "source-symlink"],
+    ["dangling active record", "sessions/active/reserved-session", "symlink"],
+    ["dangling creation stage", "sessions/active/.creating/reserved-session.123.crash", "symlink"]
+  ];
+  for (const [name, relativePath, kind = "directory"] of cases) {
+    await t.test(name, async () => {
+      await withTemporaryRoot(async (targetRoot) => {
+        const sourceRoot = path.join(targetRoot, "managed-source");
+        const store = createStore(targetRoot, { projectSessionSourceRoot: sourceRoot });
+        const stateRoot = kind.startsWith("source") ? sourceRoot : projectRuntimeRoot(targetRoot);
+        const residue = path.join(stateRoot, relativePath);
+        await mkdir(path.dirname(residue), { recursive: true });
+        if (kind.endsWith("symlink")) {
+          await fs.symlink(path.join(targetRoot, "missing-target"), residue);
+        } else if (kind === "file") {
+          await writeFile(residue, "preserve partial state\n");
+        } else {
+          await mkdir(residue);
+          await writeFile(path.join(residue, "evidence"), "preserve partial state\n");
+        }
+        const before = await fs.readdir(stateRoot, { recursive: true });
+        await assert.rejects(store.assertSessionCreationAbsent(sessionId), {
+          code: "vibe64_session_creation_state_conflict"
+        });
+        assert.deepEqual(await fs.readdir(stateRoot, { recursive: true }), before);
+        if (kind.endsWith("symlink")) {
+          assert.equal(await fs.readlink(residue), path.join(targetRoot, "missing-target"));
+        } else {
+          assert.equal(await readFile(kind === "file" ? residue : path.join(residue, "evidence"), "utf8"), "preserve partial state\n");
+        }
+      });
+    });
+  }
+});
+
+test("session creation absence rejects malformed lifecycle containers but ignores other session identities", async (t) => {
+  for (const rootOption of ["projectRuntimeRoot", "projectSessionSourceRoot"]) {
+    await t.test(`dangling configured ${rootOption}`, async () => {
+      await withTemporaryRoot(async (targetRoot) => {
+        const configuredRoot = path.join(targetRoot, "dangling-root");
+        const missingTarget = path.join(targetRoot, "missing-target");
+        await fs.symlink(missingTarget, configuredRoot);
+        const store = createStore(targetRoot, { [rootOption]: configuredRoot });
+        await assert.rejects(store.assertSessionCreationAbsent("reserved-session"), {
+          code: "vibe64_session_creation_state_conflict"
+        });
+        assert.equal(await fs.readlink(configuredRoot), missingTarget);
+        await assert.rejects(fs.lstat(missingTarget), { code: "ENOENT" });
+      });
+    });
+  }
+  for (const relativePath of [
+    "sessions", "sessions/active", "sessions/closing", "sessions/archived",
+    "sessions/active/.creating", "sessions/archived/.staging", "sessions/archived/.renewals",
+    "sessions/archived/.renewals/.building", "sessions/archived/.renewals/.publishing", "session-renewals"
+  ]) {
+    await t.test(relativePath, async () => {
+      await withTemporaryRoot(async (targetRoot) => {
+        const store = createStore(targetRoot);
+        const container = path.join(projectRuntimeRoot(targetRoot), relativePath);
+        await mkdir(path.dirname(container), { recursive: true });
+        await fs.symlink(path.join(targetRoot, "missing-target"), container);
+        await assert.rejects(store.assertSessionCreationAbsent("reserved-session"), {
+          code: "vibe64_session_creation_state_conflict"
+        });
+        assert.equal(await fs.readlink(container), path.join(targetRoot, "missing-target"));
+      });
+    });
+  }
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    const container = path.join(projectRuntimeRoot(targetRoot), "sessions");
+    await mkdir(path.dirname(container), { recursive: true });
+    await writeFile(container, "preserve malformed container\n");
+    await assert.rejects(store.assertSessionCreationAbsent("reserved-session"), {
+      code: "vibe64_session_creation_state_conflict"
+    });
+    assert.equal(await readFile(container, "utf8"), "preserve malformed container\n");
+  });
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createStore(targetRoot);
+    for (const relativePath of [
+      "sessions/active/.creating/reserved-session-other.123.crash",
+      "sessions/archived/.staging/reserved-sessionother-crash"
+    ]) {
+      await mkdir(path.join(projectRuntimeRoot(targetRoot), relativePath), { recursive: true });
+    }
+    const before = await fs.readdir(projectRuntimeRoot(targetRoot), { recursive: true });
+    await store.assertSessionCreationAbsent("reserved-session");
+    assert.deepEqual(await fs.readdir(projectRuntimeRoot(targetRoot), { recursive: true }), before);
+  });
+});

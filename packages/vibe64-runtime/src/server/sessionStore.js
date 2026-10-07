@@ -24,6 +24,7 @@ import {
 } from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { managedSessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
@@ -1116,6 +1117,73 @@ function createVibe64SessionStore({
       renewalStateRoot(),
       `${assertValidVibe64SessionId(sessionId)}.json`
     );
+  }
+
+  async function assertSessionCreationAbsent(sessionId = "") {
+    const normalizedSessionId = assertValidVibe64SessionId(sessionId);
+    const rootPaths = paths();
+    const sourcePath = managedSessionSourcePath(projectSessionSourceRoot, normalizedSessionId);
+    const conflict = (filePath) => vibe64Error(
+      `Session creation state already exists for ${normalizedSessionId}: ${filePath}. Inspect and recover it before creating the session.`,
+      "vibe64_session_creation_state_conflict"
+    );
+    const readStatePath = async (filePath) => {
+      try {
+        return await lstat(filePath);
+      } catch (error) {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      }
+    };
+    const creationStagingRoot = sessionCreationStagingRoot(rootPaths);
+    const archiveStagingRoot = sessionArchiveStagingRoot(rootPaths);
+    const directoryPaths = [
+      normalizedStateRoot,
+      rootPaths.sessionsRoot,
+      rootPaths.activeSessionsRoot,
+      rootPaths.closingSessionsRoot,
+      rootPaths.archivedSessionsRoot,
+      creationStagingRoot,
+      archiveStagingRoot,
+      renewalArchiveStagingRoot(rootPaths),
+      path.dirname(buildingRenewalArchiveRoot(rootPaths, normalizedSessionId)),
+      path.dirname(publishingRenewalArchiveRoot(rootPaths, normalizedSessionId)),
+      renewalStateRoot(),
+      ...(sourcePath ? [
+        path.resolve(normalizeText(projectSessionSourceRoot)),
+        path.dirname(path.dirname(path.dirname(sourcePath))),
+        path.dirname(path.dirname(sourcePath))
+      ] : [])
+    ];
+    for (const directoryPath of directoryPaths) {
+      const info = await readStatePath(directoryPath);
+      if (info && !info.isDirectory()) throw conflict(directoryPath);
+    }
+    const statePaths = [
+      paths(normalizedSessionId).sessionRoot,
+      closingSessionRoot(rootPaths, normalizedSessionId),
+      sessionArchiveMetadataPath(rootPaths, normalizedSessionId),
+      sessionArchivePath(rootPaths, normalizedSessionId),
+      preparedRenewalArchiveRoot(rootPaths, normalizedSessionId),
+      buildingRenewalArchiveRoot(rootPaths, normalizedSessionId),
+      publishingRenewalArchiveRoot(rootPaths, normalizedSessionId),
+      renewalStatePath(normalizedSessionId),
+      ...(sourcePath ? [path.dirname(sourcePath)] : [])
+    ];
+    for (const statePath of statePaths) {
+      if (await readStatePath(statePath)) throw conflict(statePath);
+    }
+    for (const [stagingRoot, prefix] of [
+      [creationStagingRoot, `${normalizedSessionId}.`],
+      [archiveStagingRoot, `${normalizedSessionId}-`]
+    ]) {
+      const info = await readStatePath(stagingRoot);
+      if (!info) continue;
+      if (!info.isDirectory()) throw conflict(stagingRoot);
+      const entries = await readdir(stagingRoot);
+      const existing = entries.find((name) => name.startsWith(prefix));
+      if (existing) throw conflict(path.join(stagingRoot, existing));
+    }
   }
 
   async function readSessionRenewalStateRecord(sessionId = "") {
@@ -5089,6 +5157,7 @@ function createVibe64SessionStore({
 
 
   return {
+    assertSessionCreationAbsent,
     createSession,
     createRenewalPendingSession,
     commitRenewalArchive,

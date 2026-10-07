@@ -32,6 +32,8 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `packages/vibe64-colleague/src/server/protocol.js`
 - `packages/vibe64-colleague/src/server/usageKnowledge.js`
 - `docs/colleague-usage/colleague.md`
+- `docs/colleague-usage/lesson-authoring.md`
+- `docs/colleague-usage/learning-with-colleague.md`
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `src/components/Vibe64ColleagueLauncherTarget.vue`
@@ -51,7 +53,9 @@ Colleague uses JSKIT's `createConversationRuntime` for model turns, application
 tools, native history, admission, cancellation and model replacement. Its service
 owns product instructions, focused targets, watches, assignments and authorization.
 It consumes normalized events; it has no provider-event parser or reply/tool
-envelope loop. The terminal service supplies authorized account resolution and
+envelope loop. Its existing partial-reply and browser-stream projections reuse the
+original trailing-high-surrogate guard for display only, leaving completed events
+and canonical text unchanged. The terminal service supplies authorized account resolution and
 managed execution. Each person has an independent native scope.
 The shared host preserves the native Claude profile lookup used by Main;
 it inherits an explicit configuration directory without inventing a default override.
@@ -59,10 +63,29 @@ it inherits an explicit configuration directory without inventing a default over
 The private `conversation.json` remains the authoritative product record. JSKIT's
 record transactions commit its canonical transcript and runtime metadata through
 the existing atomic writer, together with watches and assignments. There is no
-reconstructed in-memory transcript. Turn metadata survives restart. Schema version
-2 retains the old transcript and retires the previous native binding through the
+reconstructed in-memory transcript. Turn metadata survives restart. The earlier schema-version-2 upgrade retains the old transcript and retires the previous native binding through the
 numbered stopped-service upgrade `20261002-colleague-conversation`; opening a
 legacy record refuses to mutate it or run inference.
+
+Explicit **Start fresh** recovery retains the previous chat as read-only history
+and installs a genuinely new public and backend identity in the same private
+record. It preserves the person's model preference, watches, assignments and
+captured project destinations, and never resends an old message. The original
+admission and atomic writer own rotation; the original common runtime retires only
+the settled chat. Active turns, summaries and stop operations must finish first.
+A recovery operation ID retains its exact successor receipt across lost responses
+and restart. Old facade operations fail before admission; an old voice binding
+cannot silently enter the new chat. Product invalidation refreshes other tabs'
+active identity while retiring their old transcript subscriptions.
+Previous-conversation queries use the original paged transcript and product
+visibility rules without opening a model, supplying a composer or granting tool
+execution. Bounded client-reported unconfirmed submissions remain labelled as
+unconfirmed annotations, never canonical receipts or executable requests. An
+existing canonical receipt is displayed once. Assignment authorization resolves
+its exact original message IDs across retained chats without replaying work.
+The stopped-service `20261006-colleague-conversation-history` upgrade adds schema
+version 3, retaining each existing chat's exact original runtime identity and all
+history. It backs up the whole user record; normal reads never convert old formats.
 
 Stable instructions remain installed through JSKIT's engine adapters. Focus,
 observations, user-request identities and assignment summaries travel as bounded
@@ -97,6 +120,8 @@ Colleague being enabled. Colleague's conversation IDs, routes and product policy
 remain unchanged, and neither product registers a second transport.
 The facade retains Colleague's history visibility: internal wake prompts,
 tool receipts and incomplete saved answers are not exposed as completed chat.
+The exact completed watch notice remains visible through the existing system
+message renderer; its projection excludes private wake data and arbitrary system text.
 Transient snapshots retain authored identity and request origin; autonomous tool
 commentary retires any earlier unclassified partial without becoming a spoken
 progress acknowledgement. Browser configuration does not include Colleague's
@@ -107,6 +132,16 @@ receipts and custom toolbar remain product presentation. Text and voice retain
 one exact actor/conversation target. Live recording preview is applied after
 canonical delivery and cannot acknowledge an unaccepted message. Product reads
 refresh on invalidation, reconnect, opening and focus; no browser polling runs.
+The same original body supplies the combined view through one binding-owned local
+target in the root voice host's existing presentation slot. It keeps the core
+transcript and custom composer, adding the extracted voice controls beside the
+upper-right avatar overlay and keeping review in the feedback area. No second reader or controller is acquired. Recorded
+speech stays separate from the editable typed draft; continuous hands-free capture
+keeps typed Send independent, while one-off capture and startup retain their guards.
+The transcript opts into hidden-view retention, preserving the reader's position
+across minimise/reopen through the shared scroll owner. The body has no Talk/Text navigation, and remains available
+for typing when voice setup fails. Minimize/reopen retains the same target and
+body; actor loss and unmount keep the original cleanup fences.
 Its query actions `vibe64.colleague.usage.topics.read` and
 `vibe64.colleague.usage.guide.read` discover and read task guides shipped under
 the application root's `docs/colleague-usage/`. The topic index is searchable and
@@ -132,10 +167,13 @@ execution, then saves the result before further inference. Interrupted reservati
 and uncertain server failures remain inspectable and are not executed again. Model
 output alone does not establish that an application action succeeded. The same
 shared executor serves all supported engines.
+Unavailable autonomous commands remain excluded from the tool schemas. Their
+verified no-effect refusal is saved by the shared catalogue and returned to the
+model for a real final reply; provider failures and uncertain effects still stop.
 
-Product snapshots show user text, completed replies and commentary; application
-wake records and incomplete answers remain in the canonical history without being
-presented as completed chat replies. Streaming uses JSKIT's normalized message
+Product snapshots show user text, completed replies, commentary and the fixed
+completed watch notice; unfinished wakes remain hidden. Streaming uses JSKIT's
+normalized message
 events. Partial tool arguments and reasoning are not exposed as assistant text.
 Hosted realtime updates remain actor-private, coalesced over 25 ms, with
 stream epoch/revision checks. HTTP refresh and socket reconnection reconcile the
@@ -177,21 +215,29 @@ The host supplies the existing avatar, application voice configuration and
 display name (default Colleague). The service accepts a host-owned name resolver
 and includes its current value as data in each model turn. Changing the name
 updates labels and future replies without replacing native history or typed drafts.
-JSKIT's ConversationDialog owns the shared 620-pixel desktop frame, mobile
-full-screen layout, fixed header and 48-pixel icon tabs. Talk/Text switch without
-animation. Minimize and Close occupy the same positions in both views. The Text
-view omits a portrait and uses the remaining height for transcript and composer.
-Opening Colleague shows Talk first through public Vibe64's root voice host.
-Text minimizes voice without ending its audio session. Tap Talk starts hands-free;
-a hold records push-to-talk and release sends, with automatic connection setup.
-The enlarged portrait and controls stay fixed while compact captions scroll. The cog holds voice
-selection. The minus minimizes; X/Escape closes and releases audio, discarding
-unsent speech. The header avatar owns the minimized-session badge and reopening
-of the existing target, with a microphone cue while listening and an adjacent
-Stop voice button. Clicking that avatar while Talk or Text is open minimizes
-without ending audio, including a click received by the dialog backdrop. The
-shared dialog disables the separate backdrop fade as well as the content
-transition. Opening voice hides Text while preserving its draft and state.
+Colleague owns a mounted 380-pixel right-hand desktop navigation drawer. Its
+Vuetify layout registration reserves space beside the existing workspace and
+Preview, below the app bar, with no scrim or route-driven dismissal. JSKIT's
+existing inline ConversationDialog holds the desktop panel; its fullscreen dialog
+holds the phone panel. One original body Teleport selects the responsive target,
+retaining the root target-switch slot when needed. The adapter, runtime, composer
+and outer body survive resize, minimize and reopen, preserving drafts, history
+and the existing voice session. The default inner Transcript scroll DOM remounts
+and follows latest on reopening; the host does not opt into hidden-reader retention.
+There are no Talk/Text tabs on that adapter path. Opening starts neither capture
+nor read-aloud. Tap Talk starts hands-free; a hold records push-to-talk and release
+sends, with automatic connection setup. Its existing portrait control hides or
+reveals the face, while short containers can clamp the artwork.
+The cog holds personal voice selection. The frame's minus minimizes; X/Escape
+within the conversation closes and releases audio, discarding unsent speech. The header avatar owns the minimized-session
+badge and reopening of the existing target, with a microphone cue while listening
+and an adjacent Stop voice button. Clicking that avatar while the conversation is
+open minimizes without ending audio. Desktop workspace clicks do not dismiss
+the drawer. The phone keeps the original shared dialog focus and dismissal owner.
+Relocating the original body preserves its typed draft and state; failed voice
+setup leaves that body usable. Main uses the same host artwork and collapsible
+overlay in its existing text view; its retained target keeps the caption fallback
+when that view is unavailable.
 The host supplies artwork and display preferences, not another voice slot
 or controller. A 350ms hold on the launcher opens the same voice session and records
 for explicit review; release finishes, and lost capture cancels. The trailing click
@@ -199,8 +245,26 @@ cannot also open the text panel. Keyboard hold and pointer ownership are handled
 by the shared launcher. Public Vibe64 supplies live state, captured focus, stable
 message identity, canonical admission and cancellation to the binding.
 Colleague's persistent instructions still request brief replies, with detail when
-asked. Model, Stop and Send/Steer share the text toolbar. Tab from a
+asked. Model, Stop and Send/Steer retain their exact original composer toolbar.
+The avatar and voice tools start visible as a fixed upper-right overlay
+over scrolling text, and collapse without ending the voice session. The collapsed
+row has passive Listening and Speaking indicators from the exact current voice
+session; Show avatar is its only action. Muted capture does not display Listening,
+and speaker preference alone does not display Speaking. Pending speech review
+remains outside that overlay. Tab from a
 sendable draft focuses Send/Steer without propagating to the dialog focus trap.
+Colleague opts into the shared retained conversation's `deferWhileWorking`
+policy and serial delivery queue. A nonsteerable turn keeps new typed and voice
+follow-ups locally pending with their authored IDs and captured focus until the
+same canonical subscription reports ready. Each then uses normal API admission
+and permissions. The product browser facade advertises `steering: false` for
+both empty and prepared chats: its direct send owner implements stop-and-wait,
+not native steering. This truthful capability keeps ordinary browser follow-ups
+buffered without interrupting the current answer. The composer shows Send;
+the original direct service send and explicit Stop semantics remain unchanged. Stop cancels local pre-dispatch
+followers, and account/access retirement cannot dispatch them later. Explicit
+retries retain their original intent; unknown receipts remain inspection-only.
+There is no server queue or separate Colleague turn loop.
 Voice submissions use the same message-ID admission as text, carry their
 recording's original focus, and never alter the typed draft. Colleague's API stays global when the
 selected project changes. Opening a view sends a command only to the initiating
@@ -221,6 +285,17 @@ journal to preserve logical history and prepare the destination native conversat
 Model selection is committed with the replacement metadata. An interrupted switch
 requires selecting the same destination again to finish that operation. Switching
 starts no inference and does not change coding-session routing.
+Colleague compares its original five selection fields: engine, model provider,
+model, agent and variant. An identical choice retains the current segment; a
+changed choice requests a fresh native binding through the shared transaction,
+including changes within one provider. Other consumers retain JSKIT's default
+selection policy. A pending switch retries its recorded retirement policy,
+including an older request's missing field, without changing the operation.
+The product choice is published only after the replacement commits, even when
+agent or variant changes leave the runtime configuration equal. Colleague's
+logical conversation, transcript and uncertain predecessor receipts remain;
+the next authored message uses the existing native history catch-up. The native
+account identity guard remains enforced rather than relabelling an old thread.
 
 Conversation watches are ordinary create/list/cancel/resume actions. Each user
 can retain up to 16 active or paused watches, with exact project/session and
@@ -477,3 +552,202 @@ handover fits even with JSON-escaped Unicode; each action retains its own narrow
 field bounds. Ordinary conversation results and watch summaries keep their existing
 limits. The expanded catalogue uses JSKIT's native discovery instead of sending
 every tool definition on each model request.
+
+
+## Fresh/history client presentation
+
+The original Colleague element keeps its shared uncertainty status and Check
+delivery action, and adds explicit Start fresh confirmation. The confirmation
+explains that the old voice conversation ends, nothing is resent, history remains
+readable and watches/assignments continue. Active admission, Stop, voice setup,
+capture or sending must resolve first. Only the matching pending uncertain speech
+may retire after an exact successful archive receipt. Newer known-unsent speech
+remains discardable by its own ID despite another uncertain delivery; pausing the
+microphone before its X lets the original capture owner become idle without
+silently archiving those words.
+
+The client retains one pending fresh operation and its exact body for lost-response
+retry, suppressing background product retargeting until resolved. Actor, original
+runtime and matching voice binding fences prevent a late response from ending a
+different conversation or copying another person's draft. On confirmed success
+it follows the current product pointer, preserves the latest typed draft through
+the original setDraft owner, and leaves personal voice preferences unchanged. It
+does not restart speech or submit the draft. Once the archive is committed and
+the current pointer is applied, it reuses openVoice to restore the original
+controls with a new paused matching session only when the root controller is
+empty, not busy and has no pending target. A competing target remains untouched.
+Voice-presentation failure reports separately and retains the committed text
+chat/draft without restoring the archive operation. A late openVoice result
+cannot hide a different actor or conversation view.
+
+Previous conversations reuses the original responsive conversation dialog and
+transcript renderer with the existing page normalizer/merge owner. Archived reads
+create no runtime subscription, composer, model selection, voice connection or
+delivery action. The archived-page caller forwards the shared transcript completion
+callback and completes it before rendering the accepted page; rejected, busy and
+obsolete requests release it without changing the page. Original cursors survive filtered-only pages. Client-reported
+unconfirmed words remain separate plain-text annotations; they are never delivery
+inputs. Actor changes and dialog closure fence late history responses. Its list
+provides Start fresh independently of uncertain-delivery bubbles, including after
+terminal provider failure. The entry uses the original busy/block reasons and
+showFreshConfirmation, closes history through closeHistory and performs no mutation
+until explicit confirmation calls the unchanged startFresh owner. History/voice,
+draft, assignments and durable recovery semantics remain with those owners.
+
+An external current-pointer change is held before the original retained voice
+runtime and bubbles become hidden while hasUnsentSpeech remains true. A notice
+requires original resolution or explicit voice close, then explicit Refresh
+conversation; background reads cannot silently retarget after that notice.
+Same-actor pointer changes preserve the current draft through the original
+setDraft owner. Actor/access availability semantics remain with the original
+runtime and controller; the UI does not forge an available binding.
+
+Colleague supplies the existing shared runtime draftStorage host seam with
+window.sessionStorage and an actor+conversation-scoped v1 key. The original
+runtime alone owns its opaque byte shape, unknown-status restoration and writes.
+This retains exact uncertain payloads when the final old runtime reader disposes,
+without copying those messages into the new delivery owner or reopening archived
+runtimes. The retention is local to the browser tab when storage is available;
+there is no new server journal or cross-tab archive protocol.
+
+### Lesson presentation acknowledgement
+
+The original initiating-browser navigation receipt also carries bounded lesson
+presentation operations supplied by the Training action owner. The browser's
+existing Preview handle awaits the original player's readiness, completed command
+or semantic snapshot. A successful acknowledgement must match the requested
+attempt, visual, command and exercise view; command acceptance cannot settle it.
+The receipt remains private to the initiating connection and is retired through
+the original Stop/disconnection lifetime. It adds no speech or grading authority.
+
+
+## Issued lesson references at message authorship
+
+The existing Colleague state read optionally asks the host-supplied
+`context.trainingTeaching.readQuestionReference` for one bounded issued reference.
+It exposes that reference only when original current-scope turn metadata proves
+the matching native question reply completed. `stageTrainingQuestion` saves a
+prepared mark for the current interactive accepted turn/generation.
+`requireTrainingQuestionTurn` uses the same eligibility check before the question
+action saves its checkpoint; stage rechecks inside the native transaction.
+A present cue must be completed in the initiating current conversation. The
+original final-save transaction promotes it only with native completion and the actual
+saved canonical assistant output ID whose trimmed final text exactly matches
+the captured authoritative question text. Unrelated finals, commentary,
+cancelled outputs and tool progress never promote it. Restart reads the retained
+mark; Fresh archives never qualify.
+
+Typed submission captures it through the original runtime data getter; voice
+stores it in the original utterance capture context, then separates it from view
+focus before forwarding it as ordinary conversation data. The shared capture,
+serial delivery, deferred admission, draft and canonical transcript owners are
+unchanged. No JSKIT teaching concept, queue or second reference store is added.
+
+The original native facade and message action accept only the six-field reference.
+After an existing accepted UUID returns its original receipt, send admission can
+call `captureQuestion` using the fresh authenticated actor and that submitted
+reference. Only the detached Training-owned snapshot enters canonical
+`data.trainingQuestion`, together with server-derived question conversation, turn
+and output identities; caller snapshots and outcomes are never trusted. Stale,
+absent or unavailable references leave messages ordinary and ungraded without
+blocking Send or reassigning them to a new question. Stop and closure fences are
+rechecked after the asynchronous read before original preparation/cancellation.
+Actual accepted message and turn identities retain their native authority. No
+grading caller is registered by this integration. Optional new writes require
+the release's prospective upgrade; no historical question association is inferred.
+
+
+## Native lesson answer evaluation
+
+`evaluateTrainingAnswer` selects the actual canonical user message from the
+current admitted interactive turn and its original context user-message IDs. It
+requires the saved server-owned question capture and exact current-scope native
+question delivery/final-output proof. Archives, autonomous turns, caller
+snapshots and unrelated messages cannot supply evidence. It neither imports
+Training nor writes progress; the host's single `trainingAssessment` owner
+validates the pin/question, grades and saves through its native assessment owner.
+
+The operation reuses original `summaryRunning`/`summaryAbort` serialization,
+Helper process creation and cleanup. Its one original `runHelper` method is
+adapted to recheck fresh actor, scope, turn, generation and operation abort before
+returning Helper text to Training, preventing a retired turn from saving a grade.
+The optional caller signal aborts only this operation; listeners are removed and
+transient owners are cleared by identity. Original Stop joins and cleans up the
+same Helper. Persisted submission replay remains Training-owned before inference.
+
+Native practical gestures use the existing initiating connection and admission
+tail. The HTTP-only, assistant-excluded `training.observe-native` action
+reauthenticates the caller, requires an actually delivered current question, reads
+the Training owner's exact ready exercise contract, and uses ordinary session
+inspection for project access. One transient slot retains at most three exact
+gesture payload/receipt pairs and one server-derived observation. Same-ID retry
+returns the original step receipt; conflicting payloads fail. Workspace navigation
+requires project selection, revealing the exact reserved Main session through its
+session tab or Show chat, then visible Preview; return requires actual body
+minimize, same-exercise workspace use, then restore. These formative observations
+preserve saved assistance and do not grade, write progress, wake Colleague, or run
+a coding agent. Restart requires repetition; no durable gesture journal or
+anti-cheating attestation is claimed. The client admits Colleague minimise/restore
+tickets only for the return-to-Colleague assessment. Ordinary launcher use during
+workspace navigation retains the conversation and collection without an unrelated
+observation request or error; strict server sequence/target checks remain intact.
+
+The same native receipt endpoint admits `exercise-response` only for the pinned
+`try-the-application` practical. Four bounded protocol UUIDs and the original
+numeric frame generation travel as browser identities; terminal, origin, check
+and outcome never do. The existing `terminals.outputs.read` action selects the
+current App terminal, and the host's original declared-check owner verifies its
+run/pin and server interaction. A late question/scope/access change rejects the
+receipt before mutation. One exact payload/receipt, factual observation and
+server check result occupy the same connection slot; duplicates do not rerun the
+check. Stop marks the original admission fence and joins the finite check; its
+original managed execution/cleanup and caller signal remain authoritative.
+
+Answer and practical evaluation share the original private native admission and
+serialized Helper lifetime. `evaluateTrainingPractical` accepts IDs, selects only
+the current connection's exact observation/reference/check and actual accepted
+current-turn explanation, and passes them to the host Training assessment owner.
+Fresh scope/generation/auth and the captured observation object/facts are checked
+again before Helper text returns. The original owner saves and consumes evidence;
+Colleague supplies no grade setter, journal or parallel Helper.
+
+The original `context.read` query projects accepted partial steps separately as
+`trainingPracticalProgress`: exact reference/assessment, collecting phase, bounded
+count and actual last control. The same question, target, fresh access and
+connection fences guard this read-only coaching context. It has no observation
+ID, outcome, pass or persistence; Colleague continues the next step under the same
+question. Completion removes this projection and retains the original completed
+`trainingPractical` DTO. The query projects that completed native practical
+observation only for this connected current conversation and delivered
+question. It uses fresh Training capture and ordinary session authority, then
+rechecks the same slot after awaited reads. The whitelist includes the issued
+reference, observation/assessment identity, declared producer/operation, observed
+time, assistance/origin and optional check outcome. Teacher origin projects
+as demonstration assistance. Stale, unavailable and unauthorized facts are
+omitted without changing the original context response or writing state.
+This lets the existing practical action discover real IDs; it does not wake the
+teacher or grant access to App/window/source/check bytes.
+
+### Lesson authoring through existing operations
+
+The release's `lesson-authoring` guide connects existing assignment creation,
+receipt/watch follow-through and same-session review with native requested
+Save/PR publication. Colleague remains a coordinator without source or shell
+access; the coding owner authors and runs the original Training CLI. Git source
+publication is supported through existing permission/review/recovery owners,
+while installation/enablement remains an explicit local operator operation.
+Read-only how-to or quoted guide examples supply no mutation authority.
+
+Usage discovery still reads each release-matched topic through its original
+16,000-character bound. The teaching guide is split into task topics rather than
+raising that limit or changing the reader. No new runtime action, state format,
+conversation loop or browser authoring control is introduced.
+
+
+### Browser question admission
+
+The original browser facade omits undefined Training owners so native action
+contributors can supply them on each operation; explicit owners or null remain
+unchanged. Future admitted answers retain the existing canonical question
+snapshot and delivery identity. Older ordinary messages stay ungraded; this
+correction performs no historical conversion or inferred association.

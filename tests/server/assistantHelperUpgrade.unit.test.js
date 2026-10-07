@@ -190,3 +190,47 @@ test("provider defaults are renamed without changing the Helper assignment or co
   assert.deepEqual(saved.connections.custom, { apiKey: "keep-private", defaultModelId: "provider-default", label: "Connection" });
   assert.deepEqual((await createAssistantRoutingStore({ systemRoot: f.systemRoot }).read()).orchestrators.codex.helper, selection);
 });
+
+test("current Custom routing keeps its destination, receipts and untouched bytes", async t => {
+  const f = await fixture(t);
+  const current = { schemaVersion: 4, revision: 17, orchestrators: { codex: { senior: selection, junior: selection, helper: selection } } };
+  await f.config(current);
+  await f.store.createSession({ sessionId: "current", runtimeKind: "genesis" });
+  const preferences = { mode: "custom", workflowEngineId: "codex", override: selection, review: false };
+  const request = { schemaVersion: 4, mode: "custom", resolvedMode: "custom", status: "uncertain", workflowEngineId: "codex",
+    assignments: { custom: selection }, configuration: { revision: 17, orchestrators: current.orchestrators },
+    attemptedMessageId: "one", threadId: "native", submittedBy: { username: "member" } };
+  const raw = JSON.stringify(request, null, 2);
+  await f.store.writeMetadataValue("current", "assistant_routing", JSON.stringify(preferences));
+  await f.store.writeMetadataValue("current", "assistant_routing_request", raw);
+  const configBytes = await readFile(f.file, "utf8");
+  await f.run(); await f.run(true);
+  assert.equal(await readFile(f.file, "utf8"), configBytes);
+  assert.equal(await f.store.readMetadataValue("current", "assistant_routing_request"), raw);
+  assert.deepEqual(JSON.parse(await f.store.readMetadataValue("current", "assistant_routing")), preferences);
+  const olderCustom = { ...request, schemaVersion: 3, configuration };
+  const converted = upgradeAssistantHelperSession({ metadata: { assistant_routing_request: JSON.stringify(olderCustom) }, conversations: [] });
+  const migrated = JSON.parse(converted.metadata.assistant_routing_request);
+  assert.equal(migrated.schemaVersion, 4);
+  assert.deepEqual(migrated.assignments, olderCustom.assignments);
+  assert.equal(migrated.attemptedMessageId, olderCustom.attemptedMessageId);
+  assert.equal(migrated.threadId, olderCustom.threadId);
+  assert.deepEqual(migrated.configuration.orchestrators.codex.helper, configuration.orchestrators.codex.intern);
+  const attribution = { requestedMode: "custom", resolvedMode: "custom", destination: selection };
+  assert.deepEqual(upgradeAssistantHelperTurn({ assistantRouting: attribution }), { assistantRouting: attribution });
+  for (const patch of [{ status: "unknown" }, { assignments: { intern: selection } }, { configuration }, { assignments: {} }]) {
+    assert.throws(() => upgradeAssistantHelperSession({ metadata: { assistant_routing_request: JSON.stringify({ ...request, ...patch }) }, conversations: [] }));
+  }
+});
+
+test("native routing validation retains the original owned Helper profile conversion", () => {
+  const current = { schemaVersion: 4, revision: 17, orchestrators: { codex: { senior: selection, junior: selection } } };
+  const saved = { schemaVersion: 4, mode: "custom", status: "done", assignments: { custom: selection }, configuration: current,
+    helper: { executionId: "retained-helper", executionProfile: profile }, input: { message: "Keep intern and economy as my authored words" },
+    messageId: "retained-message", threadId: "retained-native", submittedBy: { username: "member" } };
+  const result = upgradeAssistantHelperSession({ metadata: { assistant_routing_request: JSON.stringify(saved) }, conversations: [] });
+  assert.equal(typeof result.metadata.assistant_routing_request, "string", "the original profile owner must publish its conversion");
+  const next = JSON.parse(result.metadata.assistant_routing_request);
+  assert.deepEqual(next, { ...saved, helper: { ...saved.helper, executionProfile: { ...profile, profileId: "helper" } } });
+  assert.deepEqual(upgradeAssistantHelperSession({ metadata: { assistant_routing_request: JSON.stringify(next) }, conversations: [] }).metadata, {});
+});

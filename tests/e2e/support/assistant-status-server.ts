@@ -73,6 +73,8 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     detailCount: 0,
     detailHandler: null as Handler | null,
     messages: [] as Record<string, unknown>[],
+    steering: true,
+    workAfterMessage: false,
     goal: null as GoalView | null,
     goalCommands: [] as Record<string, unknown>[],
     updateGoal: null as ((input: Record<string, unknown>) => unknown | Promise<unknown>) | null,
@@ -117,7 +119,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
           return { id, engine: agent.providerId,
             segmentId: agent.thread?.id ? `${agent.providerId}:${agent.thread.id}` : null,
             status: agent.turn.active ? "working" : "ready", phase: agent.turn.active ? "working" : "",
-            capabilities: { streaming: true, history: true, steering: true, cancellation: true, attachments: true, goals: false },
+            capabilities: { streaming: true, history: true, steering: state.steering, cancellation: true, attachments: true, goals: false },
             goal: state.goal?.goal || null, pendingRequest: null, error: "", streaming: { revision: 0, messages: [] },
             ...await transcript.readConversationLogPage(sessionId, query) };
         },
@@ -146,6 +148,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       requireSession(sessionId);
       const { vibe64User: _user, ...message } = input;
       state.messages.push(message);
+      if (state.workAfterMessage) { session.agentSession.turn.active = true; publishTurn(); }
       return { ok: true, delivered: true, messageId: message.messageId };
     },
     async interruptAgentTurn(sessionId: string) {
@@ -232,6 +235,9 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       });
       routes.actionRoute("GET", "", { actionId: "vibe64.colleague.state.read", buildInput: routes.requestQuery, summary: "Read your Colleague conversation." });
       routes.actionRoute("POST", "/focus", { actionId: "vibe64.colleague.focus.update", buildInput: routes.requestBody, summary: "Colleague focus.update." });
+      routes.actionRoute("POST", "/conversations/fresh", { actionId: "vibe64.colleague.conversation.start-fresh", buildInput: routes.requestBody, summary: "Retain the old conversation and start fresh." });
+      routes.actionRoute("GET", "/conversations/history", { actionId: "vibe64.colleague.conversation.history.read", buildInput: routes.requestQuery, summary: "List retained conversations." });
+      routes.actionRoute("GET", "/conversations/history/page", { actionId: "vibe64.colleague.conversation.history-page.read", buildInput: routes.requestQuery, summary: "Read retained conversation history." });
       return { colleague: { ...service,
         close: () => service.close(),
         async send(input, context, options) {

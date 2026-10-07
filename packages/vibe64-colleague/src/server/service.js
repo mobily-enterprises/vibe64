@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { createConversationRuntime, createConversationTranscript, createConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
+import { validateColleagueConversationRecord } from "./conversationRecord.js";
 
 function failure(message, code = "vibe64_colleague_failed", statusCode = 409) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -16,9 +18,26 @@ function requireResult(result) {
   return result;
 }
 function publicWatch({ cursor, ...watch }) { return watch; }
+function publicCue(cue) {
+  const { generation, name, parameters, operation, projectSlug, sessionId, ...value } = cue;
+  return value;
+}
 function colleagueHistoryMessages(turn) {
-  return turn.messages.filter(message => message.role !== "system" &&
-    (message.role === "user" || !turn.metadata?.runtime || turn.metadata.runtime.status === "complete"));
+  const runtime = turn.metadata?.runtime;
+  return turn.messages.flatMap(message => {
+    if (message.role === "system") {
+      if (message.text !== "An update from your watched conversations." || (runtime
+        ? runtime.origin !== "application" || runtime.status !== "complete"
+        : !turn.messages.some(item => item.role === "assistant" && item.text?.trim()))) return [];
+      // The original notice is presentation, never the wake's private data.
+      return [{ messageId: message.messageId, role: message.role, text: message.text, at: message.at }];
+    }
+    return message.role === "user" || !runtime || runtime.status === "complete" ? [message] : [];
+  });
+}
+function hasUserReceipt(chat, messageId) {
+  return chat.conversationLog.some(turn => turn.messages.some(message =>
+    message.role === "user" && message.messageId === messageId && message.receipt !== false));
 }
 function colleagueBrowserState(current) {
   // Preserve Colleague's existing history visibility. Internal prompts and tool
@@ -27,7 +46,9 @@ function colleagueBrowserState(current) {
     const messages = colleagueHistoryMessages(turn);
     if (!messages.length) return [];
     const runtime = turn.metadata?.runtime;
+    const system = messages.find(message => message.role === "system");
     return [{ turnId: turn.turnId, messages,
+      ...(system ? { system } : {}),
       user: messages.find(message => message.role === "user") || null,
       assistant: messages.find(message => message.role === "assistant") || null,
       thinking: messages.filter(message => message.role === "thinking"),
@@ -41,28 +62,45 @@ function colleagueBrowserState(current) {
 }
 function colleagueBrowserStream(streaming) {
   return streaming ? { ...streaming, messages: streaming.messages.filter(message =>
-    message.origin !== "application" || message.role !== "commentary") } : streaming;
+    message.origin !== "application" || message.role !== "commentary").map(message =>
+    message.status === "inProgress" ? { ...message, text: message.text.replace(/[\uD800-\uDBFF]$/, "") } : message) } : streaming;
 }
 
 function createColleagueService({ actions, accounts, terminals, systemRoot, events, watchPollMs = 30000, watchDebounceMs = 250 }) {
   if (!path.isAbsolute(systemRoot || "")) throw new TypeError("Colleague needs the private application system root.");
   const toolLimits = { maxToolArgumentBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT, maxToolResultBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT };
+  const conversationOwners = new Map();
   const storage = createConversationStorage({
     async readRecord(key) {
-      const { record } = await users.get(key);
+      const state = conversationOwners.get(key);
+      if (!state) throw failure("This Colleague history is unavailable.", "conversation_forbidden", 403);
+      const record = state.record.runtimeId === key ? state.record :
+        state.record.previousConversations.find(old => old.runtimeId === key);
       return { metadata: record.conversationMetadata || {},
         turns: new Map(record.conversationLog.map(turn => [turn.turnId, turn])) };
     },
     async writeRecord(key, { turns, metadata }, transaction) {
-      const state = await users.get(key);
+      const state = conversationOwners.get(key);
+      if (!state || state.record.runtimeId !== key) throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
       const conversationLog = await Promise.all([...turns.keys()].map(id => transaction.readTurn(id)));
+      for (const [index, turn] of conversationLog.entries()) {
+        const mark = turn.metadata?.trainingQuestionDelivery;
+        const final = turn.messages.findLast(message => message.role === "assistant" && message.text.trim());
+        if (mark?.phase !== "prepared" || mark.conversationId !== state.record.scopeId || mark.turnId !== turn.turnId ||
+            turn.metadata.runtime?.status !== "complete" || !final?.outputId ||
+            final.text.trim() !== mark.questionText) continue;
+        await transaction.updateTurnMetadata(turn.turnId, { trainingQuestionDelivery: {
+          ...mark, phase: "delivered", outputId: final.outputId
+        } });
+        conversationLog[index] = await transaction.readTurn(turn.turnId);
+      }
       const selected = state.selecting;
       const selectedConfiguration = selected?.configuration;
-      const committedSelection = selected && metadata.runtime?.engine === selected.engine &&
+      const committedSelection = selected && !metadata.runtime?.replacement && metadata.runtime?.engine === selected.engine &&
         JSON.stringify(metadata.runtime.configuration) === JSON.stringify(selectedConfiguration);
       await persist(state, { conversationLog,
         ...(committedSelection ? { assistantSelection: selected.assistantSelection } : {}),
-        ...(Object.keys(metadata).length || state.record.conversationMetadata ? { conversationMetadata: metadata } : {}) });
+        ...(Object.keys(metadata).length || state.record.conversationMetadata ? { conversationMetadata: metadata } : {}) }, key);
     }
   });
   const transcript = createConversationTranscript({ storage });
@@ -73,9 +111,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const runtime = createConversationRuntime({ storage, actions,
     limits: { ...toolLimits, maxToolCalls: 24, maxInputCharacters: COLLEAGUE_TOOL_PAYLOAD_LIMIT },
     async authorize({ context, conversationId, operation }) {
-      if (conversationId !== userKey(context)) return false;
-      const state = await users.get(conversationId);
-      if (!state) return false;
+      const state = await stateFor(context);
+      if (conversationId !== state.record.runtimeId) return false;
       await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context });
       if (["send", "wake", "tool"].includes(operation)) {
         if (context.colleague.generation !== state.generation || state.stopping) return false;
@@ -110,11 +147,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     let saved;
     try { saved = JSON.parse(await readFile(path.join(root, "conversation.json"), "utf8")); }
     catch (error) { if (error.code !== "ENOENT") throw error; }
-    if (saved && saved.schemaVersion !== 2) throw failure("Run the candidate Vibe64 state upgrade with services stopped before opening this Colleague history; no state was changed.");
+    if (saved && saved.schemaVersion !== 3) throw failure("Run the candidate Vibe64 state upgrade with services stopped before opening this Colleague history; no state was changed.");
     const record = saved || {
-      schemaVersion: 2, scopeId: `colleague_${randomUUID().replaceAll("-", "")}`,
+      schemaVersion: 3, runtimeId: key, previousConversations: [], scopeId: `colleague_${randomUUID().replaceAll("-", "")}`,
       assistantSelection: null, status: "ready", error: "", conversationLog: []
     };
+    validateColleagueConversationRecord(record, key);
     record.watches ||= [];
     record.observations ||= [];
     const state = {
@@ -122,8 +160,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       saving: Promise.resolve(), admission: Promise.resolve(), running: null,
       streamEpoch: randomUUID(), streamRevision: 0,
       generation: 0, connections: new Map(), requestContext: null, streamingReply: null,
-      interimReply: null, projectReply: null,
-      stopping: false, conversation: null, host: null, selecting: null, observationIds: [],
+      interimReply: null, projectReply: null, replyTurnId: "",
+      stopping: false, rotating: false, opening: 0, conversation: null, host: null, selecting: null, observationIds: [],
       watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve(),
       browserObservers: new Set()
     };
@@ -139,18 +177,29 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         for (const watch of record.watches) if (watch.assignmentId === assignment.assignmentId) watch.status = "paused";
       }
     }
+    for (const chat of [record, ...record.previousConversations]) conversationOwners.set(chat.runtimeId, state);
     return state;
   }
 
-  async function persist(state, conversation = null) {
+  function assertCurrentConversation(state, conversationId) {
+    if (conversationId && conversationId !== state.record.scopeId) {
+      throw failure("This Colleague conversation has been retained as read-only history. Open the current conversation before sending.", "ACTION_VALIDATION_FAILED", 400);
+    }
+  }
+
+  async function persist(state, conversation = null, expectedRuntimeId = null) {
     const operation = state.saving.then(async () => {
+      if (expectedRuntimeId && state.record.runtimeId !== expectedRuntimeId) throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
       assignments.suspendDependencies(state);
       await mkdir(state.root, { recursive: true, mode: 0o700 });
       const temporary = path.join(state.root, `conversation.${randomUUID()}.tmp`);
       try {
         await writeFile(temporary, JSON.stringify({ ...state.record, ...conversation }), { mode: 0o600 });
         await rename(temporary, path.join(state.root, "conversation.json"));
-        if (conversation) Object.assign(state.record, conversation);
+        if (conversation) {
+          Object.assign(state.record, conversation);
+          if (conversation.runtimeId) conversationOwners.set(conversation.runtimeId, state);
+        }
       } finally { await rm(temporary, { force: true }); }
     });
     state.saving = operation.catch(() => {});
@@ -162,11 +211,18 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   // Navigation data is read through the original initiating-browser operation.
   function publishBrowserChange(state) {
     for (const observer of state.browserObservers) {
-      void actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: observer.context })
+      // Product invalidation may announce a changed active identity. It grants
+      // no access to the old runtime or the new conversation transcript.
+      const context = { ...observer.context, colleague: { ...observer.context.colleague, conversationId: undefined } };
+      void actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context })
         .then(() => {
           if (!state.browserObservers.has(observer)) return;
           try { Promise.resolve(observer.listener({ type: "application", interimReply: state.interimReply })).catch(() => {}); }
           catch { /* A presentation failure does not own the conversation. */ }
+          if (observer.context.colleague?.conversationId !== state.record.scopeId) {
+            state.browserObservers.delete(observer);
+            observer.release?.();
+          }
         }, () => {
           state.browserObservers.delete(observer);
           observer.release?.();
@@ -175,14 +231,16 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   async function attachBrowserObserver(state, observer) {
+    assertCurrentConversation(state, observer.context.colleague?.conversationId);
     if (!state.conversation || observer.release || !state.browserObservers.has(observer)) return;
     if (observer.attaching) return observer.attaching;
     observer.attaching = (async () => {
-      const conversation = await runtime.open({ id: state.key, context: observer.context, host: state.host });
+      const conversation = await runtime.open({ id: state.record.runtimeId, context: observer.context, host: state.host });
       const release = await conversation.subscribe(event => {
         // Both readers apply the same synchronous product projection. Runtime
         // subscriptions reauthorize independently, so their callback order is
         // deliberately not an application presentation guarantee.
+        if (observer.context.colleague?.conversationId !== state.record.scopeId) return;
         state.projectReply?.(event);
         const interimReply = state.interimReply;
         // Product activity is read through the existing authorized snapshot;
@@ -200,7 +258,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             messageId: event.messageId, streaming: colleagueBrowserStream(event.streaming), interimReply });
           return;
         }
+        const presentationCue = [...state.connections.values()].map(connection => connection.cue).find(cue =>
+          cue?.turnId === event.turnId && cue.outputId === (event.outputId || event.messageId));
         observer.listener({ ...event, interimReply,
+          ...(event.type === "message" && event.status === "inProgress"
+            ? { text: event.text.replace(/[\uD800-\uDBFF]$/, "") } : {}),
+          ...(presentationCue ? { presentationCue: publicCue(presentationCue) } : {}),
           ...(event.streaming ? { streaming: colleagueBrowserStream(event.streaming) } : {}) });
       });
       if (!state.browserObservers.has(observer)) release();
@@ -242,12 +305,75 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     return {
       surface: "app", channel: "automation", requestMeta: state.requestContext.requestMeta,
       projectSlug: connection.focus?.projectSlug || "",
-      colleague: { userKey: state.key, clientId: connection.clientId, focus: connection.focus }
+      colleague: { userKey: state.key, conversationId: state.record.scopeId, clientId: connection.clientId, focus: connection.focus }
     };
   }
 
+  function interactiveTrainingTurn(state, context, { requireCompletedCue = true } = {}) {
+    const conversationId = context.colleague?.conversationId;
+    const turnId = state.replyTurnId;
+    const generation = context.colleague?.generation;
+    const connection = state.connections.get(context.colleague?.clientId);
+    assertCurrentConversation(state, conversationId);
+    if (closed || state.stopping || conversationId !== state.record.scopeId || !state.running ||
+        context.colleague?.autonomous || generation !== state.generation || !turnId || !connection) {
+      throw failure("Stage a lesson question only in its current admitted interactive turn.");
+    }
+    const cue = connection.cue;
+    if (requireCompletedCue && cue && (cue.phase !== "completed" || cue.conversationId !== conversationId || cue.clientId !== connection.clientId)) {
+      throw failure("Finish the current explanation cue before asking the next lesson question.");
+    }
+    return { conversationId, turnId, generation };
+  }
+
+  function deliveredQuestion(state, reference) {
+    for (const turn of state.record.conversationLog.toReversed()) {
+      const mark = turn.metadata?.trainingQuestionDelivery;
+      if (mark?.phase !== "delivered" || mark.conversationId !== state.record.scopeId || mark.turnId !== turn.turnId ||
+          turn.metadata.runtime?.status !== "complete" || turn.metadata.runtime.supersededBy ||
+          !isDeepStrictEqual(mark.reference, reference)) continue;
+      const final = turn.messages.findLast(message => message.role === "assistant" && message.text.trim());
+      if (final?.outputId && final.outputId === mark.outputId && final.text.trim() === mark.questionText) {
+        return { conversationId: mark.conversationId, turnId: mark.turnId, outputId: mark.outputId };
+      }
+    }
+    return null;
+  }
+
+  function completedPracticalQuestions(state) {
+    const proofs = [];
+    for (const turn of state.record.conversationLog.toReversed()) {
+      for (const call of (turn.metadata?.applicationTools || []).toReversed()) {
+        if (call.name !== "assistant_action_execute" || call.status !== "complete" || call.result?.ok !== true) continue;
+        let request;
+        try { request = JSON.parse(call.arguments); } catch { continue; }
+        const result = call.result.result;
+        const saved = result?.result;
+        const input = request?.input;
+        if (request?.actionId !== "vibe64.training.practical.evaluate" || result?.actionId !== request.actionId ||
+            result.version !== 1 || saved?.ok !== true || saved.outcome !== "passed" ||
+            !input?.submissionId || saved.submissionId !== input.submissionId || !input.observationId) continue;
+        const message = turn.messages.find(value => value.role === "user" && value.receipt !== false && value.messageId === input.messageId);
+        const captured = message?.data?.trainingQuestion;
+        if (captured?.schemaVersion !== 1 || !captured.pin?.topic?.topicHash || !captured.pin?.lesson?.hash ||
+            captured.attemptId !== input.attemptId || saved.assessmentId !== captured.question?.assessmentId ||
+            saved.completion?.lessonHash !== captured.pin.lesson.hash) continue;
+        const reference = { attemptId: captured.attemptId, questionId: captured.question.id,
+          assessmentId: captured.question.assessmentId, issuedRevision: captured.question.issuedRevision,
+          topicHash: captured.pin.topic?.topicHash, lessonHash: captured.pin.lesson.hash };
+        const delivery = deliveredQuestion(state, reference);
+        if (!delivery || !isDeepStrictEqual(delivery, captured.delivery)) continue;
+        if (!proofs.some(proof => proof.submissionId === input.submissionId && isDeepStrictEqual(proof.reference, reference))) {
+          proofs.push({ reference, submissionId: input.submissionId, observationId: input.observationId });
+          if (proofs.length === 64) return proofs;
+        }
+      }
+    }
+    return proofs;
+  }
+
   async function snapshot(state, clientId = "") {
-    const page = await transcript.readConversationLogPage(state.key, { limit: 50 });
+    const page = await transcript.readConversationLogPage(state.record.runtimeId, { limit: 50 });
     const record = state.record;
     const operation = record.conversationLog.at(-1)?.metadata?.applicationTools?.at(-1);
     return {
@@ -264,7 +390,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       pagination: page.pagination,
       watches: record.watches.map(publicWatch),
       assignments: (record.assignments || []).map((item) => assignmentSummary(item)),
-      navigation: state.connections.get(clientId)?.navigation || null
+      navigation: state.connections.get(clientId)?.navigation || null,
+      cue: state.connections.get(clientId)?.cue ? publicCue(state.connections.get(clientId).cue) : null
     };
   }
 
@@ -285,14 +412,26 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   async function openConversation(state, context, settings = {}) {
-    if (!state.host) {
-      const workdir = path.join(state.root, state.record.scopeId);
+    const scopeId = state.record.scopeId, runtimeId = state.record.runtimeId;
+    assertCurrentConversation(state, context.colleague?.conversationId);
+    let host = state.host;
+    if (!host) {
+      const workdir = path.join(state.root, scopeId);
       await mkdir(workdir, { recursive: true, mode: 0o700 });
-      state.host = terminals.createConversationHost({ id: state.record.scopeId, runtimeRoot: workdir, workdir });
+      assertCurrentConversation(state, scopeId);
+      host = terminals.createConversationHost({ id: scopeId, runtimeRoot: workdir, workdir });
+      state.host = host;
     }
-    state.conversation = await runtime.open({ id: state.key, context, host: state.host, ...settings });
+    state.opening += 1;
+    let conversation;
+    try {
+      conversation = await runtime.open({ id: runtimeId, context, host, ...settings });
+      assertCurrentConversation(state, scopeId);
+      state.conversation = conversation;
+    } finally { state.opening -= 1; }
     await Promise.all([...state.browserObservers].map(observer => attachBrowserObserver(state, observer)));
-    return state.conversation;
+    assertCurrentConversation(state, scopeId);
+    return conversation;
   }
 
   async function prepare(state, context, selection) {
@@ -358,6 +497,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     }
     if (!isCurrent()) return;
     const data = { assistantName: await resolveName(), focus: connection.focus,
+      ...(message?.trainingQuestion ? { trainingQuestion: message.trainingQuestion } : {}),
       userMessageIds: context.colleague.userMessageIds, observations, readOnly, autonomous,
       assignments: (state.record.assignments || []).filter(item => ["active", "waiting", "needs-user"].includes(item.status) || observedAssignmentIds.includes(item.assignmentId))
         .map(item => {
@@ -373,7 +513,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     const seenMessages = new Set();
     const projectReply = event => {
       if (!isCurrent()) return;
-      if (event.type === "accepted" && event.messageId === messageId) replyTurnId = event.turnId;
+      if (event.type === "accepted" && event.messageId === messageId) {
+        replyTurnId = event.turnId;
+        state.replyTurnId = replyTurnId;
+      }
       if (!replyTurnId || event.turnId !== replyTurnId) return;
       if (event.type === "tool" && event.call?.status === "running" && !autonomous) {
         // Ported first-interactive acknowledgement: the tool owner has already
@@ -414,9 +557,16 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           return;
         }
         if (progress && (event.role === "commentary" || (event.outputId || event.messageId) === progress.id)) return;
+        const cue = state.connections.get(connection.clientId)?.cue;
+        if (cue?.phase === "armed" && cue.generation === generation && event.role === "assistant" && event.status === "complete") {
+          cue.outputId = event.outputId || event.messageId;
+          cue.canonicalFinal = true;
+          cue.phase = "bound";
+        }
         state.interimReply = null;
         state.streamingReply = { id: event.outputId || event.messageId, turnId: event.turnId,
-          ...(event.outputId ? { outputId: event.outputId } : {}), role: "assistant", text: event.text,
+          ...(event.outputId ? { outputId: event.outputId } : {}), role: "assistant",
+          text: event.status === "complete" ? event.text : event.text.replace(/[\uD800-\uDBFF]$/, ""),
           at: new Date().toISOString(), status: event.status === "complete" ? "completed" : "inProgress", streamId, autonomous };
         publishReply(state);
       }
@@ -425,7 +575,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     const unsubscribe = await conversation.subscribe(projectReply);
     try {
       const receipt = await conversation[autonomous ? "wake" : "send"]({
-        ...(message || { messageId, text: "An update from your watched conversations." }), data
+        ...(message ? { messageId: message.messageId, text: message.text }
+          : { messageId, text: "An update from your watched conversations." }), data
       });
       admission.resolve(receipt);
       const result = await conversation.wait();
@@ -453,6 +604,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
 
   function startWorker(state, connection, message) {
     const generation = ++state.generation;
+    state.replyTurnId = "";
     const admission = Promise.withResolvers();
     admission.promise.catch(() => {});
     state.record.status = "working";
@@ -461,6 +613,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       .catch(async error => {
         admission.reject(error);
         if (state.generation !== generation) return;
+        const cue = state.connections.get(connection.clientId)?.cue;
+        if (cue?.generation === generation && !["completed", "interrupted", "failed"].includes(cue.phase)) {
+          cue.phase = "failed";
+        }
         state.record.status = "failed";
         state.record.error = error.message;
         await persist(state);
@@ -483,7 +639,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   function wakeForObservations(state) {
-    if (closed || state.stopping || state.running || !state.requestContext || !state.record.observations.length || state.record.status !== "ready") return;
+    if (closed || state.stopping || state.rotating || state.running || !state.requestContext || !state.record.observations.length || state.record.status !== "ready") return;
     const observation = state.record.observations[0];
     void startWorker(state, { clientId: "", focus: observation.focus }).catch(() => {});
   }
@@ -495,7 +651,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   function scheduleWatches(state, delay = watchPollMs) {
-    if (closed || !state.requestContext || !state.record.watches.some((watch) => watch.status === "active")) return;
+    if (closed || state.rotating || !state.requestContext || !state.record.watches.some((watch) => watch.status === "active")) return;
     if (state.watchTimer && delay === watchPollMs) return;
     clearTimeout(state.watchTimer);
     state.watchTimer = setTimeout(() => {
@@ -543,6 +699,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   async function pollWatches(state) {
+    if (state.rotating) { state.watchDirty = true; return; }
     if (state.polling) { state.watchDirty = true; return state.polling; }
     state.polling = (async () => {
       for (const watch of state.record.watches) {
@@ -584,6 +741,90 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     }
   });
 
+  async function evaluateTraining(kind, input, context) {
+    const state = await stateFor(context);
+    const admitted = interactiveTrainingTurn(state, context, { requireCompletedCue: false });
+    if (state.summaryRunning) throw failure("Finish or stop the current Colleague Helper operation first.");
+    if (!context.colleague.userMessageIds?.includes(input.messageId)) {
+      throw failure("Evaluate only the learner message admitted in this interactive turn.");
+    }
+    const evaluate = kind === "practical"
+      ? context.trainingAssessment?.evaluatePractical : context.trainingAssessment?.evaluateAnswer;
+    if (typeof evaluate !== "function") {
+      throw failure("Lesson assessment evaluation is unavailable in this host.");
+    }
+    let practical, connection, practicalFacts;
+    const controller = new AbortController();
+    const abort = () => controller.abort(context.signal.reason);
+    if (context.signal?.aborted) abort();
+    else context.signal?.addEventListener("abort", abort, { once: true });
+    const authorizationContext = { ...context };
+    delete authorizationContext.vibe64Action;
+    const requireCurrent = async () => {
+      controller.signal.throwIfAborted();
+      await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: authorizationContext });
+      if (await stateFor(context) !== state ||
+          !isDeepStrictEqual(interactiveTrainingTurn(state, context, { requireCompletedCue: false }), admitted)) {
+        throw failure("The admitted learner answer turn changed before evaluation finished.");
+      }
+      if (practical && (state.connections.get(context.colleague.clientId) !== connection ||
+          connection.trainingPractical !== practical ||
+          !isDeepStrictEqual({ reference: practical.reference, observation: practical.observation, checkResult: practical.checkResult }, practicalFacts))) {
+        throw failure("The native practical observation changed before evaluation finished.");
+      }
+      controller.signal.throwIfAborted();
+    };
+    state.requestContext = context;
+    state.summaryAbort = controller;
+    const operation = Promise.resolve().then(async () => {
+      await requireCurrent();
+      const log = await transcript.readConversationLog(state.record.runtimeId);
+      const turn = log.find(value => value.turnId === admitted.turnId);
+      const message = turn?.messages.find(value =>
+        value.role === "user" && value.messageId === input.messageId && value.receipt !== false);
+      const captured = message?.data?.trainingQuestion;
+      const reference = captured && { attemptId: captured.attemptId, questionId: captured.question?.id,
+        assessmentId: captured.question?.assessmentId, issuedRevision: captured.question?.issuedRevision,
+        topicHash: captured.pin?.topic?.topicHash, lessonHash: captured.pin?.lesson?.hash };
+      const delivery = reference && deliveredQuestion(state, reference);
+      const questionTurn = log.find(value => value.turnId === delivery?.turnId);
+      if (!message || !delivery || !isDeepStrictEqual(delivery, captured.delivery) ||
+          typeof captured.question?.text !== "string" ||
+          captured.question.text.trim() !== questionTurn?.metadata?.trainingQuestionDelivery?.questionText) {
+        throw failure("Evaluate an accepted learner answer associated with its exact delivered native question.");
+      }
+      if (kind === "practical") {
+        connection = state.connections.get(context.colleague.clientId);
+        practical = connection?.trainingPractical;
+        if (!practical?.observation || practical.observation.observationId !== input.observationId ||
+            !isDeepStrictEqual(practical.reference, reference)) {
+          throw failure("Evaluate only this connection's completed observation for its exact delivered question.");
+        }
+        practicalFacts = structuredClone({ reference: practical.reference,
+          observation: practical.observation, checkResult: practical.checkResult });
+      }
+      await requireCurrent();
+      const helper = { async runHelper(...args) {
+        const text = await summaries.runHelper(...args);
+        await requireCurrent();
+        return text;
+      } };
+      const result = await evaluate.call(context.trainingAssessment, { actor: authenticatedVibe64User(context),
+        attemptId: input.attemptId, expectedRevision: input.expectedRevision, submissionId: input.submissionId,
+        message: structuredClone(message),
+        ...(kind === "practical" ? { observation: structuredClone(practicalFacts.observation), checkResult: structuredClone(practicalFacts.checkResult) } : {})
+      }, { state, context, helper });
+      await requireCurrent();
+      return result;
+    }).finally(() => {
+      context.signal?.removeEventListener("abort", abort);
+      if (state.summaryRunning === operation) state.summaryRunning = null;
+      if (state.summaryAbort === controller) state.summaryAbort = null;
+    });
+    state.summaryRunning = operation;
+    return operation;
+  }
+
   const service = {
     browserConversations: {
       async open({ id, context } = {}) {
@@ -593,18 +834,25 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         const request = context?.requestMeta?.request;
         const requestContext = { surface: "app", channel: "internal", requestMeta: request ? {
           ...context.requestMeta, request: { ...request, headers: request.headers, vibe64User: authenticatedVibe64User(context) }
-        } : context?.requestMeta, colleague: { userKey: userKey(context), clientId: "", focus: null } };
+        } : context?.requestMeta,
+          ...(context?.trainingTeaching === undefined ? {} : { trainingTeaching: context.trainingTeaching }),
+          ...(context?.trainingAssessment === undefined ? {} : { trainingAssessment: context.trainingAssessment }),
+          colleague: { userKey: userKey(context), clientId: "", focus: null } };
         await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });
         const state = await stateFor(context);
+        if (state.record.previousConversations.some(old => old.scopeId === id)) assertCurrentConversation(state, id);
         if (id !== state.record.scopeId) throw failure("This Colleague conversation is unavailable.", "conversation_forbidden", 403);
+        requestContext.colleague.conversationId = id;
         requestContext.assistantSelection = state.record.assistantSelection;
         async function preparedConversation() {
+          assertCurrentConversation(state, id);
           if (!state.record.conversationMetadata?.runtime) return null;
           await openConversation(state, requestContext);
-          return runtime.open({ id: state.key, context: requestContext, host: state.host });
+          return runtime.open({ id: state.record.runtimeId, context: requestContext, host: state.host });
         }
         return {
           async read(options = {}) {
+            assertCurrentConversation(state, id);
             await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });
             const pageOptions = {};
             for (const key of ["beforeTurnId", "limit"]) {
@@ -615,24 +863,24 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             // Reading an empty Colleague must not require AI Accounts setup or
             // choose a native engine. Its original transcript remains readable.
             if (!conversation) return colleagueBrowserState({ id, status: "ready", phase: "", error: state.record.error || "", interimReply: state.interimReply,
-              capabilities: { steering: true, goals: false, attachments: false }, pendingRequest: null,
-              ...(paged ? await transcript.readConversationLogPage(state.key, pageOptions)
-                : { conversationLog: await transcript.readConversationLog(state.key) }),
+              capabilities: { steering: false, goals: false, attachments: false }, pendingRequest: null,
+              ...(paged ? await transcript.readConversationLogPage(state.record.runtimeId, pageOptions)
+                : { conversationLog: await transcript.readConversationLog(state.record.runtimeId) }),
               streaming: { revision: 0, messages: [] } });
             const current = paged ? await conversation.read(pageOptions) : await conversation.read();
             return colleagueBrowserState({ ...current, id, interimReply: state.interimReply,
-              capabilities: { ...current.capabilities, steering: true, goals: false, attachments: false } });
+              capabilities: { ...current.capabilities, steering: false, goals: false, attachments: false } });
           },
           async send(input) {
             if (input.attachmentIds?.length) throw failure("Colleague does not accept attachments.", "conversation_unsupported");
             return actions.execute({ actionId: "vibe64.colleague.message.send", context: requestContext,
-              input: { ...input.data, messageId: input.messageId, message: input.text }, deps: { receiptOnly: true } });
+              input: { ...input.data, expectedConversationId: id, messageId: input.messageId, message: input.text }, deps: { receiptOnly: true } });
           },
           async cancel() {
-            return actions.execute({ actionId: "vibe64.colleague.turn.stop", input: {}, context: requestContext });
+            return actions.execute({ actionId: "vibe64.colleague.turn.stop", input: { expectedConversationId: id }, context: requestContext });
           },
           async select(input) {
-            return actions.execute({ actionId: "vibe64.colleague.model.select", input, context: requestContext });
+            return actions.execute({ actionId: "vibe64.colleague.model.select", input: { ...input, expectedConversationId: id }, context: requestContext });
           },
           async inspectDelivery(input) {
             const conversation = await preparedConversation();
@@ -668,7 +916,258 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       state.requestContext = context;
       scheduleWatches(state);
       wakeForObservations(state);
-      return snapshot(state, input.clientId);
+      const result = await snapshot(state, input.clientId);
+      let trainingQuestion = null;
+      try {
+        const reference = await context.trainingTeaching?.readQuestionReference({ actor: authenticatedVibe64User(context),
+          completedPracticals: completedPracticalQuestions(state) });
+        if (reference && deliveredQuestion(state, reference)) trainingQuestion = { ...reference };
+      } catch { /* Missing or unavailable teaching never blocks ordinary chat. */ }
+      return { ...result, trainingQuestion };
+    },
+    async requireTrainingQuestionTurn(context) {
+      return interactiveTrainingTurn(await stateFor(context), context);
+    },
+    async stageTrainingQuestion(reference, context) {
+      const state = await stateFor(context);
+      const admitted = interactiveTrainingTurn(state, context);
+      const captured = await context.trainingTeaching.captureQuestion({ actor: authenticatedVibe64User(context), reference });
+      const { conversationId, turnId } = admitted;
+      const mark = { schemaVersion: 1, reference: structuredClone(reference), questionText: captured.question.text.trim(),
+        conversationId, turnId, phase: "prepared" };
+      return storage.write(state.record.runtimeId, async transaction => {
+        if (!isDeepStrictEqual(interactiveTrainingTurn(state, context), admitted)) {
+          throw failure("The admitted lesson question turn changed before staging.");
+        }
+        const turn = await transaction.readTurn(turnId);
+        const previous = turn?.metadata?.trainingQuestionDelivery;
+        if (previous) {
+          if (!isDeepStrictEqual(previous.reference, mark.reference)) throw failure("This native turn already stages another question.");
+          return previous;
+        }
+        await transaction.updateTurnMetadata(turnId, { trainingQuestionDelivery: mark });
+        return mark;
+      });
+    },
+    evaluateTrainingAnswer(input, context) {
+      return evaluateTraining("answer", input, context);
+    },
+    evaluateTrainingPractical(input, context) {
+      return evaluateTraining("practical", input, context);
+    },
+    async observeTrainingPractical(input, context) {
+      const state = await stateFor(context);
+      const observing = state.admission.then(async () => {
+        if ((input.control === "exercise-response") !== Boolean(input.exercise)) {
+          throw failure("Only an exercise-response gesture carries the exact exercise identities.", "ACTION_VALIDATION_FAILED", 400);
+        }
+        const connection = state.connections.get(input.clientId);
+        const requireCurrent = () => {
+          assertCurrentConversation(state, input.conversationId);
+          if (closed || state.stopping || state.rotating || input.conversationId !== state.record.scopeId ||
+              !connection || state.connections.get(input.clientId) !== connection || !deliveredQuestion(state, input.reference)) {
+            throw failure("Repeat the practical task in its current connected lesson question.");
+          }
+        };
+        requireCurrent();
+        const authorizationContext = { ...context, colleague: { ...context.colleague,
+          userKey: state.key, conversationId: input.conversationId, clientId: input.clientId } };
+        delete authorizationContext.vibe64Action;
+        await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: authorizationContext });
+        if (typeof context.trainingPractical?.capturePractical !== "function") {
+          throw failure("Native lesson observations are unavailable in this host.");
+        }
+        const actor = authenticatedVibe64User(authorizationContext);
+        const captured = await context.trainingPractical.capturePractical({ actor, reference: input.reference });
+        if (!input.workspace.ready || !isDeepStrictEqual(captured.target,
+            { projectSlug: input.workspace.projectSlug, sessionId: input.workspace.sessionId })) {
+          throw failure("Use the ready exercise project and session reserved for this exact lesson.");
+        }
+        requireResult(await actions.execute({ actionId: "vibe64.sessions.inspect", input: captured.target, context: authorizationContext }));
+        // Access may await a host read. Recheck the issued question before
+        // accepting a step; an old gesture cannot enter a replacement question.
+        const requireCurrentQuestion = async () => {
+          const current = await context.trainingPractical.capturePractical({ actor, reference: input.reference });
+          if (!isDeepStrictEqual(current.target, captured.target) || !isDeepStrictEqual(current.assessment, captured.assessment) ||
+              !isDeepStrictEqual(current.snapshot.question, captured.snapshot.question)) {
+            throw failure("The practical question changed. Repeat its steps.");
+          }
+          await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: authorizationContext });
+          requireCurrent();
+        };
+        await requireCurrentQuestion();
+        let practical = connection.trainingPractical;
+        if (!practical || !isDeepStrictEqual(practical.reference, input.reference)) {
+          practical = { reference: structuredClone(input.reference), steps: [], observation: null };
+        }
+        const previous = practical.steps.find(step => step.gestureId === input.gestureId);
+        if (previous) {
+          if (!isDeepStrictEqual(previous.payload, input)) throw failure("This gesture identity already retained another observation.");
+          return structuredClone(previous.response);
+        }
+        if (practical.observation) throw failure("This practical task already has its observation. Retry the original gesture receipt.");
+        const { assessment, snapshot: question } = captured;
+        const index = practical.steps.length;
+        const workspaceControl = ["project-select", "session-select", "preview-select", "chat-show"].includes(input.control);
+        let valid = false;
+        if (assessment.id === "workspace-navigation") {
+          valid = (index === 1 ? ["session-select", "chat-show"].includes(input.control)
+            : input.control === ["project-select", "session-select", "preview-select"][index]) &&
+            (index !== 1 || input.workspace.mainChatVisible) &&
+            (index !== 2 || input.workspace.projectVisible && input.workspace.pane === "preview");
+        } else if (assessment.id === "return-to-colleague") {
+          if (index === 0) {
+            valid = input.control === "colleague-minimize" && input.workspace.colleagueVisible === false;
+          } else if (index === 1) {
+            const visible = input.control === "session-select" || input.control === "chat-show"
+              ? input.workspace.mainChatVisible
+              : input.workspace.projectVisible && (input.control !== "preview-select" || input.workspace.pane === "preview");
+            valid = workspaceControl && input.workspace.colleagueVisible === false && visible;
+          } else {
+            valid = input.control === "colleague-restore" && input.workspace.colleagueVisible === true;
+          }
+        } else if (assessment.id === "try-the-application") {
+          valid = index === 0 && input.control === "exercise-response" && input.workspace.projectVisible && input.workspace.pane === "preview";
+        }
+        if (!valid) throw failure("Repeat this question's practical steps in their original order and visible workspace.");
+        const completed = index === 2 || assessment.id === "try-the-application";
+        const response = { ok: true, gestureId: input.gestureId, assessmentId: assessment.id,
+          phase: completed ? "completed" : "collecting", acceptedSteps: index + 1 };
+        if (completed) {
+          const observationId = randomUUID();
+          if (assessment.id === "try-the-application") {
+            if (typeof context.trainingChecks?.runOrientationCheck !== "function") {
+              throw failure("The installed exercise response check is unavailable in this host.");
+            }
+            const outputs = requireResult(await actions.execute({ actionId: "vibe64.terminals.outputs.read",
+              input: captured.target, context: authorizationContext }));
+            const terminalId = outputs?.activeTerminal?.id;
+            if (!terminalId) throw failure("Use the exact ready App run for this exercise before repeating the interaction.");
+            const checked = await context.trainingChecks.runOrientationCheck({ actor, signal: context.signal,
+              attemptId: question.attemptId, sessionId: captured.target.sessionId, terminalId, observationId,
+              instanceId: input.exercise.instanceId, interactionId: input.exercise.interactionId, requestId: input.exercise.requestId });
+            if (checked?.checkResult?.check !== assessment.evidence.check || checked.checkResult.observationId !== observationId ||
+                !["passed", "not-yet-passed"].includes(checked.checkResult.outcome)) {
+              throw failure("The declared check did not confirm this exact native observation.");
+            }
+            await requireCurrentQuestion();
+            practical.checkResult = structuredClone(checked.checkResult);
+          }
+          practical.observation = { kind: "observation", observationId, observedAt: new Date().toISOString(),
+            learnerId: question.learnerId, attemptId: question.attemptId, questionId: question.question.id,
+            ...captured.target, producer: assessment.evidence.producer, operation: assessment.evidence.operation,
+            operationId: input.gestureId, assistance: question.question.assistance,
+            origin: ["demonstration", "substantial"].includes(question.question.assistance) ? "teacher" : "learner",
+            text: assessment.id === "try-the-application" ? "Pressed the App's native button and displayed its identified server response in visible Preview." :
+              assessment.id === "workspace-navigation" ? "Selected the reserved exercise project, its Main session and its visible Preview using native controls." :
+              "Minimized Colleague, used a native workspace control in the same exercise and restored the same Colleague conversation." };
+          response.observationId = observationId;
+        }
+        practical.steps.push({ gestureId: input.gestureId, payload: structuredClone(input), response });
+        connection.trainingPractical = practical;
+        return structuredClone(response);
+      });
+      state.admission = observing.catch(() => {});
+      return observing;
+    },
+    async startFresh(input, context) {
+      const state = await stateFor(context);
+      const reported = (input.unconfirmedMessages || []).map(message => ({ ...message,
+        source: "client-reported", status: "unconfirmed" }));
+      const rotating = state.admission.then(() => changeWatches(state, async () => {
+        const previous = state.record.previousConversations.find(old => old.freshOperation.operationId === input.operationId);
+        if (previous) {
+          if (previous.scopeId !== input.expectedConversationId || !isDeepStrictEqual(previous.unconfirmedMessages, reported)) {
+            throw failure("This recovery ID belongs to another request. Use the original request or a new recovery ID.");
+          }
+          return { operationId: input.operationId, previousConversationId: previous.scopeId,
+            conversationId: previous.freshOperation.conversationId, duplicate: true };
+        }
+        assertCurrentConversation(state, input.expectedConversationId);
+        for (const message of reported) {
+          const saved = state.record.conversationLog.flatMap(turn => turn.messages).find(saved => saved.messageId === message.messageId);
+          if (saved && saved.text !== message.text) throw failure("An unconfirmed message ID belongs to different saved words. Keep the original request before starting fresh.", "ACTION_VALIDATION_FAILED", 400);
+        }
+        const scopeId = `colleague_${randomUUID().replaceAll("-", "")}`;
+        const old = { scopeId: state.record.scopeId, runtimeId: state.record.runtimeId,
+          assistantSelection: structuredClone(state.record.assistantSelection),
+          status: state.record.status === "working" ? "interrupted" : state.record.status,
+          error: state.record.error, conversationLog: structuredClone(state.record.conversationLog),
+          ...(state.record.conversationMetadata ? { conversationMetadata: structuredClone(state.record.conversationMetadata) } : {}),
+          ...(state.record.retiredConversation ? { retiredConversation: structuredClone(state.record.retiredConversation) } : {}),
+          archivedAt: new Date().toISOString(), unconfirmedMessages: structuredClone(reported),
+          freshOperation: { operationId: input.operationId, conversationId: scopeId } };
+        const patch = { runtimeId: `${state.key}:${scopeId}`, scopeId, status: "ready", error: "",
+          conversationLog: [], conversationMetadata: {}, retiredConversation: undefined,
+          previousConversations: [...state.record.previousConversations, old] };
+        try { validateColleagueConversationRecord({ ...state.record, ...patch }, state.key); }
+        catch (error) { throw failure(`Cannot start fresh: ${error.message}`, "ACTION_VALIDATION_FAILED", 400); }
+        if (closed || state.stopping || state.running || state.opening || state.summaryRunning || state.record.summaryHelper) {
+          throw failure("Finish or stop Colleague's current turn or summary before starting fresh.");
+        }
+        state.rotating = true;
+        try {
+          // Suppress autonomous wake while the original chat owner drains. Its
+          // watched coding conversations and assignments are never stopped.
+          state.generation += 1;
+          await state.polling;
+          await state.saving;
+          if (state.conversation) requireResult(await state.conversation.dispose());
+          state.conversation = null;
+          state.host = null;
+          old.conversationLog = structuredClone(state.record.conversationLog);
+          if (state.record.conversationMetadata) old.conversationMetadata = structuredClone(state.record.conversationMetadata);
+          old.archivedAt = new Date().toISOString();
+          await persist(state, patch, old.runtimeId);
+          state.streamingReply = null;
+          state.interimReply = null;
+          state.projectReply = null;
+          clearTimeout(state.replyTimer);
+          state.replyTimer = null;
+          state.streamEpoch = randomUUID();
+          state.streamRevision = 0;
+          state.requestContext = context;
+          for (const connection of state.connections.values()) {
+            if (connection.cue) connection.cue.phase = "interrupted";
+            connection.acknowledge?.({ ok: false,
+              error: "The previous Colleague conversation was retained as history before navigation completed." });
+          }
+          publishReply(state);
+          return { operationId: input.operationId, previousConversationId: old.scopeId,
+            conversationId: scopeId, duplicate: false };
+        } finally {
+          state.rotating = false;
+          scheduleWatches(state);
+          wakeForObservations(state);
+        }
+      }));
+      state.admission = rotating.catch(() => {});
+      const fresh = await rotating;
+      return { ...await snapshot(state), fresh };
+    },
+    async readHistory(input, context) {
+      const state = await stateFor(context);
+      const offset = input.offset || 0, limit = input.limit || 20;
+      const previous = state.record.previousConversations.slice().reverse();
+      return { ok: true, conversations: previous.slice(offset, offset + limit).map(old => ({
+        conversationId: old.scopeId, archivedAt: old.archivedAt, assistantSelection: old.assistantSelection,
+        unconfirmedCount: old.unconfirmedMessages.filter(message => !hasUserReceipt(old, message.messageId)).length
+      })), hasMore: offset + limit < previous.length,
+      nextOffset: offset + limit < previous.length ? offset + limit : null };
+    },
+    async readHistoryPage(input, context) {
+      const state = await stateFor(context);
+      const old = state.record.previousConversations.find(chat => chat.scopeId === input.conversationId);
+      if (!old) throw failure("This previous Colleague conversation is unavailable.", "conversation_forbidden", 403);
+      const options = { ...(input.beforeTurnId ? { beforeTurnId: input.beforeTurnId } : {}), limit: input.limit || 50 };
+      const page = await transcript.readConversationLogPage(old.runtimeId, options);
+      const runtimeState = old.conversationMetadata?.runtime;
+      const request = runtimeState?.request;
+      const unconfirmed = request?.messageId && request.origin !== "application" && (runtimeState.engine === "api" || request.attempted || request.inspectionOnly) &&
+        !hasUserReceipt(old, request.messageId);
+      return { ok: true, ...colleagueBrowserState({ id: old.scopeId, readOnly: true, ...page }),
+        unconfirmedMessages: old.unconfirmedMessages.filter(message => !hasUserReceipt(old, message.messageId)),
+        ...(unconfirmed ? { unconfirmedDelivery: { messageId: request.messageId, status: "unconfirmed" } } : {}) };
     },
     async listWatches(_input, context) { return { ok: true, watches: (await snapshot(await stateFor(context))).watches }; },
     async assignment(operation, input, context) {
@@ -764,13 +1263,18 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     },
     async selectModel(input, context) {
       const state = await stateFor(context);
+      const expected = input.expectedConversationId || context.colleague?.conversationId || state.record.scopeId;
       const selecting = state.admission.then(async () => {
+        assertCurrentConversation(state, expected);
         if (closed || state.stopping || state.running) throw failure("Finish or stop Colleague's current turn before changing its model.");
         const selected = await chooseSelection(context, input.assistantSelection);
         const settings = await terminals.resolveConversationConfiguration(selected, instructions, { vibe64User: authenticatedVibe64User(context) });
+        const changed = ["engineId", "modelProviderId", "modelId", "agentId", "variantId"]
+          .some(key => (state.record.assistantSelection?.[key] || "") !== (selected[key] || ""));
+        const pendingRequest = state.record.conversationMetadata?.runtime?.replacement?.request;
         state.requestContext = context;
         const scoped = { ...actionContext(state, { clientId: "", focus: null }), assistantSelection: selected };
-        if (!state.record.conversationMetadata?.runtime) {
+        if (!state.record.conversationMetadata?.runtime || !changed && !pendingRequest) {
           const previous = state.record.assistantSelection;
           state.record.assistantSelection = selected;
           try { await persist(state); } catch (error) { state.record.assistantSelection = previous; throw error; }
@@ -782,7 +1286,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         const current = await conversation.read();
         state.selecting = { ...settings, assistantSelection: selected };
         try {
-          await conversation.select({ ...settings, operationId: current.replacement?.operationId || randomUUID(), expectedSegmentId: current.segmentId });
+          // A pending request keeps its original policy, including historical
+          // absence, so a retry cannot become a different replacement operation.
+          const request = { ...settings,
+            operationId: current.replacement?.operationId || randomUUID(), expectedSegmentId: current.segmentId };
+          if (pendingRequest) {
+            if (Object.hasOwn(pendingRequest, "retireNative")) request.retireNative = pendingRequest.retireNative;
+          } else request.retireNative = true;
+          await conversation.select(request);
         } finally { state.selecting = null; }
         state.conversation = conversation;
         state.record.status = "ready";
@@ -793,24 +1304,78 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       await selecting;
       return snapshot(state);
     },
+    async readCue(input, context) {
+      const state = await stateFor(context);
+      assertCurrentConversation(state, context.colleague?.conversationId);
+      const cue = state.connections.get(context.colleague?.clientId)?.cue;
+      if (!cue || cue.conversationId !== state.record.scopeId || cue.cueId !== input.cueId ||
+          cue.attemptId !== input.attemptId || cue.visualId !== input.visualId) {
+        return { ok: false, error: "The current browser has no matching live lesson cue. Open and explain it again explicitly." };
+      }
+      return { ok: true, presentation: publicCue(cue) };
+    },
     async context(_input, context = {}) {
       const state = await stateFor(context);
+      assertCurrentConversation(state, context.colleague?.conversationId);
       if (context.colleague?.userKey && context.colleague.userKey !== state.key) {
         throw failure("This Colleague conversation is unavailable.", "conversation_forbidden", 403);
       }
       if (context.requestMeta?.request) state.requestContext = context;
-      const focused = context.colleague?.focus || state.connections.get(context.colleague?.clientId)?.focus || null;
-      return { ok: true, focus: focused || {} };
+      const connection = state.connections.get(context.colleague?.clientId);
+      const focused = context.colleague?.focus || connection?.focus || null;
+      const result = { ok: true, focus: focused || {} };
+      const practical = connection?.trainingPractical;
+      if (!practical?.steps.length || closed || state.stopping || state.rotating ||
+          context.colleague?.conversationId !== state.record.scopeId || !deliveredQuestion(state, practical.reference)) return result;
+      const facts = structuredClone({ reference: practical.reference, steps: practical.steps,
+        observation: practical.observation, checkResult: practical.checkResult });
+      try {
+        const captured = await context.trainingPractical?.capturePractical({ actor: authenticatedVibe64User(context), reference: facts.reference });
+        const lastWorkspace = facts.steps.at(-1).payload.workspace;
+        if (!captured || captured.assessment.id !== facts.reference.assessmentId ||
+            !isDeepStrictEqual(captured.target, { projectSlug: lastWorkspace.projectSlug, sessionId: lastWorkspace.sessionId }) ||
+            (facts.observation && (captured.assessment.id !== facts.observation.operation ||
+            captured.assessment.evidence.producer !== facts.observation.producer ||
+            !isDeepStrictEqual(captured.target, { projectSlug: facts.observation.projectSlug, sessionId: facts.observation.sessionId }) ||
+            captured.snapshot.question.assistance !== facts.observation.assistance))) return result;
+        const authorizationContext = { ...context };
+        delete authorizationContext.vibe64Action;
+        requireResult(await actions.execute({ actionId: "vibe64.sessions.inspect", input: captured.target, context: authorizationContext }));
+        if (closed || state.stopping || state.rotating || context.colleague.conversationId !== state.record.scopeId ||
+            state.connections.get(context.colleague.clientId) !== connection || connection.trainingPractical !== practical ||
+            !deliveredQuestion(state, facts.reference) ||
+            !isDeepStrictEqual({ reference: practical.reference, steps: practical.steps, observation: practical.observation, checkResult: practical.checkResult }, facts)) return result;
+        if (!facts.observation) {
+          result.trainingPracticalProgress = { reference: facts.reference, assessmentId: captured.assessment.id,
+            phase: "collecting", acceptedSteps: facts.steps.length, lastControl: facts.steps.at(-1).payload.control };
+          return result;
+        }
+        const observation = facts.observation;
+        result.trainingPractical = { reference: facts.reference, observationId: observation.observationId,
+          assessmentId: captured.assessment.id, producer: observation.producer, operation: observation.operation,
+          observedAt: observation.observedAt, assistance: observation.origin === "teacher" ? "demonstration" : observation.assistance,
+          origin: observation.origin,
+          ...(facts.checkResult ? { checkOutcome: facts.checkResult.outcome } : {}) };
+      } catch { /* Unavailable or unauthorized practical facts never change ordinary chat context. */ }
+      return result;
     },
     async focus(input, context) {
       const state = await stateFor(context);
       const connection = state.connections.get(input.clientId) || { clientId: input.clientId };
+      if (connection.cue && (connection.cue.projectSlug !== input.focus?.projectSlug || connection.cue.sessionId !== input.focus?.sessionId)) {
+        connection.cue.phase = "interrupted";
+        publishBrowserChange(state);
+      }
       connection.focus = input.focus;
       state.connections.set(input.clientId, connection);
       return { ok: true, focus: connection.focus };
     },
     async navigate(input, context) {
       const state = await stateFor(context);
+      if (input.presentation && (!input.sessionId || input.pane !== "preview" || input.conversationId || input.planView ||
+          !["open", "command", "snapshot", "cue"].includes(input.presentation.operation))) {
+        return { ok: false, error: "A lesson presentation requires its exact exercise session and Preview." };
+      }
       if (input.planView && (!input.sessionId || input.pane || input.conversationId)) {
         return { ok: false, error: "Choose the exact session's Main chat, without another pane or conversation, to open its plan viewer." };
       }
@@ -829,6 +1394,23 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       }
       const connection = state.connections.get(context.colleague?.clientId);
       if (!connection) return { ok: false, error: "The initiating browser is no longer connected." };
+      if (input.presentation?.operation === "cue") {
+        if (!state.running || context.colleague?.generation !== state.generation || context.colleague?.autonomous || !state.replyTurnId) {
+          return { ok: false, error: "Arm a lesson cue only inside its admitted interactive explanation turn." };
+        }
+        if (connection.cue?.cueId === input.presentation.cueId) {
+          const cue = connection.cue;
+          if (cue.turnId !== state.replyTurnId || cue.conversationId !== state.record.scopeId ||
+              ["attemptId", "visualId", "commandId", "name"].some(key => cue[key] !== input.presentation[key]) ||
+              !isDeepStrictEqual(cue.parameters, input.presentation.parameters)) {
+            return { ok: false, error: "Reuse a cue identity only for its exact original turn and declared transition." };
+          }
+          return { ok: true, focus: connection.focus, presentation: publicCue(cue) };
+        }
+        if (connection.cue && !["completed", "interrupted", "failed"].includes(connection.cue.phase)) {
+          return { ok: false, error: "The previous lesson cue has not finished. Read its actual receipt before continuing." };
+        }
+      }
       if (connection.navigation?.status === "pending") return { ok: false, error: "The browser is still opening the previous view." };
       const command = { id: randomUUID(), projectSlug: input.projectSlug,
         ...(input.managementView ? { managementView: input.managementView } : {}),
@@ -838,7 +1420,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         ...(input.databaseView ? { databaseView: input.databaseView } : {}),
         ...(input.databaseTable ? { databaseTable: input.databaseTable } : {}),
         ...(input.planView ? { planView: input.planView } : {}),
+        ...(input.presentation ? { presentation: structuredClone(input.presentation) } : {}),
         sessionId: input.sessionId || "", conversationId: input.conversationId || "", status: "pending" };
+      if (input.presentation?.operation === "cue") {
+        Object.assign(command.presentation, { navigationId: command.id, clientId: connection.clientId,
+          conversationId: state.record.scopeId, turnId: state.replyTurnId });
+      }
       connection.navigation = command;
       publishBrowserChange(state);
       return new Promise((resolve) => {
@@ -847,12 +1434,17 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           connection.acknowledge = null;
           publishBrowserChange(state);
           resolve({ ok: false, error: "The browser did not acknowledge navigation. Open Colleague in that browser and try again." });
-        }, 15000);
+        }, input.presentation ? 45000 : 15000);
         connection.acknowledge = (result) => {
           clearTimeout(timer);
           command.status = result.ok ? "completed" : "failed";
           connection.acknowledge = null;
           if (result.focus) connection.focus = result.focus;
+          if (result.ok && command.presentation?.operation === "cue") {
+            connection.cue = { ...command.presentation, projectSlug: command.projectSlug, sessionId: command.sessionId,
+              generation: state.generation, playerInstanceId: result.presentation.playerInstanceId,
+              outputId: "", canonicalFinal: false, phase: "armed" };
+          }
           publishBrowserChange(state);
           resolve(result);
         };
@@ -861,23 +1453,77 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     async acknowledgeNavigation(input, context) {
       const state = await stateFor(context);
       const connection = state.connections.get(input.clientId);
+      if (input.cue) {
+        const expected = connection?.cue;
+        const result = input.cue;
+        if (!expected || expected.conversationId !== state.record.scopeId || input.commandId !== expected.navigationId ||
+            !["completed", "interrupted", "failed"].includes(result.phase) ||
+            ["cueId", "commandId", "navigationId", "clientId", "conversationId", "turnId", "attemptId", "visualId", "playerInstanceId", "outputId"]
+              .some(key => result[key] !== expected[key]) || result.canonicalFinal !== expected.canonicalFinal ||
+            JSON.stringify(result).length > 8192 ||
+            result.phase === "completed" && (!expected.canonicalFinal || result.visualPhase !== "completed" ||
+              !["completed", "off"].includes(result.audioPhase)) ||
+            ["interrupted", "failed"].includes(expected.phase) && result.phase === "completed") {
+          return { ok: false, error: "This cue receipt does not match the initiating browser's actual selected explanation." };
+        }
+        if (expected.receipt && ["completed", "interrupted", "failed"].includes(expected.phase)) {
+          return { ok: isDeepStrictEqual(expected.receipt, result) };
+        }
+        expected.phase = result.phase;
+        expected.receipt = structuredClone(result);
+        publishBrowserChange(state);
+        return { ok: true };
+      }
       if (!connection || connection.navigation?.id !== input.commandId || !connection.acknowledge) {
         return { ok: false, error: "This navigation command is no longer pending." };
       }
-      connection.acknowledge({ ok: input.ok, ...(input.error ? { error: input.error } : {}), ...(input.focus ? { focus: input.focus } : {}) });
+      const expected = connection.navigation.presentation;
+      if (input.ok && expected) {
+        const result = input.presentation;
+        if (!result || result.attemptId !== expected.attemptId || result.visualId !== expected.visualId || !result.playerInstanceId ||
+            (expected.operation === "open" && result.phase !== "ready") ||
+            (expected.operation === "command" && (result.phase !== "completed" || result.commandId !== expected.commandId)) ||
+            (expected.operation === "cue" && (result.phase !== "armed" ||
+              ["cueId", "commandId", "navigationId", "conversationId", "turnId", "clientId"].some(key => result[key] !== expected[key]))) ||
+            (expected.operation === "snapshot" && !result.snapshot) || JSON.stringify(result).length > 8192 ||
+            input.focus?.projectSlug !== connection.navigation.projectSlug || input.focus?.sessionId !== connection.navigation.sessionId || input.focus?.pane !== "preview") {
+          return { ok: false, error: "The browser has not confirmed this exact lesson presentation operation." };
+        }
+      }
+      connection.acknowledge({ ok: input.ok, ...(input.error ? { error: input.error } : {}), ...(input.focus ? { focus: input.focus } : {}),
+        ...(expected && input.presentation ? { presentation: input.presentation } : {}) });
       return { ok: true };
     },
     async send(input, context, { receiptOnly = false } = {}) {
       const state = await stateFor(context);
+      const expected = input.expectedConversationId || context.colleague?.conversationId || state.record.scopeId;
       const admitted = state.admission.then(async () => {
+        assertCurrentConversation(state, expected);
         if (closed) throw failure("Colleague is shutting down.");
         if (state.stopping) throw failure("Colleague is stopping its previous turn. Send again once it has stopped.");
+        if (state.record.previousConversations.some(old => old.unconfirmedMessages.some(message => message.messageId === input.messageId) ||
+            old.conversationLog.some(turn => turn.messages.some(message => message.messageId === input.messageId)) ||
+            [old.conversationMetadata?.runtime, ...(old.conversationMetadata?.runtime?.predecessors || [])].some(segment => segment?.request?.messageId === input.messageId))) {
+          throw failure("This message belongs to retained Colleague history. Nothing was resent; write a new message in the current conversation.", "ACTION_VALIDATION_FAILED", 400);
+        }
         const previousTurn = state.record.conversationLog.find(turn => turn.messages.some(message => message.messageId === input.messageId));
         const previousMessage = previousTurn?.messages.find(message => message.messageId === input.messageId);
         if (previousMessage) {
           if (previousMessage.text !== input.message) throw failure("This message ID belongs to a different request. Use a new message ID.");
           return { status: "accepted", messageId: input.messageId, turnId: previousTurn.turnId, duplicate: true };
         }
+        let trainingQuestion;
+        const delivery = input.trainingQuestion && deliveredQuestion(state, input.trainingQuestion);
+        if (delivery) {
+          try {
+            const captured = await context.trainingTeaching?.captureQuestion({
+              actor: authenticatedVibe64User(context), reference: input.trainingQuestion
+            });
+            if (captured) trainingQuestion = { ...structuredClone(captured), delivery };
+          } catch { /* A stale question leaves this request ordinary and ungraded. */ }
+        }
+        assertCurrentConversation(state, expected);
+        if (closed || state.stopping) throw failure("Colleague is stopping. Send again once it has stopped.");
         if (state.running) {
           state.generation += 1;
           await state.conversation?.cancel();
@@ -891,18 +1537,23 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         const previous = state.connections.get(input.clientId) || {};
         const connection = { ...previous, clientId: input.clientId, focus: input.focus || previous.focus || null, assistantSelection: input.assistantSelection };
         state.connections.set(input.clientId, connection);
-        return startWorker(state, { ...connection, focus: structuredClone(connection.focus) }, { messageId: input.messageId, text: input.message });
+        return startWorker(state, { ...connection, focus: structuredClone(connection.focus) }, { messageId: input.messageId, text: input.message,
+          ...(trainingQuestion ? { trainingQuestion } : {}) });
       });
       state.admission = admitted.catch(() => {});
       const receipt = await admitted;
       if (receipt?.ok === false) return receipt;
       return receiptOnly ? receipt : snapshot(state, input.clientId);
     },
-    async stop(_input, context) {
+    async stop(input, context) {
       const state = await stateFor(context);
+      const expected = input.expectedConversationId || context.colleague?.conversationId || state.record.scopeId;
+      assertCurrentConversation(state, expected);
       state.stopping = true;
       await state.admission;
+      try { assertCurrentConversation(state, expected); } catch (error) { state.stopping = false; throw error; }
       state.generation += 1;
+      for (const connection of state.connections.values()) if (connection.cue) connection.cue.phase = "interrupted";
       state.streamingReply = null;
       state.interimReply = null;
       publishReply(state);

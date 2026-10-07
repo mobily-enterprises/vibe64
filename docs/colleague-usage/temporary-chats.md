@@ -63,3 +63,9 @@ preserves the chat.
 
 Colleague can explain recovery and perform supported chat actions when asked.
 Choosing a model, stopping work and closing a chat remain separate requests.
+
+Background focused tasks keep their selected Helper model and workload limits;
+they do not add their exchanges to Main. A profile audit identifies the selected
+request, not independent proof of provider enforcement or successful completion.
+Wait for the task result before reporting success. No new user control or permission
+is introduced by restoring the server's original detached execution entry points.

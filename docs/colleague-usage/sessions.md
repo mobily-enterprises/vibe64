@@ -11,6 +11,13 @@ the dialog. This works the same way on desktop and mobile.
 Colleague can explain the choices or create a session through its session
 creation action when you explicitly ask it to do so.
 
+An approved preparation operation may reserve a session and its exact saved
+source before creation. If creation reports retained session state or unavailable
+creation checks, keep that reservation and ask the owner to inspect it; retry must
+not overwrite it or choose another session. The operation retains its verified
+source rather than silently starting from newer project changes. These checks add
+no desktop/mobile control or arbitrary source selection to Colleague.
+
 ## Switch between open sessions
 
 Select a session tab above the chat to open that session's conversation and work.

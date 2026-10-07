@@ -16,7 +16,16 @@ owner-selected local source, preserving verified revisions on retry. This does n
 enable a course or expose an installation control to learners or Colleague.
 Private server-only state can reserve and resume one exact lesson identity before
 project preparation. It preserves retry identity and the original pin; it does
-not yet start an exercise, submit an assessment or report learning completion.
+not yet expose exercise start or assessment submission to a learner. Internal
+storage retains bounded assessment evidence and resume state against that pin,
+and derives completion from every required assessment rather than a teacher
+claim. A read-only teaching brief supplies lesson instructions and saved evidence
+without exposing source files or executable visual controllers.
+The server can retain owner-approved course releases and their enablement without
+changing their exact content. Disabling a release blocks future admissions while
+existing pinned attempts continue. This internal facility adds no learner course
+screen or Colleague course tool. Declared visual bytes can be read from a verified
+lesson pin, but this alone does not display or play an animation.
 
 Colleague is a separate conversation for discussing ideas and operating Vibe64
 across projects. It knows the selected project and session, can open their views
@@ -113,22 +122,31 @@ these future workflow choices from running agents, session chat modes and its ow
 model. Account connection and credential entry remain in AI Accounts. Complete
 product-operation coverage remains in progress.
 
-On every screen size, Colleague opens Talk first from its header avatar. Talk/Text
-controls at the top switch to its written conversation without losing a draft or
-ending active audio. Both views share one JSKIT dialog frame and tab geometry;
-mobile uses full screen. Opening Talk does not start recording. Tap Talk for
-hands-free or hold for push-to-talk. Minimize retains audio and marks the header
-avatar, including active listening; its adjacent Stop voice button ends audio.
-X or Escape stops voice while preserving the typed draft and saved history. Written messages scroll while the header and
-composer remain available. Model selection, Stop and Send/Steer share the composer
-toolbar. Colleague gives brief replies and expands when asked. A project agent
-keeps its text view and has a visible Talk button in the chat header.
-Tab from a nonempty message focuses Send/Steer; Enter sends it.
+Colleague opens one written conversation with optional speech controls from its
+header avatar, without Talk/Text tabs. Opening starts neither recording nor sound.
+Tap Talk for hands-free or hold for push-to-talk. Minimize retains audio and marks
+the header avatar, including active listening; its adjacent Stop voice button ends
+audio. X or Escape stops voice while preserving the typed draft and saved history.
+Messages scroll while the header and composer remain available. Model selection,
+Stop and Send/Steer share the composer toolbar. Colleague gives brief replies and
+expands when asked. The face and voice tools start visible as a small
+fixed overlay at the upper right. The larger face has both smaller voice buttons,
+with transparent space around it so text scrolls behind the face itself.
+The anonymous icon expands it and the small minus button hides it; there is no size menu.
+Hiding the artwork never replaces the conversation or rearranges composer buttons.
+Review/recovery and a stop control for hidden active recording remain reachable.
+Mobile uses the same controls in a full-screen frame.
+A project's Main agent retains its original coding chat, with voice controls
+beneath its face rather than beside Send. The same optional host artwork and voice controls appear in its
+existing coding chat; the retained target uses the original caption dialog when
+that view is absent. Tab from a nonempty message focuses Send/Steer; Enter sends it.
 
 Colleague and the project's Main agent share one voice window. Push-to-talk and
 hands-free work for both, including listening while an answer speaks. Voice uses
 the selected conversation's ordinary model, tools and permissions, with no extra
-interpretation call. Live words and answers appear as captions. A recording keeps
+interpretation call. Both use their ordinary transcript when present; Main's
+fallback shows recognized words and answers as captions. Microphone and
+spoken-reply choices are independent. A recording keeps
 its original destination and identity; the typed draft stays separate. Review keeps
 words until Send or Discard. Holding the Colleague avatar starts a reviewed recording.
 

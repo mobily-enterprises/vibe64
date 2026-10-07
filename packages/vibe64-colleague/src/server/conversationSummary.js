@@ -124,7 +124,7 @@ function createConversationSummary({ actions, terminals, persist, workflowEngine
     return responseText;
   }
 
-  return { read, cleanup };
+  return { read, cleanup, runHelper };
 }
 
 export { createConversationSummary };

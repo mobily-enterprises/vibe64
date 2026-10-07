@@ -2,7 +2,7 @@ import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapte
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
-import { prepareSessionConversationActivity, prepareSessionConversationDisposal, prepareSessionConversationRenewalProof, prepareSessionDetachedConversationCleanup } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import { prepareSessionConversationActivity, prepareSessionConversationDisposal, prepareSessionConversationRenewalProof, prepareSessionDetachedConversationCleanup, prepareSessionDetachedConversationRun } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import { codexTerminalNamespace } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 
@@ -1346,3 +1346,182 @@ for (const thinking of ["", "low", "high", "max"]) {
     }
   });
 }
+
+// Restore the original detached facade cases through the configured runtime.
+// Their native controller boundary remains mocked exactly as in the original units.
+function detachedCodexFixture({ controller }) {
+  let provider;
+  const conversations = createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context, input, options }) =>
+      prepareSessionDetachedConversationRun(provider, id, context, input, options) }
+  });
+  provider = createCodexSessionAgentProvider({ controller,
+    runNativeDetachedConversation: request => conversations.runNativeDetachedConversation(request),
+    runOwner: { runDetachedConversation(sessionId, input, options) {
+      const method = Object.hasOwn(options, "onEvent") ? "streamDetachedChatTurn" : "runDetachedChatTurn";
+      return controller[method](sessionId, input, options);
+    } }
+  });
+  return scopedRequestFixture(provider, controller);
+}
+
+test("Restored detached: Codex adapter forwards the authenticated Vibe64 user to every human turn", async () => {
+  const actor = { userId: "user-1" };
+  const calls = [];
+  const controller = {
+    async runDetachedChatTurn(_sessionId, input) {
+      calls.push(["detached", input]);
+      return { ok: true, text: "done" };
+    },
+    async startConversationTurn(_sessionId, input) {
+      calls.push(["temporary", input]);
+      return { ok: true, runId: "turn-1" };
+    },
+    async streamDetachedChatTurn(_sessionId, input) {
+      calls.push(["stream", input]);
+      return { ok: true, text: "done" };
+    },
+    async writeTerminal(_sessionId, _terminalSessionId, _data, input) {
+      calls.push(["terminal", input]);
+      return { ok: true };
+    }
+  };
+  const provider = detachedCodexFixture({ controller });
+  const context = { sessionId: "session-1", vibe64User: actor };
+
+  await provider.runDetachedChatTurn(context, { prompt: "Detached" });
+  await provider.streamDetachedChatTurn(context, { prompt: "Streamed" });
+  await provider.startConversationTurn(context, { message: "Temporary" });
+  await provider.writeTerminal(context, {
+    data: "Native input",
+    input: { trackGitActor: true },
+    terminalSessionId: "terminal-1"
+  });
+
+  assert.deepEqual(calls.map(([kind]) => kind), [
+    "detached",
+    "stream",
+    "temporary",
+    "terminal"
+  ]);
+  for (const [, input] of calls) {
+    assert.equal(input.vibe64User, actor);
+  }
+});
+
+test("Restored detached: Codex adapter resolves the live profile before a detached run and returns only its audit snapshot", async () => {
+  const calls = [];
+  const abortController = new AbortController();
+  const runtime = Object.freeze({ stateRoot: "/runtime/project-a" });
+  const session = Object.freeze({ sessionId: "session-a" });
+  const controller = {
+    async executionProfileModelCatalog(sessionId, options) {
+      calls.push(["catalog", sessionId, options]);
+      return {
+        data: [catalogModel()]
+      };
+    },
+    async runDetachedChatTurn(sessionId, input, options) {
+      calls.push(["run", sessionId, input, options]);
+      return {
+        ok: true,
+        text: "{\"answer\":\"Bounded answer\"}"
+      };
+    }
+  };
+  const provider = detachedCodexFixture({ controller });
+  const resolution = await provider.resolveExecutionProfile({
+    assistantSelection: { modelId: "gpt-5.6-luna" },
+    runtime,
+    session,
+    sessionId: "session-a",
+    signal: abortController.signal
+  }, helperRequest());
+  const result = await provider.runDetachedChatTurn({
+    runtime,
+    session,
+    sessionId: "session-a"
+  }, {
+    executionProfile: resolution,
+    prompt: "Explain this bounded excerpt."
+  });
+
+  assert.equal(calls[0][0], "catalog");
+  assert.deepEqual(calls[0][2], {
+    runtime,
+    session,
+    signal: abortController.signal,
+    timeoutMs: 180_000
+  });
+  assert.equal(calls[1][0], "run");
+  assert.equal(calls[1][2].executionProfile.model, "gpt-5.6-luna");
+  assert.equal(calls[1][3].runtime, runtime);
+  assert.equal(calls[1][3].session, session);
+  assert.equal(result.executionProfile.model, "gpt-5.6-luna");
+  assert.equal(result.executionProfile.revision, CODEX_HELPER_PROFILE_REVISION);
+  assert.equal(Object.hasOwn(result.executionProfile, "enforcement"), false);
+});
+
+test("Restored detached: Codex helper changes affect the next task while an already resolved task keeps its model", async () => {
+  const provider = detachedCodexFixture({ controller: {
+    executionProfileModelCatalog: async () => ({ data: [catalogModel(), catalogModel({ model: "chosen-helper" })] }),
+    async runDetachedChatTurn(_sessionId, input) {
+      assert.equal(input.executionProfile.model, "chosen-helper");
+      return { ok: true, text: "Done" };
+    }
+  } });
+  const context = { sessionId: "session-a", assistantSelection: { modelId: "chosen-helper" } };
+  const first = await provider.resolveExecutionProfile(context, helperRequest());
+  assert.equal(first.model, "chosen-helper");
+  context.assistantSelection = { modelId: "gpt-5.6-luna" };
+  const next = await provider.resolveExecutionProfile(context, helperRequest());
+  assert.equal(next.model, "gpt-5.6-luna");
+  const result = await provider.runDetachedChatTurn(context, { executionProfile: first, prompt: "Continue" });
+  assert.equal(result.executionProfile.model, "chosen-helper");
+});
+
+test("Restored detached: Codex adapter publishes the resolved audit profile before a streamed detached turn", async () => {
+  const events = [];
+  const runtime = Object.freeze({ stateRoot: "/runtime/project-a" });
+  const session = Object.freeze({ sessionId: "session-a" });
+  const controller = {
+    async streamDetachedChatTurn(_sessionId, input, options = {}) {
+      assert.equal(input.executionProfile.model, "gpt-5.6-luna");
+      assert.equal(options.runtime, runtime);
+      assert.equal(options.session, session);
+      options.onEvent({
+        threadId: "helper-thread",
+        type: "thread"
+      });
+      return {
+        ok: true,
+        text: "{\"answer\":\"Bounded answer\"}"
+      };
+    }
+  };
+  const provider = detachedCodexFixture({ controller });
+  const resolution = resolveCodexHelperExecutionProfile(helperRequest(), {
+    data: [catalogModel()]
+  }, "gpt-5.6-luna", "low");
+
+  const result = await provider.streamDetachedChatTurn({
+    onEvent(event) {
+      events.push(event);
+    },
+    runtime,
+    session,
+    sessionId: "session-a"
+  }, {
+    executionProfile: resolution,
+    prompt: "Explain this bounded excerpt."
+  });
+
+  assert.deepEqual(events.map((event) => event.type), [
+    "execution-profile",
+    "thread"
+  ]);
+  assert.equal(events[0].executionProfile.model, "gpt-5.6-luna");
+  assert.equal(events[0].executionProfile.revision, CODEX_HELPER_PROFILE_REVISION);
+  assert.deepEqual(result.executionProfile, events[0].executionProfile);
+});

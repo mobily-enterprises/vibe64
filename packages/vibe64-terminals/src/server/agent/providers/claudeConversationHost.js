@@ -36,6 +36,7 @@ const now = () => new Date().toISOString();
 function createClaudeConversationHost({
   env = process.env, projectService, publishSessionChanged: publishApplicationSessionChanged = async () => {},
   publishConversation,
+  runNativeDetachedConversation,
   command = env.VIBE64_CLAUDE_COMMAND || STUDIO_MANAGED_CLAUDE_COMMAND,
   credentialHome = appCredentialContext(), createProcess = createClaudeCodeProcess,
   commandRunner = runVibe64Command, stopExecution = stopVibe64Execution,
@@ -146,6 +147,10 @@ function createClaudeConversationHost({
       completeClaudeSessionRenewalSeed({ input, prepared, context, metadata, contextFor, approved, now, transport: TRANSPORT }, nativeResult) };
   }
 
+  function runDetachedChatTurn(context, input = {}) {
+    return runNativeDetachedConversation({ id: context.sessionId, context, input, options: context });
+  }
+
   const provider = {
     conversationOperations: Object.freeze(["createConversation", "ensureSession", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readGoal", "updateGoal", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof"]),
     prepareConversationRequest(method, context, input) {
@@ -186,7 +191,16 @@ function createClaudeConversationHost({
       if (method === "hasActiveTemporaryConversation") return { ok: true, active: await perform() };
       return method === "sendMessage" || method === "interruptTurn" ? (await perform()).value : perform();
     },
-    prepareConversationHost(sessionId, openingContext = {}, mode = "main") {
+    runDetachedChatTurn,
+    streamDetachedChatTurn: runDetachedChatTurn,
+    prepareConversationHost(sessionId, openingContext = {}, mode = "main", input = {}) {
+      if (mode === "detached") return {
+        native: { owner: conversations,
+          get executionProfile() {
+            return input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
+          }
+        }
+      };
       if (mode === "activity") return contextFor(openingContext).then(context => ({
         context, native: { owner: conversations }
       }));

@@ -4,6 +4,7 @@ import { access, lstat, mkdir, readdir, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { isDeepStrictEqual } from "node:util";
 import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
@@ -32,6 +33,7 @@ import {
   updateProjectRecordMetadata
 } from "./projectRecordMetadata.js";
 import {
+  isPlainObject,
   pathExists
 } from "./core.js";
 import {
@@ -390,6 +392,69 @@ function projectMetadataPath(projectRecordPath = "") {
   return normalizedRecordPath ? path.resolve(normalizedRecordPath) : "";
 }
 
+function normalizeProjectTraining(value) {
+  const invalid = () => {
+    const error = new Error("Project training provenance must contain the exact bounded learner, attempt, content pin and bundled exercise identity.");
+    error.code = "vibe64_project_training_invalid";
+    return error;
+  };
+  const shapes = [
+    [value, ["schemaVersion", "learnerKey", "attemptId", "pin", "exercise"]],
+    [value?.pin, ["course", "topic", "lesson"]],
+    [value?.pin?.course, ["courseId", "release"]],
+    [value?.pin?.topic, ["schemaVersion", "topicId", "release", "repository", "commit", "topicHash"]],
+    [value?.pin?.lesson, ["code", "hash"]],
+    [value?.exercise, ["kind", "sourcePath"]]
+  ];
+  for (const [object, fields] of shapes) {
+    if (!isPlainObject(object) || Object.keys(object).length !== fields.length ||
+        fields.some(field => !Object.hasOwn(object, field))) {
+      throw invalid();
+    }
+  }
+  const { learnerKey, attemptId, pin, exercise } = value;
+  if (typeof learnerKey !== "string" || learnerKey.length < 1 || learnerKey.length > 171) {
+    throw invalid();
+  }
+  const learnerBytes = Buffer.from(learnerKey, "base64url");
+  const learnerId = learnerBytes.toString("utf8");
+  const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
+  const releasePattern = /^\d+\.\d+\.\d+$/u;
+  if (learnerBytes.length < 1 || learnerBytes.length > 128 ||
+      learnerBytes.toString("base64url") !== learnerKey || Buffer.from(learnerId).toString("base64url") !== learnerKey ||
+      // eslint-disable-next-line no-control-regex -- Deliberately reject control characters in learner input.
+      learnerId.trim() !== learnerId || /[\u0000-\u001f\u007f]/u.test(learnerId)) {
+    throw invalid();
+  }
+  if (value.schemaVersion !== 1 || pin.topic.schemaVersion !== 1 ||
+      typeof attemptId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(attemptId) ||
+      typeof pin.course.courseId !== "string" || !/^[a-z][a-z0-9-]{0,63}$/u.test(pin.course.courseId) ||
+      typeof pin.course.release !== "string" || pin.course.release.length > 256 || !releasePattern.test(pin.course.release) ||
+      typeof pin.topic.topicId !== "string" || !idPattern.test(pin.topic.topicId) ||
+      typeof pin.topic.release !== "string" || pin.topic.release.length > 256 || !releasePattern.test(pin.topic.release) ||
+      typeof pin.topic.repository !== "string" || pin.topic.repository.length > 256 || !/^[a-zA-Z0-9_.-]+\/learn-[a-zA-Z0-9_.-]+$/u.test(pin.topic.repository) ||
+      typeof pin.topic.commit !== "string" || !/^[a-f0-9]{40}$/u.test(pin.topic.commit) ||
+      typeof pin.topic.topicHash !== "string" || !/^[a-f0-9]{64}$/u.test(pin.topic.topicHash) ||
+      typeof pin.lesson.code !== "string" || !idPattern.test(pin.lesson.code) ||
+      typeof pin.lesson.hash !== "string" || !/^[a-f0-9]{64}$/u.test(pin.lesson.hash) || exercise.kind !== "bundled") {
+    throw invalid();
+  }
+  const sourcePath = exercise.sourcePath;
+  if (typeof sourcePath !== "string" || !sourcePath || sourcePath.length > 512 ||
+      sourcePath.includes("\\") || sourcePath.includes("\0") || path.posix.isAbsolute(sourcePath) ||
+      /^[a-zA-Z][a-zA-Z0-9+.-]*:/u.test(sourcePath) ||
+      (sourcePath !== "." && sourcePath.split("/").some(part => !part || part === "." || part === ".."))) {
+    throw invalid();
+  }
+  return {
+    schemaVersion: 1,
+    learnerKey,
+    attemptId,
+    pin: { course: { ...pin.course }, topic: { ...pin.topic }, lesson: { ...pin.lesson } },
+    exercise: { ...exercise }
+  };
+}
+
 function projectMetadataFromInput(input = {}, {
   defaultRepositoryBranch = "",
   defaultRepositoryMode = ""
@@ -400,6 +465,7 @@ function projectMetadataFromInput(input = {}, {
   });
   return {
     ...repositoryMetadata,
+    ...(Object.hasOwn(input, "training") ? { training: normalizeProjectTraining(input.training) } : {}),
     ...(Object.hasOwn(input, "developmentDatabaseScope")
       ? {
           developmentDatabaseScope: normalizeDevelopmentDatabaseScope(
@@ -453,7 +519,8 @@ function normalizeProjectMetadata(metadata = {}) {
       "deletion",
       "developmentDatabaseName",
       "developmentDatabaseScope",
-      "repository"
+      "repository",
+      "training"
     ].includes(field));
   if (unsupportedFields.length > 0) {
     const error = new Error(`Project metadata contains unsupported fields: ${unsupportedFields.join(", ")}.`);
@@ -1000,8 +1067,11 @@ function createStudioProjectContext({
       await mkdir(projectContextRoot);
       sourceCreated = true;
       if (typeof prepare === "function") {
+        // The trusted initializer may adjust repository metadata, but gets its own marker copy.
         await prepare({
-          metadata,
+          metadata: metadata.training
+            ? { ...metadata, training: normalizeProjectTraining(metadata.training) }
+            : metadata,
           projectContextRoot,
           projectRuntimeRoot,
           slug
@@ -1160,10 +1230,20 @@ function createStudioProjectContext({
       if (currentMetadata.deletion && !allowDeleting) {
         throw projectDeletingError();
       }
-      return assertHostedRepositoryMetadata(normalizeProjectMetadata(await update(currentMetadata, {
+      // Snapshot the immutable marker before invoking the existing updater.
+      const training = currentMetadata.training
+        ? normalizeProjectTraining(currentMetadata.training)
+        : undefined;
+      const nextMetadata = assertHostedRepositoryMetadata(normalizeProjectMetadata(await update(currentMetadata, {
         ...state,
         metadata: currentMetadata
       })));
+      if (!isDeepStrictEqual(training, nextMetadata.training)) {
+        const error = new Error("Project training provenance is fixed at creation and cannot be added, changed or removed by an update.");
+        error.code = "vibe64_project_training_immutable";
+        throw error;
+      }
+      return nextMetadata;
     });
     return {
       ...state,

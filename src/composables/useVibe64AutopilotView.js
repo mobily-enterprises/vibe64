@@ -393,12 +393,14 @@ function useVibe64AutopilotView(props, emit, {
   const composerConnectionStatus = computed(() => !agentActive.value && unref(assistantCanRouteChat) === true &&
     ["restricted", "unavailable", "failed"].includes(props.agentConnectionStatus)
     ? "connected" : props.agentConnectionStatus);
-  const agentSteerable = computed(() => Boolean(
+  const agentNativeTurnReady = computed(() => Boolean(
     agentActive.value && !agentObservationLost.value &&
     normalizedAgentTurnText(activeAgentTurn.value.id) &&
     normalizedAgentTurnText(activeAgentTurn.value.state) === "active" &&
     props.agentConnectionStatus === "connected"
   ));
+  const agentSteerable = computed(() => agentNativeTurnReady.value &&
+    props.conversationRuntime?.steerable.value === true);
   const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
   const sessionToolbarVisible = computed(() => Boolean(
     Array.isArray(props.sessionToolbar?.sessions) && props.sessionToolbar.sessions.length
@@ -417,6 +419,7 @@ function useVibe64AutopilotView(props, emit, {
   const messageDelivery = computed(() => props.conversationRuntime?.delivery || null);
   const discardingMessageIds = new Set();
   const composerSending = computed(() => messageDelivery.value?.state.sending === true);
+  const composerQueueing = computed(() => props.conversationRuntime?.queueWhileSending.value === true);
   const composerSubmissionKind = ref("");
   const routingRequest = computed(() => {
     try { return JSON.parse(props.session?.metadata?.assistant_routing_request || "null"); } catch { return null; }
@@ -545,13 +548,13 @@ function useVibe64AutopilotView(props, emit, {
       return "reconnecting";
     }
     if (routingBusy.value && !agentActive.value) return "routing";
-    if (agentActive.value && !agentSteerable.value) {
+    if (agentActive.value && (!agentNativeTurnReady.value || !agentSteerable.value && !composerQueueing.value)) {
       return "waiting";
     }
-    if (composerSending.value && !agentSteerable.value) {
+    if (composerSending.value && !composerQueueing.value) {
       return composerSubmissionKind.value === "steer" ? "steering" : "sending";
     }
-    if (agentActive.value) {
+    if (agentSteerable.value) {
       return composerRetryMatchesDraft.value ? "retry" : "steer";
     }
     return composerRetryMatchesDraft.value ? "retry" : "send";
@@ -593,13 +596,14 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Keep typing while the assistant becomes ready"
   })[composerSubmitMode.value] || "Send message");
   const composerCanSubmit = computed(() => {
-    if (!props.conversationRuntime || composerDisabled.value || routingBusy.value && !agentSteerable.value) return false;
+    if (!props.conversationRuntime?.canSubmit.value || composerDisabled.value || routingBusy.value && !agentSteerable.value) return false;
     if (
       composerConnectionStatus.value !== "connected" ||
-      (composerSending.value && !agentSteerable.value) ||
+      (composerSending.value && !composerQueueing.value) ||
       interrupting.value ||
       repositoryOperationActive.value ||
-      (agentActive.value && (!agentSteerable.value || composerAttachments.value.length > 0))
+      (agentActive.value && (!agentNativeTurnReady.value ||
+        !agentSteerable.value && !composerQueueing.value || composerAttachments.value.length > 0))
     ) {
       return false;
     }
@@ -614,7 +618,7 @@ function useVibe64AutopilotView(props, emit, {
   const agentStopEnabled = computed(() => Boolean(
     agentStopVisible.value &&
     !interrupting.value &&
-    (!composerSending.value || routingBusy.value)
+    (!composerSending.value || routingBusy.value || !agentSteerable.value && composerQueueing.value)
   ));
   const assistantConnectionReady = computed(() => composerConnectionStatus.value === "connected");
   const reasoningActive = computed(() => assistantConnectionReady.value && agentActive.value &&
@@ -1018,7 +1022,7 @@ function useVibe64AutopilotView(props, emit, {
     composer = false,
     questionText = ""
   } = {}) {
-    if (!props.conversationRuntime || (composerSending.value && (submissionKind !== "steer" || !agentSteerable.value)) ||
+    if (!props.conversationRuntime?.canSubmit.value || (composerSending.value && !composerQueueing.value) ||
       !normalizedAgentTurnText(payload?.message)) {
       return false;
     }

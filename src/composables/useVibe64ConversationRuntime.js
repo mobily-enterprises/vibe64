@@ -35,7 +35,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
   const access = useVibe64AssistantAccess({ ...identity, viewer, active });
   const agentSettings = useVibe64AgentSettings(identity);
   const turn = computed(() => mounted.session.value?.agentSession?.turn || {});
-  const steerable = computed(() => turn.value.active === true && turn.value.status !== "observation_lost" &&
+  const steerable = computed(() => conversation.steerable.value && turn.value.active === true && turn.value.status !== "observation_lost" &&
     Boolean(turn.value.id) && turn.value.state === "active" && mounted.agentConnectionStatus.value === "connected");
   const available = computed(() => current.value && !isArchivedVibe64Session(mounted.session.value || {}) &&
     !mounted.detailState.value?.error && !access.accessError.value);
@@ -55,7 +55,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
   function prepareMessage(payload, { messageId, submissionKind = steerable.value ? "steer" : "send" } = {}) {
     if (!available.value) throw new Error("This conversation is no longer available.");
     if (!access.canUseChat.value) throw new Error(access.restrictionMessage.value || "AI access is not ready.");
-    if (turn.value.active && !steerable.value) throw new Error("Wait for this turn to finish or stop it before sending.");
+    if (turn.value.active && conversation.steerable.value && !steerable.value) throw new Error("Wait for this turn to finish or stop it before sending.");
     const authored = conversation.delivery.find(messageId)?.payload || payload;
     if (authored.request) return authored;
     // Old browser drafts keep their original opaque payload. Only an explicit
@@ -98,6 +98,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     } finally { void mounted.refresh({ reason: "agent-turn-interrupted" }).catch(() => {}); }
   }
   return { identity, mounted, conversationLog, access, agentSettings, available, steerable,
+    canSubmit: conversation.canSubmit, queueWhileSending: conversation.queueWhileSending,
     delivery: conversation.delivery, draft: conversation.draft, draftAttachments: conversation.draftAttachments,
     draftRetry: conversation.draftRetry, draftRetryMatches: conversation.draftRetryMatches,
     settleDraftRetry: conversation.settleDraftRetry, send, submitDraft, interrupt,
@@ -120,7 +121,7 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
   const binding = useAssistantConversation({
     conversationId: () => identity.value.sessionId && identity.value.projectSlug ? mainConversationId(identity.value) : "",
     actorKey: () => identity.value.actorKey, endpoint: "/api/assistant/app", surfaceId: "app", hostSurfaceId: "app",
-    workspaceSlug: "", active, goal: true, draftStorage: () => browserDraftStorage(identity.value),
+    workspaceSlug: "", active, goal: true, deferWhileWorking: true, draftStorage: () => browserDraftStorage(identity.value),
     api: createAssistantApi({ request: (url, options) => getHttpWebClient().request(url, options),
       resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app" }),
     application(conversation) {

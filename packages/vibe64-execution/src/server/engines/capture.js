@@ -142,12 +142,13 @@ async function runCaptureCommand(command = "", args = [], {
     );
   }
   if (execution?.id) capturedExecutions.delete(execution.id);
+  const finishedExecution = execution ? { ...execution, state: "finished" } : execution;
   if (signal?.aborted) {
     return commandErrorResult("Command cancelled.", "vibe64_command_cancelled", {
-      ...outcome, execution, outputEncoding
+      ...outcome, execution: finishedExecution, outputEncoding
     });
   }
-  return outcome;
+  return finishedExecution ? { ...outcome, execution: finishedExecution } : outcome;
 }
 
 export {

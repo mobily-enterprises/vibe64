@@ -21,7 +21,7 @@
         :disabled="sessionItem.archiving"
         :data-vibe64-session-id="sessionItem.sessionId"
         variant="flat"
-        @click="selectSession(sessionItem.sessionId)"
+        @click="selectSession(sessionItem.sessionId, $event)"
         @focusin="active && $event.target.matches(':focus-visible') && sessionTooltip.resumeHover()"
       >
         <span class="studio-ai-sessions__tab-main">
@@ -151,6 +151,7 @@ import Vibe64RenameSessionDialog from "./Vibe64RenameSessionDialog.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import { vibe64SessionInfoFacts } from "@/lib/vibe64SessionInfo.js";
 import { vibe64SessionStatusLabel } from "@/lib/vibe64SessionViewModel.js";
+import { VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_SESSION_TOOLTIP_KEY } from "@/lib/vibe64SessionTooltip.js";
 import {
   visibleVibe64ToolbarSessions
@@ -203,6 +204,7 @@ const emit = defineEmits(["select-session"]);
 const infoSessionId = ref("");
 const renamingSession = ref(null);
 const sessionTooltip = inject(VIBE64_SESSION_TOOLTIP_KEY);
+const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
 const infoId = useId();
 const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -259,11 +261,14 @@ function sessionInfoFacts(sessionItem) {
   ].filter((fact) => fact.value);
 }
 
-function selectSession(sessionId = "") {
+function selectSession(sessionId = "", event) {
+  const owner = learnerGestures?.value;
+  const ticket = props.active ? owner?.begin(event, "session-select", { sessionId }) : null;
   sessionTooltip.suppressedSessionId.value = sessionId;
   infoSessionId.value = "";
   emit("select-session", sessionId);
   props.toolbar.selectSession?.(sessionId);
+  if (ticket) void owner.finish(ticket);
 }
 
 function sessionTabLabel(sessionItem = {}) {

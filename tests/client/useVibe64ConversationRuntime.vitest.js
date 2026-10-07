@@ -17,7 +17,7 @@ const renderer = createRenderer({ createElement: () => ({}), createText: () => (
   setElementText() {}, setText() {}, insert() {}, remove() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
 const releases = [];
 afterEach(() => { releases.splice(0).reverse().forEach(release => release()); vi.clearAllMocks(); });
-function fixture({ readGoal = () => null } = {}) {
+function fixture({ readGoal = () => null, status = "ready", steering = true } = {}) {
   const disposed = [];
   const owners = [];
   mocks.mounted.mockImplementation(identity => {
@@ -27,8 +27,8 @@ function fixture({ readGoal = () => null } = {}) {
   });
   const states = new Map();
   function read(id) {
-    if (!states.has(id)) states.set(id, reactive({ id, segmentId: "native-thread", status: "ready",
-      capabilities: { steering: true, attachments: true }, conversationLog: [] }));
+    if (!states.has(id)) states.set(id, reactive({ id, segmentId: "native-thread", status,
+      capabilities: { steering, attachments: true }, conversationLog: [] }));
     return states.get(id);
   }
   const socket = createConversationFixtureSocket(read);
@@ -48,6 +48,11 @@ function fixture({ readGoal = () => null } = {}) {
   provideConversationFixture(app, socket, "owner"); app.mount({});
   releases.push(() => app.unmount());
   return { app, runtime, selected, viewer, owners, disposed, access, socket,
+    snapshot(identity, fields) {
+      const id = mainConversationId(identity);
+      Object.assign(read(id), fields);
+      socket.notify({ type: "phase" }, id);
+    },
     receipt(identity, turn) {
       const id = mainConversationId(identity);
       const saved = { turnId: `fixture-${turn.user.messageId}`, ...turn };
@@ -89,6 +94,9 @@ describe("retained project conversation ownership", () => {
   it("keeps the original target after navigation and text-screen unmount, then disposes its last reader", async () => {
     const f = fixture(); const original = f.runtime.value;
     const binding = createProjectVoiceBinding(original);
+    expect(binding.conversationId).toBe(mainConversationId(original.identity));
+    expect(binding.showAvatar).toBeUndefined();
+    expect(binding.id).toBe(JSON.stringify(["project", "owner", "one", "s1"]));
     binding.retain(); releases.push(() => binding.release());
     const context = binding.captureContext();
     f.selected.projectSlug = "two"; f.selected.sessionId = "s2";
@@ -113,10 +121,34 @@ describe("retained project conversation ownership", () => {
     expect(runtime.delivery.state.messages).toEqual([]);
     pending.reject(new Error("The HTTP receipt was lost")); await nextTick();
   });
+  it("forwards Main's provisional voice transcript through the live host view without changing the retained conversation", async () => {
+    const f = fixture();
+    const runtime = f.runtime.value;
+    const first = vi.fn();
+    const view = { onTranscript: first };
+    const binding = createProjectVoiceBinding(runtime, view);
+    binding.retain(); releases.push(() => binding.release());
+    const transcript = { id: "recording-one", text: "Still speaking while Main works" };
+    binding.onTranscript(transcript);
+    expect(first).toHaveBeenCalledWith(transcript);
+    binding.onTranscript(null);
+    expect(first).toHaveBeenLastCalledWith(null);
+    const next = vi.fn();
+    view.onTranscript = next;
+    binding.onTranscript({ ...transcript, text: "Updated words" });
+    expect(next).toHaveBeenCalledWith({ ...transcript, text: "Updated words" });
+    expect(first).toHaveBeenCalledTimes(2);
+    expect(binding.conversationId).toBe(mainConversationId(runtime.identity));
+    expect(runtime.conversationLog.turns).toEqual([]);
+    expect(runtime.draft.value).toBe("");
+    expect(runtime.delivery.state.messages).toEqual([]);
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
   it("revokes the old actor before a pending HTTP request can acknowledge delivery", async () => {
     const f = fixture(); const runtime = f.runtime.value; const retained = runtime.retain(); releases.push(retained.release);
     mocks.request.mockReturnValue(new Promise(() => {}));
     const sending = runtime.send({ message: "Private request" }, { messageId: "owner-request" });
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(1));
     f.viewer.value = { actorKey: "member" }; await nextTick();
     expect(runtime.available.value).toBe(false); expect(await sending).toBe(false);
     await expect(runtime.send({ message: "Another" })).rejects.toThrow("no longer available");
@@ -142,6 +174,139 @@ describe("retained project conversation ownership", () => {
     expect(runtime.draft.value).toBe("");
     expect(mocks.request).not.toHaveBeenCalled();
   });
+  it("retains both spoken followers of a nonsteerable Main turn until each canonical ready boundary", async () => {
+    const f = fixture({ status: "working", steering: false });
+    const runtime = f.runtime.value;
+    const binding = createProjectVoiceBinding(runtime);
+    const context = binding.captureContext();
+    f.owners[0].session.value.agentSession.turn = { active: true, id: "opencode-turn", state: "active" };
+    f.snapshot(runtime.identity, { status: "working", capabilities: { steering: false, attachments: true } });
+    await vi.waitFor(() => expect(runtime.steerable.value).toBe(false));
+    runtime.draft.value = "Keep this independent typed draft";
+    const first = binding.submitText("First spoken follow-up", { messageId: "speech-a", context });
+    const second = binding.submitText("Second spoken follow-up", { messageId: "speech-b", context });
+    await vi.waitFor(() => expect(runtime.delivery.state.messages.map(message => message.id)).toEqual(["speech-a", "speech-b"]));
+    expect(mocks.request).not.toHaveBeenCalled();
+    for (const message of runtime.delivery.state.messages) {
+      expect(message.status).toBe("pending");
+      expect(message.payload.submissionKind).toBe("send");
+      expect(message.payload.request.steer).toBeUndefined();
+    }
+    mocks.request.mockImplementation(async (_url, { body }) => {
+      f.snapshot(runtime.identity, { status: "working" });
+      f.receipt(runtime.identity, { user: { messageId: body.messageId, text: body.text } });
+      return { ok: true };
+    });
+    f.snapshot(runtime.identity, { status: "ready" });
+    expect(await first).toEqual({ ok: true });
+    await vi.waitFor(() => expect(runtime.delivery.state.messages.map(message => message.id)).toEqual(["speech-b"]));
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request.mock.calls[0][1].body).toEqual({ text: "First spoken follow-up", data: { originId: expect.stringMatching(/^tab:/) }, messageId: "speech-a" });
+    const authoredOrigin = mocks.request.mock.calls[0][1].body.data.originId;
+    f.snapshot(runtime.identity, { status: "ready" });
+    expect(await second).toEqual({ ok: true });
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.request.mock.calls[1][1].body).toEqual({ text: "Second spoken follow-up", data: { originId: authoredOrigin }, messageId: "speech-b" });
+    expect(runtime.delivery.state.messages).toEqual([]);
+    expect(runtime.draft.value).toBe("Keep this independent typed draft");
+    expect(runtime.conversationLog.turns.map(turn => turn.user.messageId)).toEqual(["speech-a", "speech-b"]);
+  });
+  it("keeps Codex steering immediate and never converts a failed authored steer into an ordinary follower", async () => {
+    const f = fixture();
+    const runtime = f.runtime.value;
+    const binding = createProjectVoiceBinding(runtime);
+    const context = binding.captureContext();
+    f.owners[0].session.value.agentSession.turn = { active: true, id: "codex-turn", state: "active" };
+    f.snapshot(runtime.identity, { status: "working" });
+    await vi.waitFor(() => expect(runtime.steerable.value).toBe(true));
+    mocks.request.mockResolvedValue({ ok: false, error: "That turn finished", code: "conversation_not_steerable" });
+    await expect(binding.submitText("Original spoken steering", { messageId: "steer-a", context })).rejects.toThrow("That turn finished");
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    const request = runtime.delivery.find("steer-a").payload.request;
+    const authored = { ...request, data: { ...request.data } };
+    expect(authored).toEqual({ text: "Original spoken steering", data: { originId: expect.stringMatching(/^tab:/) }, steer: true });
+    f.snapshot(runtime.identity, { status: "working", capabilities: { steering: false, attachments: true } });
+    await vi.waitFor(() => expect(runtime.steerable.value).toBe(false));
+    expect(await binding.submitText("Different words must not replace retry", { messageId: "steer-a", context })).toBe(false);
+    expect(runtime.delivery.find("steer-a").payload.request).toEqual(authored);
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
+  it("retains an uncertain authored steering request without turning it into a new send", async () => {
+    const f = fixture({ status: "working" });
+    const runtime = f.runtime.value;
+    const binding = createProjectVoiceBinding(runtime);
+    const context = binding.captureContext();
+    f.owners[0].session.value.agentSession.turn = { active: true, id: "codex-turn", state: "active" };
+    mocks.request.mockRejectedValue(new Error("The HTTP receipt was lost"));
+    expect(await binding.submitText("Keep these exact words", { messageId: "unknown-steer", context })).toBe(false);
+    const message = runtime.delivery.find("unknown-steer");
+    expect(message.status).toBe("uncertain");
+    const authored = { ...message.payload.request, data: { ...message.payload.request.data } };
+    expect(authored.steer).toBe(true);
+    f.snapshot(runtime.identity, { status: "working", capabilities: { steering: false, attachments: true } });
+    await vi.waitFor(() => expect(runtime.steerable.value).toBe(false));
+    expect(await binding.submitText("Do not replace these words", { messageId: "unknown-steer", context })).toBe(false);
+    expect(await binding.submitText("Do not bypass uncertainty", { messageId: "new-speech", context })).toBe(false);
+    expect(runtime.delivery.find("unknown-steer").payload.request).toEqual(authored);
+    expect(runtime.delivery.find("unknown-steer").status).toBe("uncertain");
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
+  it("preserves native turn and connection guards when the canonical conversation advertises steering", async () => {
+    const f = fixture({ status: "working" });
+    const runtime = f.runtime.value;
+    const binding = createProjectVoiceBinding(runtime);
+    const owner = f.owners[0];
+    for (const turn of [
+      { active: true, id: "native-turn", state: "active", status: "observation_lost" },
+      { active: true, state: "active" },
+      { active: true, id: "native-turn", state: "stopping" }
+    ]) {
+      owner.session.value.agentSession.turn = turn;
+      await expect(binding.submitText("Unsafe native steering", { messageId: "unsafe-steer", context: binding.captureContext() }))
+        .rejects.toThrow("Wait for this turn to finish or stop it before sending.");
+    }
+    owner.session.value.agentSession.turn = { active: true, id: "native-turn", state: "active" };
+    owner.agentConnectionStatus.value = "disconnected";
+    await expect(binding.submitText("Disconnected native steering", { messageId: "unsafe-steer", context: binding.captureContext() }))
+      .rejects.toThrow("Wait for this turn to finish or stop it before sending.");
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect(runtime.delivery.state.messages).toEqual([]);
+  });
+  it("cancels only the exact deferred speech and retires an undispatched follower on actor change", async () => {
+    const f = fixture({ status: "working", steering: false });
+    const runtime = f.runtime.value;
+    const binding = createProjectVoiceBinding(runtime);
+    const context = binding.captureContext();
+    f.snapshot(runtime.identity, { status: "working", capabilities: { steering: false, attachments: true } });
+    await nextTick();
+    const first = binding.submitText("Cancel these words", { messageId: "deferred-a", context });
+    const second = binding.submitText("Never cross accounts", { messageId: "deferred-b", context });
+    await vi.waitFor(() => expect(runtime.delivery.state.messages).toHaveLength(2));
+    expect(runtime.cancelMessage("unrelated")).toBe(false);
+    expect(runtime.cancelMessage("deferred-a")).toBe(true);
+    expect(await first).toBe(false);
+    f.viewer.value = { actorKey: "member" };
+    await nextTick();
+    expect(await second).toBe(false);
+    expect(runtime.available.value).toBe(false);
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+  it("stops both undispatched spoken followers through the original conversation Stop owner", async () => {
+    const f = fixture({ status: "working", steering: false });
+    const runtime = f.runtime.value;
+    const binding = createProjectVoiceBinding(runtime);
+    f.snapshot(runtime.identity, { status: "working", capabilities: { steering: false, attachments: true } });
+    await nextTick();
+    const first = binding.submitText("First waiting words", { messageId: "stop-a", context: binding.captureContext() });
+    const second = binding.submitText("Second waiting words", { messageId: "stop-b", context: binding.captureContext() });
+    await vi.waitFor(() => expect(runtime.delivery.state.messages).toHaveLength(2));
+    expect(await binding.cancelWork()).toEqual({ ok: true });
+    expect(await first).toBe(false);
+    expect(await second).toBe(false);
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request.mock.calls[0][0]).toMatch(/\/cancel$/);
+    expect(mocks.request.mock.calls[0][1].body).toBeUndefined();
+  });
   it("aborts only the captured pending message through the supplied Send owner", async () => {
     const f = fixture();
     let signal;
@@ -151,6 +316,7 @@ describe("retained project conversation ownership", () => {
     }));
     const runtime = f.runtime.value;
     const sending = runtime.send({ message: "Routing this exact request" }, { messageId: "pending-router" });
+    await vi.waitFor(() => expect(signal).toBeDefined());
     expect(runtime.cancelMessage("another-message")).toBe(false);
     expect(signal.aborted).toBe(false);
     expect(runtime.cancelMessage("pending-router")).toBe(true);

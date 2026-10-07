@@ -458,6 +458,7 @@ test("standalone finite execution drains descendants before reporting completion
 
   assert.equal(result.ok, true, result.output);
   const childPid = Number(await readFile(childPidPath, "utf8"));
+  assert.equal(result.execution.state, "finished");
   assert.throws(
     () => process.kill(childPid, 0),
     (error) => error?.code === "ESRCH"

@@ -700,10 +700,18 @@ Its conversation commands project the native thread ID after ordinary or Helper
 acquisition. The same Helper owner retains the pending-start map and awaited
 ACTIVE receipt: dispatch failure retires the Helper before releasing that map
 entry, while successful dispatch releases it before waiting for completion.
-Account rechecks and the READY receipt also belong to that owner. Vibe64's
-current bounded tasks use the common scoped runtime and retain account/profile
-authorization, output limits and result presentation. Previously saved Helper
-receipts keep their existing interrupt/delete cleanup.
+Account rechecks and the READY receipt also belong to that owner. The original
+server-only detached run/stream facades use one lazy operation on that same common
+runtime and native owners, without opening Main or writing a canonical transcript.
+The manager retains fresh access and trusted profile resolution. No-profile calls
+retain the Main writer lease for the complete turn; profile calls retain their
+separate admission. Codex/OpenCode emit the original audit before dispatch without
+awaiting it; Claude acquires its entry before awaiting the audit and starting work.
+Admitted context remains separate from each engine's original native options.
+Vibe64 supplies Codex's ordinary and Helper preparation, output bounds and contextual
+errors; shared owners retain watcher, account rechecks and Helper lifecycle.
+Current bounded tasks also use the unchanged scoped runtime. Saved Helper receipts
+keep their existing interrupt/delete cleanup.
 
 Database Copilot begins with bounded database identity and object counts, plus
 the exact selected table attached to each user question. The current selection

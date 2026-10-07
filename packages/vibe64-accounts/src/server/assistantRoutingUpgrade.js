@@ -2,6 +2,8 @@ import { publishStateUpgradeFiles, readUpgradeFile as readOptional, verifyUpgrad
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV2Format";
+import { validateAssistantRoutingConfiguration as validateV3 } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
+import { validateAssistantRoutingConfiguration as validateV4 } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/studioProjectContext";
@@ -37,6 +39,13 @@ function offlineSelection(engineId, modelProviderId, modelId, variantId = "") {
 }
 
 function upgradeAssistantRoutingConfiguration({ configuration, nativeHelpers = {}, connections = [], curatedConnections = [], historicalSelections = [] }) {
+  if ([3, 4].includes(configuration?.schemaVersion)) {
+    (configuration.schemaVersion === 3 ? validateV3 : validateV4)(configuration);
+    if (Object.keys(nativeHelpers).length || connections.some(item => item.helperModelId)) {
+      throw new Error("Current model routing coexists with legacy helper settings. Inspect the retained choices before upgrading.");
+    }
+    return configuration;
+  }
   if (configuration) validateAssistantRoutingConfiguration(configuration, { legacy: true });
   if (configuration?.schemaVersion === 2 && !Object.keys(nativeHelpers).length && !connections.some((item) => item.helperModelId) &&
       historicalSelections.every((item) => configuration.orchestrators[item.engineId])) return configuration;

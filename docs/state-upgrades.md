@@ -198,6 +198,25 @@ checkpoint bytes and validates a staged restore through these same readers.
 Its focused proof covers filesystem interruption and persistent lock contention,
 not actual fleet stopping, off-host retention or future coordinated project restores.
 
+## Training provenance and preparation compatibility
+
+`20261006-training-preparation` records the new-write release boundary for
+optional immutable project `training` provenance and learner preparation's
+saved initial session identity, `preparing`/`ready` phases and bounded failure
+observations. Ordinary project records without provenance and untouched reserved
+attempts remain valid and retain their exact bytes. Absence does not authorize
+inferred identities, preparation or historical repair.
+
+The script only reports this boundary. Check and apply convert no application
+files, invoke no project/session operation and require no data backup. The
+existing runner records its ordered completion once; interrupted or completed
+retries make no application changes. A candidate whose registry predates this
+entry refuses the newer ledger instead of accepting fields/phases it cannot read.
+This is a compatibility boundary, not training activation or a permissions grant.
+Use the candidate command's normal check, stopped-writer apply and successful
+ledger completion before any future release activates these new training writes.
+Learner-state backups remain the separate stopped-writer recovery procedure above.
+
 ## Catalog
 
 `20260925-native-conversation-lifecycle` records the additive native replacement
@@ -264,6 +283,49 @@ Focused evidence: `assistantRoutingConfigurationUpgrade.unit.test.js`,
 `assistantRoutingStateInventory.unit.test.js`, `assistantRoutingStateUpgrade.unit.test.js`
 and `stateUpgrades.unit.test.js`, including the packaged CLI and interrupted
 publication before ledger commit.
+
+## Known routing format compatibility
+
+`20261006-routing-format-compatibility` corrects the upgrade owners' handling of
+state already written by a newer supported routing format. Published numbered
+scripts remain unchanged. The existing V2 and role-name delegates validate exact
+known schema 3/4 configurations and captured routing instead of rejecting them
+as legacy Plan/Code settings or downgrading their version. The Helper delegate
+also accepts valid current Custom selections and retains its original walk of
+owned Helper execution-profile fields. A legacy profile name still follows that
+conversion; current format validation does not exempt it. Unknown versions,
+unknown roles, invalid selections and incompatible captured configurations still
+block preflight.
+
+Schema 4 Senior, Junior, Auto and Custom records already using current routing
+and profile names retain their original bytes, model, actor, messages, native
+identity and delivery receipts.
+They do not gain legacy fresh-admission flags. Actual older state still uses the
+original conversions and recovery rules. A terminal `done`/`cancelled` request
+with an explicit legacy schema 1/2 tag and no captured configuration retains
+its status and receipts, but gains the existing `admissionRequired: true`
+restriction after its legacy assignments are validated. The later role/Helper
+conversions preserve that restriction when advancing the tag to 4. It is needed
+to distinguish this original migration path from an incomplete native schema 4
+record; it does not reopen the terminal work or invent a configuration. An
+unrestricted native request with missing configuration still fails validation. Current settings that coexist with
+retired helper preferences require inspection rather than guessing which choice
+should replace the other. This is explicit stopped-service upgrade work; ordinary
+reads and startup do not backfill state.
+
+The correction runs read-only validation through all three existing routing
+upgrade owners on both `check` and `apply`. It creates no application replacement
+or backup; actual legacy conversion and interrupted publication remain owned by
+the earlier, separately recorded numbered upgrades. Existing current records
+retain their bytes, inode and modification time. Read-only `check` never records
+completion; only successful explicit `apply` appends the validation boundary to
+the ledger. Existing installations that already completed the old numbered
+scripts still run this new validation boundary. An interruption before ledger
+publication safely repeats the same read-only validation.
+
+Focused evidence remains in the original routing configuration, routing state,
+role-name, Helper and state-upgrade test files, including native pending/completed
+receipts, Custom choices and corruption carrying a current version tag.
 
 ## Senior, Junior and Intern role names
 
@@ -407,6 +469,27 @@ symlinked histories fail explicitly. Publication is atomic per record, and retry
 keeps already upgraded records and original backups. The upgrade opens no native
 conversation, sends no model request and changes no credentials.
 
+## Colleague retained conversations
+
+`20261006-colleague-conversation-history` adds schema version 3 to the existing
+private user record. It preserves the active public scope and its exact original
+backend identity, transcript, native journal, selection, watches, observations,
+assignments and unrelated fields. An empty previous-conversation list adds no
+historical chat and starts no work. Only a later explicit Start fresh operation
+creates a new chat identity and retains its predecessor; old native files remain
+untouched. Older candidate readers must not run against the new format.
+
+Check is read-only and accounts for the earlier pending schema/native upgrades.
+Apply requires all services and writers stopped. The owning Colleague operation
+validates every record before publication and backs up each complete original
+`conversation.json` under
+`upgrades/backups/20261006-colleague-conversation-history/<user-key>/` before the
+first atomic replacement. Retry retains the exact native identity and original
+backup; conflicting backups, malformed active or archived records, links and
+changed originals fail. Earlier published scripts remain immutable; their mutable
+owners strictly recognize the known new format without rewriting it. No reader,
+request or startup path performs the conversion.
+
 ## Native delivery journal
 
 `20261003-conversation-native-journal` upgrades existing Colleague runtime
@@ -498,3 +581,104 @@ old text, no alias table is created, and reads do not backfill the field. Messag
 without it retain the existing voice projection. This new-write-only addition
 requires no historical transformation or numbered upgrade. Colleague's selected
 `interimReply` is separate transient presentation and is never persisted.
+
+
+## Personal assistant preference boundary
+
+`20261006-personal-assistant-preferences` records a prospective compatibility
+boundary for explicit personal avatar/voice writes. The hosted settings owner
+uses `assistant-preferences/<authenticated-UID-base64url>/colleague.json` and
+`coding.json`, each a schemaVersion1 envelope containing exactly avatar and voice.
+Legacy `assistant-settings.json`, including its shared Colleague name, is retained
+unchanged. Missing personal profiles use defaults without creating files; corrupt
+or unsupported profiles fail closed in the original settings reader.
+
+Apply this boundary through the candidate command with writers stopped before
+activating personal writes. It changes only the ordered completion ledger and
+requires no data backup: no existing application file is converted or repaired.
+Retry is safe after interruption before ledger publication. An older registry
+refuses the newer ledger, so do not remove completion entries to bypass downgrade
+protection. Focused registry fixtures prove that refusal; they are not evidence
+of a deployed old release or live host activation. Avatar/voice preferences do
+not change conversation/session identity, microphone state or project access.
+
+## Training assessment compatibility boundary
+
+`20261006-training-assessments` is an appended prospective boundary for optional
+schema-version-1 `learning` fields on the existing learner progress and active
+summary. Admitted writes can retain pinned assessment evidence, immutable
+submission references and the current lesson resume checkpoint. Existing records
+without these fields remain valid. Check/apply uses the candidate's original
+ordered registry with every learner-state writer stopped before activation.
+
+The script changes only the completion ledger. It reads or converts no application
+record, needs no data backup, and is safe to retry before ledger publication. The
+prior registry refuses the newer ledger; do not remove ledger entries to enable a
+downgrade. This is not a historical repair or proof of a running lesson. The
+separate [learner-state backup/recovery procedure](training-state-recovery.md)
+continues to preserve the complete private state tree. No request handler, normal
+startup or project opening adds absent assessment fields.
+
+
+## Training attempt-history compatibility boundary
+
+`20261007-training-attempt-history` is appended after the assessment boundary for
+explicit new schema-version-1 attempt retirement/history and the empty active
+summary. Existing one-attempt reservations remain valid without an `ended` field;
+no project or learning history is converted or adopted. Apply the coherent
+candidate's complete ordered registry with every learner-state writer stopped
+before activating these writes.
+
+The script changes only the completion ledger. Check/apply reads or modifies no
+application record, requires no application-data backup and safely retries before
+ledger publication. A prior registry refuses the newer ledger; that focused proof
+is registry-version refusal, not a deployed old executable or a live upgrade.
+Keep the separate stopped-writer [private recovery procedure](training-state-recovery.md)
+for ordinary progress protection. Do not drop history or ledger entries to enable
+a downgrade. The boundary performs no Stop/archive/delete and activates no lesson
+discard/restart control.
+
+
+## Training question-admission compatibility boundary
+
+`20261007-training-question-admission` is appended after attempt history. It
+records the prospective new-write boundary for optional checkpoint
+`pendingQuestion.assistance` and `issuedRevision`, native
+`turn.metadata.trainingQuestionDelivery` in prepared/delivered phases, and
+canonical user `data.trainingQuestion`. Delivered question metadata retains the
+actual saved assistant `outputId`; an admitted user snapshot retains the exact
+question and its delivery `conversationId`, `turnId` and `outputId`. These facts
+associate an answer with a question; they do not grade it or prove a pass.
+
+Apply the complete candidate registry with all learner and conversation writers
+stopped before activating these writes. Check is read-only; this script reads or
+converts no learner, message or turn record. Only the ordered ledger changes, so
+no application-data backup is required for this step. Interrupted ledger
+publication safely retries. Existing bytes, modes and identities remain intact;
+missing historical provenance stays missing and ungraded. No request, account
+read, project opening or startup backfills it.
+
+The previous registry refuses the newer completed ledger. The focused test proves
+registry-version refusal, not operation of a deployed older artifact or live host
+activation. Keep normal stopped-writer backups for application-state protection;
+do not delete ledger entries or invent old output associations to bypass the
+boundary. This step starts no conversation, sends no message and enables no tool.
+
+## Personal voice policy compatibility boundary
+
+`20261008-personal-voice-policy` is appended after question admission. New explicit
+personal preference writes may retain optional `readAloud` for Colleague and
+coding assistants, and optional `vocalizeThinking`, `vocalizeInterimTurns` and
+`thinkingSounds` booleans for coding assistants only. Existing schema-1
+avatar/voice-only profiles remain valid and byte-identical until the person
+explicitly saves a preference. Missing fields use the owning host's defaults;
+reads, realtime hydration and ordinary startup create or repair no profile.
+
+Apply the candidate registry with preference writers stopped before activation.
+This prospective script reads and converts no application file and needs no
+application-data backup. Check is read-only; apply changes only the original
+ordered ledger. Interrupted publication safely retries, and the previous registry
+refuses the newer ledger. The original tests preserve profile bytes, modes,
+inodes and timestamps through check, interruption, retry and refusal; this is
+registry-version proof, not a claim of live host activation. Published scripts
+remain unchanged and the runner's normal backup/locking contract is unchanged.

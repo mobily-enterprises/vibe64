@@ -1,5 +1,58 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { createRenderer, defineComponent, nextTick, reactive, ref, shallowRef } from "vue";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "../../src/lib/vibe64AssistantHost.js";
+
+const pageFixture = vi.hoisted(() => ({ route: null, router: null }));
+vi.mock("vue-router", async importOriginal => ({
+  ...await importOriginal(),
+  useRoute: () => pageFixture.route,
+  useRouter: () => pageFixture.router
+}));
+vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent() {} }));
+vi.mock("@tanstack/vue-query", () => ({ useQueryClient: () => ({ invalidateQueries: vi.fn() }) }));
+vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: vi.fn() }) }));
+vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
+  useCommand: () => ({ canRun: false, isRunning: false, run: vi.fn() })
+}));
+vi.mock("@/composables/useStudioShellDrawer.js", () => ({ useStudioShellDrawer() {} }));
+vi.mock("@/composables/useVibe64ProjectsResource.js", () => ({
+  useVibe64ProjectsResource: () => ({ loadError: ref(""), projects: ref([]),
+    selfTargetAutoSelectProjectRepro: ref(null), targetRoot: ref(""), isLoading: ref(false) })
+}));
+
+const mountedPages = [];
+afterEach(() => {
+  for (const app of mountedPages.splice(0)) app.unmount();
+  vi.unstubAllGlobals();
+});
+
+function mountAppPage({ mobile = true, path = "/app/project/practice" } = {}) {
+  pageFixture.route = reactive({ path, params: { slug: "practice" }, query: {} });
+  pageFixture.router = { push: vi.fn(async () => {}), afterEach: vi.fn(() => () => {}) };
+  const media = { matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+  vi.stubGlobal("window", { matchMedia: () => media });
+  const layout = shallowRef(null);
+  const event = { type: "click", isTrusted: true };
+  const begin = vi.fn((input, control) => input === event ? { control } : null);
+  let page;
+  const finish = vi.fn(ticket => {
+    expect(layout.value.projectVisible || layout.value.chatVisible).toBe(true);
+    if (ticket.control === "preview-select") expect(layout.value.projectVisible).toBe(true);
+  });
+  const gestures = shallowRef({ begin, finish });
+  const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp(defineComponent({ setup() {
+    page = useVibe64AppPage();
+    return () => null;
+  } }));
+  app.provide(VIBE64_COLLEAGUE_LAYOUT_KEY, layout);
+  app.provide(VIBE64_TRAINING_LEARNER_GESTURE_KEY, gestures);
+  app.mount({});
+  mountedPages.push(app);
+  page.handleProjectSelectionReady({ currentProject: { slug: "practice" } });
+  return { page, layout, event, begin, finish, media };
+}
 
 import {
   dashboardReturnPath,
@@ -7,10 +60,57 @@ import {
   projectPaneNavigationReady,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,
-  selfTargetAutoSelectProjectTarget
+  selfTargetAutoSelectProjectTarget,
+  useVibe64AppPage
 } from "../../src/composables/useVibe64AppPage.js";
 
 describe("Vibe64 app page", () => {
+  it("phone Show project uses one original Preview ticket after making the workspace visible", async () => {
+    const { page, layout, event, begin, finish } = mountAppPage();
+    expect(layout.value.ready).toBe(true);
+    expect(page.chatToggleTitle.value).toBe("Show project");
+    expect(layout.value.projectVisible).toBe(false);
+    page.showProjectPane(event);
+    await nextTick();
+    expect(begin).toHaveBeenCalledExactlyOnceWith(event, "preview-select");
+    expect(finish).toHaveBeenCalledExactlyOnceWith({ control: "preview-select" });
+    expect(layout.value.projectVisible).toBe(true);
+    expect(page.chatToggleTitle.value).toBe("Show chat");
+    page.setChatCollapsed(true, event);
+    expect(begin).toHaveBeenCalledTimes(1);
+    page.setChatCollapsed(false, event);
+    expect(begin).toHaveBeenLastCalledWith(event, "chat-show");
+    expect(finish).toHaveBeenLastCalledWith({ control: "chat-show" });
+    expect(layout.value.chatVisible).toBe(true);
+  });
+
+  it("programmatic attention, dashboard reveal and desktop collapse do not manufacture Preview receipts", () => {
+    const phone = mountAppPage();
+    phone.page.showProjectPane();
+    expect(phone.begin).toHaveBeenCalledWith(undefined, "preview-select");
+    expect(phone.finish).not.toHaveBeenCalled();
+    expect(phone.layout.value.projectVisible).toBe(true);
+    const dashboard = mountAppPage({ path: "/app/project/practice/dashboard/env" });
+    dashboard.page.showProjectPane(dashboard.event);
+    expect(dashboard.begin).not.toHaveBeenCalled();
+    expect(dashboard.finish).not.toHaveBeenCalled();
+    const desktop = mountAppPage({ mobile: false });
+    desktop.page.setChatCollapsed(true, desktop.event);
+    expect(desktop.begin).not.toHaveBeenCalled();
+    expect(desktop.finish).not.toHaveBeenCalled();
+  });
+
+  it("explicit Preview navigation retains its original one-ticket ownership and public clicks forward the event", () => {
+    const { page, event, begin, finish } = mountAppPage();
+    page.selectProjectPane("preview", event);
+    expect(begin.mock.calls).toEqual([[event, "preview-select"], [undefined, "preview-select"]]);
+    expect(finish).toHaveBeenCalledExactlyOnceWith({ control: "preview-select" });
+    const source = readFileSync(new URL("../../src/pages/app/project/[slug].vue", import.meta.url), "utf8");
+    expect(source).toContain('@click="setChatCollapsed(!chatCollapsed, $event)"');
+    expect(source).toContain('@click="selectProjectPane(tab.id, $event)"');
+    expect(source).toContain('@click="selectProjectPane(mobileProjectAction.pane, $event)"');
+  });
+
   it("shows only open projects in the project switcher", () => {
     const projects = [
       { runtime: { open: false }, slug: "closed" },

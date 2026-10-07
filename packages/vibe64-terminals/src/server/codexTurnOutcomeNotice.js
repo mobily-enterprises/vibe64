@@ -4,7 +4,9 @@ const CODEX_TURN_OUTCOME = Object.freeze({
   PROVIDER_FAILURE: "provider_failure",
   RESPONSE_DELIVERY_FAILURE: "response_delivery_failure",
   SERVICE_RESTART: "service_restart",
-  USER_CANCELLED: "user_cancelled"
+  USER_CANCELLED: "user_cancelled",
+  CONTROL_RECONFIGURATION: "control_reconfiguration",
+  INTERRUPTED: "interrupted"
 });
 
 const CODEX_TURN_OUTCOME_MESSAGES = Object.freeze({
@@ -15,7 +17,11 @@ const CODEX_TURN_OUTCOME_MESSAGES = Object.freeze({
   [CODEX_TURN_OUTCOME.SERVICE_RESTART]:
     "Codex was interrupted by a Vibe64 restart before it could finish. Saved file changes remain; send a message to continue.",
   [CODEX_TURN_OUTCOME.USER_CANCELLED]:
-    "You stopped Codex before it finished. Saved file changes remain; send a message to continue."
+    "You stopped Codex before it finished. Saved file changes remain; send a message to continue.",
+  [CODEX_TURN_OUTCOME.CONTROL_RECONFIGURATION]:
+    "Codex was interrupted while Vibe64 restored its controls. Saved file changes remain; send a message to continue.",
+  [CODEX_TURN_OUTCOME.INTERRUPTED]:
+    "Codex was interrupted before it finished. Saved file changes remain; send a message to continue."
 });
 const CODEX_USAGE_BILLING_LINK =
   "[View Codex usage & billing](https://chatgpt.com/codex/settings/usage)";
@@ -43,7 +49,7 @@ function codexTurnOutcomeNoticeMessage(outcome = "", detail = "", {
 } = {}) {
   const normalizedOutcome = normalizeText(outcome);
   const message = CODEX_TURN_OUTCOME_MESSAGES[normalizedOutcome] ||
-    CODEX_TURN_OUTCOME_MESSAGES[CODEX_TURN_OUTCOME.PROVIDER_FAILURE];
+    "Codex could not finish. Saved file changes remain; send a message to continue.";
   const normalizedDetail = normalizeText(detail);
   let notice = message;
   if (normalizedDetail) {

@@ -7,14 +7,38 @@ bundles, verified server-only installation from admitted owner-selected local
 sources, and read-only validation of pinned topic snapshots. Consumes the existing
 CLI entry point without changing editor launch. Owns private server-only pinned
 learner reservations outside projects, reusing Core atomic writes and Kernel locks.
-No assessment progress, hosted provisioning, teaching runtime or public lesson
-start/installation action exists yet. JSKIT and
+Owns installed immutable course definitions/locks and revisioned enablement, and
+declared visual asset reads from exact installed lesson pins. These are internal
+server facilities without course controls or source access for Colleague.
+Owns bounded durable assessment receipts and lesson resume state, checked against
+the installed pin, plus a read-only teaching brief without executable assets or
+source paths. Owns internal pinned-rubric grading through the existing retained
+tool-free Helper; admission, serialized lifetime and progress writes stay with
+their original owners. The answer-assessment action binds the original native Colleague
+admission and Helper; it cannot accept model-supplied answers or outcomes. Internal
+declared exercise checks reuse the original project/App/managed-command owners and
+confirm server observations, not learner passes. Provides shared fresh-actor
+course/read/start/resume and current interactive question-preparation actions; a host
+binds exercise preparation, otherwise start/resume reports unavailable. Teaching
+delivery, public standalone provisioning and installation controls remain incomplete. JSKIT and
 Genesis do not own teaching semantics. Topic source
 and generated bundles are author-controlled files, rather than database tables.
+
+Explicit local operator CLI commands install exact committed topics, read the
+fresh installed catalogue and enable/disable exact course releases using its
+current revision. They reuse the original installer/catalogue owners and unchanged
+formats, with no browser/model paths or automatic seeding. Publication,
+installation and learner admission remain separate operations.
+
+Release-matched lesson-authoring guidance connects existing Colleague assignments
+and same-session review to requested native Save/PR publication, while retaining
+the coding/CLI and operator boundaries. Teaching usage is split into bounded
+authoring, learner and pinned-recovery topics through the original usage reader.
 
 ### Program
 
 - `genesis/program/training/content.md`
+- `genesis/program/training/teaching.md`
 
 ### Data owned
 

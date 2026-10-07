@@ -121,6 +121,7 @@ import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFix
 
 const props = defineProps({
   active: Boolean,
+  presentation: { type: Object, default: null },
   archived: Boolean,
   busy: Boolean,
   canAsk: Boolean,
@@ -173,6 +174,7 @@ const showPreview = computed(() => {
 });
 const colleaguePreview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
 const displayedPreview = {
+  get presentation() { return props.presentation; },
   get projectSlug() { return projectSlug.value; },
   get sessionId() { return props.sessionId; },
   get screen() {

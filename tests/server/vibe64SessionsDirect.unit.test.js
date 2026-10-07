@@ -156,6 +156,9 @@ function sessionCreationPolicyHarness({
   let nextSession = openSessions.length + 1;
   const runtime = {
     store: {
+      ...(runtimeRoot ? { assertSessionCreationAbsent: createVibe64SessionStore({
+        projectRuntimeRoot: runtimeRoot
+      }).assertSessionCreationAbsent } : {}),
       async listSessionsForRenewal() {
         return openSessions.map((session) => ({ ...session }));
       }
@@ -3294,6 +3297,92 @@ test("shared-session admission releases its lock before realtime publication", a
     assert.equal(accepted.ok, true);
     assert.equal(accepted.sessionId, "session-1");
   });
+});
+
+test("internal reserved sessions carry the exact verified commit after an absence check under policy exclusion", async () => {
+  for (const expectedCommit of ["a".repeat(40), "B".repeat(64)]) {
+    await withTemporaryRoot(async (targetRoot) => {
+      const actor = { username: "ada" };
+      const sessionId = "training-pinned-session";
+      const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(targetRoot) });
+      let policyHeld = false;
+      const events = [];
+      const originalPolicy = harness.project.runProjectSessionPolicyExclusive;
+      harness.project.runProjectSessionPolicyExclusive = (operation, options) => originalPolicy(async () => {
+        policyHeld = true;
+        try { return await operation(); } finally { policyHeld = false; }
+      }, options);
+      const originalAbsence = harness.runtime.store.assertSessionCreationAbsent;
+      harness.runtime.store.assertSessionCreationAbsent = async (id) => {
+        assert.equal(policyHeld, true);
+        assert.equal(id, sessionId);
+        assert.equal(harness.creationInputs.length, 0);
+        events.push("absence");
+        return originalAbsence(id);
+      };
+      const originalCreate = harness.runtime.createSession;
+      harness.runtime.createSession = async (input) => {
+        assert.equal(policyHeld, true);
+        events.push("create");
+        return originalCreate(input);
+      };
+      const created = await harness.service.createSession({ vibe64User: actor,
+        sessionId: "untrusted-session", expectedCommit: "f".repeat(40)
+      }, { sessionId, expectedCommit });
+      assert.equal(created.ok, true, created.error);
+      assert.equal(created.sessionId, sessionId);
+      assert.deepEqual(events, ["absence", "create"]);
+      assert.deepEqual(harness.creationInputs[0].sourceContext, { expectedCommit, vibe64User: actor });
+      assertInitialPlanMetadata(harness.creationInputs[0].metadata, "ada");
+    });
+  }
+});
+
+test("internal commit validation refuses missing identity, incomplete objects and branch or PR overrides before preparation", async () => {
+  const cases = [
+    [{}, { expectedCommit: "a".repeat(40) }],
+    ...[null, 40, "", "a".repeat(39), "a".repeat(41), "a".repeat(63), "g".repeat(40), ` ${"a".repeat(40)}`]
+      .map(expectedCommit => [{}, { sessionId: "training-pinned-session", expectedCommit }]),
+    [{ repositoryBranch: { name: "main" } }, { sessionId: "training-pinned-session", expectedCommit: "a".repeat(40) }],
+    [{ pullRequestNumber: 1 }, { sessionId: "training-pinned-session", expectedCommit: "a".repeat(40) }],
+    [{}, { sessionId: "../outside", expectedCommit: "a".repeat(40) }]
+  ];
+  for (const [input, options] of cases) {
+    const harness = sessionCreationPolicyHarness();
+    harness.project.resolvePullRequestSource = async () => { assert.fail("Invalid internal options must precede PR resolution."); };
+    const result = await harness.service.createSession(input, options);
+    assert.equal(result.ok, false, JSON.stringify(options));
+    assert.equal(harness.runtimeCreations, 0);
+    assert.equal(harness.creationInputs.length, 0);
+  }
+  await withTemporaryRoot(async targetRoot => {
+    const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(targetRoot) });
+    const result = await harness.service.createSession({ sessionId: "untrusted-session", expectedCommit: "a".repeat(40) });
+    assert.equal(result.ok, true, result.error);
+    assert.equal(result.sessionId, "session-1");
+    assert.deepEqual(harness.creationInputs[0].sourceContext, { vibe64User: null });
+  });
+});
+
+test("reserved creation refuses original durable session evidence or unavailable absence authority before runtime writes", async () => {
+  for (const existingEvidence of [true, false]) {
+    await withTemporaryRoot(async targetRoot => {
+      const runtimeRoot = projectRuntimeRoot(targetRoot);
+      const sessionId = "training-pinned-session";
+      const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: runtimeRoot });
+      const store = createVibe64SessionStore({ projectContextRoot: targetRoot, projectRuntimeRoot: runtimeRoot });
+      if (existingEvidence) await store.createSession({ sessionId, runtimeKind: "genesis" });
+      else delete harness.runtime.store.assertSessionCreationAbsent;
+      const result = await harness.service.createSession({}, { sessionId, expectedCommit: "a".repeat(40) });
+      assert.equal(result.ok, false);
+      if (existingEvidence) {
+        assert.equal(result.code, "vibe64_session_creation_state_conflict");
+        assert.equal((await store.readSession(sessionId)).sessionId, sessionId);
+      } else assert.match(result.error, /absence check/);
+      assert.equal(harness.creationInputs.length, 0);
+      assert.equal(harness.openSessions.length, 0);
+    });
+  }
 });
 
 for (const reservedSessionId of [undefined, "training-reserved-session"]) {

@@ -132,7 +132,7 @@ const {
             type="button"
             variant="tonal"
             :aria-label="chatToggleTitle"
-            @click="setChatCollapsed(!chatCollapsed)"
+            @click="setChatCollapsed(!chatCollapsed, $event)"
           />
 
           <div
@@ -149,7 +149,7 @@ const {
               role="tab"
               type="button"
               :aria-selected="projectPane === tab.id ? 'true' : 'false'"
-              @click="selectProjectPane(tab.id)"
+              @click="selectProjectPane(tab.id, $event)"
             >
               {{ tab.label }}
             </button>
@@ -164,7 +164,7 @@ const {
             class="studio-home-shell-project-mobile-action"
             type="button"
             :aria-label="mobileProjectAction.ariaLabel"
-            @click="selectProjectPane(mobileProjectAction.pane)"
+            @click="selectProjectPane(mobileProjectAction.pane, $event)"
           >
             {{ mobileProjectAction.label }}
             <v-icon :icon="mdiChevronRight" size="15" />

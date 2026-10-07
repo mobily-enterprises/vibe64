@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
+import { prepareSessionDetachedConversationRun } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
@@ -197,4 +199,95 @@ test("OpenCode provider routes the complete interactive terminal lifecycle", asy
     { trackGitActor: true }
   ]);
   assert.equal(calls[4].args[4].vibe64User.username, "ada");
+});
+
+function detachedOpenCodeFixture({ controller }) {
+  let provider;
+  const conversations = createConversationRuntime({
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+    host: { conversation: ({ id, context, input, options }) =>
+      prepareSessionDetachedConversationRun(provider, id, context, input, options) }
+  });
+  provider = createOpenCodeSessionAgentProvider({ accounts: {},
+    runNativeDetachedConversation: request => conversations.runNativeDetachedConversation(request),
+    sharedRuntime: { runPreparedConversationTurn: prepared =>
+      controller.runDetachedChatTurn(prepared.sessionId, prepared.input, prepared.options) },
+    scopedPreparation: { prepareDetachedChatTurn(sessionId, input, options, policy) {
+      assert.equal(policy.waitForCompletion, true);
+      return { sessionId, input, options };
+    } }
+  });
+  return provider;
+}
+
+test("Restored detached: OpenCode provider advertises and audits its helper execution profile on turns", async () => {
+  const events = [];
+  const calls = [];
+  const controller = {
+    async runDetachedChatTurn(...args) {
+      calls.push(args);
+      return {
+        ok: true,
+        text: '{"subject":"Add multi-AI sessions"}',
+        threadId: "ses_helper"
+      };
+    },
+    async streamDetachedChatTurn(...args) {
+      calls.push(args);
+      return {
+        ok: true,
+        text: '{"subject":"Add streamed multi-AI sessions"}',
+        threadId: "ses_streamed_helper"
+      };
+    }
+  };
+  const provider = detachedOpenCodeFixture({ controller });
+  const profile = resolveOpenCodeHelperExecutionProfile({
+    assistantSelection: selection,
+    assistantAccess
+  }, {
+    profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
+    workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.COMMIT_TITLE
+  });
+  const result = await provider.runDetachedChatTurn({
+    assistantSelection: selection,
+    assistantAccess,
+    onEvent: (event) => events.push(event),
+    runtime: { stateRoot: "/runtime" },
+    session: { sessionId: "session-1" },
+    sessionId: "session-1"
+  }, {
+    executionProfile: profile,
+    prompt: "Name this work"
+  });
+  const streamed = await provider.streamDetachedChatTurn({
+    assistantSelection: selection,
+    assistantAccess,
+    onEvent: (event) => events.push(event),
+    runtime: { stateRoot: "/runtime" },
+    session: { sessionId: "session-1" },
+    sessionId: "session-1"
+  }, {
+    executionProfile: profile,
+    prompt: "Name streamed work"
+  });
+
+  assert.deepEqual(provider.executionProfiles, [VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER]);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0][0], "session-1");
+  assert.equal(calls[0][1].executionProfile, profile);
+  assert.equal(calls[1][0], "session-1");
+  assert.equal(calls[1][1].executionProfile, profile);
+  assert.deepEqual(events, [
+    {
+      executionProfile: profile,
+      type: "execution-profile"
+    },
+    {
+      executionProfile: profile,
+      type: "execution-profile"
+    }
+  ]);
+  assert.deepEqual(result.executionProfile, profile);
+  assert.deepEqual(streamed.executionProfile, profile);
 });

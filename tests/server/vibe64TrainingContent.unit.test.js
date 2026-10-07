@@ -278,3 +278,128 @@ test("publish-manifest writes a pinned whole-topic lock without changing source 
   assert.deepEqual(JSON.parse(await readFile(lockPath, "utf8")), course);
   assert.equal(git("status", "--porcelain"), "", "Rejected output paths leave the source clean");
 });
+
+
+test("visual descriptor lists accept their exact bounds and reject valid excess items", async t => {
+  const f = await fixture(t);
+  // Optional assets and checks' optional assets are absent in the original fixture.
+  assert.equal((await validateTopic(f.root)).bundles[0].manifest.files.length, 8);
+  const states = ["overview", "arrived", ...Array.from({ length: 30 }, (_, index) => `state-${index}`)];
+  const parameters = Array.from({ length: 8 }, (_, index) => ({ name: `label-${index}`, required: true, maxLength: 256 }));
+  const commands = Array.from({ length: 32 }, (_, index) => ({ ...f.visual.commands[0], name: `command-${index}`, parameters }));
+  const assets = Array.from({ length: 32 }, (_, index) => `asset-${index}.txt`);
+  for (const name of [...assets, "asset-extra.txt"]) {
+    await f.write(`training/visuals/flow/${name}`, "Declared visual asset.\n");
+  }
+  const visual = { ...f.visual, states, commands, assets };
+  await f.write("training/visuals/flow/visual.json", visual);
+  assert.equal((await validateTopic(f.root)).bundles[0].manifest.files.length, 40);
+
+  const changes = [
+    { states: [...states, "extra-state"] },
+    { commands: [...commands, { ...commands[0], name: "extra-command" }] },
+    { commands: [{ ...commands[0], parameters: [...parameters, { name: "extra-label", required: true, maxLength: 256 }] }] },
+    { assets: [...assets, "asset-extra.txt"] }
+  ];
+  for (const change of changes) {
+    await f.write("training/visuals/flow/visual.json", { ...visual, ...change });
+    await assert.rejects(() => validateTopic(f.root), error => {
+      assert.match(error.message, /Schema validation failed/u);
+      assert.match(JSON.stringify(error.fieldErrors), /Expected at most (8|32) items/u);
+      return true;
+    });
+  }
+});
+
+async function operatorFixture(t) {
+  const f = await fixture(t);
+  await f.write("training/exercises/app/server.mjs", "throw new Error('Installation must not launch the exercise');\n");
+  await f.write("package.json", { name: "learn-test-topic", version: "0.1.0", repository: {
+    type: "git", url: "https://github.com/example/learn-test-topic.git" }, vibe64Training: f.topic });
+  const git = (...args) => execFileSync("git", ["-C", f.root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git("init", "--initial-branch=main");
+  git("add", ".");
+  git("-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "Fixture topic");
+  const owner = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-operator-"));
+  t.after(() => rm(owner, { recursive: true, force: true }));
+  const course = { schemaVersion: 1, courseId: "first-course", title: "First", release: "0.1.0", status: "preview",
+    topics: [{ topicId: "test-topic", release: "0.1.0" }] };
+  const coursePath = path.join(owner, "course.json"), lockPath = path.join(owner, "course.lock.json");
+  await writeFile(coursePath, JSON.stringify(course));
+  await runTrainingCli(["publish-manifest", coursePath, f.root], { write() {} });
+  const outputs = [];
+  const run = (...args) => runTrainingCli(args, { write: text => outputs.push(JSON.parse(text)) });
+  return { ...f, git, owner, course, coursePath, lockPath, systemRoot: path.join(owner, "system"), outputs, run };
+}
+
+test("operator CLI separately installs exact committed content and enables or disables with fresh catalogue CAS", async t => {
+  const f = await operatorFixture(t);
+  const courseBefore = await readFile(f.coursePath), lockBefore = await readFile(f.lockPath);
+  await f.run("installed-courses", f.systemRoot);
+  assert.deepEqual(f.outputs.at(-1), { ok: true, schemaVersion: 1, revision: 0, courses: [] });
+  await assert.rejects(readFile(path.join(f.systemRoot, "training/catalogue.json")), { code: "ENOENT" });
+  await assert.rejects(f.run("install-topic", f.root, f.systemRoot), { code: "ENOENT" });
+  await mkdir(f.systemRoot);
+  await assert.rejects(f.run("enable-course", f.coursePath, f.lockPath, f.systemRoot, "0"));
+  await f.run("install-topic", f.root, f.systemRoot);
+  const first = f.outputs.at(-1);
+  assert.equal(first.installed, true);
+  assert.equal(first.pin.commit, f.git("rev-parse", "HEAD"));
+  assert.equal(first.pin.repository, "example/learn-test-topic");
+  const snapshot = path.join(f.systemRoot, "training/content/test-topic", first.pin.commit);
+  assert.deepEqual(JSON.parse(await readFile(path.join(snapshot, "pin.json"), "utf8")), first.pin);
+  await f.run("installed-courses", f.systemRoot);
+  assert.equal(f.outputs.at(-1).courses.length, 0, "installing never enables a course");
+  await f.run("install-topic", f.root, f.systemRoot);
+  assert.equal(f.outputs.at(-1).installed, false);
+  assert.deepEqual(f.outputs.at(-1).pin, first.pin);
+  await f.run("enable-course", f.coursePath, f.lockPath, f.systemRoot, "0");
+  assert.equal(f.outputs.at(-1).revision, 1);
+  assert.equal(f.outputs.at(-1).entry.enabled, true);
+  await assert.rejects(f.run("disable-course", f.course.courseId, f.course.release, f.systemRoot, "0"),
+    { code: "VIBE64_TRAINING_CATALOGUE_REVISION_CONFLICT" });
+  await f.run("enable-course", f.coursePath, f.lockPath, f.systemRoot, "1");
+  assert.equal(f.outputs.at(-1).changed, false);
+  await f.run("disable-course", f.course.courseId, f.course.release, f.systemRoot, "1");
+  assert.equal(f.outputs.at(-1).revision, 2);
+  assert.equal(f.outputs.at(-1).entry.enabled, false);
+  await f.run("installed-courses", f.systemRoot);
+  assert.equal(f.outputs.at(-1).revision, 2);
+  assert.equal(f.outputs.at(-1).courses[0].enabled, false);
+  assert.deepEqual(JSON.parse(await readFile(path.join(snapshot, "pin.json"), "utf8")), first.pin,
+    "disabling retains the exact installed pin for existing attempts");
+  assert.deepEqual(await readFile(f.coursePath), courseBefore);
+  assert.deepEqual(await readFile(f.lockPath), lockBefore);
+  assert.equal(f.git("status", "--porcelain"), "");
+  assert.equal(f.git("remote"), "", "local provisioning never publishes a remote source");
+});
+
+test("operator CLI refuses malformed revisions aliases dirty sources and changed releases without repair", async t => {
+  const f = await operatorFixture(t);
+  await mkdir(f.systemRoot);
+  for (const revision of ["", "-1", "1.5", "+1", "01", "9007199254740992"]) {
+    await assert.rejects(f.run("enable-course", f.coursePath, f.lockPath, f.systemRoot, revision), /Usage/u);
+    await assert.rejects(f.run("disable-course", f.course.courseId, f.course.release, f.systemRoot, revision), /Usage/u);
+  }
+  for (const args of [["install-topic", f.root], ["installed-courses", f.systemRoot, "extra"],
+    ["enable-course", f.coursePath, f.lockPath, f.systemRoot, "0", "extra"],
+    ["disable-course", f.course.courseId, f.course.release, f.systemRoot]]) await assert.rejects(f.run(...args), /Usage/u);
+  await assert.rejects(readFile(path.join(f.systemRoot, "training/catalogue.json")), { code: "ENOENT" });
+  const alias = path.join(f.owner, "system-alias");
+  await symlink(f.systemRoot, alias, "dir");
+  await assert.rejects(f.run("installed-courses", alias), { code: "VIBE64_TRAINING_CATALOGUE_INVALID" });
+  await assert.rejects(f.run("install-topic", f.root, alias), /alias/u);
+  await f.write("training/checks/response.mjs", "// Changed after the pin\n");
+  await assert.rejects(f.run("install-topic", f.root, f.systemRoot), /Commit the topic/u);
+  await assert.rejects(readFile(path.join(f.systemRoot, "training/catalogue.json")), { code: "ENOENT" });
+  await f.write("training/checks/response.mjs", "// Pinned response check\n");
+  await f.run("install-topic", f.root, f.systemRoot);
+  await f.run("enable-course", f.coursePath, f.lockPath, f.systemRoot, "0");
+  await writeFile(f.coursePath, JSON.stringify({ ...f.course, title: "Different approved definition" }));
+  await assert.rejects(f.run("enable-course", f.coursePath, f.lockPath, f.systemRoot, "1"),
+    { code: "VIBE64_TRAINING_COURSE_RELEASE_CONFLICT" });
+  const cataloguePath = path.join(f.systemRoot, "training/catalogue.json");
+  await writeFile(cataloguePath, "{broken");
+  await assert.rejects(f.run("installed-courses", f.systemRoot), { code: "VIBE64_TRAINING_CATALOGUE_INVALID" });
+  assert.equal(await readFile(cataloguePath, "utf8"), "{broken", "a read never repairs invalid operator state");
+});

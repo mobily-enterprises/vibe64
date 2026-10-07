@@ -6,7 +6,7 @@ import { upgradeAssistantHelpers } from "@local/vibe64-accounts/server/assistant
 import { upgradeAssistantRoles } from "@local/vibe64-accounts/server/assistantRoleUpgrade";
 import { upgradeCompletedDiscussionPlan } from "@local/vibe64-accounts/server/completedDiscussionPlanUpgrade";
 import { upgradeAssistantPlans } from "@local/vibe64-accounts/server/assistantPlanUpgrade";
-import { upgradeColleagueConversations, upgradeColleagueConversationRuntime } from "@local/vibe64-colleague/server/conversationUpgrade";
+import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory } from "@local/vibe64-colleague/server/conversationUpgrade";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 
 try {
@@ -29,6 +29,7 @@ try {
     upgradeColleagueConversations,
     upgradeSessionConversations,
     upgradeColleagueConversationRuntime,
+    upgradeColleagueConversationHistory,
     inspectConversationUndoRetirement,
     report: (level, message) => {
       const line = `[vibe64-upgrade] ${level.toUpperCase()}: ${message}`;

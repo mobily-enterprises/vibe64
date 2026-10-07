@@ -8,7 +8,8 @@ import {
   VIBE64_ASSISTANT_TRANSPORT_IDS,
   Vibe64AgentExecutionProfileError,
   defineVibe64AgentExecutionProfileRequest,
-  defineVibe64AgentExecutionProfileResolution
+  defineVibe64AgentExecutionProfileResolution,
+  vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 import { OPENCODE_EXPECTED_VERSION, openCodeRuntimeFailure as runtimeFailure } from "../../opencodeServerProcess.js";
 import { openCodeSessionId as safeSessionId, opencodeTerminalNamespace } from "../../terminalShared.js";
@@ -72,6 +73,19 @@ function resolveOpenCodeHelperExecutionProfile(context = {}, request = {}) {
   });
 }
 
+function emitOpenCodeExecutionProfile(context = {}, executionProfile = null) {
+  if (!executionProfile) {
+    return null;
+  }
+  const snapshot = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
+  context.onEvent?.({
+    executionProfile: snapshot,
+    type: "execution-profile"
+  });
+  return snapshot;
+}
+
+
 function unsupportedOperation(operation = "operation") {
   return {
     code: "vibe64_opencode_operation_unsupported",
@@ -83,6 +97,7 @@ function unsupportedOperation(operation = "operation") {
 
 function createOpenCodeSessionAgentProvider({
   sharedRuntime,
+  runNativeDetachedConversation,
   hostPreparation = {},
   accounts,
   mainMessagePreparation = {},
@@ -159,14 +174,14 @@ function createOpenCodeSessionAgentProvider({
           })
         } }
       };
-      if (mode === "scoped" || mode === "create" || mode === "detachedCleanup") return {
+      if (mode === "scoped" || mode === "create" || mode === "detached" || mode === "detachedCleanup") return {
         namespace: opencodeTerminalNamespace(sessionId),
         native: {
           owner: sharedRuntime,
           preparation: {
             cleanup: current => prepareSessionCleanup(sessionId, current),
             creation: (input, options) => prepareConversationCreation(sessionId, input, options),
-            turn: (input, options) => prepareDetachedChatTurn(sessionId, input, options, { waitForCompletion: false }),
+            turn: (input, options) => prepareDetachedChatTurn(sessionId, input, options, { waitForCompletion: mode === "detached" }),
             existing: (input, options, { operation } = {}) => prepareExistingDetachedTarget(sessionId,
               operation === "delete" ? { ...input, persistent: input.persistent || Boolean(options?.assistantScope) } : input,
               options)
@@ -210,6 +225,22 @@ function createOpenCodeSessionAgentProvider({
   return Object.freeze({
     prepareConversationHost,
     conversationOperations: Object.freeze(["createConversation", "ensureSession", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation"]),
+    async runDetachedChatTurn(context, input = {}) {
+      const executionProfile = emitOpenCodeExecutionProfile(context, input.executionProfile);
+      const result = await runNativeDetachedConversation({
+        id: context.sessionId, context, input,
+        options: { onEvent: context.onEvent, runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+      });
+      return executionProfile ? { ...result, executionProfile } : result;
+    },
+    async streamDetachedChatTurn(context, input = {}) {
+      const executionProfile = emitOpenCodeExecutionProfile(context, input.executionProfile);
+      const result = await runNativeDetachedConversation({
+        id: context.sessionId, context, input,
+        options: { onEvent: context.onEvent, runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+      });
+      return executionProfile ? { ...result, executionProfile } : result;
+    },
     prepareConversationRequest(method, context, input = {}) {
       if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return {
         input, context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }

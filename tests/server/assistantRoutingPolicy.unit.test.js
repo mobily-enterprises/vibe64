@@ -438,6 +438,11 @@ test("background helpers stay independent of the Backup pair and Router has a di
   assert.equal(result.effectiveSelection.modelId, "deepseek-flash");
   assert.equal(result.seniorJuniorPair, undefined);
   assert.deepEqual(result.executionProfileRequest, { profileId: "helper", workloadId: "prompt_hint" });
+  const assessment = f.resolve("training_assessment");
+  assert.equal(assessment.available, true, assessment.message);
+  assert.equal(assessment.effectiveSelection.modelId, "deepseek-flash");
+  assert.equal(assessment.seniorJuniorPair, undefined);
+  assert.deepEqual(assessment.executionProfileRequest, { profileId: "helper", workloadId: "training_assessment" });
   const router = f.resolve("request_routing");
   assert.equal(router.effectiveSelection.modelId, "external-helper");
   assert.equal(router.executionProfileRequest.workloadId, "request_routing");

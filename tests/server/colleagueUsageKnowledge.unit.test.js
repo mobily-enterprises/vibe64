@@ -116,4 +116,6 @@ test("all shipped public usage topics are discoverable and fit a complete bounde
     assert.equal(guide.ok, true);
     assert.ok(guide.text.length > 40);
   }
+  const authoring = await usage.topics({ query: "author lesson publish" });
+  assert.ok(authoring.topics.some(topic => topic.topicId === "lesson-authoring"));
 });

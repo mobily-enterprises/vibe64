@@ -88,6 +88,10 @@ original chat; read it before deciding whether to repeat a message. Use **Send**
 you intend to continue. Colleague can explain the reported state; continuing or
 stopping work still needs your instruction. These steps apply on desktop and
 compact screens.
+Changing Codex models keeps saved history. Earlier incompatible tool calls are
+context, not new work. A compaction error does not undo saved file changes.
+Colleague can explain the notice; retrying or changing models still needs your
+instruction.
 When OpenCode's shared service fails, other affected conversations can also stop.
 Inspect their status and existing work before selecting **Send** again; recovery
 does not automatically repeat their requests. An ordinary conversation close

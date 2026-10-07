@@ -29,7 +29,8 @@ import {
   VIBE64_CODEX_DEFAULT_THINKING,
   Vibe64AgentExecutionProfileError,
   defineVibe64AgentExecutionProfileRequest,
-  defineVibe64AgentExecutionProfileResolution
+  defineVibe64AgentExecutionProfileResolution,
+  vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 
 const CODEX_PRODUCT_PROVIDER_ID = "codex";
@@ -456,8 +457,24 @@ function codexAttachmentLimitResult(input = {}) {
   };
 }
 
+function emitCodexExecutionProfile(context = {}, executionProfile = null) {
+  if (!executionProfile) {
+    return null;
+  }
+  const snapshot = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
+  if (typeof context.onEvent === "function") {
+    context.onEvent({
+      executionProfile: snapshot,
+      type: "execution-profile"
+    });
+  }
+  return snapshot;
+}
+
+
 function createCodexSessionAgentProvider({
   connectionStatus = async () => true,
+  runNativeDetachedConversation,
   listConnections = async () => [],
   runOwner: codexAppServerRunOwner,
   providerOwner: codexAppServerProviderOwner,
@@ -538,7 +555,7 @@ function createCodexSessionAgentProvider({
         }
         } }
       };
-      if (mode === "detachedCleanup") return { native: { runOwner: codexAppServerRunOwner } };
+      if (mode === "detached" || mode === "detachedCleanup") return { native: { runOwner: codexAppServerRunOwner } };
       if (mode === "storage") return {
         native: { providerOwner: codexAppServerProviderOwner, errorPrefix: "vibe64_",
           preparation: { storage: prepareNativeStorageProvider } }
@@ -667,6 +684,30 @@ function createCodexSessionAgentProvider({
         const result = await perform();
         return method === "sendMessage" || method === "interruptTurn" ? nativeSessionResult(result) : result;
       }));
+    },
+    async runDetachedChatTurn(context, input = {}) {
+      const executionProfile = emitCodexExecutionProfile(context, input.executionProfile);
+      const result = await runNativeDetachedConversation({
+        id: context.sessionId,
+        context,
+        input: { ...input, vibe64User: input.vibe64User || context.vibe64User || null },
+        options: {
+          ...(typeof context.onEvent === "function" ? { onEvent: context.onEvent } : {}),
+          runtime: context.runtime,
+          session: context.session
+        }
+      });
+      return executionProfile ? { ...result, executionProfile } : result;
+    },
+    async streamDetachedChatTurn(context, input = {}) {
+      const executionProfile = emitCodexExecutionProfile(context, input.executionProfile);
+      const result = await runNativeDetachedConversation({
+        id: context.sessionId,
+        context,
+        input: { ...input, vibe64User: input.vibe64User || context.vibe64User || null },
+        options: { onEvent: context.onEvent, runtime: context.runtime, session: context.session }
+      });
+      return executionProfile ? { ...result, executionProfile } : result;
     },
     async capabilities(context = {}, input = {}) {
       const connected = (await connectionStatus(context)) !== false;

@@ -52,7 +52,10 @@ const CONVERSATION_COMMANDS = Object.freeze({
   deleteConversation: (conversation, request) => conversation.dispose(request.input)
 });
 const SCOPED_CONVERSATION_METHODS = new Set(["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"]);
+const EXECUTION_PROFILE_RESOLUTION_METHODS = new Set(["runDetachedChatTurn", "streamDetachedChatTurn"]);
 const AI_METHODS = new Set([
+  "runDetachedChatTurn",
+  "streamDetachedChatTurn",
   "createConversation",
   "ensureSession",
   "generateSessionRenewalHandover",
@@ -615,7 +618,8 @@ function createSessionAgentManager({
         : null;
       let providerInput = executionProfileRequest || input;
       if (method !== "resolveExecutionProfile" && hasOwn(input, "executionProfile")) {
-        if (context.assistantScope && ["createConversation", "startConversationTurn"].includes(method)) {
+        if (EXECUTION_PROFILE_RESOLUTION_METHODS.has(method) ||
+            context.assistantScope && ["createConversation", "startConversationTurn"].includes(method)) {
           if (looksLikeExecutionProfileResolution(input.executionProfile)) {
             providerInput = {
               ...input,
@@ -1413,6 +1417,7 @@ function createSessionAgentManager({
     resizeTerminal(sessionId = "", terminalSessionId = "", size = {}, options = {}) {
       return callSessionProvider("resizeTerminal", sessionId, { size, terminalSessionId }, options);
     },
+    runDetachedChatTurn: sessionMethod("runDetachedChatTurn"),
     runEphemeralChatTurn,
     releaseRenewalPredecessorAttachments,
     releaseRenewalPredecessorProcessExitProof,
@@ -1423,6 +1428,7 @@ function createSessionAgentManager({
     sessionState(sessionId = "", options = {}) {
       return callSessionProvider("sessionState", sessionId, {}, options);
     },
+    streamDetachedChatTurn: sessionMethod("streamDetachedChatTurn"),
     startConversationTurn: sessionMethod("startConversationTurn"),
     startEphemeralConversationTurn: ephemeralScopeMethod("startConversationTurn"),
     startTerminal: sessionMethod("startTerminal"),

@@ -40,6 +40,7 @@ import {
   createService as createSourceEditorService
 } from "../../packages/vibe64-source-editor/src/server/service.js";
 import {
+  CodexAppServerAgentProvider,
   CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
@@ -80,7 +81,9 @@ import {
   sessionRenewalHandoverHash
 } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { installVibe64ManagedExecutionProvider, stableHash } from "@local/vibe64-execution/server";
-import { genesisCommandShimDirectory } from "../../packages/vibe64-genesis/src/server/index.js";
+import { createCodexGitCommandService, prepareCodexGitCommand } from "../../packages/vibe64-terminals/src/server/codexGitCommand.js";
+import { agentSessionCommandEnvironmentIsHealthy } from "../../packages/vibe64-terminals/src/server/agentCommandEnvironment.js";
+import { genesisCommandShimDirectory, vibe64HostContextRegistry } from "../../packages/vibe64-genesis/src/server/index.js";
 import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 import { writeCodexAuthMarker } from "../../packages/vibe64-core/src/server/codexAuthState.js";
 import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
@@ -1660,7 +1663,11 @@ function throughCommonScopedConversation(controller, persistentContext = null) {
 
 async function withConversationController(operation, {
   promptHints = null,
-  codexHelperThreadLedgerFactory = null
+  codexHelperThreadLedgerFactory = null,
+  providerFactory = null,
+  codexGitCommand = null,
+  codexToolHomeSource = undefined,
+  codexSystemRoot = undefined
 } = {}) {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-temporary-conversation-"));
   const previousRuntimeNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
@@ -1791,11 +1798,17 @@ async function withConversationController(operation, {
     nativeTestContext: { runtime: projectService.createRuntime(), session },
     codexAppServerProviderFactory(providerOptions) {
       captures.onProviderFactory?.();
-      return createProvider(calls, subscribers, captures, providerOptions);
+      return providerFactory
+        ? providerFactory(providerOptions, { calls, subscribers, captures })
+        : createProvider(calls, subscribers, captures, providerOptions);
     },
     ...(codexHelperThreadLedgerFactory ? { codexHelperThreadLedgerFactory } : {}),
+    ...(codexGitCommand ? { codexGitCommand } : {}),
+    ...(codexToolHomeSource === undefined ? {} : { codexToolHomeSource }),
+    ...(codexSystemRoot === undefined ? {} : { codexAppServerProviderOptions: { systemRoot: codexSystemRoot } }),
     env: {
       VIBE64_AGENT_RUNTIME_DIR: projectService.agentRuntimeRoot,
+      ...(codexGitCommand ? { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(temporaryRoot, "attachments") } : {}),
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
@@ -1869,6 +1882,9 @@ function createRestartedController({
   captures,
   codexHelperThreadLedgerFactory,
   projectService,
+  providerFactory = null,
+  codexToolHomeSource = undefined,
+  codexSystemRoot = undefined,
   subscribers = new Set()
 } = {}) {
   const runtime = projectService.createRuntime();
@@ -1878,7 +1894,9 @@ function createRestartedController({
   return createCodexTerminalController({
     ...(session ? { nativeTestContext: { runtime, session } } : {}),
     codexAppServerProviderFactory(providerOptions) {
-      return createProvider(calls, subscribers, captures, providerOptions);
+      return providerFactory
+        ? providerFactory(providerOptions, { calls, subscribers, captures })
+        : createProvider(calls, subscribers, captures, providerOptions);
     },
     env: {
       VIBE64_AGENT_RUNTIME_DIR: agentRuntimeRoot,
@@ -1886,6 +1904,8 @@ function createRestartedController({
       VIBE64_WORKSPACE: "test"
     },
     ...(codexHelperThreadLedgerFactory ? { codexHelperThreadLedgerFactory } : {}),
+    ...(codexToolHomeSource === undefined ? {} : { codexToolHomeSource }),
+    ...(codexSystemRoot === undefined ? {} : { codexAppServerProviderOptions: { systemRoot: codexSystemRoot } }),
     projectService
   });
 }
@@ -12610,4 +12630,382 @@ test("startup unsubscribe preserves no-thread isolation and retries retained cle
       }
     });
   });
+});
+
+
+test("Codex real provider cold resume composes retained Public hook preparation before native resume", async () => {
+  const threadId = randomUUID();
+  const protocol = [];
+  let provider;
+  let options;
+  let status = "notLoaded";
+  let workdir;
+  await withConversationController(async ({ controller, projectService, projectContextRoot,
+    projectRuntimeRoot, session, temporaryRoot, captures }) => {
+    workdir = session.metadata.source_path;
+    const store = createVibe64SessionStore({
+      projectContextRoot,
+      projectRuntimeRoot,
+      projectSessionSourceRoot: path.join(temporaryRoot, "managed", "sessions")
+    });
+    await store.createSession({
+      metadata: session.metadata,
+      runtimeKind: "genesis",
+      sessionId: session.sessionId
+    });
+    const readAgentRun = store.readAgentRun.bind(store);
+    store.readAgentRun = async (...args) => {
+      protocol.push({ method: "before-resume", args });
+      return readAgentRun(...args);
+    };
+    projectService.createSessionStore = () => store;
+
+    const { native } = await controller.prepareConversationHost("session-1", {}, "create");
+    const context = await native.runOwner.conversationContext("session-1", { conversationId: threadId }, {});
+    assert.notEqual(context.ok, false, context.error || "native conversation context must be available");
+    assert.equal(context.provider, provider, "the retained owner captures the actual Public subclass");
+    assert.ok(provider instanceof CodexAppServerAgentProvider);
+    const result = await provider.resumeThread(threadId, {
+      cwd: session.metadata.source_path,
+      model: "gpt-5.5"
+    });
+
+    assert.equal(result.id, threadId);
+    assert.deepEqual(protocol.map(({ method }) => method), [
+      "before-resume", "thread/read", "config/read", "config/batchWrite",
+      "hooks/list", "before-resume", "thread/resume", "thread/read"
+    ]);
+    for (const guard of protocol.filter(({ method }) => method === "before-resume")) {
+      assert.equal(guard.args[0], "session-1");
+      assert.equal(guard.args[1], "codex_app_server");
+    }
+    const trust = protocol.find(({ method }) => method === "config/batchWrite").params;
+    assert.deepEqual(trust.edits, [{
+      keyPath: `projects.${JSON.stringify(session.metadata.source_path)}.trust_level`,
+      value: "trusted",
+      mergeStrategy: "upsert"
+    }]);
+    const resume = protocol.find(({ method }) => method === "thread/resume").params;
+    assert.equal(resume.threadId, threadId);
+    assert.equal(resume.excludeTurns, true);
+    assert.equal(resume.cwd, session.metadata.source_path);
+    assert.deepEqual(resume.config["hooks.state"], {
+      "test:write-hook": { trusted_hash: "sha256:current-project-hook" }
+    });
+    assert.equal(resume.modelProvider, "openai");
+    const input = await vibe64DriverInputFromRegistry({
+      data: JSON.parse(options.terminalEnv.GENESIS_HOST_CONTEXT_RESOLVER_DATA),
+      providerSessionId: threadId,
+      scope: "session"
+    });
+    assert.equal(input.conversationKind, "temporary");
+    assert.deepEqual(captures.turns, [], "control recovery authors no user turn");
+    assert.deepEqual(captures.threads, [], "control recovery creates no replacement conversation");
+  }, {
+    providerFactory(providerOptions, { calls, subscribers, captures }) {
+      options = providerOptions;
+      const fixture = createProvider(calls, subscribers, captures, providerOptions);
+      // Only transport/process/account snapshots are controlled here. The real
+      // provider and its retained Public preparation callbacks remain intact.
+      let connected = true;
+      const client = {
+        isOpen() { return connected; },
+        close() { connected = false; },
+        async request(method, params) {
+          protocol.push({ method, params });
+          if (method === "thread/read") {
+            assert.equal(params.threadId, threadId);
+            assert.equal(params.includeTurns, false);
+            return { thread: { id: threadId, historyMode: "paginated", modelProvider: "openai", status: { type: status } } };
+          }
+          if (method === "config/read") {
+            const binding = await vibe64DriverInputFromRegistry({
+              data: JSON.parse(providerOptions.terminalEnv.GENESIS_HOST_CONTEXT_RESOLVER_DATA),
+              providerSessionId: threadId,
+              scope: "session"
+            });
+            assert.equal(binding.conversationKind, "temporary", "Public registration precedes native project trust");
+            return { config: { projects: {} } };
+          }
+          if (method === "config/batchWrite") return { status: "ok" };
+          if (method === "hooks/list") {
+            assert.deepEqual(params.cwds, [workdir]);
+            return { data: [{ cwd: workdir, hooks: [{
+              source: "project", enabled: true, key: "test:write-hook",
+              currentHash: "sha256:current-project-hook", trustStatus: "untrusted"
+            }, {
+              source: "plugin", enabled: true, key: "test:unrelated-hook",
+              currentHash: "sha256:unrelated-hook", trustStatus: "untrusted"
+            }] }] };
+          }
+          if (method === "thread/resume") {
+            status = "idle";
+            return { thread: { id: threadId, historyMode: "paginated", status: { type: status } }, modelProvider: "openai" };
+          }
+          assert.fail(`Unexpected native request ${method}; recovery must not infer an authored turn.`);
+        }
+      };
+      provider = new CodexAppServerAgentProvider(providerOptions);
+      provider.client = client;
+      provider.runtime = { ...captures.runtimeInfo, executionId: "replacement-process" };
+      provider.initializeResult = { userAgent: captures.serverUserAgent };
+      provider.activeClient = async () => client;
+      provider.ensureRuntime = fixture.ensureRuntime;
+      provider.currentRuntimeInfo = fixture.currentRuntimeInfo;
+      provider.stopRuntime = fixture.stopRuntime;
+      provider.assertRuntimeAuthReady = async () => {};
+      return provider;
+    }
+  });
+});
+
+test("Codex real provider refreshes Public commands and current instructions without authored work", async () => {
+  const threadId = randomUUID();
+  const protocol = [];
+  const commandService = createCodexGitCommandService({ projectService: {} });
+  let provider;
+  let options;
+  let nativeEnvironment;
+  await withConversationController(async ({ controller, projectService, projectRuntimeRoot,
+    projectContextRoot, session, temporaryRoot, captures }) => {
+    execFileSync("git", ["init", "--quiet"], { cwd: session.metadata.source_path });
+    execFileSync("git", ["-c", "user.name=Composition test", "-c", "user.email=composition@example.test",
+      "commit", "--quiet", "--allow-empty", "-m", "Initial managed source"], { cwd: session.metadata.source_path });
+    const store = createVibe64SessionStore({
+      projectContextRoot,
+      projectRuntimeRoot,
+      projectSessionSourceRoot: path.join(temporaryRoot, "managed", "sessions")
+    });
+    await store.createSession({
+      metadata: session.metadata,
+      runtimeKind: "genesis",
+      sessionId: session.sessionId
+    });
+    projectService.createSessionStore = () => store;
+    const { native } = await controller.prepareConversationHost("session-1", {}, "create");
+    const context = await native.runOwner.conversationContext("session-1", { conversationId: threadId }, {});
+    assert.equal(context.provider, provider);
+    const hostContext = { conversationKind: "temporary", scope: "session", session: {
+      managedDatabaseRefresh: false, managedEnvironment: false, managedGit: true, managedPreview: false
+    } };
+    await provider.startThread({ cwd: session.metadata.source_path, model: "gpt-5.5", hostContext });
+    const firstEnvironment = { ...nativeEnvironment };
+    assert.equal(await agentSessionCommandEnvironmentIsHealthy(firstEnvironment), true);
+    const firstPrompt = protocol.find(({ method }) => method === "thread/start").params.developerInstructions;
+    const registry = await vibe64HostContextRegistry(projectService.agentRuntimeRoot);
+    await registry.register(threadId, { ...hostContext, conversationKind: "main" }, session.metadata.source_path);
+    const replacement = await prepareCodexGitCommand({
+      commandService: createCodexGitCommandService({ projectService: {} }),
+      env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(temporaryRoot, "attachments") },
+      sessionId: session.sessionId,
+      stateRoot: projectRuntimeRoot
+    });
+    assert.notEqual(replacement.env.VIBE64_CODEX_GIT_COMMAND_GENERATION, firstEnvironment.VIBE64_CODEX_GIT_COMMAND_GENERATION);
+    // The original control-change subscriber may recover before this explicit
+    // operation; both enter the same per-thread coordinator.
+    let callerOperations = 0;
+    await provider.withThreadEnvironment(threadId, {}, async () => {
+      callerOperations += 1;
+    });
+    assert.equal(callerOperations, 1);
+    assert.equal(captures.providerOptions.length, 1, "transient controls retain the same provider owner");
+    assert.equal(await agentSessionCommandEnvironmentIsHealthy(nativeEnvironment), true);
+    assert.notEqual(nativeEnvironment.VIBE64_CODEX_GIT_COMMAND_GENERATION, firstEnvironment.VIBE64_CODEX_GIT_COMMAND_GENERATION);
+    const resumes = protocol.filter(({ method }) => method === "thread/resume");
+    assert.equal(resumes.length, 1);
+    assert.equal(resumes[0].params.threadId, threadId);
+    assert.notEqual(resumes[0].params.developerInstructions, firstPrompt);
+    assert.deepEqual(resumes[0].params.config.shell_environment_policy.set, nativeEnvironment);
+    const acknowledgements = protocol.filter(({ method }) => method === "thread/inject_items");
+    assert.equal(acknowledgements.length, 1);
+    assert.equal(acknowledgements[0].params.items[0].role, "developer");
+    assert.ok(acknowledgements[0].params.items[0].content[0].text.endsWith(resumes[0].params.developerInstructions));
+    assert.equal(protocol.filter(({ method }) => method === "thread/shellCommand").length, 1);
+    assert.equal(protocol.some(({ method }) => method === "hooks/list"), false, "loaded controls do not imply process replacement");
+    assert.deepEqual(captures.turns, []);
+  }, {
+    codexGitCommand: commandService,
+    providerFactory(providerOptions, { calls, subscribers, captures }) {
+      options = providerOptions;
+      const fixture = createProvider(calls, subscribers, captures, providerOptions);
+      let connected = true;
+      const client = {
+        isOpen() { return connected; },
+        close() { connected = false; },
+        async request(method, params) {
+          protocol.push({ method, params });
+          if (method === "thread/start" || method === "thread/resume") {
+            nativeEnvironment = { ...params.config.shell_environment_policy.set };
+            return { thread: { id: threadId, historyMode: "paginated", modelProvider: "openai", status: { type: "idle" } }, modelProvider: "openai" };
+          }
+          if (method === "thread/name/set") return {};
+          if (method === "thread/read") return { thread: { id: threadId, historyMode: "paginated", modelProvider: "openai", status: { type: "idle" }, turns: [] } };
+          if (method === "thread/goal/get") return { goal: null };
+          if (method === "thread/unsubscribe") return { status: "unsubscribed" };
+          if (method === "thread/inject_items") return {};
+          if (method === "thread/shellCommand") {
+            const turnId = randomUUID();
+            const item = { id: randomUUID(), type: "commandExecution", command: params.command, exitCode: 0,
+              aggregatedOutput: execFileSync("/bin/sh", ["-c", params.command], { env: { ...process.env, ...nativeEnvironment }, encoding: "utf8" }) };
+            for (const notification of [
+              { method: "turn/started", params: { threadId, turn: { id: turnId } } },
+              { method: "item/started", params: { threadId, turnId, item } },
+              { method: "item/completed", params: { threadId, turnId, item } },
+              { method: "turn/completed", params: { threadId, turn: { id: turnId, status: "completed" } } }
+            ]) provider.publishNotification(notification);
+            return {};
+          }
+          assert.fail(`Unexpected native request ${method}; recovery must not author user work.`);
+        }
+      };
+      provider = new CodexAppServerAgentProvider(providerOptions);
+      provider.client = client;
+      provider.runtime = { ...captures.runtimeInfo, executionId: "same-process" };
+      provider.initializeResult = { userAgent: captures.serverUserAgent };
+      provider.activeClient = async () => client;
+      provider.ensureRuntime = fixture.ensureRuntime;
+      provider.currentRuntimeInfo = fixture.currentRuntimeInfo;
+      provider.stopRuntime = fixture.stopRuntime;
+      provider.assertRuntimeAuthReady = async () => {};
+      return provider;
+    }
+  });
+  assert.ok(options, "the real provider factory was used");
+});
+
+test("Codex real provider restores the same-account Helper after an actual auth generation refresh", async () => {
+  const accountRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-helper-composition-"));
+  const toolHomeSource = path.join(accountRoot, "selected-home");
+  const systemRoot = path.join(accountRoot, "system");
+  const authPath = path.join(toolHomeSource, ".codex", "auth.json");
+  const threadId = randomUUID();
+  const protocol = [];
+  const providers = [];
+  let activeProvider;
+  let nextTurn = 0;
+  let threadCwd;
+  const loginId = randomUUID();
+  await mkdir(path.dirname(authPath), { recursive: true, mode: 0o700 });
+  const writeAccount = (accessToken) => writeFile(authPath, JSON.stringify({
+    auth_mode: "chatgpt", OPENAI_API_KEY: null,
+    tokens: { account_id: "fixture-account", access_token: accessToken, refresh_token: "unused-fixture-refresh" }
+  }), { mode: 0o600 });
+  await writeAccount("fixture-access-one");
+  await writeCodexAuthMarker(systemRoot, { connected: true, loginId, generation: "one" });
+  // The original application Helper shares the interactive account/runtime.
+  // Only its established native connection/process is controlled; real Vibe64
+  // login identity, generation checks, Helper ledger and resume stay intact.
+  const providerFactory = (providerOptions, { calls, subscribers, captures }) => {
+    const fixture = createProvider(calls, subscribers, captures, providerOptions);
+    const provider = new CodexAppServerAgentProvider(providerOptions);
+    providers.push(provider);
+    activeProvider = provider;
+    assert.equal(provider.isHelperProvider(), false, "original managed Helpers share the interactive provider policy");
+    let connected = true;
+    let initialized = false;
+    const client = {
+      isOpen() { return connected; },
+      close() { connected = false; },
+      async request(method, params) {
+        protocol.push({ method, threadId: params.threadId });
+        if (method === "model/list") return { data: [{ id: "gpt-5.6-luna", model: "gpt-5.6-luna", displayName: "Fixture model",
+          isDefault: true, supportedReasoningEfforts: [{ reasoningEffort: "low" }], defaultReasoningEffort: "low" }], nextCursor: null };
+        if (method === "config/read") return { config: { mcp_servers: {} } };
+        if (method === "hooks/list") return { data: [{ cwd: params.cwds[0], hooks: [], errors: [] }] };
+        if (method === "thread/start") {
+          threadCwd = params.cwd;
+          return { thread: { id: threadId, historyMode: "paginated", modelProvider: "openai", cwd: threadCwd, turns: [] } };
+        }
+        if (method === "thread/name/set") return {};
+        if (method === "thread/read") return { thread: { id: threadId, historyMode: "paginated", modelProvider: "openai", cwd: threadCwd, status: { type: "idle" }, turns: [] } };
+        if (method === "thread/resume") return { thread: { id: threadId, historyMode: "paginated" }, modelProvider: "openai" };
+        if (method === "thread/list") {
+          assert.equal(params.cwd, threadCwd);
+          return { data: params.archived ? [] : [{ id: threadId, cwd: threadCwd }], nextCursor: null };
+        }
+        if (method === "thread/loaded/list") return { data: [threadId], nextCursor: null };
+        if (method === "thread/goal/get") return { goal: null };
+        if (method === "thread/unsubscribe") return { status: "unsubscribed" };
+        if (method === "thread/delete") return { deleted: true, threadId };
+        if (method === "turn/start") {
+          const turnId = `turn-${++nextTurn}`;
+          captures.turns.push({ input: params.input, settings: params, threadId: params.threadId, turnId });
+          return { turn: { id: turnId, status: "inProgress" } };
+        }
+        assert.fail(`Unexpected Helper native request ${method}.`);
+      }
+    };
+    provider.client = client;
+    provider.runtime = { ...captures.runtimeInfo, authStateSignature: "", runtimeDir: providerOptions.runtimeDir, executionId: randomUUID() };
+    provider.initializeResult = { userAgent: captures.serverUserAgent };
+    provider.connectionGeneration = 1;
+    provider.ensureRuntime = async () => {
+      await mkdir(provider.runtime.runtimeDir, { recursive: true, mode: 0o700 });
+      return provider.runtime;
+    };
+    provider.activeClient = async () => {
+      if (!initialized) {
+        const current = await provider.currentRuntimeInfo();
+        provider.runtime.accountIdentitySignature = current.accountIdentitySignature;
+        provider.runtime.authStateSignature = current.authStateSignature;
+        initialized = true;
+      }
+      return client;
+    };
+    provider.stopRuntime = fixture.stopRuntime;
+    return provider;
+  };
+  try {
+    await withConversationController(async ({ controller, captures, session, projectService,
+      projectRuntimeRoot, simulateControllerCrash }) => {
+      const profile = sourceExplanationHelperProfile();
+      const firstPending = controller.runDetachedChatTurn("session-1", {
+        executionProfile: profile, outputSchema: sourceExplanationOutputSchema(), prompt: "Save this Helper under its selected account."
+      });
+      await waitForCapturedTurns(captures, 1);
+      completeDetachedTurn(new Set([notification => activeProvider.publishNotification(notification)]), {
+        threadId, turnId: "turn-1", text: JSON.stringify({ answer: "Saved." })
+      });
+      const first = await firstPending;
+      assert.equal(first.ok, true, JSON.stringify(first));
+      const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
+      const before = (await ledger.readAll()).records[0];
+      const firstRuntime = await activeProvider.currentRuntimeInfo();
+      simulateControllerCrash();
+      activeProvider.close();
+      await writeAccount("fixture-access-two");
+      await writeCodexAuthMarker(systemRoot, { connected: true, loginId, generation: "two" });
+      const refreshed = restartedCaptures(captures);
+      const restored = createRestartedController({ session, captures: refreshed, projectService,
+        codexToolHomeSource: toolHomeSource, codexSystemRoot: systemRoot, providerFactory });
+      try {
+        const followUp = restored.runDetachedChatTurn("session-1", {
+          executionProfile: profile, outputSchema: sourceExplanationOutputSchema(), prompt: "Continue once after token refresh.", threadId
+        });
+        await waitForCapturedTurns(refreshed, 1);
+        assert.ok(activeProvider instanceof CodexAppServerAgentProvider);
+        const currentRuntime = await activeProvider.currentRuntimeInfo();
+        assert.equal(currentRuntime.accountIdentitySignature, firstRuntime.accountIdentitySignature);
+        assert.notEqual(currentRuntime.authStateSignature, firstRuntime.authStateSignature);
+        assert.deepEqual(protocol.filter(({ method }) => method === "thread/resume").map(row => row.threadId), [threadId]);
+        completeDetachedTurn(new Set([notification => activeProvider.publishNotification(notification)]), {
+          threadId, turnId: "turn-2", text: JSON.stringify({ answer: "Same selected account resumed." })
+        });
+        assert.equal((await followUp).ok, true);
+        const after = (await ledger.readAll()).records[0];
+        assert.equal(after.ownershipId, before.ownershipId);
+        assert.equal(after.threadId, before.threadId);
+        assert.equal(protocol.filter(({ method }) => method === "thread/start").length, 1);
+        assert.equal(protocol.filter(({ method }) => method === "turn/start").length, 2, "only the two explicit fixture prompts are authored");
+        assert.equal(protocol.some(({ method }) => method === "account/login/start"), false,
+          "the controlled established connection is not proof of a native login");
+        assert.equal(protocol.filter(({ method }) => method === "thread/delete").length, 0);
+      } finally {
+        await restored.closeAllForSession("session-1");
+      }
+    }, { providerFactory, codexToolHomeSource: toolHomeSource, codexSystemRoot: systemRoot });
+  } finally {
+    for (const provider of providers) provider.close();
+    await rm(accountRoot, { recursive: true, force: true });
+  }
 });

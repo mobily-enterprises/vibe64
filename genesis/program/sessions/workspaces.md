@@ -175,9 +175,15 @@ Confirmed repository checks are reused across selection; first checks, explicit
 Refresh, source/canonical changes and bounded checks for out-of-band Git work
 remain. The assistant connection owner separately prepares an unverified provider
 after first loading, a real reconnection or an assistant-configuration change.
-An admitted internal creator can supply a server-reserved session ID through the
-service's second options argument. HTTP/action inputs cannot select that ID.
-The existing runtime/store validates and reserves it; the service still owns
+An admitted internal creator can supply a server-reserved session ID and optional
+verified complete Git commit through the service's second options argument.
+HTTP/action inputs cannot select that ID or internal commit. A commit requires
+the reserved ID and excludes caller branch/PR selections. Under the original
+project policy lock, the store must prove creation state absent before any new
+session metadata is written; missing authority or retained lifecycle evidence
+refuses creation. The commit enters the existing source context, whose original
+source owner materializes that exact object under its source lock after the
+caller releases any earlier proof lock. The service still owns
 actor, capacity, source preparation and publication policy. Setup or publication
 failure does not falsify a session already saved. This seam alone adds no learner
 start control or training operation.

@@ -60,7 +60,8 @@ function createAssignmentOperations({ actions, persist, transcript }) {
   async function userMessages(state, context) {
     requireUser(context);
     const ids = context.colleague.userMessageIds;
-    return (await transcript.readConversationLog(state.key)).flatMap((turn) => turn.messages)
+    return (await Promise.all([state.record, ...state.record.previousConversations].map(chat =>
+      transcript.readConversationLog(chat.runtimeId)))).flatMap(log => log.flatMap(turn => turn.messages))
       .filter((message) => message.role === "user" && ids.includes(message.messageId));
   }
   function cancelWatches(state, assignment) {

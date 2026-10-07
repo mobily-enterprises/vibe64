@@ -88,6 +88,7 @@ async function createViewWithProps(overrides = {}, options = {}) {
   const viewOptions = { ...options };
   delete viewOptions.emit;
   delete viewOptions.viewer;
+  delete viewOptions.runtimeOptions;
   const scope = effectScope();
   viewScopes.add(scope);
   const app = createApp({});
@@ -97,7 +98,7 @@ async function createViewWithProps(overrides = {}, options = {}) {
     props,
     scope,
     view: app.runWithContext(() => scope.run(() => {
-      attachConversationRuntime(props, options.viewer);
+      attachConversationRuntime(props, options.viewer, options.runtimeOptions);
       return useVibe64AutopilotView(props, emit, viewOptions);
     }))
   };
@@ -167,7 +168,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const messageId = first.props.sendAgentMessage.mock.calls[0][0].messageId;
     first.scope.stop();
     const recovered = await createViewWithProps();
-    expect(recovered.view.chatTurns.value[0].optimistic).toMatchObject({ status: "failed" });
+    expect(recovered.view.chatTurns.value[0].optimistic).toMatchObject({ status: "uncertain" });
     expect(recovered.props.sendAgentMessage).not.toHaveBeenCalled();
     recovered.props.session.metadata.assistant_routing_request = JSON.stringify({
       messageId, status: "routing", input: { message: "Still routing." }, assignments: {}
@@ -345,6 +346,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const delivery = deferredResult();
     const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn(() => delivery.promise) }, { viewer });
     props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
+    await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
     view.composerDraft.value = "Owner steering.";
     const sending = view.submitComposerMessage();
     viewer.value = { actorKey: "member" };
@@ -663,6 +665,71 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(accountMocks.useVibe64Accounts).toHaveBeenCalledTimes(1);
   });
 
+  it("labels busy nonsteerable Main followers Send and retains each typed request through the original queue", async () => {
+    const steering = ref(false);
+    const sendAgentMessage = vi.fn(async input => {
+      props.session.agentSession.turn.active = true;
+      props.conversationLog.turns = [...props.conversationLog.turns,
+        { turnId: input.messageId, user: { messageId: input.messageId, text: input.message } }];
+      return true;
+    });
+    const { props, view } = await createViewWithProps({ sendAgentMessage,
+      session: { ...viewProps().session, agentSession: { turn: { active: true, id: "opencode-turn", state: "active" } } }
+    }, { runtimeOptions: { steering, deferWhileWorking: true } });
+    view.composerDraft.value = "First typed follow-up.";
+    expect(view.composerSubmitMode.value).toBe("send");
+    expect(view.composerSubmitAriaLabel.value).toBe("Send message");
+    expect(view.composerCanSubmit.value).toBe(true);
+    const first = view.submitComposerMessage();
+    view.composerDraft.value = "Second typed follow-up.";
+    expect(view.composerSubmitMode.value).toBe("send");
+    expect(view.composerCanSubmit.value).toBe(true);
+    const second = view.submitComposerMessage();
+    await vi.waitFor(() => expect(view.chatTurns.value.map(turn => turn.user.text)).toEqual([
+      "First typed follow-up.", "Second typed follow-up."
+    ]));
+    const ids = view.chatTurns.value.map(turn => turn.user.messageId);
+    expect(new Set(ids).size).toBe(2);
+    expect(sendAgentMessage).not.toHaveBeenCalled();
+    expect(view.agentStopEnabled.value).toBe(true);
+    view.composerDraft.value = "Keep typing independently.";
+    props.session.agentSession.turn.active = false;
+    await expect(first).resolves.toBe(true);
+    expect(sendAgentMessage).toHaveBeenCalledTimes(1);
+    expect(sendAgentMessage.mock.calls[0][0]).toMatchObject({ messageId: ids[0], message: "First typed follow-up.", submissionKind: "send" });
+    expect(props.conversationRuntime.delivery.find(ids[1]).payload.request).not.toHaveProperty("steer");
+    expect(view.composerDraft.value).toBe("Keep typing independently.");
+    props.session.agentSession.turn.active = false;
+    await expect(second).resolves.toBe(true);
+    expect(sendAgentMessage).toHaveBeenCalledTimes(2);
+    expect(sendAgentMessage.mock.calls[1][0]).toMatchObject({ messageId: ids[1], message: "Second typed follow-up.", submissionKind: "send" });
+    expect(view.composerDraft.value).toBe("Keep typing independently.");
+  });
+  it("preserves busy attachment, unsafe native-turn and routing gates for nonsteerable typed followers", async () => {
+    const { props, view } = await createViewWithProps({
+      session: { ...viewProps().session, agentSession: { turn: { active: true, id: "opencode-turn", state: "active" } } }
+    }, { runtimeOptions: { steering: false, deferWhileWorking: true } });
+    view.composerDraft.value = "Retain this draft.";
+    view.composerAttachments.value = [{ attachmentId: "image-1", name: "layout.png" }];
+    expect(view.composerCanSubmit.value).toBe(false);
+    expect(view.composerAttachmentsEnabled.value).toBe(false);
+    expect(await view.submitComposerMessage()).toBe(false);
+    view.composerAttachments.value = [];
+    for (const turn of [
+      { active: true, id: "opencode-turn", state: "active", status: "observation_lost" },
+      { active: true, state: "starting" },
+      { active: true, id: "opencode-turn", state: "finalizing" }
+    ]) {
+      props.session.agentSession.turn = turn;
+      expect(view.composerCanSubmit.value).toBe(false);
+      expect(view.composerSubmitMode.value).toBe("waiting");
+    }
+    props.session.agentSession.turn = { active: true, id: "opencode-turn", state: "active" };
+    props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "route-1", status: "routing" });
+    expect(view.composerCanSubmit.value).toBe(false);
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    expect(view.composerDraft.value).toBe("Retain this draft.");
+  });
   it("keeps chat available for steering while Codex is working", async () => {
     const view = await createView({
       session: {
@@ -967,6 +1034,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       .mockImplementationOnce(() => secondDelivery.promise);
     const { view, props } = await createViewWithProps({ sendAgentMessage });
     props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
+    await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
     view.composerDraft.value = "First steer.";
     const first = view.submitComposerMessage();
     const firstId = sendAgentMessage.mock.calls[0][0].messageId;
@@ -1003,6 +1071,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       .mockResolvedValue(true);
     const { view, props } = await createViewWithProps({ sendAgentMessage });
     props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
+    await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
     view.composerDraft.value = "First steer.";
     const first = view.submitComposerMessage();
     const firstPayload = sendAgentMessage.mock.calls[0][0];
@@ -1027,6 +1096,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const sendAgentMessage = vi.fn(() => delivery.promise);
     const { view, props } = await createViewWithProps({ sendAgentMessage });
     props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
+    await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
     view.composerDraft.value = "First.";
     const first = view.submitComposerMessage();
     view.composerDraft.value = "Queued.";
@@ -1246,6 +1316,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const sending = view.submitComposerMessage();
     const messageId = sendAgentMessage.mock.calls[0][0].messageId;
     props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
+    await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
     props.conversationLog.turns = [{ user: { messageId: "another-message", text: "Deslop commit 04f8283622d6." } }];
     await nextTick();
     expect(view.composerSubmitLabel.value).toBe("Steer");
@@ -1308,6 +1379,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       .mockImplementationOnce(() => newDelivery.promise);
     const { props, view } = await createViewWithProps({ sendAgentMessage });
     props.session.agentSession.turn = { active: true, id: "old-turn", state: "active" };
+    await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
     view.composerDraft.value = "Old guidance";
     const oldSending = view.submitComposerMessage();
     props.session = { ...viewProps().session, sessionId: "session-2" };

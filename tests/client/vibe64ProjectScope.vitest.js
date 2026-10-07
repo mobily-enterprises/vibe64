@@ -276,6 +276,36 @@ describe("Vibe64 project client scope", () => {
       .toBe("ws://127.0.0.1:5173/api/studio/browser-lifecycle/ws");
   });
 
+  it("keeps authenticated lesson resources global through the real resolver and HTTP client on a project page", async () => {
+    const attemptId = "f3420000-0000-4000-8000-000000000001";
+    const resourceUrl = `/api/vibe64/training/attempts/${attemptId}/visuals/client-server`;
+    vi.stubGlobal("window", { location: {
+      origin: "http://127.0.0.1:5173", pathname: `/app/project/training-${attemptId}`
+    } });
+    configureHttpWebClient({ csrf: { enabled: false }, resolveRequestUrl: resolveStudioRequestUrl });
+    const requestedUrls = [];
+    vi.stubGlobal("fetch", vi.fn(async url => {
+      requestedUrls.push(url);
+      return { headers: { get: () => "application/json" }, ok: true, status: 200,
+        json: async () => ({ id: "client-server" }) };
+    }));
+    expect(resolveStudioRequestUrl(resourceUrl)).toBe(resourceUrl);
+    const result = await getHttpWebClient().request(resolveStudioRequestUrl(resourceUrl), { method: "GET" });
+    expect(result.id).toBe("client-server");
+    expect(requestedUrls).toEqual([resourceUrl]);
+    expect(resolveStudioRequestUrl(`${resourceUrl}?retry=1#diagram`)).toBe(`${resourceUrl}?retry=1#diagram`);
+    const absolute = `http://127.0.0.1:5173${resourceUrl}`;
+    expect(resolveStudioRequestUrl(absolute)).toBe(absolute);
+    expect(scopedDevelopmentApiPathname("/api/vibe64/training", "alpha_1")).toBe("/api/vibe64/training");
+    expect(scopedDevelopmentApiPathname(resourceUrl, "other-project")).toBe(resourceUrl);
+    expect(scopedDevelopmentApiPathname("/api/vibe64/training-other", "alpha_1"))
+      .toBe("/api/app/alpha_1/vibe64/training-other");
+    expect(scopedDevelopmentApiPathname(resourceUrl, "alpha_1", { scopeGlobalPaths: true }))
+      .toBe(`/api/app/alpha_1${resourceUrl.slice("/api".length)}`);
+    expect(resolveStudioRequestUrl("/api/vibe64/sessions/session-one/output-runs"))
+      .toBe(`/api/app/training-${attemptId}/vibe64/sessions/session-one/output-runs`);
+  });
+
   it("adds the tab origin to session assistant terminal WebSocket URLs", () => {
     vi.stubGlobal("window", {
       location: {

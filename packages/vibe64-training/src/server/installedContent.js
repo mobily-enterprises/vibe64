@@ -135,6 +135,19 @@ function createInstalledTrainingContent({ systemRoot } = {}) {
     }
   }
 
+  async function lessonFile({ pin, manifest }, base, reference) {
+    const filesRoot = path.join(root, "training", "content", pin.topicId, pin.commit, "files");
+    const filename = path.resolve(filesRoot, base, reference);
+    const relative = path.relative(filesRoot, filename).split(path.sep).join("/");
+    const record = manifest.files.find(file => file.path === relative);
+    if (!record) throw new Error("Lesson requested an unrecorded installed file.");
+    const bytes = await boundedFile(filename, 1024 * 1024);
+    if (bytes.length !== record.bytes || sha256(bytes) !== record.sha256) {
+      throw new Error("Installed lesson changed while reading. Ask the owner to reinstall the verified snapshot.");
+    }
+    return { path: relative, bytes };
+  }
+
   async function readLesson({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
     if (typeof lessonCode !== "string" || typeof lessonHash !== "string" || !idPattern.test(lessonCode) || !hashPattern.test(lessonHash)) {
       throw new Error("Choose a declared lesson code and its exact 64-character lowercase content hash.");
@@ -144,20 +157,12 @@ function createInstalledTrainingContent({ systemRoot } = {}) {
     if (!bundle) throw new Error(`Lesson ${lessonCode} is not declared in this pinned topic.`);
     if (bundle.status !== "published") throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
     if (bundle.hash !== lessonHash) throw new Error(`Lesson ${lessonCode} content hash changed. Resume its exact pinned revision or explicitly start a new attempt.`);
-    const filesRoot = path.join(root, "training", "content", topicId, commit, "files");
-    const descriptorRoot = path.dirname(path.join(filesRoot, bundle.descriptorPath));
-    async function lessonFile(reference) {
-      const filename = path.resolve(descriptorRoot, reference);
-      const relative = path.relative(filesRoot, filename).split(path.sep).join("/");
-      const record = bundle.manifest.files.find(file => file.path === relative);
-      if (!record) throw new Error("Lesson requested an unrecorded installed file.");
-      const bytes = await boundedFile(filename, 1024 * 1024);
-      if (bytes.length !== record.bytes || sha256(bytes) !== record.sha256) {
-        throw new Error("Installed lesson changed while reading. Ask the owner to reinstall the verified snapshot.");
-      }
-      return { path: relative, text: bytes.toString("utf8") };
+    const base = path.dirname(bundle.descriptorPath);
+    async function lessonText(reference) {
+      const file = await lessonFile({ pin: topic.pin, manifest: bundle.manifest }, base, reference);
+      return { path: file.path, text: file.bytes.toString("utf8") };
     }
-    const document = await lessonFile(bundle.lesson.document);
+    const document = await lessonText(bundle.lesson.document);
     const anchors = bundle.lesson.assessments.map(assessment => ({
       id: assessment.id,
       reference: assessment.rubric,
@@ -170,7 +175,7 @@ function createInstalledTrainingContent({ systemRoot } = {}) {
     }));
     const visuals = [];
     for (const resource of bundle.lesson.visuals) {
-      const descriptor = await lessonFile(resource.descriptor);
+      const descriptor = await lessonText(resource.descriptor);
       visuals.push({ id: resource.id, descriptorPath: descriptor.path, visual: JSON.parse(descriptor.text) });
     }
     return {
@@ -185,7 +190,78 @@ function createInstalledTrainingContent({ systemRoot } = {}) {
     };
   }
 
-  return { readTopic, readLesson };
+  async function readVisual({ topicId, commit, topicHash, lessonCode, lessonHash, visualId } = {}) {
+    if (typeof visualId !== "string" || !idPattern.test(visualId)) {
+      throw new Error("Choose a declared visual ID.");
+    }
+    const lesson = await readLesson({ topicId, commit, topicHash, lessonCode, lessonHash });
+    const resource = lesson.visuals.find(item => item.id === visualId);
+    if (!resource) throw new Error(`Visual ${visualId} is not declared in this pinned lesson.`);
+    const base = path.dirname(resource.descriptorPath);
+    const svg = await lessonFile(lesson, base, resource.visual.svg);
+    const controller = await lessonFile(lesson, base, resource.visual.controller);
+    const assets = [];
+    for (const reference of resource.visual.assets || []) {
+      assets.push(await lessonFile(lesson, base, reference));
+    }
+    return {
+      pin: lesson.pin,
+      lessonCode: lesson.lesson.code,
+      lessonHash: lesson.hash,
+      ...resource,
+      svg,
+      controller,
+      assets
+    };
+  }
+
+  async function readCheck({ topicId, commit, topicHash, lessonCode, lessonHash, checkId } = {}) {
+    if (typeof checkId !== "string" || !idPattern.test(checkId)) {
+      throw new Error("Choose a declared check ID.");
+    }
+    const lesson = await readLesson({ topicId, commit, topicHash, lessonCode, lessonHash });
+    const check = lesson.lesson.checks?.find(value => value.id === checkId);
+    if (!check) throw new Error(`Check ${checkId} is not declared in this pinned lesson.`);
+    const base = path.dirname(lesson.descriptorPath);
+    const file = await lessonFile(lesson, base, check.file);
+    const assets = [];
+    for (const reference of check.assets || []) {
+      assets.push(await lessonFile(lesson, base, reference));
+    }
+    return {
+      pin: lesson.pin,
+      lessonCode: lesson.lesson.code,
+      lessonHash: lesson.hash,
+      check,
+      file,
+      assets
+    };
+  }
+
+  async function readExercise({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
+    const lesson = await readLesson({ topicId, commit, topicHash, lessonCode, lessonHash });
+    const exercise = lesson.lesson.exercise;
+    if (!exercise) throw new Error(`Lesson ${lessonCode} has no declared bundled exercise.`);
+    const sourcePath = path.posix.join(path.posix.dirname(lesson.descriptorPath), exercise.source);
+    const prefix = sourcePath === "." ? "" : `${sourcePath}/`;
+    const files = [];
+    for (const record of lesson.manifest.files) {
+      if (!record.path.startsWith(prefix)) continue;
+      const relative = record.path.slice(prefix.length);
+      const file = await lessonFile(lesson, sourcePath, relative);
+      files.push({ path: relative, bytes: file.bytes });
+    }
+    return {
+      pin: lesson.pin,
+      lessonCode: lesson.lesson.code,
+      lessonHash: lesson.hash,
+      exercise,
+      sourcePath,
+      files
+    };
+  }
+
+  return { readTopic, readLesson, readVisual, readCheck, readExercise };
 }
 
 export { createInstalledTrainingContent, validateInstalledTopicPin };

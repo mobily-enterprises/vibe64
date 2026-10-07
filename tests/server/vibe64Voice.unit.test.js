@@ -19,10 +19,10 @@ async function fixture(t, { inspection = { ok: true, sessionId: "session-one" },
   const token = createVoiceAccessToken({ key: "0123456789abcdef0123456789abcdef", tenant: "fixture" });
   const tokenFile = path.join(root, "voice.token"); await writeFile(tokenFile, token);
   const upstream = new WebSocketServer({ host: "127.0.0.1", port: 0 }); await once(upstream, "listening");
-  const upstreams = []; const inspections = []; const actions = [];
+  const upstreams = []; const upstreamRequests = []; const inspections = []; const actions = [];
   upstream.on("connection", (socket, request) => {
     assert.equal(request.headers.authorization, `Bearer ${token}`);
-    upstreams.push(socket); socket.send(JSON.stringify({ type: "voice.ready" }));
+    upstreams.push(socket); upstreamRequests.push(request); socket.send(JSON.stringify({ type: "voice.ready" }));
   });
   const fastify = Fastify(); await fastify.register(websocket);
   let realtime;
@@ -38,9 +38,9 @@ async function fixture(t, { inspection = { ok: true, sessionId: "session-one" },
   await fastify.listen({ host: "127.0.0.1", port: 0 });
   const sockets = [];
   t.after(async () => { for (const socket of [...sockets, ...upstreams]) socket.terminate(); for (const socket of fastify.websocketServer.clients) socket.terminate(); await fastify.close(); realtime?.close(); await new Promise(resolve => upstream.close(resolve)); await rm(root, { recursive: true, force: true }); });
-  return { upstreams, inspections, actions,
-    async open({ colleague = false, origin = `http://127.0.0.1:${fastify.server.address().port}`, slug = "one" } = {}) {
-      const route = colleague ? "/api/vibe64/colleague/voice/ws" : `/api/app/${slug}/vibe64/sessions/session-one/voice/ws`;
+  return { upstreams, upstreamRequests, inspections, actions,
+    async open({ colleague = false, origin = `http://127.0.0.1:${fastify.server.address().port}`, slug = "one", sessionId = "session-one" } = {}) {
+      const route = colleague ? "/api/vibe64/colleague/voice/ws" : `/api/app/${slug}/vibe64/sessions/${encodeURIComponent(sessionId)}/voice/ws`;
       const socket = new WebSocket(`ws://127.0.0.1:${fastify.server.address().port}${route}`, { headers: { origin } }); sockets.push(socket);
       const messages = on(socket, "message", { signal: t.signal }); t.after(() => messages.return());
       const closed = once(socket, "close", { signal: t.signal }); void closed.catch(() => {});
@@ -52,30 +52,71 @@ async function fixture(t, { inspection = { ok: true, sessionId: "session-one" },
 
 test("public project voice checks exact session ownership and retains native proxy frame order", { timeout: 10000 }, async t => {
   const f = await fixture(t, { delayAccess: true });
-  const v = await f.open(); assert.equal(JSON.parse((await v.messages.next()).value[0]).type, "voice.ready");
+  const v = await f.open();
+  const [ready, readyIsBinary] = (await v.messages.next()).value;
+  assert.equal(JSON.parse(ready).type, "voice.ready"); assert.equal(readyIsBinary, false);
   assert.equal(f.inspections[0].id, "session-one"); assert.ok(f.inspections[0].scope);
+  assert.deepEqual(f.inspections.map(({ id }) => id), ["session-one"]);
+  assert.equal(f.upstreams.length, 1);
+  assert.equal(f.upstreamRequests[0].headers["sec-websocket-extensions"], undefined);
+  assert.equal(v.socket.readyState, WebSocket.OPEN);
   const forwarded = on(f.upstreams[0], "message", { signal: t.signal }); t.after(() => forwarded.return());
-  v.socket.send(Buffer.alloc(3)); assert.equal(JSON.parse((await v.messages.next()).value[0]).code, "voice_audio_frame_invalid");
+  for (const bytes of [0, 3]) {
+    v.socket.send(Buffer.alloc(bytes));
+    const [raw, isBinary] = (await v.messages.next()).value;
+    assert.equal(isBinary, false);
+    assert.equal(JSON.parse(raw).code, "voice_audio_frame_invalid");
+    assert.equal(v.socket.readyState, WebSocket.OPEN);
+  }
   const start = JSON.stringify({ type: "listen.start", turnId: "one", sampleRate: 16000 });
   const pcm = Buffer.from([0, 0, 1, 0]); const stop = JSON.stringify({ type: "listen.stop", turnId: "one" });
   for (const frame of [start, pcm, stop]) v.socket.send(frame);
   for (const [frame, binary] of [[start, false], [pcm, true], [stop, false]]) assert.deepEqual((await forwarded.next()).value, [Buffer.from(frame), binary]);
-  f.upstreams[0].close(1012, "Restarting"); assert.equal((await v.closed)[0], 1012);
+  const reply = JSON.stringify({ type: "transcript.final", turnId: "one", text: "Native reply" });
+  f.upstreams[0].send(reply); f.upstreams[0].send(pcm);
+  assert.deepEqual((await v.messages.next()).value, [Buffer.from(reply), false]);
+  assert.deepEqual((await v.messages.next()).value, [pcm, true]);
+  f.upstreams[0].close(1012, "Speech service restarting"); assert.equal((await v.closed)[0], 1012);
+  assert.deepEqual(await v.closed, [1012, Buffer.from("Speech service restarting")]);
 });
 
-for (const [label, inspection] of [["mismatched", { ok: true, sessionId: "other" }], ["failed", { ok: false, sessionId: "session-one" }], ["unconfirmed", { sessionId: "session-one" }]]) {
+test("native browser closure preserves its code and reason at the upstream connection", { timeout: 5000 }, async t => {
+  const f = await fixture(t); const v = await f.open();
+  await v.messages.next();
+  const upstreamClosed = once(f.upstreams[0], "close", { signal: t.signal });
+  v.socket.close(1000, "Browser finished");
+  assert.deepEqual(await upstreamClosed, [1000, Buffer.from("Browser finished")]);
+  assert.deepEqual(await v.closed, [1000, Buffer.from("Browser finished")]);
+});
+
+for (const [label, inspection] of [["mismatched", { ok: true, sessionId: "other" }], ["failed", { ok: false, sessionId: "session-one" }], ["unconfirmed", { sessionId: "session-one" }], ["missing inspected ID", { ok: true }]]) {
   test(`project voice refuses ${label} session inspection before upstream access`, { timeout: 5000 }, async t => {
     const f = await fixture(t, { inspection }); const v = await f.open();
-    assert.equal(JSON.parse((await v.messages.next()).value[0]).code, "voice_session_unavailable");
+    const [raw, isBinary] = (await v.messages.next()).value;
+    assert.equal(isBinary, false);
+    assert.equal(JSON.parse(raw).code, "voice_session_unavailable");
     assert.equal((await v.closed)[0], 1008); assert.equal(f.upstreams.length, 0);
+    assert.deepEqual(f.inspections.map(({ id }) => id), ["session-one"]);
   });
 }
+
+test("project voice refuses an empty normalized requested session ID before upstream access", { timeout: 5000 }, async t => {
+  const f = await fixture(t, { inspection: { ok: true, sessionId: "" } });
+  const v = await f.open({ sessionId: " " });
+  const [raw, isBinary] = (await v.messages.next()).value;
+  assert.equal(isBinary, false);
+  assert.equal(JSON.parse(raw).code, "voice_session_unavailable");
+  assert.equal((await v.closed)[0], 1008); assert.equal(f.upstreams.length, 0);
+  assert.deepEqual(f.inspections.map(({ id }) => id), [""]);
+});
 
 test("cross-origin sockets are rejected before any project or Colleague read", { timeout: 5000 }, async t => {
   const f = await fixture(t);
   for (const colleague of [false, true]) {
     const v = await f.open({ origin: "https://foreign.example", colleague });
-    assert.equal(JSON.parse((await v.messages.next()).value[0]).code, "voice_auth_required");
+    const [raw, isBinary] = (await v.messages.next()).value;
+    assert.equal(isBinary, false);
+    assert.equal(JSON.parse(raw).code, "voice_auth_required");
     assert.equal((await v.closed)[0], 1008);
   }
   assert.equal(f.inspections.length, 0); assert.equal(f.actions.length, 0); assert.equal(f.upstreams.length, 0);

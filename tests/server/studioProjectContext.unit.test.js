@@ -1469,3 +1469,154 @@ test("local project authority follows the checked-out branch and reports detache
     assert.equal((await context.listProjects()).currentProject.repository.defaultBranch, "");
   });
 });
+
+function trainingProvenance() {
+  return {
+    schemaVersion: 1,
+    learnerKey: Buffer.from("42").toString("base64url"),
+    attemptId: "12345678-1234-4234-8234-123456789abc",
+    pin: {
+      course: { courseId: "intro-course", release: "0.1.0" },
+      topic: {
+        schemaVersion: 1,
+        topicId: "intro-topic",
+        release: "0.1.0",
+        repository: "example/learn-intro",
+        commit: "b".repeat(40),
+        topicHash: "a".repeat(64)
+      },
+      lesson: { code: "INTRO-01", hash: "c".repeat(64) }
+    },
+    exercise: { kind: "bundled", sourcePath: "training/exercises/app" }
+  };
+}
+
+test("Project training provenance is copied at creation and retains ordinary project selection", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const context = createStudioProjectContext({ explicitProjectsRoot: projectsRoot, env: {}, home: root });
+    const training = trainingProvenance();
+    const expected = structuredClone(training);
+    let prepared;
+    await context.createWorkspaceProjectRecord({ slug: "intro-exercise", training }, {
+      prepare: async ({ metadata, projectContextRoot }) => {
+        prepared = structuredClone(metadata.training);
+        training.pin.topic.commit = "d".repeat(40);
+        metadata.training.exercise.sourcePath = "changed-in-prepare";
+        await writeTestFile(path.join(projectContextRoot, "index.html"), "actual exercise source\n");
+      }
+    });
+    assert.deepEqual(prepared, expected);
+    const state = await context.readWorkspaceProjectState({ slug: "intro-exercise" });
+    assert.deepEqual(state.metadata.training, expected);
+    state.metadata.training.pin.lesson.hash = "e".repeat(64);
+    assert.deepEqual((await context.readWorkspaceProjectState({ slug: "intro-exercise" })).metadata.training, expected);
+    assert.equal(await readFile(path.join(projectsRoot, "intro-exercise", "index.html"), "utf8"), "actual exercise source\n");
+    const secondContext = createStudioProjectContext({ explicitProjectsRoot: projectsRoot, env: {}, home: root });
+    const selected = await secondContext.selectWorkspaceProject({ slug: "intro-exercise" });
+    assert.equal(selected.currentProject.slug, "intro-exercise");
+    assert.equal(selected.currentProject.selected, true);
+    assert.equal(Object.hasOwn(selected.currentProject, "training"), false);
+    assert.deepEqual((await secondContext.readWorkspaceProjectState({ slug: "intro-exercise" })).metadata.training, expected);
+  });
+});
+
+test("Project metadata and deletion updates preserve immutable training provenance", async () => {
+  await withTemporaryRoot(async (root) => {
+    const context = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"), env: {}, home: root });
+    const training = trainingProvenance();
+    await context.createWorkspaceProjectRecord({ slug: "intro-exercise", training });
+    await context.updateWorkspaceProjectMetadata({ slug: "intro-exercise", developmentDatabaseScope: "project" });
+    await context.updateWorkspaceProjectMetadata({
+      slug: "intro-exercise",
+      repository: { mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT, defaultBranch: "next" }
+    });
+    const recordPath = context.projectRecordPathForSlug("intro-exercise");
+    const before = await readFile(recordPath);
+    assert.deepEqual(JSON.parse(before).training, training);
+    const replacement = trainingProvenance();
+    replacement.attemptId = "22345678-1234-4234-8234-123456789abc";
+    await assert.rejects(() => context.updateWorkspaceProjectMetadata({ slug: "intro-exercise", training: replacement }), {
+      code: "vibe64_project_training_immutable"
+    });
+    for (const training of [null, undefined]) {
+      await assert.rejects(() => context.updateWorkspaceProjectMetadata({ slug: "intro-exercise", training }), {
+        code: "vibe64_project_training_invalid"
+      });
+    }
+    await context.updateWorkspaceProjectMetadata({ slug: "intro-exercise", training: structuredClone(training) });
+    assert.deepEqual(await readFile(recordPath), before);
+    await context.beginWorkspaceProjectDeletion({ slug: "intro-exercise", startedAt: "2030-01-01T00:00:00.000Z" });
+    assert.deepEqual((await context.readWorkspaceProjectState({ slug: "intro-exercise" })).metadata.training, training);
+    await context.createWorkspaceProjectRecord({ slug: "ordinary-project" });
+    const ordinaryPath = context.projectRecordPathForSlug("ordinary-project");
+    const ordinaryBefore = await readFile(ordinaryPath);
+    await assert.rejects(() => context.updateWorkspaceProjectMetadata({ slug: "ordinary-project", training }), {
+      code: "vibe64_project_training_immutable"
+    });
+    assert.deepEqual(await readFile(ordinaryPath), ordinaryBefore);
+  });
+});
+
+test("Invalid project training provenance fails before preparation or source/runtime creation", async () => {
+  await withTemporaryRoot(async (root) => {
+    const context = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"), env: {}, home: root });
+    const invalidMarkers = [null, {}, { ...trainingProvenance(), extra: true }];
+    for (const mutate of [
+      value => { value.schemaVersion = 2; },
+      value => { value.learnerKey = "NDI="; },
+      value => { value.learnerKey = Buffer.from(" bad ").toString("base64url"); },
+      value => { value.learnerKey = Buffer.alloc(129, 97).toString("base64url"); },
+      value => { value.attemptId = "not-an-attempt"; },
+      value => { value.pin.course.release = "latest"; },
+      value => { value.pin.topic.schemaVersion = 2; },
+      value => { value.pin.topic.repository = "example/ordinary-app"; },
+      value => { value.pin.topic.commit = "B".repeat(40); },
+      value => { value.pin.topic.topicHash = "short"; },
+      value => { value.pin.lesson.code = "../INTRO-01"; },
+      value => { value.pin.lesson.hash = "short"; },
+      value => { value.pin.lesson.extra = true; },
+      value => { value.exercise.kind = "remote"; },
+      value => { value.exercise.sourcePath = "../outside"; },
+      value => { value.exercise.sourcePath = "/outside"; },
+      value => { value.exercise.sourcePath = "training//app"; },
+      value => { value.exercise.sourcePath = "training\\app"; },
+      value => { value.exercise.sourcePath = "https://example.test/app"; }
+    ]) {
+      const value = trainingProvenance();
+      mutate(value);
+      invalidMarkers.push(value);
+    }
+    let preparations = 0;
+    for (const training of invalidMarkers) {
+      await assert.rejects(() => context.createWorkspaceProjectRecord({ slug: "invalid-exercise", training }, {
+        prepare: async () => { preparations += 1; }
+      }), { code: "vibe64_project_training_invalid" });
+      await assert.rejects(() => access(path.join(root, "projects", "invalid-exercise")), { code: "ENOENT" });
+      await assert.rejects(() => access(context.projectRuntimeRootForSlug("invalid-exercise")), { code: "ENOENT" });
+    }
+    assert.equal(preparations, 0);
+  });
+});
+
+test("Corrupt stored project training provenance is rejected without repairing metadata", async () => {
+  await withTemporaryRoot(async (root) => {
+    const context = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"), env: {}, home: root });
+    const training = trainingProvenance();
+    training.exercise.sourcePath = ".";
+    await context.createWorkspaceProjectRecord({ slug: "intro-exercise", training });
+    assert.deepEqual((await context.readWorkspaceProjectState({ slug: "intro-exercise" })).metadata.training, training);
+    const recordPath = context.projectRecordPathForSlug("intro-exercise");
+    const stored = JSON.parse(await readFile(recordPath, "utf8"));
+    stored.training.pin.topic.extra = "unsupported";
+    const corruptBytes = `${JSON.stringify(stored, null, 2)}\n`;
+    await writeFile(recordPath, corruptBytes);
+    await assert.rejects(() => context.readWorkspaceProjectState({ slug: "intro-exercise" }), {
+      code: "vibe64_project_training_invalid"
+    });
+    await assert.rejects(() => context.updateWorkspaceProjectMetadata({ slug: "intro-exercise", developmentDatabaseScope: "project" }), {
+      code: "vibe64_project_training_invalid"
+    });
+    assert.equal(await readFile(recordPath, "utf8"), corruptBytes);
+  });
+});

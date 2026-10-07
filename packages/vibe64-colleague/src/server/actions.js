@@ -17,15 +17,35 @@ const focusSchema = createSchema({
   databaseScreen: { type: "string", required: false, enum: ["workspace", "loading", "unavailable"] },
   integrationEnvironment,
   integrationDirty: { type: "boolean", required: false },
-  previewScreen: { type: "string", required: false, enum: ["existing-project-setup", "new-project-setup", "checking-project-setup", "outputs", "outputs-with-setup-warning"] }
+  previewScreen: { type: "string", required: false, enum: ["existing-project-setup", "new-project-setup", "checking-project-setup", "outputs", "outputs-with-setup-warning", "lesson-presentation"] },
+  lessonAttemptId: { ...text, maxLength: 36 }, lessonVisualId: { ...text, maxLength: 64 },
+  lessonPlayerPhase: { type: "string", required: false, enum: ["loading", "ready", "accepted", "completed", "failed", "closed"] },
+  lessonVisualState: { ...text, maxLength: 64 },
+  lessonCuePhase: { type: "string", required: false, enum: ["armed", "awaiting-audio", "awaiting-continue", "playing", "completed", "interrupted", "failed"] }
 });
 const focusField = { type: "object", schema: focusSchema, required: false };
+const presentationReceipt = { type: "object", required: false, schema: createSchema({
+  attemptId: { ...text, required: true, maxLength: 36 }, visualId: { ...text, required: true, maxLength: 64 },
+  playerInstanceId: { ...text, required: true, minLength: 1, maxLength: 64 },
+  phase: { type: "string", required: false, enum: ["ready", "armed", "completed"] },
+  commandId: { ...text, maxLength: 64 }, state: { ...text, maxLength: 64 },
+  cueId: { ...text, maxLength: 64 }, navigationId: { ...text, maxLength: 128 },
+  conversationId: text, turnId: text, clientId: text, outputId: text,
+  canonicalFinal: { type: "boolean", required: false },
+  audioPhase: { ...text, maxLength: 32 }, visualPhase: { ...text, maxLength: 32 }, error: { ...text, maxLength: 2000 },
+  description: { ...text, maxLength: 2000 },
+  snapshot: { type: "object", required: false, schema: createSchema({
+    state: { ...text, required: true, maxLength: 64 }, paused: { type: "boolean", required: true },
+    labels: { type: "object", additionalProperties: true, required: true }
+  }) }
+}) };
 const navigationOutput = {
   mode: "replace",
   schema: createSchema({
     ok: { type: "boolean", required: true },
     error: { ...text, maxLength: 2000 },
-    focus: focusField
+    focus: focusField,
+    presentation: presentationReceipt
   })
 };
 const clientId = { ...text, minLength: 1, maxLength: 128, required: true };
@@ -61,16 +81,52 @@ const assignmentOutput = { mode: "replace", schema: createSchema({ ok: { type: "
   assignment: { type: "object", schema: assignmentSchema, required: false },
   assignments: { type: "array", items: assignmentSchema, required: false } }) };
 
+// The transport carries only the issued reference. Training validates its
+// provenance and supplies the server-owned snapshot before native admission.
+const trainingQuestionField = { type: "object", required: false, schema: createSchema({
+  attemptId: { type: "string", required: true, noTrim: true, maxLength: 36,
+    pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" },
+  questionId: { type: "string", required: true, noTrim: true, maxLength: 64,
+    pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" },
+  assessmentId: { type: "string", required: true, noTrim: true, maxLength: 64,
+    pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" },
+  issuedRevision: { type: "integer", required: true, min: 1, max: Number.MAX_SAFE_INTEGER },
+  topicHash: { type: "string", required: true, noTrim: true, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
+  lessonHash: { type: "string", required: true, noTrim: true, maxLength: 64, pattern: "^[a-f0-9]{64}$" }
+}) };
+
 function createColleagueActions(colleague, usage = createColleagueUsageKnowledge()) {
   const definition = (name, fields, execute, assistant, projectScoped = false) => withVibe64ActionContext({
     id: `vibe64.colleague.${name}`, version: 1,
     kind: name.endsWith("read") ? "query" : "command",
     input: { schema: createSchema(fields), mode: "create" },
-    output: null, idempotency: name === "message.send" ? "domain_native" : "none",
+    output: null, idempotency: ["message.send", "conversation.start-fresh"].includes(name) ? "domain_native" : "none",
     ...(assistant ? { extensions: { assistant } } : {}),
     execute
   }, { projectScoped });
+  const nativeObservation = definition("training.observe-native", {
+    clientId, conversationId: clientId,
+    gestureId: { ...clientId, noTrim: true, maxLength: 64, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" },
+    control: { type: "string", required: true,
+      enum: ["project-select", "session-select", "preview-select", "chat-show", "colleague-minimize", "colleague-restore", "exercise-response"] },
+    reference: { ...trainingQuestionField, required: true },
+    exercise: { type: "object", required: false, schema: createSchema({
+      ...Object.fromEntries(["instanceId", "interactionId", "requestId", "playerInstanceId"].map(key => [key, {
+        ...clientId, noTrim: true, maxLength: 36,
+        pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+      }])),
+      frameRequestId: { type: "integer", required: true, min: 1, max: Number.MAX_SAFE_INTEGER }
+    }) },
+    workspace: { type: "object", required: true, schema: createSchema({
+      projectSlug: { ...clientId, maxLength: 48, pattern: "^[a-z0-9][a-z0-9-]*$" },
+      sessionId: clientId,
+      mainChatVisible: { type: "boolean", required: true }, projectVisible: { type: "boolean", required: true },
+      pane: { ...text, required: true, maxLength: 64 }, ready: { type: "boolean", required: true },
+      colleagueVisible: { type: "boolean", required: false }
+    }) }
+  }, (input, context) => colleague.observeTrainingPractical(input, context), { exclude: true });
   return [
+    { ...nativeObservation, channels: ["api"], surfaces: ["app"], idempotency: "domain_native" },
     definition("usage.topics.read", {
       query: { ...text, maxLength: 200 },
       offset: { type: "integer", min: 0, required: false },
@@ -91,15 +147,29 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       }) }
     }),
     definition("state.read", { clientId: { ...clientId, required: false } }, (input, context) => colleague.read(input, context)),
+    definition("conversation.start-fresh", {
+      operationId: clientId, expectedConversationId: clientId,
+      unconfirmedMessages: { type: "array", required: false, description: "At most eight exact client-reported unconfirmed submissions; these are retained as annotations, never executed.", items: createSchema({
+        messageId: clientId, clientId, text: { type: "string", noTrim: true, minLength: 1, maxLength: 24000, required: true },
+        focus: focusField
+      }) }
+    }, (input, context) => colleague.startFresh(input, context)),
+    definition("conversation.history.read", {
+      offset: { type: "integer", min: 0, required: false }, limit: { type: "integer", min: 1, max: 20, required: false }
+    }, (input, context) => colleague.readHistory(input, context)),
+    definition("conversation.history-page.read", {
+      conversationId: clientId, beforeTurnId: { ...clientId, required: false },
+      limit: { type: "integer", min: 1, max: 100, required: false }
+    }, (input, context) => colleague.readHistoryPage(input, context)),
     definition("focus.update", { clientId, focus: { ...focusField, required: true } }, (input, context) => colleague.focus(input, context)),
     definition("message.send", {
-      clientId, focus: focusField,
+      clientId, focus: focusField, trainingQuestion: trainingQuestionField, expectedConversationId: { ...clientId, required: false },
       messageId: clientId,
       message: { type: "string", noTrim: false, minLength: 1, maxLength: 24000, required: true },
       assistantSelection: { type: "object", additionalProperties: true, required: false }
     }, (input, context, deps) => colleague.send(input, context, { receiptOnly: deps?.receiptOnly === true })),
-    definition("turn.stop", {}, (input, context) => colleague.stop(input, context)),
-    definition("model.select", modelSelectionFields, (input, context) => colleague.selectModel(input, context)),
+    definition("turn.stop", { expectedConversationId: { ...clientId, required: false } }, (input, context) => colleague.stop(input, context)),
+    definition("model.select", { ...modelSelectionFields, expectedConversationId: { ...clientId, required: false } }, (input, context) => colleague.selectModel(input, context)),
     definition("watches.read", {}, (input, context) => colleague.listWatches(input, context), {
       description: "List your conversation watches and their active, pending, delivered, paused or cancelled status. Paused reads need attention; silence does not prove an agent is blocked.", output: watchOutput
     }),
@@ -169,7 +239,16 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     }),
     definition("navigation.acknowledge", {
       clientId, commandId: clientId, ok: { type: "boolean", required: true },
-      error: { ...text, maxLength: 2000 }, focus: focusField
+      error: { ...text, maxLength: 2000 }, focus: focusField, presentation: presentationReceipt,
+      cue: { type: "object", required: false, schema: createSchema({
+        ...Object.fromEntries(["cueId", "commandId", "navigationId", "conversationId", "turnId", "clientId", "attemptId", "visualId", "playerInstanceId", "outputId"]
+          .map(key => [key, { ...text, required: true, maxLength: key === "attemptId" ? 36 : 256 }])),
+        phase: { type: "string", required: true, enum: ["completed", "interrupted", "failed"] },
+        canonicalFinal: { type: "boolean", required: true },
+        audioPhase: { type: "string", required: true, enum: ["waiting", "off", "started", "completed", "interrupted", "failed"] },
+        visualPhase: { type: "string", required: true, enum: ["ready", "pending", "accepted", "completed", "interrupted", "failed"] },
+        state: { ...text, maxLength: 64 }, description: { ...text, maxLength: 2000 }, error: { ...text, maxLength: 2000 }
+      }) }
     }, (input, context) => colleague.acknowledgeNavigation(input, context)),
     definition("navigation.open", { projectSlug: text, sessionId: text, conversationId: text, integrationId, integrationEnvironment, databaseView, databaseTable, planView,
       pane: { type: "string", required: false, enum: ["preview", "settings", "repository-settings", "env", "integrations", "access", "resources", "deploy", "history", "health", "session", "changes", "repository", "files", "database", "system", "ai-terminal", "issues", "pull-requests"] }
@@ -185,13 +264,29 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     }),
     definition("context.read", {}, (input, context) => colleague.context(input, context), {
       alwaysAvailable: true,
-      description: "Read the project, session, conversation and displayed view targeted by this Colleague request. pane=chat means the project view is hidden behind compact chat; no Preview or integration detail is claimed in that state. An empty pane for a selected project means its layout is not ready. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. integrationEnvironment describes the loaded visible Integrations panel, including an empty configuration; integrationId is present only for an existing selected slot. integrationDirty means the displayed draft is unsaved, so this is not proof of saved configuration or a working connection. These fields are absent when the panel is unavailable. Production selection does not require a development session. databaseScreen reports whether the visible Database is loading, unavailable or a workspace; databaseView identifies overview, erd or data only when loaded; databaseTable is the exact selected table in Data, without SQL, columns or rows. These are UI selections, not live database health or query results, and are omitted when the panel is hidden or belongs to another session. An empty focus means the project chooser. planView is present only while the matching native Plan and history dialog is open; current or history identifies its displayed tab, not approval or agent activity. Navigation does not silently retarget a pending request.",
-      output: { schema: createSchema({ ok: { type: "boolean", required: true }, focus: { ...focusField, required: true } }), mode: "replace" }
+      description: "Read the project, session, conversation and displayed view targeted by this Colleague request. pane=chat means the project view is hidden behind compact chat; no Preview or integration detail is claimed in that state. An empty pane for a selected project means its layout is not ready. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. integrationEnvironment describes the loaded visible Integrations panel, including an empty configuration; integrationId is present only for an existing selected slot. integrationDirty means the displayed draft is unsaved, so this is not proof of saved configuration or a working connection. These fields are absent when the panel is unavailable. Production selection does not require a development session. databaseScreen reports whether the visible Database is loading, unavailable or a workspace; databaseView identifies overview, erd or data only when loaded; databaseTable is the exact selected table in Data, without SQL, columns or rows. These are UI selections, not live database health or query results, and are omitted when the panel is hidden or belongs to another session. An empty focus means the project chooser. planView is present only while the matching native Plan and history dialog is open; current or history identifies its displayed tab, not approval or agent activity. Navigation does not silently retarget a pending request. Optional trainingPracticalProgress reports accepted native steps for the same delivered question: its collecting phase, acceptedSteps and lastControl are coaching context, never an observation or assessment pass. Continue the next step without replacing the question or repeating accepted steps. Workspace navigation is project selection, then revealing the exact reserved session’s Main chat through its session tab or Show chat, then Preview. Optional trainingPractical reports only a completed current native learner observation for this connection's delivered question, with its exact observationId/reference and declared producer/operation, saved assistance/origin and optional check outcome. It is not an assessment pass. Use those actual IDs with the current accepted learner explanation for practical evaluation; absent completed facts do not erase accepted collecting steps; never invent evidence. If both projections are absent, inspect current readiness/question and repeat the native task only when its collection is unavailable.",
+      output: { schema: createSchema({ ok: { type: "boolean", required: true }, focus: { ...focusField, required: true },
+        trainingPracticalProgress: { type: "object", required: false, schema: createSchema({
+          reference: { ...trainingQuestionField, required: true }, assessmentId: { ...clientId, maxLength: 64 },
+          phase: { type: "string", required: true, enum: ["collecting"] },
+          acceptedSteps: { type: "integer", required: true, min: 1, max: 2 },
+          lastControl: { type: "string", required: true,
+            enum: ["project-select", "session-select", "chat-show", "preview-select", "colleague-minimize"] }
+        }) },
+        trainingPractical: { type: "object", required: false, schema: createSchema({
+          reference: { ...trainingQuestionField, required: true }, observationId: clientId,
+          assessmentId: { ...clientId, maxLength: 64 }, producer: { type: "string", required: true, enum: ["workspace", "colleague", "exercise"] },
+          operation: { ...clientId, maxLength: 64 }, observedAt: { ...clientId, maxLength: 24 },
+          assistance: { type: "string", required: true, enum: ["none", "hint", "demonstration", "substantial"] },
+          origin: { type: "string", required: true, enum: ["learner", "teacher"] },
+          checkOutcome: { type: "string", required: false, enum: ["passed", "not-yet-passed"] }
+        }) }
+      }), mode: "replace" }
     })
   ];
 }
 
-const colleagueConversationDataSchema = createSchema({ clientId, focus: focusField });
+const colleagueConversationDataSchema = createSchema({ clientId, focus: focusField, trainingQuestion: trainingQuestionField });
 const colleagueConversationSelectionSchema = createSchema(modelSelectionFields);
 
 export { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema };

@@ -1978,3 +1978,452 @@ test("Auto and helper availability preserve member fallback without discovery; d
   assert.equal(catalogs[0].context.vibe64User.username, "member");
   await assert.rejects(f.manager.requireAssistantAccessForSelection(f.senior, f.options), { code: "vibe64_assistant_owner_required" });
 });
+
+
+// Original detached admission/profile cases; scoped cases above remain intact.
+test("Restored detached: session agent manager resolves semantic execution profiles before provider work", async () => {
+  const calls = [];
+  const abortController = new AbortController();
+  const manager = createSessionAgentManager({
+    providers: [{
+      id: "codex",
+      transportId: "codex_app_server",
+      async resolveExecutionProfile(context, request) {
+        calls.push(["resolve", context, request]);
+        return {
+          limits: {
+            maxInputCharacters: 10_000,
+            maxOutputCharacters: 1_000,
+            timeoutMs: 30_000
+          },
+          model: "provider-owned-model",
+          policy: {
+            environmentAccess: false,
+            networkAccess: false,
+            repositoryWrite: false,
+            tools: "none"
+          },
+          profileId: request.profileId,
+          providerId: "codex",
+          request: {
+            allowProviderModelFallback: false,
+            reasoning: true,
+            summary: false
+          },
+          revision: "codex-helper-v1",
+          thinking: "low",
+          workloadId: request.workloadId
+        };
+      },
+      async runDetachedChatTurn(context, input) {
+        calls.push(["run", context, input]);
+        return {
+          executionProfile: input.executionProfile,
+          ok: true,
+          text: "Done"
+        };
+      }
+    }]
+  });
+
+  const result = await manager.runDetachedChatTurn("session-1", {
+    executionProfile: {
+      profileId: "helper",
+      workloadId: "source_explanation"
+    },
+    prompt: "Explain this source."
+  }, {
+    signal: abortController.signal
+  });
+
+  assert.deepEqual(calls.map(([operation]) => operation), ["resolve", "run"]);
+  assert.deepEqual(calls[0][2], {
+    profileId: "helper",
+    workloadId: "source_explanation"
+  });
+  assert.equal(calls[0][1].signal, abortController.signal);
+  assert.equal(calls[1][1].signal, abortController.signal);
+  assert.equal(calls[1][2].executionProfile.model, "provider-owned-model");
+  assert.equal(result.executionProfile.revision, "codex-helper-v1");
+});
+
+test("Restored detached: session agent manager executes its exact pre-resolved profile without resolving again", async () => {
+  let resolutions = 0;
+  const detachedProfiles = [];
+  const providerResolution = {
+    limits: {
+      maxInputCharacters: 10_000,
+      maxOutputCharacters: 1_000,
+      timeoutMs: 30_000
+    },
+    model: "provider-owned-model",
+    policy: {
+      environmentAccess: false,
+      networkAccess: false,
+      repositoryWrite: false,
+      tools: "none"
+    },
+    profileId: "helper",
+    providerId: "codex",
+    request: {
+      allowProviderModelFallback: false,
+      reasoning: true,
+      summary: false
+    },
+    revision: "codex-helper-v1",
+    thinking: "low",
+    workloadId: "source_explanation"
+  };
+  const manager = createSessionAgentManager({
+    providers: [{
+      id: "codex",
+      transportId: "codex_app_server",
+      async resolveExecutionProfile() {
+        resolutions += 1;
+        return providerResolution;
+      },
+      async runDetachedChatTurn(_context, input) {
+        detachedProfiles.push(input.executionProfile);
+        return {
+          executionProfile: input.executionProfile,
+          ok: true,
+          text: "Done"
+        };
+      },
+      async streamDetachedChatTurn(_context, input) {
+        detachedProfiles.push(input.executionProfile);
+        return {
+          executionProfile: input.executionProfile,
+          ok: true,
+          text: "Streamed"
+        };
+      }
+    }]
+  });
+
+  const resolved = await manager.resolveExecutionProfile("session-1", {
+    profileId: "helper",
+    workloadId: "source_explanation"
+  });
+  const result = await manager.runDetachedChatTurn("session-1", {
+    executionProfile: resolved,
+    prompt: "Explain this source."
+  });
+  const streamed = await manager.streamDetachedChatTurn("session-1", {
+    executionProfile: resolved,
+    prompt: "Explain this source again."
+  });
+
+  assert.equal(resolutions, 1);
+  assert.equal(Object.isFrozen(resolved), true);
+  assert.deepEqual(detachedProfiles, [providerResolution, providerResolution]);
+  assert.deepEqual(result.executionProfile, providerResolution);
+  assert.deepEqual(streamed.executionProfile, providerResolution);
+});
+
+test("Restored detached: session agent manager rejects copied, forged, and cross-session pre-resolved profiles", async () => {
+  let detachedTurns = 0;
+  const providerResolution = {
+    limits: {
+      maxInputCharacters: 10_000,
+      maxOutputCharacters: 1_000,
+      timeoutMs: 30_000
+    },
+    model: "provider-owned-model",
+    policy: {
+      environmentAccess: false,
+      networkAccess: false,
+      repositoryWrite: false,
+      tools: "none"
+    },
+    profileId: "helper",
+    providerId: "codex",
+    request: {
+      allowProviderModelFallback: false,
+      reasoning: true,
+      summary: false
+    },
+    revision: "codex-helper-v1",
+    thinking: "low",
+    workloadId: "source_explanation"
+  };
+  const manager = createSessionAgentManager({
+    providers: [{
+      id: "codex",
+      transportId: "codex_app_server",
+      async resolveExecutionProfile() {
+        return providerResolution;
+      },
+      async runDetachedChatTurn() {
+        detachedTurns += 1;
+        return { ok: true };
+      }
+    }]
+  });
+  const resolved = await manager.resolveExecutionProfile("session-1", {
+    profileId: "helper",
+    workloadId: "source_explanation"
+  });
+
+  for (const [sessionId, executionProfile] of [
+    ["session-1", providerResolution],
+    ["session-1", { ...resolved }],
+    ["session-2", resolved]
+  ]) {
+    await assert.rejects(
+      manager.runDetachedChatTurn(sessionId, {
+        executionProfile,
+        prompt: "Explain this source."
+      }),
+      (error) => (
+        error.code === "vibe64_agent_execution_profile_invalid" &&
+        error.field === "executionProfile"
+      )
+    );
+  }
+  await manager.closeSession("session-1");
+  await assert.rejects(
+    manager.runDetachedChatTurn("session-1", {
+      executionProfile: resolved,
+      prompt: "Do not reuse a profile from a closed session binding."
+    }),
+    (error) => (
+      error.code === "vibe64_agent_execution_profile_invalid" &&
+      error.field === "executionProfile"
+    )
+  );
+  assert.equal(detachedTurns, 0);
+});
+
+test("Restored detached: session agent manager rejects malformed provider resolutions before provider work", async () => {
+  let detachedTurns = 0;
+  const manager = createSessionAgentManager({
+    providers: [{
+      id: "codex",
+      transportId: "codex_app_server",
+      async resolveExecutionProfile(_context, request) {
+        return {
+          limits: {
+            maxInputCharacters: 10_000,
+            maxOutputCharacters: 1_000,
+            timeoutMs: 30_000
+          },
+          model: "provider-owned-model",
+          policy: {
+            environmentAccess: false,
+            networkAccess: true,
+            repositoryWrite: false,
+            tools: "none"
+          },
+          profileId: request.profileId,
+          providerId: "codex",
+          request: {
+            allowProviderModelFallback: false,
+            reasoning: true,
+            summary: false
+          },
+          revision: "codex-helper-v1",
+          thinking: "low",
+          workloadId: request.workloadId
+        };
+      },
+      async runDetachedChatTurn() {
+        detachedTurns += 1;
+        throw new Error("Malformed provider resolutions must not reach detached work.");
+      }
+    }]
+  });
+
+  await assert.rejects(
+    manager.runDetachedChatTurn("session-1", {
+      executionProfile: {
+        profileId: "helper",
+        workloadId: "source_explanation"
+      },
+      prompt: "Explain this source."
+    }),
+    (error) => (
+      error.code === "vibe64_agent_execution_profile_unsafe" &&
+      error.field === "policy.networkAccess"
+    )
+  );
+  assert.equal(detachedTurns, 0);
+});
+
+test("Restored detached: session agent manager rejects provider resolution identity mismatches before detached work", async () => {
+  const validResolution = {
+    limits: {
+      maxInputCharacters: 10_000,
+      maxOutputCharacters: 1_000,
+      timeoutMs: 30_000
+    },
+    model: "provider-owned-model",
+    policy: {
+      environmentAccess: false,
+      networkAccess: false,
+      repositoryWrite: false,
+      tools: "none"
+    },
+    profileId: "helper",
+    providerId: "codex",
+    request: {
+      allowProviderModelFallback: false,
+      reasoning: true,
+      summary: false
+    },
+    revision: "codex-helper-v1",
+    thinking: "low",
+    workloadId: "source_explanation"
+  };
+
+  for (const mismatch of [
+    {
+      field: "profileId",
+      value: "interactive",
+      verify(error) {
+        return error.code === "vibe64_agent_execution_profile_unknown" &&
+          error.profileId === "interactive";
+      }
+    },
+    {
+      field: "providerId",
+      value: "other",
+      verify(error) {
+        return error.code === "vibe64_agent_execution_profile_invalid" &&
+          error.field === "resolution.providerId" &&
+          error.expected === "codex" &&
+          error.actual === "other";
+      }
+    },
+    {
+      field: "workloadId",
+      value: "prompt_hint",
+      verify(error) {
+        return error.code === "vibe64_agent_execution_profile_invalid" &&
+          error.field === "resolution.workloadId" &&
+          error.expected === "source_explanation" &&
+          error.actual === "prompt_hint";
+      }
+    }
+  ]) {
+    let detachedTurns = 0;
+    const manager = createSessionAgentManager({
+      providers: [{
+        id: "codex",
+        transportId: "codex_app_server",
+        async resolveExecutionProfile() {
+          return {
+            ...validResolution,
+            [mismatch.field]: mismatch.value
+          };
+        },
+        async runDetachedChatTurn() {
+          detachedTurns += 1;
+          throw new Error("Mismatched provider resolutions must not reach detached work.");
+        }
+      }]
+    });
+
+    await assert.rejects(
+      manager.runDetachedChatTurn("session-1", {
+        executionProfile: {
+          profileId: "helper",
+          workloadId: "source_explanation"
+        },
+        prompt: "Explain this source."
+      }),
+      mismatch.verify
+    );
+    assert.equal(detachedTurns, 0);
+  }
+});
+
+test("Restored detached: session agent manager rejects consumer-owned execution details before provider resolution", async () => {
+  let providerCalls = 0;
+  const manager = createSessionAgentManager({
+    providers: [{
+      id: "codex",
+      transportId: "codex_app_server",
+      async resolveExecutionProfile() {
+        providerCalls += 1;
+        throw new Error("Malformed semantic requests must not reach the provider.");
+      },
+      async runDetachedChatTurn() {
+        providerCalls += 1;
+        throw new Error("Detached work must not start.");
+      }
+    }]
+  });
+
+  await assert.rejects(manager.runDetachedChatTurn("session-1", {
+    executionProfile: {
+      model: "consumer-must-not-control-this",
+      profileId: "helper",
+      workloadId: "source_explanation"
+    },
+    prompt: "Explain this source."
+  }), (error) => (
+    error.code === "vibe64_agent_execution_profile_invalid" &&
+    error.field === "request.model"
+  ));
+  assert.equal(providerCalls, 0);
+});
+
+test("Restored detached: session agent manager fails closed when a provider cannot resolve a requested profile", async () => {
+  const manager = createSessionAgentManager({
+    providers: [{
+      id: "codex",
+      transportId: "codex_app_server",
+      async runDetachedChatTurn() {
+        throw new Error("Detached work must not start.");
+      }
+    }]
+  });
+
+  await assert.rejects(
+    manager.runDetachedChatTurn("session-1", {
+      executionProfile: {
+        profileId: "helper",
+        workloadId: "source_explanation"
+      },
+      prompt: "Explain this source."
+    }),
+    /does not implement resolveExecutionProfile/u
+  );
+});
+
+test("Restored detached: session agent manager surfaces required Codex authentication before helper work starts", async () => {
+  let detachedTurns = 0;
+  const manager = createSessionAgentManager({
+    providers: [{
+      id: "codex",
+      transportId: "codex_app_server",
+      async resolveExecutionProfile() {
+        const error = new Error(
+          "Codex could not activate the selected account for isolated helper work. Reconnect Codex and retry."
+        );
+        error.code = "vibe64_codex_helper_auth_unavailable";
+        throw error;
+      },
+      async runDetachedChatTurn() {
+        detachedTurns += 1;
+        throw new Error("Unauthenticated helper work must not start.");
+      }
+    }]
+  });
+
+  await assert.rejects(
+    manager.runDetachedChatTurn("session-1", {
+      executionProfile: {
+        profileId: "helper",
+        workloadId: "source_explanation"
+      },
+      prompt: "Explain this source."
+    }),
+    (error) => (
+      error.code === "vibe64_codex_helper_auth_unavailable" &&
+      /Reconnect Codex and retry/u.test(error.message)
+    )
+  );
+  assert.equal(detachedTurns, 0);
+});

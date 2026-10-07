@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { upgradeColleagueConversations } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
+import { upgradeColleagueConversations, upgradeColleagueConversationHistory } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-upgrade-"));
@@ -115,4 +115,54 @@ test("symlinked histories are refused without modifying their target", async t =
   await symlink(target, file);
   await assert.rejects(f.run(true), /regular file/);
   assert.deepEqual(JSON.parse(await readFile(target, "utf8")), original);
+});
+
+
+test("fresh-conversation upgrade preserves exact current identity with read-only preflight, backup and retry", async t => {
+  const f = await fixture(t);
+  const current = { ...original, schemaVersion: 2, status: "ready", retiredConversation: { operation: { status: "unknown", id: "retained-operation" } } };
+  const file = await f.write("owner", current);
+  const before = await readFile(file, "utf8");
+  const run = apply => upgradeColleagueConversationHistory({ ...f, apply, report: (level, message) => f.reports.push({ level, message }) });
+  await run(false);
+  assert.equal(await readFile(file, "utf8"), before);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  await run(true);
+  const next = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(next, { ...current, schemaVersion: 3, runtimeId: "owner", previousConversations: [] });
+  assert.equal(await readFile(path.join(f.backupRoot, "owner", "conversation.json"), "utf8"), before);
+  assert.equal((await stat(file)).mode & 0o777, 0o600);
+  const bytes = await readFile(file, "utf8");
+  await run(true);
+  assert.equal(await readFile(file, "utf8"), bytes);
+  await f.run(true);
+  assert.equal(await readFile(file, "utf8"), bytes, "Earlier published delegate recognizes validated format 3 without rewriting it");
+});
+
+test("fresh-conversation preflight accepts pending earlier conversion and refuses conflicting identities before backup", async t => {
+  const f = await fixture(t);
+  const file = await f.write("owner", original);
+  const before = await readFile(file, "utf8");
+  const run = apply => upgradeColleagueConversationHistory({ ...f, apply, report: () => {} });
+  await run(false);
+  assert.equal(await readFile(file, "utf8"), before);
+  await assert.rejects(run(true), /earlier Colleague conversation upgrade/);
+  await writeFile(file, JSON.stringify({ ...original, schemaVersion: 2, runtimeId: "unexpected" }));
+  await assert.rejects(run(true), /conflicting fresh-chat/);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  const valid = { ...original, schemaVersion: 2 };
+  await writeFile(file, JSON.stringify(valid));
+  const invalid = await f.write("other", { ...valid, schemaVersion: 3, runtimeId: "owner", previousConversations: [] });
+  await assert.rejects(run(true), /unsupported shape/);
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), valid);
+  await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
+  await rm(invalid);
+  const backup = path.join(f.backupRoot, "owner", "conversation.json");
+  await mkdir(path.dirname(backup), { recursive: true });
+  await writeFile(backup, "different original");
+  await assert.rejects(run(true), /differs from its fresh-conversation upgrade backup/);
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), valid);
+  await writeFile(backup, JSON.stringify(valid));
+  await run(true);
+  assert.equal(JSON.parse(await readFile(file, "utf8")).runtimeId, "owner");
 });

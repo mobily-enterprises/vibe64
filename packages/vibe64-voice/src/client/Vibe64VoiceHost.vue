@@ -1,24 +1,70 @@
 <script setup>
-import { onScopeDispose, provide, shallowRef } from "vue";
+import { onScopeDispose, provide, shallowRef, useSlots } from "vue";
 import { createVoiceConversationController, VoiceConversationHost } from "@jskit-ai/assistant-voice/client";
 import { VIBE64_VOICE_KEY } from "./voiceHost.js";
 const props = defineProps({ preferences: { type: Object, default: () => ({}) } });
+const emit = defineEmits(["read-aloud-change", "playback"]);
 const controller = createVoiceConversationController({ connectSpeech: binding => binding.socketUrl });
 const launcher = shallowRef(null);
+const slots = useSlots();
+const Avatar = visual => slots.avatar?.(visual);
+const Settings = settings => slots.settings?.(settings);
+function preferencesFor(conversation) {
+  return props.preferences[conversation.preferenceTarget] || {};
+}
+function readAloudFor(conversation) {
+  const value = preferencesFor(conversation).readAloud;
+  return typeof value === "boolean" ? value : conversation.defaults?.readAloud === true;
+}
+function readAloudChangePendingFor(conversation) {
+  return preferencesFor(conversation).isSaving === true;
+}
 provide(VIBE64_VOICE_KEY, {
   controller, launcher,
+  readAloudFor, readAloudChangePendingFor,
+  Avatar: slots.avatar ? Avatar : null,
+  Settings: slots.settings ? Settings : null,
   open(conversation) {
+    const actorKey = props.preferences.actorKey;
     return controller.open({ conversation: { ...conversation,
       // Accessors remain live: spreading a binding would freeze state/access.
       get state() { return conversation.state; },
       get available() { return conversation.available; },
       get label() { return conversation.label; },
-      get defaults() {
-        return { ...conversation.defaults, ...(props.preferences.voice ? {
-          voiceId: props.preferences.voice === "current" ? "" : props.preferences.voice
-        } : {}) };
+      get adapter() { return conversation.adapter; },
+      get onTranscript() { return conversation.onTranscript; },
+      get presentation() { return conversation.presentation; },
+      get readAloudChangePending() { return readAloudChangePendingFor(conversation); },
+      get narration() {
+        const narration = conversation.narration;
+        if (!narration) return narration;
+        const preferences = conversation.preferenceTarget === "coding" ? preferencesFor(conversation) : {};
+        return {
+          ...narration,
+          vocalizeThinking: typeof preferences.vocalizeThinking === "boolean" ? preferences.vocalizeThinking : narration.vocalizeThinking,
+          vocalizeInterimTurns: typeof preferences.vocalizeInterimTurns === "boolean" ? preferences.vocalizeInterimTurns : narration.vocalizeInterimTurns,
+          thinkingSounds: typeof preferences.thinkingSounds === "boolean" ? preferences.thinkingSounds : narration.thinkingSounds
+        };
       },
-      avatar: props.preferences.avatar
+      get defaults() {
+        const preferences = preferencesFor(conversation);
+        return {
+          ...conversation.defaults,
+          readAloud: readAloudFor(conversation),
+          ...(preferences.voice ? {
+            voiceId: preferences.voice === "current" ? "" : preferences.voice
+          } : {})
+        };
+      },
+      onReadAloudChange(value) {
+        emit("read-aloud-change", value, { target: conversation.preferenceTarget, actorKey });
+        return conversation.onReadAloudChange?.(value);
+      },
+      onPlayback(event) {
+        emit("playback", event);
+        return conversation.onPlayback?.(event);
+      },
+      get avatar() { return preferencesFor(conversation).avatar || conversation.avatar; }
     } });
   }
 });
@@ -26,9 +72,16 @@ onScopeDispose(() => { void controller.dispose(); });
 </script>
 <template>
   <slot />
-  <VoiceConversationHost :controller="controller" :activator="launcher">
+  <VoiceConversationHost v-if="controller.state.binding?.presentation !== 'inline' || controller.state.nextTarget" :controller="controller" :activator="launcher">
     <template #reopen />
-    <template v-if="$slots.settings" #settings="settings"><slot name="settings" v-bind="settings" /></template>
-    <template v-if="$slots.avatar" #avatar="visual"><slot name="avatar" v-bind="visual" /></template>
+    <template v-if="controller.state.binding?.setConversationTarget" #conversation="{ binding }">
+      <div :ref="binding.setConversationTarget" class="vibe64-voice-host__conversation" />
+    </template>
+    <template v-if="$slots.settings" #settings="settings"><slot name="settings" v-bind="settings" :binding="controller.state.binding" /></template>
+    <template v-if="$slots.avatar" #avatar="visual"><slot name="avatar" v-bind="visual" :binding="controller.state.binding" /></template>
   </VoiceConversationHost>
 </template>
+
+<style scoped>
+.vibe64-voice-host__conversation { display: flex; flex: 1; min-width: 0; min-height: 0; }
+</style>

@@ -39,7 +39,7 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.1.225",
+    "@jskit-ai/kernel": "0.1.228",
     "execa": "^9.6.1",
     "node-pty": "^1.1.0"
   }

@@ -66,6 +66,11 @@ existing process-group cleanup; unsuccessful drains retain an execution stop
 handle for explicit retry through `stopVibe64Execution()`. Concurrent stops share
 the same drain, and a successful drain is not repeated. Cancellation reports
 completion only after cleanup; a failed drain remains an explicit failure.
+After that original standalone scope-empty proof, capture projects its existing
+execution descriptor with `state: "finished"`, including cancellation after
+drain. Early cancellation and failed drains retain their prior results. This
+terminal projection lets the internal declared-check owner remove temporary
+assets only after confirmed completion; finite lifecycle alone is not proof.
 
 Execution metadata carries only a validated workflow UUID. It cannot select a
 systemd unit, host path or resource policy. The execution provider verifies

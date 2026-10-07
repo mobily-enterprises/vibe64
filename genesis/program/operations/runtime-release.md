@@ -54,6 +54,12 @@ Vibe64-local login identity for existing Codex connections without changing
 native credentials or canonical project content. See `docs/state-upgrades.md`
 for authoring, operation and recovery.
 
+The appended `20261007-training-question-admission` boundary is prospective:
+operators apply the complete candidate ledger with learner and conversation
+writers stopped before admitting optional question/delivery snapshots. The step
+converts no application files and creates no provenance for old messages; retry
+changes only the ledger. The prior registry refuses its completed entry.
+
 Task-oriented Colleague usage guides under `docs/colleague-usage/` ship with the
 matching application runtime. The builder also ships `docs/training-content.md`
 and the copyable `docs/templates/learn-topic/` authoring template. Its explicit

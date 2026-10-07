@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeMount, onBeforeUnmount, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeMount, onBeforeUnmount, ref, watch } from "vue";
 import {
   launchPreviewLocationStorageKey,
   launchPreviewToolbarStorageKey,
@@ -40,6 +40,9 @@ import {
   previewRoutePath,
   previewRoutesForTarget
 } from "@/lib/vibe64PreviewRoutes.js";
+
+import { VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
+import { previewVisibleViewportRect } from "@/composables/useVibe64PreviewCapture.js";
 
 const PREVIEW_IDENTITY_TYPE_EMAIL = "email";
 const PREVIEW_IDENTITY_TYPE_LOGIN = "login";
@@ -669,6 +672,8 @@ function useVibe64OutputControlsSurface(props) {
     outputTargets.value.length < 1
   ));
   const previewFrame = ref(null);
+  const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
+  let orientation = null;
   const previewBridgeVersion = ref(0);
   const previewBridgeRequests = createPreviewBridgeRequestRegistry();
   const previewDiagnosticsBusy = ref(false);
@@ -1096,6 +1101,130 @@ function useVibe64OutputControlsSurface(props) {
     }));
   }
 
+  function orientationUuid(value) {
+    return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(value);
+  }
+
+  function orientationFields(value, fields) {
+    return value && typeof value === "object" && !Array.isArray(value) &&
+      Object.keys(value).sort().join(",") === fields.slice().sort().join(",");
+  }
+
+  function orientationFrameCurrent(channel) {
+    return orientation === channel && previewFrame.value === channel.frame &&
+      previewFrame.value?.contentWindow === channel.window && previewFrameRequestId.value === channel.frameRequestId &&
+      props.session?.sessionId === channel.sessionId && terminalSessionId.value === channel.terminalSessionId &&
+      projectSlug.value === channel.projectSlug && Boolean(previewUrl.value);
+  }
+
+  function orientationFrameVisible(channel) {
+    return orientationFrameCurrent(channel) && previewFrameLoaded.value && previewPaneDisplayed.value &&
+      props.windowDisplayed !== false && document.visibilityState === "visible" &&
+      Boolean(previewVisibleViewportRect(channel.frame.getBoundingClientRect(), {
+        width: window.innerWidth, height: window.innerHeight
+      }));
+  }
+
+  function retireOrientationInteraction(channel = orientation) {
+    const pending = channel?.pending;
+    if (!pending) return;
+    pending.active = false;
+    channel.pending = null;
+    void pending.owner.finishExercise(pending.ticket);
+  }
+
+  function closeOrientation() {
+    retireOrientationInteraction();
+    orientation?.port?.close();
+    orientation = null;
+  }
+
+  function handleOrientationPacket(channel, input) {
+    if (!orientationFrameCurrent(channel)) return;
+    const common = ["type", "protocolVersion", "playerInstanceId", "instanceId"];
+    if (input?.protocolVersion !== 1 || input.playerInstanceId !== channel.playerInstanceId || input.instanceId !== channel.instanceId) {
+      retireOrientationInteraction(channel);
+      return;
+    }
+    if (input.type === "ready" && orientationFields(input, common)) {
+      channel.ready = true;
+      return;
+    }
+    if (!channel.ready || !orientationFrameVisible(channel)) {
+      retireOrientationInteraction(channel);
+      return;
+    }
+    if (input.type === "button" && orientationFields(input, [...common, "interactionId"]) && orientationUuid(input.interactionId)) {
+      retireOrientationInteraction(channel);
+      const owner = learnerGestures?.value;
+      if (!owner?.beginExercise || !owner.finishExercise) return;
+      const pending = { owner, active: true, interactionId: input.interactionId, phase: "button", ticket: null };
+      const current = () => pending.active && orientationFrameVisible(channel) && learnerGestures.value === owner;
+      const ticket = owner.beginExercise({ projectSlug: channel.projectSlug, sessionId: channel.sessionId,
+        frameRequestId: channel.frameRequestId, playerInstanceId: channel.playerInstanceId,
+        instanceId: channel.instanceId, interactionId: input.interactionId }, current);
+      if (ticket) {
+        pending.ticket = ticket;
+        channel.pending = pending;
+      }
+      return;
+    }
+    const pending = channel.pending;
+    if (!pending || input.interactionId !== pending.interactionId) return;
+    if (input.type === "request" && pending.phase === "button" && input.method === "POST" && input.path === "/api/greeting" &&
+        orientationFields(input, [...common, "interactionId", "method", "path"])) {
+      pending.phase = "request";
+      return;
+    }
+    if (input.type === "response-displayed" && pending.phase === "request" && orientationUuid(input.requestId) &&
+        input.message === "Hello from the server!" && orientationFields(input, [...common, "interactionId", "requestId", "message"])) {
+      pending.phase = "finishing";
+      void pending.owner.finishExercise(pending.ticket, { requestId: input.requestId }).finally(() => {
+        if (channel.pending === pending) retireOrientationInteraction(channel);
+      });
+      return;
+    }
+    retireOrientationInteraction(channel);
+  }
+
+  function connectOrientation() {
+    const channel = orientation;
+    if (!channel || channel.port || !orientationFrameCurrent(channel) || !previewFrameLoaded.value) return;
+    const ports = new MessageChannel();
+    channel.port = ports.port1;
+    channel.port.onmessage = event => handleOrientationPacket(channel, event.data);
+    channel.port.onmessageerror = () => retireOrientationInteraction(channel);
+    channel.port.start();
+    try {
+      channel.window.postMessage({ type: "orientation-init", protocolVersion: 1, playerInstanceId: channel.playerInstanceId },
+        channel.origin, [ports.port2]);
+    } catch {
+      ports.port2.close();
+      closeOrientation();
+    }
+  }
+
+  function handleOrientationAvailable(event) {
+    if (!orientationFields(event.data, ["type", "protocolVersion", "instanceId"]) ||
+        event.data.protocolVersion !== 1 || !orientationUuid(event.data.instanceId) || event.ports?.length ||
+        !props.embeddedPreview || !previewFrameRequestId.value || !previewUrl.value ||
+        !projectSlug.value || !props.session?.sessionId || !terminalSessionId.value) return;
+    if (orientation && orientationFrameCurrent(orientation) && orientation.instanceId === event.data.instanceId) return;
+    closeOrientation();
+    orientation = { frame: previewFrame.value, window: event.source, origin: event.origin,
+      frameRequestId: previewFrameRequestId.value, projectSlug: projectSlug.value,
+      sessionId: props.session.sessionId, terminalSessionId: terminalSessionId.value,
+      instanceId: event.data.instanceId, playerInstanceId: crypto.randomUUID(), ready: false, port: null, pending: null };
+    connectOrientation();
+  }
+
+  function invalidateHiddenOrientation() {
+    if (!orientation) return;
+    if (!orientationFrameVisible(orientation) || (orientation.pending && orientation.pending.owner !== learnerGestures?.value)) {
+      retireOrientationInteraction();
+    }
+  }
+
   function resetPreviewBridge(reason = "") {
     previewBridgeVersion.value = 0;
     previewBridgeRequests.rejectAll("The application preview changed.");
@@ -1182,6 +1311,7 @@ function useVibe64OutputControlsSurface(props) {
   }
 
   function clearPreviewFrame(reason = "") {
+    closeOrientation();
     resetPreviewBridge(reason || "frame-cleared");
     if (!previewFrameRequest.value.src) {
       return false;
@@ -1221,6 +1351,7 @@ function useVibe64OutputControlsSurface(props) {
     if (!nextIdentity || (!force && nextIdentity === previewFrameRequest.value.identity)) {
       return false;
     }
+    closeOrientation();
     resetPreviewBridge(reason || "frame-requested");
     previewFrameRequest.value = {
       id: previewFrameRequest.value.id + 1,
@@ -1809,7 +1940,8 @@ function useVibe64OutputControlsSurface(props) {
   }
 
   function handlePreviewBridgeMessage(event) {
-    if (!isPreviewBridgeMessage(event?.data)) {
+    const orientationAvailable = event?.data?.type === "orientation-available";
+    if (!orientationAvailable && !isPreviewBridgeMessage(event?.data)) {
       return;
     }
     if (event?.source !== previewFrame.value?.contentWindow) {
@@ -1828,9 +1960,14 @@ function useVibe64OutputControlsSurface(props) {
       });
       return;
     }
+    if (orientationAvailable) {
+      handleOrientationAvailable(event);
+      return;
+    }
     const messageType = previewMessageType(event.data);
     const bridgeReady = isPreviewBridgeReadyMessage(event.data);
     if (bridgeReady && previewFrameLoaded.value) {
+      closeOrientation();
       resetPreviewBridge("bridge-document-ready");
     }
     previewBridgeVersion.value = Math.max(
@@ -1891,6 +2028,7 @@ function useVibe64OutputControlsSurface(props) {
     if (lifecycle === previewIdentityLifecycle) {
       return;
     }
+    closeOrientation();
     previewIdentityLifecycle = lifecycle;
     previewIdentityAutomaticAttempt = "";
     resetPreviewResourceRecovery(lifecycle);
@@ -1901,6 +2039,15 @@ function useVibe64OutputControlsSurface(props) {
     flush: "sync",
     immediate: true
   });
+
+  watch([previewFrameLoaded, previewFrame], () => {
+    if (orientation && !orientationFrameCurrent(orientation)) {
+      closeOrientation();
+    } else {
+      connectOrientation();
+    }
+  }, { flush: "sync" });
+  watch([previewPaneDisplayed, () => props.windowDisplayed, () => learnerGestures?.value], invalidateHiddenOrientation, { flush: "sync" });
 
   watch(previewIdentityAvailable, (available) => {
     if (available && previewFrameLoaded.value) {
@@ -1984,10 +2131,13 @@ function useVibe64OutputControlsSurface(props) {
   
   onBeforeMount(() => {
     window.addEventListener("message", handlePreviewBridgeMessage);
+    document.addEventListener("visibilitychange", invalidateHiddenOrientation);
   });
   
   onBeforeUnmount(() => {
     window.removeEventListener("message", handlePreviewBridgeMessage);
+    document.removeEventListener("visibilitychange", invalidateHiddenOrientation);
+    closeOrientation();
     cancelPreviewResourceRetry();
     previewBridgeRequests.rejectAll("The application preview closed.");
   });
