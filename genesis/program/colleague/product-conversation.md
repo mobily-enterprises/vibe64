@@ -200,6 +200,14 @@ persisted. Fresh authenticated access is required to continue after restart.
 Uncertain native delivery must be inspected before another submission; neither
 reopening nor recovery replays it. Failed record writes preserve the last committed
 history and prevent the unsaved request from starting.
+The shared inspection owner distinguishes an exact settled native no-admission
+record from an unknown acknowledgement. Its typed not-sent result releases only
+that request's restored client uncertainty barrier, retaining the draft, payload,
+history and every genuinely unknown request. Current and retired no-admission
+records require explicit false attempt markers without conflicting copies,
+in-flight dispatch, replacement or storage/execution uncertainty. No native work,
+canonical receipt, predecessor mutation or replay is manufactured. The original
+retired-ID guard still requires a new authored message for a successor.
 
 An accepted request captures its UI focus. Subsequent navigation does not silently
 redirect its operations. New steering can arrive while a model response is active;
