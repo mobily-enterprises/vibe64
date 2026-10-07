@@ -301,7 +301,15 @@ Conversation watches are ordinary create/list/cancel/resume actions. Each user
 can retain up to 16 active or paused watches, with exact project/session and
 optional temporary-conversation identity. Conditions cover completed replies,
 finished turns and explicit attention states; failures are reported for every
-condition. An existing completed answer is reported immediately. Quiet output
+condition. Ordinary reply watches accept canonical completed assistant/commentary
+responses during active work, preserving truthful `working` and `settled` facts.
+Partial text, thinking and tool output remain excluded. This deliberately extends
+the original settled-only reply predicate for ongoing-goal steering; it does not
+declare the work complete. One-shot watches report the next response, which can be
+progress rather than a resolved question. Assignment watches retain their native
+completion boundary. An unreported reply does not advance its answer cursor,
+so a final answer saved before the native idle event remains eligible afterward.
+An existing completed response is reported immediately. Quiet output
 does not imply that an agent is blocked. One-shot watches retire after delivery;
 ongoing watches compare run, message and status cursors to suppress duplicates.
 Auto implementation handoffs count as working until admitted or interrupted.

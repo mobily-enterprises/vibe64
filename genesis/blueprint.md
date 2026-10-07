@@ -60,7 +60,8 @@ sending an AI request. Stopping or steering clears unfinished text.
 Colleague can browse open and archived sessions beyond the first page, while
 reporting unavailable records separately and keeping historical sessions inactive.
 Changing that name keeps the conversation and model choice. People can ask it
-to watch Main or temporary conversations for completed answers, finished work or
+to watch Main or temporary conversations for completed responses even while a
+goal continues, finished work or
 explicit problems. Code observes the conversations; only relevant changes wake
 Colleague. It can also watch a host's workspace conversation without a project, using that
 host's current permissions and the same code-driven notifications. Watching does

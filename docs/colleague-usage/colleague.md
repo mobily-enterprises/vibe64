@@ -185,6 +185,16 @@ Its completed notification can still be spoken when sound is on. A saved notice,
 “An update from your watched conversations.”, appears before the completed answer,
 including after reopening. Internal watch instructions and tool arguments stay hidden.
 
+Ask “Tell me when that agent replies, even while it keeps working” to request a
+response watch. Colleague can watch the exact Main or temporary conversation and
+report its next completed message, including a progress reply during an active
+goal. Partial words, thinking and tool output do not trigger it. A reply does not
+mean the task is done: Colleague reports what the agent actually said and whether
+work continues. Ask for an ongoing watch to receive later responses too; a
+one-shot watch ends after its first delivered report. Ask “Tell me when the work
+finishes” for a completion watch instead. Watching starts only on your request,
+checks your current project access and does not stop or resend the coding work.
+
 You can ask “Which projects do I have?” from any page, including AI Accounts;
 no open project is required. Colleague checks the projects available to you.
 A malformed lookup returns a validation error. An unavailable tool runs no action;

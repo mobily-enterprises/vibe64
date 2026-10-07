@@ -16,7 +16,7 @@ import { createColleagueActions } from "../../packages/vibe64-colleague/src/serv
 import { createTrainingAnswerAssessment } from "../../packages/vibe64-training/src/server/answerAssessment.js";
 import { createTrainingTeachingActions } from "../../packages/vibe64-training/src/server/teachingActions.js";
 import { createTrainingAssessmentActions } from "../../packages/vibe64-training/src/server/assessmentActions.js";
-import { readWatchedConversation } from "../../packages/vibe64-colleague/src/server/attention.js";
+import { conversationObservation, readWatchedConversation, watchUpdate } from "../../packages/vibe64-colleague/src/server/attention.js";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
@@ -3944,4 +3944,91 @@ test("Colleague withholds a split high surrogate only from partial display and p
   assert.equal(events.findLast(event => event.type === "message" && event.role === "assistant" && event.status === "complete").text, text);
   const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
   assert.equal(saved.conversationLog.at(-1).assistant.text, text);
+});
+
+for (const role of ["commentary", "assistant"]) {
+  test(`Main reply watches report completed ${role} while a native goal continues`, async t => {
+    const f = await fixture(t, [reply("The agent gave its estimate and is still working.")], { watching: true });
+    f.observations.log = [{ messages: [{ role: "user", messageId: "eta-request", text: "Give an estimate, then continue." }] }];
+    await watchAction(f, "watch.create", { ...watchInput, conversationId: "" });
+    const nativeTurn = structuredClone(f.observations.session.agentSession.turn);
+    f.observations.log[0].messages.push(
+      { role: "thinking", messageId: "thought", text: "Considering the estimate" },
+      { role: "tool", messageId: "tool", text: "Tool output is not a reply" },
+      { role, messageId: "eta-reply", complete: false, text: "Roughly" }
+    );
+    await changed(f);
+    await until(() => f.observations.reads >= 2);
+    assert.equal(f.observations.starts.length, 0, "Partial words, thinking and tool output do not wake Colleague");
+    f.observations.log[0].messages.at(-1).complete = true;
+    f.observations.log[0].messages.at(-1).text = "Roughly 30–70 hours; I am continuing the goal.";
+    await changed(f);
+    await until(() => f.observations.starts.length === 1);
+    const final = await f.service.wait(f.context);
+    assert.equal(final.status, "ready", final.error);
+    assert.equal(final.watches[0].status, "delivered");
+    const observation = f.observations.starts[0].data.observations[0];
+    assert.equal(observation.answerId, "eta-reply");
+    assert.equal(observation.answered, true);
+    assert.equal(observation.working, true, "Reporting a reply does not claim the work is finished");
+    assert.equal(observation.settled, false);
+    assert.equal(observation.answer, "Roughly 30–70 hours; I am continuing the goal.");
+    assert.deepEqual(f.observations.session.agentSession.turn, nativeTurn, "The watched goal remains untouched");
+    await changed(f);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(f.observations.starts.length, 1, "One completed output produces one notification");
+  });
+}
+
+test("reply cursors retain an answer first observed before the native turn settles", () => {
+  const watch = { condition: "reply", cursor: { status: "inProgress", runId: "goal-1", answerId: "", error: "", needsUser: false } };
+  const messages = [{ role: "assistant", messageId: "final-before-idle", text: "Ready for testing." }];
+  const early = watchUpdate(watch, conversationObservation({ status: "inProgress", runId: "goal-1", messages }));
+  assert.equal(early.reason, "");
+  assert.equal(early.cursor.answerId, "", "An unreported answer must not advance its delivery cursor");
+  const completed = watchUpdate({ ...watch, cursor: early.cursor }, conversationObservation({ status: "completed", runId: "goal-1", messages }));
+  assert.equal(completed.reason, "reply");
+  assert.equal(completed.cursor.answerId, "final-before-idle");
+  assert.equal(watchUpdate({ ...watch, cursor: completed.cursor }, conversationObservation({ status: "completed", runId: "goal-1", messages })).reason, "");
+});
+
+test("finished watches and assignment replies keep their native completion boundary", async t => {
+  for (const options of [{ condition: "finished" }, { condition: "reply", assignmentId: "bounded-assignment" }]) {
+    const f = await fixture(t, [], { watching: true });
+    f.observations.log = [{ messages: [
+      { role: "user", messageId: "request", text: "Implement the change." },
+      { role: "commentary", messageId: "progress", text: "I will check that." },
+      { role: "assistant", messageId: "final-before-idle", text: "The change is ready." }
+    ] }];
+    const observation = await readWatchedConversation(f.actions, { ...watchInput, conversationId: "", ...options }, f.context);
+    assert.equal(observation.working, true);
+    assert.equal(observation.settled, false);
+    assert.equal(observation.answered, false, "Progress must not advance assignment follow-through or finish work");
+    assert.equal(observation.answerId, "final-before-idle");
+  }
+});
+
+test("a completed goal commentary wakes the original native Colleague once without steering the watched work", async t => {
+  const f = await fixture(t, [{ text: "The estimate is 30–70 hours; the agent continues working." }], { watching: true, native: true });
+  f.observations.log = [{ messages: [{ role: "user", messageId: "eta-request", text: "Estimate the remaining work, then continue." }] }];
+  await watchAction(f, "watch.create", { ...watchInput, conversationId: "" });
+  const nativeTurn = structuredClone(f.observations.session.agentSession.turn);
+  f.observations.log[0].messages.push({ role: "commentary", messageId: "eta-reply", text: "30–70 hours. I am continuing." });
+  await changed(f);
+  await until(async () => (await f.service.read({}, f.context)).watches[0].status === "delivered");
+  const result = await f.service.wait(f.context);
+  assert.equal(result.status, "ready", result.error);
+  assert.deepEqual(result.messages.filter(message => ["user", "system", "assistant"].includes(message.role)).map(({ role, text }) => [role, text]), [
+    ["system", "An update from your watched conversations."],
+    ["assistant", "The estimate is 30–70 hours; the agent continues working."]
+  ]);
+  const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  assert.equal(saved.conversationLog.at(-1).metadata.runtime.origin, "application");
+  assert.equal(saved.observations.length, 0);
+  assert.deepEqual(f.observations.session.agentSession.turn, nativeTurn);
+  assert.deepEqual(f.observations.sent, [], "Reporting never resends or steers the watched request");
+  const starts = (await f.native.trace()).filter(row => row.method === "turn/start");
+  assert.equal(starts.length, 1, "Exactly one native notification turn");
+  await changed(f);
+  assert.deepEqual((await f.native.trace()).filter(row => row.method === "turn/start"), starts);
 });

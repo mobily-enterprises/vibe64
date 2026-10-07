@@ -34,12 +34,14 @@ async function readWatchedConversation(actions, watch, context) {
     messages = (log.conversationLog || []).flatMap((item) => item.messages || []);
   }
   const needsUser = route?.reviewStatus === "skipped_question" || (route?.status === "done" && route?.outcome?.decision === "wait");
-  return conversationObservation({ status, runId, messages, error, needsUser });
+  return conversationObservation({ status, runId, messages, error, needsUser,
+    replyDuringWork: watch.condition === "reply" && !watch.assignmentId });
 }
 
-function conversationObservation({ status = "unknown", runId = "", messages = [], error = "", needsUser = false }) {
-  const answer = messages.findLast((message) => message.role === "assistant" && message.complete !== false && !working.has(message.status));
-  const latest = messages.findLast((message) => ["user", "assistant"].includes(message.role) && message.complete !== false && !working.has(message.status));
+function conversationObservation({ status = "unknown", runId = "", messages = [], error = "", needsUser = false, replyDuringWork = false }) {
+  const replyRoles = replyDuringWork ? ["assistant", "commentary"] : ["assistant"];
+  const answer = messages.findLast((message) => replyRoles.includes(message.role) && message.complete !== false && !working.has(message.status));
+  const latest = messages.findLast((message) => ["user", ...replyRoles].includes(message.role) && message.complete !== false && !working.has(message.status));
   const answerId = answer ? String(answer.id || answer.messageId || createHash("sha256").update(`${answer.at || ""}:${answer.text || ""}`).digest("hex")) : "";
   const settled = !working.has(status) && status !== "unknown";
   return {
@@ -47,7 +49,7 @@ function conversationObservation({ status = "unknown", runId = "", messages = []
     userMessageIds: messages.filter((message) => message.role === "user").map((message) => String(message.messageId || message.id || "")),
     latestUserMessageId: String(messages.findLast((message) => message.role === "user")?.messageId || messages.findLast((message) => message.role === "user")?.id || ""),
     attention: attention.has(status) || Boolean(error) || needsUser,
-    answered: settled && latest?.role === "assistant",
+    answered: (settled || replyDuringWork) && replyRoles.includes(latest?.role),
     error: String(error).slice(0, 512),
     answer: String(answer?.text || "").slice(0, 4000),
     truncated: String(answer?.text || "").length > 4000
@@ -56,7 +58,9 @@ function conversationObservation({ status = "unknown", runId = "", messages = []
 
 function watchUpdate(watch, observation) {
   const previous = watch.cursor;
-  const cursor = { status: observation.status, runId: observation.runId, answerId: observation.answerId,
+  const cursor = { status: observation.status, runId: observation.runId,
+    // An answer first seen while work is active must remain eligible when it settles.
+    answerId: watch.condition === "reply" && !observation.answered ? previous?.answerId || "" : observation.answerId,
     error: observation.error, needsUser: observation.needsUser };
   if (JSON.stringify(previous) === JSON.stringify(cursor)) return { cursor, reason: "" };
   if (observation.attention) return { cursor, reason: "attention" };

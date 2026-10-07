@@ -665,7 +665,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     if (!watch.source) return readWatchedConversation(actions, watch, context);
     const read = conversationSources.get(watch.source);
     if (!read) throw failure("This watched conversation source is unavailable in this runtime.");
-    return conversationObservation(requireResult(await read(watch, context)));
+    return conversationObservation({ ...requireResult(await read(watch, context)),
+      replyDuringWork: watch.condition === "reply" && !watch.assignmentId });
   }
 
   async function observeWatch(state, watch) {
