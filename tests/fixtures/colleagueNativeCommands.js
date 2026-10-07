@@ -151,6 +151,11 @@ export async function createControlledColleagueNativeCommands(root, responses) {
         }
         // R06 variants change only the native wire/history supplied by this
         // executable. The actual driver decides whether any result is usable.
+        if (response.mode === "disconnect") {
+          log({ socketClosed: { threadId: thread.id, turnId: turn.id } });
+          ws.close();
+          return;
+        }
         if (response.mode === "error-only-completed-no-turn-id") {
           turn.items.push({ id: "answer", type: "agentMessage", phase: "final_answer", text: response.text });
           turn.status = "completed";

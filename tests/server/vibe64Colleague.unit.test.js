@@ -4272,3 +4272,45 @@ for (const mode of ["retrying-error", "foreign-turn-error", "late-old-turn-error
     }
   });
 }
+
+test("Colleague native socket loss settles its accepted turn and a new request never replays it", async t => {
+  const f = await fixture(t, [{ mode: "disconnect" }, { text: "The next request completed." }], { native: true });
+  try {
+    await f.send("Keep this failed request.", "user-1");
+    const failed = await f.service.wait(f.context);
+    assert.equal(failed.status, "failed", failed.error);
+    assert.deepEqual(failed.messages.map(({ role, text }) => [role, text]), [["user", "Keep this failed request."]]);
+    assert.deepEqual(f.observations.mutations, []);
+    const trace = await f.native.trace();
+    const starts = trace.filter(row => row.method === "turn/start");
+    assert.equal(starts.length, 1);
+    assert.equal(starts[0].params.clientUserMessageId, "user-1");
+    const lost = trace.find(row => row.socketClosed).socketClosed;
+    assert.equal(lost.threadId, starts[0].params.threadId);
+    const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+    const before = JSON.parse(await readFile(file, "utf8"));
+    const first = before.conversationLog.find(turn => turn.user?.messageId === "user-1");
+    assert.equal(first.metadata.runtime.nativeTurnId, lost.turnId);
+    assert.equal(first.metadata.runtime.status, "failed");
+    assert.equal(before.conversationMetadata.runtime.binding.executionId, "");
+    assert.equal(before.conversationMetadata.runtime.binding.observationLoss.stopped, true);
+    assert.deepEqual((await f.service.read({}, f.context)).messages, failed.messages);
+    assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1);
+    await f.send("Send a different request.", "user-2");
+    const next = await f.service.wait(f.context);
+    assert.equal(next.status, "ready", next.error);
+    assert.deepEqual(next.messages.map(({ role, text }) => [role, text]),
+      [["user", "Keep this failed request."], ["user", "Send a different request."],
+        ["thinking", "Reasoning summary"], ["assistant", "The next request completed."]]);
+    const after = JSON.parse(await readFile(file, "utf8"));
+    assert.deepEqual(after.conversationLog.find(turn => turn.user?.messageId === "user-1"), first);
+    assert.equal(after.conversationMetadata.runtime.binding.threadId, lost.threadId);
+    const finalTrace = await f.native.trace();
+    assert.deepEqual(finalTrace.filter(row => row.method === "turn/start").map(row => row.params.clientUserMessageId),
+      ["user-1", "user-2"]);
+    assert.equal(finalTrace.filter(row => row.args).length, 2, "The old native process was replaced once after socket loss");
+    assert.deepEqual(f.observations.mutations, []);
+  } finally {
+    await f.service.stop({}, f.context);
+  }
+});
