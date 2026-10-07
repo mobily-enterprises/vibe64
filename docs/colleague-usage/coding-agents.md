@@ -13,6 +13,20 @@ delivery first; signing in does not submit the message again. These steps are
 the same on desktop and mobile.
 After a reload, history and live updates reconnect to the project and session
 shown in that chat.
+When the session reports that a turn finished, Main chat checks the same
+conversation again if its completion update was missed. This refreshes the
+saved reply and temporary live output without sending your request again.
+If old live fragments remain visible, reload the page to reconnect the same
+chat; inspect the existing reply before deciding whether to send more work.
+
+If chat updates fail, a compact warning keeps the loaded messages and your draft
+visible. Select **Reload chat** inside that warning to reconnect to the same
+conversation. This restores observation; it does not resend your request or stop
+the agent. A connection warning alone cannot tell you whether the agent is still
+working. If access is denied, cached messages are cleared and **Reload chat** is
+hidden: sign in with the authorized account and reopen the intended conversation.
+The warning and recovery control work the same on desktop and phone. Colleague
+can explain these steps; reconnecting this browser view requires your interaction.
 
 ## Send, steer and stop
 
@@ -21,7 +35,9 @@ shown in that chat.
 2. While it works, add instructions through **Steer**. This targets the active
    conversation; selecting another project does not move an earlier request.
 3. Use its **Stop** control when you want to stop coding work. Stopping speech or
-   Colleague's own turn has a different effect.
+   Colleague's own turn has a different effect. For Codex, **Stop** targets this
+   conversation; other conversations remain available even when they share your
+   Codex account. The same control applies on desktop and compact screens.
 4. Wait for the actual answer and inspect its reported checks. Delivery or a
    working status is not a completed implementation.
 
@@ -36,9 +52,19 @@ not send anything. Review an unconfirmed request before using **Retry**; when
 **Check delivery** is shown, it checks the existing request without resending it.
 If a rejected **Steer** returns to the composer, **Retry** keeps its original
 request ID and leaves any newer text you appended in the composer.
+If the turn finished before steering arrived, the request is shown as failed
+rather than **Check delivery**. It is not automatically sent as new work.
+Retry retains that steering request; use its **Cancel** or **Edit** recovery
+before deliberately sending a new request. A genuine lost receipt remains
+uncertain until the existing delivery check confirms it.
 If OpenCode cannot confirm delivery, checking its status does not send the request
 again. An unavailable receipt remains uncertain; inspect the conversation before
 deciding what to send next. This also applies to steering instructions.
+OpenCode can receive a message before Vibe64 finishes saving it. An early reply
+does not confirm that the message was saved. If saving fails, keep the same
+request and use **Check delivery** when shown before retrying. Ask the operator
+to restore storage if needed, or resolve the reported **Stop** failure first;
+neither recovery repeats the prompt.
 After OpenCode restarts, opening a conversation can take longer while its working
 directory is prepared. Wait for preparation to finish before using the chat.
 If preparation fails, resolve the reported error and retry; the saved conversation
@@ -142,6 +168,12 @@ If Codex reports that it could not load its model catalogue, ask the workspace
 operator to check the Codex installation and connection, then restart the
 assistant service. Colleague can explain the error but cannot perform that host
 operation. This recovery is the same on desktop and mobile.
+
+If Codex stops while the editor restores its managed controls, its notice identifies
+that interruption. An interruption with no known cause is not reported as a
+provider failure. **Stop**, service restart, missing final-response delivery and a
+confirmed provider failure retain their distinct notices. Your saved file changes
+remain; inspect the result and send a new message when ready to continue.
 
 ## Answer assistant questions
 

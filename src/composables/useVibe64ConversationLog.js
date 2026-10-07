@@ -350,13 +350,30 @@ function useVibe64ConversationLog({
     const turns = computed(() => conversationTurnsWithPending(conversation.turns.value, sessionIsAwaitingCodex(currentSession.value)));
     const integrationActions = useConversationIntegrationActions({ turns, enabled, sessionId, projectSlug,
       sessionsApiPath, reloadConversationLog: conversation.reload, httpClient });
-    // These are product state changes. Native delivery, live output, history
-    // patches and reconnect reads belong to the supplied subscription alone.
+    // Product completion remains an independent reconciliation signal when a
+    // native notification is missed. The supplied binding still owns the read.
+    let realtimeCompletionKey = "";
     const realtime = useRealtimeEvent({ enabled, event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: context => ["session-assistant-selection-updated", "integration-setup-skipped", "integration-setup-completed"]
-        .includes(context?.payload?.reason) && conversationLogRealtimeShouldRefresh(context, sessionId.value),
-      onEvent: () => conversation.reload() });
-    return { ...integrationActions, turns, error: conversation.error, hasMoreBefore: conversation.hasMoreBefore,
+      matches: context => (["session-assistant-selection-updated", "integration-setup-skipped", "integration-setup-completed"]
+        .includes(context?.payload?.reason) || conversationLogCompletedTurnKey(context?.payload)) &&
+        conversationLogRealtimeShouldRefresh(context, sessionId.value),
+      onEvent: ({ payload = {} } = {}) => {
+        realtimeCompletionKey = conversationLogCompletedTurnKey(payload) || realtimeCompletionKey;
+        return conversation.reload();
+      } });
+    watch(() => conversationLogCompletedTurnKey(currentSession.value), key => {
+      if (!enabled.value || !key) return;
+      if (key === realtimeCompletionKey) {
+        realtimeCompletionKey = "";
+        return;
+      }
+      void conversation.reload()?.catch(() => {
+        // The supplied binding retains the error and its ordinary recovery.
+      });
+    }, { flush: "post" });
+    return { ...integrationActions, turns, error: conversation.error,
+      errorReloadable: computed(() => conversation.accessDenied?.value === false),
+      hasMoreBefore: conversation.hasMoreBefore,
       loadMore: conversation.loadMore, loadMoreError: conversation.loadMoreError, loading: conversation.loading,
       initializing: computed(() => !conversation.snapshot.value && conversation.loading.value),
       loadingMore: conversation.loadingMore, reload: conversation.reload, realtime,

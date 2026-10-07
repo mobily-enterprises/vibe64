@@ -132,10 +132,16 @@ and observation-loss handling, turn allocation, steering selection, event readin
 rejection drain and admitted receipt ordering on the same maps and monitor. Vibe64
 supplies Git/Genesis preparation, actor and routing metadata, attachment policy,
 the original receipt write/publication and run projection. The shared owner
-advances the observed input only after that receipt is saved and published, then
-releases admission. Detached completion, failed observation and retryable stop
-also use one native owner. Vibe64's bounded result projection still runs before
-observation closes; its checkpoint runs immediately after confirmed closure,
+selects Main's latest input before native dispatch and reuses its existing admission
+gate through the receipt write/publication. Native reads and progress continue;
+normal completion projection, retirement and checkpoint wait for that commit and
+recheck the exact input and gate after awaited work. Definite rejection restores the prior
+input and gate. Unknown admission or admitted persistence failure retains the
+actual input and enters the original Stop/error recovery without replay. A retiring
+monitor claims inactivity before cleanup; a new Send joins that cleanup before
+using the existing next monitor. Detached completion, failed observation and
+retryable stop also use one native owner. Vibe64's bounded result projection still
+runs before observation closes; its checkpoint runs immediately after confirmed closure,
 before completion is published. The original structured helper result and
 temporary status fields remain application-owned.
 The shared owner also projects native history, retires completed stream rows,
@@ -440,6 +446,17 @@ progress must finish before their attachment references can be retained.
 Stopping routing before delivery restores the local prompt to the composer,
 preserving newer draft text and uploaded attachments. Reload recovers the same
 cancelled draft without resending it; the next explicit Send gets a fresh ID.
+Transient chat subscription failures now keep the mounted shared transcript and
+show its compact error banner. Main projects the common runtime's existing
+accessDenied ref through its conversation-log facade to the shared
+errorReloadable presentation flag; the banner uses the original reloadChatPane
+action. Colleague uses the same supplied shared adapter and suppresses duplicate
+runtime errors in its custom composer. Access denial clears and fences cached
+conversation content, and hides that recovery action. No permanent reload icon
+is restored beside the avatar. JSKIT's existing subscription owner measures
+authentication, action admission, conversation opening, observer attachment,
+snapshot reading and acknowledgement sending through runtime.logger; those
+timings do not establish the cause of an unmeasured production delay.
 A fully cancelled request no longer displays its earlier error above the composer,
 including after reload. Pending helper cleanup and unconfirmed delivery retain
 their notices. The saved request remains available as operational evidence.
@@ -676,8 +693,14 @@ runtime directory. Vibe64 retains session barriers, stopped-state persistence,
 publication and Helper cleanup. Colleague's common runtime persists its native
 barrier through the same conversation storage contract. Both host bindings supply
 the existing Genesis hook environment, so their shared server has one consistent
-configuration. A runtime lock still protects native startup/retirement and exact
-metadata; it is not a cross-process observer registry.
+configuration. Lifecycle work retains the original owner-local FIFO and shutdown
+task tracking. Its shared critical sections serialize only the same exact native
+runtime directory, so a held catalogue request in another owner and runtime does
+not delay acquisition or cached release here. Catalogue and saved-proof
+preparation remain tracked before their runtime key is known. Account filtering,
+participant checks and durable invalidation barriers retain the existing owners.
+A runtime lock still protects native startup/retirement and exact metadata; it is
+not a cross-process observer registry.
 
 The native connection/thread provider also lives in JSKIT. Vibe64's subclass only
 supplies these host facilities and its existing diagnostic/error labels. The moved
@@ -875,6 +898,13 @@ An idle attempted changeover still recovers through its original owner, which
 writes the authored receipt before clearing the existing pending journal.
 Inspection rechecks authorization after native I/O and never resubmits a prompt.
 
+Router's exact inactive-turn steering rejection uses the common
+`conversation_not_steerable` pre-admission code. The shared client retains a failed
+request with its original UUID, payload and steering intent, without automatic
+conversion to new work. Other routing, transport or provider failures are not
+classified by HTTP status or error text. Existing unknown native receipts remain
+uncertain; this correction does not manufacture retrospective rejection proof.
+
 One sessions-owned composition provider installs the assistant conversation and
 access facilities, whether or not Colleague is enabled. Colleague supplies its
 own optional facade and schemas. The shared HTTP and socket owners retain the
@@ -983,6 +1013,21 @@ delivery receipt requires no new inference. Standalone admission without hosted
 users remains supported. Access responses omit the user record. Reads,
 Stop and cleanup remain separate from admission of new inference. Source
 explanations and Database Copilot use their own resolved Helper destination too.
+
+The offline routing upgrade owners validate exact known schema 3/4 state before
+legacy conversion. Current schema 4 requests and Custom preferences retain their
+captured configuration, native identity, actor and delivery receipts unchanged;
+unknown/corrupt records still fail preflight. The appended
+`20261006-routing-format-compatibility` boundary invokes the original V2,
+role-name and Helper owners read-only, including during explicit apply. Actual
+legacy conversion retains the original per-script publication and ledger recovery.
+Old numbered scripts remain unchanged; this adds no lazy
+repair to live reads or admission. The existing V2 owner gives validated schema
+1/2 terminal requests without a captured configuration the same explicit
+fresh-admission restriction already used for unfinished legacy requests. Status,
+messages and receipts remain terminal and intact as role/Helper conversion
+advances the format. Ordinary native requests without configuration remain
+invalid; no current record is silently marked legacy.
 
 Main chat can save Custom, Senior, Junior or Auto plus an optional Auto Deslop preference
 in the existing conversation metadata. A role resolves to a live, available
@@ -3155,5 +3200,26 @@ no-project-access contract and verified process cleanup still apply.
 Initial history loading completes before a restored unsent request is appended.
 This gives the transcript its complete initial tail for bottom positioning.
 Manual refreshes retain rendered history and do not reset the reader's position.
+Main's supplied conversation also retains the original canonical session
+completion watcher from `useVibe64ConversationLog`: a missed native
+completion notification requests the same binding's reload. The existing
+product event listener records the session/revision/turn key so its later
+matching session watcher does not request a duplicate reload; the common
+subscription still owns read coalescing, live output, saved
+history and error recovery. Neither path creates another transcript cache
+or sends model work.
 Delivery failures and retry controls appear on the unsent bubble once; the lower
 notice remains for follow-up recovery and unresolved cancellation cleanup.
+
+
+### Codex interruption cause presentation
+
+The existing native interruption owner records the exact thread/turn cause before
+a known user Stop or genuine managed-control reconfiguration request. Native
+completion and snapshot recovery consume that same cause; a queued completion
+therefore cannot mislabel an admitted Stop as a provider failure. Unknown native
+interruption stays neutral. Explicit service restart, completed-but-missing final
+response delivery and confirmed native failure retain their existing distinct
+outcomes. The application notice keeps its stable per-thread/turn identity, saved
+changes and original continuation instructions. This is new-event presentation,
+not a historical notice repair or a persisted-format change.

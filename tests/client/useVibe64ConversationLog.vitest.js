@@ -1428,4 +1428,65 @@ describe("useVibe64ConversationLog", () => {
       oldestTurnId: "000002"
     });
   });
+
+  it("reconciles supplied Main history when canonical completion misses realtime", async () => {
+    const scope = effectScope();
+    const active = ref(true);
+    const session = ref({ sessionId: "session-1", revision: 7,
+      agentSession: { turn: { active: true, id: "turn-1" } } });
+    const user = { role: "user", messageId: "question", text: "Question" };
+    const saved = { turnId: "000001", user, messages: [user],
+      metadata: { assistantSelection: { engineId: "codex" } } };
+    const live = { turnId: "stream:live-answer", messages: [
+      { role: "assistant", messageId: "live-answer", text: "Partial", status: "inProgress" }
+    ], pending: true };
+    const conversation = { turns: ref([saved, live]), error: ref(""), accessDenied: ref(false),
+      snapshot: ref({ status: "working" }), loading: ref(false), reload: vi.fn(async () => {
+        const answer = { role: "assistant", messageId: "saved-answer", text: "Saved reply" };
+        conversation.turns.value = [{ ...saved, assistant: answer, messages: [user, answer] }];
+      }) };
+    try {
+      const model = scope.run(() => useVibe64ConversationLog({ active, session, conversation }));
+      expect(endpointMocks.useEndpointResource).not.toHaveBeenCalled();
+      expect(model.turns.value).toHaveLength(2);
+      session.value = { sessionId: "session-1", revision: 8,
+        agentSession: { turn: { active: false, id: "turn-1" } } };
+      await nextTick();
+      expect(conversation.reload).toHaveBeenCalledTimes(1);
+      expect(model.turns.value).toHaveLength(1);
+      expect(model.turns.value[0].assistant.messageId).toBe("saved-answer");
+      expect(model.turns.value[0].metadata).toEqual(saved.metadata);
+      expect(httpRequest).not.toHaveBeenCalled();
+      active.value = false;
+      session.value = { ...session.value, revision: 9 };
+      await nextTick();
+      expect(conversation.reload).toHaveBeenCalledTimes(1);
+      scope.stop();
+      session.value = { ...session.value, revision: 10 };
+      await nextTick();
+      expect(conversation.reload).toHaveBeenCalledTimes(1);
+    } finally { scope.stop(); }
+  });
+
+  it("reconciles supplied Main completion once across its product event and session watcher", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1", revision: 7,
+      agentSession: { turn: { active: true, id: "turn-1" } } });
+    const conversation = { turns: ref([]), error: ref(""), accessDenied: ref(false),
+      snapshot: ref({ status: "working" }), loading: ref(false), reload: vi.fn(async () => null) };
+    try {
+      scope.run(() => useVibe64ConversationLog({ session, conversation }));
+      const payload = { sessionId: "session-1", revision: 8, reason: "opencode-server-turn-idle",
+        agentSession: { turn: { active: false, id: "turn-1" } } };
+      const listener = realtimeMocks.events.find(entry => entry.matches({ payload }));
+      expect(listener).toBeDefined();
+      expect(listener.matches({ payload: { ...payload, sessionId: "other-session" } })).toBe(false);
+      await listener.onEvent({ payload });
+      session.value = payload;
+      await nextTick();
+      expect(conversation.reload).toHaveBeenCalledTimes(1);
+      expect(endpointMocks.useEndpointResource).not.toHaveBeenCalled();
+      expect(httpRequest).not.toHaveBeenCalled();
+    } finally { scope.stop(); }
+  });
 });
