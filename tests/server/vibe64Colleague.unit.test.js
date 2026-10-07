@@ -4372,3 +4372,43 @@ for (const delayMs of [1000, 2000]) {
     }
   });
 }
+
+
+for (const { mode, delayMs } of [
+  { mode: "failure-before-delayed-detail", delayMs: 100 },
+  { mode: "failure-before-delayed-detail", delayMs: 1500 },
+  { mode: "error-only-failed", delayMs: 0 }
+]) {
+  test(`Colleague native failure retains detail for ${mode} at ${delayMs}ms`, async t => {
+    const f = await fixture(t, [{ mode, delayMs,
+      text: "Exact later native failure detail." }], { native: true });
+    try {
+      await f.send("Retain the failed request.", "user-1");
+      const result = await f.service.wait(f.context);
+      assert.equal(result.status, "failed");
+      if (delayMs < 500) assert.match(result.error, /Exact later native failure detail/);
+      else assert.doesNotMatch(result.error, /Exact later native failure detail/);
+      assert.deepEqual(result.messages.filter(row => row.role === "user").map(row => row.text), ["Retain the failed request."]);
+      assert.deepEqual(result.messages.filter(row => row.role === "assistant"), []);
+      assert.deepEqual(f.observations.mutations, []);
+      const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+      const authored = saved.conversationLog.filter(turn => turn.user?.messageId === "user-1");
+      assert.equal(authored.length, 1);
+      assert.equal(authored[0].metadata.runtime.status, "failed");
+      const trace = await f.native.trace();
+      assert.equal(trace.filter(row => row.method === "turn/start").length, 1);
+      assert.equal(trace.find(row => row.method === "turn/start").params.clientUserMessageId, "user-1");
+      if (mode === "error-only-failed") {
+        assert.equal(trace.some(row => row.notification?.method === "turn/completed"), false,
+          "A direct error and failed history alone supply this result");
+      }
+      if (delayMs === 100) {
+        const terminalIndex = trace.findIndex(row => row.notification?.method === "turn/completed");
+        const detailIndex = trace.findIndex(row => row.notification?.method === "error");
+        assert.ok(detailIndex > terminalIndex && terminalIndex !== -1, "The exact native detail follows failure status");
+      }
+    } finally {
+      await f.service.stop({}, f.context);
+    }
+  });
+}

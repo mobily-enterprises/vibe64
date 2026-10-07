@@ -210,6 +210,23 @@ export async function createControlledColleagueNativeCommands(root, responses) {
           emit("error", { turnId: thread.turns.at(-2).id,
             error: { message: "Controlled native provider error" }, willRetry: false });
         }
+        if (response.mode === "error-only-failed") {
+          await callTool(turn, "assistant_action_contract", { actionId: "vibe64.test.operate", version: 1 });
+          turn.status = "failed";
+          save();
+          emitTurn("error", { error: { message: response.text }, willRetry: false });
+          return;
+        }
+        if (response.mode === "failure-before-delayed-detail") {
+          await callTool(turn, "assistant_action_contract", { actionId: "vibe64.test.operate", version: 1 });
+          turn.status = "failed";
+          save();
+          emitTurn("turn/completed", { turn: { id: turn.id, status: turn.status } });
+          setTimeout(() => emitTurn("error", {
+            error: { message: response.text }, willRetry: false
+          }), response.delayMs);
+          return;
+        }
         if (response.mode === "failed" || response.mode === "foreign-completed") {
           turn.status = "failed";
           if (response.mode === "foreign-completed") {

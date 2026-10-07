@@ -133,8 +133,17 @@ first exact history read as the original detached watcher did. The existing
 timer retains that first local clock through repeated or held expiry reads;
 current turn, Stop, successor and goal checks prevent obsolete recovery. Main
 and the standalone default keep their completion-based clock. Native completion
-timestamps and persisted metadata are unchanged. The original malformed-envelope
-correction and failed-status detail interval remain separate parity obligations.
+timestamps and persisted metadata are unchanged. Colleague also selects its
+original 500ms failed/interrupted-status detail interval through server-owned
+`limits.codexFailureDetailGraceMs`. The existing exact-turn timer and notification
+FIFO retain the first deadline and return the status task immediately so a later
+nonretrying error can supply its exact detail. Exact error identity passes through
+active reconciliation; blank failed history cannot erase a received error.
+Already-failed initial history, user cancellation and control reconfiguration
+remain immediate. Repeated status or a successful-final-to-failure transition
+cannot regrant the interval, and a held successful history read yields to the
+pending failure operation. Main and standalone defaults retain immediate failure.
+The original malformed-envelope correction remains a separate parity obligation.
 No second timer owner or watcher is introduced.
 On missing-result expiry, the generic driver projects the original
 `response_delivery_failure` checkpoint as failed delivery and rejects its waiter
