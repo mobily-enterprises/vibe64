@@ -116,6 +116,14 @@ an unchanged selection also crosses its configuration guard before its product
 preference is committed. This preserves the native
 binding while requiring explicit Stop after unconfirmed native cleanup, even
 when the product worker has already settled as failed.
+The generic Codex observer forwards a non-retrying, nonempty native error to
+its existing driver signal owner. That driver checks the current native
+thread/turn, uses the original active-turn recovery to inspect its actual saved
+status, and recovers an exact completed answer before reporting failure. An
+active failed request rejects its waiter while retaining truthful native activity;
+the original driver cleanup then owns interruption. Retrying errors and foreign
+or late predecessor turn IDs cannot cancel the current request. Main's supplied
+native owner keeps its existing notification callback and outcome policy.
 Each operation and live observation rechecks the original request's current
 authority; an actor change cannot reuse an earlier person's conversation scope.
 The sessions-owned conversation provider supplies the local request guard and

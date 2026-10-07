@@ -78,6 +78,11 @@ If Colleague reports that its previous native turn must be stopped, click its
 existing **Stop** control before selecting a model, including the same model.
 A failed response can leave native cleanup unfinished; selecting a model does
 not silently stop it or resend the request.
+If Codex reports a failure without a final reply, Colleague checks that exact
+request's saved native history. A completed answer is recovered once. Otherwise
+Colleague reports the failure and stops the failed native turn through its
+existing cleanup. If cleanup cannot be confirmed, use **Stop** before continuing.
+This recovery does not resend your request or use another turn's answer.
 This also applies when selecting a connected provider under OpenCode. Vibe64
 hands the retained chat context to that provider without starting a fresh
 Colleague chat or resetting your lesson. A pending delivery keeps its original

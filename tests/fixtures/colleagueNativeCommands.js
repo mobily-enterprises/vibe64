@@ -151,6 +151,32 @@ export async function createControlledColleagueNativeCommands(root, responses) {
         }
         // R06 variants change only the native wire/history supplied by this
         // executable. The actual driver decides whether any result is usable.
+        if (response.mode === "error-only-completed-no-turn-id") {
+          turn.items.push({ id: "answer", type: "agentMessage", phase: "final_answer", text: response.text });
+          turn.status = "completed";
+          save();
+          emit("error", { error: { message: "Controlled native provider error" }, willRetry: false });
+          return;
+        }
+        if (response.mode === "error-only-active" || response.mode === "error-only-completed") {
+          if (response.mode === "error-only-completed") {
+            turn.items.push({ id: "answer", type: "agentMessage", phase: "final_answer", text: response.text });
+            turn.status = "completed";
+          }
+          save();
+          // No final item, turn/completed or idle notification supplies this
+          // outcome. The original non-retrying error is the only wake signal.
+          emitTurn("error", { error: { message: "Controlled native provider error" }, willRetry: false });
+          return;
+        }
+        if (response.mode === "retrying-error") {
+          emitTurn("error", { error: { message: "Controlled native provider error" }, willRetry: true });
+        } else if (response.mode === "foreign-turn-error") {
+          emit("error", { turnId: "another-turn", error: { message: "Controlled native provider error" }, willRetry: false });
+        } else if (response.mode === "late-old-turn-error") {
+          emit("error", { turnId: thread.turns.at(-2).id,
+            error: { message: "Controlled native provider error" }, willRetry: false });
+        }
         if (response.mode === "failed" || response.mode === "foreign-completed") {
           turn.status = "failed";
           if (response.mode === "foreign-completed") {

@@ -4094,3 +4094,181 @@ test("an unchanged settled Colleague model retains its exact native thread witho
   assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1);
   assert.deepEqual(f.observations.mutations, []);
 });
+
+// Original persistent wait rejects a non-retrying native error, then inspects
+// only its exact admitted turn. These wire causes do not fabricate a timeout.
+for (const mode of ["error-only-active", "error-only-completed"]) {
+  test(`Colleague native ${mode} notification settles its exact turn without resending`, async t => {
+    const answer = "The original answer was recovered.";
+    const f = await fixture(t, [{ text: answer, mode }], { native: true });
+    try {
+      await f.send("Check this once.");
+      await until(async () => (await f.service.read({}, f.context)).status !== "working");
+      const result = await f.service.wait(f.context);
+      const recovered = mode === "error-only-completed";
+      assert.equal(result.status, recovered ? "ready" : "failed", result.error);
+      assert.equal(result.messages.filter(message => message.role === "assistant").length, recovered ? 1 : 0);
+      assert.deepEqual(result.messages.map(({ role, text }) => [role, text]), recovered
+        ? [["user", "Check this once."], ["assistant", answer]] : [["user", "Check this once."]]);
+      const trace = await f.native.trace();
+      const starts = trace.filter(row => row.method === "turn/start");
+      assert.equal(starts.length, 1);
+      assert.equal(starts[0].params.clientUserMessageId, "user-1");
+      assert.deepEqual(f.observations.mutations, []);
+      const history = JSON.parse(await readFile(path.join(f.root, "controlled-native", "codex-history.json"), "utf8"));
+      assert.equal(history.id, starts[0].params.threadId);
+      assert.equal(history.turns.length, 1);
+      const authored = history.turns[0];
+      assert.equal(authored.items[0].clientId, "user-1");
+      const errorIndex = trace.findIndex(row => row.notification?.method === "error");
+      assert.notEqual(errorIndex, -1);
+      assert.deepEqual(trace[errorIndex].notification.params, {
+        threadId: history.id, turnId: authored.id,
+        error: { message: "Controlled native provider error" }, willRetry: false
+      });
+      assert.equal(trace.some(row => row.notification?.method === "item/completed" ||
+        row.notification?.method === "item/agentMessage/delta" || row.notification?.method === "thread/status/changed"), false,
+        "No live final or idle frame supplies the response");
+      assert.equal(trace.slice(0, errorIndex).some(row => row.notification?.method === "turn/completed"), false,
+        "The error arrives before any native completion frame");
+      const canonical = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"))
+        .conversationLog.filter(turn => turn.user?.messageId === "user-1");
+      assert.equal(canonical.length, 1);
+      assert.equal(canonical[0].metadata.runtime.nativeTurnId, authored.id);
+      assert.equal(canonical[0].metadata.runtime.status, recovered ? "complete" : "interrupted");
+      if (recovered) {
+        assert.equal(authored.status, "completed");
+        assert.equal(authored.items.find(item => item.type === "agentMessage").text, answer);
+        assert.equal(canonical[0].assistant.text, answer);
+        assert.equal(trace.some(row => row.notification?.method === "turn/completed"), false);
+      } else {
+        assert.equal(authored.items.some(item => item.type === "agentMessage"), false);
+        const active = trace.find(row => row.notification?.method === "turn/started").notification;
+        assert.equal(active.params.turn.id, authored.id);
+        assert.equal(active.params.turn.status, "inProgress");
+        const interruptIndex = trace.findIndex(row => row.method === "turn/interrupt");
+        assert.notEqual(interruptIndex, -1, "The existing cleanup owner stops the failed native turn");
+        assert.ok(trace.every((row, index) => row.notification?.method !== "turn/completed" ||
+          (interruptIndex !== -1 && index > interruptIndex)), "Any terminal frame comes only from actual native cleanup");
+      }
+      assert.deepEqual((await f.service.read({}, f.context)).messages, result.messages);
+      assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1);
+      assert.deepEqual(f.observations.mutations, []);
+    } finally {
+      await f.service.stop({}, f.context);
+    }
+  });
+}
+
+// An omitted notification turn ID is resolved by the original native owner,
+// never by accepting a later or unrelated saved answer.
+test("Colleague native error without a turn ID recovers only its exact saved completion", async t => {
+  const answer = "The exact saved answer was recovered.";
+  const f = await fixture(t, [{ text: answer, mode: "error-only-completed-no-turn-id" }], { native: true });
+  try {
+    await f.send("Check this once.");
+    await until(async () => (await f.service.read({}, f.context)).status !== "working");
+    const result = await f.service.wait(f.context);
+    assert.equal(result.status, "ready", result.error);
+    assert.deepEqual(result.messages.map(({ role, text }) => [role, text]),
+      [["user", "Check this once."], ["assistant", answer]]);
+    const trace = await f.native.trace();
+    const starts = trace.filter(row => row.method === "turn/start");
+    assert.equal(starts.length, 1);
+    assert.equal(starts[0].params.clientUserMessageId, "user-1");
+    assert.deepEqual(f.observations.mutations, []);
+    const history = JSON.parse(await readFile(path.join(f.root, "controlled-native", "codex-history.json"), "utf8"));
+    assert.equal(history.id, starts[0].params.threadId);
+    assert.equal(history.turns.length, 1);
+    const authored = history.turns[0];
+    assert.equal(authored.status, "completed");
+    assert.equal(authored.items[0].clientId, "user-1");
+    assert.equal(authored.items.find(item => item.type === "agentMessage").text, answer);
+    const errors = trace.filter(row => row.notification?.method === "error");
+    assert.equal(errors.length, 1);
+    assert.deepEqual(errors[0].notification.params, {
+      threadId: history.id, error: { message: "Controlled native provider error" }, willRetry: false
+    });
+    assert.equal(Object.hasOwn(errors[0].notification.params, "turnId"), false);
+    assert.equal(trace.some(row => ["item/completed", "item/agentMessage/delta", "turn/completed", "thread/status/changed"]
+      .includes(row.notification?.method)), false, "Only the error frame wakes exact saved-history recovery");
+    const canonical = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"))
+      .conversationLog.filter(turn => turn.user?.messageId === "user-1");
+    assert.equal(canonical.length, 1);
+    assert.equal(canonical[0].metadata.runtime.nativeTurnId, authored.id);
+    assert.equal(canonical[0].metadata.runtime.status, "complete");
+    assert.equal(canonical[0].assistant.text, answer);
+    assert.deepEqual((await f.service.read({}, f.context)).messages, result.messages);
+    assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1);
+    assert.deepEqual(f.observations.mutations, []);
+  } finally {
+    await f.service.stop({}, f.context);
+  }
+});
+
+for (const mode of ["retrying-error", "foreign-turn-error", "late-old-turn-error"]) {
+  test(`Colleague native ${mode} preserves the successful current turn without cancellation`, async t => {
+    const late = mode === "late-old-turn-error";
+    const answer = "The current native answer completed.";
+    const f = await fixture(t, [...(late ? [{ text: "The predecessor answer completed." }] : []),
+      { text: answer, mode }], { native: true });
+    try {
+      let predecessor;
+      if (late) {
+        await f.send("Finish the predecessor.", "user-1");
+        const first = await f.service.wait(f.context);
+        assert.equal(first.status, "ready", first.error);
+        assert.equal(first.messages.at(-1).text, "The predecessor answer completed.");
+        predecessor = JSON.parse(await readFile(path.join(f.root, "controlled-native", "codex-history.json"), "utf8")).turns[0];
+      }
+      const messageId = late ? "user-2" : "user-1";
+      await f.send("Complete the current response.", messageId);
+      await until(async () => (await f.service.read({}, f.context)).status !== "working");
+      const result = await f.service.wait(f.context);
+      assert.equal(result.status, "ready", result.error);
+      assert.equal(result.error, "");
+      assert.equal(result.messages.at(-1).text, answer);
+      assert.equal(result.messages.filter(message => message.role === "assistant").length, late ? 2 : 1);
+      const trace = await f.native.trace();
+      const starts = trace.filter(row => row.method === "turn/start");
+      assert.equal(starts.length, late ? 2 : 1);
+      assert.equal(starts.at(-1).params.clientUserMessageId, messageId);
+      assert.deepEqual(f.observations.mutations, []);
+      const history = JSON.parse(await readFile(path.join(f.root, "controlled-native", "codex-history.json"), "utf8"));
+      assert.equal(history.id, starts.at(-1).params.threadId);
+      assert.equal(history.turns.length, late ? 2 : 1);
+      const authored = history.turns.at(-1);
+      assert.equal(authored.status, "completed");
+      assert.equal(authored.items[0].clientId, messageId);
+      assert.equal(authored.items.find(item => item.type === "agentMessage").text, answer);
+      const errors = trace.filter(row => row.notification?.method === "error");
+      assert.equal(errors.length, 1);
+      assert.deepEqual(errors[0].notification.params, {
+        threadId: history.id,
+        turnId: mode === "retrying-error" ? authored.id : late ? predecessor.id : "another-turn",
+        error: { message: "Controlled native provider error" }, willRetry: mode === "retrying-error"
+      });
+      if (mode !== "retrying-error") assert.notEqual(errors[0].notification.params.turnId, authored.id);
+      assert.equal(trace.some(row => row.method === "turn/interrupt"), false,
+        "Retrying or foreign errors must not cancel the current native turn");
+      const currentCompletion = trace.find(row => row.notification?.method === "turn/completed" &&
+        row.notification.params.turn.id === authored.id).notification;
+      assert.equal(currentCompletion.params.turn.status, "completed");
+      const canonical = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"))
+        .conversationLog.filter(turn => turn.user?.messageId === messageId);
+      assert.equal(canonical.length, 1);
+      assert.equal(canonical[0].metadata.runtime.nativeTurnId, authored.id);
+      assert.equal(canonical[0].metadata.runtime.status, "complete");
+      assert.equal(canonical[0].assistant.text, answer);
+      if (late) {
+        assert.notEqual(authored.id, predecessor.id);
+        assert.deepEqual(history.turns[0], predecessor, "The late error cannot change the completed predecessor");
+      }
+      assert.deepEqual((await f.service.read({}, f.context)).messages, result.messages);
+      assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, late ? 2 : 1);
+      assert.deepEqual(f.observations.mutations, []);
+    } finally {
+      await f.service.stop({}, f.context);
+    }
+  });
+}
