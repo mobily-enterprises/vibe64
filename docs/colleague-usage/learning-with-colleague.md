@@ -154,9 +154,9 @@ feedback. Retrying an uncertain submission keeps the same identity and reads its
 saved result; do not invent another submission to bypass a consumed answer.
 If the Helper is unavailable, configure its existing AI Accounts model routing
 and retry. An interruption, stale question or failed save does not mean a pass.
-This internal answer integration is still awaiting native hosted caller acceptance;
-practical actions need their separate observed evidence. There is no new button
-and no permission to evaluate unrelated historical messages.
+Without native answer support, keep the attempt/question; practicals need
+observed evidence. There is no new button and no permission to evaluate unrelated
+historical messages.
 
 
 The native answer-evaluation facility uses only the accepted learner message in
@@ -198,9 +198,9 @@ toggle workspace / Main, not Colleague. Desktop drawer and phone full-screen ret
 the session, speech, draft and exercise. Restore Colleague's actual body; another
 assistant's voice panel does not count.
 
-This native observation integration is a local work in progress, not a new
-pass button. It associates the control you clicked and its settled view with the
-current delivered lesson question. If the lesson observation is not confirmed,
+The native observation integration has no pass button; if unavailable, keep the
+practical incomplete. It associates the control you clicked and its settled view
+with the current delivered lesson question. If the lesson observation is not confirmed,
 repeat the requested step once the exercise is ready; the successful workspace
 action was not undone. A reload or changed question may require repeating an
 unfinished sequence. Progress is awarded only through the separate verified
