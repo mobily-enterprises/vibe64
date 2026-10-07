@@ -202,6 +202,30 @@ release must not silently substitute new content into an existing pinned attempt
 Authorization to start a lesson and durable assessment progress are not provided
 by this API.
 
+## Server composition for an isolated author preview
+
+The original reader accepts the trusted construction option
+`createInstalledTrainingContent({systemRoot,allowDraftLessons:true})` for an
+author-preview composition. Its default remains `false`; read inputs cannot
+enable drafts. Draft reads retain the same exact pin, manifest, file/hash,
+resource and alias checks. This option is not author authorization or learner
+admission, and normal learner readers must not use it.
+
+`createTrainingLearnerState({systemRoot,contentSystemRoot,content})` may receive
+that exact configured reader. The existing `systemRoot` owns progress and locks;
+the composing server must choose a separate preview state root and retain the
+actual authenticated actor. The unchanged writer, schema, CAS and receipt owners
+then keep trial evidence outside normal learner progress. Without `content`,
+the original published-only reader still uses `contentSystemRoot`, defaulting to
+`systemRoot` as before.
+
+`createTrainingTeachingBrief({systemRoot,learners,content})` may consume those
+same owners. Absent dependencies retain the normal construction; default learners
+use the selected content reader. Its exact-pin checks, rubric/text projection,
+retained provenance and size limit remain. These are internal prerequisites only:
+author admission, snapshot selection, scoped teaching/assessment/presentation
+routing and a usable preview command are not supplied by this composition.
+
 ## Owner-controlled snapshot installation
 
 `@local/vibe64-training/server/content-installer` exports

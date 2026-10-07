@@ -18,9 +18,12 @@ const pacing = [
 
 // The caller supplies a freshly authenticated actor and applies current access
 // policy. This internal reader neither authenticates that object nor starts work.
-function createTrainingTeachingBrief({ systemRoot } = {}) {
-  const content = createInstalledTrainingContent({ systemRoot });
-  const learners = createTrainingLearnerState({ systemRoot });
+function createTrainingTeachingBrief({ systemRoot, content: suppliedContent, learners: suppliedLearners } = {}) {
+  const content = suppliedContent === undefined ? createInstalledTrainingContent({ systemRoot }) : suppliedContent;
+  const learners = suppliedLearners === undefined ? createTrainingLearnerState({ systemRoot, content }) : suppliedLearners;
+  if (typeof content?.readLesson !== "function" || typeof content?.readVisual !== "function" || typeof learners?.readState !== "function") {
+    throw new TypeError("Teaching briefs require the configured learner-state and installed-content owners.");
+  }
 
   async function readBrief({ actor, attemptId } = {}) {
     const state = await learners.readState({ actor, includeCompletion: true });

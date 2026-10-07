@@ -123,6 +123,21 @@ An absent or invalid snapshot reports reinstall guidance. Catalogue enablement i
 not part of a pinned read, so a future existing attempt can continue after its
 release is disabled; new-start permission remains the application action's job.
 
+## Author-preview owner construction
+
+The installed reader's trusted server option `allowDraftLessons:true` permits
+draft reads only in an author-preview composition. Default readers still refuse
+drafts, and per-read input cannot change admission. The original exact pin,
+manifest/hash, declared-resource and alias checks are shared unchanged.
+
+The same learner-state constructor accepts the configured `content` reader;
+without it, the existing `contentSystemRoot`/`systemRoot` construction remains.
+The composing server chooses a separate preview state root with the actual
+authenticated actor. The original schema, atomic writer, CAS, locks and immutable
+receipts own that isolated trial state; no new journal or historical rewrite
+exists. These constructor prerequisites do not select a preview snapshot, admit
+an author or route live teaching and presentation operations.
+
 ## Verified installation
 
 `@local/vibe64-training/server/content-installer` accepts only a server-owned

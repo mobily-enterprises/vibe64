@@ -2333,3 +2333,69 @@ test("unchanged lesson completion survives a new installed topic and course revi
   const isolated = await f.state.resumeAttempt({ actor: other, attemptId: otherReserved.attempt.attemptId });
   assert.equal(isolated.completion.passed, 0, "Identical content does not transfer another person's evidence.");
 });
+
+
+test("an isolated original store admits drafts only through its configured author-preview content reader", async t => {
+  const f = await fixture(t, { published: false });
+  const previewRoot = path.join(f.root, "author-preview");
+  await fs.mkdir(previewRoot, { mode: 0o700 });
+  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  const preview = createTrainingLearnerState({ systemRoot: previewRoot, contentSystemRoot: path.join(f.root, "missing-content"), content });
+  const before = await treeState(f.systemRoot);
+  await assert.rejects(() => f.reserve(), /draft and cannot be taught/u);
+  const reserved = await preview.reserveAttempt({ actor: f.actor, requestId: "author-start", expectedRevision: 0, pin: f.pin });
+  assert.equal((await preview.readState({ actor: f.actor })).progress.learnerId, "42");
+  assert.deepEqual(reserved.attempt.pin, f.pin);
+  assert.equal(reserved.revision, 1);
+  const replay = await preview.reserveAttempt({ actor: f.actor, requestId: "author-start", expectedRevision: 0, pin: f.pin });
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.attempt.attemptId, reserved.attempt.attemptId);
+  assert.equal((await preview.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 0);
+  assert.equal((await f.state.readState({ actor: f.actor })).active, null);
+  assert.equal((await preview.readState({ actor: { uid: 43 } })).active, null);
+  await assert.rejects(() => f.reserve(), /draft and cannot be taught/u);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+  await assert.rejects(() => fs.lstat(path.join(f.systemRoot, "training/users")), { code: "ENOENT" });
+  for (const content of [null, {}, { readLesson: true }]) {
+    assert.throws(() => createTrainingLearnerState({ systemRoot: previewRoot, content }), /configured installed-content reader/u);
+  }
+});
+
+test("same actor and identical pinned lesson keep preview assessment receipts outside published learner progress", async t => {
+  const f = await learningFixture(t);
+  await f.save("learner-question", "answer-one");
+  await f.record(f.answer("answer-one", "learner-pass"));
+  const learnerBefore = await treeState(f.systemRoot);
+  const previewRoot = path.join(f.root, "author-preview");
+  await fs.mkdir(previewRoot, { mode: 0o700 });
+  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  const preview = createTrainingLearnerState({ systemRoot: previewRoot, content });
+  const reserved = await preview.reserveAttempt({ actor: f.actor, requestId: "preview-start", expectedRevision: 0, pin: f.pin });
+  const attemptId = reserved.attempt.attemptId;
+  assert.notEqual(attemptId, f.attemptId);
+  assert.deepEqual(reserved.attempt.pin, f.pin);
+  assert.equal((await preview.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 0);
+  const preparing = await preview.beginPreparation({ actor: f.actor, attemptId, expectedRevision: reserved.revision });
+  const ready = await preview.recordPreparationReady({ actor: f.actor, attemptId, expectedRevision: preparing.revision,
+    initialSessionId: preparing.attempt.preparation.initialSessionId });
+  const questioned = await preview.saveLessonResume({ actor: f.actor, attemptId, expectedRevision: ready.revision,
+    requestId: "preview-question", resume: { stage: "practice", pendingQuestion: { id: "preview-question", assessmentId: "answer-two", text: "What did you observe?" },
+      visuals: [], summary: "A preview-only question." } });
+  const result = await preview.recordAssessment({ actor: f.actor, attemptId, expectedRevision: questioned.revision,
+    submissionId: "preview-pass", assessmentId: "answer-two", outcome: "passed", assistance: "none", explanation: "Controlled store evidence for preview isolation.",
+    evidence: { kind: "answer", learnerId: "42", attemptId, messageId: "preview-message", questionId: "preview-question", text: "The browser displays a response." } });
+  assert.equal(result.completion.passed, 1);
+  const previewState = await preview.readState({ actor: f.actor, includeCompletion: true });
+  assert.deepEqual(previewState.active.learning.submissions.map(value => value.submissionId), ["preview-pass"]);
+  const learnerState = await f.state.readState({ actor: f.actor, includeCompletion: true });
+  assert.equal(learnerState.active.attemptId, f.attemptId);
+  assert.equal(learnerState.completion.passed, 1);
+  assert.deepEqual(learnerState.active.learning.submissions.map(value => value.submissionId), ["learner-pass"]);
+  const previewBefore = await treeState(previewRoot);
+  await assert.rejects(() => preview.recordAssessment({ ...f.answer("answer-one", "foreign-learner-receipt"), expectedRevision: previewState.revision }));
+  await assert.rejects(() => f.state.resumeAttempt({ actor: f.actor, attemptId }));
+  assert.deepEqual(await treeState(previewRoot), previewBefore);
+  assert.deepEqual(await treeState(f.systemRoot), learnerBefore);
+  const restored = createTrainingLearnerState({ systemRoot: previewRoot, contentSystemRoot: f.systemRoot });
+  assert.deepEqual((await restored.readState({ actor: f.actor, includeCompletion: true })).progress, previewState.progress);
+});

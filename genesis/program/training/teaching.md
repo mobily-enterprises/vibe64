@@ -22,6 +22,14 @@
 
 ## Public contract
 
+The internal brief constructor may receive the exact original `learners` and
+`content` owners from an isolated author-preview composition. Missing dependencies
+retain normal defaults, with default learners using the selected reader. It
+projects only the selected store's active attempt and provenance through its
+original bounds and content checks. This prerequisite alone adds no author-preview
+action, learner admission, grading, resource route or rendering implementation;
+ordinary learner readers still refuse drafts.
+
 ### Internal declared application check
 
 `createTrainingDeclaredCheckOwner` consumes the original learners, installed

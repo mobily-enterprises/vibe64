@@ -138,6 +138,13 @@ immutable. Check both the exact local lock and actual requested Git publication;
 
 ## Operator installation is separate
 
+An isolated draft teaching preview is not available through the current lesson
+controls yet. A draft can be validated and bundled, but ordinary lesson delivery
+still requires a published lesson in an enabled course. The internal preview
+reader and separate progress-store composition do not by themselves open a
+preview or admit a trial. Do not report an author's trial as published learner
+progress or change a draft's status merely to bypass this limitation.
+
 A workspace operator can now provision approved local lesson content through the
 terminal commands documented in [Local operator provisioning](../training-content.md#local-operator-provisioning).
 `install-topic` installs a clean committed topic; `installed-courses` reads the

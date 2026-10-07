@@ -71,11 +71,16 @@ async function inventory(directory) {
   return files.sort();
 }
 
-function createInstalledTrainingContent({ systemRoot } = {}) {
+// Only the composing server may admit drafts for an isolated author preview.
+// Read inputs cannot change this choice; ordinary learner readers refuse drafts.
+function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false } = {}) {
   if (typeof systemRoot !== "string" || !systemRoot || !path.isAbsolute(systemRoot)) {
     throw new Error("Installed teaching content needs an absolute server-owned system root.");
   }
   const root = path.resolve(systemRoot);
+  if (typeof allowDraftLessons !== "boolean") {
+    throw new TypeError("Draft lesson reads require a trusted server construction choice.");
+  }
 
   async function readTopic({ topicId, commit, topicHash } = {}) {
     if (typeof topicId !== "string" || typeof commit !== "string" || !idPattern.test(topicId) || !commitPattern.test(commit)) {
@@ -155,7 +160,7 @@ function createInstalledTrainingContent({ systemRoot } = {}) {
     const topic = await readTopic({ topicId, commit, topicHash });
     const bundle = topic.bundles.find(item => item.lesson.code === lessonCode);
     if (!bundle) throw new Error(`Lesson ${lessonCode} is not declared in this pinned topic.`);
-    if (bundle.status !== "published") throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
+    if (bundle.status !== "published" && !allowDraftLessons) throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
     if (bundle.hash !== lessonHash) throw new Error(`Lesson ${lessonCode} content hash changed. Resume its exact pinned revision or explicitly start a new attempt.`);
     const base = path.dirname(bundle.descriptorPath);
     async function lessonText(reference) {

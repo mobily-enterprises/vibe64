@@ -215,3 +215,47 @@ test("brief distinguishes retained exact-pin answer and practical passes from th
   assert.equal((await f.brief.readBrief({ actor: f.actor, attemptId: fresh.attempt.attemptId })).learning.retainedPasses[0].submission.evidence.text, "I use Preview.");
   assert.deepEqual(await inventory(f.systemRoot), before);
 });
+
+
+test("configured original owners brief an isolated draft snapshot without reading or writing normal learner progress", async t => {
+  const f = await fixture(t);
+  const { createInstalledTrainingContent } = await import("../../packages/vibe64-training/src/server/installedContent.js");
+  const root = path.dirname(f.systemRoot);
+  const source = path.join(root, "source");
+  const metadata = JSON.parse(await readFile(path.join(source, "package.json"), "utf8"));
+  metadata.vibe64Training.lessons[0].status = "draft";
+  await f.write(source, "package.json", metadata);
+  const snapshotRoot = path.join(f.systemRoot, "training/content/teaching-fixture", "b".repeat(40));
+  await runTrainingCli(["bundle", source, snapshotRoot], { write() {} });
+  const bundle = JSON.parse(await readFile(path.join(snapshotRoot, "bundle.json"), "utf8"));
+  const pin = { ...f.reservation.attempt.pin, topic: { ...f.reservation.attempt.pin.topic,
+    commit: "b".repeat(40), topicHash: bundle.topicHash }, lesson: { code: f.lesson.code, hash: bundle.lessons[0].hash } };
+  await f.write(snapshotRoot, "pin.json", pin.topic);
+  const previewRoot = path.join(root, "author-preview");
+  await mkdir(previewRoot, { mode: 0o700 });
+  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  const learners = createTrainingLearnerState({ systemRoot: previewRoot, content });
+  const reservation = await learners.reserveAttempt({ actor: f.actor, requestId: "preview-start", expectedRevision: 0, pin });
+  const brief = createTrainingTeachingBrief({ systemRoot: f.systemRoot, content, learners });
+  const normalBefore = await inventory(f.systemRoot);
+  const previewBefore = await inventory(previewRoot);
+  const result = await brief.readBrief({ actor: f.actor, attemptId: reservation.attempt.attemptId });
+  assert.equal(result.attemptId, reservation.attempt.attemptId);
+  assert.deepEqual(result.pin, pin);
+  assert.equal(result.lesson.teachingText, f.teachingText);
+  assert.equal(result.lesson.visuals[0].id, f.visual.id);
+  assert.equal(result.learning.completion.passed, 0);
+  assert.deepEqual(result.learning.retainedPasses, []);
+  assert.doesNotMatch(JSON.stringify(result), /SVG_SOURCE_ONLY|CONTROLLER_SOURCE_MUST_NOT_RUN|CHECK_SOURCE_MUST_NOT_RUN|EXERCISE_SOURCE_ONLY/u);
+  await assert.rejects(() => f.brief.readBrief({ actor: f.actor, attemptId: reservation.attempt.attemptId }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  await assert.rejects(() => brief.readBrief({ actor: f.actor, attemptId: f.reservation.attempt.attemptId }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  await assert.rejects(() => brief.readBrief({ actor: { uid: "bob" }, attemptId: reservation.attempt.attemptId }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  assert.equal((await f.brief.readBrief({ actor: f.actor, attemptId: f.reservation.attempt.attemptId })).pin.topic.commit, "a".repeat(40));
+  await assert.rejects(() => createInstalledTrainingContent({ systemRoot: f.systemRoot }).readLesson({ ...pin.topic,
+    lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash }), /draft and cannot be taught/u);
+  assert.deepEqual(await inventory(f.systemRoot), normalBefore);
+  assert.deepEqual(await inventory(previewRoot), previewBefore);
+  for (const change of [{ content: null }, { learners: null }, { content: { readLesson() {} } }]) {
+    assert.throws(() => createTrainingTeachingBrief({ content, learners, ...change }), /configured learner-state and installed-content owners/u);
+  }
+});

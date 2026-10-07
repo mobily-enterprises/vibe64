@@ -572,3 +572,49 @@ test("check reads reject changed executable or changed missing and aliased asset
     assert.deepEqual(await treeState(f.systemRoot), before);
   }
 });
+
+
+test("trusted author-preview construction reads a pinned draft through the original lesson and resource owners", async t => {
+  const f = await fixture(t);
+  await f.write("training/lessons/LESSON-02/lesson.json", { ...f.lesson, code: "LESSON-02", title: "Draft with original resources" });
+  await f.write("training/lessons/LESSON-02/lesson.md", f.teachingText);
+  const { pin, bundle } = await f.install();
+  const input = { ...pin, lessonCode: "LESSON-02", lessonHash: bundle.lessons[1].hash };
+  const author = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  const before = await treeState(f.systemRoot);
+  const lesson = await author.readLesson(input);
+  assert.equal(lesson.lesson.code, "LESSON-02");
+  assert.equal(lesson.document.text, f.teachingText);
+  assert.equal(lesson.hash, input.lessonHash);
+  assert.deepEqual(lesson.pin, pin);
+  const visual = await author.readVisual({ ...input, visualId: "flow" });
+  assert.deepEqual(visual.visual, f.visual);
+  assert.match(visual.controller.bytes.toString(), /export function send/u);
+  const exercise = await author.readExercise(input);
+  assert.deepEqual(exercise.exercise, f.lesson.exercise);
+  assert.ok(exercise.files.some(file => file.path === "server.mjs"));
+  const check = await author.readCheck({ ...input, checkId: "health" });
+  assert.match(check.file.bytes.toString(), /outcome/u);
+  for (const operation of [
+    () => f.reader.readLesson({ ...input, allowDraftLessons: true }),
+    () => f.reader.readVisual({ ...input, visualId: "flow", allowDraftLessons: true }),
+    () => f.reader.readExercise({ ...input, allowDraftLessons: true }),
+    () => f.reader.readCheck({ ...input, checkId: "health", allowDraftLessons: true })
+  ]) await assert.rejects(operation, /draft and cannot be taught/u);
+  await assert.rejects(() => author.readLesson({ ...input, lessonHash: "f".repeat(64) }), /content hash changed/u);
+  await assert.rejects(() => author.readLesson({ ...input, topicHash: "f".repeat(64) }), /differs from the trusted course or attempt pin/u);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("author-preview readers retain original snapshot corruption refusal and require an explicit boolean construction", async t => {
+  const f = await fixture(t);
+  for (const allowDraftLessons of ["true", 1, null]) {
+    assert.throws(() => createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons }), /trusted server construction/u);
+  }
+  const input = { ...f.installed.pin, lessonCode: "LESSON-02", lessonHash: f.installed.bundle.lessons[1].hash };
+  const author = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  await f.write("files/training/lessons/LESSON-02/lesson.md", "Changed draft bytes.\n", f.installed.snapshotRoot);
+  const before = await treeState(f.systemRoot);
+  await assert.rejects(() => author.readLesson(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});

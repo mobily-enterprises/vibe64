@@ -321,12 +321,16 @@ function passedAssessmentIds(attempt, lesson, attempts = [attempt]) {
 // Callers derive actor from fresh authentication and admit a new start against
 // the course lock. This internal store neither authenticates objects nor owns
 // release enablement, project effects, grading or arbitrary state patches.
-function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot } = {}) {
+function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot, content } = {}) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) !== systemRoot || systemRoot === path.parse(systemRoot).root) {
     throw new Error("Learning state needs a canonical absolute, non-root server-owned system root.");
   }
   // Offline restore reads staged state against the live exact-pin installation.
-  const installed = createInstalledTrainingContent({ systemRoot: contentSystemRoot });
+  // An isolated author-preview store uses the same writer and its exact reader.
+  const installed = content === undefined ? createInstalledTrainingContent({ systemRoot: contentSystemRoot }) : content;
+  if (typeof installed?.readLesson !== "function") {
+    throw new TypeError("Learning state requires the configured installed-content reader.");
+  }
 
   function userPaths(actor) {
     const learner = learnerIdentity(actor);
