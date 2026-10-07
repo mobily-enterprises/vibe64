@@ -2090,3 +2090,38 @@ for (const invalidation of ["closed view", "changed actor"]) {
     assert.equal(view.requests.some(({ options }) => options.method === "POST"), false);
   });
 }
+
+test("watch details preserve the conversation and use existing resume/cancel admission", async t => {
+  const viewer = vue.ref({ actorKey: "person-a" });
+  let watches = [{ watchId: "paused-watch", status: "paused", question: "Tell me when it replies" }];
+  const assignments = [{ assignmentId: "assignment", status: "waiting", summary: "Finish the change" }];
+  const view = mount(t, async url => {
+    if (url.endsWith("/watches/resume")) watches = [{ ...watches[0], status: "active" }];
+    if (url.endsWith("/watches/cancel")) watches = [];
+    return { ok: true, conversationId: viewer.value.actorKey, messages: [], status: "ready",
+      watches: viewer.value.actorKey === "person-a" ? watches : [],
+      assignments: viewer.value.actorKey === "person-a" ? assignments : [] };
+  }, vue.reactive({ name: "Colleague" }), viewer);
+  await flush();
+  const original = view.state.conversation.runtime.value;
+  view.state.draft.value = "Keep this draft";
+  view.state.watchDetails.value = true;
+  await view.state.changeWatch("paused-watch", "resume");
+  assert.equal(view.state.watches.value[0].status, "active");
+  await view.state.changeWatch("paused-watch", "cancel");
+  assert.equal(view.state.watches.value.length, 0);
+  assert.equal(view.state.assignments.value.length, 1);
+  assert.equal(view.state.watchDetails.value, true);
+  assert.equal(view.state.conversation.runtime.value, original);
+  assert.equal(view.state.draft.value, "Keep this draft");
+  assert.deepEqual(view.requests.filter(({ options }) => options.method === "POST").map(({ url, options }) => [url, options.body]), [
+    ["/api/vibe64/colleague/watches/resume", { watchId: "paused-watch" }],
+    ["/api/vibe64/colleague/watches/cancel", { watchId: "paused-watch" }]
+  ]);
+  assert.equal(view.subscriptions.size, 1);
+  viewer.value = { actorKey: "person-b" };
+  await flush();
+  assert.equal(view.state.watchDetails.value, false);
+  assert.equal(view.state.watches.value.length, 0);
+  assert.equal(view.state.assignments.value.length, 0);
+});

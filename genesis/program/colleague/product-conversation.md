@@ -338,8 +338,11 @@ use the same JSKIT catalogue filtered to query actions, so they cannot assign
 work or stop an agent. New user steering takes priority and captures its own
 focus. Reports get their own canonical system/assistant turn, preserving the
 user's previous answer. Cancelling a pending watch suppresses its late report;
-it does not stop the watched agent. The drawer lists watches with cancel/resume
-controls and continues fetching state while minimized with an active watch.
+it does not stop the watched agent. A compact eye-and-count composer button opens watch and assignment details
+in an application-owned Vuetify dialog. No watch panels consume height below
+chat. Resume/Cancel remain the existing actions, and closing details returns to
+the same chat/draft. The client continues fetching state while minimized with
+an active watch.
 Large-range conversation reads use the configured Helper with the existing
 tool-free `conversation_summary` execution profile. The operation reads at most
 20 Main turns or 12 temporary messages, caps input at 120,000 characters and

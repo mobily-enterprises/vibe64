@@ -5,7 +5,7 @@ import { useDisplay } from "vuetify";
 import { VNavigationDrawer } from "vuetify/components";
 import { computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
-import { mdiArrowTopRight, mdiClose, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
+import { mdiArrowTopRight, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
 import { mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
@@ -127,6 +127,8 @@ const productError = ref("");
 const pointerNotice = ref("");
 const actorKey = computed(() => viewer?.value?.actorKey || viewer?.actorKey || "");
 const feedback = useShellWebErrorRuntime();
+const watchDetails = ref(false);
+const watchButton = ref(null);
 const modelMenu = ref(false);
 const modelButton = ref(null);
 const sendButton = ref(null);
@@ -726,6 +728,7 @@ watch(actorKey, () => {
   freshBusy.value = false;
   freshError.value = "";
   closeHistory();
+  watchDetails.value = false;
   product.value = { conversationId: "", error: "" };
   productError.value = "";
   pointerNotice.value = "";
@@ -860,6 +863,13 @@ onBeforeUnmount(() => {
                       :disabled="working || sending || Boolean(freshOperation)" @click="modelMenu = true"
                     />
                     <v-btn :icon="mdiHistory" size="small" variant="text" aria-label="Previous conversations" title="Previous conversations" @click="loadHistory()" />
+                    <v-btn
+                      v-if="watches.length || assignments.length" ref="watchButton" size="small" min-height="48" variant="text"
+                      :aria-label="`Watches and assignments (${watches.length + assignments.length})`" title="Watches and assignments"
+                      aria-haspopup="dialog" :aria-expanded="watchDetails" @click="watchDetails = true"
+                    >
+                      <v-icon :icon="mdiEyeOutline" /><span class="ms-1">{{ watches.length + assignments.length }}</span>
+                    </v-btn>
                     <v-btn v-if="freshOperation" variant="text" :disabled="freshBusy" @click="showFreshConfirmation">Resume fresh operation</v-btn>
                     <div class="vibe64-colleague__delivery">
                       <v-btn v-if="composer.canStop" :icon="mdiStop" size="small" variant="text" :aria-label="`Stop ${name}`" title="Stop assistant" @click="stop" />
@@ -887,33 +897,47 @@ onBeforeUnmount(() => {
           </template>
         </AssistantConversationElement>
       </div>
-      <details v-if="watches.length" class="vibe64-colleague__watches">
-        <summary>{{ watches.length }} conversation {{ watches.length === 1 ? 'watch' : 'watches' }}</summary>
-        <ul>
-          <li v-for="item in watches" :key="item.watchId">
-            <span><strong>{{ item.projectSlug || 'Workspace' }}</strong> · {{ item.status }}<small>{{ item.question }}</small><small v-if="item.error">{{ item.error }}</small></span>
-            <button v-if="item.status === 'paused'" :aria-label="`Resume watch: ${item.question}`" @click="changeWatch(item.watchId, 'resume')">Resume</button>
-            <button :aria-label="`Cancel watch: ${item.question}`" @click="changeWatch(item.watchId, 'cancel')">Cancel</button>
-          </li>
-        </ul>
-      </details>
-      <details v-if="assignments.length" class="vibe64-colleague__watches">
-        <summary>{{ assignments.length }} ongoing {{ assignments.length === 1 ? 'assignment' : 'assignments' }}</summary>
-        <ul>
-          <li v-for="item in assignments" :key="item.assignmentId">
-            <span><strong>{{ item.projectSlug }}</strong> · {{ item.turnLimit - item.turnsUsed }} turns left
-              <small>{{ item.summary }}</small>
-              <small>{{ item.criteria }}</small>
-            </span>
-          </li>
-        </ul>
-      </details>
       <Vibe64SessionAssistantMenu
         v-model="modelMenu" :target="modelButton?.$el" :selection="product.assistantSelection"
         :save-selection="selectModel" catalog-path="/api/vibe64/colleague/models" :changes-disabled="working || sending || Boolean(freshOperation)"
       />
     </aside>
   </Teleport>
+  <v-dialog v-model="watchDetails" :activator="watchButton?.$el || modelButton?.$el" :open-on-click="false" :fullscreen="xs" max-width="620" scrollable aria-label="Watches and assignments">
+    <v-card>
+      <v-card-title class="d-flex align-center text-title-large">
+        <span class="flex-grow-1">Watches and assignments</span>
+        <v-btn :icon="mdiClose" variant="text" aria-label="Close watches and assignments" title="Close watches and assignments" @click="watchDetails = false" />
+      </v-card-title>
+      <v-card-text class="vibe64-colleague__watch-details">
+        <section v-if="watches.length" aria-label="Conversation watches">
+          <p class="text-title-medium">Conversation watches ({{ watches.length }})</p>
+          <ul>
+            <li v-for="item in watches" :key="item.watchId">
+              <div>
+                <strong>{{ item.projectSlug || 'Workspace' }}</strong> · {{ item.status }}
+                <p>{{ item.question }}</p><p v-if="item.error" class="text-error">{{ item.error }}</p>
+              </div>
+              <div class="d-flex flex-wrap ga-1">
+                <v-btn v-if="item.status === 'paused'" variant="text" min-height="48" :aria-label="`Resume watch: ${item.question}`" @click="changeWatch(item.watchId, 'resume')">Resume</v-btn>
+                <v-btn variant="text" min-height="48" :aria-label="`Cancel watch: ${item.question}`" @click="changeWatch(item.watchId, 'cancel')">Cancel</v-btn>
+              </div>
+            </li>
+          </ul>
+        </section>
+        <section v-if="assignments.length" aria-label="Ongoing assignments">
+          <p class="text-title-medium">Ongoing assignments ({{ assignments.length }})</p>
+          <ul>
+            <li v-for="item in assignments" :key="item.assignmentId">
+              <strong>{{ item.projectSlug }}</strong> · {{ item.status }} · {{ item.turnLimit - item.turnsUsed }} turns left
+              <p>{{ item.summary }}</p><p>{{ item.criteria }}</p>
+            </li>
+          </ul>
+        </section>
+        <p v-if="!watches.length && !assignments.length" role="status">No ongoing watches or assignments.</p>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
   <v-dialog :model-value="freshConfirm" max-width="520" :persistent="freshBusy" @update:model-value="value => !value && closeFreshConfirmation()">
     <v-card title="Start a fresh conversation?">
       <v-card-text>
@@ -967,8 +991,6 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .vibe64-colleague { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
-.vibe64-colleague strong { font-size: 15px; font-weight: 650; letter-spacing: .015em; }
-.vibe64-colleague small { display: block; font-size: 12px; opacity: .75; }
 .vibe64-colleague__conversation { flex: 1; min-height: 0; display: flex; padding: 12px; }
 .vibe64-colleague__conversation :deep(.assistant-conversation) { width: 100%; min-height: 0; }
 .vibe64-colleague__conversation :deep(.assistant-transcript__avatar--user) { display: none; }
@@ -983,12 +1005,11 @@ onBeforeUnmount(() => {
 @media (pointer: coarse), (max-width: 600px) {
   .vibe64-colleague__composer-actions :deep(.v-btn) { min-width: 48px; min-height: 48px; }
 }
-.vibe64-colleague__watches { padding: 6px 16px; font-size: 12px; max-height: 160px; overflow: auto; }
-.vibe64-colleague__watches summary { min-height: 48px; padding-block: 14px; line-height: 20px; cursor: pointer; }
-.vibe64-colleague__watches ul { list-style: none; padding: 0; }
-.vibe64-colleague__watches li { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
-.vibe64-colleague__watches li > span { flex: 1; min-width: 0; }
-.vibe64-colleague__watches button { min-width: 48px; min-height: 48px; color: rgb(var(--v-theme-primary)); }
+.vibe64-colleague__watch-details { padding: 16px; min-height: 0; overflow: auto; overflow-wrap: anywhere; }
+.vibe64-colleague__watch-details section + section { margin-top: 16px; }
+.vibe64-colleague__watch-details ul { list-style: none; padding: 0; }
+.vibe64-colleague__watch-details li { padding-block: 12px; }
+.vibe64-colleague__watch-details li + li { border-top: 1px solid rgb(var(--v-theme-outline-variant)); }
 .vibe64-colleague__launcher { flex: 0 0 48px; touch-action: none; user-select: none; -webkit-touch-callout: none; }
 .vibe64-colleague__launcher--listening { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-colleague__launcher--floating { position: fixed; right: 8px; top: env(safe-area-inset-top, 0px); z-index: 1800; }

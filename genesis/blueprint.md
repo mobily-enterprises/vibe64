@@ -66,6 +66,8 @@ explicit problems. Code observes the conversations; only relevant changes wake
 Colleague. It can also watch a host's workspace conversation without a project, using that
 host's current permissions and the same code-driven notifications. Watching does
 not prevent the person from continuing their conversation with Colleague.
+A compact watch-count control opens watch and assignment details when needed;
+these lists never consume space below the chat.
 People can also delegate bounded implementation assignments: Colleague retains
 the original request, follows up within a turn allowance, arranges review
 in the same session and brings back evidence when the work is ready for their

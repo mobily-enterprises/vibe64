@@ -195,6 +195,13 @@ one-shot watch ends after its first delivered report. Ask “Tell me when the wo
 finishes” for a completion watch instead. Watching starts only on your request,
 checks your current project access and does not stop or resend the coding work.
 
+Use the eye-and-count **Watches and assignments** button beside Previous
+conversations to inspect ongoing work. It opens a separate view; nothing is
+listed below chat. **Resume** restarts a paused watch, and **Cancel** removes its
+watch without stopping the agent. Close this view to return to the same chat and
+draft. On phone, use **Close watches and assignments** in its header. Ask
+Colleague to list, cancel or resume watches if you prefer.
+
 You can ask “Which projects do I have?” from any page, including AI Accounts;
 no open project is required. Colleague checks the projects available to you.
 A malformed lookup returns a validation error. An unavailable tool runs no action;
