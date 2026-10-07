@@ -68,9 +68,9 @@
     "@codemirror/language": "^6.12.4",
     "@codemirror/state": "^6.7.0",
     "@codemirror/view": "^6.43.4",
-    "@jskit-ai/http-web": "0.1.73",
-    "@jskit-ai/kernel": "0.1.228",
-    "@jskit-ai/shell-web": "0.1.232",
+    "@jskit-ai/http-web": "0.1.75",
+    "@jskit-ai/kernel": "0.1.230",
+    "@jskit-ai/shell-web": "0.1.234",
     "@local/vibe64-core": "0.1.0",
     "@local/vibe64-accounts": "0.1.0",
     "@local/vibe64-execution": "0.1.0",
@@ -88,7 +88,7 @@
     "pg": "^8.23.0",
     "vue": "^3.5.13",
     "vue-router": "^5.3.1",
-    "@jskit-ai/assistant-core": "0.1.206",
-    "@jskit-ai/assistant-runtime": "0.1.199"
+    "@jskit-ai/assistant-core": "0.1.208",
+    "@jskit-ai/assistant-runtime": "0.1.201"
   }
 }
