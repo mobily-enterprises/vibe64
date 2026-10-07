@@ -18,13 +18,21 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
     const saved = await learners.readState({ actor, includeCompletion: true });
     const attempt = saved.progress.attempts.find(value => value.attemptId === saved.progress.activeAttemptId);
     const captured = message?.data?.trainingQuestion;
-    if (!attempt || attempt.attemptId !== attemptId || attempt.preparation.phase !== "ready" ||
+    if (!attempt || attempt.attemptId !== attemptId ||
+        attempt.preparation.phase !== "ready" && (kind !== "answer" || attempt.preparation.phase !== "reserved") ||
         message?.role !== "user" || message.receipt === false || !captured || captured.schemaVersion !== 1 ||
         captured.learnerId !== saved.progress.learnerId || captured.attemptId !== attemptId ||
         !isDeepStrictEqual(captured.pin, attempt.pin) ||
         !captured.delivery || Object.keys(captured.delivery).sort().join(",") !== "conversationId,outputId,turnId" ||
         Object.values(captured.delivery).some(value => typeof value !== "string" || !value || value.length > 128)) {
       throw failure("VIBE64_TRAINING_ANSWER_UNADMITTED", "Use the accepted learner message associated with this delivered question and exact active lesson.");
+    }
+    if (attempt.preparation.phase === "reserved") {
+      const lesson = await content.readLesson({ ...attempt.pin.topic,
+        lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+      if (lesson.lesson.exercise || !lesson.lesson.assessments.some(item => item.id === captured.question?.assessmentId && item.kind === "answer")) {
+        throw failure("VIBE64_TRAINING_ANSWER_UNADMITTED", "Use an answer declared in this exact no-exercise lesson; exercise assessments require their prepared attempt.");
+      }
     }
     if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u.test(submissionId || "") ||
         !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {

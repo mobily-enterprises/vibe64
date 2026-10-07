@@ -1608,3 +1608,8 @@ Starting an output starts those services once. Stopping one Preview leaves them
 available; project Close and inactivity shutdown stop all project work, including
 shared services. Failed cleanup is reported before a project can be considered
 closed. Idle services continue to consume and be charged for their resources.
+
+A pinned lesson without a declared practice exercise can teach its quiz answers
+without creating a project or session. It keeps the original reserved attempt
+and durable progress; exercise tasks and lesson graphics retain their preparation
+requirements. Teaching distinguishes this from pending Workspace setup.

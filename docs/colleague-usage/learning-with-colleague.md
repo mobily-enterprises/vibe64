@@ -8,12 +8,23 @@ and owner recovery, read `teaching-content`.
 In a host that registers the learning operations, ask Colleague to list available
 courses or read your saved lesson. These reads make no project or progress changes.
 A direct request to start a listed lesson, or accepting Colleague's offer, lets the
-host prepare its approved exercise; ask to resume after an interruption to keep
+host reserve the exact lesson and prepare its exercise when declared; ask to
+resume after an interruption to keep
 the exact saved attempt. Starting is unavailable when the installation has no
 exercise preparation owner. An empty course list needs the owner's installation
 and enablement, not an assistant-created substitute. Setup completion is not a
 running Preview or a completed lesson. Only the host's supported assessment and
 presentation operations can establish their actual results; never invent a pass.
+
+A lesson without a declared practice exercise stays reserved: it creates no
+project, session or Workspace setup. The fresh teaching brief identifies this
+with `lesson.exerciseRequired: false`. Colleague can teach its declared quizzes
+and grade your actual accepted answers through the same pinned rubric and saved
+progress. Do not repeatedly resume or inspect a nonexistent practice session.
+This does not allow practical assessments or diagrams to bypass preparation.
+If a no-exercise lesson unexpectedly retains an exercise-preparation checkpoint,
+keep the progress and explicitly end/restart that lesson through its existing
+operations; it is not silently changed to ready.
 
 Saved `preparation.phase` is a checkpoint, not live setup status. If it remains
 `preparing`, finish the already-requested lesson with `lesson.resume` on that same
@@ -48,46 +59,8 @@ Authenticated visual tool delivery and speech correlation are separate host work
 this presentation component alone cannot claim that teaching is active.
 
 
-Explicit lesson retirement preserves the original pinned quiz and practical
-results. It does not stop, archive or delete the exercise. When the person
-requests disposal, use the existing authorised project/session Stop, close,
-archive and deletion workflow; do not claim disposal from an ended learning
-record. Leaving or hiding Colleague does not end the lesson.
-
-An admitted fresh start after retirement uses a new exercise project/session and
-keeps the earlier evidence with its original identity. Only passes for the same
-exact topic pin and lesson code/hash contribute to that lesson's completion.
-Explain which assessments already passed and which practical tasks remain; an
-old observation is not proof that the new Preview runs. Changed content retains
-history but requires its own assessment. These internal changes add no new
-restart/discard button or Colleague operation by themselves.
-
-If an end/new-start save is unconfirmed, read progress and retry its original
-request identity rather than inventing another exercise. Replaying an ended
-reservation does not resume or reactivate it; use a new admitted start only after
-an explicit retirement. Replaying an old end cannot close a later attempt. The
-pilot keeps up to eight attempts and 64 KiB without pruning; capacity refusal
-requires owner review and keeps all evidence. Historical missing/corrupt pinned
-content requires exact owner restoration, even when no lesson is active.
-
-
-When the installation supplies its lesson host, the shared `lesson.end` operation
-can retire the person's exact learning attempt after a direct request or accepted
-offer. State clearly that it retains the exercise and all history; the reason
-`discard` records a learning decision, not project disposal. Use existing separate
-Stop, close, archive or delete operations only when requested and authorised.
-An unavailable retirement host is not a successful end. The same tool is used on
-desktop and mobile; this addition creates no new layout control.
-
-Read learning state and the current teaching brief before continuing. Ended
-history preserves original answers, assistance and native practical observations.
-The brief's retained passes name the original attempt/submission and exact pin;
-current submissions are separate. Explain already-passed assessments and remaining
-work without claiming an old observation happened in the new project. A replay of
-an old start/end returns its original ended target and the actual current active
-attempt, and cannot prepare or end a successor. A fresh exercise remains a
-separately admitted new start.
-
+For ending or restarting a lesson and retaining earlier evidence, read
+[Lesson history and resume](learning-history.md).
 
 When the host registers native assessment evaluation, do not claim a quiz or
 practical has passed merely because Colleague agrees, a diagram

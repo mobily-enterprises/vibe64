@@ -7,8 +7,9 @@ import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingTeachingOwner } from "../../packages/vibe64-training/src/server/teaching.js";
+import { createTrainingAnswerAssessment } from "../../packages/vibe64-training/src/server/answerAssessment.js";
 
-async function fixture(t, { ready = true, practical = false, evidence = null, exerciseCheck = false } = {}) {
+async function fixture(t, { ready = true, practical = false, evidence = null, exerciseCheck = false, exercise = true } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-teaching-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = path.join(root, "source"), systemRoot = path.join(root, "system");
@@ -22,7 +23,7 @@ async function fixture(t, { ready = true, practical = false, evidence = null, ex
   await writeFile(path.join(source, "lesson.json"), JSON.stringify({ schemaVersion: 1, code: "USE-ONE",
     title: "Try the app", document: "lesson.md", prerequisites: [], estimatedMinutes: 5,
     visuals: [{ id: "request", descriptor: "visual.json" }],
-    exercise: { kind: "bundled", source: "app", reuse: "attempt" },
+    ...(exercise ? { exercise: { kind: "bundled", source: "app", reuse: "attempt" } } : {}),
     ...(exerciseCheck ? { checks: [{ id: "orientation-response", file: "check.mjs" }] } : {}), assessments: [
       { id: "explain", kind: "answer", required: true, rubric: "lesson.md#explain" },
       { id: "next", kind: "answer", required: true, rubric: "lesson.md#next" },
@@ -83,6 +84,42 @@ async function fixture(t, { ready = true, practical = false, evidence = null, ex
 async function storedFiles(paths) {
   return Promise.all(paths.map(async filename => ({ bytes: await readFile(filename), mtime: (await stat(filename)).mtimeMs })));
 }
+
+test("a reserved no-exercise lesson admits pinned answers and durable grading without fabricating preparation", async t => {
+  const f = await fixture(t, { ready: false, exercise: false });
+  const issued = await f.owner.prepareQuestion(f.input);
+  assert.equal(issued.revision, 2);
+  assert.deepEqual((await f.read()).active.preparation, { phase: "reserved" });
+  const before = await storedFiles(f.paths);
+  assert.deepEqual(await f.owner.readQuestionReference({ actor: f.actor }), issued.reference);
+  assert.deepEqual(await f.owner.captureQuestion({ actor: f.actor, reference: issued.reference }), issued.snapshot);
+  assert.deepEqual(await storedFiles(f.paths), before);
+  assert.deepEqual(await f.owner.prepareQuestion(f.input), { ...issued, replayed: true });
+  await assert.rejects(f.owner.saveVisualCheckpoint({ actor: f.actor, attemptId: f.attemptId,
+    expectedRevision: 2, requestId: "visual", visualId: "request", snapshot: { state: "overview", paused: true, labels: {} } }),
+  { code: "VIBE64_TRAINING_PREPARATION_REQUIRED" });
+  await assert.rejects(f.owner.capturePractical({ actor: f.actor, reference: issued.reference }),
+    { code: "VIBE64_TRAINING_PRACTICAL_UNAVAILABLE" });
+  const assessment = createTrainingAnswerAssessment({ learners: f.learners, content: f.content, teaching: f.owner });
+  let runs = 0;
+  const input = { actor: f.actor, attemptId: f.attemptId, expectedRevision: 2, submissionId: "answer-one",
+    message: { role: "user", receipt: true, messageId: "accepted-answer", text: "I try the app in Preview.",
+      data: { trainingQuestion: { ...issued.snapshot, delivery: { conversationId: "colleague", turnId: "question-turn", outputId: "question-output" } } } } };
+  const facilities = { state: { summaryAbort: new AbortController() }, context: {}, helper: { async runHelper(_state, _context, request) {
+    runs++;
+    assert.equal(request.data.evidence.messageId, "accepted-answer");
+    return JSON.stringify({ outcome: "passed", explanation: "Identifies Preview." });
+  } } };
+  await assert.rejects(assessment.evaluateAnswer({ ...input, message: { ...input.message, receipt: false } }, facilities),
+    { code: "VIBE64_TRAINING_ANSWER_UNADMITTED" });
+  const saved = await assessment.evaluateAnswer(input, facilities);
+  assert.equal(saved.completion.passed, 1);
+  assert.equal(saved.completion.completed, false);
+  assert.deepEqual(saved.attempt.preparation, { phase: "reserved" });
+  assert.equal((await assessment.evaluateAnswer(input, facilities)).replayed, true);
+  assert.equal(runs, 1, "same accepted evidence is never graded twice");
+  assert.equal((await f.read()).active.learning.submissions[0].evidence.messageId, "accepted-answer");
+});
 
 test("question preparation uses original checkpoint identity/replay and capture returns immutable server facts without writes", async t => {
   const f = await fixture(t);

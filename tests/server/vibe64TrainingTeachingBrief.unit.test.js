@@ -85,6 +85,7 @@ test("fresh brief preserves generic pinned text, rubrics and evidence without ex
   const result = await f.brief.readBrief({ actor: f.actor, attemptId: f.reservation.attempt.attemptId });
   assert.deepEqual(result.pin, f.reservation.attempt.pin);
   assert.equal(result.lesson.code, "USE-ALPHA");
+  assert.equal(result.lesson.exerciseRequired, true);
   assert.equal(result.lesson.teachingText, f.teachingText);
   assert.equal(result.lesson.assessments[0].rubric.reference, "lesson.md#explain");
   assert.match(result.lesson.assessments[0].rubric.text, /fresh question/u);

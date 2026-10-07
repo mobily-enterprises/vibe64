@@ -54,7 +54,7 @@ fixture; it does not claim hosted fleet or learner gesture acceptance.
 ### Admitted answer assessment
 
 The internal answer owner receives a canonical accepted user message from the
-original Colleague admission owner. It checks this learner's ready active pin and
+original Colleague admission owner. It checks this learner's prepared exercise pin, or reserved no-exercise answer pin, and
 saved question snapshot, uses the actual message identity and words, then invokes
 the existing pinned-rubric grader through Colleague's original retained Helper.
 It has no message writer, provider process or public outcome setter. The original
@@ -81,7 +81,8 @@ assess practical learner gestures or execute a declared check.
 
 `createTrainingTeachingOwner({learners,content})` reuses the original private
 learner state and installed-content readers. `prepareQuestion` receives an admitted
-actor, exact ready active attempt, expected state revision, stable native request
+actor, exact prepared exercise attempt or reserved no-exercise answer attempt,
+expected state revision, stable native request
 ID, declared assessment ID, question text and authoritative assistance. It saves
 the question through `saveLessonResume`, preserving stage, visuals and summary.
 The server uses the request ID as the question identity and the native CAS revision
@@ -97,7 +98,7 @@ legacy questions without an issued revision retain their original write behavior
 
 `captureQuestion({actor,reference})` is write-free. Its exact bounded reference is
 `{attemptId,questionId,assessmentId,issuedRevision,topicHash,lessonHash}`. It checks
-the same ready active question and fresh installed lesson before returning a
+the same eligible active question and fresh installed lesson before returning a
 detached frozen server snapshot
 `{schemaVersion:1,learnerId,attemptId,pin,resumeRevision,question}`. The question is
 exactly `{id,assessmentId,text,assistance,issuedRevision}`; `pin` is the original
@@ -488,3 +489,22 @@ Sources: packages/vibe64-training/src/client/TrainingPreviewPresentation.vue;
 tests/server/vibe64TrainingVisualPlayer.browser.test.js, existing Teaching and
 learner-state tests. Hosted transport stays API-only in the original visual
 resource boundary; no model-facing checkpoint writer is added.
+
+
+### No-exercise quiz admission
+
+The exact installed descriptor determines whether an exercise is required.
+`teachingBrief.readBrief` and its bounded action projection derive
+`lesson.exerciseRequired`; it is not stored learner metadata or a readiness
+receipt. A reserved attempt with no declared exercise may prepare, capture and
+read references only for its declared answer assessments. Question identity,
+issued revision, actor, pin, CAS and stale-reference fences remain unchanged.
+After checkpoint saving the same eligibility is checked again. Visual checkpoint
+and practical capture retain their prepared-target requirement.
+
+`answerAssessment` admits reserved answer evidence only after reading the exact
+installed no-exercise pin and declared answer. Practical evaluation still requires
+ready. The same canonical accepted message, delivered question, retained Helper,
+pinned rubric, consumed evidence and original progress writer own grading and
+replay. No model-supplied completion or fabricated project/session enters state.
+No persisted format changes or historical repair are introduced.

@@ -52,22 +52,28 @@ function questionReference(snapshot) {
     topicHash: snapshot.pin.topic.topicHash, lessonHash: snapshot.pin.lesson.hash });
 }
 
+function questionPreparationReady(attempt, lesson, assessmentId) {
+  return attempt.preparation.phase === "ready" ||
+    attempt.preparation.phase === "reserved" && !lesson.lesson.exercise &&
+    lesson.lesson.assessments.some(item => item.id === assessmentId && item.kind === "answer");
+}
+
 function createTrainingTeachingOwner({ learners, content } = {}) {
   if (!learners?.readState || !learners?.saveLessonResume || !content?.readLesson) {
     throw new TypeError("Teaching requires the original learner-state and installed-content facilities.");
   }
 
-  async function activeLesson(actor, requestedAttemptId) {
+  async function activeLesson(actor, requestedAttemptId, assessmentId) {
     const state = await learners.readState({ actor, includeCompletion: true });
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
     if (!attempt || attempt.attemptId !== requestedAttemptId) {
       throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "Use this learner's exact active lesson attempt.");
     }
-    if (attempt.preparation.phase !== "ready") {
-      throw failure("VIBE64_TRAINING_PREPARATION_REQUIRED", "Finish the saved exercise preparation before preparing or capturing a question.");
-    }
     const lesson = await content.readLesson({ ...attempt.pin.topic,
       lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    if (!questionPreparationReady(attempt, lesson, assessmentId)) {
+      throw failure("VIBE64_TRAINING_PREPARATION_REQUIRED", "Finish the saved exercise preparation before preparing or capturing a question.");
+    }
     return { state, attempt, lesson };
   }
 
@@ -75,7 +81,7 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
   async function prepareQuestion({ actor, ...input } = {}) {
     const value = validateContent(prepareSchema, input, "Question preparation");
     if (!value.text.trim()) throw new Error("Prepare a nonempty question.");
-    const { state, attempt, lesson } = await activeLesson(actor, value.attemptId);
+    const { state, attempt, lesson } = await activeLesson(actor, value.attemptId, value.assessmentId);
     if (!lesson.lesson.assessments.some(item => item.id === value.assessmentId)) {
       throw new Error("Prepare an assessment declared in this exact installed lesson.");
     }
@@ -99,7 +105,7 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
       expectedRevision: value.expectedRevision, requestId: value.requestId,
       resume: { stage: previous?.stage || "question", pendingQuestion: question,
         visuals: previous?.visuals || [], summary: previous?.summary || "" } });
-    if (saved.attempt.preparation.phase !== "ready") {
+    if (!questionPreparationReady(saved.attempt, lesson, value.assessmentId)) {
       throw failure("VIBE64_TRAINING_PREPARATION_REQUIRED", "The saved exercise preparation changed before question admission.");
     }
     const snapshot = questionSnapshot(state, saved.attempt);
@@ -135,7 +141,7 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
 
   async function capturedLesson(actor, reference) {
     const expected = validateContent(trainingQuestionReferenceSchema, reference, "Submitted question reference");
-    const { state, attempt, lesson } = await activeLesson(actor, expected.attemptId);
+    const { state, attempt, lesson } = await activeLesson(actor, expected.attemptId, expected.assessmentId);
     const snapshot = questionSnapshot(state, attempt);
     if (canonicalJson(questionReference(snapshot)) !== canonicalJson(expected)) {
       throw failure("VIBE64_TRAINING_QUESTION_STALE", "The submitted question or lesson checkpoint changed. Show the current question before admitting another answer.");
@@ -166,9 +172,10 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
     const state = await learners.readState({ actor, includeCompletion: true });
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
     const question = attempt?.learning?.resume?.pendingQuestion;
-    if (!attempt || attempt.preparation.phase !== "ready" || !question?.assistance || !question.issuedRevision) return null;
-    await content.readLesson({ ...attempt.pin.topic,
+    if (!attempt || !question?.assistance || !question.issuedRevision) return null;
+    const lesson = await content.readLesson({ ...attempt.pin.topic,
       lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    if (!questionPreparationReady(attempt, lesson, question.assessmentId)) return null;
     const reference = questionReference(questionSnapshot(state, attempt));
     if (Array.isArray(completedPracticals) && completedPracticals.length <= 64 && completedPracticals.some(proof =>
       proof && canonicalJson(proof.reference) === canonicalJson(reference) &&

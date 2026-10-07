@@ -326,6 +326,8 @@ test("training queries share API/tool catalogue contracts and fresh member autho
   assert.equal(tool.ok, true, JSON.stringify(tool));
   assert.deepEqual(tool.result, api);
   assert.match(api.brief.lesson.teachingText, /your own words/u);
+  assert.equal(api.brief.lesson.exerciseRequired, false);
+  assert.equal(tool.result.brief.lesson.exerciseRequired, false);
   assert.match(api.brief.lesson.assessments[0].rubric.text, /your own words/u);
   assert.equal(api.brief.learning.completion.required, 1);
   assert.equal(api.brief.learning.completion.completed, false);
