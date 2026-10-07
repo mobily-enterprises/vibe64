@@ -84,6 +84,14 @@ or change Colleague's model. Ask for the actual routing before changing only the
 requested future workflow role. A correct lesson answer establishes understanding,
 not successful account setup or model execution.
 
+If an existing GLM Coding Plan hides **Connect regular Z.AI API**, use
+**Add connection** → OpenCode's **Choose provider**. Wait for the catalogue,
+search **Z.AI** in **Search OpenCode providers**, and choose **Z.AI** rather than
+**Z.AI Coding Plan**. This opens the same regular API key editor. That route has
+no key-creation link: use [Z.AI's key page](https://z.ai/manage-apikey/apikey-list)
+in another tab, finish its registration/sign-in steps, then return to the masked
+**API key** field and **Verify and connect**. Keep the key out of Colleague chat.
+
 For one main conversation, open its chat mode menu and choose **Custom**. Select
 **Orchestrator**, then **Model** and **Thinking**, and press **Apply**. The model
 list includes the available models from each connected provider for that
