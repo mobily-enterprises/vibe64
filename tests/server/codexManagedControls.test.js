@@ -422,3 +422,202 @@ test("native Codex paginated reload applies changed controls and preserves histo
   assert.equal(JSON.stringify(modelInputs.at(-1)).split("CALENDAR_INSTRUCTIONS_B").length - 1, 1);
   assert.equal(JSON.stringify(modelInputs.at(-1)).includes("CALENDAR_INSTRUCTIONS_A"), false);
 });
+
+test("native Codex completes once when its active command deletes and restores a Genesis reference", {
+  skip: spawnSync("codex", ["--version"], { timeout: 5000 }).status !== 0 ? "Codex CLI is not installed" : false,
+  timeout: 60_000
+}, async (t) => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const { mkdir } = await import("node:fs/promises");
+  const { gunzipSync, zstdDecompressSync } = await import("node:zlib");
+  const { initializeGenesisProject, setGenesisCollaboration, vibe64ConversationInstructions,
+    vibe64HostContextEnvironment, vibe64HostContextRegistry } = await import("../../packages/vibe64-genesis/src/server/index.js");
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-native-genesis-refresh-"));
+  const home = path.join(root, "home");
+  const cwd = path.join(root, "source");
+  const socket = path.join(root, "app-server.sock");
+  const events = [], requests = [], modelInputs = [];
+  let child, client, provider, registry, fixtureError, stderr = "", instructionReads = 0;
+  const waitFor = async (predicate, label) => {
+    const deadline = Date.now() + 10_000;
+    while (!await predicate()) {
+      if (fixtureError) throw fixtureError;
+      assert.ok(Date.now() < deadline, `${label}: ${stderr.slice(-2000)}`);
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  };
+  // Use the original native Responses fixture and execution-tool protocol.
+  // Codex itself runs the command; no test-authored native notifications exist.
+  const model = createServer(async (request, response) => {
+    try {
+      if (!request.url.endsWith("/responses")) { response.writeHead(404).end(); return; }
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      let raw = Buffer.concat(chunks);
+      if (request.headers["content-encoding"] === "zstd") raw = zstdDecompressSync(raw);
+      if (request.headers["content-encoding"] === "gzip") raw = gunzipSync(raw);
+      const body = JSON.parse(raw);
+      modelInputs.push(body);
+      const id = `reference-${modelInputs.length}`;
+      let item;
+      if (modelInputs.length === 1) {
+        const tools = [...(body.tools || []), ...body.input.filter(value => value.type === "additional_tools").flatMap(value => value.tools || [])]
+          .flatMap(tool => tool.type === "namespace" ? tool.tools.map(nested => ({ ...nested, namespace: tool.name })) : [tool]);
+        const tool = tools.find(value => ["exec_command", "exec"].includes(value.name));
+        assert.ok(tool, "The real native execution tool must be available");
+        const args = { login: false, yield_time_ms: 30_000, cmd: `python3 - <<'PY'
+from pathlib import Path
+import time
+source = Path("referenced.js")
+source.unlink()
+Path("deleted.marker").write_text("deleted")
+while not Path("restore.release").exists():
+    time.sleep(0.02)
+source.write_text("export const reference = 'restored';\\n")
+Path("restored.marker").write_text("restored")
+while not Path("finish.release").exists():
+    time.sleep(0.02)
+PY` };
+        item = { id, call_id: id, type: tool.type === "custom" ? "custom_tool_call" : "function_call",
+          name: tool.name, ...(tool.namespace ? { namespace: tool.namespace } : {}), status: "completed",
+          ...(tool.type === "custom" ? { input: `text(await tools.exec_command(${JSON.stringify(args)}));` } : { arguments: JSON.stringify(args) }) };
+      } else {
+        assert.equal(modelInputs.length, 2, "The one authored turn has only its command and final model rounds");
+        assert.ok(body.input.some(value => ["function_call_output", "custom_tool_call_output"].includes(value.type)), "The final reply follows actual native execution");
+        item = { id, type: "message", role: "assistant", status: "completed",
+          content: [{ type: "output_text", text: "The referenced source is restored.", annotations: [] }] };
+      }
+      const result = { id, object: "response", created_at: 1, status: "completed", output: [item],
+        usage: { input_tokens: 20, output_tokens: 10, total_tokens: 30 } };
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      for (const event of [
+        { type: "response.created", response: { ...result, status: "in_progress", output: [] } },
+        { type: "response.output_item.added", output_index: 0, item: { ...item, status: "in_progress" } },
+        { type: "response.output_item.done", output_index: 0, item },
+        { type: "response.completed", response: result }
+      ]) response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      response.end();
+    } catch (error) {
+      fixtureError = error;
+      response.writeHead(500).end();
+    }
+  });
+  t.after(async () => {
+    await Promise.all(["restore.release", "finish.release"].map(file => writeFile(path.join(cwd, file), "release").catch(() => {})));
+    client?.close();
+    provider?.close();
+    if (child?.exitCode === null && child.signalCode === null) {
+      const exited = new Promise(resolve => child.once("exit", resolve));
+      process.kill(-child.pid, "SIGTERM");
+      await exited;
+    }
+    await registry?.close();
+    model.closeAllConnections();
+    if (model.listening) await new Promise(resolve => model.close(resolve));
+    await rm(root, { recursive: true, force: true });
+  });
+  await mkdir(home);
+  await mkdir(cwd);
+  await promisify(execFile)("git", ["init", "--quiet"], { cwd });
+  await initializeGenesisProject({ projectRoot: cwd });
+  await writeFile(path.join(cwd, "referenced.js"), "export const reference = 'original';\n");
+  await mkdir(path.join(cwd, "genesis", "program", "reference"), { recursive: true });
+  await writeFile(path.join(cwd, "genesis", "program", "reference", "read-reference.md"),
+    "# Read reference\n\n## Sources\n\n- `referenced.js`\n\n## Public contract\n\nRead the project's current reference.\n");
+  const promptContext = { scope: "session", conversationKind: "main", session: {
+    managedDatabaseRefresh: false, managedEnvironment: false, managedGit: false, managedPreview: false
+  } };
+  const readInstructions = () => vibe64ConversationInstructions({ workdir: cwd, promptContext });
+  const initialInstructions = await readInstructions();
+  assert.doesNotMatch(initialInstructions, /Genesis needs attention:/u);
+  registry = await vibe64HostContextRegistry(path.join(root, "runtime"));
+  const hostEnvironment = await vibe64HostContextEnvironment(path.join(root, "runtime"));
+  await new Promise(resolve => model.listen(0, "127.0.0.1", resolve));
+  await writeFile(path.join(home, "config.toml"), [
+    'model_provider="probe"', 'model="gpt-6-astra"', 'check_for_update_on_startup=false', 'web_search="disabled"',
+    '[model_providers.probe]', 'name="probe"', `base_url="http://127.0.0.1:${model.address().port}/v1"`,
+    'wire_api="responses"', 'requires_openai_auth=false', 'supports_websockets=false'
+  ].join("\n"));
+  child = spawn("codex", ["app-server", "--listen", `unix://${socket}`, "-c", "features.remote_control=false",
+    "-c", "features.plugins=false", "-c", "features.remote_plugin=false"], {
+    cwd, env: { PATH: process.env.PATH, HOME: home, CODEX_HOME: home, LANG: "C.UTF-8", ...hostEnvironment },
+    stdio: ["ignore", "ignore", "pipe"], detached: true
+  });
+  child.stderr.on("data", chunk => { stderr += chunk; });
+  await waitFor(() => access(socket).then(() => true, () => false), "Native socket readiness");
+  client = new CodexAppServerJsonRpcClient({ endpoint: `unix://${socket}`, requestTimeoutMs: 10_000 });
+  await client.connect();
+  await client.initialize({ clientInfo: { name: "vibe64-genesis-refresh-test", version: "1" }, capabilities: { experimentalApi: true } });
+  const nativeRequest = client.request.bind(client);
+  client.request = (method, params, options) => { requests.push({ method, params }); return nativeRequest(method, params, options); };
+  const environment = { PATH: process.env.PATH, ...hostEnvironment };
+  provider = new CodexAppServerAgentProvider({ threadEnv: environment, prepareThreadEnvironment: async () => environment,
+    readInstructions: async () => { instructionReads += 1; return readInstructions(); },
+    bindThreadContext: (threadId, context, params) => registry.register(threadId, context, params.cwd) });
+  provider.client = client;
+  provider.activeClient = async () => client;
+  client.subscribe(event => { events.push(event); provider.publishNotification(event); });
+  const thread = await provider.startThread({ cwd, hostContext: promptContext, approvalPolicy: "never", sandbox: "danger-full-access" });
+  assert.match(thread.id, /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u);
+  const installed = provider.conversationRuntime.threadEnvironments.get(thread.id);
+  const installedReads = instructionReads;
+  const nativePid = child.pid;
+  requests.length = 0;
+  const turn = await provider.sendTurn(thread.id, [{ type: "text", text: "Delete and restore the referenced source once, then finish." }]);
+  await waitFor(() => access(path.join(cwd, "deleted.marker")).then(() => true, () => false), "Native source deletion");
+  await assert.rejects(readFile(path.join(cwd, "referenced.js")), { code: "ENOENT" });
+  const missingInstructions = await readInstructions();
+  assert.notEqual(missingInstructions, initialInstructions);
+  assert.match(missingInstructions, /Genesis needs attention:/u);
+  assert.match(missingInstructions, /Program module cites a missing or ineligible source file: referenced\.js/u);
+  await provider.ensureThreadControls(thread.id);
+  assert.equal(instructionReads, installedReads + 1, "Only the idle send admission reread the host before the native command started");
+  assert.equal(provider.conversationRuntime.threadEnvironments.get(thread.id), installed);
+  await writeFile(path.join(cwd, "restore.release"), "restore");
+  await waitFor(() => access(path.join(cwd, "restored.marker")).then(() => true, () => false), "Native source restoration");
+  assert.equal(await readFile(path.join(cwd, "referenced.js"), "utf8"), "export const reference = 'restored';\n");
+  await setGenesisCollaboration({ projectRoot: cwd, requirements: "- Keep the restored source reference intact." });
+  const latestInstructions = await readInstructions();
+  assert.doesNotMatch(latestInstructions, /Genesis needs attention:/u);
+  assert.match(latestInstructions, /Keep the restored source reference intact\./u);
+  await provider.ensureThreadControls(thread.id);
+  assert.equal(instructionReads, installedReads + 1, "An active restored source also retains the installed prompt");
+  assert.equal(provider.conversationRuntime.threadEnvironments.get(thread.id), installed);
+  assert.equal(child.pid, nativePid);
+  assert.equal(child.exitCode, null);
+  assert.equal(child.signalCode, null);
+  assert.equal(requests.filter(value => value.method === "turn/start").length, 1);
+  assert.equal(requests.some(value => ["turn/interrupt", "thread/unsubscribe", "thread/resume", "thread/inject_items"].includes(value.method)), false);
+  await writeFile(path.join(cwd, "finish.release"), "finish");
+  await waitFor(() => events.some(event => event.method === "turn/completed" && event.params.threadId === thread.id && event.params.turn.id === turn.id), "The same native turn completion");
+  const completions = events.filter(event => event.method === "turn/completed" && event.params.threadId === thread.id && event.params.turn.id === turn.id);
+  assert.equal(completions.length, 1);
+  assert.equal(completions[0].params.turn.status, "completed");
+  assert.ok(events.some(event => event.method === "item/started" && event.params.threadId === thread.id &&
+    event.params.turnId === turn.id && event.params.item.type === "commandExecution"),
+    JSON.stringify({ expectedThreadId: thread.id, expectedTurnId: turn.id, events: events.map(event => ({
+      method: event.method, threadId: event.params?.threadId, turnId: event.params?.turnId || event.params?.turn?.id,
+      itemType: event.params?.item?.type
+    })) }));
+  const finals = events.filter(event => event.method === "item/completed" && event.params.threadId === thread.id && event.params.turnId === turn.id && event.params.item.type === "agentMessage");
+  assert.equal(finals.length, 1);
+  assert.equal(finals[0].params.item.text, "The referenced source is restored.");
+  assert.equal(modelInputs.length, 2, "Two HTTP rounds belong to the single accepted execution turn");
+  const saved = await client.request("thread/turns/list", { threadId: thread.id, limit: 10, sortDirection: "asc", itemsView: "full" });
+  assert.equal(saved.data.filter(value => value.id === turn.id).length, 1);
+  assert.equal(saved.data.find(value => value.id === turn.id).status, "completed");
+  assert.equal(requests.some(value => value.method === "turn/interrupt"), false);
+  await provider.ensureThreadControls(thread.id);
+  assert.equal(provider.conversationRuntime.threadEnvironments.get(thread.id).params.developerInstructions, latestInstructions);
+  assert.equal(provider.conversationRuntime.threadEnvironments.get(thread.id).client, client);
+  assert.equal(instructionReads, installedReads + 2, "The next idle admission reads the current Genesis composition");
+  assert.equal(requests.filter(value => value.method === "thread/resume").length, 1);
+  assert.equal(requests.find(value => value.method === "thread/resume").params.threadId, thread.id);
+  assert.equal(requests.filter(value => value.method === "thread/inject_items").length, 1);
+  assert.ok(requests.find(value => value.method === "thread/inject_items").params.items[0].content[0].text.endsWith(latestInstructions));
+  assert.equal(requests.filter(value => value.method === "turn/start").length, 1);
+  assert.equal(requests.some(value => value.method === "turn/interrupt"), false);
+  assert.equal(child.pid, nativePid);
+  if (fixtureError) throw fixtureError;
+});
