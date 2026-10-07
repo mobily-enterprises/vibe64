@@ -749,6 +749,13 @@ publication is supported through existing permission/review/recovery owners,
 while installation/enablement remains an explicit local operator operation.
 Read-only how-to or quoted guide examples supply no mutation authority.
 
+The product instructions route lesson template/source inspection and Training
+validation/bundling directly to the existing coding assignment. Colleague loads
+the create/send contracts for the supplied exact target instead of searching for
+source access or preflighting later review/publication before delegation. This is
+coordination guidance, not another action, a larger tool budget or new authority;
+the original assignment receipts and later review/Save owners remain required.
+
 Usage discovery still reads each release-matched topic through its original
 16,000-character bound. The teaching guide is split into task topics rather than
 raising that limit or changing the reader. No new runtime action, state format,

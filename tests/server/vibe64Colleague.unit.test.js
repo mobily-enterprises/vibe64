@@ -4015,8 +4015,12 @@ test("a completed goal commentary wakes the original native Colleague once witho
   const nativeTurn = structuredClone(f.observations.session.agentSession.turn);
   f.observations.log[0].messages.push({ role: "commentary", messageId: "eta-reply", text: "30–70 hours. I am continuing." });
   await changed(f);
-  await until(async () => (await f.service.read({}, f.context)).watches[0].status === "delivered");
+  await until(async () => {
+    const state = await f.service.read({}, f.context);
+    return state.status === "working" || state.watches[0].status === "delivered";
+  });
   const result = await f.service.wait(f.context);
+  assert.equal(result.watches[0].status, "delivered");
   assert.equal(result.status, "ready", result.error);
   assert.deepEqual(result.messages.filter(message => ["user", "system", "assistant"].includes(message.role)).map(({ role, text }) => [role, text]), [
     ["system", "An update from your watched conversations."],

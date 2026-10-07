@@ -39,6 +39,13 @@ the implementer and require another review of the latest work. Routine follow-up
 within the assignment is supported. New scope, extra turns or an unresolved
 publication target remain a recorded user decision, not an invented choice.
 
+For an exact authoring project and session, Colleague sends the template, file
+inspection, validation and bundling work to the coding agent. It does not need
+file access to start that assignment. Review follows the implementer's answer;
+publication follows the existing destination and permission checks. If discovery
+reaches the application's tool-call limit before work starts, inspect the
+assignment list before retrying; an error is not evidence that coding began.
+
 “Ready for testing” needs evidence against every criterion and the latest review;
 it does not mean published or installed. A preview can be published as preview
 source when requested. Pedagogical trial, real exercise and animation acceptance
