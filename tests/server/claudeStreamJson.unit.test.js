@@ -1,6 +1,6 @@
-import { prepareSessionDetachedConversationCleanup, createSessionConversationBinding, prepareSessionConversationActivity, prepareSessionConversationRenewal, prepareSessionConversationCreation, prepareSessionConversationReadiness, prepareSessionConversationDisposal, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import { prepareSessionDetachedConversationRun, prepareSessionDetachedConversationCleanup, createSessionConversationBinding, prepareSessionConversationActivity, prepareSessionConversationRenewal, prepareSessionConversationCreation, prepareSessionConversationReadiness, prepareSessionConversationDisposal, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
@@ -26,7 +26,6 @@ import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../pa
 import { createService as createSessionService } from "../../packages/vibe64-sessions/src/server/service.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
-import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 
 test("Claude subscription launch preserves native auth and makes helper tools unavailable", () => {
   const args = claudeCodeArguments({ sessionId: "session", resume: true, model: "sonnet", effort: "high", toolFree: true });
@@ -57,7 +56,8 @@ function createClaudeSessionAgentProvider(options) {
   let provider;
   const conversations = options.conversationRuntime || createConversationRuntime({
     authorize: ({ context, conversationId }) => context.sessionId === conversationId,
-    host: { nativeTools: true, conversation: ({ id, context, input, options, operation }) => operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
+    host: { nativeTools: true, conversation: ({ id, context, input, options, operation }) => operation === "runDetachedConversation"
+      ? prepareSessionDetachedConversationRun(provider, id, context, input, options) : operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
       ? prepareSessionDetachedConversationCleanup(provider, id, context, input,
         operation === "interruptDetachedConversation" ? "interruptDetachedChatTurn" : "deleteDetachedChatThread") : operation === "inspectTemporaryActivity"
       ? prepareSessionConversationActivity(provider, id, context) : operation === "generateRenewalHandover" || operation === "seedRenewalHandover"
@@ -72,6 +72,7 @@ function createClaudeSessionAgentProvider(options) {
     }) }
   });
   provider = createNativeClaudeSessionAgentProvider({ ...nativeOptions, conversationRuntime: conversations,
+    runNativeDetachedConversation: request => conversations.runNativeDetachedConversation(request),
     publishConversation: options.publishConversation || (event => conversations.publishNative(event)) });
   const manager = createSessionAgentManager({ conversationRuntime: conversations, defaultProviderId: "claude",
     providers: [provider], readAssistantAccess: async () => ({ available: true, ownerOnly: false }) });
@@ -108,21 +109,6 @@ function createClaudeSessionAgentProvider(options) {
     return conversations.deleteNativeDetachedConversation({ id: context.sessionId, context, input });
   }
 
-  // The two original native-helper cases retain their owner-level setup after
-  // removal of the unused application start/stream route. Product helper routing
-  // is exercised separately through the common scoped runtime.
-  async function runDetachedChatTurn(context, input = {}) {
-    const conversationId = input.conversationId || input.threadId || randomUUID();
-    const created = !input.conversationId && !input.threadId;
-    const { owner: conversations } = await retainedNative(context, { ...input, conversationId });
-    const entry = await conversations.acquire(context, conversationId, { create: created });
-    const executionProfile = input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
-    if (created && context.assistantScope) entry.profile = executionProfile;
-    if (executionProfile) await context.onEvent?.({ type: "execution-profile", executionProfile });
-    await startConversationTurn(context, { ...input, conversationId });
-    const result = await waitForConversationTurn(context, { ...input, conversationId });
-    return executionProfile ? { ...result, executionProfile } : result;
-  }
 
   const facade = { ...provider,
     hasActiveTemporaryConversation: context => provider.projectConversationResult("hasActiveTemporaryConversation", () =>
@@ -133,7 +119,7 @@ function createClaudeSessionAgentProvider(options) {
     closeProject: (context, input) => conversations.closeNativeProject({ context, input }),
     invalidateRuntimes: (context, input) => conversations.invalidateNativeRuntimes({ context, input }),
     createConversation: (context, input) => conversations.createNativeConversation({ id: context.sessionId, context, input }),
-    readConversation, startConversationTurn, waitForConversationTurn, stopConversation, deleteConversation, runDetachedChatTurn,
+    readConversation, startConversationTurn, waitForConversationTurn, stopConversation, deleteConversation,
     async closeSession(context) {
       return (await conversations.disposeNative(provider.prepareConversationRequest("closeSession", context))).result;
     },
@@ -2023,4 +2009,41 @@ test("Claude native status frames preserve forwarding before usage and goal publ
   await provider.readPlanUsage(context);
   assert.equal(usageReads, 2, "a goal update does not invalidate account usage");
   assert.equal(f.processes.length, 1);
+});
+
+test("restored Claude detached facade awaits the original profile event before starting native work", async (t) => {
+  const f = await fixture(t);
+  f.context.assistantSelection = { ...f.context.assistantSelection, modelId: "haiku", variantId: "" };
+  const profile = await f.provider.resolveExecutionProfile(f.context, { profileId: "helper", workloadId: "commit_title" });
+  const catalogueProcesses = [...f.processes];
+  assert.equal(catalogueProcesses.length, 1);
+  assert.equal(catalogueProcesses[0].stopped, true);
+  assert.equal(catalogueProcesses[0].options.toolFree, true);
+  assert.equal(catalogueProcesses[0].lastInput, undefined);
+  let release;
+  let entered;
+  const held = new Promise(resolve => { release = resolve; });
+  const eventEntered = new Promise(resolve => { entered = resolve; });
+  f.context.onEvent = async event => {
+    if (event.type !== "execution-profile") return;
+    assert.equal(event.type, "execution-profile");
+    assert.deepEqual(event.executionProfile, profile);
+    assert.deepEqual(f.processes, catalogueProcesses, "Audit must finish before any conversation process starts.");
+    entered();
+    await held;
+  };
+  f.behavior.afterSend = native => native.options.onEvent({ type: "result", subtype: "success", result: "Bounded title", uuid: "title" });
+  const running = f.provider.runDetachedChatTurn(f.context, { prompt: "Write the bounded title.", executionProfile: profile });
+  await eventEntered;
+  assert.deepEqual(f.processes, catalogueProcesses, "Audit must finish before any conversation process starts.");
+  release();
+  const result = await running;
+  assert.equal(result.text, "Bounded title");
+  assert.deepEqual(result.executionProfile, profile);
+  assert.equal(f.processes.length, catalogueProcesses.length + 1);
+  const beforeRejection = f.processes.length;
+  f.context.onEvent = async () => { throw new Error("Controlled audit rejection."); };
+  await assert.rejects(f.provider.streamDetachedChatTurn(f.context, { prompt: "Must not start native work.", executionProfile: profile }),
+    /Controlled audit rejection/);
+  assert.equal(f.processes.length, beforeRejection);
 });

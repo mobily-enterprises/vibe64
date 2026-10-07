@@ -42,6 +42,7 @@ import {
   addGenesisStack,
   genesisPackageBinDirectory,
   initializeGenesisProject,
+  inspectVibe64WorkspaceSetup,
   inspectGenesisSkills
 } from "../../packages/vibe64-genesis/src/server/index.js";
 
@@ -1600,4 +1601,158 @@ test("local Git work records the local command actor before any AI interaction",
   assert.equal(actors[0].actorUserKey, "local");
   assert.equal(session.metadata.session_git_command_actor_source_root, session.metadata.source_path);
   assert.equal(session.metadata.session_git_command_actor_session_id, session.sessionId);
+});
+
+test("workspace readiness reloads the exact session without setup admission or writes", async (t) => {
+  const lock = agentWriteLockHarness();
+  const { service, session, runtime, projectService } = await terminalServiceFixture(t, lock);
+  await execFileAsync("git", ["init", "--quiet"], { cwd: session.metadata.source_path });
+  let runtimeReads = 0;
+  let sessionReads = 0;
+  let currentState = { status: "unconfigured" };
+  projectService.createRuntime = async (options) => {
+    assert.deepEqual(options, { inspectSource: false });
+    runtimeReads += 1;
+    return runtime;
+  };
+  runtime.getSession = async (sessionId, options) => {
+    assert.equal(sessionId, session.sessionId);
+    assert.deepEqual(options, { inspectSource: false });
+    sessionReads += 1;
+    return { ...session, workspaceSetup: currentState };
+  };
+  runtime.store.writeMetadataValue = async () => assert.fail("A readiness read must not write setup state.");
+  assert.equal(await service.workspaceSetupIsPrepared(session.sessionId), true);
+  currentState = { status: "failed" };
+  assert.equal(await service.workspaceSetupIsPrepared(session.sessionId), false);
+  currentState = { status: "required" };
+  assert.equal(await service.workspaceSetupIsPrepared(session.sessionId), false);
+  assert.equal(runtimeReads, 3);
+  assert.equal(sessionReads, 3);
+  assert.deepEqual(lock.attempts, []);
+  await assert.rejects(service.workspaceSetupIsPrepared(""), { code: "vibe64_invalid_session_id" });
+  assert.equal(runtimeReads, 3, "Invalid identity must not choose the current session.");
+  runtime.getSession = async () => { throw Object.assign(new Error("Missing exact session"), { code: "vibe64_session_not_found" }); };
+  await assert.rejects(service.workspaceSetupIsPrepared("missing-session"), { code: "vibe64_session_not_found" });
+});
+
+test("workspace readiness verifies the current recipe and retains the original unconfigured fallback", async (t) => {
+  const lock = agentWriteLockHarness();
+  const { service, session, runtime } = await terminalServiceFixture(t, lock);
+  const projectRoot = session.metadata.source_path;
+  await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
+  await initializeGenesisProject({ projectRoot });
+  await addGenesisStack({ projectRoot, pieces: ["nodejs"] });
+  const stackPath = path.join(projectRoot, "genesis/stack.md");
+  const stack = await readFile(stackPath, "utf8");
+  const configuredStack = `${stack}\n## Workspace setup\n\n- Prepare \`Initial recipe\` with \`nodejs\`: \`node\` \`initial.js\`\n`;
+  await writeFile(stackPath, configuredStack);
+  const initial = await inspectVibe64WorkspaceSetup({ projectRoot });
+  assert.equal(initial.status, "ready");
+  session.workspaceSetup = { status: "succeeded", recipeHash: initial.recipeHash };
+  runtime.store.writeMetadataValue = async () => assert.fail("A readiness read must not persist inspected state.");
+  assert.equal(await service.workspaceSetupIsPrepared(session.sessionId), true);
+  const changedStack = configuredStack.replace(/## Workspace setup\n[\s\S]*?(?=\n## |$)/u,
+    "## Workspace setup\n\n- Prepare `Changed recipe` with `nodejs`: `node` `changed.js`\n");
+  assert.notEqual(changedStack, configuredStack);
+  await writeFile(stackPath, changedStack);
+  assert.equal(await service.workspaceSetupIsPrepared(session.sessionId), false);
+  assert.equal(await readFile(stackPath, "utf8"), changedStack);
+  assert.deepEqual(session.workspaceSetup, { status: "succeeded", recipeHash: initial.recipeHash });
+  session.workspaceSetup = { status: "unconfigured" };
+  assert.equal(await service.workspaceSetupIsPrepared(session.sessionId), false,
+    "Unconfigured state cannot certify a configured recipe.");
+  await rm(stackPath);
+  assert.equal(await service.workspaceSetupIsPrepared(session.sessionId), true);
+  assert.deepEqual(lock.attempts, []);
+});
+
+for (const method of ["runDetachedAgentChatTurn", "streamDetachedAgentChatTurn"]) {
+  test(`${method} retains the original whole-turn Main lease and freshly admitted session`, async (t) => {
+    const entered = deferred();
+    const finish = deferred();
+    let observed;
+    const native = await controllerHarness({ withCommandBoundary: true, beforePrompt: async () => {
+      assert.equal(lock.held, true);
+      entered.resolve();
+      await finish.promise;
+    } });
+    t.after(async () => {
+      finish.resolve();
+      await native.controller.closeAllForProject();
+      await rm(native.root, { recursive: true, force: true });
+    });
+    const lock = agentWriteLockHarness();
+    const f = await terminalServiceFixture(t, lock, { assistantSelection: native.selection,
+      opencodeTerminalController: native.controllerOptions });
+    const stale = { ...f.session, metadata: { ...f.session.metadata, source_path: "/stale/source" } };
+    f.service.configureAssistantRuntime({
+      resolveConnection: native.controllerOptions.resolveConnection,
+      listConnections: native.controllerOptions.listConnections,
+      readAssistantAccess: async (input) => {
+      observed = input;
+      assert.equal(lock.held, true);
+      return { available: true, ownerOnly: false };
+    } });
+    const running = f.service[method]("session-1", { prompt: "Keep the admitted detached work." },
+      { runtime: f.runtime, session: stale });
+    await entered.promise;
+    assert.equal(lock.held, true);
+    assert.equal(observed.session, f.session);
+    const competing = await f.service[method]("session-1", { prompt: "Must not dispatch twice." }, { runtime: f.runtime });
+    assert.equal(competing.code, "vibe64_agent_write_mode_busy");
+    assert.equal(native.promptCalls.length, 1);
+    finish.resolve();
+    assert.equal((await running).ok, true);
+    assert.equal(lock.held, false);
+    assert.equal(lock.attempts[0].operationName, "agent-write-mode");
+  });
+}
+
+test("detached helper execution keeps its original profile admission without a Main lease", async (t) => {
+  const native = await controllerHarness({ withCommandBoundary: true });
+  t.after(async () => {
+    await native.controller.closeAllForProject();
+    await rm(native.root, { recursive: true, force: true });
+  });
+  const lock = agentWriteLockHarness();
+  const f = await terminalServiceFixture(t, lock, { assistantSelection: native.selection,
+    opencodeTerminalController: native.controllerOptions });
+  f.service.configureAssistantRuntime({
+    resolveConnection: native.controllerOptions.resolveConnection,
+    listConnections: native.controllerOptions.listConnections,
+    readAssistantAccess: async () => ({ available: true, ownerOnly: false }) });
+  const options = { runtime: f.runtime, session: f.session, assistantSelection: native.selection };
+  const profile = await f.service.resolveAgentExecutionProfile("session-1", {
+    profileId: "helper", workloadId: "commit_title"
+  }, options);
+  assert.equal(lock.attempts.length, 0);
+  for (const method of ["runDetachedAgentChatTurn", "streamDetachedAgentChatTurn"]) {
+    const result = await f.service[method]("session-1", { executionProfile: profile, prompt: "Name the bounded work." }, options);
+    assert.equal(result.ok, true);
+    assert.equal(result.executionProfile.model, profile.model);
+    assert.equal(lock.attempts.length, 0);
+  }
+});
+
+test("detached Main failure releases admission and an inherited writer can run the same original operation", async (t) => {
+  const native = await controllerHarness({ withCommandBoundary: true });
+  t.after(async () => {
+    await native.controller.closeAllForProject();
+    await rm(native.root, { recursive: true, force: true });
+  });
+  const f = await terminalServiceFixture(t, { store: {} }, { assistantSelection: native.selection,
+    opencodeTerminalController: native.controllerOptions });
+  f.service.configureAssistantRuntime({
+    resolveConnection: native.controllerOptions.resolveConnection,
+    listConnections: native.controllerOptions.listConnections,
+    readAssistantAccess: async () => ({ available: true, ownerOnly: false }) });
+  native.failPrompt(Object.assign(new Error("Controlled detached rejection."), { statusCode: 503 }));
+  await assert.rejects(f.service.runDetachedAgentChatTurn("session-1", { prompt: "Reject this original native call." },
+    { runtime: f.runtime }), { message: "Controlled detached rejection.", statusCode: 503 });
+  const inherited = await runVibe64AgentWriteExclusive(f.runtime, "session-1", () =>
+    f.service.streamDetachedAgentChatTurn("session-1", { prompt: "Run under the existing participant." }, { runtime: f.runtime }));
+  assert.equal(inherited.acquired, true);
+  assert.equal(inherited.value.ok, true);
+  assert.equal(native.promptCalls.length, 2);
 });
