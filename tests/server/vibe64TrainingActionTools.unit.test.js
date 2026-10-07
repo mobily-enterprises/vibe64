@@ -802,3 +802,23 @@ test("ended continuation replay projects its own history and actual successor wi
   assert.equal(result.result.completion, null);
   assert.doesNotMatch(JSON.stringify(result), excluded);
 });
+
+
+test("presentation supplies its exact captured attempt ID to the configured original learner reader", async t => {
+  const f = await fixture(t, { presentation: true });
+  const reserved = await f.reserve();
+  const attemptId = reserved.attempt.attemptId;
+  const preparing = await f.learners.beginPreparation({ actor: f.auth.user, attemptId, expectedRevision: reserved.revision });
+  const ready = await f.learners.recordPreparationReady({ actor: f.auth.user, attemptId,
+    expectedRevision: preparing.revision, initialSessionId: preparing.attempt.preparation.initialSessionId });
+  const reads = [];
+  const learners = { async readState(input) { reads.push(input); return f.learners.readState(input); } };
+  const colleague = { async navigate() { return { ok: true }; } };
+  const definition = createTrainingPresentationActions({ learners, content: f.content, colleague })
+    .find(value => value.id === "vibe64.training.visual.open");
+  const result = await definition.execute({ projectSlug: ready.attempt.projectSlug, attemptId, visualId: "request" },
+    { vibe64Action: { user: f.auth.user, project: { slug: ready.attempt.projectSlug } } });
+  assert.equal(result.ok, true);
+  assert.equal(reads.length, 1);
+  assert.deepEqual(reads[0], { actor: f.auth.user, attemptId, includeCompletion: true });
+});

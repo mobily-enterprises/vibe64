@@ -260,6 +260,15 @@ App iframe preservation require separate composed proof.
 
 ## Authenticated presentation commands
 
+The presentation action supplies its exact input attempt ID to the configured
+learner reader after original actor/project authorization. A composing host may
+route that read to the corresponding original isolated author-preview owner;
+the normal reader's data/format remain unchanged. Resource reads and commands
+still derive their full pin from that owner's verified active attempt. A host
+must route checkpoint, question, check and grading callbacks to the same owner;
+changing only visual opening is insufficient.
+
+
 `packages/vibe64-training/src/server/presentationActions.js` registers visual
 open, command and snapshot against the existing Colleague navigation owner.
 Fresh actor/project authorization and the learner's active prepared attempt

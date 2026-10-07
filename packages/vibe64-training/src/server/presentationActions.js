@@ -31,7 +31,7 @@ function createTrainingPresentationActions({ learners, content, colleague } = {}
       const actor = authenticatedVibe64User(context);
       if (!actor) throw Object.assign(new Error("Sign in before showing a lesson presentation."), { statusCode: 401, code: "vibe64_auth_required" });
       try {
-        const saved = await learners.readState({ actor, includeCompletion: true });
+        const saved = await learners.readState({ actor, attemptId: input.attemptId, includeCompletion: true });
         const attempt = saved.active;
         if (attempt?.attemptId !== input.attemptId || attempt.projectSlug !== (context.vibe64Action?.project?.slug || currentProjectRequestContext()?.slug) ||
             attempt.preparation.phase !== "ready" || !attempt.preparation.initialSessionId) {

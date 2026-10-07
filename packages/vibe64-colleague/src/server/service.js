@@ -333,7 +333,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const mark = turn.metadata?.trainingQuestionDelivery;
       if (mark?.phase !== "delivered" || mark.conversationId !== state.record.scopeId || mark.turnId !== turn.turnId ||
           turn.metadata.runtime?.status !== "complete" || turn.metadata.runtime.supersededBy ||
-          !isDeepStrictEqual(mark.reference, reference)) continue;
+          (reference !== undefined && !isDeepStrictEqual(mark.reference, reference))) continue;
       const final = turn.messages.findLast(message => message.role === "assistant" && message.text.trim());
       if (final?.outputId && final.outputId === mark.outputId && final.text.trim() === mark.questionText) {
         return { conversationId: mark.conversationId, turnId: mark.turnId, outputId: mark.outputId };
@@ -922,7 +922,13 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const result = await snapshot(state, input.clientId);
       let trainingQuestion = null;
       try {
+        // Scope discovery to an actual native delivery, never whichever lesson
+        // store happens to be active. The host still revalidates its question.
+        const delivery = deliveredQuestion(state);
+        const deliveredReference = delivery && state.record.conversationLog.find(turn => turn.turnId === delivery.turnId)
+          ?.metadata.trainingQuestionDelivery.reference;
         const reference = await context.trainingTeaching?.readQuestionReference({ actor: authenticatedVibe64User(context),
+          ...(deliveredReference ? { reference: structuredClone(deliveredReference) } : {}),
           completedPracticals: completedPracticalQuestions(state) });
         if (reference && deliveredQuestion(state, reference)) trainingQuestion = { ...reference };
       } catch { /* Missing or unavailable teaching never blocks ordinary chat. */ }

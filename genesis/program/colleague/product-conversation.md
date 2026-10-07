@@ -693,6 +693,14 @@ the original Stop/disconnection lifetime. It adds no speech or grading authority
 
 The existing Colleague state read optionally asks the host-supplied
 `context.trainingTeaching.readQuestionReference` for one bounded issued reference.
+The read also supplies the latest actually delivered native reference as a host
+routing hint. It derives that hint through the same completed-output/current-scope
+checks, skips prepared and invalid marks, and never uses retained Fresh history.
+A host with independently active normal and author-preview stores selects the
+original teaching owner by that exact attempt; an absent hint retains ordinary
+normal-owner discovery. The selected owner still validates its active question,
+and the original native delivery check still decides whether a reference is
+exposed. This adds no persisted field, grading shortcut or mutable preview mode.
 It exposes that reference only when original current-scope turn metadata proves
 the matching native question reply completed. `stageTrainingQuestion` saves a
 prepared mark for the current interactive accepted turn/generation.

@@ -164,3 +164,11 @@ list the resulting enabled course through its normal learning query after the
 operator completes this step; absence is not permission to fabricate a substitute.
 Existing attempts keep their saved pins. Source publication alone does not prove
 installation, learner delivery, assessment completion or pilot acceptance.
+
+Question delivery keeps its exact lesson attempt attached to your answer. An
+unfinished question or one retained from an earlier fresh conversation does not
+become a new assessment. Switching the displayed Preview is not permission to
+move an answer or a diagram checkpoint into another lesson's progress. These
+routing foundations do not add a draft-preview launcher: the current authoring
+commands remain the ones described above, and assembled author-preview admission
+and refresh remain under development.

@@ -4453,3 +4453,48 @@ test("Colleague decoded reply bound preserves a larger DeepSeek text-carried app
   assert.equal(f.observations.realtime.some(event => JSON.stringify(event.realtime.payload).includes(value)), false,
     "The private tool carrier never becomes a visible answer");
 });
+
+
+test("question discovery carries only the latest actually delivered native attempt reference to the host", async t => {
+  const previewReference = { ...issuedQuestion, attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", questionId: "preview-question" };
+  const unfinishedReference = { ...previewReference, questionId: "unfinished-question", issuedRevision: 9 };
+  const references = [issuedQuestion, previewReference, unfinishedReference];
+  const texts = [capturedQuestion.question.text, "What did you observe in the preview?", "An unfinished new question?"];
+  const f = await fixture(t, [call("issue-normal"), reply(texts[0]), call("issue-preview"), reply(texts[1]),
+    call("prepare-unfinished"), reply("This final does not deliver that prepared question.")]);
+  const reads = [];
+  let prepared = 0;
+  f.context.trainingTeaching = {
+    async readQuestionReference({ actor, reference }) {
+      assert.equal(actor.uid, 42);
+      reads.push(structuredClone(reference));
+      return reference || issuedQuestion;
+    },
+    async captureQuestion({ actor, reference }) {
+      assert.equal(actor.uid, 42);
+      const index = references.findIndex(value => isDeepStrictEqual(value, reference));
+      assert.notEqual(index, -1);
+      return { ...structuredClone(capturedQuestion), attemptId: reference.attemptId,
+        question: { ...structuredClone(capturedQuestion.question), id: reference.questionId,
+          issuedRevision: reference.issuedRevision, text: texts[index] } };
+    }
+  };
+  f.observations.onOperation = (_input, context) => f.service.stageTrainingQuestion(references[prepared],
+    { ...context, trainingTeaching: f.context.trainingTeaching });
+  assert.equal((await f.service.read({}, f.context)).trainingQuestion, null);
+  assert.equal(reads.at(-1), undefined, "saved or claimed active state is not native delivery");
+  for (const text of ["Teach the ordinary lesson.", "Preview my draft.", "Prepare the next question."]) {
+    await f.send(text, `request-${prepared}`);
+    await f.service.wait(f.context);
+    const expected = references[Math.min(prepared, 1)];
+    assert.deepEqual((await f.service.read({}, f.context)).trainingQuestion, expected);
+    assert.deepEqual(reads.at(-1), expected, "the exact delivered attempt chooses the original host owner");
+    prepared++;
+  }
+  const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  assert.equal(saved.conversationLog[2].metadata.trainingQuestionDelivery.phase, "prepared");
+  const current = await f.service.read({}, f.context);
+  await freshAction(f, { operationId: "fresh-after-preview", expectedConversationId: current.conversationId });
+  assert.equal((await f.service.read({}, f.context)).trainingQuestion, null);
+  assert.equal(reads.at(-1), undefined, "retained old delivery is not a discovery hint in a fresh conversation");
+});
