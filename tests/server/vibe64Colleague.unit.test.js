@@ -4412,3 +4412,44 @@ for (const { mode, delayMs } of [
     }
   });
 }
+
+for (const native of [false, true]) for (const length of [16_000, 16_001]) {
+  test(`Colleague ${native ? "native" : "API"} final reply preserves the original ${length}-character boundary`, async t => {
+    const answer = "x".repeat(length);
+    const f = await fixture(t, native ? [{ text: answer, mode: "history-final" }] : [reply(answer)], { native });
+    try {
+      await f.send("Give the requested answer.");
+      const result = await f.service.wait(f.context);
+      assert.equal(result.status, length === 16_000 ? "ready" : "failed", result.error);
+      const assistants = result.messages.filter(message => message.role === "assistant");
+      assert.equal(assistants.length, length === 16_000 ? 1 : 0);
+      if (length === 16_000) assert.equal(assistants[0].text, answer, "Preserve the complete accepted answer without truncation");
+      else assert.match(result.error, /(output|reply|response).*(limit|large)|size limit/i);
+      assert.deepEqual(f.observations.mutations, []);
+      const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+      const canonical = saved.conversationLog.filter(turn => turn.user?.messageId === "user-1");
+      assert.equal(canonical.length, 1, "Retain exactly one authored message");
+      assert.equal(canonical[0].assistant?.text, length === 16_000 ? answer : undefined,
+        "An oversized answer cannot enter saved assistant history");
+      if (native) assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1);
+      else assert.equal(f.observations.starts.length, 1);
+    } finally { await f.service.stop({}, f.context); }
+  });
+}
+
+test("Colleague decoded reply bound preserves a larger DeepSeek text-carried application payload", async t => {
+  const value = "private-handover-".repeat(1100);
+  assert.ok(value.length > 16_000);
+  const text = `<｜DSML｜function_calls><｜DSML｜invoke name="vibe64_test_operate">${JSON.stringify({ value })}</｜DSML｜invoke></｜DSML｜function_calls>`;
+  const f = await fixture(t, [new Response(modelFrame({ content: text }) + modelFrame({}, "stop"),
+    { headers: { "content-type": "text/event-stream" } }), reply("The handover is saved.")]);
+  await f.send("Save this handover.");
+  const result = await f.service.wait(f.context);
+  assert.equal(result.status, "ready", result.error);
+  assert.deepEqual(f.observations.mutations, [value], "The independent application argument limit remains in force");
+  assert.equal(result.messages.at(-1).text, "The handover is saved.");
+  assert.equal(f.observations.starts.length, 2, "One tool response and one final; no extra model work");
+  assert.equal(result.messages.some(message => message.text.includes(value)), false);
+  assert.equal(f.observations.realtime.some(event => JSON.stringify(event.realtime.payload).includes(value)), false,
+    "The private tool carrier never becomes a visible answer");
+});

@@ -135,6 +135,12 @@ answer is still growing. Stop or new
 steering clears the unfinished reply. Reopening the drawer while it is working
 shows the current reply again. Tool requests are not displayed as chat text.
 
+Colleague accepts completed replies up to 16,000 characters. A longer reply
+reports a failure instead of silently cutting the answer short or saving it as
+complete. Your request remains in history. Read the error, then ask for a shorter
+answer; the failed request is not automatically sent again. This reply limit
+does not reduce the separate limits for supported application actions.
+
 If updates cannot reconnect, the compact chat warning retains already loaded
 history and your draft. Use **Reload chat** in that warning to observe the same
 conversation again; it does not resend a message. A connection warning does not

@@ -53,7 +53,16 @@ Colleague uses JSKIT's `createConversationRuntime` for model turns, application
 tools, native history, admission, cancellation and model replacement. Its service
 owns product instructions, focused targets, watches, assignments and authorization.
 It consumes normalized events; it has no provider-event parser or reply/tool
-envelope loop. Its existing partial-reply and browser-stream projections reuse the
+envelope loop. The service selects the original 16,000-character decoded final
+reply bound through JSKIT's `limits.maxFinalReplyCharacters`. The common runtime
+rejects an oversized completed answer before saving it; generic Codex canonical
+assistant writers enforce the same bound before native output reaches storage.
+Shared Claude and OpenCode receipt recovery bounds their joined decoded replies
+before saving, retaining native user admission without resending a request.
+Raw provider output and application-tool argument limits remain separate, so
+large valid text-carried tool payloads are not mistaken for oversized replies.
+This does not restore the original malformed-envelope correction budget.
+Its existing partial-reply and browser-stream projections reuse the
 original trailing-high-surrogate guard for display only, leaving completed events
 and canonical text unchanged. The terminal service supplies authorized account resolution and
 managed execution. Each person has an independent native scope.

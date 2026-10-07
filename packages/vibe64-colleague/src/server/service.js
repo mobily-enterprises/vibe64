@@ -110,6 +110,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const users = new Map();
   const runtime = createConversationRuntime({ storage, actions,
     limits: { ...toolLimits, maxToolCalls: 24, maxInputCharacters: COLLEAGUE_TOOL_PAYLOAD_LIMIT,
+      maxFinalReplyCharacters: 16_000,
       codexFinalizingGraceMs: 500, codexFinalizingGraceAfterHistoryRead: true, codexFailureDetailGraceMs: 500 },
     async authorize({ context, conversationId, operation }) {
       const state = await stateFor(context);
