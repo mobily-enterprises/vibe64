@@ -109,7 +109,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
   const users = new Map();
   const runtime = createConversationRuntime({ storage, actions,
-    limits: { ...toolLimits, maxToolCalls: 24, maxInputCharacters: COLLEAGUE_TOOL_PAYLOAD_LIMIT },
+    limits: { ...toolLimits, maxToolCalls: 24, maxInputCharacters: COLLEAGUE_TOOL_PAYLOAD_LIMIT,
+      codexFinalizingGraceMs: 500 },
     async authorize({ context, conversationId, operation }) {
       const state = await stateFor(context);
       if (conversationId !== state.record.runtimeId) return false;

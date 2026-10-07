@@ -124,6 +124,20 @@ active failed request rejects its waiter while retaining truthful native activit
 the original driver cleanup then owns interruption. Retrying errors and foreign
 or late predecessor turn IDs cannot cancel the current request. Main's supplied
 native owner keeps its existing notification callback and outcome policy.
+Colleague supplies its original 500ms missing-final grace through the common
+runtime's server-owned `limits.codexFinalizingGraceMs`. The generic Codex driver
+passes it to its existing run owner and journal; Main's supplied owner and the
+standalone default retain 10000ms. The common journal measures from its saved
+completion time, unlike the old detached watcher's interval after its first
+history read. The original malformed-envelope correction and failed-status
+detail interval remain separate parity obligations. No second timer or watcher
+is introduced by this duration setting.
+On missing-result expiry, the generic driver projects the original
+`response_delivery_failure` checkpoint as failed delivery and rejects its waiter
+with the native owner's missing-text error. The native turn remains completed;
+an absent answer is not projected as a completed common response. Supplied Main
+owners keep their existing projection. This prevents the product from attempting
+to display an absent assistant reply and reporting a JavaScript dereference error.
 Each operation and live observation rechecks the original request's current
 authority; an actor change cannot reuse an earlier person's conversation scope.
 The sessions-owned conversation provider supplies the local request guard and

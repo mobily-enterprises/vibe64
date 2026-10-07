@@ -4314,3 +4314,27 @@ test("Colleague native socket loss settles its accepted turn and a new request n
     await f.service.stop({}, f.context);
   }
 });
+
+for (const delayMs of [200, 1500]) {
+  test(`Colleague native final output delayed ${delayMs}ms uses its original short grace`, async t => {
+    const f = await fixture(t, [{ mode: "completion-before-delayed-final", delayMs, text: "The delayed exact reply." }], { native: true });
+    try {
+      await f.send("Keep the exact request.", "user-1");
+      const result = await f.service.wait(f.context);
+      assert.equal(result.status, delayMs === 200 ? "ready" : "failed", result.error);
+      if (delayMs === 1500) assert.match(result.error, /assistant result text was not received/);
+      const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+      assert.equal(saved.conversationLog.find(turn => turn.user?.messageId === "user-1").metadata.runtime.status,
+        delayMs === 200 ? "complete" : "failed");
+      assert.deepEqual(result.messages.filter(row => row.role === "user").map(row => row.text), ["Keep the exact request."]);
+      assert.deepEqual(result.messages.filter(row => row.role === "assistant").map(row => row.text),
+        delayMs === 200 ? ["The delayed exact reply."] : []);
+      assert.deepEqual(f.observations.mutations, []);
+      const trace = await f.native.trace();
+      assert.equal(trace.filter(row => row.method === "turn/start").length, 1);
+      assert.equal(trace.find(row => row.method === "turn/start").params.clientUserMessageId, "user-1");
+    } finally {
+      await f.service.stop({}, f.context);
+    }
+  });
+}

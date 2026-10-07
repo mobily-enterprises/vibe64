@@ -156,6 +156,18 @@ export async function createControlledColleagueNativeCommands(root, responses) {
           ws.close();
           return;
         }
+        if (response.mode === "completion-before-delayed-final") {
+          turn.status = "completed";
+          save();
+          emitTurn("turn/completed", { turn: { id: turn.id, status: turn.status } });
+          setTimeout(() => {
+            const answer = { id: "answer", type: "agentMessage", phase: "final_answer", text: response.text };
+            turn.items.push(answer);
+            save();
+            emitTurn("item/completed", { item: answer });
+          }, response.delayMs);
+          return;
+        }
         if (response.mode === "error-only-completed-no-turn-id") {
           turn.items.push({ id: "answer", type: "agentMessage", phase: "final_answer", text: response.text });
           turn.status = "completed";
