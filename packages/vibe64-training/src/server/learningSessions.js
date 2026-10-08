@@ -71,6 +71,37 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     return context;
   }
 
+  async function readSessions({ actor } = {}) {
+    const state = await learners.readState({ actor });
+    const summaries = [];
+    for (const attempt of state.progress.attempts) {
+      let context;
+      try { context = await resolveContext({ actor, attemptId: attempt.attemptId, access: "observe" }); }
+      catch (error) {
+        // Exercise attempts use their real project, never this reserved namespace.
+        if (error.code === "VIBE64_TRAINING_EXERCISE_REQUIRED") continue;
+        throw error;
+      }
+      await runWithProjectRequestContext(context, async () => {
+        const runtime = await project.createRuntime({ inspectSource: false });
+        let session;
+        try { session = await runtime.store.readSessionSummary(`learning-${attempt.attemptId}`); }
+        catch (error) { if (error.code === "vibe64_session_not_found") return; throw error; }
+        // The original Store validates the immutable learning binding. Project
+        // only summary facts here: no transcript, native observation or paths.
+        summaries.push({
+          sessionId: session.sessionId, sessionName: session.sessionName,
+          status: session.status, revision: session.revision,
+          createdAt: session.createdAt, updatedAt: session.updatedAt,
+          ...(session.archived === true ? { archived: true, archivedAt: session.archivedAt } : {}),
+          purpose: "learning", learningAttemptId: attempt.attemptId,
+          lessonCode: context.learningScope.pin.lesson.code
+        });
+      });
+    }
+    return summaries;
+  }
+
   async function openSession({ actor, attemptId, input = {} } = {}) {
     // The existing preparation lock also serializes lesson ending. No new
     // journal, session registry or replacement creation path is needed.
@@ -90,7 +121,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     });
   }
 
-  return Object.freeze({ resolveContext, openSession });
+  return Object.freeze({ resolveContext, openSession, readSessions });
 }
 
 export { createTrainingLearningSessions };

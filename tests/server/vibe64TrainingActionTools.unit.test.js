@@ -1008,3 +1008,36 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["POST", "/api/vibe64/training/attempts/:attemptId/continue"]
   ]);
 });
+
+test("canonical learning read shares bounded owned session summaries and actual learner identity across API and tool without changing saved progress", async t => {
+  const f = await fixture(t);
+  const reserved = await f.reserve();
+  const session = { sessionId: `learning-${reserved.attempt.attemptId}`, sessionName: "First lesson", status: "active", revision: 1,
+    createdAt: "2026-10-08T00:00:00.000Z", updatedAt: "2026-10-08T00:00:00.000Z",
+    purpose: "learning", learningAttemptId: reserved.attempt.attemptId, lessonCode: "USE-ONE" };
+  const calls = [];
+  const learningSessions = { async readSessions(input) { calls.push(input); return [structuredClone(session)]; } };
+  const c = f.register(null, { learningSessions });
+  const before = await inventory(f.systemRoot);
+  const read = await c.execute("learning.read");
+  const tool = await c.tool("learning.read");
+  assert.equal(read.learnerId, String(f.auth.user.uid));
+  assert.deepEqual(read.sessions, [session]);
+  const { learnerId: browserIdentity, ...visible } = read;
+  assert.equal(browserIdentity, String(f.auth.user.uid));
+  assert.deepEqual(tool.result, visible);
+  assert.equal(Object.hasOwn(tool.result, "learnerId"), false);
+  assert.doesNotMatch(JSON.stringify(tool.result), excluded);
+  assert.equal(Object.hasOwn(c.definitions.find(value => value.id === "vibe64.training.learning.read").extensions.assistant.output.schema.getFieldDefinitions(), "learnerId"), false);
+  assert.deepEqual(read.history, []);
+  assert.equal(read.active.attemptId, reserved.attempt.attemptId);
+  assert.equal(calls.length, 2);
+  for (const input of calls) { assert.deepEqual(Object.keys(input), ["actor"]); assert.equal(input.actor, f.auth.user); }
+  assert.deepEqual(await inventory(f.systemRoot), before);
+  const defaultRead = await f.register().execute("learning.read");
+  assert.equal(Object.hasOwn(defaultRead, "sessions"), false, "the optional summary facility does not change unconfigured callers");
+  assert.equal(Object.hasOwn(defaultRead, "learnerId"), false, "the original unconfigured projection stays unchanged");
+  learningSessions.readSessions = async () => { throw Object.assign(new Error("corrupt saved binding"), { code: "vibe64_learning_session_scope_mismatch" }); };
+  await assert.rejects(c.execute("learning.read"), { code: "vibe64_learning_session_scope_mismatch" });
+  assert.deepEqual(await inventory(f.systemRoot), before);
+});

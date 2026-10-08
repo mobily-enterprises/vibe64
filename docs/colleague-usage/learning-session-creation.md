@@ -59,3 +59,17 @@ there is no successful practice project or setup to retry yet. Ending the attemp
 requires an explicit request and retains its history. Lesson delivery, assessment
 and the visible Main Learning launcher still require their own supported controls
 and acceptance; backend availability alone is not a completed lesson.
+
+## Saved conversations
+
+Supported Learning controls can show your already-created lesson conversations
+with the existing session choices. Reading this list does not start a conversation
+or send a message. A saved lesson attempt without a conversation has no session
+entry yet. Ended attempts can retain readable conversation summaries; reading
+those summaries does not resume teaching or change progress.
+
+If the list cannot verify a saved conversation's lesson or ownership, keep the
+last confirmed list and ask the owner to inspect that exact attempt. Do not assume
+the conversation is missing or create a replacement merely because the read
+failed. The read addition alone does not establish that every installation has
+completed its visible Learning filter or teacher controls.

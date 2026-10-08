@@ -8,12 +8,20 @@ const id = { ...text, maxLength: 64, pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" };
 const requestId = { ...text, maxLength: 64, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" };
 const attemptId = { ...text, maxLength: 36, pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" };
 const opaque = { type: "object", additionalProperties: true, required: true };
+const learningSessionSummary = { type: "object", required: true, schema: createSchema({
+  sessionId: id, sessionName: { ...text, minLength: 0, maxLength: 1024 },
+  status: { ...text, maxLength: 64 }, revision,
+  createdAt: { ...text, minLength: 0, maxLength: 64 }, updatedAt: { ...text, minLength: 0, maxLength: 64 },
+  archived: { type: "boolean", required: false }, archivedAt: { ...text, required: false, minLength: 0, maxLength: 64 },
+  purpose: { ...text, enum: ["learning"] }, learningAttemptId: attemptId, lessonCode: id
+}) };
 const resultOutput = {
   mode: "replace",
   schema: createSchema({
     ok: { type: "boolean", required: true }, available: { type: "boolean", required: true },
     revision: { ...revision, required: false }, activeSummaryCurrent: { type: "boolean", required: false },
     courses: { type: "array", required: false, items: opaque },
+    sessions: { type: "array", required: false, maxLength: 16, items: learningSessionSummary },
     active: { ...opaque, required: false, nullable: true },
     attempt: { ...opaque, required: false }, history: { type: "array", required: false, items: opaque },
     replayed: { type: "boolean", required: false },
@@ -134,7 +142,7 @@ const prepared = result => {
 
 // Composition supplies the original readers and one exercise preparation owner.
 // This factory registers neither a teacher loop nor a standalone provisioner.
-function createTrainingActions({ catalogue, learners, teachingBrief, exercises = null } = {}) {
+function createTrainingActions({ catalogue, learners, teachingBrief, exercises = null, learningSessions = null } = {}) {
   if (typeof catalogue?.readCatalogue !== "function" || typeof learners?.readState !== "function" || typeof teachingBrief?.readBrief !== "function") {
     throw new TypeError("Training actions require the installed catalogue, learner state and teaching brief owners.");
   }
@@ -143,7 +151,14 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
     kind: name.endsWith("read") || name.endsWith("list") ? "query" : "command",
     input: { mode: "create", schema: createSchema(fields) }, output: null,
     idempotency: ["lesson.start", "lesson.resume", "lesson.end", "lesson.continue"].includes(name) ? "domain_native" : "none",
-    extensions: { assistant: { alwaysAvailable: true, description, output: resultOutput } },
+    extensions: { assistant: { alwaysAvailable: true, description, output: resultOutput,
+      ...(name === "learning.read" ? { transformResult(result) {
+        // Own identity binds browser state, never the model's tool result.
+        const visible = { ...result };
+        delete visible.learnerId;
+        return visible;
+      } } : {})
+    } },
     async execute(input, context) {
       const actor = authenticatedVibe64User(context);
       if (!actor) throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), { code: "vibe64_auth_required", statusCode: 401 });
@@ -178,9 +193,10 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
         }))
       })) };
     }),
-    definition("learning.read", {}, "Read this signed-in learner's current saved lesson and verified progress. No reservation, exercise or summary repair is performed. The saved resume question is a checkpoint, not proof that it is unanswered or the next task. Read teaching-brief.read for exact passed and remaining assessments before continuing. Saved preparation and visual snapshots are earlier facts, not current Preview or animation readiness. preparation.phase is a saved checkpoint: reserved/preparing does not prove Workspace setup is still running. Repeated reads cannot complete it. Read the fresh teaching brief: when lesson.exerciseRequired is false, a reserved attempt needs no project or setup and can prepare its declared quiz answers. For an already-requested exercise lesson, use lesson.resume with this same attemptId to recheck actual setup and retain proven readiness.", async (_input, actor) => {
+    definition("learning.read", {}, "Read this signed-in learner's current saved lesson and verified progress. When this installation supplies learning sessions, this also lists only existing owned learning conversations; opening or listing them does not send a message. A missing conversation is absent, but invalid saved identity is an error. No reservation, exercise or summary repair is performed. The saved resume question is a checkpoint, not proof that it is unanswered or the next task. Read teaching-brief.read for exact passed and remaining assessments before continuing. Saved preparation and visual snapshots are earlier facts, not current Preview or animation readiness. preparation.phase is a saved checkpoint: reserved/preparing does not prove Workspace setup is still running. Repeated reads cannot complete it. Read the fresh teaching brief: when lesson.exerciseRequired is false, a reserved attempt needs no project or setup and can prepare its declared quiz answers. For an already-requested exercise lesson, use lesson.resume with this same attemptId to recheck actual setup and retain proven readiness.", async (_input, actor) => {
       const result = await learners.readState({ actor, includeCompletion: true });
       return { ok: true, available: true, revision: result.revision, activeSummaryCurrent: result.activeSummaryCurrent,
+        ...(learningSessions ? { learnerId: result.progress.learnerId, sessions: await learningSessions.readSessions({ actor }) } : {}),
         active: active(result.active), completion: completion(result.completion),
         history: result.progress.attempts.filter(value => value.ended).map(active) };
     }),

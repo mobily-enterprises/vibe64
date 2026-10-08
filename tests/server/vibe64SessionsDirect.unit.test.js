@@ -4328,3 +4328,68 @@ test("working notifications cannot gain learning identity from extra payload or 
     { sessionId: "working-two", projectSlug: "trusted-working" }
   ]);
 });
+
+test("saved learning collection uses the original exact summary reader without creating, hydrating or admitting native work", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await learningSessionCreationFixture(root);
+    const { createTrainingLearningSessions } = await import("../../packages/vibe64-training/src/server/learningSessions.js");
+    const attempts = [{ attemptId: f.scope.attemptId }];
+    const learners = {
+      async readState({ actor }) { assert.equal(actor, f.actor); return { progress: { attempts } }; },
+      async readLearningSessionScope({ actor, attemptId }) {
+        assert.equal(actor, f.actor);
+        assert.equal(attemptId, f.scope.attemptId);
+        return structuredClone(f.trainingState);
+      },
+      runPreparationExclusive: () => assert.fail("Listing cannot acquire creation or preparation authority")
+    };
+    const originalFactory = f.project.createRuntime;
+    f.project.createRuntime = async options => {
+      const runtime = await originalFactory(options);
+      runtime.store.readSession = () => assert.fail("Listing cannot hydrate conversation history");
+      runtime.getNativeExecutionRoot = () => assert.fail("Listing cannot admit native execution");
+      return runtime;
+    };
+    const reader = createTrainingLearningSessions({ learners, teachingBrief: f.teachingBrief, project: f.project,
+      sessions: { createSession: () => assert.fail("Listing cannot create"), inspectSession: () => assert.fail("Listing cannot inspect native output") } });
+    assert.deepEqual(await reader.readSessions({ actor: f.actor }), []);
+    assert.equal(f.createdInputs.length, 0);
+    // Create through the original admitted owner, then restore summary-only reads.
+    f.project.createRuntime = originalFactory;
+    const created = await f.learningSessions.openSession({ actor: f.actor, attemptId: f.scope.attemptId });
+    assert.equal(created.ok, true, created.error);
+    f.project.createRuntime = async options => {
+      const runtime = await originalFactory(options);
+      runtime.store.readSession = () => assert.fail("Listing cannot hydrate conversation history");
+      runtime.getNativeExecutionRoot = () => assert.fail("Listing cannot admit native execution");
+      return runtime;
+    };
+    const before = structuredClone(f.trainingState);
+    const list = await reader.readSessions({ actor: f.actor });
+    assert.equal(list.length, 1);
+    assert.equal(list[0].sessionId, `learning-${f.scope.attemptId}`);
+    assert.equal(list[0].sessionName, created.sessionName);
+    assert.equal(list[0].revision, created.revision);
+    assert.equal(list[0].purpose, "learning");
+    assert.equal(list[0].learningAttemptId, f.scope.attemptId);
+    assert.equal(list[0].lessonCode, f.scope.pin.lesson.code);
+    assert.deepEqual(Object.keys(list[0]).sort(), ["sessionId", "sessionName", "status", "revision", "createdAt", "updatedAt",
+      "purpose", "learningAttemptId", "lessonCode"].sort());
+    assert.deepEqual(f.trainingState, before);
+    f.trainingState.active = false;
+    assert.deepEqual(await reader.readSessions({ actor: f.actor }), list, "ended attempts retain their own readable summary");
+    assert.equal(f.createdInputs.length, 1);
+    assert.equal(f.nativeMessages.length, 0);
+    f.trainingState.scope.learnerId = "another-actor";
+    await assert.rejects(reader.readSessions({ actor: f.actor }), { code: "vibe64_learning_scope_mismatch" });
+    f.trainingState.scope.learnerId = f.scope.learnerId;
+    f.trainingState.scope.pin.lesson.hash = "d".repeat(64);
+    await assert.rejects(reader.readSessions({ actor: f.actor }), { code: "vibe64_learning_session_scope_mismatch" });
+    f.trainingState.scope.pin.lesson.hash = f.scope.pin.lesson.hash;
+    learners.readLearningSessionScope = async () => { throw Object.assign(new Error("real exercise"), { code: "VIBE64_TRAINING_EXERCISE_REQUIRED" }); };
+    assert.deepEqual(await reader.readSessions({ actor: f.actor }), []);
+    learners.readLearningSessionScope = async () => { throw Object.assign(new Error("corrupt installed pin"), { code: "CONTENT_CORRUPT" }); };
+    await assert.rejects(reader.readSessions({ actor: f.actor }), { code: "CONTENT_CORRUPT" });
+    assert.equal(f.createdInputs.length, 1);
+  });
+});

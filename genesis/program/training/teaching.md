@@ -274,7 +274,9 @@ state format, model-supplied evidence or parallel progress owner.
 operations: courses list, learning read, teaching-brief read, lesson start,
 lesson resume, lesson end and retained-pin lesson continuation. They use Core's fresh actor context and expose bounded teaching
 text and saved facts without source paths, executable controllers or shell
-authority. API and assistant tools use the same projections. A host supplies the
+authority. API and assistant tools share the saved teaching projections; the
+configured learning-read browser identity is omitted from native tools as
+described below. A host supplies the
 existing exercise preparation/retirement owner; without its relevant method,
 start/resume/end/continue reports unavailable. `learning.read` includes bounded ended history;
 the brief's retained-pass projection preserves original attempt/submission IDs
@@ -667,3 +669,31 @@ question/delivery correlation. Colleague retains current actor/turn/generation,
 interactive admission, cancellation and its serialized Helper lifetime. Main must
 supply those same native guarantees before it can use these operations; moving
 these functions alone does not register Main teaching tools or grading authority.
+
+### Existing learning conversation summary projection
+
+`learningSessions.readSessions({actor})` reads only this actor's original bounded
+saved attempts. For each eligible no-exercise attempt, it resolves the same
+trusted observation context without requesting conversation hydration, creates
+the original Project Runtime and reads the exact reserved
+`learning-<attemptId>` through Store `readSessionSummary`. The original metadata
+reader validates immutable learner/attempt/pin/purpose and archive/renewal rules.
+It neither calls creation nor reads native activity, messages or arbitrary roots.
+Only original missing-session refusal means absent; original exercise-required
+refusal means this source-less namespace is inapplicable. Other failures propagate.
+
+When its composer supplies the existing learning-session reader, canonical
+the API `learning.read` result adds this actor's actual bounded learnerId for
+browser cache/binding and at most sixteen safe summaries across supported normal/preview scopes. Summaries contain
+actual identity/name/status/revision/timestamps, optional archive facts, learning
+purpose/attempt and lesson code; no pin, filesystem path or conversation content
+is returned. Unconfigured callers retain their original projection without learner identity or
+a session array. Configured native tools also retain the original learner-ID
+omission: the existing assistant `transformResult` seam removes only learnerId
+before the unchanged strict output validation. Safe summaries remain the same
+API/tool facts. This is an explicit API-only browser identity adaptation, not an
+authentication or execution-policy change. The seam is the original JSKIT service
+tool catalogue and is already used by Public Accounts/Project action presenters.
+Progress/checkpoints/pins and their schemas/writers remain unchanged. This
+transient projection is a prerequisite for one Panel's Learning/Working filter,
+not proof of the visible filter or native teaching.

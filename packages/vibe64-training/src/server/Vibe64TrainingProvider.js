@@ -51,7 +51,7 @@ const Vibe64TrainingProvider = defineFeature({
   },
   actions({ training, trainingHost }) {
     return trainingHost ? [] : createTrainingActions({ catalogue: training.catalogue, learners: training.learners,
-      teachingBrief: training.brief, exercises: training.exercises });
+      teachingBrief: training.brief, exercises: training.exercises, learningSessions: training.learningSessions });
   }
 });
 
