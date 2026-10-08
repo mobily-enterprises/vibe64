@@ -10,6 +10,13 @@ working project does not move that chat, its words or its pending request into
 that project. Changing account requires fresh access to your own saved lessons;
 an already-submitted message must not be repeated merely because the view changed.
 
+Learning tabs provide session information and their saved conversation name.
+When Rename session is available in session information, it renames the lesson
+conversation you chose, even if another attempt is selected.
+They do not show a Working-session Archive button, source branch or repository
+save-status icon. Ending a lesson uses the supported lesson controls; an ordinary
+Working tab keeps its existing Archive and repository status.
+
 A lesson without a practice project has no project workspace to Save, prepare,
 renew or open in a native terminal. Its supported Main chat still uses the same
 message and Stop controls. Project operations require an actual working or

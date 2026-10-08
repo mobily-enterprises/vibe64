@@ -370,6 +370,7 @@ describe("single panel Learning resource attachment", () => {
       f.props.purposeFilter = "learning";
       await nextTick();
       expect(purposePanelHarness.dataInput.purposeFilter()).toBe("learning");
+      expect(f.panel.toolbar.workingSessionsApiPath).toBe("/original/sessions");
       expect(purposePanelHarness.registryInput.sessions).toBe(f.data.sessions);
       expect(purposePanelHarness.registryInput.sessionSourceOperationsSuspended("learn")).toBe(true);
       expect(purposePanelHarness.registryInput.sessionSourceOperationsSuspended("work")).toBe(false);

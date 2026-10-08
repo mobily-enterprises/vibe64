@@ -126,9 +126,19 @@ async function renderToolbar({
   canCreate = true,
   createVisible = true,
   sessions = [],
+  selectedSessionId = "",
+  sessionsApiPath = "",
+  workingSessionsApiPath = "",
+  onSetup = null,
   title = "Create a new Vibe64 session"
 } = {}) {
-  const app = createSSRApp(Vibe64SessionToolbar, {
+  const component = onSetup ? { ...Vibe64SessionToolbar, setup(props, context) {
+    const state = Vibe64SessionToolbar.setup(props, context);
+    onSetup(state);
+    return state;
+  } } : Vibe64SessionToolbar;
+  const app = createSSRApp(component, {
+    selectedSessionId,
     archive: { command: { isRunning: false } },
     createVisible,
     toolbar: {
@@ -136,6 +146,8 @@ async function renderToolbar({
       createSession: vi.fn(),
       createSessionRunning: false,
       createSessionTitle: title,
+      sessionsApiPath,
+      workingSessionsApiPath,
       sessions
     }
   });
@@ -422,5 +434,73 @@ describe("session closure progress", () => {
   });
   it("removes progress when no closure is active", async () => {
     expect(await renderToolbar()).not.toContain("archive-progress");
+  });
+});
+
+
+describe("same session toolbar purpose capabilities", () => {
+  it.each([undefined, "working"])("retains original archive and repository controls for Working purpose %s", async purpose => {
+    const html = await renderToolbar({
+      createVisible: false, selectedSessionId: "work",
+      sessions: [{ sessionId: "work", ...(purpose ? { purpose } : {}) }]
+    });
+    expect(html).toContain('aria-label="Archive session"');
+    expect(html).toContain("studio-ai-sessions__repository-state");
+    expect(html).toContain("Checking whether work is saved");
+    expect(html).toContain("Session info: work");
+  });
+
+  it("shows the Learning session without unsupported archive, branch or repository claims", async () => {
+    const html = await renderToolbar({
+      createVisible: false, selectedSessionId: "lesson",
+      sessions: [{ sessionId: "lesson", purpose: "learning", branch: "not-an-exercise",
+        metadata: { branch: "not-an-exercise" }, sessionName: "Lesson zero" }]
+    });
+    expect(html).toContain("Lesson zero. Learning session.");
+    expect(html).toContain("Session info: Lesson zero");
+    expect(html).not.toContain('aria-label="Archive session"');
+    expect(html).not.toContain("studio-ai-sessions__repository-state");
+    expect(html).not.toContain("Checking whether work is saved");
+    expect(html).not.toContain("not-an-exercise");
+    expect(html).not.toContain('aria-label="New session"');
+  });
+
+  it("reads capabilities per saved row without changing the other session", async () => {
+    const sessions = [{ sessionId: "work" }, { sessionId: "lesson", purpose: "learning" }];
+    const html = await renderToolbar({ createVisible: false, sessions, selectedSessionId: "lesson" });
+    expect(html).toContain("work. Checking whether work is saved.");
+    expect(html).toContain("lesson. Learning session.");
+    expect(html).not.toContain('aria-label="Archive session"');
+    expect(html.match(/studio-ai-sessions__repository-state--desktop/g)).toHaveLength(1);
+    expect(sessions).toEqual([{ sessionId: "work" }, { sessionId: "lesson", purpose: "learning" }]);
+  });
+});
+
+
+describe("original rename dialog captured Learning scope", () => {
+  it("renames the chosen saved row rather than the selected attempt", async () => {
+    const chosen = { sessionId: "learning-b", purpose: "learning", learningAttemptId: "attempt-b" };
+    let state;
+    await renderToolbar({
+      createVisible: false, selectedSessionId: "learning-a",
+      sessionsApiPath: "/api/learning/attempt-a/vibe64/sessions",
+      workingSessionsApiPath: "/api/projects/one/vibe64/sessions",
+      sessions: [{ sessionId: "learning-a", purpose: "learning", learningAttemptId: "attempt-a" }, chosen],
+      onSetup: value => { state = value; }
+    });
+    state.renameSession(chosen);
+    expect(state.renamingSession.value).toEqual(chosen);
+    expect(state.renamingSessionsApiPath.value).toBe("/api/learning/attempt-b/vibe64/sessions");
+    state.renameSession({ sessionId: "work" });
+    expect(state.renamingSessionsApiPath.value).toBe("/api/projects/one/vibe64/sessions");
+  });
+
+  it("does not substitute the selected scope for a Learning row with no saved attempt", async () => {
+    let state;
+    await renderToolbar({ sessionsApiPath: "/api/projects/one/vibe64/sessions",
+      onSetup: value => { state = value; } });
+    state.renameSession({ sessionId: "learning-without-scope", purpose: "learning" });
+    expect(state.renamingSession.value).toBe(null);
+    expect(state.renamingSessionsApiPath.value).toBe("");
   });
 });

@@ -421,6 +421,7 @@ describe("same keyed Main host across purpose filters", () => {
       expect(f.host.guardedPage.value.error).toBe("");
       expect(f.host.autopilotSessionToolbar.canCreateSession).toBe(false);
       expect(f.host.autopilotSessionToolbar.createSessionVisible).toBe(false);
+      expect(f.host.autopilotSessionToolbar.workingSessionsApiPath).toBe("/api/projects/two/vibe64/sessions");
       expect(f.host.runtimeProjectContext.value).toEqual({});
       expect(f.host.sourceWorkspaceAvailable.value).toBe(false);
       expect(f.host.codexTerminalCanStart.value).toBe(false);

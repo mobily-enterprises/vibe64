@@ -49,6 +49,7 @@ the canonical project and from other sessions.
 - `src/composables/useVibe64SessionSelection.js`
 - `src/composables/useStoredSelection.js`
 - `src/lib/vibe64CurrentSessionPublisher.js`
+- `tests/client/vibe64SessionCreateUi.vitest.js`
 - `tests/client/vibe64SessionSelection.vitest.js`
 - `tests/client/vibe64SessionCreation.vitest.js`
 - `tests/client/useVibe64SessionData.vitest.js`
@@ -545,3 +546,14 @@ original store leases, transcript, status and archive owners remain. Browser
 admission, native provider/environment integration, learning renewal/selection,
 teaching evidence and complete learner acceptance are separate unfinished work;
 these constructors do not add a launch control or establish Main teaching.
+
+
+The original session toolbar reads each saved row's purpose. Learning tabs retain
+selection, information and supported scoped naming, but omit the unsupported
+Working Archive action and source branch/repository status claims. Historical rows
+with no purpose and explicit Working rows preserve their existing controls and
+accessible status. This presentation does not introduce a Learning archive owner
+or prove complete lesson controls, teacher admission or installed geometry.
+The original Rename dialog captures the chosen saved row's own Learning attempt
+path; Working rows use the original Working path exposed by the same Data/Host.
+The currently selected attempt cannot retarget the named conversation.

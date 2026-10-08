@@ -373,14 +373,16 @@ function useVibe64SessionRuntimeHost(props, emit) {
   });
   const autopilotSessionToolbar = proxyRefs({
     sessionsApiPath,
+    workingSessionsApiPath: props.sessionData.sessionsApiPath,
     refreshSessionData,
     projectContext: runtimeProjectContext,
     refreshRepositoryState: props.refreshRepositoryState,
-    canCreateSession: learningScope ? false : props.sessionData.canCreateSession,
+    canCreateSession: props.sessionData.canCreateSession,
     createSession: props.sessionData.createSession,
     createSessionCommand: props.sessionData.createSessionCommand,
     createSessionRunning: props.sessionData.createSessionRunning,
-    createSessionVisible: learningScope ? false : props.sessionData.createSessionVisible,
+    createSessionVisible: props.sessionData.createSessionVisible,
+    ...(learningScope ? { canCreateSession: false, createSessionVisible: false } : {}),
     createSessionTitle: props.sessionData.createSessionTitle,
     selectSession: props.sessionData.selectSessionId,
     sessions: computed(() => runtimeHostToolbarSessions({
