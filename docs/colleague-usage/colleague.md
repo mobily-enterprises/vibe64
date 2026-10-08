@@ -199,3 +199,18 @@ installation's state upgrade before it can open. The workspace operator runs the
 candidate release's upgrade command with services stopped; Colleague cannot do
 this through chat. Written history is preserved, and interrupted operations are
 not repeated.
+
+## Read older messages while replies arrive
+
+Scroll up and use **Load older messages** when it is shown. Incoming replies
+retain the history you loaded and your place in it, including on phone. Your
+unsent draft and selection remain intact. Updated or removed saved messages
+reflect the current conversation; live output does not replace its original
+question or progress.
+
+A reconnection starts with the latest page again. Use **Load older messages**
+to return farther back. A failed history refresh retains the visible messages;
+use the existing **Reload chat** recovery if shown. Access denial clears cached
+private messages instead: sign in with the authorized account and reopen chat.
+Colleague can explain these steps; scrolling and loading this browser's history
+require your interaction. These operations do not resend any request.
