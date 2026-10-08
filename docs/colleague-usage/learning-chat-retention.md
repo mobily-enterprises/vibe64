@@ -17,7 +17,9 @@ exercise project and its normal permissions.
 
 If lesson updates cannot load, inspect the same saved attempt and connection
 before retrying. A Working project list error is separate from that lesson's chat
-connection. Colleague can explain the supported controls and offer authorized
+connection. A failed Working list refresh retains its background chats; it does
+not keep a lesson chat visible after your own lesson list no longer grants access.
+Colleague can explain the supported controls and offer authorized
 operations; an offer is not permission to start or repeat a lesson.
 
 These retained-host prerequisites apply on desktop and phone. They do not yet

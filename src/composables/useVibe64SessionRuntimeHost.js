@@ -394,7 +394,8 @@ function useVibe64SessionRuntimeHost(props, emit) {
   });
   const pageError = computed(() => String(
     mounted.detailState.value?.error ||
-    (learningScope ? readRefOrGetterValue(props.sessionData.learningLoadError) : props.sessionData.sessionList?.loadError) ||
+    (learningScope ? readRefOrGetterValue(props.sessionData.learningLoadError)
+      : readRefOrGetterValue(props.sessionData.workingLoadError ?? props.sessionData.sessionList?.loadError)) ||
     ""
   ));
   const guardedPage = computed(() => ({

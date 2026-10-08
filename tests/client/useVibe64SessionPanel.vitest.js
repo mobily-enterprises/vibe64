@@ -254,10 +254,10 @@ import { computed, effectScope, nextTick, reactive, ref } from "vue";
 import { vi } from "vitest";
 import { useVibe64SessionPanel, vibe64SessionPanelProps } from "../../src/composables/useVibe64SessionPanel.js";
 
-const purposePanelHarness = vi.hoisted(() => ({ data: null, registryInput: null }));
+const purposePanelHarness = vi.hoisted(() => ({ data: null, registryInput: null, dataInput: null }));
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }));
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ref("project") }));
-vi.mock("@/composables/useVibe64SessionData.js", () => ({ useVibe64SessionData: () => purposePanelHarness.data }));
+vi.mock("@/composables/useVibe64SessionData.js", () => ({ useVibe64SessionData: input => { purposePanelHarness.dataInput = input; return purposePanelHarness.data; } }));
 vi.mock("@/composables/useVibe64SessionRepositoryStatusRegistry.js", () => ({
   useVibe64SessionRepositoryStatusRegistry: input => {
     purposePanelHarness.registryInput = input;
@@ -353,6 +353,50 @@ describe("same session panel purpose filtering", () => {
       expect(f.panel.runtimeHostSessionIds.value).toEqual([]);
       expect(f.data.selectedSessionId.value).toBe("learn");
       expect(f.data.selectSessionId).not.toHaveBeenCalled();
+    } finally { f.scope.stop(); }
+  });
+});
+
+
+describe("single panel Learning resource attachment", () => {
+  it("forwards live mode/resource inputs to the one Data owner and skips source inspection for Learning", async () => {
+    const f = mountPurposePanel("working");
+    try {
+      const resource = { data: ref({ learnerId: "own-learner", sessions: [] }) };
+      f.props.learningResource = resource;
+      expect(vibe64SessionPanelProps.learningResource.default).toBe(null);
+      expect(purposePanelHarness.dataInput.learningResource()).toBe(f.props.learningResource);
+      expect(purposePanelHarness.dataInput.purposeFilter()).toBe("working");
+      f.props.purposeFilter = "learning";
+      await nextTick();
+      expect(purposePanelHarness.dataInput.purposeFilter()).toBe("learning");
+      expect(purposePanelHarness.registryInput.sessions).toBe(f.data.sessions);
+      expect(purposePanelHarness.registryInput.sessionSourceOperationsSuspended("learn")).toBe(true);
+      expect(purposePanelHarness.registryInput.sessionSourceOperationsSuspended("work")).toBe(false);
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["work"]);
+    } finally { f.scope.stop(); }
+  });
+
+  it("retires removed Learning hosts despite a Working refresh error while keeping hidden Working work", async () => {
+    const f = mountPurposePanel();
+    try {
+      f.props.learningResource = { data: ref({ learnerId: "own-learner", sessions: [] }) };
+      f.data.selectedSessionId.value = "learn";
+      await nextTick();
+      f.data.selectedSessionId.value = "work";
+      await nextTick();
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["work", "learn"]);
+      f.data.sessionList.loadError = "Working updates unavailable";
+      f.data.sessions.value = [];
+      await nextTick();
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["work"]);
+      f.data.sessionList.loadError = "";
+      // The real Data owner clears selection after a confirmed empty read.
+      f.data.selectedSessionId.value = "";
+      await nextTick();
+      f.data.sessions.value = [];
+      await nextTick();
+      expect(f.panel.runtimeHostSessionIds.value).toEqual([]);
     } finally { f.scope.stop(); }
   });
 });

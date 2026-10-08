@@ -359,7 +359,7 @@ const mountedHostRenderer = createRenderer({
   setElementText() {}, setText() {}, insert() {}, remove() {}, patchProp() {},
   parentNode() {}, nextSibling() {}
 });
-function mountedHostFixture({ learning = false, learnerId = "learner-one" } = {}) {
+function mountedHostFixture({ learning = false, learnerId = "learner-one", workingLoadError } = {}) {
   const attemptId = "314cdfd8-182f-4e15-8f79-71381e4a89b4";
   const session = { sessionId: learning ? `learning-${attemptId}` : "working-one",
     ...(learning ? { purpose: "learning", learningAttemptId: attemptId } : {}),
@@ -378,7 +378,9 @@ function mountedHostFixture({ learning = false, learnerId = "learner-one" } = {}
   // Props in the actual component are shallow: preserve the same ref contract.
   const hostProps = { get active() { return props.active; }, get sessionId() { return props.sessionId; },
     get projectContext() { return props.projectContext; }, sessionData: {
-      ...props.sessionData, sessions: computed(() => state.sessions),
+      ...props.sessionData,
+      ...(workingLoadError === undefined ? {} : { workingLoadError: ref(workingLoadError) }),
+      sessions: computed(() => state.sessions),
       sessionsApiPath: computed(() => state.apiPath), learningLearnerId: computed(() => state.learnerId)
     } };
   mountedHostMocks.conversation.mockClear(); mountedHostMocks.renewal.mockClear();
@@ -395,7 +397,7 @@ function mountedHostFixture({ learning = false, learnerId = "learner-one" } = {}
     host = useVibe64SessionRuntimeHost(hostProps, vi.fn()); return () => h("div");
   } });
   app.mount({});
-  return { app, host, props, state, attemptId, send };
+  return { app, host, props, hostProps, state, attemptId, send };
 }
 
 describe("same keyed Main host across purpose filters", () => {
@@ -461,6 +463,19 @@ describe("same keyed Main host across purpose filters", () => {
       expect(f.host.codexTerminalCanStart.value).toBe(true);
       await f.host.refreshWorkState();
       expect(mountedHostMocks.request.mock.calls.some(([path]) => path === "/api/projects/two/vibe64/sessions/working-one/work")).toBe(true);
+    } finally { f.app.unmount(); }
+  });
+});
+
+
+describe("captured host list errors", () => {
+  it("keeps a Working chat tied to its Working reader while Learning is visible", () => {
+    const f = mountedHostFixture({ workingLoadError: "" });
+    try {
+      f.hostProps.sessionData.sessionList.loadError = "Learning unavailable";
+      expect(f.host.guardedPage.value.error).toBe("");
+      f.hostProps.sessionData.workingLoadError.value = "Working unavailable";
+      expect(f.host.guardedPage.value.error).toBe("Working unavailable");
     } finally { f.app.unmount(); }
   });
 });

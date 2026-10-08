@@ -3418,3 +3418,12 @@ Main chat Send/Stop and refresh still use their original owner. Ordinary Working
 targets retain their original reactive project/path and source facilities. This
 mounted-host increment does not establish the Main teacher catalogue, completed
 mode UI, native teaching, physical audio or browser acceptance.
+
+The same Panel forwards the live Learning resource and purpose filter into its
+one original Data owner. Toolbar shortcuts use the selected saved session's own
+scoped path. Its original repository registry keeps the full collection while
+excluding source-less Learning from source inspection. Working hosts read their
+Working list errors independently of the visible Learning list; failed Working
+refresh retains background Working hosts without preserving removed Learning
+hosts. Default unconfigured Working retention remains unchanged. These attachment
+checks do not prove the visible launcher, Preview or actual teacher admission.

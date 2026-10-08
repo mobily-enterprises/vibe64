@@ -38,6 +38,10 @@ const vibe64SessionPanelEmits = [
   "project-attention"
 ];
 const vibe64SessionPanelProps = {
+  learningResource: {
+    default: null,
+    type: Object
+  },
   purposeFilter: {
     default: "",
     type: String,
@@ -83,6 +87,8 @@ function useVibe64SessionPanel(props, emit) {
   const mountedRuntimeSessionIds = ref([]);
   const runtimeStateBySessionId = reactive({});
   const sessionData = useVibe64SessionData({
+    learningResource: () => props.learningResource,
+    purposeFilter: () => props.purposeFilter,
     onTitleChange(title) {
       emit("title-change", title);
     }
@@ -137,6 +143,7 @@ function useVibe64SessionPanel(props, emit) {
     onState: applyRuntimeWorkState,
     selectedSessionId: () => canonicalSelection.selectedSessionId,
     sessionSourceOperationsSuspended: (sessionId) => (
+      (sessionData.sessions.value || []).some(session => session.sessionId === sessionId && session.purpose === "learning") ||
       runtimeStateBySessionId[sessionId]?.sourceOperationsSuspended === true
     ),
     sessions: sessionData.sessions,
@@ -152,7 +159,7 @@ function useVibe64SessionPanel(props, emit) {
     session => vibe64SessionMatchesPurpose(session, props.purposeFilter)
   ));
   const toolbar = proxyRefs({
-    sessionsApiPath: sessionData.sessionsApiPath,
+    sessionsApiPath: sessionData.selectedSessionsApiPath || sessionData.sessionsApiPath,
     refreshSessionData: sessionData.refreshSessionData,
     refreshRepositoryState: repositoryStatusRegistry.refresh,
     canCreateSession: sessionData.canCreateSession,
@@ -177,14 +184,19 @@ function useVibe64SessionPanel(props, emit) {
   ).trim());
   const selectedRuntimeState = computed(() => runtimeStateBySessionId[selection.selectedSessionId] || null);
   const sessionLoadError = computed(() => Boolean(sessionData.sessionList.loadError));
+  const workingSessionLoadError = computed(() => Boolean(
+    unref(sessionData.workingLoadError ?? sessionData.sessionList.loadError)
+  ));
   const runtimeHostSessionIds = computed(() => {
     const visibleSessionIds = new Set(canonicalToolbarSessions.value.filter((session) => !session.archiving).map((session) => session.sessionId));
     if (canonicalSelection.selectedSessionId) {
       visibleSessionIds.add(canonicalSelection.selectedSessionId);
     }
-    if (sessionLoadError.value) {
+    if (workingSessionLoadError.value) {
       for (const mountedSessionId of mountedRuntimeSessionIds.value) {
-        visibleSessionIds.add(mountedSessionId);
+        if (!props.learningResource || runtimeStateBySessionId[mountedSessionId]?.purpose !== "learning") {
+          visibleSessionIds.add(mountedSessionId);
+        }
       }
     }
     const archivingIds = new Set(canonicalToolbarSessions.value.filter((session) => session.archiving).map((session) => session.sessionId));
@@ -255,13 +267,20 @@ function useVibe64SessionPanel(props, emit) {
   }));
 
   watch(sessionData.sessions, (sessions = []) => {
-    if (sessionLoadError.value) {
+    if (workingSessionLoadError.value && !props.learningResource) {
       if (canonicalSelection.selectedSessionId) {
         ensureRuntimeHost(canonicalSelection.selectedSessionId);
       }
       return;
     }
     const visibleSessionIds = new Set(sessions.map((session) => session.sessionId));
+    if (workingSessionLoadError.value) {
+      for (const mountedSessionId of mountedRuntimeSessionIds.value) {
+        if (runtimeStateBySessionId[mountedSessionId]?.purpose !== "learning") {
+          visibleSessionIds.add(mountedSessionId);
+        }
+      }
+    }
     mountedRuntimeSessionIds.value = mountedRuntimeSessionIds.value.filter((sessionId) => visibleSessionIds.has(sessionId));
     for (const sessionId of Object.keys(runtimeStateBySessionId)) {
       if (!visibleSessionIds.has(sessionId)) {
@@ -347,6 +366,7 @@ function useVibe64SessionPanel(props, emit) {
     }
     if (!runtimeStateBySessionId[key]) {
       runtimeStateBySessionId[key] = {
+        purpose: (sessionData.sessions.value || []).find(session => session.sessionId === key)?.purpose || "working",
         toolbarControls: null,
         agentThinking: false,
         busy: false,
