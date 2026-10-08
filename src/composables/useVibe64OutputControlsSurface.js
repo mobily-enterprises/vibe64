@@ -1,4 +1,4 @@
-import { computed, inject, nextTick, onBeforeMount, onBeforeUnmount, ref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeMount, onBeforeUnmount, ref, unref, watch } from "vue";
 import {
   launchPreviewLocationStorageKey,
   launchPreviewToolbarStorageKey,
@@ -910,6 +910,14 @@ function useVibe64OutputControlsSurface(props) {
       if (sessionId !== previous[0]) previewChangesHidden.value = false;
       if ((busy || suspended) && url) previewChangesHidden.value = true;
     }, { immediate: true, flush: "sync" });
+
+  watch([() => props.busy, () => props.sourceOperationsSuspended,
+    () => props.session?.agentSession?.turn, () => unref(props.previewGoalState)], async ([busy, suspended, turn, goal]) => {
+    if (previewChangesHidden.value && !busy && !suspended && turn?.state === "completed" && !turn.error &&
+        (!goal || (goal.enabled && !goal.pending && !goal.error && (!goal.goal || goal.goal.status === "complete")))) {
+      await revealPreviewChanges();
+    }
+  });
 
   async function revealPreviewChanges() {
     if (props.busy || props.sourceOperationsSuspended) return;

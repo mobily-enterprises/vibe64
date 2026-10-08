@@ -878,6 +878,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  previewGoalState: {
+    default: null,
+    type: Object
+  },
   session: {
     type: Object,
     default: null

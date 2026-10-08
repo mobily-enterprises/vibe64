@@ -78,8 +78,11 @@ Close, Stop and collapsible task details retain their own existing behavior.
 ## Public contract
 
 Embedded Preview hides its iframe during active editing, and retains that cover
-after interruption, failure, or a gap between goal turns. Only **Preview changes**
-reveals it, using the existing refresh and stale-output restart operations.
+after interruption, failure, or a gap between goal turns. A confirmed successful
+turn automatically reveals it when no goal remains, or when the existing goal
+owner reports complete. Pending or unavailable goal state retains the cover.
+**Preview changes** also reveals it manually through the existing refresh and
+stale-output restart operations.
 The cover is local to the mounted workspace and resets on session change; it
 neither snapshots source nor rolls back data or stops managed browser checks.
 

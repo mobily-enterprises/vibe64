@@ -1,10 +1,12 @@
 # Previewing a web application
 
 While the coding agent works, **Updating app…** covers the embedded app. After
-the agent stops, **App changes are hidden** remains until you select **Preview
-changes**. Interrupting the agent, a failed turn, or a pause between goal turns
-does not reveal changes. The button is disabled during active edits. Selecting
-it refreshes Preview, restarting a stale backend through the existing output
+the agent stops, Preview refreshes automatically after a successfully completed
+turn, or after the whole goal completes. Interrupting the agent, a failed turn,
+an unavailable goal status, or a pause between goal turns keeps **App changes are
+hidden** visible. You can select **Preview changes** to reveal changes manually.
+The button is disabled during active edits. Revealing changes refreshes Preview,
+restarting a stale backend through the existing output
 command when required. This is a display cover, not a rollback or a saved app
 version. It applies to the current workspace on desktop and mobile; reloading
 the editor or switching sessions starts a new Preview view. Managed browser

@@ -661,6 +661,33 @@ it("keeps the cover when a stale backend cannot restart", async () => {
   expect(f.outputs.restartTerminal).toHaveBeenCalledTimes(1);
   expect(f.state.previewChangesHidden.value).toBe(true);
 });
+
+it("automatically reveals a successful turn, but waits for the whole goal", async () => {
+  const f = mountOrientationSurface();
+  f.props.previewGoalState = { enabled: true, pending: false, goal: { status: "active" } };
+  f.props.busy = true;
+  f.props.session.agentSession = { turn: { state: "completed" } };
+  f.props.busy = false;
+  await nextTick();
+  expect(f.state.previewChangesHidden.value).toBe(true);
+  for (const status of ["paused", "blocked", "usageLimited"]) {
+    f.props.previewGoalState = { enabled: true, pending: false, goal: { status } };
+    await nextTick();
+    expect(f.state.previewChangesHidden.value).toBe(true);
+  }
+  f.props.previewGoalState = { enabled: true, pending: false, goal: { status: "complete" } };
+  await nextTick(); await nextTick(); await nextTick();
+  expect(f.state.previewChangesHidden.value).toBe(false);
+  f.props.busy = true;
+  f.props.session.agentSession = { turn: { state: "interrupted" } };
+  f.props.previewGoalState = null;
+  f.props.busy = false;
+  await nextTick();
+  expect(f.state.previewChangesHidden.value).toBe(true);
+  f.props.session.agentSession = { turn: { state: "completed" } };
+  await nextTick(); await nextTick(); await nextTick();
+  expect(f.state.previewChangesHidden.value).toBe(false);
+});
 afterEach(() => {
   for (const fixture of mountedSurfaces.splice(0)) fixture.dispose();
   vi.unstubAllGlobals();
