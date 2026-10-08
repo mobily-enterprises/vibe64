@@ -6,7 +6,11 @@ you want to inspect. Temporary chats do not have Auto plans.
 ## Create or update a plan
 
 Ask **Senior**, directly or through **Auto**, to make a plan. This means a saved
-short Vibe64 scope checklist available through the plan icon. Plan and Progress are two tabs for one artifact: Plan defines the agreed deliverables and acceptance criteria; Progress holds actual work, evidence and blockers. You can explicitly request a
+Vibe64 plan available through the plan icon: a short user-friendly summary and
+scope checklist, followed by detailed technical implementation instructions.
+Plan and Progress are two tabs for one artifact: Plan defines the agreed
+deliverables, acceptance criteria and implementation approach; Progress holds
+actual work, evidence and blockers. You can explicitly request a
 chat-only draft or another format instead.
 
 Senior checks whether there is a current plan first. If there is, say whether to
@@ -16,7 +20,9 @@ and replace the plan already authorizes that choice; the archive stays in Histor
 Senior confirms creation or updates after the plan helper has saved the result.
 
 Both direct Senior and Junior receive the plan format and command instructions.
-Both roles must read Plan and Progress before implementing or reviewing. Junior can update Progress; Senior owns agreed Plan scope changes. Creating,
+Both roles must read the full Plan, including its technical details, and Progress
+before implementing or reviewing. Collapsing details in the viewer does not hide
+them from the agent. Junior can update Progress; Senior owns agreed Plan scope changes. Creating,
 reopening, archiving and completing a plan still require Senior. An unsuccessful
 save must be reported, and a chat outline alone is not a saved plan.
 
@@ -27,8 +33,16 @@ save must be reported, and a chat outline alone is not a saved plan.
    is **View active plan** or **View plan and history**.
 2. Select **Current plan**. The selected tab has a coloured underline.
 3. Read the **Active** or **Completed** status and number of requirements. Select
-   **Plan** for the stable scope checklist or **Progress** for work, evidence and
+   **Plan** for the stable summary, checklist and implementation instructions or **Progress** for work, evidence and
    blockers. Both tabs belong to the same current or archived artifact.
+4. Select **Technical details** below the summary and checklist to expand the
+   implementation instructions. Select it again to collapse them. These details
+   start collapsed when opening a different document or plan; a Progress update
+   does not collapse the same Plan you are reading.
+
+New plans use a **Technical details** heading to identify that section. Older
+plans without that heading remain fully visible; opening a plan never rewrites
+or guesses how to divide its content.
 
 The same controls appear on desktop and mobile. The dialog fits the viewport and
 keeps its dimensions when you change views. Select **Close plan** to return to chat.
@@ -165,7 +179,9 @@ pending work or send your explicit continuation through its existing actions.
 
 When ready, Auto starts one separate Senior review, even when Senior implemented
 it or both roles use the same model. The **Deslop** switch adds behavior-preserving
-cleanup to that review. A failed Router decision leaves **Retry review** for an
+cleanup after the implementation review, within the same Senior turn. Senior
+checks the cleanup before explicitly completing the plan; unfinished work or
+verification leaves it active. A failed Router decision leaves **Retry review** for an
 explicit review request, or use **Stop** to cancel it. The same controls and
 notices appear on desktop and mobile. Colleague's conversation watches treat
 unfinished waiting outcomes as needing attention. Colleague can explain the outcome and offer

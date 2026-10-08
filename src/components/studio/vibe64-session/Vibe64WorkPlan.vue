@@ -141,19 +141,27 @@ async function changePlan(operation) {
     if (target === endpoint.value && actor === actorKey.value) pendingOperation.value = "";
   }
 }
+const technicalPanel = ref(null);
 const sections = computed(() => {
   const result = [];
   let prose = [];
+  let technical = false;
   const flush = () => {
     if (prose.length) {
-      result.push({ blocks: parseLongTextReviewBlocks(prose.join("\n")) });
+      result.push({ technical, blocks: parseLongTextReviewBlocks(prose.join("\n")) });
       prose = [];
     }
   };
-  for (const line of parseWorkPlanLines((document.value === "progress" ? plan.value?.progressText : plan.value?.text) || "")) {
+  for (const line of parseWorkPlanLines((document.value === "progress" ? plan.value?.progressText : plan.value?.text) || "",
+    { markTechnicalDetails: document.value === "plan" })) {
+    if (line.technicalDetails) {
+      flush();
+      technical = true;
+      continue;
+    }
     if (line.checked !== undefined) {
       flush();
-      result.push({ checked: line.checked, blocks: parseLongTextReviewBlocks(line.text) });
+      result.push({ technical, checked: line.checked, blocks: parseLongTextReviewBlocks(line.text) });
     } else if (!/^Status: (active|completed)\s*$/u.test(line.text)) {
       prose.push(line.text);
     }
@@ -161,8 +169,12 @@ const sections = computed(() => {
   flush();
   return result;
 });
+const overviewSections = computed(() => sections.value.filter(section => !section.technical));
+const technicalSections = computed(() => sections.value.filter(section => section.technical));
+watch([document, archiveId, () => plan.value?.revision], () => { technicalPanel.value = null; });
 watch([sessionId, sessionsPath, actorKey], () => {
   open.value = false;
+  technicalPanel.value = null;
   archiveId.value = "";
   notice.value = "";
   view.value = "current";
@@ -264,10 +276,20 @@ watch(() => props.active, (active) => {
             <v-tab value="progress">Progress</v-tab>
           </v-tabs>
           <p v-if="document === 'progress' && !plan.progressAvailable" class="text-body-medium mb-4">This historical plan has no separate Progress document. Its original evidence remains in Plan.</p>
-          <div v-for="(section, index) in sections" :key="index" :class="{ 'work-plan-item': section.checked !== undefined }">
+          <div v-for="(section, index) in overviewSections" :key="index" :class="{ 'work-plan-item': section.checked !== undefined }">
             <input v-if="section.checked !== undefined" type="checkbox" :checked="section.checked" disabled aria-label="Recorded checklist mark">
             <LongTextPreviewBlocks :blocks="section.blocks" />
           </div>
+          <v-expansion-panels v-if="technicalSections.length" v-model="technicalPanel" class="mt-4" variant="accordion">
+            <v-expansion-panel value="technical" title="Technical details">
+              <v-expansion-panel-text>
+                <div v-for="(section, index) in technicalSections" :key="index" :class="{ 'work-plan-item': section.checked !== undefined }">
+                  <input v-if="section.checked !== undefined" type="checkbox" :checked="section.checked" disabled aria-label="Recorded checklist mark">
+                  <LongTextPreviewBlocks :blocks="section.blocks" />
+                </div>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+          </v-expansion-panels>
         </template>
         <div v-else-if="!resource.loadError.value" class="work-plan-empty text-center pa-4">
           <v-icon :icon="mdiArchiveOutline" size="48" class="text-medium-emphasis mb-4" />

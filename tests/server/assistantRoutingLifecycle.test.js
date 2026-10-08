@@ -526,6 +526,10 @@ test("Auto uses a bounded helper then ordinary delivery and one Senior-model rev
   assert.match(f.sends[1].input.message, /Then perform Deslop on the coding changes and your review fixes/);
   assert.match(f.sends[1].input.message, /Perform both parts yourself in this turn/);
   assert.match(f.sends[1].input.message, /Run relevant checks after cleanup/);
+  assert.match(f.sends[1].input.message, /Only after review, any enabled Deslop and their checks are finished/);
+  assert.ok(f.sends[1].input.message.indexOf("Explicitly complete an involved plan") >
+    f.sends[1].input.message.indexOf("Run relevant checks after cleanup"), "Plan completion follows review, cleanup and checks");
+  assert.match(f.sends[1].input.message, /including the complete technical implementation plan/);
   assert.match(f.sends[1].input.displayMessage, /Automatic review and Deslop/);
   assert.equal(f.sends[1].input.genesisTask, undefined);
   await f.service.afterTurn("session-1", completion(), f.context);

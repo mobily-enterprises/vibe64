@@ -545,12 +545,12 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
             .map((name) => [name, context.vibe64User[name]])) : null,
           reviewMessage: [
             preferences.review ? "Automatic review and Deslop:" : "Automatic review:",
-            "Check the preceding implementation against my request, accepted steering and any plan explicitly involved in that work. Inspect the implementation and evidence, fix in-scope issues, and run relevant checks. Explicitly complete an involved plan when every requirement is verified; otherwise leave Plan active and record specific gaps and verification evidence in its paired Progress document. Read every page of BOTH before reviewing; checklist marks do not establish completion. Leave unrelated plans unchanged. Do not ask for permission merely to review or complete verified work.",
+            "Check the preceding implementation against my request, accepted steering and any plan explicitly involved in that work. Inspect the implementation and evidence, fix in-scope issues, and run relevant checks. Read every page of BOTH Plan and Progress before reviewing, including the complete technical implementation plan; checklist marks do not establish completion. Leave unrelated plans unchanged. Do not ask for permission merely to review or complete verified work.",
             ...(preferences.review ? [
               "Then perform Deslop on the coding changes and your review fixes, following the project's Deslop guidance. Keep that cleanup behavior-preserving and preserve unrelated work and staging.",
               "Perform both parts yourself in this turn; do not delegate cleanup or start a separate Deslop turn. Run relevant checks after cleanup."
             ] : []),
-            "Report findings, fixes, actual checks and anything unverified."
+            "Only after review, any enabled Deslop and their checks are finished: Explicitly complete an involved plan when every requirement is verified; otherwise leave Plan active and record specific gaps and verification evidence in its paired Progress document. Report findings, fixes, actual checks and anything unverified."
           ].join(" ")
         };
         state.decision = await resolve(context, state);

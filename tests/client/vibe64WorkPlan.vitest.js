@@ -9,6 +9,7 @@ vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: ()
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ({ value: "fixture" }) }));
 import WorkPlan from "../../src/components/studio/vibe64-session/Vibe64WorkPlan.vue";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PLAN_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { parseWorkPlanLines } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
 
 let app;
 afterEach(() => { app?.unmount(); mocks.request.mockReset(); mocks.report.mockReset(); });
@@ -239,4 +240,58 @@ it("Plan and Progress select the same artifact and accumulate companion pages at
   expect(result.progressText).toBe("Actual complete companion");
   expect(mocks.request.mock.calls[1][0]).toContain("expectedProgressRevision=" + "e".repeat(64));
   expect(mocks.request.mock.calls[1][0]).toContain("expectedRevision=" + "b".repeat(64));
+});
+
+it("keeps the summary and checklist visible while retaining the complete technical plan in a collapsed section", async () => {
+  const text = "# Reporting\nShort user summary\n- [ ] Prove privacy\n\n## Technical details\n### Ownership\nUse the existing authorization owner.\n- [ ] Reject foreign access\n```js\nconst retained = true;\n```";
+  const f = mount({ ...active, revision: "b".repeat(64), text });
+  expect(f.state().technicalPanel).toBe(null);
+  expect(f.state().overviewSections.map(section => section.checked)).toEqual([undefined, false, undefined]);
+  expect(f.state().technicalSections.map(section => section.checked)).toEqual([undefined, false, undefined]);
+  expect(JSON.stringify(f.state().overviewSections)).toContain("Short user summary");
+  expect(JSON.stringify(f.state().overviewSections)).not.toContain("authorization owner");
+  expect(JSON.stringify(f.state().technicalSections)).toContain("authorization owner");
+  expect(JSON.stringify(f.state().technicalSections)).toContain("const retained = true;");
+  expect(mocks.resource.data.value.text).toBe(text, "Collapse is presentation only; canonical Plan is unchanged");
+  f.state().technicalPanel = "technical";
+  mocks.resource.data.value = { ...mocks.resource.data.value, progressText: "New evidence", progressRevision: "e".repeat(64) };
+  await nextTick();
+  expect(f.state().technicalPanel).toBe("technical", "Progress updates do not collapse the same Plan");
+  mocks.resource.data.value = { ...mocks.resource.data.value, revision: "c".repeat(64) };
+  await nextTick();
+  expect(f.state().technicalPanel).toBe(null);
+});
+
+it("never mistakes a fenced heading for the technical boundary or hides unmarked legacy content", () => {
+  const text = "# Legacy\n```md\n## Technical details\n- [ ] Code example only\n```\n- [ ] Actual requirement\nLegacy detailed instructions remain visible.";
+  const f = mount({ ...active, text });
+  expect(f.state().technicalSections).toEqual([]);
+  expect(f.state().overviewSections).toEqual(f.state().sections);
+  expect(JSON.stringify(f.state().overviewSections)).toContain("Legacy detailed instructions");
+  expect(f.state().sections.filter(section => section.checked !== undefined)).toHaveLength(1);
+  expect(parseWorkPlanLines(text, { markTechnicalDetails: true })).toEqual(parseWorkPlanLines(text));
+  const heading = "## Technical details\n- [ ] Step";
+  expect(parseWorkPlanLines(heading)).toEqual([{ text: "## Technical details" }, { text: "Step", checked: false }]);
+  expect(parseWorkPlanLines(heading, { markTechnicalDetails: true })[0].technicalDetails).toBe(true);
+});
+
+it("keeps Progress fully visible and resets expansion across documents, archives and sessions", async () => {
+  const text = "# Plan\n- [ ] Deliver\n## Technical details\nExact implementation instructions";
+  const f = mount({ ...active, revision: "b".repeat(64), text, progressText: text, progressAvailable: true });
+  f.state().technicalPanel = "technical";
+  f.state().document = "progress";
+  await nextTick();
+  expect(f.state().technicalPanel).toBe(null);
+  expect(f.state().technicalSections).toEqual([]);
+  expect(JSON.stringify(f.state().overviewSections)).toContain("Exact implementation instructions");
+  f.state().document = "plan";
+  await nextTick();
+  f.state().technicalPanel = "technical";
+  f.state().archiveId = "a".repeat(64);
+  await nextTick();
+  expect(f.state().technicalPanel).toBe(null);
+  f.state().technicalPanel = "technical";
+  f.props.value.session = { sessionId: "two" };
+  await nextTick();
+  expect(f.state().technicalPanel).toBe(null);
 });

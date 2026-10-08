@@ -1,5 +1,5 @@
 // Keep checklist recognition identical in stored progress and the plan viewer.
-function parseWorkPlanLines(text) {
+function parseWorkPlanLines(text, { markTechnicalDetails = false } = {}) {
   let fence = "";
   return text.split("\n").map((line) => {
     const marker = /^\s*(`{3,}|~{3,})/u.exec(line)?.[1];
@@ -9,7 +9,10 @@ function parseWorkPlanLines(text) {
       return { text: line };
     }
     const item = !fence && /^\s*(?:[-*+]|\d+[.)]) \[([ xX])\] (.+)$/u.exec(line);
-    return item ? { text: item[2], checked: item[1] !== " " } : { text: line };
+    return item ? { text: item[2], checked: item[1] !== " " } : {
+      text: line,
+      ...(markTechnicalDetails && !fence && /^## Technical details\s*$/iu.test(line) ? { technicalDetails: true } : {})
+    };
   });
 }
 

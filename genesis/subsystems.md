@@ -464,7 +464,9 @@ Vibe64 owns workflow chat modes, actor-aware destination resolution, isolated re
 classification and delivery, per-turn attribution, cancellation, Router-gated
 bounded implementation continuation, Senior review and optional Deslop in Auto that respect current user intent, current checklist plans, explicit Senior completion and
 archived/reopened plan snapshots outside source. The original private plan owner
-now binds stable scope and separate Progress as one revision-fenced artifact;
+now binds stable scope and detailed implementation instructions with separate
+Progress as one revision-fenced artifact; the existing viewer shows the summary
+and checklist first with expandable Technical details, without shortening agent reads;
 its original read/mutation queue protects paired reads and document retirement.
 Senior owns scope/lifecycle; Junior writes Progress. Both native roles read the
 full pair through the existing paged helper, and the existing viewer shows both

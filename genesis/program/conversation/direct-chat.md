@@ -1268,7 +1268,12 @@ remain unchanged. Ordinary reads and startup perform no conversion.
 
 Direct Senior and Junior receive the same saved-plan format and helper guidance
 as plan-related Auto turns. A request to make a plan means a persisted Vibe64
-checklist unless the user explicitly requests a chat-only draft or another format.
+plan unless the user explicitly requests a chat-only draft or another format.
+Its stable Markdown starts with a short user-friendly summary and scope checklist,
+then a `## Technical details` section with actual owners/files, ordered steps,
+constraints, edge cases and verification. This section contains implementation
+instructions, not accumulating progress. Junior and review must read and follow
+the complete technical section through the same full paired helper read.
 Senior reads the current plan and clarifies update versus archive-and-replace
 when the user has not chosen. Creation/update claims require a successful helper
 response confirming the saved current checklist. Merely dispatching or completing
@@ -1293,7 +1298,14 @@ The viewer reads canonical current/history pages independently of the latest
 routing request or selected chat mode. The document icon sits in the existing
 composer toolbar beside the usage percentage, without a separate row. It uses warning tone for
 an active plan, neutral tone otherwise, and remains available for completed or
-archived plans. Plan and Progress are two tabs inside the SAME current/history viewer. Plan shows stable requirements; Progress shows actual work, evidence and blockers. Legacy recorded marks remain visible without a checked-count progress gauge. work-plan-changed events refresh open viewers; stable content
+archived plans. Plan and Progress are two tabs inside the SAME current/history viewer.
+Plan shows the summary/checklist first and collapses its explicitly marked
+Technical details into a standard expansion panel. The existing fence-aware
+checklist parser marks that boundary only on the viewer's opt-in read; storage
+and agent reads retain the exact full Plan. Unmarked legacy plans and Progress
+remain fully visible. Plan/document/archive/session changes reset expansion;
+updating only Progress retains expansion of the same Plan.
+Progress shows actual work, evidence and blockers. Legacy recorded marks remain visible without a checked-count progress gauge. work-plan-changed events refresh open viewers; stable content
 containers preserve scrolling. Complete pagination uses one revision throughout;
 a changed document cannot be presented as a mixture of revisions.
 Colleague's plan-viewer navigation invokes the same local opening owner. It
@@ -1322,7 +1334,9 @@ Discussion is read-only. Beginning a Senior turn never modifies or invalidates a
 plan. Junior preserves delivered work and records actual evidence in Progress without ticking or rewriting scope. Senior reads both documents, verifies the agreed requirements, records gaps in Progress and fixes in-scope defects. Auto schedules one Senior review after reviewable
 implementation by either role when Router confirms continuation fits the user's
 latest intent, even when the implementer and reviewer use the
-same exact model selection. Greetings, answers, planning, requested reviews and
+same exact model selection. When Deslop is enabled, the same review turn performs
+cleanup after implementation review and checks that cleanup before explicitly
+completing the plan. Greetings, answers, planning, requested reviews and
 Deslop do not schedule another review. The existing receipt, cancellation,
 question, goal and disconnected-completion guards apply to both implementers.
 The saved review preference controls optional Deslop only;

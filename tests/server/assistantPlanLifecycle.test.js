@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import { manageWorkPlan, readWorkPlan, readWorkPlanPage, readWorkPlanHistory, workPlanPath, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { manageWorkPlan, readWorkPlan, readWorkPlanPage, readWorkPlanHistory, workPlanPath, workPlanInstructions, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { upgradePlanProgress } from "../../packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js";
 import { upgradePlanSession, upgradeAssistantPlans } from "../../packages/vibe64-accounts/src/server/assistantPlanUpgrade.js";
@@ -278,6 +278,34 @@ test("paired pages preserve full Unicode and reject progress replacement without
   await f.change("progress-write", "junior", { text: "# Progress\nChanged evidence" });
   await assert.rejects(readWorkPlanPage(f.context, { offset: first.nextOffset, limit: 100,
     expectedRevision: first.revision, expectedProgressRevision: first.progressRevision }), { code: "vibe64_work_plan_changed" });
+});
+
+test("full paired agent reads retain detailed implementation instructions beyond the first page", async t => {
+  const f = await fixture(t);
+  const text = "# Reporting\nUser-friendly summary\n- [ ] Prove privacy\n## Technical details\n" +
+    "Follow the existing authorization owner and verify foreign access.\n".repeat(350) +
+    "Final implementation constraint: never bypass account isolation.";
+  await f.change("new", "senior", { text });
+  await f.change("progress-write", "junior", { text: "# Progress\nAcceptance remains open." });
+  const expected = await readWorkPlan(f.context);
+  let page = await readWorkPlanPage(f.context);
+  const first = page;
+  assert.equal(page.hasMore, true);
+  assert.equal(page.text.includes("Final implementation constraint"), false);
+  let plan = page.text; let progress = page.progressText;
+  while (page.hasMore) {
+    page = await readWorkPlanPage(f.context, { offset: page.nextOffset,
+      expectedRevision: first.revision, expectedProgressRevision: first.progressRevision });
+    plan += page.text; progress += page.progressText;
+  }
+  assert.equal(plan, expected.text);
+  assert.equal(progress, expected.progressText);
+  assert.match(plan, /Final implementation constraint: never bypass account isolation\./);
+  assert.deepEqual(await readWorkPlan(f.context), expected, "Presentation/read changes never rewrite Plan");
+  for (const role of ["senior", "junior", "review"]) {
+    assert.match(workPlanInstructions(role), /MUST read and follow the complete technical section/);
+    assert.match(workPlanInstructions(role), /Read every page of BOTH text and progressText/);
+  }
 });
 
 test("offline pair conversion preserves exact legacy Markdown identities timestamps and inline evidence", () => {
