@@ -234,7 +234,10 @@ import {
   projectServiceNamespaceRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
-  currentProjectRequestContext
+  assertProjectEffectAdmission,
+  captureProjectRequestContext,
+  currentProjectRequestContext,
+  runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
   logOperationalEvent
@@ -491,7 +494,7 @@ function createCodexSessionRegistration({
     resultDeliveryFailureMessage: codexAppServerResultDeliveryFailureMessage,
     orphanedPromptMessage: "Vibe64 restarted before Codex confirmed the message. Your message is safe; retry it.",
     onNotificationSignal: recordCodexAppServerProductSignal,
-    captureContext: currentProjectRequestContext,
+    captureContext: captureProjectRequestContext,
     runInContext: runWithCodexAppServerProjectContext,
     activeReconcileMs: codexAppServerActiveReconcileMs,
     steerFailedCode: CODEX_AGENT_TURN_STEER_FAILED_CODE,
@@ -1781,6 +1784,7 @@ function createService({
     runtime: existingRuntime = null,
     session: existingSession = null
   } = {}) {
+    const requestContext = captureProjectRequestContext();
     const runtime = existingRuntime || await projectService.createRuntime({
       inspectSource: false
     });
@@ -1803,14 +1807,17 @@ function createService({
         })
       });
       if (setup.completion) {
-        void setup.completion.then(async () => {
+        const publishCompleted = async () => {
           await publishSessionChanged.agentTerminal(sessionId, {
             reason: "workspace-setup-completed",
             session: await runtime.getSession(sessionId, {
               inspectSource: false
             })
           });
-        }).catch((error) => {
+        };
+        void setup.completion.then(() => requestContext
+          ? runWithProjectRequestContext(requestContext, publishCompleted)
+          : publishCompleted()).catch((error) => {
           vibe64SessionDebugLog("server.terminals.workspaceSetup.publish.error", {
             error: vibe64SessionDebugError(error),
             sessionId
@@ -3379,6 +3386,7 @@ function createService({
     },
 
     async runDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
+      assertProjectEffectAdmission();
       if (input.executionProfile) {
         return sessionAgent.runDetachedChatTurn(
           sessionId,
@@ -3392,6 +3400,7 @@ function createService({
     },
 
     async streamDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
+      assertProjectEffectAdmission();
       if (input.executionProfile) {
         return sessionAgent.streamDetachedChatTurn(
           sessionId,
@@ -3690,6 +3699,7 @@ function createService({
     },
 
     async sendAgentMessage(sessionId, input = {}, options = {}) {
+      assertProjectEffectAdmission();
       const startedAt = Date.now();
       const username = (currentProjectRequestContext()?.vibe64User || options.vibe64User)?.username || null;
       void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId).catch((error) => {
@@ -3754,6 +3764,7 @@ function createService({
 
     async updateAgentGoal(sessionId, input = {}, { canonical = false } = {}) {
       if (["set", "resume"].includes(input.action)) {
+        assertProjectEffectAdmission();
         return runMainAgentWrite(sessionId, input, async (context) => {
           requireCompletedConversationRewind(context.session);
           if (assistantRoutingFromMetadata(context.session.metadata)?.mode === "auto") {
@@ -4041,6 +4052,7 @@ function createService({
     },
 
     startAgentTerminal(sessionId, input = {}, options = {}) {
+      assertProjectEffectAdmission();
       return runMainAgentWrite(sessionId, options, async (context) => {
         await prepareAgentSkillsInsideAgentWrite(sessionId, context);
         return sessionAgent.startTerminal(sessionId, input, context);
@@ -4119,6 +4131,7 @@ function createService({
     },
 
     writeAgentTerminal(sessionId, terminalSessionId, data, input = {}, options = {}) {
+      assertProjectEffectAdmission();
       // A terminal write targets an already-open, namespace-owned PTY. It is
       // transport authorized against its captured connection by the manager.
       // Putting raw input through

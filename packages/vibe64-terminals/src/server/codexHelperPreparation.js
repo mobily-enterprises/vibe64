@@ -1,7 +1,7 @@
 import { CODEX_APP_SERVER_EXECUTION_MODES } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
-import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { codexTerminalNamespace, terminalSessionSourceRoot, terminalWorktreePath } from "./terminalShared.js";
 
 function normalizeText(value) {
@@ -65,7 +65,7 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
           providerKey,
           get restoreProvider() {
             assertCodexAppServerControllerOpen();
-            const projectContext = currentProjectRequestContext();
+            const projectContext = captureProjectRequestContext();
             return {
               preserveProcessExitProof: providerOptions.executionMode !== CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
               owner: {

@@ -4,7 +4,7 @@ import { codexAppServerAgentRun,
 } from "@jskit-ai/assistant-core/server/codex-turn";
 import { curatedCodexProvider, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
-import { currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { terminalNamespaceAdmissionFailure } from "@local/vibe64-execution/server/terminalSessions";
 import { vibe64HostContextEnvironment, vibe64HostContextRegistry, vibe64ConversationInstructions } from "@local/vibe64-genesis/server";
 import {
@@ -77,7 +77,7 @@ function createCodexSessionProviderHost(host) {
 
   async function prepareCodexAppServerSessionProvider(sessionId, options, providerKey, identity) {
     const { learningRuntime, ...nativeOptions } = options;
-    const projectContext = currentProjectRequestContext();
+    const projectContext = captureProjectRequestContext();
     const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
     async function readProviderSession(runtime) {
       if (options.renewalId) {

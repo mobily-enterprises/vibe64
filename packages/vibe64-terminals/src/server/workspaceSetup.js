@@ -8,6 +8,7 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  captureProjectRequestContext,
   currentProjectRequestContext,
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
@@ -401,7 +402,7 @@ function createWorkspaceSetupRunner({
     if (!sessionId || !runtime?.store) {
       throw new TypeError("Workspace preparation requires a stored Vibe64 session.");
     }
-    const projectContext = currentProjectRequestContext();
+    const projectContext = captureProjectRequestContext();
     const runKey = workspaceSetupRunKey(sessionId);
     if (activeRuns.has(runKey)) {
       return {

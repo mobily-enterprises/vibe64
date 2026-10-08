@@ -927,3 +927,68 @@ test("same raw session workspace preparations remain isolated across project con
     );
   });
 });
+
+
+test("admitted practice Workspace setup finishes in original owner control after fresh callback ends", async () => {
+  await withTemporaryRoot(async root => {
+    const { createStudioProjectContext } = await import("../../packages/vibe64-core/src/server/studioProjectContext.js");
+    const { createService: createProjectService } = await import("../../packages/vibe64-project/src/server/service.js");
+    const { assertProjectEffectAdmission } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+    const working = path.join(root, "working");
+    await mkdir(working);
+    const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+      explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
+    const project = createProjectService({ projectContext: core });
+    const training = { schemaVersion: 1, learnerKey: Buffer.from("42").toString("base64url"),
+      attemptId: "12345678-1234-4234-8234-123456789abc",
+      pin: { course: { courseId: "intro-course", release: "0.1.0" },
+        topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0", repository: "example/learn-intro",
+          commit: "b".repeat(40), topicHash: "a".repeat(64) }, lesson: { code: "INTRO-01", hash: "c".repeat(64) } },
+      exercise: { kind: "bundled", sourcePath: "training/exercises/app" } };
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    let release;
+    const commandMayFinish = new Promise(resolve => { release = resolve; });
+    let started;
+    const commandStarted = new Promise(resolve => { started = resolve; });
+    let calls = 0;
+    let completion;
+    let actualRuntime;
+    const runner = createWorkspaceSetupRunner({ projectService: project, inspect: () => readySetup(),
+      async runCommand(request) {
+        calls++;
+        started();
+        await commandMayFinish;
+        assert.equal(core.currentPracticeProjectScope().access, "control");
+        assert.equal((await project.readCurrentProject()).slug, slug);
+        assert.equal(currentProjectRequestContext().vibe64User.uid, 42);
+        assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+        assert.equal(request.cwd, (await import("@local/vibe64-core/server/sessionSourcePath")).sessionSourcePath(
+          await actualRuntime.store.readSession("practice-setup")));
+        return { exitCode: 0, ok: true, output: "accepted setup completed\n" };
+      }
+    });
+    await core.runWithPracticeProjectScope({ actor: { uid: 42, username: "learner" }, training, access: "create" }, async () => {
+      await core.createWorkspaceProjectRecord({ slug, training });
+      await project.runInProjectContext(slug, async () => {
+        actualRuntime = await project.createRuntime({ inspectSource: false });
+        const sourceRoot = (await import("@local/vibe64-core/server/sessionSourcePath")).managedSessionSourcePath(
+          currentProjectRequestContext().projectSessionSourceRoot, "practice-setup");
+        await mkdir(sourceRoot, { recursive: true });
+        await actualRuntime.store.createSession({ sessionId: "practice-setup", runtimeKind: "genesis", metadata: {
+          source_kind: "session_clone", source_path: sourceRoot, source_path_authority: (await import("@local/vibe64-core/server/sessionSourcePath")).SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+        } });
+        const session = await actualRuntime.store.readSession("practice-setup");
+        const setup = await runner.start({ runtime: actualRuntime, session });
+        assert.equal(setup.state.status, "running");
+        completion = setup.completion;
+        await Promise.race([commandStarted, setup.completion.then(value => assert.fail(`setup ended before its delayed command: ${JSON.stringify(value)}`))]);
+      });
+    });
+    release();
+    const finished = await completion;
+    assert.equal(finished.status, "succeeded", finished.diagnostic);
+    assert.equal(calls, 1);
+    assert.equal(workspaceSetupStateFromMetadata((await actualRuntime.store.readSession("practice-setup")).metadata).status, "succeeded");
+    assert.equal(core.currentPracticeProjectScope(), null);
+  });
+});

@@ -10,6 +10,7 @@ import { createInstalledTrainingContent } from "./installedContent.js";
 import { createTrainingLearnerState } from "./learnerState.js";
 import { createTrainingTeachingBrief } from "./teachingBrief.js";
 import { createTrainingService } from "./preparation.js";
+import { createManagedProjectRepositoryService } from "@local/vibe64-project/server/managedRepository";
 import { createTrainingLearningSessions } from "./learningSessions.js";
 import { registerTrainingRoutes } from "./registerRoutes.js";
 
@@ -29,7 +30,8 @@ const Vibe64TrainingProvider = defineFeature({
     const content = createInstalledTrainingContent({ systemRoot });
     const learners = createTrainingLearnerState({ systemRoot, content });
     const brief = createTrainingTeachingBrief({ learners, content });
-    const exercises = createTrainingService({ catalogue, content, learners, projectContext, project, sessions, terminals });
+    const projectRepositoryService = createManagedProjectRepositoryService({ projectContext, projectService: project });
+    const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals });
     const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, projectContext });
     registerVibe64ActionContext(actionCatalogue, {
       admissionScope: "learning-only",

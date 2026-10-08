@@ -356,3 +356,61 @@ test("no-exercise preparation does not require an exercise provisioner", async t
   assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "lock", "lock"]);
   assert.equal(f.failure, null);
 });
+
+
+test("local preparation admits the original exercise effects under its existing exclusive barrier", async t => {
+  const f = await fixture(t);
+  const { createStudioProjectContext } = await import("@local/vibe64-core/server/studioProjectContext");
+  const { currentProjectRequestContext } = await import("@local/vibe64-core/server/projectRequestContext");
+  const working = path.join(f.root, "working");
+  await mkdir(working);
+  const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(f.root, "system"),
+    explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true } });
+  let barrierHeld = false;
+  let barrierAdmissions = 0;
+  const originalBarrier = f.owners.learners.runPreparationExclusive;
+  f.owners.learners.runPreparationExclusive = async (input, operation) => {
+    assert.equal(barrierHeld, false, "Practice admission must never reacquire the held nonreentrant learner barrier.");
+    barrierAdmissions++;
+    barrierHeld = true;
+    try { return await originalBarrier(input, operation); } finally { barrierHeld = false; }
+  };
+  f.owners.projectContext = core;
+  f.owners.projectRepositoryService.createManagedGitProject = async (input, options) => {
+    assert.equal(barrierHeld, true);
+    assert.equal(core.currentPracticeProjectScope().access, "create");
+    assert.equal(currentProjectRequestContext().vibe64User.uid, actor.uid);
+    return core.createWorkspaceProjectRecord(input, { prepare: ({ projectContextRoot }) => options.initializeProject({ projectRoot: projectContextRoot }) });
+  };
+  const originalProof = f.owners.projectRepositoryService.verifyTrainingProjectSource;
+  f.owners.projectRepositoryService.verifyTrainingProjectSource = (input, options) => {
+    assert.equal(barrierHeld, true);
+    assert.deepEqual(core.currentPracticeProjectScope().training, input.training);
+    return originalProof(input, options);
+  };
+  const originalCreate = f.owners.sessions.createSession;
+  f.owners.sessions.createSession = (input, options) => {
+    assert.equal(barrierHeld, true);
+    assert.equal(core.currentPracticeProjectScope().access, "create");
+    return originalCreate(input, options);
+  };
+  const service = createTrainingService(f.owners);
+  const pending = await service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "local-start" });
+  assert.equal(pending.attempt.preparation.phase, "preparing");
+  assert.equal(pending.previewReady, false);
+  assert.equal(barrierAdmissions, 1);
+  assert.equal(barrierHeld, false);
+  assert.equal(core.currentPracticeProjectScope(), null);
+  assert.equal(core.targetRoot, working);
+  await core.runWithPracticeProjectScope({ actor, training: {
+    schemaVersion: 1, learnerKey: Buffer.from("123").toString("base64url"), attemptId, pin,
+    exercise: { kind: "bundled", sourcePath: "training/exercises/orientation-app" }
+  } }, async () => {
+    const prepared = await core.readWorkspaceProjectState({ slug: f.attempt.projectSlug });
+    assert.equal(await readFile(path.join(prepared.projectContextRoot, "genesis/stack.md"), "utf8"), "approved exercise");
+    assert.equal(prepared.projectRuntimeRoot, path.join(core.systemRoot, "projects", f.attempt.projectSlug));
+  });
+  assert.equal(f.calls.filter(([name]) => name === "source-proof").length, 1);
+  assert.equal(f.calls.filter(([name]) => name === "session-create").length, 1);
+  assert.equal(f.calls.some(([name]) => name === "ready"), false);
+});

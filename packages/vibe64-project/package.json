@@ -8,7 +8,8 @@
     "./shared/onboardingRequest": "./src/shared/onboardingRequest.js",
     "./server/actions": "./src/server/actions.js",
     "./server/managedProject": "./src/server/managedProject.js",
-    "./server/resourceEnvironment": "./src/server/resourceEnvironment.js"
+    "./server/resourceEnvironment": "./src/server/resourceEnvironment.js",
+    "./server/managedRepository": "./src/server/managedRepository.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -54,6 +55,10 @@
           {
             "subpath": "./server/resourceEnvironment",
             "summary": "Validates semantic host resource values and maps them through exact application-declared environment bindings."
+          },
+          {
+            "subpath": "./server/managedRepository",
+            "summary": "Owns original managed project creation and exact training source proof; hosted defaults remain an explicit host facility."
           }
         ],
         "capabilities": [

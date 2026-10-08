@@ -98,67 +98,72 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
           schemaVersion: 1, learnerKey: Buffer.from(saved.active.learnerId).toString("base64url"), attemptId,
           pin: attempt.pin, exercise: { kind: "bundled", sourcePath: exercise.sourcePath }
         };
-        const existing = await projectContext.readWorkspaceProjectState({ slug: attempt.projectSlug });
-        let exists = false;
-        try { await lstat(existing.projectContextRoot); exists = true; }
-        catch (error) { if (error.code !== "ENOENT") throw error; }
-        if (exists || Object.keys(existing.metadata).length) {
-          if (!isDeepStrictEqual(existing.metadata.training, training) || existing.metadata.deletion || existing.metadata.repository?.mode !== "managed_git") {
-            throw trainingError("VIBE64_TRAINING_PROJECT_CONFLICT", "The reserved exercise project has different or missing ownership. Keep it intact and ask the owner to inspect it; no replacement was created.");
-          }
-        } else {
-          if (attempt.preparation.phase === "ready") throw trainingError("VIBE64_TRAINING_PROJECT_MISSING", "Your prepared exercise project is missing. Keep your progress and ask the owner to restore it; this attempt cannot silently adopt a replacement.");
-          requireSuccess(await projectRepositoryService.createManagedGitProject({
-            slug: attempt.projectSlug, name: `Practice: ${attempt.pin.lesson.code}`, training, vibe64User: actor
-          }, { initializeProject: async ({ projectRoot }) => {
-            // readExercise already verifies every byte against the installed pin.
-            // Retain the original managed initializer's Git commit and rollback.
-            for (const file of exercise.files) {
-              const relative = file.path;
-              if (!relative || relative.includes("\\") || path.posix.isAbsolute(relative) || relative.split("/").some(part => !part || part === "." || part === ".." || part === ".git")) {
-                throw trainingError("VIBE64_TRAINING_EXERCISE_PATH_INVALID", "The verified exercise contains an invalid source path. Ask the owner to inspect its content release.");
-              }
-              const destination = path.join(projectRoot, relative);
-              await mkdir(path.dirname(destination), { recursive: true });
-              await writeFile(destination, file.bytes, { flag: "wx" });
+        const prepareExercise = async () => {
+          const existing = await projectContext.readWorkspaceProjectState({ slug: attempt.projectSlug });
+          let exists = false;
+          try { await lstat(existing.projectContextRoot); exists = true; }
+          catch (error) { if (error.code !== "ENOENT") throw error; }
+          if (exists || Object.keys(existing.metadata).length) {
+            if (!isDeepStrictEqual(existing.metadata.training, training) || existing.metadata.deletion || existing.metadata.repository?.mode !== "managed_git") {
+              throw trainingError("VIBE64_TRAINING_PROJECT_CONFLICT", "The reserved exercise project has different or missing ownership. Keep it intact and ask the owner to inspect it; no replacement was created.");
             }
-          } }));
-        }
-        stage = "session";
-        const session = await project.runInProjectContext(attempt.projectSlug, async () => {
-          const runtime = await project.createRuntime({ inspectSource: false });
-          let current;
-          try { current = await runtime.getSession(initialSessionId, { inspectSource: false }); }
-          catch (error) {
-            if (error.code !== "vibe64_session_not_found") throw error;
-            if (attempt.preparation.phase === "ready") throw trainingError("VIBE64_TRAINING_SESSION_MISSING", "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement.");
-            // Prove the original exercise only before the first session exists.
-            // Existing session source may contain the learner's unsaved edits.
-            const source = await projectRepositoryService.verifyTrainingProjectSource({ slug: attempt.projectSlug, training }, { files: exercise.files });
-            current = requireSuccess(await sessions.createSession({ vibe64User: actor }, { sessionId: initialSessionId, expectedCommit: source.commit }));
+          } else {
+            if (attempt.preparation.phase === "ready") throw trainingError("VIBE64_TRAINING_PROJECT_MISSING", "Your prepared exercise project is missing. Keep your progress and ask the owner to restore it; this attempt cannot silently adopt a replacement.");
+            requireSuccess(await projectRepositoryService.createManagedGitProject({
+              slug: attempt.projectSlug, name: `Practice: ${attempt.pin.lesson.code}`, training, vibe64User: actor
+            }, { initializeProject: async ({ projectRoot }) => {
+              // readExercise already verifies every byte against the installed pin.
+              // Retain the original managed initializer's Git commit and rollback.
+              for (const file of exercise.files) {
+                const relative = file.path;
+                if (!relative || relative.includes("\\") || path.posix.isAbsolute(relative) || relative.split("/").some(part => !part || part === "." || part === ".." || part === ".git")) {
+                  throw trainingError("VIBE64_TRAINING_EXERCISE_PATH_INVALID", "The verified exercise contains an invalid source path. Ask the owner to inspect its content release.");
+                }
+                const destination = path.join(projectRoot, relative);
+                await mkdir(path.dirname(destination), { recursive: true });
+                await writeFile(destination, file.bytes, { flag: "wx" });
+              }
+            } }));
           }
-          if (current.sessionId !== initialSessionId || current.status === "archived" || current.closing) {
-            throw trainingError("VIBE64_TRAINING_SESSION_CONFLICT", "The reserved exercise session is unavailable. Keep your progress and ask the owner to inspect it; no alternative session was selected.");
+          stage = "session";
+          const session = await project.runInProjectContext(attempt.projectSlug, async () => {
+            const runtime = await project.createRuntime({ inspectSource: false });
+            let current;
+            try { current = await runtime.getSession(initialSessionId, { inspectSource: false }); }
+            catch (error) {
+              if (error.code !== "vibe64_session_not_found") throw error;
+              if (attempt.preparation.phase === "ready") throw trainingError("VIBE64_TRAINING_SESSION_MISSING", "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement.");
+              // Prove the original exercise only before the first session exists.
+              // Existing session source may contain the learner's unsaved edits.
+              const source = await projectRepositoryService.verifyTrainingProjectSource({ slug: attempt.projectSlug, training }, { files: exercise.files });
+              current = requireSuccess(await sessions.createSession({ vibe64User: actor }, { sessionId: initialSessionId, expectedCommit: source.commit }));
+            }
+            if (current.sessionId !== initialSessionId || current.status === "archived" || current.closing) {
+              throw trainingError("VIBE64_TRAINING_SESSION_CONFLICT", "The reserved exercise session is unavailable. Keep your progress and ask the owner to inspect it; no alternative session was selected.");
+            }
+            if (current.workspaceSetup?.status === "succeeded" && !await terminals.workspaceSetupIsPrepared(initialSessionId)) {
+              throw trainingError("VIBE64_TRAINING_SETUP_CHANGED", "Workspace setup no longer matches this exercise session. Use its existing setup recovery, then resume the same lesson; no replacement was created.");
+            }
+            return current;
+          });
+          stage = "setup";
+          // Creating a session starts the original asynchronous Workspace setup.
+          // A pending/failed setup is not success, and prepared is not running Preview.
+          if (session.workspaceSetup?.status !== "succeeded") {
+            const current = await learners.resumeAttempt({ actor, attemptId });
+            if (["failed", "ambiguous", "required", "unconfigured"].includes(session.workspaceSetup?.status)) {
+              if (attempt.preparation.phase === "ready") return { ...current, setup: session.workspaceSetup, previewReady: false };
+              return { ...await learners.recordPreparationFailure({ actor, attemptId, expectedRevision: current.revision, initialSessionId,
+                stage, code: "VIBE64_TRAINING_SETUP_INCOMPLETE", message: "Exercise Workspace setup is incomplete. Use the existing setup recovery, then resume this same lesson." }), previewReady: false };
+            }
+            return { ...current, setup: session.workspaceSetup || null, previewReady: false };
           }
-          if (current.workspaceSetup?.status === "succeeded" && !await terminals.workspaceSetupIsPrepared(initialSessionId)) {
-            throw trainingError("VIBE64_TRAINING_SETUP_CHANGED", "Workspace setup no longer matches this exercise session. Use its existing setup recovery, then resume the same lesson; no replacement was created.");
-          }
-          return current;
-        });
-        stage = "setup";
-        // Creating a session starts the original asynchronous Workspace setup.
-        // A pending/failed setup is not success, and prepared is not running Preview.
-        if (session.workspaceSetup?.status !== "succeeded") {
           const current = await learners.resumeAttempt({ actor, attemptId });
-          if (["failed", "ambiguous", "required", "unconfigured"].includes(session.workspaceSetup?.status)) {
-            if (attempt.preparation.phase === "ready") return { ...current, setup: session.workspaceSetup, previewReady: false };
-            return { ...await learners.recordPreparationFailure({ actor, attemptId, expectedRevision: current.revision, initialSessionId,
-              stage, code: "VIBE64_TRAINING_SETUP_INCOMPLETE", message: "Exercise Workspace setup is incomplete. Use the existing setup recovery, then resume this same lesson." }), previewReady: false };
-          }
-          return { ...current, setup: session.workspaceSetup || null, previewReady: false };
-        }
-        const current = await learners.resumeAttempt({ actor, attemptId });
-        return { ...await learners.recordPreparationReady({ actor, attemptId, expectedRevision: current.revision, initialSessionId }), previewReady: false };
+          return { ...await learners.recordPreparationReady({ actor, attemptId, expectedRevision: current.revision, initialSessionId }), previewReady: false };
+        };
+        return await (projectContext.projectCatalogEnabled === false
+          ? projectContext.runWithPracticeProjectScope({ actor, training, access: "create" }, prepareExercise)
+          : prepareExercise());
       } catch (error) {
         // Preserve the original error even if recording its bounded diagnosis
         // fails. Retrying reads the same saved identities before any effect.

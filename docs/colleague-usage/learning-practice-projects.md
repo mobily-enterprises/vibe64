@@ -1,16 +1,22 @@
 # Practice projects in standalone lessons
 
-Some lessons need a practice application. Starting a lesson in a standalone
-installation may still report that exercise preparation is unavailable. Ask the
-installation owner to enable lesson preparation; retry through the existing
-lesson Start or Resume control after it is supported. An unavailable result does
-not mean the practice application or its session was created.
+Some lessons need a practice application. Use the existing lesson **Start** or
+**Resume** control. If the installation reports that exercise preparation is
+unavailable, keep the saved attempt and ask the owner to provide preparation
+support before retrying. That refusal means preparation did not start.
 
-The saved lesson and its progress remain intact. Do not substitute an unrelated
-Working project or delete project folders to clear a preparation error. If Vibe64
-reports mismatched practice ownership or unsafe storage, keep that storage intact
-and ask the owner to inspect it before retrying.
+Supported preparation uses the exercise bundled with your saved lesson and keeps
+its reserved practice project and session when you resume. Workspace setup may
+continue after the start request finishes. Pending or failed setup needs its
+existing recovery; it does not mean Preview is running or a practical has passed.
+Standalone setup uses the installation's actual resources; it does not create a
+hosted development database by default.
 
-Colleague can explain the error and use the supported lesson controls when asked.
-Local exercise preparation, its Preview and practical assessment are not yet
-available through these standalone lesson controls.
+The saved lesson and progress remain intact. Keep mismatched or unsafe practice
+storage intact and ask the owner to inspect the reported error. An unrelated
+Working project cannot replace this saved attempt's practice project.
+
+Colleague can explain the error and use supported lesson controls when asked.
+Standalone exercise conversations in Learning, their Preview and practical
+assessment are still being integrated; prepared source alone does not make that
+complete flow available.

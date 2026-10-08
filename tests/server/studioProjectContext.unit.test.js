@@ -1802,3 +1802,65 @@ test("original catalogue orphan cleanup retains only an exact marked real privat
     assert.equal(await readFile(retainedSession, "utf8"), "retained admitted session\n");
   });
 });
+
+
+test("admitted practice capture retains only same-owner control after the fresh callback ends", async () => {
+  await withTemporaryRoot(async root => {
+    const { assertProjectEffectAdmission, captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } =
+      await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+    const working = path.join(root, "working");
+    await mkdir(working);
+    const options = { explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+      explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } };
+    const context = createStudioProjectContext(options);
+    const foreign = createStudioProjectContext(options);
+    const project = createProjectService({ projectContext: context });
+    const training = trainingProvenance();
+    const actor = { uid: 42, username: "learner" };
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    let captured;
+    let expired;
+    let actual;
+    await context.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
+      assert.doesNotThrow(assertProjectEffectAdmission);
+      await context.createWorkspaceProjectRecord({ slug, training });
+      await project.runInProjectContext(slug, async () => {
+        expired = currentProjectRequestContext();
+        captured = captureProjectRequestContext();
+        assert.notEqual(captured, expired);
+        assert.equal(context.currentPracticeProjectScope().access, "create", "capture does not retarget the current fresh grant");
+        actual = await project.readCurrentProject();
+      });
+    });
+    await assert.rejects(() => runWithProjectRequestContext(expired, async () => captureProjectRequestContext()),
+      { code: "vibe64_practice_scope_expired" });
+    await runWithProjectRequestContext(captured, async () => {
+      assert.equal(context.currentPracticeProjectScope().access, "control");
+      assert.deepEqual(context.currentPracticeProjectScope().training, training);
+      assert.equal((await project.readCurrentProject()).projectRoot, actual.projectRoot);
+      assert.equal((await project.createRuntime({ inspectSource: false })).stateRoot, actual.projectRuntimeRoot);
+      assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+      await assert.rejects(() => context.discardWorkspaceProjectRecord({ slug }), { code: "vibe64_practice_effect_admission_required" });
+      await assert.rejects(() => context.createWorkspaceProjectRecord({ slug, training }), { code: "vibe64_practice_scope_mismatch" });
+      await assert.rejects(() => context.beginWorkspaceProjectDeletion({ slug }), { code: "vibe64_project_catalog_unavailable" });
+      await assert.rejects(() => foreign.readWorkspaceProjectState({ slug }), { code: "vibe64_practice_context_mismatch" });
+      const state = await context.readWorkspaceProjectState({ slug });
+      const bytes = await readFile(state.projectRecordPath);
+      const changed = JSON.parse(bytes);
+      changed.training.pin.lesson.hash = "f".repeat(64);
+      await writeFile(state.projectRecordPath, JSON.stringify(changed));
+      await assert.rejects(() => project.readCurrentProject(), { code: "vibe64_practice_scope_mismatch" });
+      await writeFile(state.projectRecordPath, bytes);
+      await rm(actual.projectRoot, { recursive: true });
+      await fs.promises.symlink(working, actual.projectRoot);
+      await assert.rejects(() => project.readCurrentProject(), { code: "vibe64_practice_path_unsafe" });
+    });
+    const plain = { slug: "working", targetRoot: working, vibe64User: actor };
+    await runWithProjectRequestContext(plain, async () => {
+      assert.equal(captureProjectRequestContext(), currentProjectRequestContext(), "ordinary capture preserves the exact original context");
+      assert.doesNotThrow(assertProjectEffectAdmission);
+    });
+    assert.equal(captureProjectRequestContext(), null);
+    assert.doesNotThrow(assertProjectEffectAdmission);
+  });
+});

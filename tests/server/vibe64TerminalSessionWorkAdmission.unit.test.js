@@ -1945,3 +1945,56 @@ test("source read preserves reconnection timeout and requires original project s
   delete f.projectService.runProjectSourceExclusive;
   await assert.rejects(read(), { code: "vibe64_project_source_lock_unavailable" });
 });
+
+
+test("captured practice control cannot admit fresh user work or session and repository creation", async t => {
+  const { createStudioProjectContext } = await import("../../packages/vibe64-core/src/server/studioProjectContext.js");
+  const { captureProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const { createService: createSessions } = await import("../../packages/vibe64-sessions/src/server/service.js");
+  const { createManagedProjectRepositoryService } = await import("../../packages/vibe64-project/src/server/managedRepository.js");
+  const lock = agentWriteLockHarness();
+  const f = await terminalServiceFixture(t, lock, { assistantSelection: CODEX_SELECTION,
+    codexAppServerProviderFactory: () => assert.fail("No denied user work may open a native provider.") });
+  const working = path.join(f.root, "working");
+  await mkdir(working);
+  const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(f.root, "practice-system"),
+    explicitManagedSourceRoot: path.join(f.root, "practice-source"), home: f.root, runtimeProfile: { local: true } });
+  const actor = { uid: 42, username: "learner" };
+  const training = { schemaVersion: 1, learnerKey: Buffer.from("42").toString("base64url"),
+    attemptId: "12345678-1234-4234-8234-123456789abc",
+    pin: { course: { courseId: "intro-course", release: "0.1.0" },
+      topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0", repository: "example/learn-intro",
+        commit: "b".repeat(40), topicHash: "a".repeat(64) }, lesson: { code: "INTRO-01", hash: "c".repeat(64) } },
+    exercise: { kind: "bundled", sourcePath: "training/exercises/app" } };
+  const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+  let control;
+  await core.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
+    await core.createWorkspaceProjectRecord({ slug, training });
+    control = captureProjectRequestContext();
+  });
+  const sessions = createSessions({ project: f.projectService, terminals: f.service,
+    initializeModelRouting: () => assert.fail("Denied creation must not initialize routing.") });
+  const repository = createManagedProjectRepositoryService({ projectContext: core, projectService: f.projectService,
+    configureProject: () => assert.fail("Denied creation must not configure or clean a project."),
+    initializeManagedProject: () => assert.fail("Denied creation must not initialize a repository.") });
+  await runWithProjectRequestContext(control, async () => {
+    const denied = { code: "vibe64_practice_effect_admission_required" };
+    for (const request of [
+      () => f.service.sendAgentMessage("session-1", { message: "new user request" }),
+      () => f.service.runDetachedAgentChatTurn("session-1", { message: "new temporary request" }),
+      () => f.service.streamDetachedAgentChatTurn("session-1", { message: "new streamed request" }),
+      () => f.service.updateAgentGoal("session-1", { action: "set", objective: "new goal" }),
+      () => f.service.updateAgentGoal("session-1", { action: "resume" }),
+      () => Promise.resolve().then(() => f.service.startAgentTerminal("session-1")),
+      () => Promise.resolve().then(() => f.service.writeAgentTerminal("session-1", "terminal", "new command")),
+      () => repository.createManagedGitProject({ slug, training })
+    ]) await assert.rejects(request, denied);
+    const result = await sessions.createSession({ vibe64User: actor }, { sessionId: "new-denied-session" });
+    assert.equal(result.ok, false);
+    assert.equal(result.code, denied.code);
+    assert.equal(lock.held, false);
+    assert.equal(lock.attempts.length, 0, "Denial precedes all native/write admission or routing effects.");
+    assert.equal((await core.readWorkspaceProjectState({ slug })).metadata.training.attemptId, training.attemptId);
+    assert.equal(f.session.metadata.agent_identity_conversation_id, "pre-existing-thread");
+  });
+});

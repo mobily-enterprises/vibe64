@@ -418,3 +418,60 @@ test("managed source proof returns the resolved immutable commit when canonical 
     { code: "vibe64_managed_project_source_mismatch" });
   assert.deepEqual(await repositorySnapshot(fixture.repositoryPath), before);
 });
+
+
+test("shared managed repository owner provisions and clones a real private practice source with exact pinned bytes", async () => {
+  const { withTemporaryRoot } = await import("./vibe64TestHelpers.js");
+  const { createStudioProjectContext } = await import("@local/vibe64-core/server/studioProjectContext");
+  const { createService: createProject } = await import("../../packages/vibe64-project/src/server/service.js");
+  const { createManagedProjectRepositoryService } = await import("@local/vibe64-project/server/managedRepository");
+  const { createSessionSource } = await import("../../packages/vibe64-terminals/src/server/sessionSource.js");
+  await withTemporaryRoot(async root => {
+    const working = path.join(root, "working");
+    await mkdir(working);
+    const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+      explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
+    const project = createProject({ projectContext: core });
+    const repository = createManagedProjectRepositoryService({ projectContext: core, projectService: project,
+      initializeManagedProject: input => initializeManagedProject({ ...input, runCommand: directCommand }) });
+    const actor = { uid: 42, username: "learner" };
+    const training = { schemaVersion: 1, learnerKey: Buffer.from("42").toString("base64url"),
+      attemptId: "12345678-1234-4234-8234-123456789abc",
+      pin: { course: { courseId: "intro-course", release: "0.1.0" },
+        topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0", repository: "example/learn-intro",
+          commit: "b".repeat(40), topicHash: "a".repeat(64) }, lesson: { code: "INTRO-01", hash: "c".repeat(64) } },
+      exercise: { kind: "bundled", sourcePath: "training/exercises/app" } };
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    const files = [{ path: "README.md", bytes: Buffer.from("Exact installed exercise bytes.\n") }];
+    await core.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
+      const created = await repository.createManagedGitProject({ slug, training }, { initializeProject: ({ projectRoot }) =>
+        writeFile(path.join(projectRoot, files[0].path), files[0].bytes) });
+      const state = await core.readWorkspaceProjectState({ slug });
+      assert.equal(created.project.projectRoot, state.projectContextRoot);
+      assert.equal(state.projectContextRoot, path.join(core.systemRoot, "training", "practice", "NDI", training.attemptId, slug));
+      assert.equal(state.projectRuntimeRoot, path.join(core.systemRoot, "projects", slug));
+      assert.deepEqual(state.metadata.training, training);
+      assert.equal(state.metadata.developmentDatabaseName, undefined, "Standalone composition does not invent Online database defaults.");
+      const proof = await repository.verifyTrainingProjectSource({ slug, training }, { files });
+      assert.match(proof.commit, /^[0-9a-f]{40}$/u);
+      assert.equal(proof.branch, "main");
+      const canonical = path.join(state.projectRuntimeRoot, "canonical-repository", "repository.git");
+      assert.equal((await execFileAsync("git", ["--git-dir", canonical, "rev-list", "--count", proof.commit])).stdout.trim(), "1");
+      await project.runInProjectContext(slug, async () => {
+        const runtime = await project.createRuntime({ inspectSource: false, createSessionSource: context =>
+          project.runProjectSourceExclusive(async () => createSessionSource({ ...context, project: await project.readCurrentProject(),
+            runCommand: directCommand }), { operation: "session-source-create" }) });
+        const session = await runtime.createSession({ sessionId: `training-${training.attemptId}`,
+          sourceContext: { expectedCommit: proof.commit, vibe64User: actor } });
+        const { sessionSourcePath } = await import("@local/vibe64-core/server/sessionSourcePath");
+        const source = sessionSourcePath(session);
+        assert.equal(source, path.join(core.managedSourceRoot, slug, "sessions", "active", session.sessionId, "source"));
+        assert.deepEqual(await readFile(path.join(source, files[0].path)), files[0].bytes);
+        assert.equal((await execFileAsync("git", ["-C", source, "rev-parse", "HEAD"])).stdout.trim(), proof.commit);
+        assert.equal((await runtime.getSession(session.sessionId, { inspectSource: false })).sessionId, session.sessionId);
+      });
+    });
+    assert.equal(core.targetRoot, working);
+    await assert.rejects(() => core.readWorkspaceProject({ slug }), { code: "vibe64_project_catalog_unavailable" });
+  });
+});

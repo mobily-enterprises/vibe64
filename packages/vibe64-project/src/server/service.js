@@ -49,6 +49,7 @@ import {
   normalizeDevelopmentDatabaseScope
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
+  captureProjectRequestContext,
   currentProjectRequestContext,
   currentProjectRuntimeRoot,
   currentProjectSessionSourceRoot,
@@ -1193,7 +1194,7 @@ function createService({
   }
 
   async function createRuntime(options = {}) {
-    const requestContext = currentProjectRequestContext() || {};
+    const requestContext = captureProjectRequestContext() || {};
     if (requestContext.learningScope) {
       return new Vibe64SessionRuntime({
         inspectSourceByDefault: false,

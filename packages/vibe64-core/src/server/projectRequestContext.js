@@ -155,12 +155,34 @@ async function runWithPracticeProjectContext(owner, scope, operation) {
   if (typeof operation !== "function") throw new TypeError("Practice access requires an owning callback.");
   let active = true;
   const context = Object.freeze({ ...scope,
-    [practiceScopeKey]: { owner, scope, active: () => active }
+    [practiceScopeKey]: Object.freeze({ owner, scope, active: () => active })
   });
   try {
     return await projectContextStorage.run(context, () => operation());
   } finally {
     active = false;
+  }
+}
+
+// Existing accepted-work owners retain only this exact observation/control
+// projection. Fresh effects must re-enter the saved-attempt request admission.
+function captureProjectRequestContext() {
+  const context = currentProjectRequestContext();
+  const grant = context?.[practiceScopeKey];
+  if (!grant) return context;
+  const scope = Object.freeze({ ...grant.scope, access: "control",
+    vibe64User: Object.freeze({ ...grant.scope.vibe64User }) });
+  return Object.freeze({ ...scope,
+    [practiceScopeKey]: Object.freeze({ owner: grant.owner, scope, active: () => true })
+  });
+}
+
+function assertProjectEffectAdmission() {
+  const scope = currentProjectRequestContext()?.[practiceScopeKey]?.scope;
+  if (scope && !["create", "write"].includes(scope.access)) {
+    throw Object.assign(new Error("Read this saved lesson's current authority before starting new practice work."), {
+      code: "vibe64_practice_effect_admission_required", statusCode: 409
+    });
   }
 }
 
@@ -241,6 +263,8 @@ export {
   VIBE64_PROJECT_ROUTE_BASE,
   currentPracticeProjectScope,
   runWithPracticeProjectContext,
+  captureProjectRequestContext,
+  assertProjectEffectAdmission,
   currentProjectRecordPath,
   currentProjectRequestContext,
   currentProjectRuntimeRoot,

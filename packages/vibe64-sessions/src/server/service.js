@@ -5,8 +5,11 @@ import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences, assistantRouti
 
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
 import {
+  assertProjectEffectAdmission,
+  captureProjectRequestContext,
   currentProjectRequestContext,
-  currentProjectVibe64User
+  currentProjectVibe64User,
+  runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
   writeSessionUiSyncPreviewState
@@ -405,7 +408,8 @@ function createService({
     if (!completion || typeof completion.then !== "function") {
       return;
     }
-    void completion.then(async (workspaceSetup) => {
+    const context = captureProjectRequestContext();
+    const observe = async (workspaceSetup) => {
       const runtime = await project.createRuntime({
         inspectSource: false
       });
@@ -418,7 +422,10 @@ function createService({
         }),
         workspaceSetup
       });
-    }).catch((error) => {
+    };
+    void completion.then(workspaceSetup => context
+      ? runWithProjectRequestContext(context, () => observe(workspaceSetup))
+      : observe(workspaceSetup)).catch((error) => {
       vibe64SessionDebugLog("server.sessions.workspaceSetup.publish.error", {
         error: vibe64SessionDebugError(error),
         sessionId
@@ -832,6 +839,7 @@ function createService({
     // Only an internal caller may supply a server-reserved identity.
     async createSession(input = {}, { sessionId, expectedCommit } = {}) {
       return sessionResult(async () => {
+        assertProjectEffectAdmission();
         if (sessionId !== undefined) assertValidVibe64SessionId(sessionId);
         if (expectedCommit !== undefined) {
           if (sessionId === undefined || typeof expectedCommit !== "string" ||

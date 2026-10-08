@@ -15,6 +15,14 @@ workspace.
 - `tests/server/vibe64OnboardingActionTools.unit.test.js`
 - `tests/server/vibe64ProjectActionDispatch.unit.test.js`
 - `packages/vibe64-project/src/server/managedProject.js`
+- `packages/vibe64-project/src/server/managedRepository.js`
+- `packages/vibe64-training/src/server/preparation.js`
+- `packages/vibe64-training/src/server/Vibe64TrainingProvider.js`
+- `packages/vibe64-terminals/src/server/workspaceSetup.js`
+- `tests/server/vibe64ManagedProject.unit.test.js`
+- `tests/server/vibe64TrainingPreparation.unit.test.js`
+- `tests/server/vibe64WorkspaceSetup.unit.test.js`
+- `tests/server/vibe64TerminalSessionWorkAdmission.unit.test.js`
 - `packages/vibe64-genesis/src/server/index.js`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `docs/colleague-usage/starter-apps.md`
@@ -65,16 +73,37 @@ The private grant survives exact nested Project resolution but expires with its
 owning callback; it cannot come from HTTP fields or inherit source-less Learning
 authority. Ordinary local catalogue and route refusals remain unchanged.
 
-This prerequisite admits a real practice record through an attached saved-attempt
-caller. It does not yet provision the bundled repository, create/setup the practice
-session, expose scoped practice transport, or prove Preview/native acceptance.
-The existing standalone exercise-preparation refusal remains in place until those
-original owners are composed. No old pin, progress or project record is migrated.
-Preparation must enter this Core scope inside its already-held original barrier,
-without reacquiring the non-reentrant Training preparation lock. Subsequent
-provisioning must preserve admitted asynchronous Workspace setup and native
-callbacks after a request returns: retained observation/control identity is
-distinct from fresh effect admission, and no expired effect grant is reusable.
+The original managed repository creation and exact exercise source verification
+operations now live beside the original Public managed initializer. Online calls
+that same owner, retaining its hosted slug prevalidation and one configuration
+facility for its existing development database defaults. Standalone composition
+supplies no hosted database policy. The original initial commit, source exclusion,
+identity checks and atomic rollback remain with their original owners. Private
+creation obtains its exact root through Core rather than a catalogue-path guess.
+
+The same preparation coordinator enters this Core scope around its original
+exercise effect block, inside the already-held non-reentrant learner barrier.
+It preserves the server-reserved project/session identities and pinned source
+commit. Missing preparation facilities retain the original early refusal, and
+pending Workspace setup remains pending rather than lesson or Preview readiness.
+No old pin, progress or project record is migrated.
+
+Core captures an admitted practice context as exact same-owner observation/control
+only. The original delayed Workspace execution/completion observers and Codex
+context captures retain that projection after the request callback returns.
+Original record/marker/path checks still apply to reads, including later aliases.
+Fresh session/repository creation, user sends, temporary sends, terminal starts/
+writes and goal set/resume require a new create/write admission. The original
+naming, review, native goal continuations, Stop and reconciliation owners retain
+their admitted control flow; neutral source locks are not new-effect admissions.
+Ordinary project context capture and admission are unchanged.
+
+Focused component evidence covers private canonical creation/source cloning,
+held-barrier preparation, accepted delayed Workspace completion and denied fresh
+user effects. Practice-session Learning purpose/collection, authenticated transport,
+Main teacher/Preview integration and all-provider native lifetime acceptance are
+still required. Source renewal remains unsupported for this practice increment;
+its existing ordinary policy is unchanged. This is not installed/browser proof.
 
 All thirty-six project HTTP operations dispatch named `vibe64.project.*` actions.
 The canonical inputs enforce required fields and exclude caller-supplied actors;

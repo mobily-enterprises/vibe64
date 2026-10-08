@@ -9,7 +9,7 @@ import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
 
-import { currentPracticeProjectScope, runWithPracticeProjectContext } from "./projectRequestContext.js";
+import { assertProjectEffectAdmission, currentPracticeProjectScope, runWithPracticeProjectContext } from "./projectRequestContext.js";
 
 import {
   VIBE64_PROJECTS_ROOT_ENV,
@@ -1300,6 +1300,11 @@ function createStudioProjectContext({
       throw projectCatalogUnavailableError();
     }
     const slug = projectSlugFromInput(input);
+    if (scope) {
+      for (const directory of [scope.targetRoot, scope.projectRuntimeRoot, scope.projectSessionSourceRoot]) {
+        await practiceDirectoryExists(directory);
+      }
+    }
     const metadata = assertHostedRepositoryMetadata(await readProjectMetadata({
       projectRecordPath: projectRecordPathForSlug(slug)
     }));
@@ -1396,6 +1401,7 @@ function createStudioProjectContext({
   }
 
   async function discardWorkspaceProjectRecord(input = {}) {
+    assertProjectEffectAdmission();
     const state = await readWorkspaceProjectState(input);
     if (!Object.keys(state.metadata).length) {
       throw projectStateMissingError(state.slug);
