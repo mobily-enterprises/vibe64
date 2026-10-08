@@ -346,3 +346,127 @@ test("original Codex context restoration preserves Working and unscoped callback
   });
   assert.equal(currentProjectRequestContext(), null);
 });
+
+
+test("source-bearing Learning retains the original native source and Git checkpoint paths", async t => {
+  const { learningScope } = await learningNativeFixture(t);
+  const { mkdir, rm, access } = await import("node:fs/promises");
+  const path = await import("node:path");
+  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
+  const { managedSessionSourceRoot, projectRuntimeRoot, sourceMetadata, sourcePath, withTemporaryRoot } =
+    await import("./vibe64TestHelpers.js");
+  const { learningSessionExecutionRoot, readSessionConversationContext } =
+    await import("../../packages/vibe64-terminals/src/server/mainConversationBinding.js");
+  await withTemporaryRoot(async root => {
+    const completions = [], checkpoints = [], publications = [];
+    const runtime = new Vibe64SessionRuntime({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
+      projectSessionSourceRoot: managedSessionSourceRoot(root), learningScope: { ...learningScope, noExercise: false },
+      inspectSourceByDefault: false,
+      learningTeaching: { bindConversation: () => assert.fail("Context reads do not bind teaching"),
+        completeConversation: async input => { completions.push(input); } },
+      createSessionSource: async ({ session, store }) => {
+        const metadata = sourceMetadata(root, session.sessionId);
+        await mkdir(metadata.source_path, { recursive: true });
+        for (const [name, value] of Object.entries(metadata)) await store.writeMetadataValue(session.sessionId, name, value);
+      } });
+    for (const engine of ["codex", "claude", "opencode"]) {
+      const id = `source-bearing-${engine}`;
+      const selection = { engineId: engine, agentId: engine === "opencode" ? "build" : engine,
+        modelProviderId: engine === "claude" ? "anthropic" : engine === "opencode" ? "opencode" : "openai",
+        modelId: engine === "claude" ? "sonnet" : engine === "opencode" ? "big-pickle" : "gpt-6.1-sol",
+        variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` };
+      const session = await runtime.createSession({ sessionId: id, metadata: { assistant_selection: JSON.stringify(selection) } });
+      const nativeRoot = await runtime.getNativeExecutionRoot(id);
+      assert.equal(nativeRoot, sourcePath(root, id));
+      assert.equal(session.sourcePath, nativeRoot);
+      await assert.rejects(access(path.join(session.sessionRoot, "native")), { code: "ENOENT" });
+      assert.equal(await learningSessionExecutionRoot(runtime, id), "", "Only no-exercise learning opts out of the source path");
+      const host = { toolHome: async () => ({ ok: true, toolHomeSource: "/authorized/account" }),
+        unavailableWorktree: async (_runtime, receivedId, failure) => { assert.equal(receivedId, id); return failure; } };
+      const context = await readSessionConversationContext(engine, { createRuntime: async () => runtime }, id, {}, host);
+      assert.equal(context.workdir, nativeRoot);
+      assert.equal(context.session.sourcePath, nativeRoot);
+      if (engine === "codex") {
+        assert.equal(context.ok, true);
+        assert.equal(context.executionRoot, nativeRoot);
+        await runtime.store.writeMetadataValue(id, "source_removed", "yes");
+        const removed = await readSessionConversationContext(engine, { createRuntime: async () => runtime }, id, {}, host);
+        assert.equal(removed.ok, false);
+        assert.equal(removed.code, "vibe64_session_worktree_unavailable");
+        await runtime.store.writeMetadataValue(id, "source_removed", "");
+        await rm(nativeRoot, { recursive: true });
+        const missing = await readSessionConversationContext(engine, { createRuntime: async () => runtime }, id, {}, host);
+        assert.equal(missing.ok, false);
+        assert.equal(missing.code, "vibe64_session_worktree_unavailable");
+        await mkdir(nativeRoot, { recursive: true });
+      }
+      const project = Object.freeze({ slug: "actual-practice" });
+      const nativeTurn = Object.freeze({ threadId: "native-thread", turnId: `native-${engine}`,
+        outerTurnId: `outer-${engine}`, active: false });
+      const input = { runtime, sessionId: id, outerTurnId: `outer-${engine}`, outcome: "completed", nativeTurn,
+        projectService: { readCurrentProject: async () => project },
+        createCheckpoint: async value => {
+          assert.equal(completions.at(-1).outerTurnId, value.outerTurnId, "Teaching completion precedes the original Git checkpoint");
+          checkpoints.push(value); return { created: true, commit: "d".repeat(40) };
+        },
+        publishSessionChanged: async (receivedId, event) => publications.push({ id: receivedId, event }) };
+      const result = await checkpointSessionTurn(input);
+      assert.equal(result.ok, true);
+      assert.equal(result.processed, true);
+      assert.equal(result.task.status, "ready");
+      assert.equal(checkpoints.at(-1).worktreePath, nativeRoot);
+      assert.equal(checkpoints.at(-1).project, project);
+      assert.equal(checkpoints.at(-1).outerTurnId, input.outerTurnId);
+      assert.equal(completions.at(-1).runtime, runtime);
+      assert.equal(completions.at(-1).sessionId, id);
+      assert.equal(completions.at(-1).nativeTurn, nativeTurn);
+      assert.equal(completions.at(-1).outerTurnId, input.outerTurnId);
+      assert.equal(completions.at(-1).outcome, "completed");
+      assert.equal(publications.at(-1).event.reason, "session-turn-checkpoint-updated");
+      const failed = await checkpointSessionTurn({ ...input, outerTurnId: `failed-${engine}`,
+        createCheckpoint: async () => { throw new Error("Original practice checkpoint failure"); } });
+      assert.equal(failed.ok, false);
+      assert.equal(failed.task.status, "failed");
+      assert.match(failed.error, /Original practice checkpoint failure/u);
+      assert.equal(publications.at(-1).event.reason, "session-turn-checkpoint-failed");
+      await runtime.markSessionClosing(id);
+      await assert.rejects(() => learningSessionExecutionRoot(runtime, id), { code: "vibe64_learning_session_inactive" });
+      await assert.rejects(() => learningSessionExecutionRoot(runtime, id, { allowClosing: "true" }),
+        { code: "vibe64_learning_session_inactive" });
+      assert.equal(await learningSessionExecutionRoot(runtime, id, { allowClosing: true }), "");
+      const control = await readSessionConversationContext(engine, { createRuntime: async () => runtime }, id,
+        { allowClosing: true }, host);
+      assert.equal(control.workdir, nativeRoot);
+      const interrupted = await checkpointSessionTurn({ ...input, outerTurnId: `closing-${engine}`, outcome: "interrupted" });
+      assert.equal(interrupted.processed, true);
+      assert.equal(checkpoints.at(-1).outcome, "interrupted");
+      assert.equal(completions.at(-1).outcome, "interrupted");
+    }
+    assert.equal(checkpoints.length, 6);
+    assert.equal(completions.length, 9);
+    assert.equal(publications.length, 9);
+  });
+});
+
+test("source-less Learning still completes teaching before its truthful no-Git result", async t => {
+  const { runtime } = await learningNativeFixture(t);
+  const calls = [];
+  runtime.learningTeaching = { completeConversation: async input => calls.push(input) };
+  const id = "source-less-teaching-checkpoint";
+  await runtime.createSession({ sessionId: id });
+  const before = await runtime.store.readSession(id);
+  const nativeTurn = Object.freeze({ threadId: "native-thread", turnId: "native-turn",
+    outerTurnId: "native-outer", active: false });
+  const result = await checkpointSessionTurn({ runtime, sessionId: id, outerTurnId: "native-outer", nativeTurn,
+    projectService: { readCurrentProject: () => assert.fail("No source-less project lookup") },
+    createCheckpoint: () => assert.fail("No source-less Git checkpoint"),
+    publishSessionChanged: () => assert.fail("No source-less checkpoint task") });
+  assert.equal(result.reason, "learning_session_no_git_checkpoint");
+  assert.equal(result.checkpoint.applicable, false);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].runtime, runtime);
+  assert.equal(calls[0].sessionId, id);
+  assert.equal(calls[0].nativeTurn, nativeTurn);
+  assert.equal(calls[0].outerTurnId, "native-outer");
+  assert.deepEqual(await runtime.store.readSession(id), before);
+});

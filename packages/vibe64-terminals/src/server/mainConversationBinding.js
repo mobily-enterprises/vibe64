@@ -71,7 +71,8 @@ export async function learningSessionExecutionRoot(runtime, sessionId, { allowCl
   if (typeof runtime.getNativeExecutionRoot !== "function") {
     throw new TypeError("Learning sessions require the trusted native execution root reader.");
   }
-  return runtime.getNativeExecutionRoot(sessionId, { allowClosing });
+  const executionRoot = await runtime.getNativeExecutionRoot(sessionId, { allowClosing });
+  return runtime.learningScope.noExercise === true ? executionRoot : "";
 }
 
 // These are the original application snapshot contracts, not native acquisition.

@@ -22,6 +22,14 @@ Routing retains trusted captured question data only for this configured Learning
 branch, including its original uncertain-receipt repair; duplicate UUIDs preserve
 their first accepted words and association. The original completed native
 checkpoint projects exact question delivery and keeps source-less no-Git behavior.
+The existing native-context root reader validates both Learning scopes against
+their durable session. Only noExercise:true supplies the private source-less
+override; practicals retain their original source-availability, environment and
+worktree branches. The same completion callback precedes checkpoint projection
+for either configured Learning scope. Practicals then retain the original Git
+checkpoint task, failure and publication path; ordinary Working callbacks do not
+enter Training. This physical-scope correction does not enable practice teaching
+tools or prove native/package/browser acceptance.
 The existing automatic Workspace setup owner reads the actual Runtime/session,
 then leaves its setup state unchanged only for server-owned noExercise:true.
 Native after-turn routing still drains normally; ordinary and source-bearing

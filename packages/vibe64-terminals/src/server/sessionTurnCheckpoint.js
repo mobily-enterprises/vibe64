@@ -17,11 +17,12 @@ async function checkpointSessionTurn({
   if (!outerTurnId) return { ok: true, processed: false, reason: "outer_turn_unavailable" };
   runtime ||= await projectService.createRuntime({ inspectSource: false });
   session ||= await runtime.getSession(sessionId, { inspectSource: false });
-  if (await learningSessionExecutionRoot(runtime, sessionId, { allowClosing: true })) {
-    if (runtime.learningTeaching) {
-      nativeTurn ||= codexAppServerTurnState(session, normalizeVibe64AgentRunState);
-      await runtime.learningTeaching.completeConversation({ runtime, sessionId, outerTurnId, outcome, nativeTurn });
-    }
+  const learningRoot = await learningSessionExecutionRoot(runtime, sessionId, { allowClosing: true });
+  if (runtime.learningScope && runtime.learningTeaching) {
+    nativeTurn ||= codexAppServerTurnState(session, normalizeVibe64AgentRunState);
+    await runtime.learningTeaching.completeConversation({ runtime, sessionId, outerTurnId, outcome, nativeTurn });
+  }
+  if (learningRoot) {
     return { ok: true, processed: false, reason: "learning_session_no_git_checkpoint",
       checkpoint: { applicable: false, outerTurnId, outcome } };
   }
