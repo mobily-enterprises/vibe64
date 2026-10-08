@@ -746,6 +746,10 @@ binding.
 
 ## Sources
 
+- `src/components/StudioAppShellLayout.vue`
+- `src/composables/useVibe64SessionSelection.js`
+- `src/composables/useStoredSelection.js`
+
 - `src/lib/vibe64ThinkingPresentation.js`
 - `src/lib/vibe64ChatDelivery.js`
 - `src/components/studio/vibe64-session/Vibe64ConversationStatus.vue`
@@ -3299,3 +3303,28 @@ These native prerequisites do not establish the Main Learning launcher, lesson
 authorization, practical assessment, installed package adoption or a successful
 native/browser/device teaching trial. The host must supply the real pinned brief
 and private namespace; source operations retain their original refusal.
+
+
+## Learning shell and separate remembered selection
+
+The original app shell accepts a controlled Learning state and emits a requested
+mode change through its optional yellow Australian L plate. The accessible
+name stays `Learning mode`; pressed state and the next-action hover label follow
+the supplied state. The active header and background use a restrained yellow
+blend of the current light/dark surface. Reduced motion removes the plate's
+transition. Slots, status placement, Main/Colleague controls and pane swipe
+behavior keep their existing owners. The control is hidden by default: the host
+must attach actual mode navigation before showing it, rather than expose a dead
+or simulated lesson control.
+
+The original stored-selection owner continues to use the exact Working project
+key and `session` URL preference. An explicitly supplied Learning learner and
+attempt use a separate key. Their `learningSession` URL preference is followed
+only when `learningAttempt` matches that exact attempt; an old retained instance
+never follows another attempt's selection. Partial claimed scope is refused.
+These browser fields are navigation identity, not lesson or account authority.
+Only reconciliation against actual authorized rows selects an available session;
+empty lists produce no fabricated lesson row. This increment adds no session
+list/API switch, request routing, Main conversation or Preview player. The host
+still needs its authenticated attempt and captured original panel/API owners to
+keep background Working sessions mounted during real mode navigation.

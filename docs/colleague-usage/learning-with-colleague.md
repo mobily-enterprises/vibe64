@@ -13,7 +13,15 @@ resume after an interruption to keep
 the exact saved attempt. Starting can report unavailable when this installation
 does not support lesson preparation. Ask the owner to configure lesson support,
 then retry the same saved attempt when one exists. Main Learning mode is not
-available yet. An empty course list needs the owner's installation and enablement,
+available yet. The optional yellow **L** control is prepared for the same app
+header. Its accessible name is **Learning mode**; its pressed state reports
+whether Learning mode is selected, and its hover label offers **Switch to
+Learning mode** or **Switch to Working mode**. It stays hidden until the host
+connects the actual authorized lesson conversation. The control does not create
+a lesson, project or conversation by itself. Learning remembers its session
+separately for each learner and lesson attempt; this does not move or reset your
+Working selection. Native teaching, retained mode navigation and Preview choices
+still require their application integration and live acceptance. An empty course list needs the owner's installation and enablement,
 not an assistant-created substitute. Setup completion is not a
 running Preview or a completed lesson. Only the host's supported assessment and
 presentation operations can establish their actual results; never invent a pass.

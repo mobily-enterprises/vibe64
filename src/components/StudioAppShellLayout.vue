@@ -2,6 +2,7 @@
   <v-app-bar
     border
     class="shell-layout__app-bar bg-surface"
+    :class="{ 'studio-app-shell-layout--learning': learningMode }"
     density="comfortable"
     elevation="0"
     data-testid="jskit-shell-app-bar"
@@ -10,6 +11,20 @@
     @touchend="endPaneSwipe"
     @touchcancel="cancelPaneSwipe"
   >
+    <v-btn
+      v-if="showLearningModeControl"
+      class="studio-app-shell-layout__learning-plate"
+      :class="{ 'studio-app-shell-layout__learning-plate--active': learningMode }"
+      aria-label="Learning mode"
+      :aria-pressed="learningMode"
+      :title="learningMode ? 'Switch to Working mode' : 'Switch to Learning mode'"
+      height="40"
+      min-width="44"
+      variant="flat"
+      @click="emit('update:learningMode', !learningMode)"
+    >
+      <span aria-hidden="true">L</span>
+    </v-btn>
     <slot name="top-left" />
     <v-spacer />
     <div class="studio-app-shell-layout__top-right">
@@ -19,7 +34,7 @@
     </div>
   </v-app-bar>
 
-  <v-main class="bg-background">
+  <v-main class="bg-background" :class="{ 'studio-app-shell-layout--learning': learningMode }">
     <v-container
       fluid
       class="shell-layout__content studio-app-shell-layout__content"
@@ -46,9 +61,11 @@ const BROWSER_GESTURE_EDGE_PX = 24;
 
 const props = defineProps({
   mobilePaneSwipeEnabled: Boolean,
-  chatCollapsed: Boolean
+  chatCollapsed: Boolean,
+  showLearningModeControl: Boolean,
+  learningMode: Boolean
 });
-const emit = defineEmits(["update:chatCollapsed"]);
+const emit = defineEmits(["update:chatCollapsed", "update:learningMode"]);
 let paneSwipe = null;
 
 watch(() => [props.mobilePaneSwipeEnabled, props.chatCollapsed], cancelPaneSwipe);
@@ -211,6 +228,38 @@ function endPaneSwipe(event) {
 
 .studio-app-shell-layout__content {
   padding: 0.75rem 0.75rem 0;
+}
+
+.studio-app-shell-layout--learning {
+  background-color: color-mix(in srgb, rgb(var(--v-theme-surface)) 92%, #ffdb2c) !important;
+}
+
+.studio-app-shell-layout__learning-plate {
+  flex: 0 0 auto;
+  margin-left: 0.75rem;
+  border: 2px solid #101010;
+  border-radius: 3px;
+  background-color: #ffdb2c !important;
+  color: #101010 !important;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0 0.5rem;
+}
+
+.studio-app-shell-layout__learning-plate--active {
+  box-shadow: 0 0 0 2px rgb(var(--v-theme-on-surface));
+}
+
+.studio-app-shell-layout__learning-plate:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-app-shell-layout__learning-plate {
+    transition: none;
+  }
 }
 
 .studio-app-shell-layout__top-right {
