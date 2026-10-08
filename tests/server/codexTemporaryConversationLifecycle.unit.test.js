@@ -13241,3 +13241,101 @@ test("actual learning Main host installs one catalogue before readiness and save
     return runtime;
   } });
 });
+
+
+test("R11 original persistent scoped Codex preserves history and excludes stopped writers without retiring a sibling", async () => {
+  const wires = new Map();
+  await withConversationController(async ({ captures, controller, calls, subscribers, temporaryRoot, projectContextRoot, projectService }) => {
+    captures.uniqueThreadIds = true;
+    const scopes = ["colleague_legacy", "colleague_sibling"].map(id => ({ id, environment: {},
+      workdir: path.join(temporaryRoot, id), runtimeRoot: path.join(temporaryRoot, id),
+      stableContext: "Use the supplied private conversation only." }));
+    for (const scope of scopes) await mkdir(scope.workdir, { recursive: true });
+    const targets = [];
+    const events = [];
+    for (const scope of scopes) {
+      const options = { assistantScope: scope, onEvent: event => events.push({ scopeId: scope.id, event }) };
+      const created = await controller.createConversation(scope.id, { persistent: true }, options);
+      assert.equal(created.ok, true, JSON.stringify(created));
+      assert.ok(created.conversationId);
+      wires.set(created.conversationId, { status: "idle", turns: [] });
+      targets.push({ scope, options, conversationId: created.conversationId });
+    }
+    const [old, sibling] = targets;
+    assert.notEqual(old.conversationId, sibling.conversationId);
+    assert.deepEqual(captures.threads[0].dynamicTools, []);
+    captures.onSendTurn = ({ threadId, input }) => {
+      const wire = wires.get(threadId);
+      wire.status = "active";
+      wire.turns.push({ id: `turn-${captures.turns.length}`, status: "inProgress", items: [{ id: "user", type: "userMessage",
+        clientId: `input-${captures.turns.length}`, content: input.map(text => ({ type: "inputText", text })) }] });
+    };
+    const first = await controller.startConversationTurn(old.scope.id, { conversationId: old.conversationId,
+      persistent: true, messageId: "original-request", message: "Retain this original discussion." }, old.options);
+    assert.equal(first.ok, true, JSON.stringify(first));
+    const saved = wires.get(old.conversationId);
+    saved.status = "idle";
+    saved.turns.at(-1).status = "completed";
+    saved.turns.at(-1).items.push({ id: "old-answer", type: "agentMessage", phase: "final_answer", text: "Original retained answer." });
+    emitCodexNotification(subscribers, turnCompleted({ threadId: old.conversationId, turnId: first.runId }));
+    const completed = await controller.readConversation(old.scope.id, { conversationId: old.conversationId, persistent: true }, old.options);
+    assert.equal(completed.messages.findLast(message => message.role === "assistant").text, "Original retained answer.");
+    const active = await controller.startConversationTurn(old.scope.id, { conversationId: old.conversationId,
+      persistent: true, messageId: "old-active", message: "Keep observing this unfinished request." }, old.options);
+    const siblingTurn = await controller.startConversationTurn(sibling.scope.id, { conversationId: sibling.conversationId,
+      persistent: true, messageId: "sibling-active", message: "Independent sibling work." }, sibling.options);
+    assert.equal(active.ok, true, JSON.stringify(active));
+    assert.equal(siblingTurn.ok, true, JSON.stringify(siblingTurn));
+    assert.equal((await controller.readConversation(sibling.scope.id, { conversationId: sibling.conversationId,
+      persistent: true }, sibling.options)).status, "inProgress");
+    const stopped = await controller.stopConversation(old.scope.id, { conversationId: old.conversationId,
+      runId: active.runId, persistent: true }, old.options);
+    assert.equal(stopped.ok, true, JSON.stringify(stopped));
+    assert.equal(stopped.status, "interrupted");
+    assert.ok(calls.some(([method, id]) => method === "stopObserved" && id === old.conversationId));
+    assert.equal(calls.some(([method, id]) => method === "stopObserved" && id === sibling.conversationId), false);
+    assert.equal((await controller.readConversation(sibling.scope.id, { conversationId: sibling.conversationId,
+      persistent: true }, sibling.options)).status, "inProgress", "Stop keeps the original sibling native owner active");
+    assert.equal(captures.stopRuntimes, 0, "per-conversation Stop cannot terminate the shared server");
+    const disposedProject = await controller.closeAllForProject({ projectContextRoot, reason: "unit-test" });
+    assert.equal(disposedProject.ok, true, JSON.stringify(disposedProject));
+    assert.equal(subscribers.size, 0, "the original project disposal releases each scoped native observer");
+    const invalidated = await controller.invalidateAppServerRuntimes({ includeOwned: true, reason: "server-shutdown" });
+    assert.equal(invalidated.ok, true, JSON.stringify(invalidated));
+    assert.ok(captures.stopRuntimes > 0);
+    const eventCount = events.length;
+    const turnCount = captures.turns.length;
+    emitCodexNotification(subscribers, { method: "item/agentMessage/delta", params: {
+      threadId: old.conversationId, turnId: active.runId, itemId: "late-answer", delta: "Late stopped words" } });
+    emitCodexNotification(subscribers, turnCompleted({ threadId: old.conversationId, turnId: active.runId }));
+    await flushPromises();
+    assert.equal(events.length, eventCount, "an excluded old writer cannot deliver a late observer callback");
+    assert.equal(captures.turns.length, turnCount, "shutdown and delayed output never infer again");
+    assert.deepEqual(captures.deletes, [], "stopped-service exclusion retains durable native history");
+    const after = restartedCaptures(captures);
+    const restarted = createRestartedController({ captures: after, projectService, providerFactory });
+    try {
+      const restored = await restarted.readConversation(old.scope.id, { conversationId: old.conversationId, persistent: true }, old.options);
+      assert.equal(restored.conversationId, old.conversationId);
+      assert.equal(restored.messages.findLast(message => message.role === "assistant").text, "Original retained answer.");
+      assert.deepEqual(after.threads, [], "ordinary restoration does not replace the original native thread");
+      assert.deepEqual(after.turns, [], "ordinary restoration does not repeat the old native request");
+    } finally { await restarted.invalidateAppServerRuntimes({ includeOwned: true, reason: "server-shutdown" }); }
+  }, { providerFactory });
+  function providerFactory(options, { calls, subscribers, captures }) {
+    const provider = createProvider(calls, subscribers, captures, options);
+    // Native wire fixture only: the unchanged original scoped owners retain
+    // admission, observation, Stop and shared process cleanup.
+    provider.readThread = async id => {
+      const wire = wires.get(id) || { status: "idle", turns: [] };
+      if (calls.some(([method, stoppedId]) => method === "stopObserved" && stoppedId === id)) {
+        wire.status = "idle";
+        if (wire.turns.at(-1)?.status === "inProgress") wire.turns.at(-1).status = "interrupted";
+      }
+      return { raw: { id, historyMode: "paginated", status: wire.status, turns: wire.turns } };
+    };
+    provider.readThreadStatus = id => provider.readThread(id);
+    provider.listThreadTurns = async id => ({ data: (await provider.readThread(id)).raw.turns });
+    return provider;
+  }
+});

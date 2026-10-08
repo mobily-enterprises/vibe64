@@ -4752,3 +4752,142 @@ test("shared admitted question staging preserves the original transaction, actor
   assert.deepEqual(record, before);
   assert.equal(writes, writesBefore, "retired staging never commits the canonical record");
 });
+
+
+// Literal supported schema-1 product input, not an authentic old native writer.
+// Its stopped-writer prerequisite is proved at the original scoped owner.
+async function r11LiteralLegacyFixture(t, responses) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "colleague-r11-literal-"));
+  const native = await createControlledColleagueNativeCommands(root, []);
+  const scopeId = "colleague_literal_schema1";
+  const legacy = { schemaVersion: 1, scopeId, assistantSelection: selection,
+    status: "working", error: "", conversationId: "literal-historical-thread", runId: "literal-historical-run",
+    currentTurnId: "000001", operation: { id: "literal-uncertain-operation", status: "executing",
+      toolName: "vibe64_test_operate", arguments: '{"value":"must-not-repeat"}' },
+    conversationLog: [{ turnId: "000001", metadata: { application: { receipt: "retained-original-field" } }, messages: [
+      { messageId: "legacy-user", role: "user", text: "We discussed a grocery list.", at: "2026-10-01T00:00:00.000Z" },
+      { messageId: "legacy-answer", role: "assistant", text: "Original retained answer.", at: "2026-10-01T00:00:01.000Z" }
+    ] }], watches: [], observations: [], assignments: [] };
+  const retainedTurn = legacy.conversationLog[0];
+  Object.assign(retainedTurn, { user: retainedTurn.messages[0], assistant: retainedTurn.messages[1],
+    thinking: [], commentary: [] });
+  const directory = path.join(root, "colleague", "NDI");
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const file = path.join(directory, "conversation.json");
+  const originalBytes = JSON.stringify(legacy);
+  await writeFile(file, originalBytes, { mode: 0o600 });
+  const nativeMarker = path.join(directory, "literal-historical-native.jsonl");
+  await writeFile(nativeMarker, "Literal historical native bytes remain unchanged.\n");
+  const { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory } =
+    await import("../../packages/vibe64-colleague/src/server/conversationUpgrade.js");
+  const stages = [upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory];
+  for (let index = 0; index < stages.length; index++) {
+    const backupRoot = path.join(root, "backups", String(index));
+    await stages[index]({ systemRoot: root, backupRoot, apply: false, report() {} });
+  }
+  assert.equal(await readFile(file, "utf8"), originalBytes, "all supported preflight stages are read-only");
+  assert.deepEqual(await native.trace(), [], "preflight does not create or inspect a native process");
+  for (let index = 0; index < stages.length; index++) {
+    await stages[index]({ systemRoot: root, backupRoot: path.join(root, "backups", String(index)), apply: true, report() {} });
+  }
+  const upgraded = JSON.parse(await readFile(file, "utf8"));
+  assert.equal(upgraded.schemaVersion, 3);
+  assert.equal(upgraded.runtimeId, "NDI");
+  assert.equal(upgraded.scopeId, legacy.scopeId);
+  assert.deepEqual(upgraded.assistantSelection, legacy.assistantSelection);
+  assert.deepEqual(upgraded.conversationLog, legacy.conversationLog);
+  assert.deepEqual(upgraded.retiredConversation, { conversationId: legacy.conversationId, runId: legacy.runId,
+    currentTurnId: legacy.currentTurnId, assistantSelection: legacy.assistantSelection,
+    operation: { ...legacy.operation, status: "unknown" } });
+  assert.equal(upgraded.conversationMetadata, undefined, "no native/account/process binding is invented");
+  assert.equal(await readFile(path.join(root, "backups", "0", "NDI", "conversation.json"), "utf8"), originalBytes);
+  assert.equal(await readFile(nativeMarker, "utf8"), "Literal historical native bytes remain unchanged.\n");
+  assert.deepEqual(await native.trace(), [], "published feature transformations do not run inference or native cleanup");
+  const f = await fixture(t, responses, { systemRoot: root, native });
+  t.after(() => rm(root, { recursive: true, force: true }));
+  return { ...f, file, legacy, originalBytes, nativeMarker, upgraded };
+}
+
+test("R11 literal schema1 upgrade carries retained history once into a current native successor and resumes it", async t => {
+  const f = await r11LiteralLegacyFixture(t, [{ text: "The retained discussion is available." }]);
+  const before = await f.service.read({}, f.context);
+  assert.equal(before.conversationId, f.legacy.scopeId);
+  assert.deepEqual(before.messages.map(({ role, text }) => [role, text]), f.legacy.conversationLog[0].messages.map(({ role, text }) => [role, text]));
+  assert.deepEqual(await f.native.trace(), [], "reading migrated history never starts native work");
+  await f.send("Continue this retained discussion.", "after-legacy-upgrade");
+  const completed = await f.service.wait(f.context);
+  assert.equal(completed.status, "ready", completed.error);
+  assert.deepEqual(f.observations.mutations, [], "the unknown historical tool is never replayed");
+  const trace = await f.native.trace();
+  const starts = trace.filter(row => row.method === "thread/start");
+  const turns = trace.filter(row => row.method === "turn/start");
+  assert.equal(starts.length, 1);
+  assert.equal(turns.length, 1);
+  assert.notEqual(turns[0].params.threadId, f.legacy.conversationId);
+  assert.equal(turns[0].params.clientUserMessageId, "after-legacy-upgrade");
+  const frames = turns[0].params.input[0].text.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line))
+    .filter(value => Array.isArray(value.messages));
+  assert.equal(frames.length, 1, "the original changeover transports the retained rows once");
+  assert.deepEqual(frames[0].messages.map(({ role, text }) => [role, text]), f.legacy.conversationLog[0].messages.map(({ role, text }) => [role, text]));
+  const saved = JSON.parse(await readFile(f.file, "utf8"));
+  assert.deepEqual(saved.conversationLog[0], f.legacy.conversationLog[0]);
+  assert.equal(saved.retiredConversation.operation.status, "unknown");
+  await f.service.close();
+  const restored = await fixture(t, [{ text: "The same native successor continues." }], { systemRoot: f.root, native: f.native });
+  assert.deepEqual((await restored.service.read({}, restored.context)).messages, completed.messages);
+  await restored.send("Continue again.", "after-successor-restart");
+  const after = await restored.service.wait(restored.context);
+  assert.equal(after.status, "ready", after.error);
+  const restartedTrace = await f.native.trace();
+  assert.equal(restartedTrace.filter(row => row.method === "thread/start").length, 1);
+  const resumedTurns = restartedTrace.filter(row => row.method === "turn/start");
+  assert.deepEqual(resumedTurns.map(row => row.params.threadId), [turns[0].params.threadId, turns[0].params.threadId]);
+  assert.equal(resumedTurns[1].params.input[0].text.includes("[Conversation changeover]"), false,
+    "ordinary restart does not seed migrated history a second time");
+  assert.deepEqual(restored.observations.mutations, []);
+});
+
+test("R11 literal schema1 history uses fresh actor and selection authorization before native work", async t => {
+  const f = await r11LiteralLegacyFixture(t, []);
+  const before = await readFile(f.file, "utf8");
+  f.observations.allow = false;
+  await assert.rejects(f.send("Denied work", "r11-denied-login"), { statusCode: 401 });
+  f.observations.allow = true;
+  await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.model.select", input: {
+    assistantSelection: { ...selection, modelId: "denied" } }, context: f.context }), /Model access denied/);
+  const other = { ...f.context, requestMeta: { request: { vibe64User: { uid: 43, username: "another", role: "member" } } } };
+  const otherState = await f.service.read({}, other);
+  assert.deepEqual(otherState.messages, []);
+  assert.notEqual(otherState.conversationId, f.legacy.scopeId);
+  await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.conversation.history-page.read", input: {
+    conversationId: f.legacy.scopeId }, context: other }), { statusCode: 403 });
+  assert.deepEqual(await f.native.trace(), [], "denied requests and foreign history access never create, infer or clean native work");
+  assert.equal(await readFile(f.file, "utf8"), before, "failed authority checks never rewrite the migrated actor's record");
+  assert.deepEqual(f.observations.mutations, []);
+});
+
+test("R11 migrated current successor refuses a changed native account without another inference", async t => {
+  const f = await r11LiteralLegacyFixture(t, [{ text: "A current account owns this successor." }]);
+  await f.send("Continue with this account.", "r11-current-account");
+  assert.equal((await f.service.wait(f.context)).status, "ready");
+  const host = f.native.host(f.observations.scope);
+  const accountFile = host.env.TEST_ACCOUNT;
+  const originalAccount = await readFile(accountFile, "utf8");
+  const before = await f.native.trace();
+  const turns = before.filter(row => row.method === "turn/start");
+  assert.equal(turns.length, 1);
+  await writeFile(accountFile, "different@example.test");
+  try {
+    await assert.rejects(f.send("This account change must not infer.", "r11-changed-account"),
+      /another Codex account/);
+    const after = await f.native.trace();
+    assert.deepEqual(after.filter(row => row.method === "turn/start"), turns);
+    assert.equal(after.filter(row => row.method === "thread/start").length, 1);
+    assert.equal(after.some(row => row.method === "thread/archive" || row.method === "thread/delete"), false);
+    assert.deepEqual(f.observations.mutations, []);
+    const saved = JSON.parse(await readFile(f.file, "utf8"));
+    assert.deepEqual(saved.conversationLog[0], f.legacy.conversationLog[0]);
+    assert.equal(saved.retiredConversation.conversationId, f.legacy.conversationId,
+      "the current account fence does not invent an account binding for retired schema1 history");
+  } finally { await writeFile(accountFile, originalAccount); }
+});
