@@ -43,3 +43,8 @@ It is not a new visible launch control: the installation must connect the real
 lesson picker and authenticated Main route before Learning mode can start it.
 Colleague remains the supervisor; it must not claim these prerequisites mean that
 the left teacher, assessments or presentation have passed learner acceptance.
+
+Standalone lesson support uses the computer owner's local identity. Your existing
+Colleague history and Working conversations retain their ownership. If lessons
+are unavailable, keep your saved work and ask the installation owner to enable
+lesson support.

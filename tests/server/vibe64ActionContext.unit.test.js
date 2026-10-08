@@ -210,3 +210,107 @@ test("learning writes recheck active authority; ended observations retain the sa
   assert.equal(observe.calls[1].current.learningScope.attemptId, learningAttempt);
   assert.equal(currentProjectRequestContext(), null);
 });
+
+
+function learningOnlyContributor() {
+  const calls = [];
+  const state = { user: { uid: 42, username: "actual-process-owner", role: "owner" }, foreign: false };
+  let contributor;
+  registerVibe64ActionContext({ registerContextContributor(value) { contributor = value; return value; } }, {
+    admissionScope: "learning-only",
+    async resolveUser(input) { calls.push({ user: input }); return state.user; },
+    authorizeProject() { assert.fail("Learning-only authority cannot admit a working project"); },
+    async resolveLearningContext(input) {
+      calls.push({ learning: input });
+      return { projectRuntimeRoot: "/server-owned/actual-learner/attempt", learningScope: {
+        learnerId: state.foreign ? "another-owner" : String(input.actor.uid), attemptId: input.attemptId, noExercise: true
+      } };
+    }
+  });
+  const contribute = (definition, input = {}, context = {}) => contributor.contribute({ definition, input, context });
+  return { calls, state, contribute };
+}
+
+const scopedDefinition = (id, vibe64) => ({ id, extensions: { vibe64 } });
+
+test("action context rejects unsupported construction admission scopes before registration or resolution", () => {
+  for (const admissionScope of [null, "", "local", "learning", true, [], {}]) {
+    assert.throws(() => registerVibe64ActionContext({ registerContextContributor() { assert.fail("No registration"); } }, {
+      admissionScope, resolveUser() { assert.fail("No identity resolution"); }, authorizeProject() { assert.fail("No project authorization"); }
+    }), /admissionScope must be all or learning-only/u);
+  }
+});
+
+test("learning-only authority leaves ordinary Working and Colleague contributions empty before resolving an actor", async () => {
+  const f = learningOnlyContributor();
+  const cases = [
+    [scopedDefinition("vibe64.sessions.conversation.context.read", { projectScoped: true, learningAccess: "observe" }), { projectSlug: "working", sessionId: "saved" }],
+    [scopedDefinition("vibe64.colleague.state.read", { projectScoped: false }), {}],
+    [scopedDefinition("vibe64.accounts.state.read", { projectScoped: false }), {}],
+    [scopedDefinition("vibe64.training.author-preview.start", { projectScoped: true }), { projectSlug: "author-project" }],
+    [scopedDefinition("vibe64.sessions.source.read", { projectScoped: true }), { learningAttemptId: learningAttempt }],
+    [scopedDefinition("vibe64.training-other.read", { projectScoped: false }), {}],
+    [{ id: "unscoped.action" }, {}]
+  ];
+  for (const [definition, input] of cases) {
+    const context = { channel: "internal", localMarker: "retain" };
+    assert.deepEqual(await f.contribute(definition, input, context), {});
+    assert.deepEqual(context, { channel: "internal", localMarker: "retain" });
+  }
+  assert.deepEqual(f.calls, []);
+  const { authenticatedVibe64User } = await import("@local/vibe64-core/server/actionContext");
+  const colleague = withVibe64ActionContext({ id: "vibe64.colleague.state.read",
+    input: { schema: createSchema({}), mode: "create" }, execute(_input, context) { return authenticatedVibe64User(context); }
+  }, { projectScoped: false });
+  assert.equal(await colleague.execute({}, {}), null);
+  assert.deepEqual(await f.contribute(cases[0][0], cases[0][1], { vibe64Action: { existingHostMarker: true } }), {});
+  assert.deepEqual(f.calls, []);
+});
+
+test("learning-only authority uses the original fresh contributor for non-project Training and explicitly selected Main actions", async () => {
+  const f = learningOnlyContributor();
+  const training = scopedDefinition("vibe64.training.learning.read", { projectScoped: false });
+  const first = await f.contribute(training);
+  assert.equal(first.actor.id, "42");
+  assert.equal(first.vibe64Action.user, f.state.user);
+  assert.equal(first.vibe64Action.project, null);
+  assert.equal(Object.hasOwn(first.vibe64Action, "learning"), false);
+  const main = scopedDefinition("vibe64.sessions.agent-message.send", { projectScoped: true, learningAccess: "write" });
+  for (const [input, context] of [
+    [{ learningAttemptId: learningAttempt, sessionId: "saved-learning" }, {}],
+    [{ sessionId: "saved-learning" }, { requestMeta: { request: { params: { learningAttemptId: learningAttempt } } } }]
+  ]) {
+    const grant = await f.contribute(main, input, context);
+    assert.equal(grant.vibe64Action.user, f.state.user);
+    assert.equal(grant.vibe64Action.learning.learningScope.attemptId, learningAttempt);
+    assert.equal(grant.vibe64Action.learning.learningScope.learnerId, "42");
+    assert.equal(grant.vibe64Action.project, null);
+    const resolution = f.calls.at(-1).learning;
+    assert.equal(resolution.actor, f.state.user);
+    assert.equal(resolution.sessionId, "saved-learning");
+    assert.equal(resolution.access, "write");
+  }
+  assert.equal(f.calls.filter(value => value.user).length, 3);
+  f.state.user = null;
+  await assert.rejects(f.contribute(training), { code: "vibe64_auth_required" });
+  assert.equal(f.calls.filter(value => value.user).length, 4);
+});
+
+test("learning-only matching retains reserved authority, exact selector and foreign learner refusals", async () => {
+  const f = learningOnlyContributor();
+  const main = scopedDefinition("vibe64.sessions.agent-turn.interrupt", { projectScoped: true, learningAccess: "control" });
+  await assert.rejects(f.contribute(main, { learningAttemptId: learningAttempt }, { vibe64Action: { user: f.state.user } }),
+    { code: "vibe64_action_context_reserved" });
+  assert.deepEqual(f.calls, []);
+  await assert.rejects(f.contribute(main, { learningAttemptId: "../private" }), { code: "vibe64_learning_attempt_invalid" });
+  await assert.rejects(f.contribute(main, { learningAttemptId: learningAttempt, projectSlug: "working" }),
+    { code: "vibe64_learning_project_mismatch" });
+  await assert.rejects(f.contribute(main, { learningAttemptId: "12345678-1234-4234-8234-123456789abd" }, {
+    requestMeta: { request: { params: { learningAttemptId: learningAttempt } } }
+  }), { code: "vibe64_learning_attempt_mismatch" });
+  assert.equal(f.calls.some(value => value.learning), false);
+  f.state.foreign = true;
+  await assert.rejects(f.contribute(main, { learningAttemptId: learningAttempt, sessionId: "saved-learning" }),
+    { code: "vibe64_learning_scope_mismatch" });
+  assert.equal(f.calls.at(-1).learning.access, "control");
+});

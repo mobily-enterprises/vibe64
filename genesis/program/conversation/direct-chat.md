@@ -3328,3 +3328,15 @@ empty lists produce no fabricated lesson row. This increment adds no session
 list/API switch, request routing, Main conversation or Preview player. The host
 still needs its authenticated attempt and captured original panel/API owners to
 keep background Working sessions mounted during real mode navigation.
+
+The existing Core action contributor has a closed server-construction
+`admissionScope`: its default `all` retains the hosted global authority path.
+`learning-only` contributes only to non-project Training definitions or actions
+with declared learning access and an explicit attempt selector. Ordinary Working
+and Colleague operations return an empty contribution before resolving a user,
+retaining their original local/null-user policy and saved identity keys. Matched
+operations use the same fresh actor, reserved-context, exact attempt, project
+exclusion and learner-binding checks. This prerequisite does not derive an OS
+actor, install a local host contributor, expose routes or prove native teaching;
+the actual host must admit its real local authority without replacing transport
+gates. Unsupported construction scopes fail before registration.

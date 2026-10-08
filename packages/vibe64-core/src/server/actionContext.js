@@ -109,7 +109,11 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
 
 // Hosts supply authentication and project access through JSKIT's existing
 // context contributor. Both callers are re-authorized for every execution.
-function registerVibe64ActionContext(actions, { projectContext, resolveUser, authorizeProject, resolveLearningContext } = {}) {
+function registerVibe64ActionContext(actions, { projectContext, resolveUser, authorizeProject, resolveLearningContext,
+  admissionScope = "all" } = {}) {
+  if (!["all", "learning-only"].includes(admissionScope)) {
+    throw new TypeError("Vibe64 action context admissionScope must be all or learning-only.");
+  }
   if (typeof resolveUser !== "function" || typeof authorizeProject !== "function") {
     throw new TypeError("Vibe64 action context requires resolveUser() and authorizeProject().");
   }
@@ -118,6 +122,11 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
     async contribute({ definition, input, context }) {
       const scope = definition.extensions?.vibe64;
       if (!scope) return {};
+      if (admissionScope === "learning-only" &&
+          !(scope.projectScoped === false && definition.id.startsWith("vibe64.training.") ||
+            scope.learningAccess && (input.learningAttemptId || context.requestMeta?.request?.params?.learningAttemptId))) {
+        return {};
+      }
       if (Object.hasOwn(context, "vibe64Action")) {
         throw actionContextError("vibe64_action_context_reserved", "Operation authority is resolved by the host.");
       }
