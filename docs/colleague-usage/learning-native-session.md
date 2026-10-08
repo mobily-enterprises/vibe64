@@ -77,3 +77,8 @@ Being able to read historical chat does not permit another lesson evaluation.
 If access or the active attempt changes, reopen the intended lesson with current
 access before requesting new teaching work. The internal authority prerequisite
 adds no person-facing control or lesson tool by itself.
+
+A supported learning conversation retains its own attempt when its delayed AI
+completion arrives after you select a Working conversation. That completion
+does not use the selected Working project or create a Git checkpoint. This
+context prerequisite alone does not enable Main lesson tools or prove a pass.

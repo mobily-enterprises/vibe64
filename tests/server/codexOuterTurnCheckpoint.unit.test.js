@@ -285,3 +285,64 @@ test("the original Main dispatch marks only interruption as closing control befo
     assert.deepEqual(controls, [true]);
   }
 });
+
+
+test("original Codex completion queue restores the source-less learning context for its Main checkpoint", async t => {
+  const { runtime, learningScope } = await learningNativeFixture(t);
+  const { createCodexSessionTurnCheckpoint } = await import("../../packages/vibe64-terminals/src/server/sessionTurnCheckpoint.js");
+  const { runWithCodexAppServerProjectContext } = await import("../../packages/vibe64-terminals/src/server/codexSessionProviderHost.js");
+  const { currentProjectRequestContext, runWithProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const core = import.meta.resolve("@jskit-ai/assistant-core/server/conversation");
+  const { createCodexAppServerNotificationQueue } = await import(new URL("./codexNotificationQueue.js", core));
+  const id = "learning-completion-context";
+  await runtime.createSession({ sessionId: id });
+  const threadId = "11111111-1111-4111-8111-111111111111";
+  const turnId = "22222222-2222-4222-8222-222222222222";
+  const outerTurnId = "33333333-3333-4333-8333-333333333333";
+  await runtime.store.writeAgentRunEvent(id, "codex_app_server", { patch: {
+    provider: "codex", providerInterface: "codex_app_server", providerThreadId: threadId,
+    providerTurnId: turnId, outerTurnId, state: "completed", providerStatus: "completed"
+  } });
+  const context = Object.freeze({ learningScope, projectRuntimeRoot: runtime.stateRoot,
+    vibe64User: { userId: "42" }, learningInstructions: async () => "Exact saved lesson" });
+  const failures = [];
+  const queue = createCodexAppServerNotificationQueue({ runInContext: runWithCodexAppServerProjectContext,
+    reportError: error => failures.push(error) });
+  const checkpoint = createCodexSessionTurnCheckpoint({ projectService: {
+    createRuntime: async () => {
+      assert.deepEqual(currentProjectRequestContext(), context);
+      return runtime;
+    }, readCurrentProject: () => assert.fail("Learning completion must not read a Working project")
+  }, publishSessionChanged: () => assert.fail("Learning completion has no Git success task") });
+  const before = await runtime.store.readSession(id);
+  let result;
+  // The original asynchronous native notification queue owns completion order;
+  // its checkpoint callback must restore its admitted context after Send returns.
+  await runWithProjectRequestContext({ targetRoot: "/other/working/project", vibe64User: { userId: "other" } }, async () => {
+    queue.run({ sessionId: id, projectContext: context }, async () => {
+      result = await checkpoint(id, { status: "completed", threadId, turnId });
+    });
+    await queue.drain(id);
+    assert.equal(currentProjectRequestContext().targetRoot, "/other/working/project");
+  });
+  assert.deepEqual(failures, []);
+  assert.deepEqual(result, { ok: true, processed: false, reason: "learning_session_no_git_checkpoint",
+    checkpoint: { applicable: false, outerTurnId, outcome: "completed" } });
+  assert.deepEqual(await runtime.store.readSession(id), before);
+  assert.equal(currentProjectRequestContext(), null);
+});
+
+test("original Codex context restoration preserves Working and unscoped callback behavior", async () => {
+  const { runWithCodexAppServerProjectContext } = await import("../../packages/vibe64-terminals/src/server/codexSessionProviderHost.js");
+  const { currentProjectRequestContext, runWithProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const working = { targetRoot: "/working/project", vibe64User: { userId: "working-owner" } };
+  await runWithProjectRequestContext({ targetRoot: "/outer/project" }, async () => {
+    await runWithCodexAppServerProjectContext(working, async () => assert.deepEqual(currentProjectRequestContext(), working));
+    await runWithCodexAppServerProjectContext({ vibe64User: { userId: "unscoped" } }, async () => {
+      assert.equal(currentProjectRequestContext().targetRoot, "/outer/project");
+      assert.equal(currentProjectRequestContext().vibe64User, undefined);
+    });
+    assert.equal(currentProjectRequestContext().targetRoot, "/outer/project");
+  });
+  assert.equal(currentProjectRequestContext(), null);
+});

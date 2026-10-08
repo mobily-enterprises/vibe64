@@ -59,7 +59,7 @@ function codexAppServerAdmissionError(sessionId = "") {
 }
 
 function runWithCodexAppServerProjectContext(projectContext = null, operation = async () => null) {
-  if (projectContext?.targetRoot) {
+  if (projectContext?.targetRoot || projectContext?.learningScope) {
     return runWithProjectRequestContext(projectContext, operation);
   }
   return operation();

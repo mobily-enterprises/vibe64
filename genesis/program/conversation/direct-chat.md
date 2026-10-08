@@ -3443,3 +3443,11 @@ Working list errors independently of the visible Learning list; failed Working
 refresh retains background Working hosts without preserving removed Learning
 hosts. Default unconfigured Working retention remains unchanged. These attachment
 checks do not prove the visible launcher, Preview or actual teacher admission.
+
+The original Codex callback context owner also restores a captured Learning
+scope without a source root. Its existing notification queue can then invoke
+the original Main checkpoint against that attempt's Runtime and actor after
+Send returns. Working roots and unscoped callbacks retain their original
+behavior; Learning still returns the existing no-Git checkpoint result. This
+necessary new-host adaptation supplies no teaching manifest or completion
+promotion, and its source-graph callback proof is not installed native acceptance.
