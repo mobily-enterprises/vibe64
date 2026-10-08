@@ -163,12 +163,19 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
 
   return Object.freeze([
     definition("courses.list", {}, "Read installed course releases and their exact lesson choices. Read this again in the current teaching turn before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare an exercise. Drafts and disabled releases are not available for new teaching admissions. Topic IDs identify pinned content, not usage-guide topics.", async () => {
-      const result = await catalogue.readCatalogue();
+      const result = await catalogue.readCatalogue({ includeLessonTitles: true });
       return { ok: true, available: true, revision: result.revision, courses: result.courses.map(entry => ({
         ...pick(entry.course, ["courseId", "release", "title", "status"]), enabled: entry.enabled,
-        lessons: entry.lock.topics.flatMap(topic => topic.lessons.map(lesson => ({
-          ...pick(lesson, ["code", "hash", "status", "required"]), topicId: topic.topicId, topicRelease: topic.release
-        })))
+        lessons: entry.lock.topics.flatMap(topic => topic.lessons.map(lesson => {
+          const matches = (entry.lessonTitles || []).filter(value => value.topicId === topic.topicId &&
+            value.topicRelease === topic.release && value.code === lesson.code && value.hash === lesson.hash);
+          const title = matches[0]?.title;
+          if (matches.length !== 1 || typeof title !== "string" || title.length < text.minLength || title.length > text.maxLength) {
+            throw new Error("The installed catalogue did not return one bounded title for this exact lesson pin.");
+          }
+          return { ...pick(lesson, ["code", "hash", "status", "required"]),
+            title, topicId: topic.topicId, topicRelease: topic.release };
+        }))
       })) };
     }),
     definition("learning.read", {}, "Read this signed-in learner's current saved lesson and verified progress. No reservation, exercise or summary repair is performed. The saved resume question is a checkpoint, not proof that it is unanswered or the next task. Read teaching-brief.read for exact passed and remaining assessments before continuing. Saved preparation and visual snapshots are earlier facts, not current Preview or animation readiness. preparation.phase is a saved checkpoint: reserved/preparing does not prove Workspace setup is still running. Repeated reads cannot complete it. Read the fresh teaching brief: when lesson.exerciseRequired is false, a reserved attempt needs no project or setup and can prepare its declared quiz answers. For an already-requested exercise lesson, use lesson.resume with this same attemptId to recheck actual setup and retain proven readiness.", async (_input, actor) => {

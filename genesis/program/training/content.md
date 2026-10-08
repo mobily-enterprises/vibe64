@@ -490,8 +490,15 @@ Explicit Start emits only `{courseId, release, lessonCode, expectedRevision}` fo
 the original start owner; the parent retains request identity and actual admission.
 It adds no catalogue revision guard, pin receipt or second start contract. The
 existing server action resolves and authorizes the immutable installed pin.
-The list projection supplies lesson hash/topic release, not source commit or
-lesson title; the picker never invents those missing facts.
+The original catalogue read can opt into transient `lessonTitles` metadata,
+collected during its same verified pinned-topic read. Each title comes from the
+original bounded validated lesson descriptor and is joined by exact topic release,
+lesson code and hash. Canonical `courses.list` projects that one bounded title
+beside its original fields. Default reads, saved course locks, writer behavior and
+formats stay unchanged; there is no second catalogue/read or historical repair.
+The picker shows that readable title beside its exact code. Missing titles show
+a refresh error while keeping saved learning/history; no invented fallback or
+retargeted choice is used. New choices still disclose no source commit/path.
 
 Resume emits only the supplied saved attempt ID, independently of current course
 enablement. A saved attempt alone cannot enable resume; the parent must supply

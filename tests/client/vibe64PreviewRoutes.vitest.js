@@ -93,8 +93,8 @@ const savedId = "11111111-1111-4111-8111-111111111111";
 function pickerCatalogue() {
   return { ok: true, available: true, revision: 3, courses: [
     { courseId: "getting-started", release: "0.1.7", title: "Getting started", status: "released", enabled: true, lessons: [
-      { code: "V64-START-00", hash: pickerHash, topicId: "intro", topicRelease: "0.1.7", status: "published", required: true },
-      { code: "V64-START-01", hash: "d".repeat(64), topicId: "intro", topicRelease: "0.1.7", status: "published", required: true }
+      { code: "V64-START-00", title: "Connect your first AI", hash: pickerHash, topicId: "intro", topicRelease: "0.1.7", status: "published", required: true },
+      { code: "V64-START-01", title: "Explore Vibe64", hash: "d".repeat(64), topicId: "intro", topicRelease: "0.1.7", status: "published", required: true }
     ] }
   ] };
 }
@@ -264,4 +264,39 @@ describe("Training lesson picker prerequisite", () => {
     expect(html).not.toContain('aria-label="Loading installed lessons"');
     expect(html).not.toContain('aria-label="Loading saved lesson"');
   });
+});
+
+
+it("shows the actual readable lesson title alongside its exact code", async () => {
+  const html = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: true });
+  expect(html).toContain("Connect your first AI · V64-START-00");
+  expect(html).toContain("Explore Vibe64 · V64-START-01");
+  expect(html).toContain(pickerHash);
+});
+
+it("missing titles refuse new choice intent while retaining saved attempt and read-only history", async () => {
+  const catalogue = pickerCatalogue();
+  delete catalogue.courses[0].lessons[0].title;
+  const learning = pickerLearning(pickerAttempt());
+  learning.history = [{ ...pickerAttempt(), attemptId: "22222222-2222-4222-8222-222222222222", ended: { reason: "restart" } }];
+  const html = await renderPicker({ catalogueResult: catalogue, learningResult: learning, canStart: true, canResume: true });
+  expect(html).toContain("Lesson titles are unavailable. Refresh lesson choices");
+  expect(html).toContain("Refresh lessons");
+  expect(html).toContain("Saved lesson · V64-START-00");
+  expect(html).toContain("Saved lesson history (1)");
+  const start = vi.fn();
+  const state = mountPicker({ onStart: start });
+  selectFirst(state);
+  const captured = state.selectionId;
+  pickerApp._instance.props.catalogueResult = catalogue;
+  await nextTick();
+  expect(state.catalogueInvalid).toBe(true);
+  expect(state.selectionId).toBe(captured);
+  expect(state.selected).toBeNull();
+  state.requestStart();
+  expect(start).not.toHaveBeenCalled();
+  pickerApp._instance.props.catalogueResult = pickerCatalogue();
+  await nextTick();
+  expect(state.selected.lesson.title).toBe("Connect your first AI");
+  expect(state.selected.lesson.hash).toBe(pickerHash);
 });

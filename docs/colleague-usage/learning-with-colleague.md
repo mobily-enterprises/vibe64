@@ -240,11 +240,14 @@ An assessment error does not prove a Helper setup problem. Keep the attempt and 
 ## Preview lesson choices: integration prerequisite
 
 The prepared **Lessons** picker displays the host's installed courses in their
-original order, including exact course/topic releases and lesson hashes. It does
+original order, with readable lesson titles beside the exact lesson codes,
+course/topic releases and lesson hashes. It does
 not install or enable content. Disabled courses, preview courses and draft
 lessons stay labelled and unavailable for a new start. Choose a published lesson
 from an enabled release, then use **Start selected lesson** to request that exact
-lesson. Selection alone never starts anything. The host's original lesson action
+lesson. Selection alone never starts anything. A missing title reports **Lesson titles
+are unavailable**; use **Refresh lessons**. This preserves the saved attempt and
+history and does not substitute an invented title or another lesson. The host's original lesson action
 must still authorize and admit it; unavailable support or a failed read is not a
 successful start.
 

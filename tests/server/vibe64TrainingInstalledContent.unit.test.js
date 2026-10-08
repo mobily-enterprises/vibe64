@@ -618,3 +618,116 @@ test("author-preview readers retain original snapshot corruption refusal and req
   await assert.rejects(() => author.readLesson(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
   assert.deepEqual(await treeState(f.systemRoot), before);
 });
+
+
+// Readable catalogue titles reuse these same installed snapshot fixtures and
+// the original verified catalogue/action owners. Original reader tests above
+// remain unchanged.
+import { createCourseLock } from "../../packages/vibe64-training/src/server/catalogue.js";
+import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
+import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
+import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
+import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
+import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+
+async function titleCatalogue(f) {
+  const course = { schemaVersion: 1, courseId: "readable-course", release: "0.1.0", title: "Readable lessons", status: "preview",
+    topics: [{ topicId: f.installed.pin.topicId, release: f.installed.pin.release }] };
+  const lock = createCourseLock(course, [{ ...f.installed.pin, topicManifest: f.installed.bundle.topicManifest }]);
+  const catalogue = createInstalledTrainingCatalogue({ systemRoot: f.systemRoot });
+  await catalogue.enableCourse({ course, lock, expectedRevision: 0 });
+  return { catalogue, course, lock };
+}
+function titleActions(f, catalogue) {
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "title-fixture", domain: "training", actions: createTrainingActions({ catalogue,
+    learners: createTrainingLearnerState({ systemRoot: f.systemRoot }), teachingBrief: createTrainingTeachingBrief({ systemRoot: f.systemRoot })
+  }).map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });
+  registerVibe64ActionContext(actions, { resolveUser: async () => ({ uid: 42, username: "reader", role: "member" }),
+    authorizeProject() { assert.fail("Course title reads must not require a project."); } });
+  const execute = (input = {}) => actions.execute({ actionId: "vibe64.training.courses.list", input, context: { channel: "api", surface: "app" } });
+  return { actions, execute };
+}
+
+test("opt-in lesson titles use exact verified snapshots without changing default catalogue or persisted locks", async t => {
+  const f = await fixture(t);
+  const { catalogue, course, lock } = await titleCatalogue(f);
+  const savedPath = path.join(f.systemRoot, "training/catalogue.json");
+  const saved = JSON.parse(await readFile(savedPath, "utf8"));
+  const before = await treeState(f.systemRoot);
+  const display = await catalogue.readCatalogue({ includeLessonTitles: true });
+  assert.deepEqual(display.courses[0].lessonTitles, [
+    { topicId: "installed-topic", topicRelease: "0.1.0", code: "LESSON-01", hash: f.installed.bundle.lessons[0].hash, title: "Use an application" },
+    { topicId: "installed-topic", topicRelease: "0.1.0", code: "LESSON-02", hash: f.installed.bundle.lessons[1].hash, title: "Draft" }
+  ]);
+  assert.deepEqual(await catalogue.readCatalogue(), saved);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+  await catalogue.disableCourse({ courseId: course.courseId, release: course.release, expectedRevision: 1 });
+  assert.equal((await catalogue.readCatalogue({ includeLessonTitles: true })).courses[0].enabled, false);
+  await catalogue.enableCourse({ course, lock, expectedRevision: 2 });
+  const persisted = JSON.parse(await readFile(savedPath, "utf8"));
+  assert.equal(persisted.revision, 3);
+  assert.equal(Object.hasOwn(persisted.courses[0], "lessonTitles"), false);
+  assert.deepEqual(persisted.courses[0].lock, lock);
+  assert.deepEqual(await catalogue.readCatalogue(), persisted);
+  await assert.rejects(() => catalogue.readCatalogue({ includeLessonTitles: "true" }), /explicit Boolean/u);
+});
+
+test("canonical course API and native tool project bounded installed lesson titles with all original identities and no writes", async t => {
+  const f = await fixture(t);
+  const { catalogue } = await titleCatalogue(f);
+  const { actions, execute } = titleActions(f, catalogue);
+  const before = await treeState(f.systemRoot);
+  const result = await execute();
+  assert.deepEqual(result.courses[0].lessons, [
+    { code: "LESSON-01", hash: f.installed.bundle.lessons[0].hash, status: "published", required: true,
+      title: "Use an application", topicId: "installed-topic", topicRelease: "0.1.0" },
+    { code: "LESSON-02", hash: f.installed.bundle.lessons[1].hash, status: "draft", required: true,
+      title: "Draft", topicId: "installed-topic", topicRelease: "0.1.0" }
+  ]);
+  const tools = createServiceToolCatalog(actions, { maxDirectTools: 100 });
+  const context = { channel: "automation", surface: "app" };
+  const toolSet = tools.resolveToolSet(context);
+  const definition = toolSet.tools.find(value => value.actionId === "vibe64.training.courses.list");
+  const tool = await tools.executeToolCall({ toolName: definition.name, toolSet, context, argumentsText: "{}" });
+  assert.equal(tool.ok, true, JSON.stringify(tool));
+  assert.deepEqual(tool.result, result);
+  assert.doesNotMatch(JSON.stringify(result), /sourceRoot|repository|descriptor|snapshotRoot|lessonTitles|lesson\.json|controller/u);
+  await assert.rejects(() => execute({ includeLessonTitles: true }), { code: "ACTION_VALIDATION_FAILED" });
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("title projection ignores edited live source and refuses a tampered exact installed descriptor without repair", async t => {
+  const f = await fixture(t);
+  const { catalogue } = await titleCatalogue(f);
+  const { execute } = titleActions(f, catalogue);
+  await f.write("training/lessons/LESSON-01/lesson.json", { ...f.lesson, title: "Edited live source" });
+  assert.equal((await execute()).courses[0].lessons[0].title, "Use an application");
+  await f.write("files/training/lessons/LESSON-01/lesson.json", { ...f.lesson, title: "Tampered installed title" }, f.installed.snapshotRoot);
+  const before = await treeState(f.systemRoot);
+  await assert.rejects(() => catalogue.readCatalogue({ includeLessonTitles: true }), { code: "VIBE64_TRAINING_CATALOGUE_INVALID" });
+  await assert.rejects(() => execute(), { code: "VIBE64_TRAINING_CATALOGUE_INVALID" });
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("canonical title projection refuses missing, ambiguous, oversized or wrong-pin display metadata", async t => {
+  const f = await fixture(t);
+  const { catalogue } = await titleCatalogue(f);
+  const original = await catalogue.readCatalogue({ includeLessonTitles: true });
+  for (const change of [
+    entry => { entry.lessonTitles = []; },
+    entry => { entry.lessonTitles.push({ ...entry.lessonTitles[0] }); },
+    entry => { entry.lessonTitles[0].title = "x".repeat(257); },
+    entry => { entry.lessonTitles[0].hash = "0".repeat(64); }
+  ]) {
+    const result = structuredClone(original);
+    change(result.courses[0]);
+    const { execute } = titleActions(f, { readCatalogue: async options => {
+      assert.deepEqual(options, { includeLessonTitles: true });
+      return result;
+    } });
+    await assert.rejects(() => execute(), /training operation could not complete/u);
+  }
+});

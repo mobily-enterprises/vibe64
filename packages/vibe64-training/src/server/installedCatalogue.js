@@ -92,6 +92,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
       throw new Error("The approved course lock must contain every selected whole topic in order.");
     }
     const resolved = [];
+    const lessonTitles = [];
     for (const reference of references) {
       const pin = validateInstalledTopicPin({
         schemaVersion: 1,
@@ -104,6 +105,10 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
       const topic = await installed.readTopic(pin);
       if (canonicalJson(topic.pin) !== canonicalJson(pin)) {
         throw new Error("Installed topic identity differs from the approved course lock.");
+      }
+      for (const bundle of topic.bundles) {
+        lessonTitles.push({ topicId: pin.topicId, topicRelease: pin.release,
+          code: bundle.lesson.code, hash: bundle.hash, title: bundle.lesson.title });
       }
       resolved.push({
         topicId: topic.pin.topicId,
@@ -118,9 +123,13 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     if (canonicalJson(entry.lock) !== canonicalJson(expected)) {
       throw new Error("The approved course lock differs from the complete installed topic inventory. Regenerate and review its exact release.");
     }
+    return lessonTitles;
   }
 
-  async function readCatalogue() {
+  async function readCatalogue({ includeLessonTitles = false } = {}) {
+    if (typeof includeLessonTitles !== "boolean") {
+      throw new TypeError("Lesson title projection requires an explicit Boolean read option.");
+    }
     try {
       const { catalogueStat } = await inspectPaths();
       if (!catalogueStat) {
@@ -146,7 +155,10 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
         seen.add(identity);
         // Disabled snapshots are retained and verified too. A missing/corrupt
         // snapshot fails catalogue admission closed, never triggers a repair.
-        await verifyEntry(entry);
+        const lessonTitles = await verifyEntry(entry);
+        // Read-only display metadata is never part of the saved course/lock.
+        // All writers retain the original default read result unchanged.
+        if (includeLessonTitles) entry.lessonTitles = lessonTitles;
       }
       return catalogue;
     } catch (cause) {

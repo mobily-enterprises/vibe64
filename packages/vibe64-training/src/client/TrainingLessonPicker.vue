@@ -16,6 +16,9 @@ const emit = defineEmits(["refresh", "start", "resume"]);
 const selectionId = ref("");
 const text = value => typeof value === "string" && value.length > 0;
 const revision = value => Number.isSafeInteger(value) && value >= 0;
+const lessonTitlesMissing = computed(() => Array.isArray(props.catalogueResult?.courses) &&
+  props.catalogueResult.courses.some(course => Array.isArray(course?.lessons) &&
+    course.lessons.some(lesson => !text(lesson?.title))));
 
 // These are display-shape guards, not replicas of the server's content,
 // permission, pin, progress or admission validators.
@@ -26,7 +29,7 @@ const catalogueInvalid = computed(() => {
       !text(course?.courseId) || !text(course.release) || !text(course.title) ||
       typeof course.enabled !== "boolean" || !text(course.status) || !Array.isArray(course.lessons) ||
       course.lessons.some(lesson => !text(lesson?.code) || !text(lesson.hash) ||
-        !text(lesson.topicId) || !text(lesson.topicRelease) || !text(lesson.status))));
+        !text(lesson.topicId) || !text(lesson.topicRelease) || !text(lesson.status) || !text(lesson.title))));
 });
 const courses = computed(() => !catalogueInvalid.value && props.catalogueResult?.ok === true &&
   props.catalogueResult.available === true ? props.catalogueResult.courses : []);
@@ -126,7 +129,7 @@ function requestResume() {
 
     <v-skeleton-loader v-if="catalogueLoading && !courses.length" type="heading, list-item-two-line, list-item-two-line" aria-label="Loading installed lessons" />
     <v-alert v-if="catalogueError || catalogueInvalid" type="error" variant="tonal" role="alert">
-      {{ catalogueError || 'Installed lesson choices could not be displayed. Refresh or ask the owner to restore the exact content; nothing was installed or enabled.' }}
+      {{ catalogueError || (lessonTitlesMissing ? 'Lesson titles are unavailable. Refresh lesson choices; your saved lesson and history remain retained.' : 'Installed lesson choices could not be displayed. Refresh or ask the owner to restore the exact content; nothing was installed or enabled.') }}
     </v-alert>
     <p v-else-if="!catalogueLoading && (!catalogueResult || catalogueResult.ok !== true || catalogueResult.available !== true)" role="status">
       {{ catalogueResult?.error || 'Installed lessons are not available yet.' }}
@@ -140,7 +143,7 @@ function requestResume() {
         <v-card-text>
           <p v-if="course.lessons.length === 0">This course has no displayed lesson choices.</p>
           <div v-for="lesson in course.lessons" :key="choiceId(course, lesson)" class="training-lesson-picker__choice">
-            <v-radio :value="choiceId(course, lesson)" :label="lesson.code" :disabled="!offered(course, lesson)" />
+            <v-radio :value="choiceId(course, lesson)" :label="`${lesson.title} · ${lesson.code}`" :disabled="!offered(course, lesson)" />
             <p>{{ lesson.topicId }} · {{ lesson.topicRelease }} · {{ lesson.status === 'published' ? 'Published' : 'Draft — unavailable for new lessons' }}</p>
             <details><summary>Lesson identity</summary><code>{{ lesson.hash }}</code></details>
           </div>
@@ -179,6 +182,7 @@ function requestResume() {
 .training-lesson-picker__saved p + p { margin-top: 0.5rem; }
 .training-lesson-picker__history li + li { margin-top: 1rem; }
 .training-lesson-picker :deep(.v-card-title), .training-lesson-picker :deep(.v-card-subtitle), .training-lesson-picker p, .training-lesson-picker code, .training-lesson-picker dd { white-space: normal; overflow-wrap: anywhere; }
+.training-lesson-picker :deep(.v-label) { white-space: normal; overflow-wrap: anywhere; }
 .training-lesson-picker dl { margin-top: 0.5rem; }
 .training-lesson-picker dt { font-weight: 600; }
 .training-lesson-picker dd { margin-bottom: 0.5rem; }
