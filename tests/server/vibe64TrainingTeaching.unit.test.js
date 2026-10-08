@@ -890,7 +890,10 @@ test("Main prospective client capture retains original UUID facts before later r
 test("Main nine teaching definitions retain original scopes and cannot borrow a model-supplied browser or attempt", async t => {
   const f = await mainTeachingFixture(t);
   const mapped = await f.bound.applicationTools.prepareContext(f.current, f.admitted);
-  assert.equal(mapped.requestMeta.request.params.learningAttemptId, f.attemptId);
+  assert.deepEqual(mapped.requestMeta.request.params, {}, "native learner-scoped tools do not inherit the browser Session route");
+  assert.equal(f.current.browserAuthority.requestContext.requestMeta.request.params.learningAttemptId, f.attemptId,
+    "the original exact browser route remains retained for every fresh authority check");
+  assert.notEqual(mapped.requestMeta.request, f.current.browserAuthority.requestContext.requestMeta.request);
   assert.equal(f.main.actionIds.length, 9);
   const { createTrainingPresentationActions } = await import("../../packages/vibe64-training/src/server/presentationActions.js");
   const visual = createTrainingPresentationActions({ learners: f.learners, content: f.content, mainTeaching: f.main });
