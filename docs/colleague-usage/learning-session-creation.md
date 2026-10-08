@@ -32,3 +32,25 @@ These action and storage prerequisites do not yet expose a complete lesson picke
 or Main teacher in every installation. They do not establish successful question
 delivery, assessment, speech or presentation. Use the installation's supported
 controls; an internal operation name is not a visible button.
+
+
+## Local editor availability
+
+The local editor uses the OS account running it for saved lessons. Open it through
+its supported localhost connection; typing another name or account into a request
+does not change lesson ownership. Ordinary Working and Colleague conversations
+keep their existing history and preferences. Text lessons need no speech service.
+
+The owner must first install and enable a reviewed course release using the
+existing operator commands. An empty course list is not a broken conversation and
+does not authorize installing arbitrary content. Starting or resuming a lesson
+uses the same saved attempt and revision rules as hosted Vibe64. Retrying an
+uncertain start keeps its request and content choice; it does not reset progress.
+
+This standalone increment supports lessons without a practice exercise. A lesson
+that requires a practice project can report that exercise preparation is
+unavailable. Keep its saved attempt and ask the installation owner for support;
+there is no successful practice project or setup to retry yet. Ending the attempt
+requires an explicit request and retains its history. Lesson delivery, assessment
+and the visible Main Learning launcher still require their own supported controls
+and acceptance; backend availability alone is not a completed lesson.

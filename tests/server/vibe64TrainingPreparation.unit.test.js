@@ -325,3 +325,34 @@ test("ordinary starts cannot preoccupy host-owned continuation identities", asyn
   assert.deepEqual(f.calls, []);
 });
 
+
+
+test("missing exercise provisioner refuses before preparation effects while retaining the original reservation", async t => {
+  for (const missing of [undefined, {}, { createManagedGitProject() {} }, { verifyTrainingProjectSource() {} }]) {
+    const f = await fixture(t);
+    f.owners.projectRepositoryService = missing;
+    const service = createTrainingService(f.owners);
+    await assert.rejects(service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "local-start" }),
+      { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE", statusCode: 409 });
+    assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "lock", "lesson"]);
+    assert.equal(f.attempt.preparation.phase, "reserved");
+    assert.equal(f.failure, null);
+    assert.equal(f.state().revision, 1);
+    await assert.rejects(service.prepareLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE" });
+    assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "lock", "lesson", "lock", "lesson"]);
+    await assert.rejects(readFile(path.join(f.sourceRoot, "genesis/stack.md")), { code: "ENOENT" });
+  }
+});
+
+test("no-exercise preparation does not require an exercise provisioner", async t => {
+  const f = await fixture(t);
+  f.owners.projectRepositoryService = undefined;
+  f.owners.content.readLesson = async () => ({ lesson: {} });
+  const service = createTrainingService(f.owners);
+  const started = await service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "local-quiz" });
+  const resumed = await service.prepareLesson({ actor, attemptId });
+  assert.deepEqual(resumed, started);
+  assert.equal(resumed.attempt.preparation.phase, "reserved");
+  assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "lock", "lock"]);
+  assert.equal(f.failure, null);
+});

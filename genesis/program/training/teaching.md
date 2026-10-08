@@ -6,6 +6,10 @@
 - `packages/vibe64-training/src/server/installedContent.js`
 - `packages/vibe64-training/src/server/learnerState.js`
 - `packages/vibe64-training/src/server/learningSessions.js`
+- `packages/vibe64-training/src/server/Vibe64TrainingProvider.js`
+- `packages/vibe64-training/src/server/registerRoutes.js`
+- `packages/vibe64-training/src/server/preparation.js`
+- `tests/server/vibe64TrainingPreparation.unit.test.js`
 - `tests/server/vibe64SessionsDirect.unit.test.js`
 - `tests/server/vibe64ActionContext.unit.test.js`
 - `tests/server/vibe64TrainingTeachingBrief.unit.test.js`
@@ -33,6 +37,41 @@ projects only the selected store's active attempt and provenance through its
 original bounds and content checks. This prerequisite alone adds no author-preview
 action, learner admission, grading, resource route or rendering implementation;
 ordinary learner readers still refuse drafts.
+
+### Original host composition and learning HTTP
+
+The Training Feature requires the existing Project, Sessions, Terminals and HTTP
+owners and provides `vibe64.training`. It optionally consumes the generic
+`vibe64.training.host` capability: exact original catalogue/content/learners/brief,
+preparation and learning-session references, not callbacks, actor cache or paths.
+When present, those supplied references remain exact and the host retains its one
+Training action registration, authority contributor and learning Session routes.
+The Feature adds only the canonical Training HTTP adapter in this branch.
+
+Without that capability, the Feature composes the original published-content,
+catalogue, learner, brief, preparation and learning-session owners from the
+configured Studio system root. It uses Core's closed `learning-only` contributor:
+only a trusted local request admits the actual OS owner's UID/username, never a
+browser actor or a requestless native assertion. Working/Colleague operations
+return no contribution and retain their original local identity. The original
+learning Session adapter reuses its action-derived source-independent allowlist.
+The missing local exercise repository provisioner is reported by original
+preparation after the no-exercise branch and before `beginPreparation` or project
+writes; a reserved attempt remains available for honest recovery.
+
+Both modes dispatch `/api/vibe64/training` courses, learning state, exact attempt
+brief and start/resume/end/continue through existing canonical actions. The path
+attempt is authoritative, supplied actor fields are removed, and the existing
+local/origin transport gate and action schemas remain in effect. No HTTP handler
+copies preparation, pin, assessment or progress policy. No source project is
+fabricated for a no-exercise lesson.
+
+Optional hosted composition orders this Feature after the supplied host. The
+Feature does not depend on Colleague, and none of Project/Sessions/Terminals or
+the supplied host requires `vibe64.training`, avoiding a reverse capability edge.
+These source compositions are not packaged adoption, a visible lesson launcher,
+native application-tool provenance, supported standalone exercise provisioning
+or successful teacher/assessment/browser acceptance.
 
 ### Internal declared application check
 

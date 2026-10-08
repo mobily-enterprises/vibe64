@@ -891,3 +891,120 @@ test("author preview API/tools retain bounded original projections and fresh own
   await assert.rejects(execute("read"), { statusCode: 401 });
   assert.equal(calls.length, before, "revocation cannot reach the preview owner");
 });
+
+
+// These appended cases compose the real original installed/learning/preparation
+// owners. They do not launch a native teacher, provision an exercise or prove UI.
+test("standalone Training Feature uses actual OS-owner authority only for trusted learning transports", async t => {
+  const f = await fixture(t);
+  const [{ Vibe64TrainingProvider }, { configureStudioProjectContext }, { currentOsUser },
+    { withVibe64ActionContext }, { createSchema }, { default: Fastify }] = await Promise.all([
+    import("../../packages/vibe64-training/src/server/Vibe64TrainingProvider.js"),
+    import("@local/vibe64-core/server/studioProjectContext"), import("@local/vibe64-core/server/osUserIdentity"),
+    import("@local/vibe64-core/server/actionContext"), import("@jskit-ai/kernel/shared/validators"), import("fastify")
+  ]);
+  configureStudioProjectContext({ explicitSystemRoot: f.systemRoot, explicitTargetRoot: f.root });
+  t.after(() => configureStudioProjectContext());
+  const actions = createActionCatalogue();
+  const server = Fastify();
+  t.after(() => server.close());
+  server.decorateRequest("executeAction", function ({ actionId, input }) {
+    return actions.execute({ actionId, input, context: { channel: "api", surface: this.routeOptions.config.surface,
+      requestMeta: { request: this } } });
+  });
+  const registered = [];
+  const http = { router: { register(method, url, options, handler) {
+    registered.push({ method, url });
+    server.route({ method, url, config: { surface: options.surface }, handler });
+  } } };
+  const unexpected = () => assert.fail("no-exercise preparation must not invoke source, setup or native session effects");
+  const { training } = await Vibe64TrainingProvider.setup({ actionCatalogue: actions, http,
+    project: { createRuntime: unexpected }, sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: {}, trainingHost: null });
+  assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host" });
+  assert.deepEqual(Object.keys(training).sort(), ["brief", "catalogue", "content", "exercises", "learners", "learningSessions"]);
+  assert.ok(registered.some(route => route.url.startsWith("/api/learning/:learningAttemptId/vibe64/")));
+  assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
+  const observed = [];
+  actions.register({ contributorId: "original-local-scopes", domain: "test", actions: ["vibe64.working.fixture", "vibe64.colleague.fixture"].map(id =>
+    withVibe64ActionContext({ id, kind: "query", channels: ["api"], surfaces: ["app"],
+      input: { mode: "create", schema: createSchema({}) }, execute(input, context) {
+        observed.push({ input, context }); return { ok: true };
+      } }, { projectScoped: false })) });
+  const courses = await server.inject({ method: "GET", url: "/api/vibe64/training/courses" });
+  assert.equal(courses.statusCode, 200, courses.body);
+  assert.equal(courses.json().courses[0].lessons[0].code, f.input.lessonCode);
+  const initial = await server.inject({ method: "GET", url: "/api/vibe64/training/learning" });
+  assert.equal(initial.statusCode, 200, initial.body);
+  assert.equal(initial.json().revision, 0);
+  const started = await server.inject({ method: "POST", url: "/api/vibe64/training/lessons/start", payload: {
+    ...f.input, actor: { uid: 999, username: "forged" }, vibe64User: { uid: 999, role: "owner" }
+  } });
+  assert.equal(started.statusCode, 200, started.body);
+  const id = started.json().active.attemptId;
+  const osActor = currentOsUser();
+  const state = await training.learners.readState({ actor: osActor });
+  assert.equal(state.progress.learnerId, String(osActor.uid));
+  assert.equal(state.active.attemptId, id);
+  assert.equal(state.active.preparation.phase, "reserved");
+  assert.equal((await training.learners.readState({ actor: { uid: 999, username: "forged" } })).progress.attempts.length, 0);
+  const resumed = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/resume`, payload: {
+    attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  } });
+  assert.equal(resumed.statusCode, 200, resumed.body);
+  assert.equal(resumed.json().active.attemptId, id, "the saved path attempt wins over a conflicting body");
+  const brief = await server.inject({ method: "GET", url: `/api/vibe64/training/attempts/${id}/brief` });
+  assert.equal(brief.statusCode, 200, brief.body);
+  assert.equal(brief.json().brief.attemptId, id);
+  assert.equal(brief.json().brief.lesson.exerciseRequired, false);
+  const ended = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/end`, payload: {
+    requestId: "local-end", expectedRevision: state.revision, reason: "restart"
+  } });
+  assert.equal(ended.statusCode, 200, ended.body);
+  assert.ok(ended.json().attempt.ended);
+  const continued = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/continue`, payload: {
+    requestId: "local-next", expectedRevision: ended.json().revision
+  } });
+  assert.equal(continued.statusCode, 200, continued.body);
+  assert.notEqual(continued.json().active.attemptId, id);
+  const inheritedRemoteRequest = Object.create({
+    get ip() { return "198.51.100.7"; }, get headers() { return { host: "untrusted.example" }; },
+    vibe64User: { uid: osActor.uid, username: osActor.username, role: "owner" }
+  });
+  for (const request of [undefined, inheritedRemoteRequest, { ip: "198.51.100.7", headers: { host: "untrusted.example" },
+    vibe64User: { uid: osActor.uid, username: osActor.username, role: "owner" } }]) {
+    await assert.rejects(actions.execute({ actionId: "vibe64.training.learning.read", input: {},
+      context: { channel: "internal", surface: "app", requestMeta: { request } } }), { code: "vibe64_auth_required" });
+  }
+  for (const actionId of ["vibe64.working.fixture", "vibe64.colleague.fixture"]) {
+    await actions.execute({ actionId, input: {}, context: { channel: "api", surface: "app",
+      requestMeta: { request: { ip: "127.0.0.1", headers: { host: "localhost" } } } } });
+  }
+  assert.equal(observed.length, 2);
+  for (const result of observed) {
+    assert.equal(result.input.vibe64User, undefined);
+    assert.equal(result.context.vibe64Action, undefined, "Working/Colleague do not acquire OS-owner authority");
+  }
+});
+
+test("hosted Training Feature retains exact supplied owners and registers no second actions, authority or Main routes", async t => {
+  const f = await fixture(t);
+  const { Vibe64TrainingProvider } = await import("../../packages/vibe64-training/src/server/Vibe64TrainingProvider.js");
+  const registered = [];
+  const trainingHost = Object.freeze({ catalogue: f.catalogue, content: f.content, learners: f.learners,
+    brief: f.teachingBrief, exercises: f.exercises, learningSessions: { resolveContext() {}, openSession() {} } });
+  const outputs = await Vibe64TrainingProvider.setup({ actionCatalogue: {
+    register() { assert.fail("the hosted original action catalogue must not be registered twice"); },
+    registerContextContributor() { assert.fail("the hosted original authority must not be registered twice"); }
+  }, http: { router: { register(method, url, options, handler) { registered.push({ method, url, options, handler }); } } },
+    project: {}, sessions: {}, terminals: {}, trainingHost });
+  assert.equal(outputs.training, trainingHost);
+  assert.equal(registered.length, 7);
+  assert.equal(registered.every(route => route.url.startsWith("/api/vibe64/training/") && route.options.surface === "app"), true);
+  assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false, "Online retains its one existing Main route registration");
+  assert.deepEqual(registered.map(route => [route.method, route.url]), [
+    ["GET", "/api/vibe64/training/courses"], ["GET", "/api/vibe64/training/learning"],
+    ["GET", "/api/vibe64/training/attempts/:attemptId/brief"], ["POST", "/api/vibe64/training/lessons/start"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/resume"], ["POST", "/api/vibe64/training/attempts/:attemptId/end"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/continue"]
+  ]);
+});

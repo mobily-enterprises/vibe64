@@ -84,6 +84,10 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
         }
         return { ...saved, previewReady: false };
       }
+      if (typeof projectRepositoryService?.createManagedGitProject !== "function" ||
+          typeof projectRepositoryService?.verifyTrainingProjectSource !== "function") {
+        throw trainingError("VIBE64_TRAINING_EXERCISE_UNAVAILABLE", "This installation cannot prepare the lesson's practice project. Keep the saved attempt and ask the owner to provide exercise preparation.");
+      }
       saved = await learners.beginPreparation({ actor, attemptId, expectedRevision: saved.revision });
       const { attempt } = saved;
       const initialSessionId = attempt.preparation.initialSessionId;

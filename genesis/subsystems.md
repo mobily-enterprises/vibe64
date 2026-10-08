@@ -30,7 +30,8 @@ declared exercise checks reuse the original project/App/managed-command owners a
 confirm server observations, not learner passes. Provides shared fresh-actor
 course/read/start/resume and current interactive question-preparation actions; a host
 composes the shared preparation coordinator with the original project/repository,
-session and Workspace setup facilities; otherwise start/resume reports unavailable.
+session and Workspace setup facilities. Without an exercise provisioner,
+exercise start/resume reports unavailable before practice effects.
 This subsystem owns start/resume/end/retained-pin continuation policy while hosts
 supply concrete resources and provisioning. Reserved
 no-exercise quizzes reuse these pins and answer owners without project effects;
@@ -40,8 +41,13 @@ and ended state without repair. Its internal learning-session coordinator derive
 the authenticated attempt context and fresh pinned teaching instructions while
 using the original preparation lock, Project factory and Main Session creation.
 Historical observation/control cannot admit new lesson work. Runtime construction,
-native admission and all providers stay with existing owners. Host routes and
-Main application-tool integration remain unfinished. Teaching
+native admission and native providers stay with existing owners. Main
+application-tool integration remains unfinished. The Training Feature supplies
+canonical Training HTTP/action composition in Public and consumes an optional
+host's exact existing services without duplicating hosted authority or writers.
+Standalone learning-only admission uses the actual OS owner through the original
+trusted local transport; Working/Colleague identity stays unchanged. Original
+preparation reports missing exercise provisioning before project effects. Teaching
 delivery, public standalone provisioning and installation controls remain incomplete. JSKIT and
 Genesis do not own teaching semantics. Topic source
 and generated bundles are author-controlled files, rather than database tables.
