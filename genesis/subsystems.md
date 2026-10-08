@@ -12,8 +12,10 @@ declared visual asset reads from exact installed lesson pins. These are internal
 server facilities without source access for Colleague. The presentational lesson
 picker displays parent-supplied installed choices and saved progress, and emits
 explicit start/resume intent through the original Training operations. It owns
-neither API reads, permission/pin/progress rules nor writes; retained Preview and
-Main Learning-mode placement remain host integration work.
+neither API reads, permission/pin/progress rules nor writes. One shared client
+Learning UI adapter supplies actor-scoped original Training reads and captured
+Start/Resume/Open coordination; server owners retain admission and progress.
+Retained Preview and Main Learning-mode placement remain host integration work.
 Owns the original canonical delivered-question and completed-practical proof
 readers plus delivery promotion, staging, accepted-answer correlation and
 delivered-question capture, immediately reused by the original Colleague
@@ -67,6 +69,7 @@ authoring, learner and pinned-recovery topics through the original usage reader.
 
 - `genesis/program/training/content.md`
 - `genesis/program/training/teaching.md`
+- `genesis/program/training/learning-ui.md`
 
 ### Data owned
 
