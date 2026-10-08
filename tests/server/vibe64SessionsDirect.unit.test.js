@@ -4181,3 +4181,65 @@ test("typed Main learning transport uses fresh authenticated catalogue authority
     assert.equal(f.nativeMessages.length, 1);
   });
 });
+
+test("the original Create action opens and reopens only the authenticated server-reserved learning session", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await learningSessionCreationFixture(root);
+    const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
+    const { registerVibe64ActionContext } = await import("../../packages/vibe64-core/src/server/actionContext.js");
+    const actions = createActionCatalogue();
+    actions.register({ contributorId: "actual-sessions", domain: "vibe64-sessions", actions: createSessionActions({ sessions: f.service })
+      .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
+    let user = f.actor;
+    const authorizations = [];
+    registerVibe64ActionContext(actions, {
+      resolveUser: async () => user,
+      authorizeProject: () => assert.fail("Opening a learning conversation must not authorize a substitute project"),
+      async resolveLearningContext(input) {
+        authorizations.push(input);
+        return f.learningSessions.resolveContext(input);
+      }
+    });
+    const request = { actionId: ACTION_CREATE_SESSION,
+      input: { learningAttemptId: f.scope.attemptId, originId: "learning-picker" },
+      context: { surface: "app", channel: "internal", requestMeta: { request: {
+        vibe64User: { uid: "99", username: "caller-selected-user", role: "owner" }
+      } } } };
+    const created = await actions.execute(request);
+    assert.equal(created.ok, true, created.error);
+    assert.equal(created.sessionId, `learning-${f.scope.attemptId}`);
+    assert.deepEqual(created.learning.pin, f.scope.pin);
+    assert.equal(created.learning.learnerId, f.actor.uid);
+    const saved = await f.runtime.store.readSession(created.sessionId);
+    const reopened = await actions.execute(request);
+    assert.equal(reopened.ok, true, reopened.error);
+    assert.equal(reopened.sessionId, created.sessionId);
+    assert.deepEqual(await f.runtime.store.readSession(created.sessionId), saved);
+    assert.equal(f.createdInputs.length, 1);
+    assert.equal(f.publications.length, 1);
+    assert.equal(f.nativeMessages.length, 0);
+    assert.equal(authorizations.every(input => input.actor === f.actor && input.attemptId === f.scope.attemptId && input.access === "create"), true);
+    f.trainingState.active = false;
+    await assert.rejects(actions.execute(request), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+    user = null;
+    await assert.rejects(actions.execute(request), { code: "vibe64_auth_required" });
+    assert.equal(f.createdInputs.length, 1);
+    assert.equal(f.publications.length, 1);
+  });
+});
+
+test("a learning creation facility reauthorizes under the original preparation lock and is absent from observation", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await learningSessionCreationFixture(root);
+    const request = { actor: f.actor, attemptId: f.scope.attemptId };
+    const observed = await f.learningSessions.resolveContext({ ...request, access: "observe" });
+    assert.equal(Object.hasOwn(observed, "createLearningSession"), false);
+    const creating = await f.learningSessions.resolveContext({ ...request, access: "create" });
+    assert.equal(typeof creating.createLearningSession, "function");
+    f.trainingState.active = false;
+    await assert.rejects(creating.createLearningSession({}), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+    assert.equal(f.createdInputs.length, 0);
+    assert.equal(f.publications.length, 0);
+    assert.equal(f.nativeMessages.length, 0);
+  });
+});

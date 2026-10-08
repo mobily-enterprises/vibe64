@@ -609,6 +609,16 @@ teaching or grading session.
 
 ### Shared canonical teaching delivery coordination
 
+The original Main Create action declares learning creation access and delegates
+only an authorized learning context to Training's `createLearningSession` facility.
+The ordinary project branch is unchanged. Training supplies this facility only
+for creation authority; it captures the real learner and attempt and invokes its
+same opener, which rechecks activity under the original preparation/end lock.
+The browser cannot choose a private session identity. Reopening preserves the
+existing original record and publication, and starts no inference. The original
+Sessions test file covers canonical action admission, replay and revocation;
+visible lesson routes and installed teacher acceptance remain unfinished.
+
 The original Colleague's delivered-question promotion, staging, accepted-answer
 reader and delivered-question capture now use Training's existing
 `deliveryProof.js` owner. These operations use the original conversation log and

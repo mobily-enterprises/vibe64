@@ -32,6 +32,12 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
       systemRoot: saved.systemRoot,
       learningScope: Object.freeze(structuredClone(saved.scope)),
       vibe64User: actor,
+      ...(access === "create" ? {
+        // The canonical Create action receives this host-only facility. The
+        // opener rechecks the saved reservation under the original end lock;
+        // transport input never selects the reserved session identity.
+        createLearningSession: input => openSession({ actor, attemptId, input })
+      } : {}),
       async learningInstructions(currentSessionId) {
         if (sessionId && currentSessionId !== sessionId) {
           throw learningError("VIBE64_TRAINING_SESSION_MISMATCH", "Teaching instructions belong to this exact conversation.");
