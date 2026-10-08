@@ -1,17 +1,18 @@
 # Previewing a web application
 
-While the coding agent works, **Updating app…** covers the embedded app. After
-the agent stops, Preview refreshes automatically after a successfully completed
-turn, or after the whole goal completes. Interrupting the agent, a failed turn,
-an unavailable goal status, or a pause between goal turns keeps **App changes are
-hidden** visible. You can select **Preview changes** to reveal changes manually.
-The button is disabled during active edits. Revealing changes refreshes Preview,
-restarting a stale backend through the existing output
-command when required. This is a display cover, not a rollback or a saved app
-version. It applies to the current workspace on desktop and mobile; reloading
-the editor or switching sessions starts a new Preview view. Managed browser
-checks continue independently. Colleague can explain the button; it does not
-silently reveal or certify changes.
+While the coding agent works, a small **Work in progress** bar appears above the
+app. Preview stays visible and interactive on desktop and mobile, including
+during goals and after interruptions. The bar disappears when editing stops.
+
+When Vibe64's output status detects a failed or stale web server and recovery is
+available, **Server will be restarted soon** appears above the app. Recovery uses
+the app's declared output command and waits for editing and other source operations
+to stop; interrupting a turn does not cancel that queued recovery. It makes one
+automatic attempt. If that fails, the existing error and recovery controls remain
+available; use **Restart preview** or ask the coding agent to repair the failure.
+Application page errors that do not change the output's health remain visible in
+the app itself. Managed browser tests retain their own recovery lifecycle.
+Colleague can explain these controls and offer supported recovery assistance.
 
 An amber **Test Preview** bar means the selected app target declares isolated
 test data. It remains visible above the app on desktop and mobile, even with

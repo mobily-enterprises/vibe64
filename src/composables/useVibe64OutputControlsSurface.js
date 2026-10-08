@@ -904,30 +904,30 @@ function useVibe64OutputControlsSurface(props) {
   }));
   const previewFrameRequestId = computed(() => previewFrameRequest.value.id);
   const previewUrl = computed(() => previewFrameRequest.value.src);
-  const previewChangesHidden = ref(false);
-  watch([() => props.session?.sessionId, () => props.busy, () => props.sourceOperationsSuspended, previewUrl],
-    ([sessionId, busy, suspended, url], previous = []) => {
-      if (sessionId !== previous[0]) previewChangesHidden.value = false;
-      if ((busy || suspended) && url) previewChangesHidden.value = true;
-    }, { immediate: true, flush: "sync" });
-
-  watch([() => props.busy, () => props.sourceOperationsSuspended,
-    () => props.session?.agentSession?.turn, () => unref(props.previewGoalState)], async ([busy, suspended, turn, goal]) => {
-    if (previewChangesHidden.value && !busy && !suspended && turn?.state === "completed" && !turn.error &&
-        (!goal || (goal.enabled && !goal.pending && !goal.error && (!goal.goal || goal.goal.status === "complete")))) {
-      await revealPreviewChanges();
+  const previewRestartPending = ref(false);
+  let previewRestartAttempted = false;
+  const previewWorkNotice = computed(() => previewRestartPending.value
+    ? "Server will be restarted soon"
+    : props.busy || props.sourceOperationsSuspended ? "Work in progress" : "");
+  watch([() => props.session?.sessionId, () => props.busy, () => props.sourceOperationsSuspended,
+    previewState, operationBusy, terminalCanRestart, terminalCanRetry, previewCanRestart, previewTestNotice],
+  async ([sessionId, busy, suspended, state], previous = []) => {
+    if (sessionId !== previous[0] || state === "ready") {
+      previewRestartAttempted = false;
+      previewRestartPending.value = false;
+    }
+    if (busy && !previous[1]) previewRestartAttempted = false;
+    if (!props.embeddedPreview || previewTestNotice.value || !["stale", "failed"].includes(state) ||
+        !(terminalCanRestart.value || terminalCanRetry.value || previewCanRestart.value) || previewRestartAttempted) return;
+    previewRestartPending.value = true;
+    if (busy || suspended || operationBusy.value) return;
+    previewRestartAttempted = true;
+    try {
+      await recoverEmbeddedPreview();
+    } finally {
+      if (props.session?.sessionId === sessionId) previewRestartPending.value = false;
     }
   });
-
-  async function revealPreviewChanges() {
-    if (props.busy || props.sourceOperationsSuspended) return;
-    if (previewState.value === "stale") {
-      const result = await restartTerminal();
-      if (result?.ok === false) return;
-    }
-    await reloadPreview();
-    if (!props.busy && !props.sourceOperationsSuspended) previewChangesHidden.value = false;
-  }
   const previewFrameLoaded = computed(() => Boolean(
     previewUrl.value &&
     previewFrameRequestId.value > 0 &&
@@ -1032,6 +1032,7 @@ function useVibe64OutputControlsSurface(props) {
   const previewNoticeVisible = computed(() => Boolean(
     props.embeddedPreview &&
     previewNotice.value &&
+    !previewRestartPending.value &&
     !embeddedTerminalFrameVisible.value
   ));
   const previewRecoveryVisible = computed(() => Boolean(
@@ -2169,8 +2170,7 @@ function useVibe64OutputControlsSurface(props) {
 
   return {
     outputOptionsAction,
-    previewChangesHidden,
-    revealPreviewChanges,
+    previewWorkNotice,
     previewTestNotice,
     outputOptionsAvailable,
     outputOptionsError,

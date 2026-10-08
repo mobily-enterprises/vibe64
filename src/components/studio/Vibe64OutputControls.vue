@@ -514,31 +514,26 @@
     <div
       v-if="embeddedPreview"
       class="vibe64-launch-controls__preview"
-      :class="{ 'vibe64-launch-controls__preview--test': previewTestNotice }"
+      :class="{ 'vibe64-launch-controls__preview--notice': previewTestNotice || previewWorkNotice }"
     >
-      <div v-if="previewTestNotice" class="vibe64-launch-controls__test-notice" :class="{ 'vibe64-launch-controls__test-notice--error': previewTestNotice.error }" :role="previewTestNotice.error ? 'alert' : 'status'">
-        <strong>{{ previewTestNotice.title }}</strong>
-        <span>{{ previewTestNotice.message }}</span>
+      <div v-if="previewTestNotice || previewWorkNotice" class="vibe64-launch-controls__notices">
+        <div v-if="previewTestNotice" class="vibe64-launch-controls__test-notice" :class="{ 'vibe64-launch-controls__test-notice--error': previewTestNotice.error }" :role="previewTestNotice.error ? 'alert' : 'status'">
+          <strong>{{ previewTestNotice.title }}</strong>
+          <span>{{ previewTestNotice.message }}</span>
+        </div>
+        <div v-if="previewWorkNotice" class="vibe64-launch-controls__work-notice" role="status">{{ previewWorkNotice }}</div>
       </div>
       <iframe
         v-if="previewUrl"
-        :inert="previewChangesHidden ? true : undefined"
-        :aria-hidden="previewChangesHidden ? 'true' : undefined"
         :key="previewFrameRequestId"
         ref="previewFrame"
         allow="clipboard-write; microphone; autoplay"
         class="vibe64-launch-controls__preview-frame"
-        :style="previewChangesHidden ? { visibility: 'hidden' } : undefined"
         :data-preview-frame-request-id="previewFrameRequestId"
         :src="previewUrl"
         title="App preview"
         @load="handlePreviewFrameLoad"
       />
-      <div v-if="previewChangesHidden" class="vibe64-launch-controls__preview-empty vibe64-launch-controls__edit-cover" role="status">
-        <strong>{{ busy || sourceOperationsSuspended ? 'Updating app…' : 'App changes are hidden' }}</strong>
-        <span>Your app will stay hidden until you choose to preview the changes.</span>
-        <v-btn :disabled="busy || sourceOperationsSuspended || operationBusy" color="primary" variant="flat" @click="revealPreviewChanges">Preview changes</v-btn>
-      </div>
       <div
         v-if="previewLoadingOverlayVisible"
         class="vibe64-launch-controls__preview-empty vibe64-launch-controls__preview-overlay"
@@ -928,8 +923,7 @@ const {
   embeddedManualStartButtonDisabled,
   resourceAdmissionId,
   testApproval,
-  previewChangesHidden,
-  revealPreviewChanges,
+  previewWorkNotice,
   previewTestNotice,
   acceptResourceRetry,
   embeddedManualStartButtonVisible,
@@ -1570,9 +1564,15 @@ onBeforeUnmount(() => {
   grid-area: 1 / 1;
 }
 
-.vibe64-launch-controls__preview--test { grid-template-rows: auto minmax(0, 1fr); }
-.vibe64-launch-controls__preview--test > * { grid-area: 2 / 1; }
-.vibe64-launch-controls__preview--test > .vibe64-launch-controls__test-notice { grid-area: 1 / 1; }
+.vibe64-launch-controls__preview--notice { grid-template-rows: auto minmax(0, 1fr); }
+.vibe64-launch-controls__preview--notice > * { grid-area: 2 / 1; }
+.vibe64-launch-controls__preview--notice > .vibe64-launch-controls__notices { grid-area: 1 / 1; }
+.vibe64-launch-controls__work-notice {
+  padding: 6px 14px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 13px;
+}
 .vibe64-launch-controls__test-notice {
   display: flex;
   flex-wrap: wrap;
@@ -1628,8 +1628,6 @@ onBeforeUnmount(() => {
     rgb(var(--v-theme-surface));
   z-index: 1;
 }
-
-.vibe64-launch-controls__edit-cover { background: rgb(var(--v-theme-surface)); z-index: 2; }
 
 .vibe64-launch-controls__preview-diagnostic {
   align-self: center;

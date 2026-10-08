@@ -77,14 +77,16 @@ Close, Stop and collapsible task details retain their own existing behavior.
 
 ## Public contract
 
-Embedded Preview hides its iframe during active editing, and retains that cover
-after interruption, failure, or a gap between goal turns. A confirmed successful
-turn automatically reveals it when no goal remains, or when the existing goal
-owner reports complete. Pending or unavailable goal state retains the cover.
-**Preview changes** also reveals it manually through the existing refresh and
-stale-output restart operations.
-The cover is local to the mounted workspace and resets on session change; it
-neither snapshots source nor rolls back data or stops managed browser checks.
+Embedded Preview remains interactive during edits, goals and interruptions.
+A small **Work in progress** bar reports editing without hiding or replacing
+the frame. A recoverable failed or stale web output queues one existing output
+recovery attempt after editing/source operations settle, showing **Server will
+be restarted soon** while queued or running. Successful readiness or a new
+editing turn permits another attempt; failure retains ordinary diagnostics and
+manual recovery rather than a retry loop. The mounted surface owns the notice
+and invokes the existing admitted output commands; it adds no technology-specific
+preparation, execution, resource or database owner. Managed browser-test notices
+exclude this automatic recovery so their original lifecycle retains control.
 
 Output targets may declare `Data: test` or `Data: development` in the Vibe64-owned
 Outputs grammar. This optional field reaches target views unchanged. Test-data

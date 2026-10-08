@@ -735,9 +735,10 @@ interrupt a person's navigation away while the database loads.
 Preview visibly identifies a declared test-data target and managed browser-test
 handover. It shows restoration in progress and retains a red recovery notice
 after failed cleanup or restoration, instead of presenting test data as normal.
-During edits the embedded app is covered. It reveals completed changes after a
-successful turn or completed goal, staying covered through interruptions and
-goal pauses. **Preview changes** also allows an explicit manual reveal.
+During edits the embedded app stays interactive beneath a small **Work in
+progress** bar. A failed or stale server awaiting automatic recovery shows
+**Server will be restarted soon**. Recovery waits for edits to stop and uses
+the app's existing output commands, with one attempt before manual recovery.
 The diagram keeps the working space: routine search and Fit
 stay visible, while occasional display and arrangement controls live in an
 options menu. Overview concepts can be dragged continuously without waiting for

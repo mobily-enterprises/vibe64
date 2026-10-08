@@ -627,66 +627,65 @@ describe("Vibe64 launch controls surface", () => {
 
 const mountedSurfaces = [];
 
-it("keeps interrupted and goal-turn changes covered until an explicit reveal", async () => {
+it("keeps the same preview frame usable during edits, interruptions and goals", async () => {
   const f = mountOrientationSurface();
-  f.props.busy = true;
-  expect(f.state.previewChangesHidden.value).toBe(true);
   const generation = f.state.previewFrameRequestId.value;
-  await f.state.revealPreviewChanges();
+  f.props.busy = true;
+  expect(f.state.previewWorkNotice.value).toBe("Work in progress");
   expect(f.state.previewFrameRequestId.value).toBe(generation);
-  f.props.busy = false;
-  await nextTick();
-  expect(f.state.previewChangesHidden.value).toBe(true);
-  f.props.busy = true;
-  f.props.busy = false;
-  await nextTick();
-  expect(f.state.previewChangesHidden.value).toBe(true);
-  await f.state.revealPreviewChanges();
-  expect(f.state.previewChangesHidden.value).toBe(false);
-  expect(f.state.previewFrameRequestId.value).toBeGreaterThan(generation);
-  f.props.sourceOperationsSuspended = true;
-  expect(f.state.previewChangesHidden.value).toBe(true);
-  f.props.sourceOperationsSuspended = false;
-  f.props.session = { sessionId: "another-session" };
-  expect(f.state.previewChangesHidden.value).toBe(false);
-});
-
-it("keeps the cover when a stale backend cannot restart", async () => {
-  const f = mountOrientationSurface();
-  f.props.busy = true;
-  f.props.busy = false;
-  f.outputs.previewState.value = "stale";
-  f.outputs.restartTerminal.mockResolvedValue({ ok: false });
-  await f.state.revealPreviewChanges();
-  expect(f.outputs.restartTerminal).toHaveBeenCalledTimes(1);
-  expect(f.state.previewChangesHidden.value).toBe(true);
-});
-
-it("automatically reveals a successful turn, but waits for the whole goal", async () => {
-  const f = mountOrientationSurface();
+  expect(f.state.previewFrame.value).toBe(f.frame);
   f.props.previewGoalState = { enabled: true, pending: false, goal: { status: "active" } };
-  f.props.busy = true;
-  f.props.session.agentSession = { turn: { state: "completed" } };
-  f.props.busy = false;
-  await nextTick();
-  expect(f.state.previewChangesHidden.value).toBe(true);
-  for (const status of ["paused", "blocked", "usageLimited"]) {
-    f.props.previewGoalState = { enabled: true, pending: false, goal: { status } };
-    await nextTick();
-    expect(f.state.previewChangesHidden.value).toBe(true);
-  }
-  f.props.previewGoalState = { enabled: true, pending: false, goal: { status: "complete" } };
-  await nextTick(); await nextTick(); await nextTick();
-  expect(f.state.previewChangesHidden.value).toBe(false);
-  f.props.busy = true;
   f.props.session.agentSession = { turn: { state: "interrupted" } };
-  f.props.previewGoalState = null;
   f.props.busy = false;
   await nextTick();
-  expect(f.state.previewChangesHidden.value).toBe(true);
-  f.props.session.agentSession = { turn: { state: "completed" } };
+  expect(f.state.previewWorkNotice.value).toBe("");
+  expect(f.state.previewFrameRequestId.value).toBe(generation);
+  f.props.sourceOperationsSuspended = true;
+  expect(f.state.previewWorkNotice.value).toBe("Work in progress");
+  f.props.sourceOperationsSuspended = false;
+  expect(f.state.previewWorkNotice.value).toBe("");
+});
+
+it("queues generic preview recovery until edits stop, including an interruption", async () => {
+  const f = mountOrientationSurface();
+  f.outputs.terminalCanRestart.value = true;
+  f.props.busy = true;
+  f.outputs.previewState.value = "failed";
+  await nextTick();
+  expect(f.state.previewWorkNotice.value).toBe("Server will be restarted soon");
+  expect(f.outputs.run).not.toHaveBeenCalled();
+  expect(f.state.previewNoticeVisible.value).toBe(false);
+  f.props.session.agentSession = { turn: { state: "interrupted" } };
+  f.props.sourceOperationsSuspended = true;
+  f.props.busy = false;
+  await nextTick();
+  expect(f.outputs.run).not.toHaveBeenCalled();
+  f.props.sourceOperationsSuspended = false;
   await nextTick(); await nextTick(); await nextTick();
-  expect(f.state.previewChangesHidden.value).toBe(false);
+  expect(f.outputs.run).toHaveBeenCalledTimes(1);
+  expect(f.outputs.run).toHaveBeenCalledWith(expect.objectContaining({ id: "app" }),
+    expect.objectContaining({ forceRestart: true }));
+});
+
+it("does not loop after a failed recovery or interfere with managed browser tests", async () => {
+  const f = mountOrientationSurface();
+  f.outputs.terminalCanRestart.value = true;
+  f.outputs.run.mockResolvedValue(false);
+  f.outputs.previewState.value = "failed";
+  await vi.waitFor(() => {
+    expect(f.outputs.run).toHaveBeenCalledTimes(1);
+    expect(f.state.previewWorkNotice.value).toBe("");
+  });
+  expect(f.state.previewNoticeVisible.value).toBe(true);
+  f.outputs.previewMessage.value = "Still unavailable";
+  await nextTick();
+  expect(f.outputs.run).toHaveBeenCalledTimes(1);
+  f.outputs.previewState.value = "ready";
+  f.outputs.previewTestNotice.value = { title: "Test Preview", message: "Browser tests in progress" };
+  await nextTick();
+  f.outputs.previewState.value = "failed";
+  await nextTick();
+  expect(f.outputs.run).toHaveBeenCalledTimes(1);
 });
 afterEach(() => {
   for (const fixture of mountedSurfaces.splice(0)) fixture.dispose();
@@ -711,6 +710,7 @@ function mountOrientationSurface() {
   ].map(name => [name, ref(false)]));
   const target = { id: "app", presentation: { kind: "web" } };
   Object.assign(outputs, { activeOutputTarget: ref(target), outputTargets: ref([target]), previewState: ref("ready"),
+    previewTestNotice: ref(null), run: vi.fn(async () => ({ ok: true })),
     terminal: ref({ metadata: { outputTargetId: "app" } }), terminalSessionId: ref("terminal-a"),
     launchActions: ref([{ href: "https://preview.example.test/" }]), publishPreviewState: vi.fn(), refresh: vi.fn(async () => {}), restartTerminal: vi.fn(async () => ({ ok: true })) });
   surfaceHost.outputs = outputs;
