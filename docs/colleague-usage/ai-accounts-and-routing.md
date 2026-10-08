@@ -33,6 +33,13 @@ Claude's plan allowance shows only valid provider-reported usage windows. A
 missing allowance does not mean unlimited usage. If a model-list or allowance
 request reports that process cleanup could not be confirmed, ask the workspace
 operator to restore the execution service before retrying the request.
+The same applies when Claude cannot open its managed conversation stream after
+startup: failure to confirm cleanup does not mean the process has stopped. Keep
+the current conversation and ask the operator to restore its execution service;
+use its existing **Stop** control to retry owned cleanup when available. Do not
+change models or resend the pending words until cleanup and delivery are resolved.
+Colleague can explain the error and inspect readiness, but cannot repair the
+host's process service. These recovery steps apply on desktop and mobile.
 
 After connecting, the **[provider] connected** screen names the orchestrator you
 selected. For example, connecting DeepSeek through Codex shows only Codex's
