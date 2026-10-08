@@ -40,11 +40,14 @@ function createConversationApplication(conversation, { identity, viewer, summary
     Boolean(turn.value.id) && turn.value.state === "active" && mounted.agentConnectionStatus.value === "connected");
   const available = computed(() => current.value && !isArchivedVibe64Session(mounted.session.value || {}) &&
     !mounted.detailState.value?.error && !access.accessError.value);
+  function projectTrainingQuestion(reference) {
+    return Object.fromEntries(["attemptId", "questionId", "assessmentId", "issuedRevision", "topicHash", "lessonHash"]
+      .map(key => [key, reference[key]]));
+  }
   const trainingQuestion = computed(() => {
     const reference = conversation.snapshot.value?.trainingQuestion;
     if (!available.value || identity.learningAttemptId === undefined || reference?.attemptId !== identity.learningAttemptId) return null;
-    return Object.freeze(Object.fromEntries(["attemptId", "questionId", "assessmentId", "issuedRevision", "topicHash", "lessonHash"]
-      .map(key => [key, reference[key]])));
+    return Object.freeze(projectTrainingQuestion(reference));
   });
   // A goal can stay pinned to another native engine after a chat selection.
   // Product invalidations refresh the same binding; they own no goal cache.
@@ -75,8 +78,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     // local null marker never enters the original optional-object wire schema.
     const reference = Object.hasOwn(authored, "trainingQuestion") ? authored.trainingQuestion : trainingQuestion.value;
     if (identity.learningAttemptId !== undefined && reference?.attemptId === identity.learningAttemptId) {
-      data.trainingQuestion = Object.fromEntries(["attemptId", "questionId", "assessmentId", "issuedRevision", "topicHash", "lessonHash"]
-        .map(key => [key, reference[key]]));
+      data.trainingQuestion = projectTrainingQuestion(reference);
     }
     return { ...authored, submissionKind, data, request: { text: String(authored.message || ""), data,
       ...(authored.attachmentIds?.length ? { attachmentIds: authored.attachmentIds } : {}),
