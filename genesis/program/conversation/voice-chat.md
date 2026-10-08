@@ -27,7 +27,9 @@ when absent. A saved explicit boolean wins over the binding default. The binding
 supplies its label. A host may replace the settings slot with its own authorized
 preference control. Reactive voice changes reach subsequent replies through the
 JSKIT binding without replacing the conversation.
-Historical host talking/review preferences are not passed to the runtime.
+The approved tap/hold gestures remain unchanged; historical talking-mode choices
+are not forwarded. An explicitly saved edit-before-send choice maps to the
+runtime's existing captured reviewBeforeSend policy.
 Installed service voices are advertised to the modal and selected there.
 The root emits read-aloud-change only for an explicit speaker preference change,
 and forwards playback observations with their captured canonical conversation
@@ -248,3 +250,18 @@ eligibility flag for its unconfirmed or retired originating request. Raw turns,
 loading and saved thinking/interim preferences remain unchanged; the existing
 voice tracker consumes activity silently without resetting its identities.
 Working and Colleague keep their original narration projection.
+
+
+### Retained edit-before-send policy
+
+The same live VoiceHost defaults reader maps the host's explicitly loaded saved
+sendMode:edit to the existing reviewBeforeSend flag for both coding and Colleague
+bindings. JSKIT's original recording captures that flag; automatic daemon endpoint
+completion now honors it just like manual finalization. Continuous reset retains
+the ongoing capture's choice and separate UUID; fresh recording reads fresh defaults.
+This changes no delivery queue, playback/microphone ownership, persisted schema or
+approved automatic pause-send default. The optional preparePreferences facility
+composes with the existing binding.prepareVoice in the original connectSpeech
+boundary, before the controller releases its old target. Hosted reader/account
+failure refuses the replacement; it does not make the old microphone unavailable.
+Absent that facility, the original default connection branch remains exact.

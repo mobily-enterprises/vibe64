@@ -2,7 +2,10 @@
 import { onScopeDispose, provide, shallowRef, useSlots } from "vue";
 import { createVoiceConversationController, VoiceConversationHost } from "@jskit-ai/assistant-voice/client";
 import { VIBE64_VOICE_KEY } from "./voiceHost.js";
-const props = defineProps({ preferences: { type: Object, default: () => ({}) } });
+const props = defineProps({
+  preferences: { type: Object, default: () => ({}) },
+  preparePreferences: { type: Function, default: null }
+});
 const emit = defineEmits(["read-aloud-change", "playback"]);
 const controller = createVoiceConversationController({ connectSpeech(binding) {
   if (!binding.prepareVoice) return binding.socketUrl;
@@ -28,8 +31,18 @@ provide(VIBE64_VOICE_KEY, {
   Avatar: slots.avatar ? Avatar : null,
   Settings: slots.settings ? Settings : null,
   open(conversation) {
-    const actorKey = props.preferences.actorKey;
+    let actorKey = props.preferences.actorKey;
     return controller.open({ conversation: { ...conversation,
+      ...(props.preparePreferences ? { async prepareVoice() {
+        actorKey = await props.preparePreferences(conversation.preferenceTarget);
+        if (!actorKey || props.preferences.actorKey !== actorKey || conversation.available === false) {
+          throw new Error("This conversation is no longer available for voice.");
+        }
+        await conversation.prepareVoice?.();
+        if (props.preferences.actorKey !== actorKey || conversation.available === false) {
+          throw new Error("This conversation is no longer available for voice.");
+        }
+      } } : {}),
       // Accessors remain live: spreading a binding would freeze state/access.
       get state() { return conversation.state; },
       get available() { return conversation.available; },
@@ -54,6 +67,7 @@ provide(VIBE64_VOICE_KEY, {
         return {
           ...conversation.defaults,
           readAloud: readAloudFor(conversation),
+          ...(preferences.sendMode === "edit" ? { reviewBeforeSend: true } : {}),
           ...(preferences.voice ? {
             voiceId: preferences.voice === "current" ? "" : preferences.voice
           } : {})

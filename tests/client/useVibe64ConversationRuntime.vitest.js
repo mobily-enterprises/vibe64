@@ -563,7 +563,7 @@ describe("Main lesson answer context uses the original conversation snapshot", (
 
 // Deferred first hydration uses the original reader, mounted product host,
 // controller, session and transport. Only their browser/service endpoints are controlled.
-async function mountedOriginalMainVoice() {
+async function mountedOriginalMainVoice({ preferences, preparePreferences } = {}) {
   const { default: VoiceHost } = await import("../../packages/vibe64-voice/src/client/Vibe64VoiceHost.vue");
   const { useVibe64Voice, VIBE64_VOICE_KEY } = await import("../../packages/vibe64-voice/src/client/voiceHost.js");
   const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
@@ -573,7 +573,8 @@ async function mountedOriginalMainVoice() {
   // lifecycle while rendering only its supplied probe slot in this renderer.
   const MountedVoiceHost = { ...VoiceHost, render() { return h("div", this.$slots.default?.()); } };
   const host = renderer.createApp({ render: () => h(MountedVoiceHost, {
-    preferences: { actorKey: "owner", coding: { readAloud: true, vocalizeThinking: true, vocalizeInterimTurns: true } }
+    preferences: preferences || { actorKey: "owner", coding: { readAloud: true, vocalizeThinking: true, vocalizeInterimTurns: true } },
+    ...(preparePreferences ? { preparePreferences } : {})
   }, { default: () => h(Probe) }) });
   host.provide(ssrContextKey, { modules: new Set() });
   host.mount({});
@@ -835,4 +836,76 @@ it("actual retained Main snapshot/client feeds the same original three-control c
   f.viewer.value = { actorKey: "another" };
   expect(await pending).toBe(false);
   expect(mocks.request.mock.calls.filter(([url]) => url.endsWith("/training/observations"))).toHaveLength(3);
+});
+
+
+describe("actual shared VoiceHost restores loaded saved review policy before replacing a Main target", () => {
+  it("keeps the existing controller target and capture until preparation publishes edit, then maps it for Main and Colleague", async () => {
+    const endpoints = controlledVoiceBrowserEndpoints();
+    window.location = { href: "http://localhost/app", origin: "http://localhost" };
+    const preferences = reactive({ actorKey: "owner", coding: { readAloud: true }, colleague: { readAloud: false } });
+    const gate = Promise.withResolvers();
+    let wait = false;
+    const preparePreferences = vi.fn(async () => { if (wait) await gate.promise; return "owner"; });
+    const mounted = await mountedOriginalMainVoice({ preferences, preparePreferences });
+    try {
+      const f = fixture({ projectSlug: "alpha", sessionId: "before-settings", beforeMount: mounted.beforeMount });
+      const before = createProjectVoiceBinding(f.runtime.value, { presentation: "inline" });
+      const release = vi.spyOn(before, "release");
+      expect(await mounted.voice.open(before)).toBe(true);
+      const originalSession = mounted.voice.controller.state.session;
+      const capture = before.captureContext();
+      f.selected.sessionId = "after-settings"; await nextTick();
+      const target = createProjectVoiceBinding(f.runtime.value, { presentation: "inline" });
+      const retain = vi.spyOn(target, "retain");
+      wait = true;
+      const pending = mounted.voice.open(target);
+      await vi.waitFor(() => expect(preparePreferences).toHaveBeenCalledTimes(2));
+      expect(mounted.voice.controller.state.session).toBe(originalSession);
+      expect(mounted.voice.controller.state.binding.captureContext()).toEqual(capture);
+      expect(release).not.toHaveBeenCalled(); expect(retain).not.toHaveBeenCalled();
+      expect(target.available).toBe(true); expect(endpoints.microphone).not.toHaveBeenCalled();
+      preferences.coding = { readAloud: true, sendMode: "edit" };
+      preferences.colleague = { readAloud: false, sendMode: "edit" };
+      gate.resolve();
+      expect(await pending).toBe(true);
+      expect(mounted.voice.controller.state.binding.defaults.reviewBeforeSend).toBe(true);
+      expect(release).toHaveBeenCalledTimes(1); expect(retain).toHaveBeenCalledTimes(1);
+      // SAME Host and controller exercise the original Colleague preference target,
+      // not a second policy reader/controller or another microphone acquisition.
+      const colleague = { ...target, id: "original-colleague-policy-target", preferenceTarget: "colleague" };
+      expect(await mounted.voice.open(colleague)).toBe(true);
+      expect(mounted.voice.controller.state.binding.defaults.reviewBeforeSend).toBe(true);
+      preferences.colleague = { readAloud: false };
+      expect(mounted.voice.controller.state.binding.defaults.reviewBeforeSend).toBeUndefined();
+      f.app.unmount();
+    } finally { gate.resolve(); await mounted.close(); endpoints.restore(); }
+  });
+
+  it("failed or actor-retired preparation cannot release the original target or create a replacement session", async () => {
+    const endpoints = controlledVoiceBrowserEndpoints();
+    window.location = { href: "http://localhost/app", origin: "http://localhost" };
+    const preferences = reactive({ actorKey: "owner", coding: { readAloud: true } });
+    const gate = Promise.withResolvers();
+    let wait = false;
+    const mounted = await mountedOriginalMainVoice({ preferences,
+      preparePreferences: async () => { if (wait) await gate.promise; return "owner"; } });
+    try {
+      const f = fixture({ projectSlug: "alpha", sessionId: "original", beforeMount: mounted.beforeMount });
+      const before = createProjectVoiceBinding(f.runtime.value, { presentation: "inline" });
+      const released = vi.spyOn(before, "release");
+      expect(await mounted.voice.open(before)).toBe(true);
+      const session = mounted.voice.controller.state.session;
+      f.selected.sessionId = "retired"; await nextTick();
+      const target = createProjectVoiceBinding(f.runtime.value, { presentation: "inline" });
+      const retained = vi.spyOn(target, "retain"); wait = true;
+      const pending = mounted.voice.open(target);
+      const rejection = expect(pending).rejects.toThrow(/no longer available/);
+      await nextTick(); preferences.actorKey = "other"; gate.resolve(); await rejection;
+      expect(mounted.voice.controller.state.session).toBe(session);
+      expect(released).not.toHaveBeenCalled(); expect(retained).not.toHaveBeenCalled();
+      expect(endpoints.microphone).not.toHaveBeenCalled();
+      f.app.unmount();
+    } finally { gate.resolve(); await mounted.close(); endpoints.restore(); }
+  });
 });
