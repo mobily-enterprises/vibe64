@@ -4586,3 +4586,44 @@ test("shared Training accepted-answer coordination retains exact words, actor an
   await assert.rejects(captureDeliveredTrainingQuestion(log, { conversationId, reference, actor,
     teaching: { captureQuestion: async () => { throw new Error("Actor permission revoked"); } } }), /permission revoked/);
 });
+
+test("the extracted retained Helper keeps its original native receipt and cleanup across parent reconstruction", async t => {
+  const { createRetainedConversationHelper } = await import("../../packages/vibe64-terminals/src/server/retainedConversationHelper.js");
+  const f = await fixture(t, [], { watching: true });
+  f.observations.expectedHelperWorkload = "training_assessment";
+  f.observations.helperAnswer = '{"outcome":"passed","explanation":"Retained real evidence."}';
+  f.observations.cleanupFails = true;
+  let retained = null;
+  const writes = [];
+  const helperFor = () => createRetainedConversationHelper({
+    terminals: f.terminals, root: path.join(f.root, "colleague", "shared-parent", "helpers"),
+    receipt: { read: () => structuredClone(retained), async write(value) {
+      retained = structuredClone(value); writes.push(structuredClone(value));
+    } },
+    workflowEngineId: async () => "codex"
+  });
+  await assert.rejects(helperFor().runHelper(f.context, {
+    workloadId: "training_assessment", stableContext: "Grade only these supplied accepted words. No tools.",
+    promptLabel: "Evaluate an accepted lesson answer", data: { words: "My genuine answer." },
+    outputSchema: { type: "object", additionalProperties: false, required: ["outcome", "explanation"],
+      properties: { outcome: { type: "string", enum: ["passed"] }, explanation: { type: "string", maxLength: 100 } } },
+    signal: new AbortController().signal
+  }), /Summary cleanup unavailable/);
+  assert.equal(retained.conversationId, "summary-thread");
+  assert.equal(retained.runId, "summary-turn");
+  assert.equal(retained.executionId, "summary-execution");
+  assert.equal(retained.executionProfile.policy.tools, "none");
+  assert.equal(writes[0].conversationId, "", "retain the parent before native creation");
+  assert.equal(writes.some(value => value?.executionProfile), true);
+  const callsBefore = f.observations.helperCalls.filter(value => value.input).length;
+  await assert.rejects(helperFor().cleanup(f.context), /Summary cleanup unavailable/);
+  assert.equal(f.observations.helperCalls.filter(value => value.input).length, callsBefore);
+  f.observations.cleanupFails = false;
+  await helperFor().cleanup(f.context);
+  assert.equal(retained, null);
+  const cleanup = f.observations.helperCalls.at(-1).cleanup;
+  assert.equal(cleanup.conversationId, "summary-thread");
+  assert.equal(cleanup.cleanupExecutionId, "summary-execution");
+  assert.equal(cleanup.executionProfile.workloadId, "training_assessment");
+  assert.equal(f.observations.starts.length, 0, "the primary parent model was never used as the Helper");
+});

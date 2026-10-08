@@ -58,3 +58,10 @@ supported recovery before retrying. Colleague must not erase history, create a
 substitute conversation or claim that tool availability proves an assessment
 passed. Ordinary Working conversations and bounded Helpers keep their existing
 capabilities.
+
+Lesson evaluation must use the configured tool-free Helper and retain a cleanup
+failure for retry. The shared native Helper prerequisite preserves Colleague's
+existing Stop and cleanup behavior; it does not by itself enable Main grading.
+If cleanup is unconfirmed, retain the attempt and resolve that failure before
+requesting another evaluation. Colleague must not report a pass from missing or
+unfinished Helper evidence.

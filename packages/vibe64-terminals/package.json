@@ -13,7 +13,8 @@
     "./server/projectExecutionEnv": "./src/server/projectExecutionEnv.js",
     "./server/nativeConversationBindings": "./src/server/nativeConversationRetirement.js",
     "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js",
-    "./shared/assistantWorkPlan": "./src/shared/assistantWorkPlan.js"
+    "./shared/assistantWorkPlan": "./src/shared/assistantWorkPlan.js",
+    "./server/retainedConversationHelper": "./src/server/retainedConversationHelper.js"
   },
   "jskit": {
     "kind": "runtime",

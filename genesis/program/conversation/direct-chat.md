@@ -3403,6 +3403,13 @@ original settings. A differing retained manifest fails before resume without
 rewriting the saved binding or replacing history. Exact teacher admission,
 catalogue composition and installed native acceptance remain separate prerequisites.
 
+Terminals also owns the original retained conversation Helper execution block
+moved from Colleague. Its parent supplies a private root and durable receipt
+adapter; the same account routing, tool-free profile, native event IDs and
+cleanup proof are preserved. Colleague immediately consumes it with its original
+summary receipt and Stop controller. Main teaching must still supply its actual
+admitted parent receipt and cancellation/close coordination before using it.
+
 ## Keyed Learning chat retention
 
 The original mounted runtime host captures each saved Learning record's session,

@@ -466,6 +466,11 @@ Temporary activity checks enter the configured common runtime without opening
 Main; the existing manager retains provider selection and application result
 projection. Native fresh-receipt restoration and cosmetic-work exclusions remain
 with the same shared owners, including while cleanup retries after closure.
+Terminals owns the shared retained conversation Helper execution block, moved
+from Colleague with its original account/profile/native cleanup behavior. The
+parent supplies its existing durable receipt and private root; Colleague retains
+summary policy and Stop serialization. This shared facility creates neither a
+second grading runtime nor Main teaching authority.
 The native conversation owners also retain Codex first-goal acquisition and Helper
 catalog/account discovery, Claude terminal busy/Stop transitions and OpenCode
 terminal attachment grants. Application readiness receipts, account selection,

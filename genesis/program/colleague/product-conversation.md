@@ -416,6 +416,13 @@ separate readiness/classification API or Helper inference. Spoken questions and
 corrections retain the selected model, tools and identity/focus/retry contract.
 Conversation summaries retain their existing Helper lifecycle,
 including cleanup of retained historical executions.
+The original retained Helper execution block now belongs to Terminals'
+`retainedConversationHelper` owner. Colleague supplies its unchanged private
+summary root, existing `summaryHelper` receipt publication and workflow selector.
+The shared block retains the original tool-free profile, account connection,
+native ID publication, timeout, cancellation and cleanup-before-reuse contract.
+Excerpt/citation policy and Stop serialization remain in Colleague. This move
+does not compose a Main teacher or create another progress/Helper runtime.
 The client emits the local message-submission identity synchronously before
 sending. Voice hosts use it to distinguish a fresh invitation from a delayed
 canonical acknowledgement after Stop speaking; it changes no stored history.
