@@ -61,6 +61,7 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
       conversationLogPatch: { type: "upsert-turn", turn },
       conversationStream: runtime.store.readConversationStream(sessionId)
     } });
+    return turn;
   }
 
   async function receiveTurnEvent(entry, event) {
@@ -90,7 +91,7 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
       if (entry.persistent && !entry.main && !entry.profile && !entry.renewal && entry.context.routingConversationId) {
         await entry.onEvent?.({ ...event, threadId: entry.id, turnId: entry.turn?.id || "" });
       }
-      await publishMessage(entry, event.message);
+      return publishMessage(entry, event.message);
     } else if (event.type === "message-complete") {
       if (entry.main && !entry.renewal) entry.context.runtime.store.completeConversationStreamMessage(entry.context.sessionId, event.messageId);
     } else if (event.type === "text" || event.type === "thinking") {

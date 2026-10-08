@@ -63,6 +63,18 @@ OpenCode reuses its original shared server, native input/tool-use match, origina
 receipt and completion monitor. Its existing native message projection supplies
 the native-derived output identity required by the same final delivery proof;
 tool effects cannot write native output or completion.
+Claude's original supplied-store event path returns its actual canonical writer
+receipt only after the original publication succeeds. Its same native turn keeps
+one private receipt correlated with the accepted native command, current process,
+execution and account. Final evidence becomes readable only at successful native
+settlement after the original command/background fences, before the original
+retained before-state checkpoint; checkpoint ordering and storage are unchanged.
+The exact context/thread/turn getter does not read saved history or start native
+work. Default sinks, unacknowledged input, failed publication/checkpoint, Stop,
+changed accounts/processes and closed/restored entries cannot supply final proof.
+This receipt-only prerequisite leaves Claude's Main teaching guard closed. Actual
+supplied-owner command/MCP custody, CLI declaration, Main question correlation and
+native checkpoint attachment remain required before enabling Claude teaching.
 Claude, practice teaching, live native/installed adoption and browser
 acceptance remain incomplete.
 

@@ -2139,3 +2139,32 @@ test("Claude Main result-only output retains native identity and interrupted par
   ]);
   assert.deepEqual(store.readConversationStream("test").messages, []);
 });
+
+
+// This receipt-only companion uses the original Main manager, supplied native
+// store, canonical writer/publication and native result event. Claude teaching
+// remains disabled in the Main binding until command/tool custody is composed.
+test("Claude original Main writer returns exact canonical final proof without enabling teaching", async t => {
+  const f = await fixture(t);
+  await f.provider.sendMessage(f.context, { message: "Explain", messageId: "receipt-owner-request" });
+  const binding = await createSessionConversationBinding(f.provider, f.context.sessionId, f.context);
+  const owner = binding.native.owner;
+  const entry = [...owner.entries.values()].find(entry => entry.main && entry.context.sessionId === f.context.sessionId);
+  assert.equal(Object.hasOwn(binding, "applicationTools"), false);
+  assert.equal(owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id), null);
+  await f.processes[0].options.onEvent({ type: "result", session_id: entry.id,
+    subtype: "success", result: "Canonical answer", uuid: "receipt-native-result" });
+  const receipt = owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id);
+  const rows = await f.context.runtime.store.readConversationLog(f.context.sessionId);
+  const canonical = rows.find(turn => turn.messages.some(message => message.messageId === "claude_receipt-native-result_result"));
+  assert.deepEqual(receipt.conversationTurn, canonical);
+  assert.equal(receipt.text, "Canonical answer");
+  assert.equal(receipt.itemId, "claude_receipt-native-result_result");
+  assert.equal(receipt.outputId, receipt.itemId);
+  assert.equal(receipt.threadId, entry.id);
+  assert.equal(receipt.turnId, entry.turn.id);
+  assert.equal(entry.turn.active, false);
+  assert.equal(f.checkpoints.length > 0, true, "Original source checkpoint still runs");
+  await f.provider.closeProject();
+  assert.equal(owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id), null);
+});
