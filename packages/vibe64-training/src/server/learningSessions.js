@@ -7,13 +7,17 @@ function learningError(code, message, statusCode = 409) {
 
 // Training derives authority and instructions from the saved reservation. Main's
 // original Project/Session/Runtime owners retain storage, routing and execution.
-function createTrainingLearningSessions({ learners, teachingBrief, project, sessions, projectContext } = {}) {
+function createTrainingLearningSessions({ learners, teachingBrief, project, sessions, projectContext, learningTeaching = null } = {}) {
   if (typeof learners?.readLearningSessionScope !== "function" ||
       typeof learners?.runPreparationExclusive !== "function" ||
       typeof teachingBrief?.readBrief !== "function" ||
       typeof project?.createRuntime !== "function" ||
       typeof sessions?.createSession !== "function" || typeof sessions?.inspectSession !== "function") {
     throw new TypeError("Learning sessions require the existing learner, teaching brief, Project and Main session owners.");
+  }
+
+  if (learningTeaching !== null && typeof learningTeaching?.bindConversation !== "function") {
+    throw new TypeError("Learning teaching requires its original typed Training owner.");
   }
 
   async function resolveContext({ actor, attemptId, sessionId, access = "observe" } = {}) {
@@ -32,6 +36,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
       systemRoot: saved.systemRoot,
       learningScope: Object.freeze(structuredClone(saved.scope)),
       vibe64User: actor,
+      ...(learningTeaching ? { learningTeaching } : {}),
       ...(access === "create" ? {
         // The canonical Create action receives this host-only facility. The
         // opener rechecks the saved reservation under the original end lock;

@@ -605,6 +605,8 @@ function createSessionAgentManager({
       onEvent: typeof operationOptions.onEvent === "function" ? operationOptions.onEvent : null,
       providerId: provider.id,
       runtime: operationOptions.runtime || null,
+      ...(method === "sendMessage" && operationOptions.runtime?.learningScope && operationOptions.runtime.learningTeaching &&
+          operationOptions.browserAuthority ? { browserAuthority: operationOptions.browserAuthority } : {}),
       routingConversationId: operationOptions.routingConversationId || "",
       session: operationOptions.session || null,
       sessionId: normalizeText(sessionId),

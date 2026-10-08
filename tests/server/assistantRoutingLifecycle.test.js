@@ -2029,3 +2029,50 @@ test("new requests cannot replace unconfirmed or still-owned handoffs", async (t
     assert.equal(f.sends.length, 1);
   }
 });
+
+// Routing receives already admitted application data. These original controlled
+// receipt cases prove persistence/retry, not delivered-question authorization.
+test("original routing retains admitted Learning data through uncertain receipt repair and leaves Working allowlist unchanged", async t => {
+  const { trainingTeachingFixture } = await import("../fixtures/trainingTeachingFixture.js");
+  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
+  const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
+  const { createTrainingAnswerAssessment } = await import("../../packages/vibe64-training/src/server/answerAssessment.js");
+  const teaching = await trainingTeachingFixture(t, { ready: false, exercise: false });
+  const issued = await teaching.owner.prepareQuestion(teaching.input);
+  const saved = await teaching.learners.readLearningSessionScope({ actor: teaching.actor, attemptId: teaching.attemptId });
+  const originalData = { trainingQuestion: { ...issued.snapshot, delivery: {
+    conversationId: "lesson-session", turnId: "delivered-question", outputId: "question-output" } } };
+  const learningRuntime = new Vibe64SessionRuntime({ projectContextRoot: path.resolve(teaching.snapshotRoot, "../../../../.."),
+    projectRuntimeRoot: saved.projectRuntimeRoot, learningScope: saved.scope,
+    learningTeaching: createTrainingMainTeaching({ teaching: teaching.owner,
+      assessment: createTrainingAnswerAssessment({ learners: teaching.learners, content: teaching.content, teaching: teaching.owner }) }) });
+  for (const learning of [false, true]) {
+    const f = await fixture(t, { mode: "senior", review: false }, { readyPlan: false });
+    if (learning) Object.assign(f.context.runtime, {
+      learningScope: learningRuntime.learningScope, learningTeaching: learningRuntime.learningTeaching
+    });
+    const repaired = [];
+    const write = f.context.runtime.store.writeConversationUserMessage;
+    f.context.runtime.store.writeConversationUserMessage = async (...args) => {
+      repaired.push(structuredClone(args[1]));
+      return write(...args);
+    };
+    const input = { ...request, data: structuredClone(originalData) };
+    f.failAdmission();
+    await assert.rejects(f.service.send("session-1", input, f.context), /Lost admission/u);
+    assert.equal(f.state().status, "uncertain");
+    assert.deepEqual(f.state().input.data, learning ? originalData : undefined);
+    assert.deepEqual(f.sends[0].input.data, learning ? originalData : undefined);
+    input.data.trainingQuestion.question.text = "A later caller must not replace the saved association.";
+    f.agent.inspectMessageAdmission = async () => ({ admission: "accepted" });
+    const result = await f.restart().send("session-1", input, f.context);
+    assert.equal(result.delivered, true);
+    assert.equal(f.sends.length, 1, "the original uncertain repair does not resend");
+    assert.equal(repaired.length, 1);
+    assert.equal(repaired[0].messageId, request.messageId);
+    assert.equal(repaired[0].text, request.message);
+    assert.deepEqual(repaired[0].data, learning ? originalData : undefined);
+    assert.equal(Object.hasOwn(repaired[0], "data"), learning);
+    assert.equal(f.state().status, "sent");
+  }
+});

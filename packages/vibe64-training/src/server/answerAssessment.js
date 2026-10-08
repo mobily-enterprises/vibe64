@@ -14,7 +14,9 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
     throw new TypeError("Answer assessment requires the original learner, teaching and installed-content owners.");
   }
 
-  async function evaluate(kind, { actor, attemptId, expectedRevision, submissionId, message, observation, checkResult } = {}, { state, context, helper, requireCurrent, signal: suppliedSignal } = {}) {
+  async function evaluate(kind, { actor, attemptId, expectedRevision, submissionId, message, observation, checkResult } = {}, { state, context, helper, requireCurrent, assertCurrent, signal: suppliedSignal } = {}) {
+    const writerFacilities = requireCurrent || assertCurrent || suppliedSignal
+      ? [{ requireCurrent, assertCurrent, signal: suppliedSignal }] : [];
     const saved = await learners.readState({ actor, includeCompletion: true });
     const attempt = saved.progress.attempts.find(value => value.attemptId === saved.progress.activeAttemptId);
     const captured = message?.data?.trainingQuestion;
@@ -73,8 +75,9 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
       // Native replay reconciles a derived summary without another inference,
       // even when the lesson has since advanced to its next question.
       await requireCurrent?.();
+      assertCurrent?.();
       suppliedSignal?.throwIfAborted();
-      return learners.recordAssessment({ actor, attemptId, expectedRevision, ...previous });
+      return learners.recordAssessment({ actor, attemptId, expectedRevision, ...previous }, ...writerFacilities);
     }
     const evidenceId = kind === "practical" ? "observationId" : "messageId";
     if (submissions.some(value => value.evidence.kind === evidence.kind && value.evidence[evidenceId] === evidence[evidenceId])) {
@@ -100,9 +103,10 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
     await teaching.captureQuestion({ actor, reference });
     signal.throwIfAborted();
     await requireCurrent?.();
+    assertCurrent?.();
     signal.throwIfAborted();
     return learners.recordAssessment({ actor, attemptId, expectedRevision, submissionId,
-      assessmentId: question.assessmentId, evidence, assistance: question.assistance, ...result });
+      assessmentId: question.assessmentId, evidence, assistance: question.assistance, ...result }, ...writerFacilities);
   }
 
   return {

@@ -301,6 +301,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       await store.writeConversationUserMessage(sessionId, {
         messageId, text: displayMessage,
         attachments: followup ? [] : state.input.displayAttachments,
+        ...(!followup && context.runtime.learningScope && context.runtime.learningTeaching && state.input.data !== undefined
+          ? { data: structuredClone(state.input.data) } : {}),
         turnMetadata: { assistantSelection: selection, assistantRouting: attribution(state, followup),
           ...(followup ? { actorId: "app", actorDisplayName: followupLabel } : {}) }
       });
@@ -519,7 +521,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           input: Object.fromEntries(Object.entries(input).filter(([name]) => [
             "message", "displayMessage", "attachmentIds", "displayAttachments", "genesisTask",
             "originId", "presentation", "promptLabel", "outputSchema", "planRevision"
-          ].includes(name))),
+          ].includes(name) || name === "data" && context.runtime.learningScope && context.runtime.learningTeaching)),
           mode,
           resolvedMode,
           ...(explicitDeslop ? { task: "deslop" } : {}),

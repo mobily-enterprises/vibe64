@@ -1,5 +1,6 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { codexAppServerTurnState } from "./codexConversationStorage.js";
 import { upstreamMessageId } from "./openCodeConversationStorage.js";
 import { vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { recordSessionGitCommandActor, sessionGitCommandActorFromMetadata } from "./sessionGitCommandActor.js";
@@ -365,6 +366,13 @@ export async function createSessionConversationBinding(provider, sessionId, opti
     runtime, session, readSession: () => runtime.getSession(sessionId, { inspectSource: false })
   });
   const conversation = original.conversation({ engine, publish: host.publish, checkpoint: host.checkpoint });
+  const teaching = engine === "codex" && runtime.learningScope && runtime.learningTeaching
+    ? runtime.learningTeaching.bindConversation({ runtime, sessionId, actions: openingContext.teachingActions,
+      terminals: openingContext.teachingTerminals, native: { async readTurn() {
+        const current = await host.state.read();
+        return { ...codexAppServerTurnState(current.session),
+          assistantSelection: vibe64AssistantSelectionFromMetadata(current.session.metadata) };
+      } } }) : null;
   return {
     ...conversation, namespace: host.namespace, engine,
     prepareInput: engine === "codex" && typeof prepareInput === "function" ? async (input, current) => {
@@ -372,6 +380,7 @@ export async function createSessionConversationBinding(provider, sessionId, opti
       return { ...prepared, actorContext: prepared.vibe64User || null };
     } : prepareInput,
     ...(engine === "codex" ? { selection } : {}),
+    ...(teaching ? { applicationTools: teaching.applicationTools } : {}),
     async admission(current) {
       if (engine !== "codex") return requireMainConversationAdmission(runtime, sessionId, current);
       const session = await runtime.getSession(sessionId, { inspectSource: false });

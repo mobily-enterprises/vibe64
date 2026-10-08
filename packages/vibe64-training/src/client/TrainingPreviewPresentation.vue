@@ -4,17 +4,31 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { resolveStudioRequestUrl } from "/src/lib/studioUrls.js";
 import TrainingVisualPlayer from "./TrainingVisualPlayer.vue";
+import { useTrainingPreviewRegistration } from "./useTrainingPreviewRegistration.js";
 
 const props = defineProps({
   active: Boolean,
   lessonsAvailable: Boolean,
   appAvailable: { type: Boolean, default: true },
   attemptId: { type: String, default: "" },
+  learningBinding: { type: Object, default: null },
   projectSlug: { type: String, required: true },
   sessionId: { type: String, required: true }
 });
 const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
 const actorKey = computed(() => unref(viewer)?.actorKey || "");
+const learningAvailable = computed(() => {
+  const binding = props.learningBinding;
+  return !props.appAvailable && props.lessonsAvailable && !props.projectSlug && binding &&
+    actorKey.value && binding.actorKey === actorKey.value && binding.learnerId && !binding.projectSlug &&
+    binding.learningAttemptId === props.attemptId && binding.sessionId === props.sessionId &&
+    /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(props.attemptId) &&
+    binding.sessionsApiPath === `/api/learning/${props.attemptId}/vibe64/sessions`;
+});
+function sameLearningBinding(expected) {
+  return learningAvailable.value && ["actorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath"]
+    .every(key => expected[key] === props.learningBinding[key]);
+}
 const selection = shallowRef(null);
 const resource = shallowRef(null);
 const player = ref(null);
@@ -38,7 +52,8 @@ const checkpointError = ref("");
 let checkpointOperation = null;
 
 function ensureSelection(expected) {
-  if (!mounted || !actorKey.value || !expected || selection.value !== expected) {
+  if (!mounted || !actorKey.value || !expected || selection.value !== expected ||
+      expected.learningBinding && !sameLearningBinding(expected.learningBinding)) {
     throw new Error("This lesson presentation is no longer selected. Open its current attempt again.");
   }
 }
@@ -106,7 +121,7 @@ async function ready(expected) {
 }
 
 async function open({ attemptId, visualId } = {}) {
-  if (!actorKey.value || !props.active || !props.appAvailable || !props.projectSlug || !props.sessionId ||
+  if (!actorKey.value || !props.active || (!learningAvailable.value && (!props.appAvailable || !props.projectSlug)) || !props.sessionId ||
       (props.attemptId && props.attemptId !== attemptId) ||
       !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(attemptId || "") ||
       !/^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u.test(visualId || "")) {
@@ -116,7 +131,9 @@ async function open({ attemptId, visualId } = {}) {
   collapsed.value = false;
   let expected = selection.value;
   if (expected?.attemptId !== attemptId || expected.visualId !== visualId || !resource.value) {
-    expected = { attemptId, visualId };
+    expected = { attemptId, visualId, ...(learningAvailable.value ? { learningBinding: Object.freeze(
+      Object.fromEntries(["actorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath"]
+        .map(key => [key, props.learningBinding[key]]))) } : {}) };
     selection.value = expected;
     resource.value = null;
     revision.value++;
@@ -138,6 +155,7 @@ async function open({ attemptId, visualId } = {}) {
 }
 
 function resourceUrl(expected) {
+  if (expected.learningBinding) return `${expected.learningBinding.sessionsApiPath}/${encodeURIComponent(expected.learningBinding.sessionId)}/training/visuals/${encodeURIComponent(expected.visualId)}`;
   return resolveStudioRequestUrl(`/api/vibe64/training/attempts/${expected.attemptId}/visuals/${expected.visualId}`);
 }
 
@@ -155,9 +173,10 @@ async function saveCheckpoint(expected, transition) {
   const value = await snapshot(expected);
   ensureSelection(expected);
   if (transition !== transitionRevision || instance !== value.playerInstanceId) return;
-  checkpointOperation = { expected, instance, transition, actor: actorKey.value,
+  checkpointOperation = { expected, instance, transition, actor: actorKey.value, projectSlug: props.projectSlug,
     body: { requestId: crypto.randomUUID(), expectedRevision: fresh.revision,
-      projectSlug: props.projectSlug, sessionId: props.sessionId, snapshot: value.snapshot } };
+      ...(!expected.learningBinding ? { projectSlug: props.projectSlug } : {}),
+      sessionId: props.sessionId, snapshot: value.snapshot } };
   await retryCheckpoint();
 }
 
@@ -171,7 +190,7 @@ async function retryCheckpoint() {
   try {
     ensureSelection(operation.expected);
     if (operation.actor !== actorKey.value || operation.instance !== display.value.playerInstanceId ||
-        operation.body.projectSlug !== props.projectSlug || operation.body.sessionId !== props.sessionId) {
+        operation.projectSlug !== props.projectSlug || operation.body.sessionId !== props.sessionId) {
       throw new Error("This captured diagram checkpoint belongs to its original player and exercise.");
     }
     const result = await getHttpWebClient().request(resourceUrl(operation.expected), { method: "POST", body: operation.body });
@@ -370,7 +389,11 @@ watch([visible, () => display.value.phase], () => {
   if (!visible.value) retireCue("The lesson presentation is hidden.", false);
   void pauseHidden();
 }, { flush: "post" });
-watch([actorKey, () => props.projectSlug, () => props.sessionId, () => props.attemptId], () => {
+watch([actorKey, () => props.projectSlug, () => props.sessionId, () => props.attemptId,
+  () => props.learningBinding?.actorKey, () => props.learningBinding?.learnerId,
+  () => props.learningBinding?.projectSlug,
+  () => props.learningBinding?.learningAttemptId, () => props.learningBinding?.sessionId,
+  () => props.learningBinding?.sessionsApiPath], () => {
   retireCue("The learner or exercise changed.", false);
   cue.value = null;
   checkpointOperation = null;
@@ -389,6 +412,14 @@ onBeforeUnmount(() => {
   revision.value++;
 });
 const presentation = Object.freeze({ open, command, snapshot, armCue, observeCue, playback, retireCue, get state() { return state(); } });
+useTrainingPreviewRegistration({
+  get presentation() { return presentation; },
+  get projectSlug() { return props.projectSlug; },
+  get sessionId() { return props.sessionId; },
+  get learningAttemptId() { return props.attemptId; },
+  get learnerId() { return props.learningBinding?.learnerId; },
+  get screen() { return undefined; }
+}, () => props.active && learningAvailable.value);
 defineExpose({ presentation });
 </script>
 

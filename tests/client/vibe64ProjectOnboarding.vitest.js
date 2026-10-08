@@ -189,11 +189,12 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   const colleaguePreview = Vue.shallowRef(null);
   const transport = {
     request(url, options) {
-      if (url.startsWith("/api/vibe64/training/attempts/")) {
+      if (url.startsWith("/api/vibe64/training/attempts/") || url.startsWith("/api/learning/")) {
         const scope = JSON.stringify([viewer.value?.actorKey, props.projectSlug, props.sessionId, url]);
         if (options.method === "POST") {
           expect(savedVisual?.scope).toBe(scope);
-          expect(options.body.projectSlug).toBe(props.projectSlug);
+          if (url.startsWith("/api/learning/")) expect(Object.hasOwn(options.body, "projectSlug")).toBe(false);
+          else expect(options.body.projectSlug).toBe(props.projectSlug);
           expect(options.body.sessionId).toBe(props.sessionId);
           expect(options.body.expectedRevision).toBe(checkpointRevision);
           expect(options.body.requestId).toMatch(/^[a-f0-9-]{36}$/u);
@@ -1365,4 +1366,87 @@ it("does not mount source-backed App owners in the actual source-less Autopilot 
     expect(fixture.button("App")).toBeNull(); expect(fixture.button("Presentation").props.disabled).toBe(true);
     expect(findNode(fixture.container, node => node.props?.["aria-label"] === "Actual Lessons slot")).toBeTruthy();
   } finally { fixture.close(); }
+});
+
+function configureActualLearningPreview(fixture, bindingChanges = {}) {
+  const attempt = visualRequest.attemptId;
+  fixture.props.projectSlug = "";
+  fixture.props.sessionId = `learning-${attempt}`;
+  fixture.props.attemptId = attempt;
+  fixture.props.conversationRuntime = { identity: { actorKey: "member-42", learnerId: "42", projectSlug: "",
+    learningAttemptId: attempt, sessionId: fixture.props.sessionId,
+    sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`, ...bindingChanges } };
+}
+
+it("source-less actual Autopilot Preview opens the same player from Lessons through its captured Main session route and checkpoint", async () => {
+  const fixture = mountOnboarding({ withAutopilotPreview: true, lessonsAvailable: true, appAvailable: false, projectPane: "dashboard" });
+  try {
+    configureActualLearningPreview(fixture);
+    await Vue.nextTick(); await Vue.nextTick();
+    const bridge = fixture.colleaguePreview.value;
+    expect(bridge).toBeTruthy();
+    expect(bridge.learningAttemptId).toBe(visualRequest.attemptId);
+    expect(bridge.learnerId).toBe("42"); expect(bridge.projectSlug).toBe("");
+    expect(bridge.sessionId).toBe(fixture.props.sessionId); expect(bridge.screen).toBeUndefined();
+    const handle = bridge.presentation;
+    const opening = handle.open(visualRequest);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    const expectedUrl = `/api/learning/${visualRequest.attemptId}/vibe64/sessions/${fixture.props.sessionId}/training/visuals/alternate`;
+    expect(fixture.visualReads[0].url).toBe(expectedUrl);
+    fixture.visualReads[0].resolve(visualResource());
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    expect(handle.state.phase).toBe("loading"); mocks.visuals[0].ready();
+    expect(await opening).toMatchObject({ ok: true, ...visualRequest, phase: "ready", visible: true });
+    const command = handle.command({ ...visualRequest, commandId: "learning-advance", name: "advance", parameters: { label: "Seen" } });
+    await vi.waitFor(() => expect(mocks.visuals[0].operations).toHaveLength(1));
+    expect(fixture.checkpointWrites).toHaveLength(0);
+    mocks.visuals[0].finish(0, { state: "arrived", paused: true });
+    expect(await command).toMatchObject({ ok: true, commandId: "learning-advance", phase: "completed", state: "arrived" });
+    expect(fixture.checkpointWrites).toHaveLength(1);
+    expect(fixture.checkpointWrites[0].url).toBe(expectedUrl);
+    expect(fixture.checkpointWrites[0].options.body).toEqual({ requestId: expect.any(String), expectedRevision: 0,
+      sessionId: fixture.props.sessionId, snapshot: { state: "arrived", paused: true, labels: {} } });
+    const player = mocks.visuals[0];
+    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    await vi.waitFor(() => expect(player.operations).toHaveLength(2)); player.finish(1, { paused: true });
+    await vi.waitFor(() => expect(fixture.checkpointWrites).toHaveLength(2));
+    expect(handle.state.visible).toBe(false); expect(fixture.colleaguePreview.value).toBe(bridge);
+    fixture.button("Presentation").props.onClick(); await Vue.nextTick();
+    expect(handle.state.visible).toBe(true); expect(mocks.visuals).toHaveLength(1); expect(player.disposed).toBe(false);
+    expect(fixture.button("App")).toBeNull(); expect(fixture.reads).toHaveLength(0);
+    expect(fixture.outputs.mounted).not.toHaveBeenCalled(); expect(fixture.writes).toHaveLength(0);
+    fixture.props.active = false; await Vue.nextTick(); expect(fixture.colleaguePreview.value).toBeNull();
+  } finally { fixture.close(); }
+});
+
+it("source-less Preview rejects absent foreign mixed or mismatched actual Main bindings before visual reads", async () => {
+  for (const changes of [{ actorKey: "member-43" }, { learnerId: "" }, { projectSlug: "working" },
+    { learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }, { sessionId: "other" },
+    { sessionsApiPath: "/api/vibe64/sessions" }]) {
+    const fixture = mountOnboarding({ withAutopilotPreview: true, lessonsAvailable: true, appAvailable: false });
+    try {
+      configureActualLearningPreview(fixture, changes); await Vue.nextTick(); await Vue.nextTick();
+      expect(fixture.colleaguePreview.value).toBeNull(); expect(fixture.visualReads).toHaveLength(0);
+      expect(fixture.button("Presentation").props.disabled).toBe(true);
+      expect(fixture.reads).toHaveLength(0); expect(fixture.outputs.mounted).not.toHaveBeenCalled();
+    } finally { fixture.close(); }
+  }
+});
+
+it("source-less Preview retires a held resource read when its captured learner or API target changes", async () => {
+  for (const change of [{ learnerId: "43" }, { projectSlug: "foreign-working-project" }, { sessionsApiPath: "/api/vibe64/sessions" }]) {
+    const fixture = mountOnboarding({ withAutopilotPreview: true, lessonsAvailable: true, appAvailable: false });
+    try {
+      configureActualLearningPreview(fixture); await Vue.nextTick(); await Vue.nextTick();
+      const oldHandle = fixture.colleaguePreview.value.presentation;
+      const pending = oldHandle.open(visualRequest).catch(error => error);
+      await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+      Object.assign(fixture.props.conversationRuntime.identity, change); await Vue.nextTick();
+      fixture.visualReads[0].resolve(visualResource());
+      expect((await pending).message).toContain("no longer selected");
+      expect(mocks.visuals).toHaveLength(0); expect(fixture.checkpointWrites).toHaveLength(0);
+      expect(oldHandle.state.phase).toBe("closed"); expect(oldHandle.state.visible).toBe(false);
+      expect(fixture.reads).toHaveLength(0); expect(fixture.outputs.mounted).not.toHaveBeenCalled();
+    } finally { fixture.close(); }
+  }
 });

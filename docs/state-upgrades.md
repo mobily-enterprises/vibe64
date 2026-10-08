@@ -650,6 +650,15 @@ actual saved assistant `outputId`; an admitted user snapshot retains the exact
 question and its delivery `conversationId`, `turnId` and `outputId`. These facts
 associate an answer with a question; they do not grade it or prove a pass.
 
+Configured Learning Main new writes also retain the accepted message and actual
+native thread/turn/outer-turn tuple on this optional delivery metadata, together
+with the original application-tool and retained Helper receipt formats in the
+same canonical transcript. Server-bound Send preserves explicitly captured
+`data.trainingQuestion` through ordinary admission and uncertain receipt repair.
+These additions are prospective only: existing deliveries without the actual
+tuple remain unconfirmed for Main, and absent user associations remain ungraded.
+There is no historical reconstruction, replacement native history or lazy repair.
+
 Apply the complete candidate registry with all learner and conversation writers
 stopped before activating these writes. Check is read-only; this script reads or
 converts no learner, message or turn record. Only the ordered ledger changes, so

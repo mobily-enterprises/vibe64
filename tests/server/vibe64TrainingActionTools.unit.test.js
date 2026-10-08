@@ -921,7 +921,11 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   const { training } = await Vibe64TrainingProvider.setup({ actionCatalogue: actions, http,
     project: { createRuntime: unexpected }, sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: {}, trainingHost: null });
   assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host" });
-  assert.deepEqual(Object.keys(training).sort(), ["brief", "catalogue", "content", "exercises", "learners", "learningSessions"]);
+  assert.deepEqual(Object.keys(training).sort(), ["assessment", "brief", "catalogue", "content", "exercises", "learners", "learningSessions", "mainTeaching", "teaching"]);
+  assert.equal(typeof training.teaching.prepareQuestion, "function");
+  assert.equal(typeof training.assessment.evaluateAnswer, "function");
+  assert.deepEqual(training.mainTeaching.actionIds, ["vibe64.training.learning.read", "vibe64.training.teaching-brief.read",
+    "vibe64.training.question.prepare", "vibe64.training.answer.evaluate"]);
   assert.ok(registered.some(route => route.url.startsWith("/api/learning/:learningAttemptId/vibe64/")));
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
   const observed = [];
@@ -946,6 +950,8 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.equal(state.progress.learnerId, String(osActor.uid));
   assert.equal(state.active.attemptId, id);
   assert.equal(state.active.preparation.phase, "reserved");
+  const learningContext = await training.learningSessions.resolveContext({ actor: osActor, attemptId: id });
+  assert.equal(learningContext.learningTeaching, training.mainTeaching, "the original learner context retains the exact composed Main owner");
   assert.equal((await training.learners.readState({ actor: { uid: 999, username: "forged" } })).progress.attempts.length, 0);
   const resumed = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/resume`, payload: {
     attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -998,14 +1004,21 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
   }, http: { router: { register(method, url, options, handler) { registered.push({ method, url, options, handler }); } } },
     project: {}, sessions: {}, terminals: {}, trainingHost });
   assert.equal(outputs.training, trainingHost);
-  assert.equal(registered.length, 7);
-  assert.equal(registered.every(route => route.url.startsWith("/api/vibe64/training/") && route.options.surface === "app"), true);
-  assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false, "Online retains its one existing Main route registration");
+  assert.equal(registered.length, 11);
+  assert.equal(registered.every(route => route.options.surface === "app"), true);
+  assert.equal(registered.some(route => route.url.startsWith("/api/learning/") &&
+    route.url !== "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"), false,
+  "Online retains its one existing Main route registration; Training adds only its explicit Learning visual adapter");
+  assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
   assert.deepEqual(registered.map(route => [route.method, route.url]), [
     ["GET", "/api/vibe64/training/courses"], ["GET", "/api/vibe64/training/learning"],
     ["GET", "/api/vibe64/training/attempts/:attemptId/brief"], ["POST", "/api/vibe64/training/lessons/start"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/resume"], ["POST", "/api/vibe64/training/attempts/:attemptId/end"],
-    ["POST", "/api/vibe64/training/attempts/:attemptId/continue"]
+    ["POST", "/api/vibe64/training/attempts/:attemptId/continue"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"],
+    ["GET", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"],
+    ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"],
+    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/visuals/:visualId"]
   ]);
 });
 

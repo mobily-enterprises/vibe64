@@ -19,6 +19,10 @@ reads and commands without creating a second session panel or progress owner.
 - `src/composables/useVibe64SessionRuntimeHost.js`
 - `packages/vibe64-training/src/client/TrainingPreviewPresentation.vue`
 - `packages/vibe64-training/src/client/useTrainingPresentationCue.js`
+- `packages/vibe64-training/src/client/createTrainingNavigation.js`
+- `packages/vibe64-training/src/client/useTrainingPreviewRegistration.js`
+- `packages/vibe64-training/src/server/visualResourceActions.js`
+- `packages/vibe64-training/src/server/visualResourceRoutes.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `packages/vibe64-voice/src/server/Vibe64VoiceProvider.js`
 - `packages/vibe64-voice/src/client/projectVoiceBinding.js`
@@ -105,12 +109,19 @@ visible player keeps the existing Online lesson-presentation focus projection.
 This split is necessary because the original active flag owned both App reads
 and presentation callbacks. Default false retains original Working behavior. A source-less
 Host's existing sourceWorkspaceAvailable projection omits App/Onboarding/output
-owners, hides Save and Temporary/workspace tools, and shows truthful unavailable
-presentation. True/default keeps original Working controls, including suspended
-Working behavior. The original empty Learning pane uses the same host without a
-fake project, player or teaching message. Main teaching/current-question/cue
-connection and source-less visual authority remain unimplemented; this frontend
-composition does not complete LM10's installed/browser/device acceptance.
+owners and hides Save and Temporary/workspace tools. True/default keeps original
+Working controls, including suspended Working behavior. The original empty
+Learning pane uses the same host without a fake project, player or teaching
+message. A source-less saved Main identity can now register the same original
+Preview handle and use the original player through its captured learner, actor,
+attempt, session and exact Learning API path. Invalid or changed bindings retire
+selection and cannot read, open or checkpoint a diagram. The registration owner
+was moved from Onboarding unchanged; source-backed Onboarding immediately reuses
+it at the same active/presentationActive sites, while only an actual source-less
+Learning wrapper supplies the new registration. Hidden App still reports no
+setup screen. No extra bridge, renderer, progress reader or receipt writer is
+introduced. Main canonical question/cue/navigation/ACK integration and actual
+installed/browser/device acceptance remain separate gates.
 
 Original checkpoint/cue methods retain their implementation. Exact before-source
 runs exposed a prior hidden-pause race: a genuine second hide was dropped while
@@ -170,3 +181,16 @@ exercise the real canonical contributor/action/proxy and same retained Main
 binding; the Voice unit saved-context/session reader is explicitly controlled.
 Actual saved-state owners retain their own original proof. Installed service,
 physical audio, browser/phone and canonical teacher narration cues remain open.
+
+
+## Original navigation client ownership
+
+The same Training client layer owns Colleague's original navigation execution and
+ACK cache, with immediate consumer reuse. Five concrete facilities retain actual
+mounted/actor/client scope, the original host callback getter, host mobile
+preparation, original acknowledgement operation and error ref. Its actor-reset
+order and unmount fence remain at the original consumer sites. Cached receipts
+retry acknowledgement without repeating navigation; mobile preparation remains
+outside that cache and only its original async branch yields. Main attachment
+still requires real initiating-client effects, typed browser/native identity
+correlation and canonical cue/ACK fields from the original server coordinator.

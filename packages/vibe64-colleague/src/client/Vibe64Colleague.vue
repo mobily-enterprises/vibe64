@@ -1,6 +1,7 @@
 <script setup>
 import { useVibe64Voice } from "@local/vibe64-voice/client";
 import { useTrainingPresentationCue } from "@local/vibe64-training/client/presentation-cue";
+import { createTrainingNavigation } from "@local/vibe64-training/client/navigation";
 import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { useDisplay } from "vuetify";
 import { VNavigationDrawer } from "vuetify/components";
@@ -131,8 +132,6 @@ const watches = computed(() => (product.value.watches || []).filter((item) => !i
 const assignments = computed(() => (product.value.assignments || []).filter((item) => ["active", "waiting", "needs-user"].includes(item.status)));
 let mounted = true;
 let revision = 0;
-let navigating = null;
-let navigationReceipt = null;
 
 function reportFailure(error) {
   const message = String(error?.message || error || "Colleague could not complete this request.");
@@ -168,28 +167,16 @@ function apply(result, expectedRevision, expectedActor, allowRetarget = false) {
   void handleNavigation(navigation);
   return true;
 }
-async function handleNavigation(command) {
-  if (navigating || command?.status !== "pending" || !props.navigate) return;
-  navigating = command.id;
-  const expectedActor = actorKey.value;
-  try {
-    if (xs.value && shown.value && ["open", "cue"].includes(command.presentation?.operation)) await toggleConversation();
-    if (navigationReceipt?.commandId !== command.id) {
-      let receipt;
-      try {
-        const result = await props.navigate(command);
-        receipt = { commandId: command.id, clientId, ok: true,
-          ...(command.presentation ? { focus: result.focus, presentation: result.presentation } : { focus: result }) };
-      }
-      catch (error) { receipt = { commandId: command.id, clientId, ok: false, error: error.message }; }
-      if (!mounted || expectedActor !== actorKey.value) return;
-      navigationReceipt = receipt;
-    }
-    if (!mounted || expectedActor !== actorKey.value) return;
-    await requestColleague("/navigation/ack", { method: "POST", body: navigationReceipt });
-  } catch (error) { if (mounted && expectedActor === actorKey.value) productError.value = error.message; }
-  finally { if (expectedActor === actorKey.value) navigating = null; }
-}
+const trainingNavigation = createTrainingNavigation({
+  scope: () => ({ mounted, actorKey: actorKey.value, clientId }),
+  navigate: () => props.navigate,
+  beforeNavigate(command) {
+    if (xs.value && shown.value && ["open", "cue"].includes(command.presentation?.operation)) return toggleConversation();
+  },
+  acknowledge: body => requestColleague("/navigation/ack", { method: "POST", body }),
+  error: productError
+});
+const handleNavigation = trainingNavigation.handle;
 const realtimeSocket = useRealtimeSocket();
 const api = createAssistantApi({
   request: (url, options) => props.request(url, options),
@@ -699,8 +686,7 @@ watch(actorKey, () => {
   pointerNotice.value = "";
   presentationCue.retire("The signed-in learner changed.");
   presentationCue.reset();
-  navigationReceipt = null;
-  navigating = null;
+  trainingNavigation.reset();
   voiceTranscript.value = null;
   void refresh();
 }, { flush: "sync" });

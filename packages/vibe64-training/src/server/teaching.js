@@ -1,14 +1,11 @@
+import { trainingQuestionReferenceSchema, trainingQuestionIdentityFields } from "@local/vibe64-runtime/shared/training-question-reference";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
+import { isDeepStrictEqual } from "node:util";
 import { canonicalJson } from "./content.js";
 import { validateContent } from "./contentSchemas.js";
 import { validateSnapshot } from "./learnerState.js";
 
-const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 64 };
-const attemptId = { ...text, maxLength: 36, pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" };
-const requestId = { ...text, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" };
-const assessmentId = { ...text, pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" };
-const revision = { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER };
-const hash = { ...text, pattern: "^[a-f0-9]{64}$" };
+const { text, attemptId, requestId, assessmentId, revision } = trainingQuestionIdentityFields;
 const prepareSchema = createSchema({
   attemptId, expectedRevision: revision, requestId, assessmentId,
   text: { ...text, maxLength: 2048 },
@@ -18,10 +15,7 @@ const checkpointSchema = createSchema({
   attemptId, expectedRevision: revision, requestId, visualId: assessmentId,
   snapshot: { type: "object", required: true }
 });
-const trainingQuestionReferenceSchema = createSchema({
-  attemptId, questionId: requestId, assessmentId,
-  issuedRevision: { ...revision, min: 1 }, topicHash: hash, lessonHash: hash
-});
+
 
 function failure(code, message) {
   return Object.assign(new Error(message), { code, statusCode: 409 });
@@ -63,7 +57,7 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
     throw new TypeError("Teaching requires the original learner-state and installed-content facilities.");
   }
 
-  async function activeLesson(actor, requestedAttemptId, assessmentId) {
+  async function activeLesson(actor, requestedAttemptId, assessmentId, learningScope) {
     const state = await learners.readState({ actor, includeCompletion: true });
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
     if (!attempt || attempt.attemptId !== requestedAttemptId) {
@@ -71,14 +65,20 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
     }
     const lesson = await content.readLesson({ ...attempt.pin.topic,
       lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
-    if (!questionPreparationReady(attempt, lesson, assessmentId)) {
+    const learningVisual = learningScope?.noExercise === true &&
+      learningScope.learnerId === state.progress.learnerId &&
+      learningScope.attemptId === requestedAttemptId &&
+      isDeepStrictEqual(learningScope.pin, attempt.pin) &&
+      attempt.preparation.phase === "reserved" && !lesson.lesson.exercise;
+    if ((learningScope && !learningVisual) || (!questionPreparationReady(attempt, lesson, assessmentId) && !learningVisual)) {
       throw failure("VIBE64_TRAINING_PREPARATION_REQUIRED", "Finish the saved exercise preparation before preparing or capturing a question.");
     }
     return { state, attempt, lesson };
   }
 
   // Actor and assistance are admitted host facts, not learner-supplied claims.
-  async function prepareQuestion({ actor, ...input } = {}, { requireCurrent, signal } = {}) {
+  async function prepareQuestion({ actor, ...input } = {}, facilities) {
+    const { requireCurrent, assertCurrent, signal } = facilities || {};
     const value = validateContent(prepareSchema, input, "Question preparation");
     if (!value.text.trim()) throw new Error("Prepare a nonempty question.");
     const { state, attempt, lesson } = await activeLesson(actor, value.attemptId, value.assessmentId);
@@ -91,6 +91,7 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
       text: value.text, assistance: value.assistance,
       issuedRevision: sameIdentity ? previous.pendingQuestion.issuedRevision : state.revision + 1 };
     if (requireCurrent) await requireCurrent();
+    assertCurrent?.();
     signal?.throwIfAborted();
     if (sameIdentity) {
       if (canonicalJson(previous.pendingQuestion) !== canonicalJson(question)) {
@@ -106,7 +107,7 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
     const saved = await learners.saveLessonResume({ actor, attemptId: value.attemptId,
       expectedRevision: value.expectedRevision, requestId: value.requestId,
       resume: { stage: previous?.stage || "question", pendingQuestion: question,
-        visuals: previous?.visuals || [], summary: previous?.summary || "" } });
+        visuals: previous?.visuals || [], summary: previous?.summary || "" } }, ...(facilities ? [facilities] : []));
     if (!questionPreparationReady(saved.attempt, lesson, value.assessmentId)) {
       throw failure("VIBE64_TRAINING_PREPARATION_REQUIRED", "The saved exercise preparation changed before question admission.");
     }
@@ -115,14 +116,21 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
       snapshot, reference: questionReference(snapshot) };
   }
 
-  async function saveVisualCheckpoint({ actor, ...input } = {}) {
+  async function saveVisualCheckpoint({ actor, ...input } = {}, facilities) {
+    const { learningScope, requireCurrent, assertCurrent, signal } = facilities || {};
+    if (learningScope && typeof requireCurrent !== "function") {
+      throw new TypeError("A learning diagram checkpoint requires its fresh exact session authority.");
+    }
     const value = validateContent(checkpointSchema, input, "Visual checkpoint");
     validateSnapshot(value.snapshot);
-    const { state, attempt, lesson } = await activeLesson(actor, value.attemptId);
+    const { state, attempt, lesson } = await activeLesson(actor, value.attemptId, undefined, learningScope);
     const visual = lesson.visuals.find(item => item.id === value.visualId)?.visual;
     if (!visual || !visual.states.includes(value.snapshot.state)) {
       throw new Error("Save a semantic state declared by this exact installed lesson visual.");
     }
+    if (requireCurrent) await requireCurrent();
+    assertCurrent?.();
+    signal?.throwIfAborted();
     const previous = attempt.learning?.resume;
     const savedVisual = previous?.visuals.find(item => item.visualId === value.visualId);
     const unchanged = savedVisual && canonicalJson(savedVisual.snapshot) === canonicalJson(value.snapshot);
@@ -137,7 +145,7 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
     const saved = await learners.saveLessonResume({ actor, attemptId: value.attemptId,
       expectedRevision: value.expectedRevision, requestId: value.requestId,
       resume: { stage: previous?.stage || "visual", pendingQuestion: previous?.pendingQuestion || null,
-        visuals, summary: previous?.summary || "" } });
+        visuals, summary: previous?.summary || "" } }, ...(facilities ? [facilities] : []));
     return { revision: saved.revision, replayed: saved.replayed, unchanged: false };
   }
 

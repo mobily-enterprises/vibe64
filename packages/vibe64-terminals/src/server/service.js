@@ -87,6 +87,7 @@ import {
   codexAppServerConversationResponse,
   codexAppServerExpiredEphemeralConversation
 } from "./codexScopedConversationPreparation.js";
+import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createProjectServices } from "./projectServices.js";
 import {
@@ -1161,8 +1162,18 @@ function createService({
     publishConversation: event => mainConversations.publishNative(event),
     runNativeDetachedConversation
   });
+  const mainToolCatalog = actions ? createServiceToolCatalog(actions, {
+    isActionAvailable: ({ actionId, context }) => Boolean(context.runtime?.learningScope &&
+      context.runtime.learningTeaching?.actionIds.includes(actionId))
+  }) : null;
+  function learningToolManifest(context) {
+    if (!context.runtime?.learningScope || !context.runtime.learningTeaching || !mainToolCatalog) return context;
+    const toolSet = mainToolCatalog.resolveToolSet(context, { discoveryOnly: true });
+    return { ...context, applicationTools: { schemas: toolSet.tools.map(mainToolCatalog.toOpenAiToolSchema) } };
+  }
   const mainConversations = createConversationRuntime({
     engine: "codex",
+    ...(mainToolCatalog ? { toolCatalog: mainToolCatalog } : {}),
     async authorize({ context, conversationId }) {
       if (context?.sessionId !== conversationId) return false;
       const authority = context.browserAuthority;
@@ -1235,14 +1246,21 @@ function createService({
             return prepareSessionConversationRenewal(provider, id, context, input);
           }
           if (operation === "create") return prepareSessionConversationCreation(provider, id, context, input);
-          if (operation === "ensure") return prepareSessionConversationReadiness(provider, id, context);
-          if (operation === "dispose") return prepareSessionConversationDisposal(provider, id, context, input);
+          if (operation === "ensure") return prepareSessionConversationReadiness(provider, id, learningToolManifest(context));
+          if (operation === "dispose") {
+            const runtime = context.runtime;
+            if (runtime?.learningScope && runtime.learningTeaching) {
+              await runtime.learningTeaching.cleanupConversation({ runtime, sessionId: id, terminals: service, context });
+            }
+            return prepareSessionConversationDisposal(provider, id, context, input);
+          }
           // Scoped work already has its own authorized host and native identity;
           // opening its existing handle must not hydrate a project session.
           if (context.assistantScope) return createSessionConversationBinding(provider, id, context);
           const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
           return createSessionConversationBinding(provider, id, {
             ...context, runtime,
+            ...(runtime.learningScope && runtime.learningTeaching ? { teachingTerminals: service, teachingActions: actions } : {}),
             prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
           });
         })();
@@ -3707,7 +3725,10 @@ function createService({
           "Prompt suggestion cleanup will be retried on session close.");
       });
       try {
-        const result = await assistantRouting.send(sessionId, input, options);
+        const request = options.runtime?.learningScope && options.runtime.learningTeaching
+          ? await options.runtime.learningTeaching.captureMessage({ runtime: options.runtime, sessionId, input,
+            context: options, actions }) : input;
+        const result = await assistantRouting.send(sessionId, request, options);
         if (result?.ok === true && !result.duplicate && !options.purpose && !input.reviewAction && !closing) {
           try {
             sessionNaming.start(await assistantSessionOptions(sessionId, options), input.messageId);
@@ -3848,7 +3869,7 @@ function createService({
             !context.session.metadata.agent_identity_conversation_id)) {
           await sessionAgent.prepareSelection(sessionId, selection, context);
         }
-        const result = await sessionAgent.ensureSession(sessionId, context);
+        const result = await sessionAgent.ensureSession(sessionId, selection.engineId === "codex" ? learningToolManifest(context) : context);
         if (result?.ok !== false) await assistantRouting.reconcile(sessionId, context);
         if (result?.ok === false) {
           logFailure({
@@ -3953,8 +3974,15 @@ function createService({
           code: "conversation_unsupported", statusCode: 400
         });
       }
-      return mainConversations.open({ id: sessionId,
-        context: { ...context, sessionId, assistantSelection: selection, providerId: selection.engineId } });
+      const current = { ...context, sessionId, assistantSelection: selection, providerId: selection.engineId };
+      const conversation = await mainConversations.open({ id: sessionId, context: current });
+      if (!context.runtime.learningScope || !context.runtime.learningTeaching) return conversation;
+      return Object.freeze({ ...conversation, async read(query) {
+        const result = await conversation.read(query);
+        const trainingQuestion = await context.runtime.learningTeaching.readQuestion({ runtime: context.runtime,
+          sessionId, context: current, actions });
+        return { ...result, trainingQuestion };
+      } });
     },
 
     async openTemporaryBrowserConversation(sessionId, conversationId, options = {}) {

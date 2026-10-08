@@ -18,6 +18,10 @@ async function checkpointSessionTurn({
   runtime ||= await projectService.createRuntime({ inspectSource: false });
   session ||= await runtime.getSession(sessionId, { inspectSource: false });
   if (await learningSessionExecutionRoot(runtime, sessionId, { allowClosing: true })) {
+    if (runtime.learningTeaching) {
+      const nativeTurn = codexAppServerTurnState(session, normalizeVibe64AgentRunState);
+      await runtime.learningTeaching.completeConversation({ runtime, sessionId, outerTurnId, outcome, nativeTurn });
+    }
     return { ok: true, processed: false, reason: "learning_session_no_git_checkpoint",
       checkpoint: { applicable: false, outerTurnId, outcome } };
   }

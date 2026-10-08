@@ -878,7 +878,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
 
   // These internal writes receive admitted facts. They do not authenticate the
   // actor, observe a browser, execute checks or grade the learner's answer.
-  async function writeLearning({ actor, attemptId, expectedRevision }, operation) {
+  async function writeLearning({ actor, attemptId, expectedRevision }, operation, { requireCurrent, assertCurrent, signal } = {}) {
     const paths = userPaths(actor);
     if (!uuidPattern.test(attemptId || "") || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
       throw new Error("Save learning for the exact attempt with the current state revision.");
@@ -896,6 +896,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
       const lessons = await verifyProgressLessons(state.progress);
       const lesson = lessons.get(attempt.attemptId);
+      if (requireCurrent) await requireCurrent();
+      assertCurrent?.();
+      signal?.throwIfAborted();
       const learning = operation(attempt, lesson, state.revision + 1);
       if (learning === false) {
         const active = state.activeSummaryCurrent ? state.active : await saveActive(paths, state.progress);
@@ -930,7 +933,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
   }
 
-  async function saveLessonResume({ actor, attemptId, expectedRevision, requestId, resume } = {}) {
+  async function saveLessonResume({ actor, attemptId, expectedRevision, requestId, resume } = {}, facilities) {
     if (!requestPattern.test(requestId || "")) throw new Error("Save a bounded stable resume request ID.");
     const input = structuredClone(validateContent(resumeSchema, { ...resume, requestId, revision: 1 }, "Lesson resume"));
     return writeLearning({ actor, attemptId, expectedRevision }, (attempt, lesson, nextRevision) => {
@@ -949,10 +952,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         return false;
       }
       return { submissions: attempt.learning?.submissions || [], resume: { ...input, revision: nextRevision } };
-    });
+    }, facilities);
   }
 
-  async function recordAssessment({ actor, attemptId, expectedRevision, submissionId, assessmentId, outcome, evidence, explanation, assistance } = {}) {
+  async function recordAssessment({ actor, attemptId, expectedRevision, submissionId, assessmentId, outcome, evidence, explanation, assistance } = {}, facilities) {
     return writeLearning({ actor, attemptId, expectedRevision }, (attempt, lesson) => {
       const assessment = lesson.lesson.assessments.find(value => value.id === assessmentId);
       if (!assessment) throw new Error("The assessment is not declared in this exact pinned lesson.");
@@ -991,7 +994,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         throw failure("VIBE64_TRAINING_EVIDENCE_CONFLICT", "This admitted evidence reference has already been consumed by another submission.", 409);
       }
       return { ...(attempt.learning || {}), submissions: [...(attempt.learning?.submissions || []), input] };
-    });
+    }, facilities);
   }
 
   async function beginPreparation({ actor, attemptId, expectedRevision } = {}) {

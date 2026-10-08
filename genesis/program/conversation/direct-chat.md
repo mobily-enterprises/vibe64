@@ -11,6 +11,20 @@ snapshots. This grant is not a model tool, HTTP route, native turn admission or
 teacher implementation; actual application tools still require the original
 native owner and explicit trusted learning composition.
 
+For an explicitly configured no-exercise Learning Runtime, one typed Training
+teaching facility now supplies the original Codex Main binding with the same
+service-tool catalogue at early readiness and Send. The original Manager forwards
+only that Send's server-owned browser authority through its private context
+allowlist. Working input/options and control grants cannot provide this authority.
+The mapper rechecks the original WRITE grant and actual accepted thread/turn/message
+after awaits, while independent Stop remains with the original native owner.
+Routing retains trusted captured question data only for this configured Learning
+branch, including its original uncertain-receipt repair; duplicate UUIDs preserve
+their first accepted words and association. The original completed native
+checkpoint projects exact question delivery and keeps source-less no-Git behavior.
+Other providers, practice teaching, live native/installed adoption and browser
+acceptance remain incomplete.
+
 JSKIT's conversation runtime owns native instruction installation and refresh
 for Codex, Claude and OpenCode, shared by main chat and Colleague. Vibe64 supplies
 Genesis-composed project guidance or an application's current instructions, plus
@@ -762,7 +776,6 @@ resource edits refreshes facts without restarting the native conversation.
 
 ## Sources
 
-- `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `tests/server/agentSessionCommand.unit.test.js`
 
 - `tests/client/useVibe64AssistantAccessCache.vitest.js`

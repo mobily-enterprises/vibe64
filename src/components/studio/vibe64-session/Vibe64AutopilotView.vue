@@ -764,6 +764,7 @@
           :lessons-available="props.lessonsAvailable"
           :app-available="props.sourceWorkspaceAvailable"
           :attempt-id="props.learningAttemptId"
+          :learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"
           :active="props.active && (props.lessonsAvailable || props.projectPane === 'preview') && !props.sessionSelectionArchived"
           :project-slug="projectSlug"
           :session-id="selectedAssistantSessionId"

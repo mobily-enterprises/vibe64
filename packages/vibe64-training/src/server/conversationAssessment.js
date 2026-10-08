@@ -3,7 +3,7 @@ import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext
 // Moved from Colleague's admitted evaluation. Consumers retain their actual
 // actor/turn/cue/observation lifetime; Training shares this one Helper/domain cut.
 async function evaluateAdmittedTrainingAssessment(kind, input, context, {
-  assessment, state, helper, requireCurrent, signal
+  assessment, state, helper, requireCurrent, assertCurrent, signal
 }) {
   await requireCurrent();
   const checkedHelper = { async runHelper(...args) {
@@ -13,7 +13,7 @@ async function evaluateAdmittedTrainingAssessment(kind, input, context, {
   } };
   const evaluate = kind === "practical" ? assessment.evaluatePractical : assessment.evaluateAnswer;
   const result = await evaluate.call(assessment, { ...input, actor: authenticatedVibe64User(context) }, {
-    state, context, helper: checkedHelper, requireCurrent, signal
+    state, context, helper: checkedHelper, requireCurrent, assertCurrent, signal
   });
   await requireCurrent();
   return result;

@@ -264,6 +264,7 @@ class Vibe64SessionRuntime {
     inspectSourceByDefault = true,
     learningScope = null,
     learningInstructions = null,
+    learningTeaching = null,
     projectContextRoot = process.cwd(),
     projectRuntimeRoot = "",
     projectSessionSourceRoot = "",
@@ -278,6 +279,10 @@ class Vibe64SessionRuntime {
       throw vibe64Error("Learning instructions require an authorized learning runtime and its server-owned reader.", "vibe64_learning_scope_invalid");
     }
     this.learningInstructions = learningInstructions;
+    if (learningTeaching !== null && (!this.learningScope || typeof learningTeaching?.bindConversation !== "function")) {
+      throw vibe64Error("Learning teaching requires an authorized runtime and its typed Training owner.", "vibe64_learning_scope_invalid");
+    }
+    this.learningTeaching = learningTeaching;
     if (this.learningScope && (projectSessionSourceRoot || createSessionSource)) {
       throw vibe64Error("A source-less learning runtime cannot provision a project source.", "vibe64_learning_scope_invalid");
     }

@@ -163,6 +163,7 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
       const actor = authenticatedVibe64User(context);
       if (!actor) throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), { code: "vibe64_auth_required", statusCode: 401 });
       try {
+        context.trainingMain?.requireAttempt(input.attemptId);
         return boundedResult(await execute(input, actor));
       } catch (cause) {
         if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;

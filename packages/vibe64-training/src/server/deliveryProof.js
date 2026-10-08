@@ -61,10 +61,12 @@ async function promoteTrainingQuestionDeliveries(conversationLog, conversationId
   }
 }
 
-async function stageTrainingQuestionDelivery(transaction, { conversationId, turnId, reference, captured }) {
+async function stageTrainingQuestionDelivery(transaction, { conversationId, turnId, reference, captured, nativeThreadId, nativeTurnId, nativeOuterTurnId, messageId, assertCurrent }) {
   const mark = { schemaVersion: 1, reference: structuredClone(reference), questionText: captured.question.text.trim(),
-    conversationId, turnId, phase: "prepared" };
+    conversationId, turnId, phase: "prepared",
+    ...(nativeThreadId && nativeTurnId ? { nativeThreadId, nativeTurnId, nativeOuterTurnId, messageId } : {}) };
   const turn = await transaction.readTurn(turnId);
+  assertCurrent?.();
   const previous = turn?.metadata?.trainingQuestionDelivery;
   if (previous) return previous;
   await transaction.updateTurnMetadata(turnId, { trainingQuestionDelivery: mark });
@@ -79,7 +81,7 @@ async function stageAdmittedTrainingQuestion(reference, {
   const captured = await teaching.captureQuestion({ actor, reference });
   return storage.write(storageId, async transaction => {
     await requireCurrent();
-    const mark = await stageTrainingQuestionDelivery(transaction, { ...admitted, reference, captured });
+    const mark = await stageTrainingQuestionDelivery(transaction, { ...admitted, reference, captured, assertCurrent: admitted.assertCurrent });
     if (!isDeepStrictEqual(mark.reference, reference)) throw failure("This native turn already stages another question.");
     return mark;
   });

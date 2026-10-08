@@ -31,10 +31,17 @@ motion completion. Hiding or stopping it does not count as completed teaching.
 If its cue receipt was not confirmed, read the current status before continuing;
 do not assume the explanation or motion succeeded.
 
-Source-less Learning conversations show Lessons, omit App and leave Presentation
-disabled until supported visual authority exists. They do not expose repository
-Save status or Temporary AI/workspace tools. A saved lesson checkpoint does not
-mean a presentation is currently open.
+Source-less Learning conversations show Lessons and omit App. A supported declared
+diagram can use the same Presentation player only in your exact saved lesson
+conversation; an empty picker or unavailable diagram cannot open it. This does
+not give the lesson repository, Save or Temporary AI/workspace access. A saved
+checkpoint does not mean a presentation is currently open. After a completed
+command or pause, the player saves its semantic state and labels. Reopening the
+same attempt restores its last confirmed state without replaying sound or motion.
+**Retry diagram checkpoint** retains an unconfirmed save identity; after a
+revision conflict, **Save current diagram** captures fresh state. Keep the player
+open until confirmation. A changed account, attempt or conversation retires its
+old handle; an error never grants a pass.
 
 If Start is unconfirmed, **Retry lesson start** keeps its original request
 identity, lesson and revision. Do not substitute a different lesson request.
@@ -52,6 +59,7 @@ Private provider key entry remains a human-only step.
 
 This attachment composes the original Preview choices and opens the original
 lesson and conversation controls. Actual Main teaching and its visual/current
-question receipt connection, source-less presentation support, and desktop/mobile
-live acceptance remain separate delivery gates. Opening a conversation does not
+question/cue receipt connection and desktop/mobile live acceptance remain
+separate delivery gates. Declared visual resources and checkpoint controls do
+not establish that Main can pilot or narrate them yet. Opening a conversation does not
 itself send a teaching request.

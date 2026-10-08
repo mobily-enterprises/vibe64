@@ -2569,3 +2569,130 @@ test("actual saved exercise caller admits only its same original local Project r
   // Component record admission is not exercise materialization, session creation,
   // setup success, native teaching or Preview acceptance.
 });
+
+async function guardedLearningWriterFixture(t) {
+  const f = await learningFixture(t);
+  await f.save("guarded-original-question", "answer-one");
+  const revision = (await f.state.readState({ actor: f.actor })).revision;
+  const installed = createInstalledTrainingContent({ systemRoot: f.systemRoot });
+  const entered = Promise.withResolvers();
+  const continueRead = Promise.withResolvers();
+  const state = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
+    async readLesson(input) {
+      const lesson = await installed.readLesson(input);
+      entered.resolve();
+      await continueRead.promise;
+      return lesson;
+    }
+  } });
+  const before = { progress: await fs.readFile(f.paths.progress), active: await fs.readFile(f.paths.active) };
+  const write = (kind, facilities) => kind === "question"
+    ? state.saveLessonResume({ actor: f.actor, attemptId: f.attemptId, expectedRevision: revision,
+      requestId: "guarded-next-question", resume: f.checkpoint("answer-two") }, facilities)
+    : state.recordAssessment({ ...f.answer("answer-one", "guarded-answer"), expectedRevision: revision }, facilities);
+  async function unchanged() {
+    assert.deepEqual(await fs.readFile(f.paths.progress), before.progress);
+    assert.deepEqual(await fs.readFile(f.paths.active), before.active);
+    const release = await tryAcquireExclusiveFileLock(f.paths.lock);
+    assert.equal(typeof release, "function", "refused original writer releases its same learner lock");
+    await release();
+  }
+  return { ...f, state, entered, continueRead, write, unchanged };
+}
+
+test("original learning writer refuses Stop after held installed verification for question and assessment", { timeout: 15_000 }, async t => {
+  for (const kind of ["question", "assessment"]) {
+    const f = await guardedLearningWriterFixture(t);
+    const abort = new AbortController();
+    const reason = new Error(`Stopped admitted ${kind}`);
+    const pending = f.write(kind, { signal: abort.signal });
+    const rejected = assert.rejects(pending, error => error === reason);
+    await f.entered.promise;
+    assert.equal(await tryAcquireExclusiveFileLock(f.paths.lock), null, "installed verification is inside the original learner writer lock");
+    abort.abort(reason);
+    f.continueRead.resolve();
+    await rejected;
+    await f.unchanged();
+  }
+});
+
+test("original learning writer refreshes revoked authority after held content and refuses without replay or progress", { timeout: 15_000 }, async t => {
+  for (const kind of ["question", "assessment"]) {
+    const f = await guardedLearningWriterFixture(t);
+    let authorized = true;
+    let refreshes = 0;
+    const revoked = new Error("Actual originating actor no longer has teaching WRITE authority");
+    const pending = f.write(kind, { async requireCurrent() {
+      refreshes++;
+      if (!authorized) throw revoked;
+    } });
+    const rejected = assert.rejects(pending, error => error === revoked);
+    await f.entered.promise;
+    assert.equal(refreshes, 0, "fresh effect admission belongs after the awaited original verification");
+    authorized = false;
+    f.continueRead.resolve();
+    await rejected;
+    assert.equal(refreshes, 1);
+    await f.unchanged();
+  }
+});
+
+test("original learning writer checks retired accepted request synchronously after awaited fresh authority", { timeout: 15_000 }, async t => {
+  for (const kind of ["question", "assessment"]) {
+    const f = await guardedLearningWriterFixture(t);
+    const authorityEntered = Promise.withResolvers();
+    const continueAuthority = Promise.withResolvers();
+    let current = true;
+    let checked = 0;
+    const retired = new Error("The actual admitted native request was retired while authority refreshed");
+    const pending = f.write(kind, { async requireCurrent() {
+      authorityEntered.resolve();
+      await continueAuthority.promise;
+    }, assertCurrent() {
+      checked++;
+      if (!current) throw retired;
+    } });
+    const rejected = assert.rejects(pending, error => error === retired);
+    await f.entered.promise;
+    f.continueRead.resolve();
+    await authorityEntered.promise;
+    assert.equal(checked, 0);
+    current = false;
+    continueAuthority.resolve();
+    await rejected;
+    assert.equal(checked, 1);
+    await f.unchanged();
+  }
+});
+
+test("original learning receipt replay refreshes authority and preserves exact saved question and assessment", async t => {
+  const f = await learningFixture(t);
+  const saved = await f.save("guarded-replay-question", "answer-one");
+  const answerInput = { ...f.answer("answer-one", "guarded-replay-answer"), expectedRevision: saved.revision };
+  const assessed = await f.state.recordAssessment(answerInput);
+  const before = { progress: await fs.readFile(f.paths.progress), active: await fs.readFile(f.paths.active) };
+  const resumeInput = { actor: f.actor, attemptId: f.attemptId, expectedRevision: 0,
+    requestId: "guarded-replay-question", resume: f.checkpoint("answer-one") };
+  let authorized = false;
+  let refreshes = 0;
+  let checks = 0;
+  const revoked = new Error("Saved receipt does not grant current teaching WRITE authority");
+  const facilities = { async requireCurrent() {
+    refreshes++;
+    if (!authorized) throw revoked;
+  }, assertCurrent() { checks++; } };
+  await assert.rejects(f.state.saveLessonResume(resumeInput, facilities), error => error === revoked);
+  await assert.rejects(f.state.recordAssessment(answerInput, facilities), error => error === revoked);
+  assert.equal(checks, 0);
+  authorized = true;
+  const questionReplay = await f.state.saveLessonResume(resumeInput, facilities);
+  const assessmentReplay = await f.state.recordAssessment(answerInput, facilities);
+  assert.equal(questionReplay.replayed, true);
+  assert.equal(assessmentReplay.replayed, true);
+  assert.equal(questionReplay.revision, assessed.revision);
+  assert.deepEqual(assessmentReplay.attempt.learning.submissions, assessed.attempt.learning.submissions);
+  assert.equal(refreshes, 4);
+  assert.equal(checks, 2);
+  assert.deepEqual(await fs.readFile(f.paths.progress), before.progress);
+  assert.deepEqual(await fs.readFile(f.paths.active), before.active);
+});

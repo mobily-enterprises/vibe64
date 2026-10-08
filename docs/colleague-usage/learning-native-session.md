@@ -1,107 +1,59 @@
 # Lessons without a practice workspace
 
-A host-supported lesson can use a learning conversation without creating a
-practice project. Its conversation and history belong to your saved lesson
-attempt. Ask to resume that attempt after an interruption; do not invent a
-workspace or repeat setup for a lesson that has no practice exercise.
+Use the yellow **L** plate and the existing **Lessons** pane to Start or Resume
+your saved lesson attempt. The same left Main conversation is the intended
+teacher; Colleague remains available for general application assistance. See
+[Choosing lessons and Learning conversations](learning-mode-ui.md) for the
+picker, chat and desktop/mobile view controls. Opening the conversation does
+not send a teaching request or prove that its teaching tools are available.
 
-A supported installation starts the learning conversation for the exact saved
-lesson attempt using your authorized AI connection and normal workflow choice.
-A lesson without a practice exercise does not create a source workspace or use a
-practice database slot. If that connection is unavailable or access was revoked,
-starting reports the failure rather than pretending the lesson is ready. Retain
-the attempt and resolve the connection access before retrying. A failed live
-update after creation does not erase the saved conversation; inspect the attempt
-before retrying an uncertain creation.
+A lesson without a practice exercise retains its conversation and history under
+your exact saved attempt. It creates no practice project, uses no practice
+database slot and has no source changes to Save or Git recovery checkpoint.
+Resume the confirmed attempt after an interruption. Do not create a substitute
+workspace or reset its progress to hide a preparation failure.
 
-Such a conversation has no source changes to Save and no Git recovery checkpoint.
-This does not mean the lesson has passed. Assessment results still require the
-lesson's supported evaluation operation. A closed or historical learning
-conversation can retain its history without accepting new work.
+An installation must supply teaching tools for that exact conversation. The
+current source integration supports Codex Main for lessons without a practice
+workspace; Claude, OpenCode and practice-workspace teaching still require their
+integration. Selecting a different workflow does not make those lesson tools
+available. Teaching instructions or ordinary chat alone do not certify teaching,
+grading or presentation support. This source increment has not established
+installed, real-model or desktop/mobile learner acceptance.
 
-Stopping or closing a supported learning conversation stops its admitted work.
-It does not stop another conversation sharing the same AI connection. Closing
-does not permit new messages or restart an archived lesson.
+In a supported teacher conversation, ask Main to teach the retained lesson. It
+can read your current learning state and pinned teaching brief, prepare a short
+question and evaluate your accepted answer. A prepared question becomes delivered
+only when Main's completed final answer exactly matches it. Progress is never
+a pass merely because the teacher says so. Evaluation uses the configured
+tool-free Helper and the lesson's original pinned rubric and progress rules.
+Practical gestures and diagram narration are separate capabilities; these four
+tools do not establish them.
 
-These native prerequisites do not yet expose Main Learning mode. If starting
-reports unavailable, ask the installation owner to enable lesson support. A
-missing execution directory or unavailable teaching instructions is a real
-preparation failure; retain the saved attempt and ask the owner to repair it.
-Colleague must not claim that an unavailable conversation is teaching, or create
-a substitute project to hide the failure.
+Reply to the question actually shown in that conversation. Typed input captures
+its current question; voice input captures it when recording begins. Retrying an
+uncertain Send keeps the original message identity and exact words. A stale or
+missing question association leaves the words in chat without treating them as
+an answer to a newer question. An unconfirmed question or grade is not a pass:
+read the retained result before asking for another evaluation.
 
-Reopening a supported no-exercise teacher uses the conversation already saved for
-that exact attempt. It does not make another conversation or reset progress.
-After explicitly ending the attempt, retained history can still be inspected or
-its existing work stopped, but a new message cannot resume that ended lesson.
-Resume the confirmed active attempt or explicitly request a new lesson attempt.
-If lesson content or ownership changes while teaching instructions are read,
-preparation reports the conflict rather than teaching from a different pin.
+Teaching requires current write access to the exact learner, attempt and pinned
+lesson. Historical chat access does not permit a new evaluation. If your account,
+access, attempt or teaching turn changes during a check, the save is refused.
+Stop also refuses a pending question, checkpoint or assessment save. Keep the
+attempt and retry from a current authorized turn after reading its saved state.
+A saved receipt requires current access to replay; it cannot authorize new work.
 
-The Main conversation adapter now has an internal learning-attempt selector.
-It is not a new visible launch control: the installation must connect the real
-lesson picker and authenticated Main route before Learning mode can start it.
-Colleague remains the supervisor; it must not claim these prerequisites mean that
-the left teacher, assessments or presentation have passed learner acceptance.
+Stopping or closing the conversation stops its admitted work without stopping a
+peer sharing the AI connection. Closing and ended attempts retain history but
+accept no new teaching. Resume the confirmed active attempt or explicitly start
+a new one. A delayed completion remains attached to its own attempt when you
+switch to Working; it does not change the selected Working project.
 
-Standalone lesson support uses the computer owner's local identity. Your existing
-Colleague history and Working conversations retain their ownership. If lessons
-are unavailable, keep your saved work and ask the installation owner to enable
-lesson support.
-
-Lesson tools must be supplied by the installation for that exact learning
-conversation. Teaching instructions alone do not make those tools available.
-If preparation reports that the saved conversation was created with different
-application tool entry points, its history and lesson attempt remain intact.
-Keep the attempt and ask the installation owner to resolve the tool setup and
-supported recovery before retrying. Colleague must not erase history, create a
-substitute conversation or claim that tool availability proves an assessment
-passed. Ordinary Working conversations and bounded Helpers keep their existing
-capabilities.
-
-Lesson evaluation must use the configured tool-free Helper and retain a cleanup
-failure for retry. The shared native Helper prerequisite preserves Colleague's
-existing Stop and cleanup behavior; it does not by itself enable Main grading.
-If cleanup is unconfirmed, retain the attempt and resolve that failure before
-requesting another evaluation. Colleague must not report a pass from missing or
-unfinished Helper evidence.
-
-If Stop, cancellation or loss of access retires an evaluation while its final
-question check is pending, the result is refused before it saves a pass. Reopen
-the retained attempt with current access and read its saved result before
-requesting another evaluation. This assessment prerequisite does not yet enable
-the left Main teacher's lesson tools.
-
-Teaching requires current write access to the exact retained learning attempt.
-Being able to read historical chat does not permit another lesson evaluation.
-If access or the active attempt changes, reopen the intended lesson with current
-access before requesting new teaching work. The internal authority prerequisite
-adds no person-facing control or lesson tool by itself.
-
-A supported learning conversation retains its own attempt when its delayed AI
-completion arrives after you select a Working conversation. That completion
-does not use the selected Working project or create a Git checkpoint. This
-context prerequisite alone does not enable Main lesson tools or prove a pass.
-
-A prepared question is still unconfirmed until the AI's completed final answer
-matches it. If the current teaching turn is stopped or replaced while preparing
-a question, retry the same saved request in a current authorized turn before
-claiming delivery. Moving the existing staging coordination does not enable Main
-teaching by itself.
-
-Learning Send retains its original authorized request privately so future lesson
-effects can check current access again. If access is lost or the attempt ends,
-read the retained history and resume an authorized active attempt before new
-teaching work. Sending still preserves your exact words; this prerequisite alone
-does not make lesson tools available or certify an assessment.
-
-Question preparation checks current teaching access again after reading the pinned
-lesson and before replaying or saving a question. Stop during that check refuses
-the save. Keep the retained attempt and retry from a current authorized turn;
-this guard does not by itself make Main lesson tools available.
-
-An assessment stopped while its final access check is pending refuses the progress
-save. A native teaching host can supply its actual Stop signal to the existing
-assessment owner; it still needs the accepted answer and retained Helper receipt.
-Read the saved result before retrying. This prerequisite alone enables no new
-teaching control or Main tool.
+If the AI connection or instructions are unavailable, retain the attempt and
+resolve that preparation failure before retrying. If a retained conversation
+reports different application tool entry points, ask the installation owner to
+resolve its supported recovery. Do not erase history or recreate the conversation
+to bypass the mismatch. An unconfirmed Helper cleanup must be resolved before
+another evaluation. Colleague can explain recovery and offer supported actions;
+private connection-key entry remains a human-only step.

@@ -1,3 +1,4 @@
+import { trainingQuestionReferenceSchema } from "@local/vibe64-runtime/shared/training-question-reference";
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 import { ASSISTANT_MODES } from "@local/vibe64-runtime/shared/assistantRouting";
@@ -101,6 +102,7 @@ const sessionRenameActionInputValidator = requiredInputSchema({
 });
 
 const agentMessageFields = {
+  trainingQuestion: { type: "object", required: false, schema: trainingQuestionReferenceSchema },
   planRevision: { type: "string", maxLength: 64, required: false },
   reviewAction: { type: "string", enum: ["retry"], required: false },
   submissionKind: { type: "string", enum: ["send", "steer"], required: false },

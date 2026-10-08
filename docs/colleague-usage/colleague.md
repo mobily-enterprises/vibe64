@@ -125,6 +125,12 @@ retrying an action; Colleague does not automatically repeat an uncertain tool
 operation. If the error asks you to close an attached native assistant terminal,
 close it before resuming the conversation.
 
+If a requested view or diagram opens but its confirmation fails, leave it open
+and ask Colleague to inspect its current state before asking for another change.
+Rechecking the same pending confirmation keeps the original browser result; it
+does not repeat the navigation or presentation command. Changing account retires
+that pending confirmation rather than sending it as the new person.
+
 Reply text appears progressively while Colleague is answering. A character split
 across updates appears only after its remaining part arrives; the completed reply
 is unchanged. Hosted clients

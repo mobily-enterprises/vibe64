@@ -44,7 +44,14 @@ the authenticated attempt context and fresh pinned teaching instructions while
 using the original preparation lock, Project factory and Main Session creation.
 Historical observation/control cannot admit new lesson work. Runtime construction,
 native admission and native providers stay with existing owners. Main
-application-tool integration remains unfinished. The Training Feature supplies
+teaching coordinator supplies the exact four learning-read, brief-read,
+question-prepare and answer-evaluate actions to the original Codex Main native
+host for no-exercise attempts. Fresh originating-request WRITE authority and
+accepted thread/turn/message guards fence every effect and final progress save;
+the original retained Helper, transcript transaction and native checkpoint remain
+the execution, receipt and delivery owners. Other providers, practice teaching,
+Main cue/navigation receipts and installed/browser acceptance remain unfinished.
+The Training Feature supplies
 canonical Training HTTP/action composition in Public and consumes an optional
 host's exact existing services without duplicating hosted authority or writers.
 Standalone learning-only admission uses the actual OS owner through the original

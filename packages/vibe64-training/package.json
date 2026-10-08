@@ -27,7 +27,12 @@
     "./server/installed-catalogue": "./src/server/installedCatalogue.js",
     "./server/routes": "./src/server/registerRoutes.js",
     "./server/conversation-assessment": "./src/server/conversationAssessment.js",
-    "./client/presentation-cue": "./src/client/useTrainingPresentationCue.js"
+    "./client/presentation-cue": "./src/client/useTrainingPresentationCue.js",
+    "./client/navigation": "./src/client/createTrainingNavigation.js",
+    "./server/main-teaching": "./src/server/mainTeaching.js",
+    "./server/visual-resource-actions": "./src/server/visualResourceActions.js",
+    "./server/visual-resource-routes": "./src/server/visualResourceRoutes.js",
+    "./client/preview-registration": "./src/client/useTrainingPreviewRegistration.js"
   },
   "jskit": {
     "kind": "runtime",

@@ -107,14 +107,14 @@
 </template>
 
 <script setup>
-import { computed, inject, onBeforeUnmount, ref, watch, watchEffect } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { projectOnboardingRequest } from "@local/vibe64-project/shared/onboardingRequest";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
-import { VIBE64_COLLEAGUE_PREVIEW_KEY } from "@/lib/vibe64AssistantHost.js";
+import { useTrainingPreviewRegistration } from "@local/vibe64-training/client/preview-registration";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { vibe64ResourceResponseError } from "@/lib/vibe64ApiResponses.js";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
@@ -173,7 +173,6 @@ const showPreview = computed(() => {
   if (props.archived || onboarding.value?.available === false || loadError.value) return true;
   return onboarding.value !== null && state.value !== "new" && state.value !== "adoption";
 });
-const colleaguePreview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
 const displayedPreview = {
   get presentation() { return props.presentation; },
   get projectSlug() { return projectSlug.value; },
@@ -187,14 +186,7 @@ const displayedPreview = {
     return "checking-project-setup";
   }
 };
-watchEffect(() => {
-  if (!colleaguePreview) return;
-  if (props.active || props.presentationActive) colleaguePreview.value = displayedPreview;
-  else if (colleaguePreview.value === displayedPreview) colleaguePreview.value = null;
-});
-onBeforeUnmount(() => {
-  if (colleaguePreview?.value === displayedPreview) colleaguePreview.value = null;
-});
+useTrainingPreviewRegistration(displayedPreview, () => props.active || props.presentationActive);
 const pending = computed(() => Boolean(applying.value || asking.value));
 const starterDisabled = computed(() => pending.value || props.busy || !enabled.value);
 const askDisabled = computed(() => pending.value || !enabled.value || !props.canAsk);

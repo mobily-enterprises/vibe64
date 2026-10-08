@@ -1914,6 +1914,7 @@ async function withAgentMessageController(operation, {
   actions = null,
   throughTerminalService = false,
   bindConversation = false,
+  runtimeFactory = null,
   codexAppServerActiveReconcileMs = 60_000
 } = {}) {
   const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-message-"));
@@ -1933,7 +1934,7 @@ async function withAgentMessageController(operation, {
     projectRuntimeRoot,
     session
   } = await managedSessionFixture(temporaryRoot);
-  const store = createVibe64SessionStore({
+  let store = createVibe64SessionStore({
     projectContextRoot,
     projectRuntimeRoot,
     projectSessionSourceRoot: path.join(temporaryRoot, "managed", "sessions")
@@ -1963,7 +1964,9 @@ async function withAgentMessageController(operation, {
     turns: [],
     subscribers: null
   };
-  const runtime = {
+  const runtime = runtimeFactory
+    ? await runtimeFactory({ temporaryRoot, projectContextRoot, projectRuntimeRoot, session })
+    : {
     async getSession(sessionId) {
       return store.readSession(sessionId);
     },
@@ -1977,6 +1980,7 @@ async function withAgentMessageController(operation, {
     stateRoot: projectRuntimeRoot,
     store
   };
+  if (runtimeFactory) store = runtime.store;
   const projectService = {
     createRuntime() {
       return runtime;
@@ -13113,4 +13117,127 @@ test("original learning readiness forwards only the supplied schema facility and
   const normal = schemaPreparation({ projectService: {}, runtimeHost: {}, sessionRuntimeHost: { createRuntimeForSession: async () => plainRuntime },
     accountPreparation: {}, sessionEnvironment: {}, health: {}, enabled: true });
   await assert.rejects(normal.readiness("ordinary", options), /admitted learning session/);
+});
+
+// The original controlled native owner receives a genuine saved no-exercise
+// Runtime/Store and the same Training factories. This is source integration,
+// not a logged-in provider or installed package acceptance case.
+test("actual learning Main host installs one catalogue before readiness and saves admitted tool delivery at its native checkpoint", { timeout: 30_000 }, async t => {
+  const { trainingTeachingFixture } = await import("../fixtures/trainingTeachingFixture.js");
+  const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
+  const { createTrainingAnswerAssessment } = await import("../../packages/vibe64-training/src/server/answerAssessment.js");
+  const { createTrainingLearningSessions } = await import("../../packages/vibe64-training/src/server/learningSessions.js");
+  const { createTrainingTeachingBrief } = await import("../../packages/vibe64-training/src/server/teachingBrief.js");
+  const { createTrainingActions } = await import("../../packages/vibe64-training/src/server/actions.js");
+  const { createTrainingTeachingActions } = await import("../../packages/vibe64-training/src/server/teachingActions.js");
+  const { createTrainingAssessmentActions } = await import("../../packages/vibe64-training/src/server/assessmentActions.js");
+  const { createLearningTeachingContextActions } = await import("../../packages/vibe64-sessions/src/server/actions.js");
+  const f = await trainingTeachingFixture(t, { ready: false, exercise: false });
+  f.actor.role = "owner";
+  const main = createTrainingMainTeaching({ teaching: f.owner,
+    assessment: createTrainingAnswerAssessment({ learners: f.learners, content: f.content, teaching: f.owner }) });
+  const saved = await f.learners.readLearningSessionScope({ actor: f.actor, attemptId: f.attemptId });
+  const actions = createActionCatalogue();
+  let runtime;
+  const learning = createTrainingLearningSessions({ learners: f.learners,
+    teachingBrief: createTrainingTeachingBrief({ learners: f.learners, content: f.content }), learningTeaching: main,
+    project: { createRuntime: async () => runtime }, sessions: { createSession() {}, inspectSession() {} } });
+  const scope = await learning.resolveContext({ actor: f.actor, attemptId: f.attemptId });
+  await withAgentMessageController(async ({ captures, projectService, sessionId, store, terminalService }) => {
+    const sessions = createSessionService({ project: projectService, terminals: terminalService });
+    const definitions = [...createSessionActions({ sessions }), ...createLearningTeachingContextActions(),
+      ...createTrainingActions({ catalogue: { readCatalogue() {} }, learners: f.learners,
+        teachingBrief: createTrainingTeachingBrief({ learners: f.learners, content: f.content }) }),
+      ...createTrainingTeachingActions({ mainTeaching: main }),
+      ...createTrainingAssessmentActions({ mainTeaching: main }).filter(action => action.id === "vibe64.training.answer.evaluate")];
+    actions.register({ contributorId: "original-learning-main-host", domain: "training",
+      actions: definitions.map(action => ({ ...action, channels: action.channels || ["api", "automation", "internal"], surfaces: ["app"] })) });
+    registerVibe64ActionContext(actions, { resolveUser: async () => f.actor,
+      authorizeProject: () => assert.fail("Source-less Main does not borrow a project ACL"),
+      resolveLearningContext: input => learning.resolveContext(input) });
+    const context = { channel: "internal", surface: "app", requestMeta: {
+      request: { params: { learningAttemptId: f.attemptId }, vibe64User: f.actor } } };
+    const registrations = new Map();
+    captures.onProviderCreated = provider => {
+      provider.client = {};
+      provider.registerThreadRequestHandler = (threadId, handler) => {
+        const owned = { handler };
+        registrations.set(threadId, owned);
+        return { isCurrent: () => registrations.get(threadId) === owned,
+          release: () => { if (registrations.get(threadId) === owned) registrations.delete(threadId); } };
+      };
+      provider.interruptTurn = async (threadId, turnId) => {
+        provider.status = "interrupted";
+        emitCodexNotification(captures.subscribers, turnCompleted({ threadId, turnId, status: "interrupted" }));
+        return { interrupted: true };
+      };
+    };
+    const ready = await terminalService.ensureAgentSession(sessionId, { runtime, vibe64User: f.actor });
+    assert.equal(ready.ok, true, JSON.stringify(ready));
+    assert.equal(captures.threadStarts.length, 1);
+    const manifest = captures.threadStarts[0].dynamicTools;
+    assert.ok(manifest.length > 0, "the original native Start already receives the supplied catalogue");
+    assert.equal(captures.turns.length, 0, "readiness authors no inference or replacement history");
+    const nativeThreadId = captures.provider.threadId;
+    const retainedHash = await store.readMetadataValue(sessionId, "codex_conversation_tool_schema_identity");
+    assert.match(retainedHash, /^[a-f0-9]{64}$/u);
+    const messageId = randomUUID();
+    const sent = await actions.execute({ actionId: "vibe64.sessions.agent-message.send",
+      input: { learningAttemptId: f.attemptId, sessionId, messageId, message: "Teach this exact saved lesson.", submissionKind: "send" }, context });
+    assert.equal(sent.ok, true, JSON.stringify(sent));
+    assert.equal(captures.threadStarts.length, 1, "Send reuses the native thread prepared with that same manifest");
+    assert.equal(captures.turns[0].threadId, nativeThreadId);
+    const handler = registrations.get(nativeThreadId)?.handler;
+    assert.equal(typeof handler, "function", "the same account provider owns the exact thread dispatcher");
+    const call = (callId, tool, args) => handler({ method: "item/tool/call", params: {
+      threadId: nativeThreadId, turnId: captures.provider.turnId, callId, tool, arguments: args } });
+    const discovered = await call("native-learning-search", "assistant_action_search", {});
+    const search = JSON.parse(discovered.contentItems[0].text);
+    assert.equal(search.ok, true, JSON.stringify(search));
+    assert.deepEqual(search.result.items.map(value => value.actionId).sort(), [...main.actionIds].sort());
+    const contractReply = await call("native-learning-question-contract", "assistant_action_contract", {
+      actionId: "vibe64.training.question.prepare" });
+    const contract = JSON.parse(contractReply.contentItems[0].text);
+    assert.equal(contract.ok, true, JSON.stringify(contract));
+    assert.equal(contract.result.actionId, "vibe64.training.question.prepare");
+    const preparedReply = await call("native-learning-question", "assistant_action_execute", {
+      actionId: "vibe64.training.question.prepare", input: {
+        attemptId: f.attemptId, expectedRevision: 1, requestId: "native-first-question",
+        assessmentId: "explain", text: f.input.text, assistance: "none" } });
+    const prepared = JSON.parse(preparedReply.contentItems[0].text);
+    assert.equal(prepared.ok, true, JSON.stringify(prepared));
+    let log = await store.readConversationLog(sessionId);
+    const canonical = log.find(turn => turn.messages.some(message => message.messageId === messageId));
+    assert.equal(canonical.metadata.trainingQuestionDelivery.phase, "prepared");
+    assert.equal(canonical.metadata.trainingQuestionDelivery.nativeThreadId, nativeThreadId);
+    assert.equal(canonical.metadata.trainingQuestionDelivery.nativeTurnId, captures.provider.turnId);
+    assert.equal(canonical.metadata.trainingQuestionDelivery.messageId, messageId);
+    assert.equal(canonical.messages.find(message => message.messageId === messageId).text, "Teach this exact saved lesson.");
+    assert.equal(canonical.metadata.applicationTools.find(value => value.id === "native-learning-question").status, "complete");
+    captures.finalText = f.input.text;
+    const nativeTurnId = captures.provider.turnId;
+    emitCodexNotification(captures.subscribers, { method: "item/completed", params: {
+      threadId: nativeThreadId, turnId: nativeTurnId, item: { id: "native-final-question", type: "agentMessage", phase: "final_answer", text: f.input.text } } });
+    captures.provider.status = "completed";
+    emitCodexNotification(captures.subscribers, turnCompleted({ threadId: nativeThreadId, turnId: nativeTurnId }));
+    await waitForSessionValue(() => store.readConversationLog(sessionId), value =>
+      value.some(turn => turn.metadata.trainingQuestionDelivery?.phase === "delivered"), "original native checkpoint question delivery");
+    log = await store.readConversationLog(sessionId);
+    const delivered = log.find(turn => turn.metadata.trainingQuestionDelivery?.phase === "delivered");
+    assert.equal(delivered.metadata.trainingQuestionDelivery.nativeTurnId, nativeTurnId);
+    assert.equal(delivered.messages.findLast(message => message.role === "assistant").text, f.input.text);
+    assert.equal(captures.threadStarts.length, 1);
+    assert.equal((await f.learners.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 0);
+    assert.equal(captures.renderPrompts.length, 0, "the actual learning Runtime supplies instructions without a source Genesis prompt");
+    assert.equal(await store.readMetadataValue(sessionId, "codex_conversation_tool_schema_identity"), retainedHash);
+  }, { actions, throughTerminalService: true, bindConversation: true, async runtimeFactory({ temporaryRoot, session }) {
+    session.sessionId = `learning-${f.attemptId}`;
+    runtime = new LearningBindingRuntime({ projectContextRoot: temporaryRoot,
+      projectRuntimeRoot: saved.projectRuntimeRoot, learningScope: scope.learningScope,
+      learningInstructions: scope.learningInstructions, learningTeaching: scope.learningTeaching,
+      promptRenderer: () => assert.fail("No source prompt for a genuine no-exercise Main") });
+    await runtime.createSession({ sessionId: session.sessionId, metadata: {
+      assistant_selection: session.metadata.assistant_selection } });
+    return runtime;
+  } });
 });

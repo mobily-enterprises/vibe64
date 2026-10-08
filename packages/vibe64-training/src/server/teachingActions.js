@@ -13,8 +13,8 @@ const output = { mode: "replace", schema: createSchema({
   delivery: { ...text, enum: ["prepared"] }
 }) };
 
-function createTrainingTeachingActions({ colleague } = {}) {
-  if (typeof colleague?.requireTrainingQuestionTurn !== "function" || typeof colleague?.stageTrainingQuestion !== "function") {
+function createTrainingTeachingActions({ colleague, mainTeaching } = {}) {
+  if (!mainTeaching?.bindConversation && (typeof colleague?.requireTrainingQuestionTurn !== "function" || typeof colleague?.stageTrainingQuestion !== "function")) {
     throw new TypeError("Question preparation requires the original Colleague turn admission and question staging owners.");
   }
   return Object.freeze([withVibe64ActionContext({
@@ -38,11 +38,14 @@ function createTrainingTeachingActions({ colleague } = {}) {
       }
       let saved;
       try {
-        await colleague.requireTrainingQuestionTurn(context);
+        const coordinator = context.trainingMain || colleague;
+        const facilities = context.trainingMain
+          ? await coordinator.requireTrainingQuestionTurn(context, input)
+          : await coordinator.requireTrainingQuestionTurn(context);
         saved = await teaching.prepareQuestion({ actor, attemptId: input.attemptId,
           expectedRevision: input.expectedRevision, requestId: input.requestId,
-          assessmentId: input.assessmentId, text: input.text, assistance: input.assistance });
-        await colleague.stageTrainingQuestion(saved.reference, context);
+          assessmentId: input.assessmentId, text: input.text, assistance: input.assistance }, context.trainingMain ? facilities : undefined);
+        await coordinator.stageTrainingQuestion(saved.reference, context);
         return { ok: true, revision: saved.revision, replayed: saved.replayed,
           assessmentId: saved.snapshot.question.assessmentId, questionText: saved.snapshot.question.text,
           reference: saved.reference, delivery: "prepared" };

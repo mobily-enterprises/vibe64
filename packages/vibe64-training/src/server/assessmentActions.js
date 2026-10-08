@@ -16,8 +16,8 @@ const output = { mode: "replace", schema: createSchema({
   }) }
 }) };
 
-function createTrainingAssessmentActions({ colleague } = {}) {
-  if (typeof colleague?.evaluateTrainingAnswer !== "function" || typeof colleague?.evaluateTrainingPractical !== "function") {
+function createTrainingAssessmentActions({ colleague, mainTeaching } = {}) {
+  if (!mainTeaching?.bindConversation && (typeof colleague?.evaluateTrainingAnswer !== "function" || typeof colleague?.evaluateTrainingPractical !== "function")) {
     throw new TypeError("Assessment evaluation requires the original Colleague message/observation admission and Helper lifetime.");
   }
   return Object.freeze(["answer", "practical"].map(kind => withVibe64ActionContext({
@@ -41,9 +41,10 @@ function createTrainingAssessmentActions({ colleague } = {}) {
       try {
         const admitted = { attemptId: input.attemptId, expectedRevision: input.expectedRevision,
           submissionId: input.submissionId, messageId: input.messageId };
+        const coordinator = context.trainingMain || colleague;
         const saved = kind === "practical"
-          ? await colleague.evaluateTrainingPractical({ ...admitted, observationId: input.observationId }, context)
-          : await colleague.evaluateTrainingAnswer(admitted, context);
+          ? await coordinator.evaluateTrainingPractical({ ...admitted, observationId: input.observationId }, context)
+          : await coordinator.evaluateTrainingAnswer(admitted, context);
         const result = saved.attempt.learning.submissions.find(value => value.submissionId === input.submissionId);
         if (!result) throw new Error("The native learning result did not retain this submission. Read progress before retrying.");
         const completion = saved.completion;

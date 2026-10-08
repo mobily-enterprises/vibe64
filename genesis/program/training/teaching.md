@@ -18,7 +18,12 @@
 - `packages/vibe64-runtime/src/shared/agentExecutionProfiles.js`
 - `tests/server/vibe64TrainingAssessmentGrader.unit.test.js`
 - `packages/vibe64-training/src/server/teaching.js`
+- `packages/vibe64-training/src/server/visualResourceActions.js`
+- `packages/vibe64-training/src/server/visualResourceRoutes.js`
 - `packages/vibe64-training/src/server/deliveryProof.js`
+- `packages/vibe64-training/src/server/mainTeaching.js`
+- `packages/vibe64-runtime/src/shared/trainingQuestionReference.js`
+- `tests/fixtures/trainingTeachingFixture.js`
 - `tests/server/vibe64TrainingTeaching.unit.test.js`
 - `packages/vibe64-training/src/server/answerAssessment.js`
 - `packages/vibe64-training/src/server/conversationAssessment.js`
@@ -30,6 +35,42 @@
 - `tests/fixtures/training/orientation-response.mjs`
 
 ## Public contract
+
+### Bound no-exercise Main teaching
+
+`createTrainingMainTeaching` composes the original question, admitted-answer,
+delivery-proof and retained Helper owners for the exact saved no-exercise attempt.
+The original Main host supplies its Runtime/Store, native turn reader, action
+catalogue and Terminals; it installs one catalogue at Codex readiness and Send.
+Only learning-state read, teaching-brief read, question preparation and accepted
+answer evaluation are exposed. The original search/contract/execute policy stays
+in place; no shell, paths, supplied actor, answer words or passed outcome is added.
+
+The mapper reexecutes the original Sessions internal WRITE grant using the private
+originating browser authority. It checks learner, session, attempt, full pin,
+account selection and the actual accepted canonical message/native thread/turn.
+After awaited reads it invokes the common runtime's frozen `assertCurrent` and
+checks cancellation, including inside the final original learner writer. Caller
+JSON cannot supply that authority. Server Send capture preserves duplicate UUID
+facts first and associates only an explicit currently delivered question with the
+original exact accepted words. Missing or stale associations remain ungraded.
+
+The same canonical transcript transaction stores application-tool and Helper
+receipts. A retained old Helper must finish cleanup before a successor can run;
+original Stop and host disposal own cancellation and cleanup. Only the original
+native completed-target checkpoint promotes a prepared question whose complete
+final output matches. Source-less completion retains the original no-Git outcome;
+it neither grades a final reply nor writes native output/status from the tool
+runtime. The Main read wrapper projects a bounded current reference only after
+fresh observation access, for the existing typed/voice capture owner.
+
+This source composition covers Codex/no-exercise Main only. Ordinary Working,
+Temporary, Helper and Colleague compatibility callers retain their original
+defaults. Claude/OpenCode dispatch, source-backed practice, Main cue/navigation
+receipts, actual model/native adoption and packaged desktop/mobile acceptance
+remain open. The native integration fixture reuses the exact original Teaching
+fixture through one shared test helper and the original Runtime/Store/controller
+lifecycle; its controlled provider completion is not live model acceptance.
 
 The internal brief constructor may receive the exact original `learners` and
 `content` owners from an isolated author-preview composition. Missing dependencies
@@ -47,7 +88,7 @@ owners and provides `vibe64.training`. It optionally consumes the generic
 preparation and learning-session references, not callbacks, actor cache or paths.
 When present, those supplied references remain exact and the host retains its one
 Training action registration, authority contributor and learning Session routes.
-The Feature adds only the canonical Training HTTP adapter in this branch.
+The Feature registers the canonical Training and browser visual HTTP adapters in this branch.
 
 Without that capability, the Feature composes the original published-content,
 catalogue, learner, brief, preparation and learning-session owners from the
@@ -149,6 +190,18 @@ against the original Colleague accepted-turn owner and retained Helper. Focused
 native admission and wiring checks cover that boundary; full learner acceptance
 remains separate. This action does not
 assess practical learner gestures or execute a declared check.
+
+### Final original progress writer admission
+
+`saveLessonResume` and `recordAssessment` accept optional trusted host facilities
+without changing their input schemas, CAS or consumed-evidence rules. Inside
+the original learner lock, `writeLearning` verifies the retained installed lessons,
+then refreshes `requireCurrent` and synchronously checks `assertCurrent` and the
+actual AbortSignal before its original replay or write operation. A request that
+retires during the awaited refresh cannot save a question or assessment.
+Question preparation, visual checkpoints and the existing admitted assessment
+pipeline forward these same facilities; unconfigured callers add no new await.
+This final writer fence is separate from tool/native/browser acceptance.
 
 ### Internal question admission foundation
 
@@ -747,3 +800,28 @@ tool catalogue and is already used by Public Accounts/Project action presenters.
 Progress/checkpoints/pins and their schemas/writers remain unchanged. This
 transient projection is a prerequisite for one Panel's Learning/Working filter,
 not proof of the visible filter or native teaching.
+
+
+### Original portable browser visual resources
+
+Training owns the original hosted visual-resource actions and routes; Online
+immediately reuses those owners and no longer registers a parallel adapter.
+The default attempt visual URL retains its original project checkpoint authority,
+bounded verified file envelope, no-store transport, saved checkpoint, pin and CAS
+behavior. A body learningAttemptId cannot redirect that legacy POST.
+
+The explicit Learning URL binds attempt/session/visual from its path. The original
+Core contributor freshly admits observation or write through the original
+Training learning-session scope and Store. A no-exercise reserved attempt may
+save only with exact trusted owner/attempt/full pin and a fresh authority facility;
+ordinary calls retain their original preparation refusal and practical eligibility.
+After installed content validation, the same checkpoint writer reexecutes the
+original internal teaching-context action with the originating request metadata,
+rejecting an account/role/saved-scope change before effects. Aborted operations do
+not write. Online's original selected teaching facade forwards these facilities
+unchanged. The original resume writer alone owns replay, conflict and revision.
+
+These APIs and the retained client handle do not establish Main navigation, cue,
+audible-completion or terminal-acknowledgement transport. Those operations must
+reuse the original teaching coordinators and actual canonical native receipts;
+selected IDs, progress and rendered history cannot substitute for that proof.

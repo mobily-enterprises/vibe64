@@ -36,6 +36,7 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `docs/colleague-usage/learning-with-colleague.md`
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
+- `packages/vibe64-training/src/client/createTrainingNavigation.js`
 - `src/components/Vibe64ColleagueLauncherTarget.vue`
 - `src/lib/vibe64AssistantHost.js`
 - `src/components/StudioAppShellLayout.vue`
@@ -686,6 +687,16 @@ runtimes. The retention is local to the browser tab when storage is available;
 there is no new server journal or cross-tab archive protocol.
 
 ### Lesson presentation acknowledgement
+
+Training now owns the original client navigation/cache/ACK coordinator through
+createTrainingNavigation. Colleague immediately uses the same handle at apply and
+resets its cache in the original actor-watch order. Its host retains mobile
+minimise before the cache branch; desktop/no-op adds no awaited yield. The
+original pending-only, one-navigation guard, cached success/failure receipt,
+actor/unmount checks and uncertain-ACK retry remain unchanged. Server connection
+timeouts, product navigation and player authority retain their original owners.
+No Main effect/cue fields, subscriber, runtime or receipt transport are introduced
+by this client move.
 
 The original initiating-browser navigation receipt also carries bounded lesson
 presentation operations supplied by the Training action owner. The browser's

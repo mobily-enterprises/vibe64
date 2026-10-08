@@ -12,7 +12,14 @@ import { createTrainingTeachingBrief } from "./teachingBrief.js";
 import { createTrainingService } from "./preparation.js";
 import { createManagedProjectRepositoryService } from "@local/vibe64-project/server/managedRepository";
 import { createTrainingLearningSessions } from "./learningSessions.js";
+import { createTrainingTeachingOwner } from "./teaching.js";
+import { createTrainingAnswerAssessment } from "./answerAssessment.js";
+import { createTrainingMainTeaching } from "./mainTeaching.js";
+import { createTrainingTeachingActions } from "./teachingActions.js";
+import { createTrainingAssessmentActions } from "./assessmentActions.js";
 import { registerTrainingRoutes } from "./registerRoutes.js";
+import { createTrainingVisualResourceActions } from "./visualResourceActions.js";
+import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js";
 
 const Vibe64TrainingProvider = defineFeature({
   id: "vibe64.training", domain: "vibe64-training",
@@ -22,6 +29,8 @@ const Vibe64TrainingProvider = defineFeature({
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
   setup({ http, project, sessions, terminals, trainingHost }, { actionCatalogue }) {
     registerTrainingRoutes(http);
+    registerTrainingVisualResourceRoutes(http);
+    registerTrainingVisualResourceRoutes(http, { learningScoped: true });
     if (trainingHost) return { training: trainingHost };
 
     const projectContext = getStudioProjectContext();
@@ -32,7 +41,10 @@ const Vibe64TrainingProvider = defineFeature({
     const brief = createTrainingTeachingBrief({ learners, content });
     const projectRepositoryService = createManagedProjectRepositoryService({ projectContext, projectService: project });
     const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals });
-    const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, projectContext });
+    const teaching = createTrainingTeachingOwner({ learners, content });
+    const assessment = createTrainingAnswerAssessment({ learners, content, teaching });
+    const mainTeaching = createTrainingMainTeaching({ teaching, assessment });
+    const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, projectContext, learningTeaching: mainTeaching });
     registerVibe64ActionContext(actionCatalogue, {
       admissionScope: "learning-only",
       resolveUser({ request }) {
@@ -49,11 +61,16 @@ const Vibe64TrainingProvider = defineFeature({
       resolveLearningContext: learningSessions.resolveContext
     });
     registerLearningSessionRoutes(http, { learningScoped: true, routeSurface: "app" });
-    return { training: Object.freeze({ catalogue, content, learners, brief, exercises, learningSessions }) };
+    return { training: Object.freeze({ catalogue, content, learners, brief, exercises, learningSessions, teaching, assessment, mainTeaching }) };
   },
-  actions({ training, trainingHost }) {
-    return trainingHost ? [] : createTrainingActions({ catalogue: training.catalogue, learners: training.learners,
-      teachingBrief: training.brief, exercises: training.exercises, learningSessions: training.learningSessions });
+  actions({ training, trainingHost }, { actionCatalogue }) {
+    if (trainingHost) return [];
+    return [...createTrainingActions({ catalogue: training.catalogue, learners: training.learners,
+      teachingBrief: training.brief, exercises: training.exercises, learningSessions: training.learningSessions }),
+    ...createTrainingTeachingActions({ mainTeaching: training.mainTeaching }),
+    ...createTrainingAssessmentActions({ mainTeaching: training.mainTeaching }).filter(action => action.id === "vibe64.training.answer.evaluate"),
+    ...createTrainingVisualResourceActions({ learners: training.learners, content: training.content,
+      teaching: training.teaching, actions: actionCatalogue })];
   }
 });
 
