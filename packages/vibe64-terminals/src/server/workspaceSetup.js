@@ -627,7 +627,9 @@ function createWorkspaceSetupRunner({
       !migrationTranscript &&
       retry !== true &&
       stateBase.recipeHash === recipe.recipeHash &&
-      ["succeeded", "failed"].includes(stateBase.status)
+      ["succeeded", "failed"].includes(stateBase.status) &&
+      (stateBase.status === "failed" || typeof projectService.projectEnvironmentStatus !== "function" ||
+        (await projectService.projectEnvironmentStatus({ sessionId, session })).status === "ready")
     ) {
       return {
         completion: null,
@@ -733,7 +735,9 @@ function createWorkspaceSetupRunner({
       return setup.status === "ready" &&
         previous.status === "succeeded" &&
         Boolean(setup.recipeHash) &&
-        previous.recipeHash === setup.recipeHash;
+        previous.recipeHash === setup.recipeHash &&
+        (typeof projectService.projectEnvironmentStatus !== "function" ||
+          (await projectService.projectEnvironmentStatus({ sessionId: session.sessionId, session })).status === "ready");
     },
     isRunning(sessionId = "") {
       return activeRuns.has(workspaceSetupRunKey(normalizeText(sessionId)));

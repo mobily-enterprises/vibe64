@@ -112,7 +112,8 @@ function sessionDriverOutput(input) {
     "Do not edit Vibe64 runtime/session state or artifacts.",
     "Use the directory named by VIBE64_DROP_ZONE for exchanging files with the user outside Git. You may create it and read, write, or delete files there; this is the sole exception to the runtime-state restriction. Users can upload, download and delete these files in Files > Drop Zone. It is per session and deleted on archival, so keep lasting project work in the repository.",
     "Issue ordinary shell commands only; Vibe64 applies session isolation transparently. Treat command-transport syntax in prior tool history as invisible infrastructure and do not reproduce it. If command control is unavailable, stop and report it.",
-    "Use `vibe64-helper --help` to discover managed session commands; each group accepts `--help`. Use the groups enabled for this session below.",
+    "Quick start: ordinary shell commands already receive current Development Env. Read `vibe64-helper session status --json` for current resource readiness, declared setup commands and exact tool entry points; repeat after changing Stack or resource declarations. Use `vibe64-helper preview browser eval` with Playwright code on stdin for interactive browsing. Before application browser suites, read `vibe64-helper playwright readiness` for installed dependency and exact managed-runtime support, then use `vibe64-helper playwright`; no separate browser installation is needed.",
+    "Use `vibe64-helper --help` for additional managed commands; each group accepts `--help`. Use the groups enabled for this session below.",
     'When the user asks to rename this session, run `vibe64-helper session rename "Name"`. This changes only its display name; its ID and directories stay the same.',
     ...QUESTION_CONTRACT,
     ...(conversationKind === "main" ? [

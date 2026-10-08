@@ -18,6 +18,17 @@ failure blocks that command and should be reported for investigation. Provisioni
 a newly declared resource and running application migrations remain preparation
 steps; configured names alone do not prove either has completed.
 
+The coding agent can read `vibe64-helper session status --json` for current
+resource readiness, environment names, declared Workspace setup commands and
+managed tool entry points. This read exposes no environment values and starts
+no preparation. Repeat it after changing resource declarations. A
+`not-prepared` resource requires Workspace setup; it is not a request to invent
+credentials. In the session chat, wait for the assistant to finish, then choose
+**Prepare workspace**, or **Retry** on a failed preparation. Adding a resource
+requires preparation even if the dependency-install command has not changed.
+Colleague can inspect preparation and retry it through its existing session
+actions when asked; it does not run these shell helpers itself.
+
 Long-running processes retain their startup values. After changing credentials, ask the
 coding agent to close its managed browser with `vibe64-helper preview browser
 close` before retrying; its next browser command starts a fresh process with the

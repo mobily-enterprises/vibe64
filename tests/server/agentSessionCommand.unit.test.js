@@ -11,7 +11,8 @@ import {
   prepareAgentSessionCommand
 } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import {
-  genesisCommandShimDirectory
+  genesisCommandShimDirectory,
+  initializeGenesisProject
 } from "../../packages/vibe64-genesis/src/server/index.js";
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
 
@@ -33,6 +34,7 @@ test("agent shell commands run as session-owned managed executions and drain on 
   const runCalls = [];
   let projectEnv = { DB_NAME: "new_database", DB_USER: "managed_writer", SERVICE_URL: "https://current.example.test" };
   let environmentFailure = null;
+  let environmentStatus = "not-prepared";
   let commandExitCode = 0;
   const stopOwnedCalls = [];
   const descriptor = {
@@ -55,6 +57,9 @@ test("agent shell commands run as session-owned managed executions and drain on 
         return {
           async readSessionSourceDescriptor() {
             return descriptor;
+          },
+          async readMetadataValue() {
+            return JSON.stringify({ status: "succeeded" });
           }
         };
       },
@@ -66,6 +71,9 @@ test("agent shell commands run as session-owned managed executions and drain on 
         assert.equal(input.session.metadata.source_path, sourceRoot);
         if (environmentFailure) throw environmentFailure;
         return projectEnv;
+      },
+      async projectEnvironmentStatus() {
+        return { status: environmentStatus, keys: Object.keys(projectEnv), resources: [] };
       },
       async projectExecutionEnvironment() {
         assert.fail("Shell environment reads must not provision resources or acquire the active agent's source lock.");
@@ -95,6 +103,9 @@ test("agent shell commands run as session-owned managed executions and drain on 
   });
 
   try {
+    await mkdir(sourceRoot, { recursive: true });
+    await promisify(execFile)("git", ["init", "--quiet", sourceRoot]);
+    await initializeGenesisProject({ projectRoot: sourceRoot });
     await service.bindSession(sessionId, { wrapperHostDir });
     const command = "/usr/bin/google-chrome --headless https://example.test &";
     const result = await service.run({
@@ -182,6 +193,21 @@ test("agent shell commands run as session-owned managed executions and drain on 
       env: { ...process.env, ...prepared.env, VIBE64_AGENT_SESSION_COMMAND_TOKEN: "invalid" }
     }), (error) => error.code === 1 && /identity is invalid/.test(error.stderr));
     assert.equal(runCalls.length, callCount);
+
+    const readStatus = () => promisify(execFile)(path.join(wrapperHostDir, "vibe64-session"), ["status", "--json"], {
+      cwd: sourceRoot, env: { ...process.env, ...prepared.env }
+    });
+    let summary = JSON.parse((await readStatus()).stdout);
+    assert.equal(summary.project, projectSlug);
+    assert.equal(summary.environment.status, "not-prepared");
+    assert.match(summary.recovery, /Prepare workspace/);
+    assert.equal(summary.workspaceSetup.status, "succeeded");
+    assert.equal(summary.tools.browserTests, "vibe64-helper playwright status");
+    assert.equal(summary.tools.browserTestReadiness, "vibe64-helper playwright readiness");
+    assert.equal(JSON.stringify(summary).includes("managed_writer"), false);
+    environmentStatus = "ready";
+    summary = JSON.parse((await readStatus()).stdout);
+    assert.equal(summary.environment.status, "ready", "The helper reads current state without restarting the conversation.");
 
     projectEnv = { DB_NAME: "changed_database", DB_USER: "managed_writer", SERVICE_URL: "https://changed.example.test" };
     commandExitCode = 0;

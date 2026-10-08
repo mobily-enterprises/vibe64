@@ -1193,6 +1193,11 @@ each managed shell command reads current project Env even when the conversation
 started before those values were added. Tool help remains available before browser
 test dependencies or their matching runtime are prepared, without launching a browser.
 Credentials need not be copied into chat or source to inspect an authorized site.
+Agents have a single known session-summary command for current resource readiness,
+setup commands and managed tool entry points without secret values. Browser-suite
+readiness distinguishes dependency preparation from exact runtime support before
+any browser starts. An unprepared managed database reports preparation and its
+recovery step instead of attempting a connection with unproven credentials.
 Agents can run a browser suite against a project's declared test Preview target.
 Vibe64 starts that target, waits for readiness, uses its application identity,
 and restores the previous Preview when the test command finishes. The project

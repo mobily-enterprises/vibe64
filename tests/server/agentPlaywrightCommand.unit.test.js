@@ -775,6 +775,12 @@ test("managed Playwright test command refuses mismatched runtimes and browser in
   let fixture;
   try {
     fixture = await prepareFixture(root, "1.62.0", "1.61.1");
+    const readiness = JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath,
+      ["readiness"], { cwd: fixture.projectRoot })).stdout);
+    assert.equal(readiness.status, "unsupported-runtime");
+    assert.equal(readiness.installedVersion, "1.62.0");
+    assert.match(readiness.recovery, /platform operator/u);
+    assert.equal(fixture.managedCommands.length, 0);
     await assert.rejects(
       execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
         cwd: fixture.projectRoot
@@ -783,6 +789,8 @@ test("managed Playwright test command refuses mismatched runtimes and browser in
     );
 
     await createRuntime(fixture.runtimeRoot, "1.62.0");
+    assert.equal(JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath,
+      ["readiness"], { cwd: fixture.projectRoot })).stdout).status, "ready");
     await assert.rejects(
       execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["install", "chromium"], {
         cwd: fixture.projectRoot
@@ -795,6 +803,30 @@ test("managed Playwright test command refuses mismatched runtimes and browser in
       force: true,
       recursive: true
     });
+  }
+});
+
+test("an existing project keeps its retained browser runtime instead of the platform default", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-retained-"));
+  let fixture;
+  try {
+    fixture = await prepareFixture(root, "1.50.1", "1.61.1");
+    await createRuntime(fixture.runtimeRoot, "1.50.1");
+    const options = { cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env } };
+    const readiness = JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath,
+      ["readiness"], options)).stdout);
+    assert.equal(readiness.status, "ready");
+    assert.equal(readiness.declaredVersion, "1.50.1");
+    assert.equal(readiness.installedVersion, "1.50.1");
+    assert.equal(readiness.runtimeVersion, "1.50.1");
+    const executed = JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath,
+      ["test"], options)).stdout);
+    assert.equal(executed.browsersPath,
+      path.join(fixture.runtimeRoot, "playwright-versions", "1.50.1", "browsers"));
+    assert.equal(executed.skipDownload, "1");
+  } finally {
+    await fixture?.commandService.closeAllForSession("playwright-1.50.1");
+    await rm(root, { force: true, recursive: true });
   }
 });
 
@@ -814,7 +846,11 @@ test("managed Playwright help works without matching runtimes or an installed pr
       assert.equal(result.stderr, "");
     }
     await rm(path.join(fixture.projectRoot, "node_modules"), { recursive: true });
+    assert.equal(JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath,
+      ["readiness"], { cwd: fixture.projectRoot })).stdout).status, "dependencies-not-prepared");
     await rm(path.join(fixture.projectRoot, "package.json"));
+    assert.equal(JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath,
+      ["readiness"], { cwd: fixture.projectRoot })).stdout).status, "not-configured");
     const result = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--help"], {
       cwd: fixture.projectRoot,
       env: { ...process.env, ...fixture.prepared.env }

@@ -353,7 +353,8 @@ function normalizeResourceEnvironment(resources = [], provided = {}, {
       "vibe64_database_tool_environment_forbidden"
     );
   }
-  const databaseToolEnvironment = managedDatabases.length === 0 || !requireDatabaseTool
+  const databaseToolEnvironment = managedDatabases.length === 0 || !requireDatabaseTool ||
+    (allowUnprepared && provided.prepared === false && provided.databaseToolEnvironment == null)
     ? null
     : normalizeDatabaseToolEnvironment(provided.databaseToolEnvironment, {
         requireDistinctReader: true

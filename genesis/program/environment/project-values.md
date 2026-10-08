@@ -25,6 +25,17 @@ host provide managed system values separately.
 
 ## Public contract
 
+The bound session helper's `session status --json` reports current environment
+names and resource configuration separately from host-confirmed preparation,
+plus the existing workspace preparation state, declared argv and known managed
+tool entry points. It reads the exact session source through the existing broker
+capability and never returns environment values, provisions resources or runs
+setup. Failed declaration inspection reports unavailable rather than ready.
+Unprepared providers may return derived application bindings without a database
+tool reader; these are configuration evidence only. Database access rejects that
+pending state before attempting a connection or falling back to application
+configuration.
+
 The environment view distinguishes editable user values from host-owned system
 values, masks secrets, supports explicit add, replace, and confirmed removal,
 and applies values to session preparation, checks, launches, and agent work.

@@ -504,6 +504,45 @@ test("workspace preparation reruns a successful recipe after its identity change
   });
 });
 
+test("unchanged setup provisions newly declared resources before reusing a successful recipe", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    let prepared = true;
+    let preparations = 0;
+    let commands = 0;
+    const runner = createWorkspaceSetupRunner({
+      inspect: () => readySetup(),
+      projectService: {
+        async projectEnvironmentStatus() { return { status: prepared ? "ready" : "not-prepared" }; },
+        async projectExecutionEnvironment() {
+          preparations += 1;
+          prepared = true;
+          return { environment: { DB_NAME: "prepared_database" }, resourceConfigurationFingerprint: null };
+        }
+      },
+      async runCommand(input) {
+        commands += 1;
+        assert.equal(prepared, true, "Resources are prepared before application setup runs.");
+        assert.equal(input.project.runtimeConfigEnv.DB_NAME, "prepared_database");
+        return { ok: true };
+      }
+    });
+    assert.equal((await (await runner.start({ runtime, session })).completion).status, "succeeded");
+    const stored = await runtime.getSession(session.sessionId, { inspectSource: false });
+    assert.equal(await runner.isPrepared({ runtime, session: stored }), true);
+    prepared = false;
+    assert.equal(await runner.isPrepared({ runtime, session: stored }), false);
+    const started = await runner.start({ runtime, session: stored });
+    assert.ok(started.completion, "The same recipe must run when its resources are not ready.");
+    assert.equal((await started.completion).status, "succeeded");
+    assert.equal(preparations, 2);
+    assert.equal(commands, 2);
+    const current = await runtime.getSession(session.sessionId, { inspectSource: false });
+    assert.equal((await runner.start({ runtime, session: current })).completion, null);
+    assert.equal(preparations, 2, "Ready resources preserve setup reuse.");
+  });
+});
+
 test("workspace preparation treats a missing Genesis Stack as unconfigured", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session } = await workspaceSession(targetRoot);

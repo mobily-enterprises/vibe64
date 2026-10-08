@@ -77,6 +77,20 @@ Close, Stop and collapsible task details retain their own existing behavior.
 
 ## Public contract
 
+Successful Workspace setup is reusable only when its current recipe matches and
+the host still confirms the exact resources prepared. Adding resources therefore
+re-enters the existing preparation workflow even when install argv are unchanged.
+Failed setup retains explicit retry. Post-turn preparation waits on the existing
+source-write lock while the completed agent turn drains; it does not acquire a
+second lock or run underneath active source work.
+
+`vibe64-helper playwright readiness` reuses the test wrapper's installed-package
+and exact managed-runtime selection without executing tests or launching Preview.
+Its result distinguishes not-configured, dependencies-not-prepared,
+unsupported-runtime and ready; active suite status remains a separate operation.
+An unsupported-runtime error identifies tests as not started and directs runtime
+reconciliation to the operator while retaining the interactive browser entry point.
+
 The original Studio URL classifier keeps `/api/vibe64/training` and its slash
 descendants global on selected-project pages. The hosted visual-resource route
 selects the fresh authenticated learner's exact active attempt and installed pin;

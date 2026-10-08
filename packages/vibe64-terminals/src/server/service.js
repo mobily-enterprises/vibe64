@@ -1080,7 +1080,8 @@ function createService({
         logOperationalEvent(logger, "warn", { component: "vibe64.assistant_routing", event: "vibe64.assistant_routing.review_deferred", sessionId, code: error.code }, "Automatic review needs attention.");
       }),
       prepareWorkspaceSetup(sessionId, {
-        publish: true
+        publish: true,
+        waitMs: AGENT_WRITE_WAIT_MS
       }).catch((error) => {
         vibe64SessionDebugLog("server.terminals.workspaceSetup.afterTurn.error", {
           error: vibe64SessionDebugError(error),
@@ -1509,7 +1510,7 @@ function createService({
         await setup.completion;
       }
       return setup;
-    }, { operation: "prepare-workspace" });
+    }, { operation: "prepare-workspace", waitMs: options.waitMs });
   }
 
   async function prepareRenewalWorkspaceSetup(sessionId = "", options = {}) {

@@ -75,6 +75,14 @@ matching managed runtime. A version error is a test-runtime blocker; interactive
 checks can use the existing managed Preview browser. Report the exact required
 version to the platform operator instead of installing a separate browser.
 
+Before a suite, the coding agent can run `vibe64-helper playwright readiness`.
+It distinguishes absent tests, uninstalled dependencies, an unsupported exact
+runtime and a supported installed dependency without starting Preview or a
+browser. `ready` confirms dependency/runtime availability, not passing tests or
+application readiness. `status` separately reports an active test run. Colleague
+can explain these outcomes and delegate investigation to the coding chat; it
+does not receive shell access through this guide.
+
 If the agent reports “Browser testing requires a live assistant execution owner,”
 the browser test did not start. This is an assistant runtime problem. After the
 host runtime has been fixed and restarted, send a new chat message asking the

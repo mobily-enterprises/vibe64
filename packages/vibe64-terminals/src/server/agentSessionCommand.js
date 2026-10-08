@@ -10,6 +10,7 @@ import path from "node:path";
 import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planCommandSource } from "./agentPlanCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
+import { WORKSPACE_SETUP_METADATA_NAME, workspaceSetupStateFromMetadata } from "@local/vibe64-runtime/server/workspaceSetupState";
 
 import {
   normalizeText,
@@ -31,7 +32,7 @@ import {
   stopVibe64OwnedExecutions,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "@local/vibe64-execution/server";
-import { genesisParserEnvironment, withGenesisCommandShim } from "@local/vibe64-genesis/server";
+import { genesisParserEnvironment, inspectVibe64WorkspaceSetup, withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import {
   pathInsideOrEqual
 } from "./terminalShared.js";
@@ -69,7 +70,7 @@ const VIBE64_WRAPPER_ENV = "VIBE64_WRAPPER";
 const VIBE64_AGENT_SESSION_RUN_COMMAND_ENV = "VIBE64_AGENT_SESSION_RUN_COMMAND_BASE64";
 const VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV = "VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH";
 const VIBE64_AGENT_SESSION_RUN_RESULT_ENV = "VIBE64_AGENT_SESSION_RUN_RESULT_PATH";
-// This capability permits session rename and role-checked plan commands. It
+// This capability permits session status, rename and role-checked plan commands. It
 // does not expose the shell-execution token stripped from managed child commands.
 const SESSION_RENAME_CONTROL_ENV = "VIBE64_SESSION_RENAME_CONTROL";
 
@@ -203,23 +204,25 @@ function sessionRenameCommandSource() {
 import http from "node:http";
 
 const args = process.argv.slice(2);
+const usage = 'Usage: vibe64-helper session status [--json] | rename "Name"';
 if (!args.length || args[0] === "--help" || args[0] === "-h") {
-  console.log('Usage: vibe64-helper session rename "Name"');
+  console.log(usage);
   process.exit(0);
 }
-if (args[0] !== "rename" || args.length !== 2 || !args[1].trim()) {
-  console.error('Usage: vibe64-helper session rename "Name"');
+const status = args[0] === "status" && (args.length === 1 || args.length === 2 && args[1] === "--json");
+if (!status && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
+  console.error(usage);
   process.exit(2);
 }
 try {
   const control = JSON.parse(process.env.${SESSION_RENAME_CONTROL_ENV} || "null");
   if (!control?.socketPath || !control.token || !control.sessionId || !control.generationId) {
-    throw new Error("Session rename is unavailable. Reconnect the assistant.");
+    throw new Error("Session control is unavailable. Reconnect the assistant.");
   }
   const body = JSON.stringify({ name: args[1], token: control.token, sessionId: control.sessionId, generationId: control.generationId });
   const result = await new Promise((resolve, reject) => {
     const request = http.request({
-      socketPath: control.socketPath, method: "POST", path: "/agent-session-command/rename", timeout: 15000,
+      socketPath: control.socketPath, method: "POST", path: status ? "/agent-session-command/status" : "/agent-session-command/rename", timeout: 15000,
       headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
     }, (response) => {
       let text = "";
@@ -229,11 +232,11 @@ try {
       response.on("end", () => { try { resolve(JSON.parse(text)); } catch (error) { reject(error); } });
     });
     request.on("error", reject);
-    request.on("timeout", () => request.destroy(new Error("Session rename timed out.")));
+    request.on("timeout", () => request.destroy(new Error("Session control timed out.")));
     request.end(body);
   });
-  if (result.ok !== true) throw new Error(result.error || "The session could not be renamed.");
-  console.log(JSON.stringify({ sessionName: result.sessionName }));
+  if (result.ok !== true) throw new Error(result.error || "The session command failed.");
+  console.log(JSON.stringify(status ? result : { sessionName: result.sessionName }));
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;
@@ -433,7 +436,8 @@ async function ensureAgentSessionCommandServer({
         });
         const isRename = request.url === "/agent-session-command/rename";
         const isPlan = request.url === "/agent-session-command/plan";
-        const authorized = normalizeText(input.token) === (isRename || isPlan ? renameToken : token) &&
+        const isStatus = request.url === "/agent-session-command/status";
+        const authorized = normalizeText(input.token) === (isRename || isPlan || isStatus ? renameToken : token) &&
           normalizeText(input.generationId) === generationId &&
           normalizeText(input.sessionId) === normalizeText(sessionId);
         if (!authorized) {
@@ -445,6 +449,11 @@ async function ensureAgentSessionCommandServer({
         }
         if (isRename) {
           const result = await commandService.renameSession(sessionId, input.name);
+          sendJsonCommandResponse(response, vibe64StatusCode(result), result);
+          return;
+        }
+        if (isStatus) {
+          const result = await commandService.sessionStatus(sessionId);
           sendJsonCommandResponse(response, vibe64StatusCode(result), result);
           return;
         }
@@ -627,6 +636,46 @@ function createAgentSessionCommandService({
       const sessionName = await store.writeSessionLabel(sessionId, name);
       await publishSessionChanged(sessionId, { reason: "session-renamed", payload: { clientRefresh: { includeList: true } } });
       return { ok: true, sessionId, sessionName };
+    });
+  }
+
+  async function sessionStatus(sessionId) {
+    return runInSessionProject(sessionId, async ({ descriptor, sourceRoot, project, store }) => {
+      const environment = await projectService.projectEnvironmentStatus({
+        sessionId, session: { ...descriptor, sessionId }
+      });
+      const setup = await inspectVibe64WorkspaceSetup({ projectRoot: sourceRoot });
+      const state = workspaceSetupStateFromMetadata({
+        [WORKSPACE_SETUP_METADATA_NAME]: await store.readMetadataValue(sessionId, WORKSPACE_SETUP_METADATA_NAME)
+      });
+      return {
+        ok: true,
+        sessionId,
+        project: normalizeText(project.slug || project.name),
+        environment,
+        workspaceSetup: {
+          status: state.status,
+          inspectionStatus: setup.status,
+          diagnostic: state.diagnostic,
+          steps: setup.steps.map(({ label, argv }) => ({ label, argv })),
+          diagnostics: setup.diagnostics
+        },
+        tools: {
+          environment: "vibe64-helper env status development",
+          preview: "vibe64-helper preview status",
+          browser: "vibe64-helper preview browser eval (Playwright code on stdin)",
+          browserTests: "vibe64-helper playwright status",
+          browserTestReadiness: "vibe64-helper playwright readiness",
+          database: "vibe64-helper database refresh"
+        },
+        recovery: environment.status === "not-prepared"
+          ? "Let the assistant finish, then choose Prepare workspace in the session chat, or Retry on its failed preparation."
+          : environment.status === "missing-configuration"
+          ? "Supply the missing application resource configuration through Development Env."
+          : environment.status === "unavailable"
+          ? "Correct the project environment declaration and retry."
+          : ""
+      };
     });
   }
 
@@ -852,6 +901,7 @@ function createAgentSessionCommandService({
     bindSession,
     closeAllForSession,
     renameSession,
+    sessionStatus,
     managePlan,
     run
   });

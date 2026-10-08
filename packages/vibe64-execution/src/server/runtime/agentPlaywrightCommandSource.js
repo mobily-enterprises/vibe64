@@ -360,6 +360,7 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
     "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
     "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
     "  vibe64-helper playwright status",
+    "  vibe64-helper playwright readiness",
     "  vibe64-helper playwright cancel <run-id>",
     "",
     "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and uses the project's default managed app identity. Use --identity to select another configured name or guest.",
@@ -368,6 +369,26 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
   process.exit(0);
 }
 const applicationRoot = findApplicationRoot();
+if (command === "readiness") {
+  if (args.length || identityExplicit || targetId) fail("Use readiness without test arguments.", 64);
+  const manifest = applicationRoot ? readJson(path.join(applicationRoot, "package.json")) : null;
+  const declaredVersion = String(manifest?.devDependencies?.["@playwright/test"] ||
+    manifest?.dependencies?.["@playwright/test"] || manifest?.devDependencies?.playwright ||
+    manifest?.dependencies?.playwright || "").trim();
+  const project = applicationRoot ? projectPlaywright(applicationRoot) : null;
+  const installed = Boolean(project && existsSync(project.cliPath));
+  const runtime = installed ? managedRuntime(project.version) : null;
+  process.stdout.write(JSON.stringify({
+    status: !declaredVersion ? "not-configured" : !installed ? "dependencies-not-prepared" :
+      !runtime ? "unsupported-runtime" : "ready",
+    declaredVersion, installedVersion: project?.version || "",
+    runtimeVersion: runtime?.version || "",
+    recovery: !declaredVersion ? "Declare portable project browser tests when needed." :
+      !installed ? "Run the project's declared Workspace setup." : !runtime ?
+      "Ask the platform operator to reconcile the exact dependency with the supported runtime catalogue. Interactive inspection can use vibe64-helper preview browser eval." : ""
+  }) + "\\n");
+  process.exit(0);
+}
 if (!applicationRoot) {
   fail("No package.json was found for this Playwright test command.");
 }
@@ -392,7 +413,8 @@ if (!runtime) {
   fail(
     "The project requires Playwright " + project.version +
     ", but Vibe64 does not provide its matching managed browser runtime. " +
-    "Do not install a browser in this session."
+    "Browser tests were not started. Ask the platform operator to reconcile this project's exact test dependency with the supported runtime catalogue. " +
+    "Interactive inspection can use vibe64-helper preview browser eval. Do not install a browser in this session."
   );
 }
 if (targetId && (String(process.env.PLAYWRIGHT_BASE_URL || "").trim() || String(process.env.VIBE64_PLAYWRIGHT_STORAGE_STATE || "").trim())) {

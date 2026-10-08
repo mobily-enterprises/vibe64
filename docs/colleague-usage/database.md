@@ -21,6 +21,15 @@ configuration. Missing resources require ordinary application preparation. Do no
 assume that another session uses the same database: hosted project policy can use
 shared project data or separate session databases.
 
+“Database not prepared” means Vibe64 has not confirmed provisioning for this
+database identity. Return to the session chat, let the assistant finish and choose
+**Prepare workspace**, or **Retry** on failed preparation. Then retry **Database**.
+Vibe64 supplies the managed database and credentials; the application's declared
+Workspace setup owns migrations. Stored connection configuration alone does not
+prove that database users exist. If preparation fails, inspect its error before
+retrying. Colleague can inspect and retry the selected session's preparation when
+asked, and refresh schema afterward; a retry acknowledgement is not completion.
+
 Open **Copilot** to ask about the database or the currently selected table. It uses
 the configured **Helper** destination, looks up bounded parts of the refreshed
 schema and can run read-only queries. If a lookup or query fails, that question

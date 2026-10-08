@@ -315,6 +315,23 @@ test("a fresh managed starter remains readable before database preparation and e
     assert.deepEqual(inspected.templates, []);
     assert.deepEqual(inspected.environmentSetup.missingKeys, []);
     assert.deepEqual(await service.projectInspectionEnvironment({ sessionId }), {});
+    assert.equal((await service.projectEnvironmentStatus({ sessionId })).status, "not-prepared");
+    await assert.rejects(service.sessionDatabaseEnvironment({ sessionId }), {
+      code: "vibe64_session_database_not_prepared"
+    });
+    pending.resourceValues = [{
+      declaration: { component: "application", id: "database", kind: "mysql" },
+      values: { database: "derived_name", host: "127.0.0.1", password: "unprepared-secret", port: "3306", username: "derived_writer" }
+    }];
+    const status = await service.projectEnvironmentStatus({ sessionId });
+    assert.equal(status.status, "not-prepared", "Derived credentials do not establish resource preparation.");
+    assert.deepEqual(status.resources, [{ id: "database", kind: "mysql", configured: true }]);
+    assert.equal(JSON.stringify(status).includes("unprepared-secret"), false);
+    assert.equal(JSON.stringify(status).includes("derived_writer"), false);
+    await assert.rejects(service.sessionDatabaseEnvironment({ sessionId }), {
+      code: "vibe64_session_database_not_prepared"
+    });
+    pending.resourceValues = [];
     assert.equal((await service.readEnv({ sessionId })).ok, true);
     assert.equal(provisionCalls, 0);
     await assert.rejects(readFile(path.join(root, ".env")), { code: "ENOENT" });

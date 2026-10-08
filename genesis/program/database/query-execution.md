@@ -26,6 +26,12 @@ connection and share one query-ownership boundary.
 
 ## Public contract
 
+The project environment owner refuses an explicitly unprepared managed database
+before the database tool opens a reader connection. Its recovery directs people
+to Prepare workspace or Retry in session chat. Derived bindings or existing
+service metadata alone do not establish provisioned database users. Application
+migrations still belong to declared Workspace setup, not schema refresh.
+
 All thirteen database HTTP operations invoke their named actions. Those actions
 own the input contract, including required session/query identities and explicit
 read-only/confirmation fields. The shared host context resolves project access

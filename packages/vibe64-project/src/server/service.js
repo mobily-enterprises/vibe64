@@ -1201,6 +1201,7 @@ function createService({
         projectRuntimeRoot: requestContext.projectRuntimeRoot,
         learningScope: requestContext.learningScope,
         learningInstructions: requestContext.learningInstructions,
+        learningTeaching: requestContext.learningTeaching,
         store: sessionStore()
       });
     }
@@ -1345,12 +1346,37 @@ function createService({
       return projectEnvironmentResult(resolved, input, records);
     },
 
+    async projectEnvironmentStatus(input = {}) {
+      const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
+      const resources = resolved.resources.map(({ resource }) => ({
+        id: resource.id,
+        kind: resource.kind,
+        configured: Boolean(satisfiedAlternative(resource, resolved.effectiveEnvironment))
+      }));
+      return {
+        status: resolved.environmentInspectionFailed ? "unavailable"
+          : !resolved.resourcesPrepared ? "not-prepared"
+          : resources.some(({ configured }) => !configured) ? "missing-configuration"
+          : "ready",
+        keys: Object.keys(resolved.projectEnvironment).sort(),
+        resources,
+        ...(resolved.warning ? { diagnostic: "Project environment declarations could not be read. Correct their configuration and retry." } : {})
+      };
+    },
+
     async sessionDatabaseEnvironment(input = {}) {
       const resolved = await resolvedProjectEnvironment(
         input,
         await userEnvRecords(),
         { provisionResources: false }
       );
+      if (!resolved.resourcesPrepared && !resolved.databaseToolEnvironment &&
+          resolved.resources.some(({ resource }) => ["mysql", "postgresql", "sqlite"].includes(resource.kind))) {
+        throw vibe64Error(
+          "Database not prepared. Let the assistant finish, then choose Prepare workspace in the session chat, or Retry on its failed preparation. Vibe64 prepares the managed database and credentials; the application runs its declared migrations.",
+          "vibe64_session_database_not_prepared"
+        );
+      }
       const databaseToolEnvironment = resolved.databaseToolEnvironment ||
         applicationDatabaseToolEnvironment(resolved.resources, resolved.projectEnvironment, resolved.source.sourceRoot);
       return {

@@ -12010,7 +12010,9 @@ test("Main browser facade uses the original native owner and action authority wi
           "the original idle publication schedules both application write operations");
         // Native Stop does not await the original background routing/setup work.
         // Join those exact gate promises before the single zero-wait selection.
-        await Promise.all(postTurnWrites.map(write => write.pending));
+        const completedWrites = await Promise.all(postTurnWrites.map(write => write.pending));
+        assert.ok(completedWrites.every(write => write.acquired),
+          "Idle preparation and review must wait for the finishing turn's lock rather than lose their work.");
       } finally {
         store.runSessionExclusive = runSessionExclusive;
         captures.onSessionChanged = onSessionChanged;

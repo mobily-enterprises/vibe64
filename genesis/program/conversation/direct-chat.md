@@ -753,7 +753,17 @@ product-only invalidations reload that same subscription through the application
 binding.
 
 
+The coding-agent instruction owner supplies the current session-summary and
+browser-readiness entry points before application work. The session summary
+uses the existing authenticated broker and scoped session-control capability;
+it reads current resource readiness and declared setup without a new message
+injection lane, secret values or preparation side effects. Re-reading after
+resource edits refreshes facts without restarting the native conversation.
+
 ## Sources
+
+- `packages/vibe64-terminals/src/server/agentSessionCommand.js`
+- `tests/server/agentSessionCommand.unit.test.js`
 
 - `tests/client/useVibe64AssistantAccessCache.vitest.js`
 

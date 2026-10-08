@@ -18,7 +18,7 @@ Groups:
   env          Project environment settings
   database     Database refresh, overview and diagram operations
   github       GitHub view refresh
-  session      Rename the current session
+  session      Current environment/setup/tool summary and session rename
   plan         Read and maintain the current plan and archived plans
 
 Use vibe64-helper <group> --help for that group.
