@@ -37,6 +37,11 @@ When Main opens a lesson diagram, keep that same browser open until its operatio
 is confirmed. Stop or a replacement Learning conversation retires its old
 explanation; an old confirmation cannot complete a new one.
 
+The selected Learning conversation prepares the configured agent through the same
+Main readiness flow as Working. Preparation retains that saved conversation and
+checks your current access; it does not send your draft or begin teaching. An
+ended or inaccessible attempt cannot start agent preparation.
+
 Source-less Learning conversations show Lessons and omit App. A supported declared
 diagram can use the same Presentation player only in your exact saved lesson
 conversation; an empty picker or unavailable diagram cannot open it. This does

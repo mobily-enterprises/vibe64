@@ -213,7 +213,8 @@ function registerRoutes(
   });
   const learningActions = learningScoped ? new Set(createTerminalActions({ terminals })
     .filter(action => action.extensions.vibe64.learningAccess &&
-      (action.id.startsWith("vibe64.terminals.output") || action.id === ACTION_SELECT_PREVIEW_IDENTITY)).map(action => action.id)) : null;
+      (action.id.startsWith("vibe64.terminals.output") || action.id === ACTION_SELECT_PREVIEW_IDENTITY ||
+        action.id === "vibe64.terminals.agent-session.prepare")).map(action => action.id)) : null;
   const routes = learningScoped ? {
     ...featureRoutes,
     actionRoute(method, suffix, options) {

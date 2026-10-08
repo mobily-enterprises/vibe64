@@ -82,7 +82,7 @@ function action({ assistant, channels, execute, id, idempotency = "optional", in
       return execute(input, context, deps);
     } : execute
   }, { learningAccess: practiceOutputAccess[id] || (id === ACTION_READ_CANONICAL_AGENT_GOAL ? "observe"
-    : id === ACTION_UPDATE_CANONICAL_AGENT_GOAL ? "write" : false) });
+    : id === ACTION_UPDATE_CANONICAL_AGENT_GOAL || id === "vibe64.terminals.agent-session.prepare" ? "write" : false) });
 }
 
 function createTerminalActions({ terminals } = {}) {

@@ -362,7 +362,7 @@ test("Learning output registration retains original builders and exposes no manu
     ["GET", "/outputs"], ["POST", "/output-runs"], ["POST", "/output-runs/open"],
     ["POST", "/preview-identity"], ["POST", "/output-runs/:terminalSessionId/stop"],
     ["GET", "/output-runs/:terminalSessionId/terminal"], ["DELETE", "/output-runs/:terminalSessionId/terminal"],
-    ["GET", "/output-results/:resultId"]
+    ["GET", "/output-results/:resultId"], ["POST", "/agent-session"]
   ];
   for (const [method, suffix] of expected)
     assert.ok(findRegisteredRoute(app, { method, path: `${base}${suffix}` }), `${method} ${suffix}`);

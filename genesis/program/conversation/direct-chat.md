@@ -3426,6 +3426,15 @@ escaping. The original lifecycle tests now use the actual shared schema validato
 
 ## Source-less learning uses the same native Main owners
 
+The mounted Learning Main uses the original `agent-session.prepare` terminal
+action and `ensureAgentSession` service through the same HTTP route builder.
+Its explicit Learning write grant rechecks the saved learner/attempt/session
+before preparation; the Learning transport exposes this one readiness operation
+without exposing manual/global terminals, attachments or temporary conversations.
+No-exercise scopes need no practice source and retain the original native
+readiness, sharing and thread owners. Preparation sends no teaching turn.
+
+
 An authenticated host may construct the original Runtime/Store with an exact
 Training-authorized no-exercise learning scope and fresh instruction owner. The
 native context reader calls `getNativeExecutionRoot` for that exact durable active

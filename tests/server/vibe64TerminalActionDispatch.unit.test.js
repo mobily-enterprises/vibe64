@@ -49,7 +49,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       ["POST", "/sessions/:sessionId/agent-goal", "agent-goal.update", "updateAgentGoal", { action: "resume", threadId: "thread-1", createdAt: 123.456, objective: " Preserve exact whitespace. " }],
       ["GET", "/sessions/:sessionId/agent-plan-usage", "agent-plan-usage.read", "readAgentPlanUsage", {}],
       ["GET", "/sessions/:sessionId/work-plan", "work-plan.read", "readSessionWorkPlan", { offset: 0, limit: 1000 }],
-      ["POST", "/sessions/:sessionId/work-plan/archive", "work-plan.archive", "archiveSessionWorkPlan", { expectedRevision: "a".repeat(64) }],
+      ["POST", "/sessions/:sessionId/work-plan/archive", "work-plan.archive", "archiveSessionWorkPlan", { expectedRevision: "a".repeat(64), expectedProgressRevision: "" }],
       ["POST", "/sessions/:sessionId/work-plan/restore", "work-plan.restore", "restoreSessionWorkPlan", { archiveId: "b".repeat(64) }],
       ["POST", "/sessions/:sessionId/agent-session", "agent-session.prepare", "ensureAgentSession", {}]
     ];
@@ -327,5 +327,51 @@ test("learning Main goals retain original internal controls and reauthorize the 
   user = { uid: 43, username: "other", role: "member" };
   await assert.rejects(facade.readGoal(), { code: "conversation_forbidden" });
   assert.equal(calls.length, 3);
+  assert.equal(currentProjectRequestContext(), null);
+});
+
+
+test("Learning Main readiness uses the original preparer with fresh saved write authority", async () => {
+  const attemptId = "12345678-1234-4234-8234-123456789abc";
+  const actor = { uid: 42, username: "learner", role: "member" };
+  let user = actor;
+  let active = true;
+  const calls = [];
+  const grants = [];
+  const actions = catalogue({
+    ensureAgentSession(...args) {
+      calls.push({ args, scope: currentProjectRequestContext().learningScope });
+      return { ok: true, nativeThreadId: "retained-teacher-thread" };
+    }
+  }, null, {
+    resolveUser: async () => user,
+    authorizeProject() { assert.fail("Learning readiness cannot borrow Working project authority."); },
+    async resolveLearningContext({ actor: current, attemptId: requested, sessionId, access }) {
+      grants.push({ actor: current.uid, requested, sessionId, access });
+      assert.equal(access, "write");
+      if (current.uid !== actor.uid || requested !== attemptId || sessionId !== "saved-teacher") {
+        throw Object.assign(new Error("Foreign learning binding"), { code: "learning_forbidden" });
+      }
+      if (!active) throw Object.assign(new Error("Ended attempt"), { code: "attempt_inactive" });
+      return { projectRuntimeRoot: "/actual/private/learner/attempt", learningScope: {
+        learnerId: String(current.uid), attemptId, noExercise: true
+      } };
+    }
+  });
+  const execute = (input = {}) => actions.execute({ actionId: "vibe64.terminals.agent-session.prepare",
+    input: { sessionId: "saved-teacher", learningAttemptId: attemptId, ...input },
+    context: { channel: "api", surface: "app" } });
+  assert.deepEqual(await execute(), { ok: true, nativeThreadId: "retained-teacher-thread" });
+  assert.deepEqual(calls, [{ args: ["saved-teacher", { vibe64User: actor }],
+    scope: { learnerId: "42", attemptId, noExercise: true } }]);
+  active = false;
+  await assert.rejects(execute(), { code: "attempt_inactive" });
+  active = true;
+  user = { uid: 43, username: "other", role: "member" };
+  await assert.rejects(execute(), { code: "learning_forbidden" });
+  user = actor;
+  await assert.rejects(execute({ sessionId: "foreign-teacher" }), { code: "learning_forbidden" });
+  assert.equal(grants.length, 4);
+  assert.equal(calls.length, 1);
   assert.equal(currentProjectRequestContext(), null);
 });
