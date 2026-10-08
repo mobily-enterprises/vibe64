@@ -5,7 +5,7 @@ import { upstreamMessageId } from "./openCodeConversationStorage.js";
 import { vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { recordSessionGitCommandActor, sessionGitCommandActorFromMetadata } from "./sessionGitCommandActor.js";
 import { clearCodexAppServerContextRefreshPending } from "./codexContextRenewalSignals.js";
-import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
+import { openCodeModel, openCodeConversationAgent } from "@jskit-ai/assistant-core/server/opencode-process";
 import { conversationActorMetadata, conversationReviewActorMetadata } from "./conversationActor.js";
 import {
   VIBE64_ASSISTANT_ENGINE_IDS, defineVibe64AssistantSelection,
@@ -366,12 +366,19 @@ export async function createSessionConversationBinding(provider, sessionId, opti
     runtime, session, readSession: () => runtime.getSession(sessionId, { inspectSource: false })
   });
   const conversation = original.conversation({ engine, publish: host.publish, checkpoint: host.checkpoint });
-  const teaching = engine === "codex" && runtime.learningScope && runtime.learningTeaching
+  const teaching = ["codex", "opencode"].includes(engine) && runtime.learningScope && runtime.learningTeaching
     ? runtime.learningTeaching.bindConversation({ runtime, sessionId, actions: openingContext.teachingActions,
       terminals: openingContext.teachingTerminals, native: { async readTurn() {
-        const current = await host.state.read();
-        return { ...codexAppServerTurnState(current.session),
-          assistantSelection: vibe64AssistantSelectionFromMetadata(current.session.metadata) };
+        if (engine === "codex") {
+          const current = await host.state.read();
+          return { ...codexAppServerTurnState(current.session),
+            assistantSelection: vibe64AssistantSelectionFromMetadata(current.session.metadata) };
+        }
+        const native = await host.native.owner.readSessionState(openingContext, host.native.preparation.state);
+        const current = await runtime.getSession(sessionId, { inspectSource: false });
+        return { threadId: native.thread.id, turnId: native.turn.id, active: native.turn.active,
+          outerTurnId: `opencode:${native.thread.id}:${native.turn.id}`,
+          assistantSelection: vibe64AssistantSelectionFromMetadata(current.metadata) };
       } } }) : null;
   return {
     ...conversation, namespace: host.namespace, engine,
@@ -670,10 +677,10 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
       onPromptRejected: () => input.onPromptRejected?.()
     }, application: {
       writeRun: (turn, state, error) => writeRun(context, turn, state, error),
-      monitor: messageMonitorProjection(context),
+      monitor: messageMonitorProjection(context, options.applicationTools),
       async prepare() {
         const process = await prepareProcess(context, options);
-        return { process, get session() { return upstreamSessionOptions(context); } };
+        return { process, get session() { return upstreamSessionOptions(context, options); } };
       },
       commit(conversationTurn) {
         return publishConversationTurn(context, conversationTurn, "opencode-server-message-delivered");
@@ -804,7 +811,8 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
             : { prompt: message };
           const renderedPrompt = text(rendered?.prompt) || message;
           return {
-            get agent() { return context.selection.agentId; },
+            get agent() { return context.runtime.learningScope && context.runtime.learningTeaching && options.applicationTools
+              ? openCodeConversationAgent({ tools: true }) : context.selection.agentId; },
             get model() { return openCodeModel(context.selection); },
             get prompt() { return { text: renderedPrompt }; },
             get attachments() { return input.attachments; },
@@ -818,6 +826,8 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
             context.sessionId,
             {
               attachments: input.displayAttachments,
+              ...(context.runtime.learningScope && context.runtime.learningTeaching && input.data !== undefined
+                ? { data: input.data } : {}),
               messageId,
               text: text(input.displayMessage) || message,
               turnMetadata: {

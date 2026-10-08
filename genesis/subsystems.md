@@ -45,11 +45,11 @@ using the original preparation lock, Project factory and Main Session creation.
 Historical observation/control cannot admit new lesson work. Runtime construction,
 native admission and native providers stay with existing owners. Main
 teaching coordinator supplies the exact four learning-read, brief-read,
-question-prepare and answer-evaluate actions to the original Codex Main native
+question-prepare and answer-evaluate actions to the original Codex/OpenCode Main native
 host for no-exercise attempts. Fresh originating-request WRITE authority and
 accepted thread/turn/message guards fence every effect and final progress save;
 the original retained Helper, transcript transaction and native checkpoint remain
-the execution, receipt and delivery owners. Other providers, practice teaching,
+the execution, receipt and delivery owners. Claude, practice teaching,
 Main cue/navigation receipts and installed/browser acceptance remain unfinished.
 The Training Feature supplies
 canonical Training HTTP/action composition in Public and consumes an optional

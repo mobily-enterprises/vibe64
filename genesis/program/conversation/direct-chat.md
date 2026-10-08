@@ -12,7 +12,7 @@ teacher implementation; actual application tools still require the original
 native owner and explicit trusted learning composition.
 
 For an explicitly configured no-exercise Learning Runtime, one typed Training
-teaching facility now supplies the original Codex Main binding with the same
+teaching facility now supplies the original Codex and OpenCode Main bindings with the same
 service-tool catalogue at early readiness and Send. The original Manager forwards
 only that Send's server-owned browser authority through its private context
 allowlist. Working input/options and control grants cannot provide this authority.
@@ -22,7 +22,11 @@ Routing retains trusted captured question data only for this configured Learning
 branch, including its original uncertain-receipt repair; duplicate UUIDs preserve
 their first accepted words and association. The original completed native
 checkpoint projects exact question delivery and keeps source-less no-Git behavior.
-Other providers, practice teaching, live native/installed adoption and browser
+OpenCode reuses its original shared server, native input/tool-use match, originating
+receipt and completion monitor. Its existing native message projection supplies
+the native-derived output identity required by the same final delivery proof;
+tool effects cannot write native output or completion.
+Claude, practice teaching, live native/installed adoption and browser
 acceptance remain incomplete.
 
 JSKIT's conversation runtime owns native instruction installation and refresh

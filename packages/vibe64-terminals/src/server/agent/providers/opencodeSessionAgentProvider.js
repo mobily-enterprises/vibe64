@@ -250,7 +250,9 @@ function createOpenCodeSessionAgentProvider({
         context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
       };
       if (method === "ensureSession") return {
-        context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+        context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User,
+          ...(context.runtime?.learningScope && context.runtime.learningTeaching && context.applicationTools
+            ? { applicationTools: context.applicationTools } : {}) }
       };
       if (method === "createConversation") return {
         input,

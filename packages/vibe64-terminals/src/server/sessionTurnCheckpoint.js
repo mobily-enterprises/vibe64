@@ -12,14 +12,14 @@ const SESSION_TURN_CHECKPOINT_TASK_ID = "codex_turn_checkpoint";
 async function checkpointSessionTurn({
   projectService, runtime, session, sessionId, outerTurnId, outcome = "completed",
   timestamp = new Date().toISOString(), publishSessionChanged = async () => {},
-  createCheckpoint = createGitTurnCheckpoint
+  createCheckpoint = createGitTurnCheckpoint, nativeTurn
 }) {
   if (!outerTurnId) return { ok: true, processed: false, reason: "outer_turn_unavailable" };
   runtime ||= await projectService.createRuntime({ inspectSource: false });
   session ||= await runtime.getSession(sessionId, { inspectSource: false });
   if (await learningSessionExecutionRoot(runtime, sessionId, { allowClosing: true })) {
     if (runtime.learningTeaching) {
-      const nativeTurn = codexAppServerTurnState(session, normalizeVibe64AgentRunState);
+      nativeTurn ||= codexAppServerTurnState(session, normalizeVibe64AgentRunState);
       await runtime.learningTeaching.completeConversation({ runtime, sessionId, outerTurnId, outcome, nativeTurn });
     }
     return { ok: true, processed: false, reason: "learning_session_no_git_checkpoint",

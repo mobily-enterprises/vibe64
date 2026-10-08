@@ -13,13 +13,14 @@ database slot and has no source changes to Save or Git recovery checkpoint.
 Resume the confirmed attempt after an interruption. Do not create a substitute
 workspace or reset its progress to hide a preparation failure.
 
-An installation must supply teaching tools for that exact conversation. The
-current source integration supports Codex Main for lessons without a practice
-workspace; Claude, OpenCode and practice-workspace teaching still require their
-integration. Selecting a different workflow does not make those lesson tools
-available. Teaching instructions or ordinary chat alone do not certify teaching,
-grading or presentation support. This source increment has not established
-installed, real-model or desktop/mobile learner acceptance.
+For lessons without a practice workspace, Codex and OpenCode Main can use the
+lesson teaching tools supplied by your installation. If those tools are
+unavailable, keep the saved attempt and conversation, check the selected AI
+account, and report the exact error before retrying. Claude and practice-workspace
+teaching are not available through these four lesson tools yet. Changing workflows
+or sending ordinary chat does not enable missing teaching, grading or presentation
+capabilities; do not reset progress or create a substitute workspace to hide the
+failure.
 
 In a supported teacher conversation, ask Main to teach the retained lesson. It
 can read your current learning state and pinned teaching brief, prepare a short

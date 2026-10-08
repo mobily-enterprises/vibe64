@@ -1,5 +1,5 @@
 import { openCodeMessageError as readOpenCodeMessageError } from "@jskit-ai/assistant-core/server/opencode-turn";
-import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
+import { openCodeModel, openCodeConversationAgent } from "@jskit-ai/assistant-core/server/opencode-process";
 import { VIBE64_AGENT_RUN_STATE, vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
@@ -113,6 +113,8 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
     return sharedRuntime.writeConversationProjection(context.sessionId, messages, options, {
       store: context.runtime.store,
       messageId: conversationMessageId,
+      ...(context.runtime.learningScope && context.runtime.learningTeaching
+        ? { outputId: conversationMessageId } : {}),
       readError: openCodeMessageError,
       reasoning: (parts, input) => projectReasoning(context, parts, input),
       publishTurn: (turn) => publishConversationTurn(context, turn, "opencode-server-assistant-message"),
@@ -152,7 +154,10 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
         projectService, runtime: context.runtime, session: context.session, sessionId: context.sessionId,
         outerTurnId: `opencode:${turn.threadId}:${turn.id}`,
         outcome: ["completed", "interrupted", "cancelled"].includes(state) ? state : "failed",
-        timestamp: turn.updatedAt || new Date().toISOString(), publishSessionChanged
+        timestamp: turn.updatedAt || new Date().toISOString(), publishSessionChanged,
+        ...(context.runtime.learningScope && context.runtime.learningTeaching && turns.get(context.key) === turn
+          ? { nativeTurn: { threadId: turn.threadId, turnId: turn.id, active: turn.active,
+            outerTurnId: `opencode:${turn.threadId}:${turn.id}` } } : {})
       });
     }
     let written = null;
@@ -238,7 +243,7 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
     };
   }
 
-  function messageMonitorProjection(context) {
+  function messageMonitorProjection(context, applicationTools) {
     return {
       prepare(admitted, options) {
         const previous = context.session?.agentRuns?.find((run) => run.id === OPENCODE_AGENT_RUN_ID && run.turnId === admitted.id);
@@ -271,7 +276,8 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
             "vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready. Try sending again.", {}, 504
           ) } : undefined,
           finalResponse: {
-            get agent() { return context.selection.agentId; },
+            get agent() { return context.runtime.learningScope && context.runtime.learningTeaching && applicationTools
+              ? openCodeConversationAgent({ tools: true }) : context.selection.agentId; },
             get model() { return openCodeModel(context.selection); },
             get recoveryMessageId() { return upstreamMessageId(`${turn.id}:final-response`); },
             readError: openCodeMessageError

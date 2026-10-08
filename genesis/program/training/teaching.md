@@ -41,7 +41,8 @@
 `createTrainingMainTeaching` composes the original question, admitted-answer,
 delivery-proof and retained Helper owners for the exact saved no-exercise attempt.
 The original Main host supplies its Runtime/Store, native turn reader, action
-catalogue and Terminals; it installs one catalogue at Codex readiness and Send.
+catalogue and Terminals; it installs one catalogue at Codex and OpenCode readiness
+and Send.
 Only learning-state read, teaching-brief read, question preparation and accepted
 answer evaluation are exposed. The original search/contract/execute policy stays
 in place; no shell, paths, supplied actor, answer words or passed outcome is added.
@@ -64,13 +65,19 @@ it neither grades a final reply nor writes native output/status from the tool
 runtime. The Main read wrapper projects a bounded current reference only after
 fresh observation access, for the existing typed/voice capture owner.
 
-This source composition covers Codex/no-exercise Main only. Ordinary Working,
+This source composition covers Codex and OpenCode no-exercise Main only. Ordinary Working,
 Temporary, Helper and Colleague compatibility callers retain their original
-defaults. Claude/OpenCode dispatch, source-backed practice, Main cue/navigation
+defaults. Claude dispatch, source-backed practice, Main cue/navigation
 receipts, actual model/native adoption and packaged desktop/mobile acceptance
 remain open. The native integration fixture reuses the exact original Teaching
 fixture through one shared test helper and the original Runtime/Store/controller
 lifecycle; its controlled provider completion is not live model acceptance.
+OpenCode uses the original shared process, native tool identity/input match and
+originating receipt. Same-turn steering retires the old authored tool callback
+without stopping its successor. Optional native output identity reaches the
+original stream and persisted writers; its original completed native checkpoint
+uses that exact output for delivery promotion. No native history is recreated or
+backfilled, and the saved model/provider selection is unchanged.
 
 The internal brief constructor may receive the exact original `learners` and
 `content` owners from an isolated author-preview composition. Missing dependencies

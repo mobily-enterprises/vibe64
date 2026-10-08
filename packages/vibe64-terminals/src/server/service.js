@@ -3869,7 +3869,7 @@ function createService({
             !context.session.metadata.agent_identity_conversation_id)) {
           await sessionAgent.prepareSelection(sessionId, selection, context);
         }
-        const result = await sessionAgent.ensureSession(sessionId, selection.engineId === "codex" ? learningToolManifest(context) : context);
+        const result = await sessionAgent.ensureSession(sessionId, ["codex", "opencode"].includes(selection.engineId) ? learningToolManifest(context) : context);
         if (result?.ok !== false) await assistantRouting.reconcile(sessionId, context);
         if (result?.ok === false) {
           logFailure({

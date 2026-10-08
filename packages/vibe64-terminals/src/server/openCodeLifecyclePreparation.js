@@ -76,7 +76,7 @@ function createOpenCodeLifecyclePreparation({
       "The assistant session changed while its connection was being checked.", {}, 409);
     return {
       get key() { return context.key; },
-      get selection() { return context.selection; },
+      get selection() { return upstreamSessionOptions(context, options).selection; },
       get workdir() { return context.workdir; },
       async connection() {
         return requireOpenCodeConnection(await resolveConnection({
@@ -90,7 +90,8 @@ function createOpenCodeLifecyclePreparation({
       async refresh() {
         context = await contextFor(sessionId, { ...options, session: null });
         if (sharedRuntime.closed || sessionIsClosing(context.session) || context.session.status === "archived") throw changed();
-        return context;
+        return options.applicationTools && context.runtime?.learningScope && context.runtime.learningTeaching
+          ? { ...context, selection: upstreamSessionOptions(context, options).selection } : context;
       },
       prepare(operation) {
         return runVibe64AgentWriteExclusive(context.runtime, sessionId, async () => {
@@ -105,7 +106,7 @@ function createOpenCodeLifecyclePreparation({
             configuration() {
               const current = context;
               return { process: () => prepareProcess(current, options),
-                get session() { return upstreamSessionOptions(current); } };
+                get session() { return upstreamSessionOptions(current, options); } };
             }
           }).catch(runtimeFailure);
         }, { operation: "prepare-agent-session", waitMs: 10_000 });
