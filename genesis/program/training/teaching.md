@@ -154,6 +154,15 @@ a later visual checkpoint is preserved. Changed contents under that same current
 identity conflict. This retains native current-checkpoint replay semantics, not
 an unbounded question-operation journal.
 
+The optional server-only second `prepareQuestion` facilities supply `requireCurrent`
+and an actual admitted `signal`. After the final pinned lesson read, the owner
+awaits that fresh host guard and synchronously checks cancellation before either
+retained replay or the original CAS writer. The one-argument caller adds no new
+await; schemas, question identity, pin checks and persistence remain unchanged.
+The original Teaching file retains all nineteen earlier cases and appends revoked
+authority/replay and cancellation-during-refresh evidence. Main still must supply
+its real WRITE/native admission; this facility is not tool registration.
+
 The original checkpoint writer refuses changed text, assessment or assistance
 under an identical already-issued question ID/revision. This small ownership
 adaptation prevents a saved visual checkpoint from reinterpreting queued answers;

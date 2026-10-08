@@ -78,7 +78,7 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
   }
 
   // Actor and assistance are admitted host facts, not learner-supplied claims.
-  async function prepareQuestion({ actor, ...input } = {}) {
+  async function prepareQuestion({ actor, ...input } = {}, { requireCurrent, signal } = {}) {
     const value = validateContent(prepareSchema, input, "Question preparation");
     if (!value.text.trim()) throw new Error("Prepare a nonempty question.");
     const { state, attempt, lesson } = await activeLesson(actor, value.attemptId, value.assessmentId);
@@ -90,6 +90,8 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
     const question = { id: value.requestId, assessmentId: value.assessmentId,
       text: value.text, assistance: value.assistance,
       issuedRevision: sameIdentity ? previous.pendingQuestion.issuedRevision : state.revision + 1 };
+    if (requireCurrent) await requireCurrent();
+    signal?.throwIfAborted();
     if (sameIdentity) {
       if (canonicalJson(previous.pendingQuestion) !== canonicalJson(question)) {
         throw failure("VIBE64_TRAINING_REQUEST_CONFLICT", "This question identity already retained different text, assessment or assistance.");

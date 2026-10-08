@@ -94,3 +94,8 @@ effects can check current access again. If access is lost or the attempt ends,
 read the retained history and resume an authorized active attempt before new
 teaching work. Sending still preserves your exact words; this prerequisite alone
 does not make lesson tools available or certify an assessment.
+
+Question preparation checks current teaching access again after reading the pinned
+lesson and before replaying or saving a question. Stop during that check refuses
+the save. Keep the retained attempt and retry from a current authorized turn;
+this guard does not by itself make Main lesson tools available.

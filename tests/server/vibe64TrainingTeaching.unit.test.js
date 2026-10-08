@@ -456,3 +456,55 @@ test("an unpassed practical receipt never suppresses the current native question
     completedPracticals: [{ reference: issued.reference, submissionId: "needs-practice", observationId }] }), issued.reference);
   assert.deepEqual(await storedFiles(f.paths), before);
 });
+
+
+test("question preparation rechecks supplied current authority after the original pinned lesson read before its writer", async t => {
+  const f = await fixture(t);
+  const entered = Promise.withResolvers(), release = Promise.withResolvers();
+  let current = true, checks = 0, writes = 0;
+  const owner = createTrainingTeachingOwner({ learners: { ...f.learners,
+    async saveLessonResume(...args) { writes++; return f.learners.saveLessonResume(...args); }
+  }, content: { ...f.content, async readLesson(...args) {
+    const lesson = await f.content.readLesson(...args);
+    entered.resolve(); await release.promise; return lesson;
+  } } });
+  const before = await storedFiles(f.paths);
+  const pending = owner.prepareQuestion(f.input, { async requireCurrent() {
+    checks++; if (!current) throw new Error("The actual teaching admission was retired");
+  } });
+  await entered.promise;
+  current = false; release.resolve();
+  await assert.rejects(pending, /actual teaching admission was retired/);
+  assert.equal(checks, 1);
+  assert.equal(writes, 0);
+  assert.deepEqual(await storedFiles(f.paths), before);
+  const issued = await f.owner.prepareQuestion(f.input);
+  assert.equal(issued.replayed, false, "the original unconfigured caller retains its preparation path");
+  const replayBefore = await storedFiles(f.paths);
+  await assert.rejects(owner.prepareQuestion({ ...f.input, expectedRevision: 0 }, {
+    async requireCurrent() { checks++; throw new Error("The replay admission was retired"); }
+  }), /replay admission was retired/);
+  assert.equal(checks, 2);
+  assert.equal(writes, 0);
+  assert.deepEqual(await storedFiles(f.paths), replayBefore);
+});
+
+test("question preparation checks the actual supplied abort signal after an awaited authority refresh", async t => {
+  const f = await fixture(t);
+  const entered = Promise.withResolvers(), release = Promise.withResolvers();
+  const controller = new AbortController();
+  let writes = 0;
+  const owner = createTrainingTeachingOwner({ learners: { ...f.learners,
+    async saveLessonResume(...args) { writes++; return f.learners.saveLessonResume(...args); }
+  }, content: f.content });
+  const before = await storedFiles(f.paths);
+  const pending = owner.prepareQuestion(f.input, { signal: controller.signal, async requireCurrent() {
+    entered.resolve(); await release.promise;
+  } });
+  const reached = await Promise.race([entered.promise.then(() => true), pending.then(() => false)]);
+  assert.equal(reached, true, "the supplied current authority is checked before question persistence");
+  controller.abort(new Error("The admitted native tool was stopped")); release.resolve();
+  await assert.rejects(pending, /admitted native tool was stopped/);
+  assert.equal(writes, 0);
+  assert.deepEqual(await storedFiles(f.paths), before);
+});
