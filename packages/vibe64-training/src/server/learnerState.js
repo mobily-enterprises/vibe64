@@ -517,6 +517,34 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return { ...state, completion: lessonCompletion(attempt, lessons.get(attempt.attemptId), state.progress.attempts) };
   }
 
+  // Internal host context, never an assistant result or caller-selected path.
+  // Read the real reservation and installed descriptor before using a private
+  // source-less Main namespace. Historical attempts may be read, not continued.
+  async function readLearningSessionScope({ actor, attemptId } = {}) {
+    const paths = userPaths(actor);
+    if (typeof attemptId !== "string" || !uuidPattern.test(attemptId)) {
+      throw new Error("Use the exact saved learning attempt ID.");
+    }
+    const state = await loadState(paths);
+    const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
+    if (!attempt) {
+      throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
+    }
+    const lesson = await verifyInstalled(attempt.pin);
+    if (lesson.lesson.exercise) {
+      throw failure("VIBE64_TRAINING_EXERCISE_REQUIRED", "This lesson requires its real exercise workspace; it cannot use a source-less learning session.", 409);
+    }
+    const projectRuntimeRoot = path.join(paths.userRoot, "learning-sessions", attemptId);
+    await inspectDirectoryChain(projectRuntimeRoot);
+    return {
+      scope: { learnerId: paths.learner.id, attemptId, pin: structuredClone(attempt.pin), noExercise: true },
+      projectRuntimeRoot,
+      systemRoot,
+      active: state.progress.activeAttemptId === attemptId && !attempt.ended,
+      activeSummaryCurrent: state.activeSummaryCurrent
+    };
+  }
+
   async function reserveAttempt({ actor, requestId, expectedRevision, pin: inputPin } = {}) {
     const paths = userPaths(actor);
     if (typeof requestId !== "string" || !requestPattern.test(requestId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
@@ -943,7 +971,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return writePreparation({ actor, attemptId, initialSessionId, expectedRevision }, "failure", { stage, code, message });
   }
 
-  return { readState, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive, beginPreparation, recordPreparationReady, recordPreparationFailure, saveLessonResume, recordAssessment };
+  return { readState, readLearningSessionScope, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive, beginPreparation, recordPreparationReady, recordPreparationFailure, saveLessonResume, recordAssessment };
 }
 
 export { createTrainingLearnerState, evidenceSchema, passedAssessmentIds, validateSnapshot };

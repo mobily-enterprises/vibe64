@@ -17,7 +17,7 @@ import { createInstalledTrainingCatalogue } from "@local/vibe64-training/server/
 import { createTrainingLearnerState, passedAssessmentIds } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingTeachingBrief } from "../../packages/vibe64-training/src/server/teachingBrief.js";
 
-async function fixture(t, { published = true, learning = false } = {}) {
+async function fixture(t, { published = true, learning = false, noExercise = false } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "vibe64-learner-state-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const systemRoot = path.join(root, "system");
@@ -41,7 +41,7 @@ async function fixture(t, { published = true, learning = false } = {}) {
   ] : [{ id: "explain", kind: "answer", required: true, rubric: "lesson.md#explain" }];
   await write("training/lessons/INTRO-01/lesson.json", { schemaVersion: 1, code: "INTRO-01", title: "Try the practice app", document: "lesson.md", prerequisites: [], estimatedMinutes: 10,
     visuals: learning ? [{ id: "request", descriptor: "../../visuals/request/visual.json" }] : [],
-    exercise: { kind: "bundled", source: "../../exercises/app", reuse: "attempt" }, assessments,
+    ...(noExercise ? {} : { exercise: { kind: "bundled", source: "../../exercises/app", reuse: "attempt" } }), assessments,
     ...(learning ? { checks: [{ id: "response", file: "../../checks/response.mjs" }] } : {}) });
   await write("training/lessons/INTRO-01/lesson.md", learning
     ? `# Try the app\n${assessments.map(value => `<a id="${value.id}"></a>\nExplain what you tried.\n`).join("")}`
@@ -2398,4 +2398,65 @@ test("same actor and identical pinned lesson keep preview assessment receipts ou
   assert.deepEqual(await treeState(f.systemRoot), learnerBefore);
   const restored = createTrainingLearnerState({ systemRoot: previewRoot, contentSystemRoot: f.systemRoot });
   assert.deepEqual((await restored.readState({ actor: f.actor, includeCompletion: true })).progress, previewState.progress);
+});
+
+
+test("source-less learning scope comes from the real learner reservation and installed no-exercise pin without writes", async t => {
+  const f = await fixture(t, { noExercise: true });
+  const reserved = await f.reserve();
+  const attemptId = reserved.attempt.attemptId;
+  const before = await treeState(f.systemRoot);
+  const scope = await f.state.readLearningSessionScope({ actor: f.actor, attemptId });
+  assert.deepEqual(scope, { scope: { learnerId: "42", attemptId, pin: f.pin, noExercise: true },
+    projectRuntimeRoot: path.join(f.paths.root, "learning-sessions", attemptId), systemRoot: f.systemRoot,
+    active: true, activeSummaryCurrent: true });
+  scope.scope.pin.lesson.code = "foreign";
+  assert.deepEqual((await f.state.readLearningSessionScope({ actor: f.actor, attemptId })).scope.pin, f.pin);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+  await assert.rejects(() => fs.lstat(path.join(f.paths.root, "learning-sessions")), { code: "ENOENT" });
+  await assert.rejects(() => f.state.readLearningSessionScope({ actor: { uid: 43 }, attemptId }),
+    error => error.code === "VIBE64_TRAINING_ATTEMPT_MISSING");
+  await assert.rejects(() => f.state.readLearningSessionScope({ actor: {}, attemptId }));
+  await assert.rejects(() => f.state.readLearningSessionScope({ actor: f.actor, attemptId: "../attempt" }));
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("learning scope refuses exercise lessons and aliases rather than substituting a private root", async t => {
+  const exercise = await fixture(t);
+  const reservedExercise = await exercise.reserve();
+  await assert.rejects(() => exercise.state.readLearningSessionScope({ actor: exercise.actor, attemptId: reservedExercise.attempt.attemptId }),
+    error => error.code === "VIBE64_TRAINING_EXERCISE_REQUIRED");
+  const f = await fixture(t, { noExercise: true });
+  const reserved = await f.reserve();
+  const link = path.join(f.paths.root, "learning-sessions");
+  await fs.symlink(f.sourceRoot, link);
+  const before = await treeState(f.systemRoot);
+  await assert.rejects(() => f.state.readLearningSessionScope({ actor: f.actor, attemptId: reserved.attempt.attemptId }));
+  assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("learning scope reports ended and unconfirmed-summary state truthfully without repairing either", async t => {
+  const f = await fixture(t, { noExercise: true });
+  const reserved = await f.reserve();
+  const attemptId = reserved.attempt.attemptId;
+  await fs.writeFile(f.paths.active, JSON.stringify({ schemaVersion: 1, learnerId: "42", progressRevision: 0, attemptId: null }));
+  const invalidBefore = await treeState(f.systemRoot);
+  await assert.rejects(() => f.state.readLearningSessionScope({ actor: f.actor, attemptId }),
+    error => error.code === "VIBE64_TRAINING_STATE_INVALID");
+  assert.deepEqual(await treeState(f.systemRoot), invalidBefore);
+  // Original recovery allows a missing summary; an invented end revision is invalid.
+  await fs.rm(f.paths.active);
+  const before = await treeState(f.systemRoot);
+  const unconfirmed = await f.state.readLearningSessionScope({ actor: f.actor, attemptId });
+  assert.equal(unconfirmed.active, true);
+  assert.equal(unconfirmed.activeSummaryCurrent, false);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+  const ended = await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: reserved.revision,
+    requestId: "end-learning", reason: "restart" });
+  const endedBefore = await treeState(f.systemRoot);
+  const historical = await f.state.readLearningSessionScope({ actor: f.actor, attemptId });
+  assert.equal(historical.active, false);
+  assert.equal(historical.activeSummaryCurrent, true);
+  assert.deepEqual(historical.scope.pin, ended.attempt.pin);
+  assert.deepEqual(await treeState(f.systemRoot), endedBefore);
 });

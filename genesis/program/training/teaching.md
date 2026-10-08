@@ -563,3 +563,16 @@ ready. The same canonical accepted message, delivered question, retained Helper,
 pinned rubric, consumed evidence and original progress writer own grading and
 replay. No model-supplied completion or fabricated project/session enters state.
 No persisted format changes or historical repair are introduced.
+
+### Server-owned source-less learning scope
+
+`createTrainingLearnerState.readLearningSessionScope` derives an internal Main
+namespace from the actual authenticated learner's saved attempt and freshly
+verified installed pin. It rejects lessons declaring an exercise, foreign or
+missing attempts, invalid identities and directory aliases. It returns the
+server-derived private root plus truthful active/summary flags; the caller must
+require current confirmed state before creation or sending. Historical ended
+attempts can expose their exact retained identity for history, not execution.
+The reader creates no directories, repairs no summary and writes no progress.
+No browser field, assistant result or caller-selected path supplies this scope.
+This prerequisite is not a Main launcher or a teaching admission implementation.

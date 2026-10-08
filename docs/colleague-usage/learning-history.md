@@ -70,3 +70,10 @@ replay returns its retained result and the actual current active lesson without
 preparing that successor. Unavailable continuation, missing/corrupt installed
 content or history capacity refusal needs owner inspection; keep the original
 progress. Ask Colleague to offer the supported recovery, then accept it when ready.
+
+For a lesson without an exercise, retain its exact learner, attempt and installed
+content when diagnosing an unavailable learning conversation. An ended attempt
+may supply history but does not permit new teaching work. Missing or unconfirmed
+reservation summaries require the existing supported recovery; simply reading
+state does not repair them or create a substitute workspace. Ask the installation
+owner to inspect corrupt, foreign or missing content rather than changing the pin.
