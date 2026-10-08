@@ -10,7 +10,15 @@ agent which variable names contain its URL and credentials. Values need not be
 pasted into chat or copied into source. Presence in Env confirms configuration,
 not a successful login.
 
-Processes receive values when they start. After changing credentials, ask the
+Each managed shell command reads current Development Env, so the coding agent's
+next command receives added or changed values without restarting its conversation.
+The agent can use ordinary application commands; it does not need to copy managed
+credentials into source or write environment-injection code. An environment-read
+failure blocks that command and should be reported for investigation. Provisioning
+a newly declared resource and running application migrations remain preparation
+steps; configured names alone do not prove either has completed.
+
+Long-running processes retain their startup values. After changing credentials, ask the
 coding agent to close its managed browser with `vibe64-helper preview browser
 close` before retrying; its next browser command starts a fresh process with the
 current values. This also ends that browser's existing login session. Each new

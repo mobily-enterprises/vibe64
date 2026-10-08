@@ -351,6 +351,22 @@ const {
   identityExplicit,
   targetId
 } = invocation;
+if (!command && (identityExplicit || targetId)) {
+  fail("Specify test or npm-run after --target and --identity options.", 64);
+}
+if (!command || command === "help" || command === "--help" || command === "-h") {
+  process.stdout.write([
+    "Usage:",
+    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
+    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
+    "  vibe64-helper playwright status",
+    "  vibe64-helper playwright cancel <run-id>",
+    "",
+    "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and uses the project's default managed app identity. Use --identity to select another configured name or guest.",
+    "Use --target for a declared web target: Vibe64 waits for it, tests with its identity, and restores the previous Preview after the command ends. The project owns test database isolation, fixtures, and disabling external side effects. List targets with vibe64-helper preview targets --json."
+  ].join("\\n") + "\\n");
+  process.exit(0);
+}
 const applicationRoot = findApplicationRoot();
 if (!applicationRoot) {
   fail("No package.json was found for this Playwright test command.");
@@ -378,23 +394,6 @@ if (!runtime) {
     ", but Vibe64 does not provide its matching managed browser runtime. " +
     "Do not install a browser in this session."
   );
-}
-
-if (!command && (identityExplicit || targetId)) {
-  fail("Specify test or npm-run after --target and --identity options.", 64);
-}
-if (!command || command === "help" || command === "--help" || command === "-h") {
-  process.stdout.write([
-    "Usage:",
-    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
-    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
-    "  vibe64-helper playwright status",
-    "  vibe64-helper playwright cancel <run-id>",
-    "",
-    "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and uses the project's default managed app identity. Use --identity to select another configured name or guest.",
-    "Use --target for a declared web target: Vibe64 waits for it, tests with its identity, and restores the previous Preview after the command ends. The project owns test database isolation, fixtures, and disabling external side effects. List targets with vibe64-helper preview targets --json."
-  ].join("\\n") + "\\n");
-  process.exit(0);
 }
 if (targetId && (String(process.env.PLAYWRIGHT_BASE_URL || "").trim() || String(process.env.VIBE64_PLAYWRIGHT_STORAGE_STATE || "").trim())) {
   fail("--target uses its own managed Preview URL and identity. Remove PLAYWRIGHT_BASE_URL and VIBE64_PLAYWRIGHT_STORAGE_STATE.", 64);

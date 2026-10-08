@@ -18,6 +18,7 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
+- `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `src/components/studio/EnvPanel.vue`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/components/studio/RuntimeConfigRecordsTable.vue`
@@ -28,7 +29,13 @@ The environment view distinguishes editable user values from host-owned system
 values, masks secrets, supports explicit add, replace, and confirmed removal,
 and applies values to session preparation, checks, launches, and agent work.
 Codex, Claude, and OpenCode session commands receive the resolved development
-environment. Managed browser workers and Playwright commands resolve it in their
+environment. The authenticated shell broker reads current project Env for every
+command using its bound project and exact session source, then supplies it through
+the execution gateway's existing project environment policy. Current project
+values override the native agent's stale startup values. Read failure blocks the
+command before an execution or output directory is created. This inspection does
+not provision resources or mutate environment files under an active agent.
+Managed browser workers and Playwright commands resolve it in their
 registered project's context at process startup, using the owning session source.
 This read does not provision resources or project environment files. A failed
 read prevents execution. Existing browser workers retain their startup values;

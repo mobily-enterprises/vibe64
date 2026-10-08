@@ -797,3 +797,33 @@ test("managed Playwright test command refuses mismatched runtimes and browser in
     });
   }
 });
+
+test("managed Playwright help works without matching runtimes or an installed project and starts no browser", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-help-"));
+  let fixture;
+  try {
+    fixture = await prepareFixture(root, "1.62.0", "1.61.1", {
+      onEnsurePreview() { assert.fail("Help must not start Preview."); }
+    });
+    for (const args of [["--help"], ["help"], ["-h"], []]) {
+      const result = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, args, {
+        cwd: fixture.projectRoot,
+        env: { ...process.env, ...fixture.prepared.env }
+      });
+      assert.match(result.stdout, /vibe64-helper playwright.*test/u);
+      assert.equal(result.stderr, "");
+    }
+    await rm(path.join(fixture.projectRoot, "node_modules"), { recursive: true });
+    await rm(path.join(fixture.projectRoot, "package.json"));
+    const result = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--help"], {
+      cwd: fixture.projectRoot,
+      env: { ...process.env, ...fixture.prepared.env }
+    });
+    assert.match(result.stdout, /Usage:/u);
+    assert.equal(result.stderr, "");
+    assert.equal(fixture.managedCommands.length, 0);
+  } finally {
+    await fixture?.commandService.closeAllForSession("playwright-1.62.0");
+    await rm(root, { force: true, recursive: true });
+  }
+});

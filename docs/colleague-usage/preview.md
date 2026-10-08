@@ -68,6 +68,13 @@ specify the flow to check. The agent uses the session's managed browser tools;
 you do not need to provide an execution ID or change application code to enable
 them. Application login may still require your credentials or interaction.
 
+The coding agent can read `vibe64-helper playwright --help` before a project has
+browser tests or a matching test runtime. Help starts neither Preview nor a browser.
+An actual suite still requires the project's installed Playwright version and a
+matching managed runtime. A version error is a test-runtime blocker; interactive
+checks can use the existing managed Preview browser. Report the exact required
+version to the platform operator instead of installing a separate browser.
+
 If the agent reports “Browser testing requires a live assistant execution owner,”
 the browser test did not start. This is an assistant runtime problem. After the
 host runtime has been fixed and restarted, send a new chat message asking the

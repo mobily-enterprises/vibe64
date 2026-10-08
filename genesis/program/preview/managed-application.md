@@ -126,6 +126,10 @@ Working directories resolve relative to the session source. An ordinary name
 such as `..build` is valid; a path resolving outside that source is rejected.
 
 Agents discover declared targets through `vibe64-helper preview targets --json`.
+`vibe64-helper playwright --help` prints usage before inspecting project packages
+or managed runtimes, without starting Preview or a browser. Actual suite execution
+still requires an installed project Playwright and its matching managed runtime;
+help availability is not runtime readiness.
 `vibe64-helper playwright --target <id> test ...` and `npm-run <script>` temporarily
 select an available web target through the same output controller. The server
 holds the session's target selection while the existing managed runner obtains

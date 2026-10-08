@@ -9,6 +9,7 @@ import {
 import path from "node:path";
 import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planCommandSource } from "./agentPlanCommand.js";
+import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 
 import {
   normalizeText,
@@ -658,6 +659,10 @@ function createAgentSessionCommandService({
     if (cwd.ok === false) {
       return cwd;
     }
+    const runtimeConfigEnv = await loadProjectExecutionEnv({
+      projectService,
+      session: { ...context.descriptor, sessionId: normalizeText(input.sessionId) }
+    });
     const commandId = randomUUID();
     const runRoot = path.join(
       commandRunsHostPath(context.binding.wrapperHostDir),
@@ -698,6 +703,7 @@ function createAgentSessionCommandService({
       mode: "detached",
       project: {
         ...context.project,
+        runtimeConfigEnv,
         slug: projectSlug
       },
       purpose: "terminal",

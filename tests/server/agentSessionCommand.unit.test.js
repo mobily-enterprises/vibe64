@@ -13,6 +13,7 @@ import {
 import {
   genesisCommandShimDirectory
 } from "../../packages/vibe64-genesis/src/server/index.js";
+import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
 
 test("agent shell commands run as session-owned managed executions and drain on session close", async (t) => {
   for (const [name, value] of Object.entries({ GENESIS_PARSER_ROOT: "/release/genesis-parsers", GENESIS_PARSER_AUTO_INSTALL: "0" })) {
@@ -30,6 +31,8 @@ test("agent shell commands run as session-owned managed executions and drain on 
   const sourceRoot = path.join(temporaryRoot, "sessions", "active", sessionId, "source");
   const wrapperHostDir = path.join(temporaryRoot, "wrappers");
   const runCalls = [];
+  let projectEnv = { DB_NAME: "new_database", DB_USER: "managed_writer", SERVICE_URL: "https://current.example.test" };
+  let environmentFailure = null;
   let commandExitCode = 0;
   const stopOwnedCalls = [];
   const descriptor = {
@@ -57,6 +60,15 @@ test("agent shell commands run as session-owned managed executions and drain on 
       },
       async readCurrentProject() {
         return project;
+      },
+      async projectInspectionEnvironment(input) {
+        assert.equal(input.sessionId, sessionId);
+        assert.equal(input.session.metadata.source_path, sourceRoot);
+        if (environmentFailure) throw environmentFailure;
+        return projectEnv;
+      },
+      async projectExecutionEnvironment() {
+        assert.fail("Shell environment reads must not provision resources or acquire the active agent's source lock.");
       },
       async runInProjectContext(slug, operation) {
         assert.equal(slug, projectSlug);
@@ -93,6 +105,7 @@ test("agent shell commands run as session-owned managed executions and drain on 
         DBUS_STARTER_ADDRESS: "unix:path=/run/user/1000/bus",
         DBUS_STARTER_BUS_TYPE: "session",
         SAFE_ENV: "kept",
+        DB_NAME: "stale_database",
         VIBE64_SESSION_RENAME_CONTROL: "rename-only-capability",
         GENESIS_PARSER_ROOT: "/untrusted/parser-cache",
         GENESIS_PARSER_AUTO_INSTALL: "1",
@@ -118,6 +131,9 @@ test("agent shell commands run as session-owned managed executions and drain on 
       genesisCommandShimDirectory()
     ]);
     assert.equal(request.baseEnv.SAFE_ENV, "kept");
+    assert.deepEqual(request.project.runtimeConfigEnv, projectEnv);
+    assert.equal(resolveCommandEnv({ baseEnv: request.baseEnv, request }).DB_NAME, "new_database");
+    assert.equal(resolveCommandEnv({ baseEnv: request.baseEnv, request }).SERVICE_URL, "https://current.example.test");
     assert.equal(request.baseEnv.VIBE64_SESSION_RENAME_CONTROL, "rename-only-capability");
     assert.equal(request.baseEnv.GENESIS_PARSER_ROOT, "/release/genesis-parsers");
     assert.equal(request.baseEnv.GENESIS_PARSER_AUTO_INSTALL, "0");
@@ -166,6 +182,24 @@ test("agent shell commands run as session-owned managed executions and drain on 
       env: { ...process.env, ...prepared.env, VIBE64_AGENT_SESSION_COMMAND_TOKEN: "invalid" }
     }), (error) => error.code === 1 && /identity is invalid/.test(error.stderr));
     assert.equal(runCalls.length, callCount);
+
+    projectEnv = { DB_NAME: "changed_database", DB_USER: "managed_writer", SERVICE_URL: "https://changed.example.test" };
+    commandExitCode = 0;
+    await promisify(execFile)(prepared.hostWrapperPath, ["printf updated"], {
+      cwd: sourceRoot,
+      env: { ...process.env, ...prepared.env, DB_NAME: "stale_database" }
+    });
+    const currentRequest = runCalls.at(-1);
+    const resolvedEnv = resolveCommandEnv({ baseEnv: currentRequest.baseEnv, request: currentRequest });
+    assert.equal(resolvedEnv.DB_NAME, "changed_database");
+    assert.equal(resolvedEnv.SERVICE_URL, "https://changed.example.test");
+
+    environmentFailure = Object.assign(new Error("Current project environment could not be read."), { code: "environment_unavailable" });
+    const beforeFailure = runCalls.length;
+    const blocked = await service.run({ commandBase64: Buffer.from("printf blocked").toString("base64url"), cwd: sourceRoot, sessionId });
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.code, "environment_unavailable");
+    assert.equal(runCalls.length, beforeFailure, "Environment failure must block execution rather than reuse stale values.");
 
     const closed = await service.closeAllForSession(sessionId);
     assert.equal(closed.ok, true);

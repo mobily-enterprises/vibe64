@@ -33,6 +33,7 @@ const MANAGED_PREVIEW_INSTRUCTIONS = Object.freeze([
   "Describe only rendered browser evidence; if managed preview is unavailable, report that blocker instead of starting a replacement."
 ]);
 const MANAGED_ENVIRONMENT_INSTRUCTIONS = Object.freeze([
+  "Each managed shell command receives current development Env from Vibe64, including existing declared resource bindings. Use those variables in ordinary application commands; do not build environment injection or copy managed credentials into source. Resource provisioning and application migrations remain separate preparation steps.",
   "Use `vibe64-helper env status [development|production|all]` to inspect configured key names without revealing values.",
   "Pipe an available value to `vibe64-helper env set <development|production> <KEY> [--secret]`; never put values in arguments, logs, or repository files. Use empty stdin only when the user requested an empty value.",
   "Keep development and production values separate. Never invent credentials, copy a value between scopes without explicit direction, or edit Vibe64 runtime/session storage.",
