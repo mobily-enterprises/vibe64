@@ -43,10 +43,11 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
   async function publishMessage(entry, message) {
     if (!entry.main || entry.renewal) return;
     const { runtime, sessionId } = entry.context;
+    const outputId = text(message.outputId) || message.id;
     if (!message.complete) {
       if (message.role !== "assistant") return;
       const conversationStream = runtime.store.updateConversationStream(sessionId, {
-        turnId: entry.turn?.id, messageId: message.id, text: message.text
+        turnId: entry.turn?.id, messageId: message.id, outputId, text: message.text
       });
       await publishSessionChanged(sessionId, { reason: "assistant-stream", payload: { conversationStream } });
       return;
@@ -54,8 +55,8 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
     if (!text(message.text)) return;
     const writer = message.role === "thinking" ? "writeConversationThinkingMessage"
       : message.role === "commentary" ? "writeConversationCommentaryMessage" : "writeConversationAssistantMessage";
-    const turn = await runtime.store[writer](sessionId, { messageId: message.id, text: message.text });
-    runtime.store.completeConversationStreamMessage(sessionId, message.id);
+    const turn = await runtime.store[writer](sessionId, { messageId: message.id, outputId, text: message.text });
+    runtime.store.completeConversationStreamMessage(sessionId, outputId);
     await publishSessionChanged(sessionId, { reason: "claude-stream-message", payload: {
       conversationLogPatch: { type: "upsert-turn", turn },
       conversationStream: runtime.store.readConversationStream(sessionId)

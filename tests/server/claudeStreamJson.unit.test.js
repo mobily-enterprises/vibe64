@@ -2047,3 +2047,95 @@ test("restored Claude detached facade awaits the original profile event before s
     /Controlled audit rejection/);
   assert.equal(f.processes.length, beforeRejection);
 });
+
+test("Claude Main preserves split native output identity through canonical storage and restart", async (t) => {
+  const f = await fixture(t);
+  const store = f.context.runtime.store;
+  await f.provider.sendMessage(f.context, { message: "Explain", messageId: "output-owner-request" });
+  const event = f.processes[0].options.onEvent;
+  await event({ type: "stream_event", event: { type: "message_start", message: { id: "same-api-message" } } });
+  for (const [index, block] of [
+    { type: "thinking", thinking: "The reasoning." }, { type: "text", text: "The answer." }
+  ].entries()) {
+    await event({ type: "stream_event", event: { type: "content_block_start", index, content_block: { type: block.type } } });
+    await event({ type: "stream_event", event: { type: "content_block_delta", index,
+      delta: block.type === "thinking" ? { thinking: block.thinking } : { text: block.text } } });
+    if (block.type === "text") {
+      const live = store.readConversationStream("test").messages;
+      assert.equal(live.length, 1);
+      assert.equal(live[0].messageId, "claude_same-api-message_1");
+      assert.equal(live[0].outputId, "claude_same-api-message_1");
+      assert.equal(live[0].text, "The answer.");
+    }
+    // Native saved frames can precede block retirement; their local index is zero.
+    await event({ type: "assistant", uuid: `saved-block-${index}`,
+      message: { id: "same-api-message", content: [block] } });
+    const saved = f.written.at(-1);
+    assert.equal(saved.messageId, `claude_saved-block-${index}_0`);
+    assert.equal(saved.outputId, `claude_same-api-message_${index}`);
+    assert.deepEqual(store.readConversationStream("test").messages, [],
+      "Saving the exact output retires its partial before native block Stop");
+    await event({ type: "stream_event", event: { type: "content_block_stop", index } });
+  }
+  await event({ type: "result", subtype: "success", result: "The answer.", uuid: "output-owner-result" });
+  const rows = await store.readConversationLog("test");
+  assert.deepEqual(rows.flatMap(turn => turn.messages).filter(message => message.role !== "user")
+    .map(({ messageId, outputId, role, text }) => ({ messageId, outputId, role, text })), [
+    { messageId: "claude_saved-block-0_0", outputId: "claude_same-api-message_0", role: "thinking", text: "The reasoning." },
+    { messageId: "claude_saved-block-1_0", outputId: "claude_same-api-message_1", role: "assistant", text: "The answer." }
+  ]);
+  assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
+  const reopened = createVibe64SessionStore({ projectContextRoot: f.root,
+    projectRuntimeRoot: path.join(f.root, "fixture-runtime") });
+  assert.deepEqual(await reopened.readConversationLog("test"), rows,
+    "Restart reads the original canonical rows without rewriting message or output identity");
+});
+
+test("Claude Main does not guess a live output from ambiguous native blocks", async (t) => {
+  const f = await fixture(t);
+  const store = f.context.runtime.store;
+  await f.provider.sendMessage(f.context, { message: "Explain", messageId: "ambiguous-output-request" });
+  const event = f.processes[0].options.onEvent;
+  await event({ type: "stream_event", event: { type: "message_start", message: { id: "ambiguous-api" } } });
+  for (const index of [3, 4]) {
+    await event({ type: "stream_event", event: { type: "content_block_start", index,
+      content_block: { type: "text", text: "" } } });
+    await event({ type: "stream_event", event: { type: "content_block_delta", index, delta: { text: `Partial ${index}` } } });
+  }
+  const live = store.readConversationStream("test");
+  assert.equal(live.messages.length, 2);
+  await event({ type: "assistant", uuid: "ambiguous-saved",
+    message: { id: "ambiguous-api", content: [{ type: "text", text: "Complete" }] } });
+  const saved = f.written.at(-1);
+  assert.equal(saved.messageId, "claude_ambiguous-saved_0");
+  assert.equal(saved.outputId, saved.messageId, "Only the actual saved native identity is available");
+  assert.deepEqual(store.readConversationStream("test").messages, live.messages,
+    "A saved local index must not retire either uncorrelated live block");
+  await f.provider.interruptTurn(f.context);
+  assert.deepEqual(store.readConversationStream("test").messages, []);
+});
+
+test("Claude Main result-only output retains native identity and interrupted partials remain unsaved", async (t) => {
+  const f = await fixture(t);
+  const store = f.context.runtime.store;
+  await f.provider.sendMessage(f.context, { message: "Explain", messageId: "result-output-request" });
+  await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Only result.", uuid: "native-result" });
+  const saved = f.written.at(-1);
+  assert.equal(saved.messageId, "claude_native-result_result");
+  assert.equal(saved.outputId, saved.messageId);
+  assert.equal(saved.text, "Only result.");
+  await f.provider.sendMessage(f.context, { message: "Continue", messageId: "partial-output-request" });
+  const event = f.processes.at(-1).options.onEvent;
+  await event({ type: "stream_event", event: { type: "message_start", message: { id: "canceled-output" } } });
+  await event({ type: "stream_event", event: { type: "content_block_start", index: 0,
+    content_block: { type: "text", text: "" } } });
+  await event({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { text: "Unfinished" } } });
+  assert.equal(store.readConversationStream("test").messages[0].text, "Unfinished");
+  await f.provider.interruptTurn(f.context);
+  const answers = (await store.readConversationLog("test")).flatMap(turn => turn.messages)
+    .filter(message => message.role === "assistant");
+  assert.deepEqual(answers.map(({ messageId, outputId, text }) => ({ messageId, outputId, text })), [
+    { messageId: "claude_native-result_result", outputId: "claude_native-result_result", text: "Only result." }
+  ]);
+  assert.deepEqual(store.readConversationStream("test").messages, []);
+});

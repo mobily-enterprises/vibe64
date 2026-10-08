@@ -320,6 +320,14 @@ those cached query results. The retained owner supplies its own process inventor
 and closing barrier. `claudeConversationAccounts` retains authorized identity,
 access, curated model choices, Helper profiles and product error projection;
 `claudeConversationEvents` retains the original publication and checkpoint effects.
+It preserves each saved native frame's message ID and the native owner's exact
+live output ID in the canonical writer. Completing a split saved frame retires
+that same live output rather than its different saved-frame/local-index ID.
+Where the native owner supplies no unambiguous live correlation, the saved
+native message ID remains the output identity; the application does not guess
+another stream's global block index. The existing canonical format retains
+these IDs across reopening. This carrier does not promote lesson delivery or
+turn completion from an unfinished streamed reply.
 JSKIT classifies native result completion into the existing semantic goal-update
 event before resolving the turn. The application no longer reads the native
 completion source. It supplies its authorized command hook and timeout; JSKIT

@@ -203,6 +203,10 @@ Send to retry that same message identity or Discard to abandon it. A saved recei
 clears an uncertain submission without sending it again. Check the target title
 before retrying. If the speech service is unavailable, typed chat remains usable.
 
+Reopening a Claude chat reads its saved replies. A finished reply replaces its
+matching partial text; an interrupted partial is not a finished answer. If you
+lose chat updates, reconnect before deciding to send the same request again.
+
 The four controls beneath the face sit close together. Hands-free pauses still
 complete separate messages.
 Further speech is not merged into earlier queued messages.
