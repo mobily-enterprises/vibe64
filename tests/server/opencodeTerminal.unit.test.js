@@ -3909,3 +3909,123 @@ test("R19 Main B joins claimed A terminal cleanup before its own original monito
   assert.equal(harness.promptCalls.length, 2);
   assert.equal(harness.checkpoints.length, 2);
 });
+
+test("R20 reasoning-only recovery retains the exact native ID and selected settings for one attempt", { timeout: 15000 }, async (t) => {
+  const { upstreamMessageId } = await import("../../packages/vibe64-terminals/src/server/openCodeConversationStorage.js");
+  const harness = await controllerHarness({ assistantResponses: [
+    { text: "", content: [{ id: "r20-reasoning", type: "reasoning", text: "The saved result is 42." }] },
+    { text: "", content: [{ id: "r20-recovery-reasoning", type: "reasoning", text: "The result is still 42." }] }
+  ] });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { recursive: true, force: true });
+  });
+  const submitted = await harness.controller.sendMessage("session-1", {
+    messageId: "r20-exact-recovery", message: "Tell me the saved result."
+  });
+  const result = await harness.controller.waitForTurn("session-1");
+  const prompts = harness.promptCalls.filter(entry => entry.input.agent !== "vibe64-helper");
+  assert.equal(prompts.length, 2, "The original empty-answer policy admits at most one recovery prompt.");
+  assert.equal(prompts[0].input.id, upstreamMessageId("r20-exact-recovery"));
+  assert.equal(prompts[1].id, submitted.thread.id);
+  assert.equal(prompts[1].input.id, upstreamMessageId(`${submitted.turn.id}:final-response`));
+  assert.equal(prompts[1].input.agent, harness.selection.agentId);
+  assert.deepEqual(prompts[1].input.model, {
+    id: harness.selection.modelId, providerID: harness.selection.modelProviderId, variant: harness.selection.variantId
+  });
+  assert.equal(prompts[1].input.delivery, "queue");
+  assert.equal(prompts[1].input.resume, true);
+  assert.equal(prompts[1].input.prompt.text,
+    "Your previous response ended without a user-facing final answer. Do not call tools or repeat your reasoning. Return the concise final answer to the user's latest request now.");
+  assert.equal(result.state, "failed");
+  assert.equal(result.error, "OpenCode finished without a user-facing final response. Please send your message again.");
+  assert.deepEqual(harness.userMessages.map(message => message.messageId), ["r20-exact-recovery"]);
+  assert.deepEqual(harness.assistantMessages, []);
+});
+
+test("R20 confirmed Stop at the completed-empty recovery projection never submits another prompt", { timeout: 15000 }, async (t) => {
+  const projectionEntered = Promise.withResolvers();
+  const releaseProjection = Promise.withResolvers();
+  const nativeIdle = Promise.withResolvers();
+  let idlePolls = 0;
+  let stopping;
+  let harness;
+  harness = await controllerHarness({
+    assistantResponses: [{ text: "", content: [{
+      id: "r20-stopped-reasoning", type: "reasoning", text: "The command finished with a saved result."
+    }] }],
+    async sessionStatus() {
+      if (harness.promptCalls.length && ++idlePolls >= 2) nativeIdle.resolve();
+      return { type: "idle" };
+    }
+  });
+  const writeThinking = harness.runtime.store.writeConversationThinkingMessage;
+  harness.runtime.store.writeConversationThinkingMessage = async (...args) => {
+    projectionEntered.resolve();
+    await releaseProjection.promise;
+    return writeThinking(...args);
+  };
+  t.after(async () => {
+    releaseProjection.resolve();
+    await stopping?.catch(() => {});
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { recursive: true, force: true });
+  });
+  const submitted = await harness.controller.sendMessage("session-1", {
+    messageId: "r20-stop-empty", message: "Finish this command."
+  });
+  const completion = harness.controller.waitForTurn("session-1");
+  await projectionEntered.promise;
+  await nativeIdle.promise;
+  const owner = harness.controller.prepareConversationHost("session-1", {}, "activity").native.owner;
+  const tracked = [...owner.turns.values()].find(turn => turn.threadId === submitted.thread.id);
+  stopping = harness.controller.interruptTurn("session-1");
+  for (let index = 0; index < 3; index += 1) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(tracked.interruptAcknowledged, true, "Native Stop is confirmed before the held projection finishes.");
+  assert.equal(harness.promptCalls.length, 1);
+  releaseProjection.resolve();
+  const stopped = await stopping;
+  assert.equal(stopped.ok, true);
+  assert.equal(stopped.turn.state, "interrupted");
+  assert.equal((await completion).state, "interrupted");
+  assert.equal(harness.promptCalls.length, 1, "Confirmed interruption must not become an empty-answer recovery.");
+  assert.deepEqual(harness.assistantMessages, []);
+  assert.deepEqual(harness.systemMessages, []);
+  assert.equal(harness.processStops.length, 0, "Independent Stop leaves the original shared service warm.");
+});
+
+test("R20 accepted completed-empty renewal seed retries preserve native history without resending or cleanup", { timeout: 15000 }, async (t) => {
+  const harness = await controllerHarness({ assistantResponses: [{ text: "" }] });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { recursive: true, force: true });
+  });
+  const handover = renewalHandover();
+  const input = { handover, handoverHash: sessionRenewalHandoverHash(handover),
+    operationId: "renewal:r20-completed-empty", oldThreadId: "r20-predecessor", source: renewalSource };
+  const options = { runtime: harness.runtime, session: harness.session };
+  let retainedThreadId;
+  let retainedClientMessageId;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await assert.rejects(harness.controller.seedSessionRenewalHandover("session-1", input, options), error => {
+      assert.equal(error.code, "vibe64_session_renewal_turn_unreadable");
+      assert.equal(error.details.handoverPromptAccepted, true);
+      assert.equal(error.details.threadId, harness.session.metadata.opencode_conversation_id);
+      assert.notEqual(error.details.threadId, input.oldThreadId);
+      retainedThreadId ||= error.details.threadId;
+      retainedClientMessageId ||= error.details.clientMessageId;
+      assert.equal(error.details.threadId, retainedThreadId);
+      assert.equal(error.details.clientMessageId, retainedClientMessageId);
+      assert.ok(retainedClientMessageId);
+      return true;
+    });
+    assert.equal(harness.promptCalls.length, 1, "An accepted empty result is checked by its exact history, never submitted twice.");
+    assert.equal(harness.processStops.length, 0, "Unreadable acceptance cannot acknowledge or release the seed.");
+    assert.equal(harness.session.metadata.agent_renewal_seed_acknowledged_at, undefined);
+    assert.equal(harness.session.metadata.agent_renewal_seed_operation_id, undefined);
+    assert.equal(harness.session.metadata.agent_briefing_delivered, undefined);
+    assert.deepEqual(harness.userMessages, []);
+    assert.deepEqual(harness.assistantMessages, []);
+  }
+  assert.equal(harness.createdSessions.length, 1, "Retry retains the original native successor rather than creating another.");
+});
