@@ -72,6 +72,7 @@ const LAUNCH_STATUS_IDLE_RECOVERY_LIMIT = 6;
 const TERMINAL_STOP_POLL_INTERVAL_MS = 100;
 const TERMINAL_STOP_POLL_ATTEMPTS = 50;
 const OUTPUTS_REALTIME_REASONS = new Set([
+  "preview-test-state-changed",
   "output-target-started",
   "output-target-ready",
   "output-target-closed",
@@ -559,6 +560,21 @@ function plainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function launchPreviewTestNotice(status = {}, activeTarget = null) {
+  const state = status.previewTestRun?.state;
+  if (["cleanup_required", "restore_failed"].includes(state)) {
+    return { error: true, title: "Preview recovery required", message: "Tests finished, but Preview has not been restored. Ask the coding agent to recover it before using the app." };
+  }
+  if (state === "restoring") {
+    return { title: "Restoring your app", message: "Browser tests have finished. Vibe64 is restoring the previous Preview." };
+  }
+  if (activeTarget?.dataMode === "test") {
+    return { title: "Test Preview", message: "This app target uses test data. Changes here are separate from your normal app data." };
+  }
+  if (state) return { title: "Browser tests in progress", message: "The coding agent temporarily controls this Preview for automated checks." };
+  return null;
+}
+
 function launchPreviewFromStatus(status = {}) {
   const source = plainObject(status);
   const previewSource = plainObject(source.preview);
@@ -944,6 +960,7 @@ function useVibe64OutputControls({
   const activeOutputTarget = computed(() => {
     return outputTargets.value.find((target) => target.id === activeOutputTargetId.value) || null;
   });
+  const previewTestNotice = computed(() => launchPreviewTestNotice(status.value, activeOutputTarget.value));
   const launchActions = computed(() => {
     const actions = terminalMetadata.value.actions || activeTerminal.value?.metadata?.actions || [];
     const targetHref = previewTargetHref.value || String(previewTarget.value?.targetHref || "").trim();
@@ -1833,6 +1850,7 @@ function useVibe64OutputControls({
 
   return {
     activeOutputTarget,
+    previewTestNotice,
     activeOutputTargetId,
     activeTerminal,
     closeTerminal,
@@ -1914,6 +1932,7 @@ function useVibe64OutputControls({
 }
 
 export {
+  launchPreviewTestNotice,
   AUTO_START_ATTEMPT_COOLDOWN_MS,
   AUTO_START_STABILITY_DELAY_MS,
   LAUNCH_STATUS_RETRY_LIMIT,

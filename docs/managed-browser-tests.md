@@ -95,6 +95,7 @@ Keep the normal target as the default. Add another web target to the existing
 ### Target `test-app`: Test Preview
 
 - Mode: `interactive`
+- Data: `test`
 - Runtimes: `nodejs`
 - Run `Start test application`: `node` `tests/support/start-test-app.mjs`
 
@@ -109,6 +110,13 @@ The command above is an example of a portable application-owned launcher, not
 a command provided by Vibe64. Adapt the runtime, path and readiness endpoint to
 the project. Use the host's supplied `HOST` and `PORT`, or the Outputs contract's
 `{host}` and `{port}` arguments, rather than starting another fixed-port server.
+
+The optional `- Data: \`test\`` declaration belongs to Vibe64's Outputs grammar.
+It identifies a target that enforces isolated test data and enables the persistent
+Test Preview banner; target and database names are not used as heuristics.
+`development` is the other accepted value. Omitting Data retains existing target
+behavior and does not assert isolation. Managed test phases remain visible during
+startup, execution, restoration and recovery even for targets without Data.
 
 The application launcher must:
 

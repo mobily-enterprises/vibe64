@@ -2044,10 +2044,10 @@ function createOutputTargetTerminalController({
   const previewTestRuns = new Map();
   const outputResultWrites = new Map();
 
-  function publishLaunchCleanup(sessionId) {
+  function publishLaunchCleanup(sessionId, reason = "output-target-stale-cleared") {
     // Process cleanup must not wait for realtime delivery or its access checks.
     void Promise.resolve().then(() => publishSessionChanged(sessionId, {
-      reason: "output-target-stale-cleared"
+      reason
     })).catch((error) => {
       vibe64SessionDebugLog("server.outputTargetTerminal.cleanupPublication.error", {
         error: vibe64SessionDebugError(error),
@@ -2317,6 +2317,8 @@ function createOutputTargetTerminalController({
             previewStatus,
             previewApplicationIdentities: context.previewApplicationIdentities
           });
+          const testRun = previewTestRuns.get(sessionId);
+          if (testRun) response.previewTestRun = { targetId: testRun.targetId, state: testRun.state };
           if (!["ready", "starting"].includes(response.preview.state) && !launchTerminalIsRunning(previewStatus.activeTerminal || {})) {
             const root = previewDiagnosticsSessionRoot(context.session);
             const diagnostic = root ? await readFile(path.join(root, PREVIEW_LAST_FILE_NAME), "utf8")
@@ -2383,6 +2385,11 @@ function createOutputTargetTerminalController({
 
     async withPreviewTarget(sessionId, outputTargetId, operation, { waitUntilReady, startTarget = (start) => start(), signal, onState = () => {} }) {
       const testRun = { targetId: outputTargetId, token: crypto.randomUUID(), closing: false };
+      function changeState(state) {
+        testRun.state = state;
+        onState(state);
+        publishLaunchCleanup(sessionId, "preview-test-state-changed");
+      }
       const previous = await withLaunchStartLock(sessionId, async () => {
         signal?.throwIfAborted();
         if (previewTestRuns.has(sessionId)) {
@@ -2429,13 +2436,13 @@ function createOutputTargetTerminalController({
 
       let result;
       try {
-        onState("starting");
+        changeState("starting");
         await ensureTargetReady(outputTargetId);
         signal?.throwIfAborted();
         if (testRun.closing) {
           throw new Error("The session closed before browser tests could start.");
         }
-        onState("running");
+        changeState("running");
         result = await operation(testRun.token);
       } catch (error) {
         result = { ok: false, exitCode: 1, error: error.message, code: error.code,
@@ -2446,7 +2453,7 @@ function createOutputTargetTerminalController({
       const cleanupExecutionIds = new Set(cleanupRequired ? result.cleanupExecutionIds || [result.execution?.id] : []);
       testRun.finish = async (retry = false) => {
         if (cleanupRequired) {
-          onState("cleanup_required");
+          changeState("cleanup_required");
           if (retry) {
             await drainBrowserTestExecutions(cleanupExecutionIds, stopExecution);
             cleanupRequired = cleanupExecutionIds.size > 0;
@@ -2458,7 +2465,7 @@ function createOutputTargetTerminalController({
             previewTestRuns.delete(sessionId);
             return result;
           }
-          onState("restoring");
+          changeState("restoring");
           if (previous.running && previous.targetId) {
             await ensureTargetReady(previous.targetId, { restoring: true });
           } else {
@@ -2477,8 +2484,9 @@ function createOutputTargetTerminalController({
             });
           }
           previewTestRuns.delete(sessionId);
+          publishLaunchCleanup(sessionId, "preview-test-state-changed");
         } catch (error) {
-          onState("restore_failed");
+          changeState("restore_failed");
           return {
             ...result, ok: false, exitCode: result?.exitCode || 1,
             code: "vibe64_preview_restore_failed",

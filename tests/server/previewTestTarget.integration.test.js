@@ -45,6 +45,7 @@ async function fixture(t, name, workflowHooks = {}) {
   await initializeGenesisProject({ projectRoot: sourceRoot });
   const target = (id, mode = id) => `### Target \`${id}\`: ${id}
 ${id === "app" ? "- Default.\n" : ""}- Mode: \`interactive\`
+- Data: \`${id === "app" ? "development" : "test"}\`
 - Runtimes: \`nodejs\`
 - Run \`Start\`: \`node\` \`server.mjs\` \`${mode}\` \`{parameter:label}\`
 #### Parameter \`label\`: Label
@@ -290,6 +291,21 @@ test('cancelled test', async ({page}) => {
   };
 }
 
+test("failed restoration remains visible until managed recovery succeeds", async t => {
+  const f = await fixture(t, "restore-status");
+  const normal = await f.controller.ensurePreview(f.sessionId);
+  await f.waitReady(normal);
+  const result = await f.controller.withPreviewTarget(f.sessionId, "test-app", async () => {
+    await writeFile(path.join(f.sourceRoot, "fail-normal-start"), "yes");
+    return { ok: true, exitCode: 0 };
+  }, { waitUntilReady: f.waitReady });
+  assert.equal(result.previewRecoveryRequired, true);
+  assert.deepEqual((await f.controller.launchStatus(f.sessionId)).previewTestRun, { targetId: "test-app", state: "restore_failed" });
+  await rm(path.join(f.sourceRoot, "fail-normal-start"));
+  assert.equal((await f.controller.retryPreviewTestCleanup(f.sessionId)).ok, true);
+  assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun, undefined);
+});
+
 test("workflow metadata separates real test target runs from development restoration without resource declarations", async t => {
   const starts = [];
   const phases = [];
@@ -308,6 +324,8 @@ test("workflow metadata separates real test target runs from development restora
     await f.waitReady(normal);
     const result = await f.controller.withPreviewTarget(f.sessionId, "test-app", async () => {
       const status = await f.controller.launchStatus(f.sessionId);
+      assert.deepEqual(status.previewTestRun, { targetId: "test-app", state: "running" });
+      assert.equal(status.outputTargets.find(target => target.id === "test-app").dataMode, "test");
       const url = new URL(status.previewTarget.href);
       url.pathname = `${url.pathname.replace(/\/$/u, "")}/test-state`;
       const response = await fetch(url);
@@ -319,6 +337,7 @@ test("workflow metadata separates real test target runs from development restora
       return { ok: true, exitCode: 0 };
     }, { waitUntilReady: f.waitReady });
     assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun, undefined);
     assert.deepEqual(starts.map((input) => [input.operation.targetId, input.environment]), [
       ["app", "development"], ["test-app", "test"], ["app", "development"]
     ]);

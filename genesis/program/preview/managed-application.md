@@ -77,6 +77,15 @@ Close, Stop and collapsible task details retain their own existing behavior.
 
 ## Public contract
 
+Output targets may declare `Data: test` or `Data: development` in the Vibe64-owned
+Outputs grammar. This optional field reaches target views unchanged. Test-data
+targets show a persistent amber banner in embedded Preview; their app launchers
+own database isolation. The existing serialized temporary-Preview run publishes
+its state through launch status and realtime refresh. Startup/running,
+restoration, and retained cleanup/restoration failures remain visible until the
+original owner releases the run. Failures show a red recovery banner even when
+the saved target is development. Status is transient and adds no persisted state.
+
 Successful Workspace setup is reusable only when its current recipe matches and
 the host still confirms the exact resources prepared. Adding resources therefore
 re-enters the existing preparation workflow even when install argv are unchanged.

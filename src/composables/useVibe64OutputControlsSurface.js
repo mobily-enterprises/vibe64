@@ -599,6 +599,7 @@ function launchPreviewAddressNavigationUrl({
 function useVibe64OutputControlsSurface(props) {
   const {
     activeOutputTarget,
+    previewTestNotice,
     expandTerminal,
     launchActions,
     launchButtonsDisabled,
@@ -2144,6 +2145,7 @@ function useVibe64OutputControlsSurface(props) {
 
   return {
     outputOptionsAction,
+    previewTestNotice,
     outputOptionsAvailable,
     outputOptionsError,
     outputOptionsErrors,

@@ -180,6 +180,14 @@ function preferredPort(value, outputsPath, line) {
 }
 
 function parseTargetLine(draft, source, outputsPath, line) {
+  if (source.startsWith("- Data: ")) {
+    const dataMode = oneToken(source, "- Data: ", outputsPath, "Output target Data", line);
+    if (!["development", "test"].includes(dataMode)) {
+      invalid(outputsPath, "Output target Data must be `development` or `test`.", line);
+    }
+    setOnce(draft, "dataMode", dataMode, outputsPath, line, "output target Data entry");
+    return;
+  }
   if (source === "- Default.") {
     setOnce(draft, "default", true, outputsPath, line, "output target Default entry");
     return;
@@ -582,6 +590,7 @@ function normalizeTarget(draft, outputsPath) {
     mode: draft.mode,
     workdir: draft.workdir,
     runtimeRequirements: draft.runtimeRequirements,
+    ...(draft.dataMode ? { dataMode: draft.dataMode } : {}),
     steps: draft.steps,
     presentation,
     downloads,

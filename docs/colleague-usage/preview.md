@@ -1,5 +1,17 @@
 # Previewing a web application
 
+An amber **Test Preview** bar means the selected app target declares isolated
+test data. It remains visible above the app on desktop and mobile, even with
+the Preview toolbar collapsed. Changes in that target use its test data rather
+than the ordinary app database. The project launcher must enforce this separation.
+A generic **Browser tests in progress** bar means automated checks control
+Preview; it does not claim a separate database. **Restoring your app** remains
+visible while Vibe64 restores the previous target. The bar disappears when
+restoration succeeds. A red **Preview recovery required** bar means cleanup or
+restoration failed: ask the coding agent to recover the managed browser run
+before using Preview. Colleague can inspect output status and explain recovery;
+it must not claim the normal app is restored from a test exit code alone.
+
 Open the project's **Preview** tab. On mobile, use **Show project** from chat,
 then **Show preview controls** to expand the toolbar. If the selected output needs settings,
 choose **Preview options**, fill the required fields and choose **Run**.

@@ -731,6 +731,10 @@ among its users: moving a table updates the other open diagrams automatically.
 Data overview is the default database view, followed by the detailed ERD and
 the query/data view. Opening the default view does not rewrite the URL or
 interrupt a person's navigation away while the database loads.
+
+Preview visibly identifies a declared test-data target and managed browser-test
+handover. It shows restoration in progress and retains a red recovery notice
+after failed cleanup or restoration, instead of presenting test data as normal.
 The diagram keeps the working space: routine search and Fit
 stay visible, while occasional display and arrangement controls live in an
 options menu. Overview concepts can be dragged continuously without waiting for

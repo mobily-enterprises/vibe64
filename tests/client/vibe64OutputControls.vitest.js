@@ -10,6 +10,7 @@ import {
   launchBrowserTargetName,
   launchControlsCanLoadTargets,
   launchPreviewFromStatus,
+  launchPreviewTestNotice,
   launchPreviewLocationStorageKey,
   launchPreviewRequiresProxy,
   launchPreviewToolbarStorageKey,
@@ -42,6 +43,17 @@ import {
 } from "@local/studio-terminal-core/shared";
 
 describe("Vibe64 launch controls", () => {
+  it("shows declared test data and retains restoration failures without guessing target names", () => {
+    expect(launchPreviewTestNotice({}, { id: "test-database" })).toBeNull();
+    expect(launchPreviewTestNotice({}, { id: "app", dataMode: "test" }).title).toBe("Test Preview");
+    expect(launchPreviewTestNotice({ previewTestRun: { state: "running" } }, { dataMode: "development" }).title).toBe("Browser tests in progress");
+    expect(launchPreviewTestNotice({ previewTestRun: { state: "restoring" } }, { dataMode: "test" }).title).toBe("Restoring your app");
+    for (const state of ["restore_failed", "cleanup_required"]) {
+      expect(launchPreviewTestNotice({ previewTestRun: { state } }, { dataMode: "development" }).error).toBe(true);
+    }
+    expect(launchPreviewTestNotice({}, { dataMode: "development" })).toBeNull();
+    expect(outputTargetsRealtimeShouldRefresh({ payload: { sessionId: "one", reason: "preview-test-state-changed" } }, "one")).toBe(true);
+  });
   const managedSourceMetadata = {
     source_kind: "session_clone",
     source_path: "/var/lib/vibe64/user/projects/project-test/sessions/active/session-1/source",

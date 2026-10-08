@@ -514,7 +514,12 @@
     <div
       v-if="embeddedPreview"
       class="vibe64-launch-controls__preview"
+      :class="{ 'vibe64-launch-controls__preview--test': previewTestNotice }"
     >
+      <div v-if="previewTestNotice" class="vibe64-launch-controls__test-notice" :class="{ 'vibe64-launch-controls__test-notice--error': previewTestNotice.error }" :role="previewTestNotice.error ? 'alert' : 'status'">
+        <strong>{{ previewTestNotice.title }}</strong>
+        <span>{{ previewTestNotice.message }}</span>
+      </div>
       <iframe
         v-if="previewUrl"
         :key="previewFrameRequestId"
@@ -911,6 +916,7 @@ const {
   embeddedManualStartButtonDisabled,
   resourceAdmissionId,
   testApproval,
+  previewTestNotice,
   acceptResourceRetry,
   embeddedManualStartButtonVisible,
   embeddedStartTarget,
@@ -1548,6 +1554,23 @@ onBeforeUnmount(() => {
 
 .vibe64-launch-controls__preview > * {
   grid-area: 1 / 1;
+}
+
+.vibe64-launch-controls__preview--test { grid-template-rows: auto minmax(0, 1fr); }
+.vibe64-launch-controls__preview--test > * { grid-area: 2 / 1; }
+.vibe64-launch-controls__preview--test > .vibe64-launch-controls__test-notice { grid-area: 1 / 1; }
+.vibe64-launch-controls__test-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 10px 14px;
+  background: rgb(var(--v-theme-warning));
+  color: rgb(var(--v-theme-on-warning));
+  font-size: 13px;
+}
+.vibe64-launch-controls__test-notice--error {
+  background: rgb(var(--v-theme-error));
+  color: rgb(var(--v-theme-on-error));
 }
 
 .vibe64-launch-controls__preview-frame {

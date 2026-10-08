@@ -81,6 +81,7 @@ function vibe64OutputTargetView(target = {}) {
     id: String(target.id || "").trim(),
     label: String(target.label || target.id || "").trim(),
     mode: String(target.mode || "").trim(),
+    ...(target.dataMode ? { dataMode: target.dataMode } : {}),
     presentation,
     ...(target.parameters?.length ? { parameters: structuredClone(target.parameters) } : {})
   };

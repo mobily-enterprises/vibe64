@@ -563,6 +563,7 @@ test("Vibe64 setup and Outputs parse only their canonical Markdown grammar", () 
     "",
     "- Default.",
     "- Mode: `interactive`",
+    "- Data: `test`",
     "- Runtimes: `nodejs`",
     "- Run `Develop`: `npm` `run` `develop`",
     "",
@@ -580,6 +581,7 @@ test("Vibe64 setup and Outputs parse only their canonical Markdown grammar", () 
   ]);
   assert.equal(outputs.targets[0].steps[0].role, "run");
   assert.equal(outputs.targets[0].presentation.kind, "web");
+  assert.equal(outputs.targets[0].dataMode, "test");
   assert.equal(outputs.targets[0].previewIdentity.protocol, "vibe64.preview-identity.command.v1");
 
   assert.throws(
