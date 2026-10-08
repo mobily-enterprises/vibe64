@@ -33,9 +33,14 @@ function sessionRealtimePayload(sessionId, { session: sessionValue, originId, re
   const additionalRefresh = normalizedClientRefresh(additionalPayload.clientRefresh);
   const {
     clientRefresh: _clientRefresh,
+    learningAttemptId: _learningAttemptId,
     ...additionalFields
   } = additionalPayload;
   void _clientRefresh;
+  void _learningAttemptId;
+  const context = currentProjectRequestContext();
+  const learningAttemptId = String(context?.learningScope?.attemptId ||
+    (!context?.slug && session.purpose === "learning" ? session.learning?.attemptId : "") || "").trim();
   const clientRefresh = {
     ...sessionRefresh,
     ...additionalRefresh
@@ -45,7 +50,8 @@ function sessionRealtimePayload(sessionId, { session: sessionValue, originId, re
     ...(Number.isSafeInteger(revision) && revision >= 0 ? { revision } : {}),
     ...(status ? { status } : {}),
     ...additionalFields,
-    projectSlug: String(currentProjectRequestContext()?.slug || session.projectSlug || additionalFields.projectSlug || "").trim(),
+    projectSlug: learningAttemptId ? "" : String(context?.slug || session.projectSlug || additionalFields.projectSlug || "").trim(),
+    ...(learningAttemptId ? { learningAttemptId } : {}),
     ...(Object.keys(clientRefresh).length > 0 ? { clientRefresh } : {}),
     ...(origin ? { originId: origin } : {}),
     ...(reason ? { reason } : {})

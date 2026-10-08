@@ -4280,3 +4280,51 @@ test("canonical learning current-session selection and clearing retain scope wit
     assert.equal(f.createdInputs.length, 1);
   });
 });
+
+
+test("learning session notifications retain trusted concurrent attempt identity", async () => {
+  const published = [];
+  const publish = createSessionChangedPublisher({ async publish(event) { published.push(event); } });
+  const attempts = ["12345678-1234-4234-8234-123456789abc", "22345678-1234-4234-8234-123456789abc"];
+  await Promise.all(attempts.map(attemptId => runWithProjectRequestContext({ learningScope: { attemptId } }, async () => {
+    await Promise.resolve();
+    await publish(`learning-${attemptId}`, {
+      payload: { projectSlug: "untrusted-project", learningAttemptId: "untrusted-attempt" },
+      session: { purpose: "learning", learning: { attemptId: "stale-attempt" }, revision: 2 },
+      reason: "codex-goal"
+    });
+  })));
+  assert.deepEqual(published.map(event => event.realtime.payload.learningAttemptId).sort(), attempts);
+  for (const { realtime } of published) {
+    assert.equal(realtime.payload.projectSlug, "");
+    assert.equal(realtime.payload.sessionId, `learning-${realtime.payload.learningAttemptId}`);
+    assert.equal(realtime.payload.revision, 2);
+    assert.equal(realtime.payload.reason, "codex-goal");
+  }
+});
+
+test("deferred learning notification uses the original validated session view without a context", async () => {
+  const attemptId = "12345678-1234-4234-8234-123456789abc";
+  let published;
+  const publish = createSessionChangedPublisher({ async publish(event) { published = event; } });
+  await publish(`learning-${attemptId}`, {
+    session: { session: { sessionId: `learning-${attemptId}`, purpose: "learning", learning: { attemptId }, revision: 3 } },
+    payload: { learningAttemptId: "untrusted-attempt", projectSlug: "wrong-working-project" }
+  });
+  assert.deepEqual(published.realtime.payload, {
+    sessionId: `learning-${attemptId}`, revision: 3, projectSlug: "", learningAttemptId: attemptId
+  });
+});
+
+test("working notifications cannot gain learning identity from extra payload or a conflicting session view", async () => {
+  const published = [];
+  const publish = createSessionChangedPublisher({ async publish(event) { published.push(event); } });
+  await publish("working-one", { payload: { learningAttemptId: "forged", projectSlug: "working-project" } });
+  await runWithProjectRequestContext({ slug: "trusted-working" }, () => publish("working-two", {
+    session: { purpose: "learning", learning: { attemptId: "forged" } }, payload: { learningAttemptId: "forged" }
+  }));
+  assert.deepEqual(published.map(event => event.realtime.payload), [
+    { sessionId: "working-one", projectSlug: "working-project" },
+    { sessionId: "working-two", projectSlug: "trusted-working" }
+  ]);
+});

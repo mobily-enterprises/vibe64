@@ -28,6 +28,11 @@ unchanged. Reopening the same attempt can recover its saved selection. Selecting
 history does not resume an ended lesson or send a message. Use the supported
 lesson start or resume operation before requesting new teaching work.
 
+Page updates for a supported learning conversation belong to that exact lesson
+attempt. They do not change the working project or indicate that a different
+lesson has completed. If updates stop, check this same saved conversation before
+retrying a message; a refresh is not permission to send the message again.
+
 These action and storage prerequisites do not yet expose a complete lesson picker
 or Main teacher in every installation. They do not establish successful question
 delivery, assessment, speech or presentation. Use the installation's supported

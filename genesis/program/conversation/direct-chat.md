@@ -790,6 +790,17 @@ binding.
 - `packages/vibe64-execution/src/server/engines/stdioBridge.js`
 
 - `packages/vibe64-core/src/server/sessionRealtimeEvents.js`
+
+Learning session notifications reuse this same publisher and channel. Its
+optional `learningAttemptId` comes from the original trusted request context's
+learning scope, or the already validated nested session view when deferred work
+has no request context. Extra payload fields cannot select that identity. Such
+events carry an empty working-project slug; a trusted working-project context
+cannot be reclassified by a conflicting learning view. Ordinary events retain
+their original shape. Client exact-attempt matching and mounted Learning-mode
+acceptance remain separate integration obligations; an event is no authority,
+completion proof or reason to resend work.
+
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
 - `packages/vibe64-sessions/src/server/service.js`
