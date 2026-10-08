@@ -138,6 +138,7 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
       sessionsApiPath: scopedDevelopmentApiUrl(String(toValue(sessionsApiPath) || ""), String(toValue(projectSlug) || "")) };
     const attempt = toValue(learningAttemptId);
     if (attempt !== undefined) {
+      target.viewerActorKey = target.actorKey;
       target.learningAttemptId = attempt;
       target.learnerId = typeof toValue(learnerId) === "string" ? toValue(learnerId) : "";
       // Only the host's actual API-returned own learner identity scopes this

@@ -20,13 +20,13 @@ const actorKey = computed(() => unref(viewer)?.actorKey || "");
 const learningAvailable = computed(() => {
   const binding = props.learningBinding;
   return !props.appAvailable && props.lessonsAvailable && !props.projectSlug && binding &&
-    actorKey.value && binding.actorKey === actorKey.value && binding.learnerId && !binding.projectSlug &&
+    actorKey.value && binding.viewerActorKey === actorKey.value && typeof binding.actorKey === "string" && binding.actorKey && binding.learnerId && !binding.projectSlug &&
     binding.learningAttemptId === props.attemptId && binding.sessionId === props.sessionId &&
     /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(props.attemptId) &&
     binding.sessionsApiPath === `/api/learning/${props.attemptId}/vibe64/sessions`;
 });
 function sameLearningBinding(expected) {
-  return learningAvailable.value && ["actorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath"]
+  return learningAvailable.value && ["actorKey", "viewerActorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath"]
     .every(key => expected[key] === props.learningBinding[key]);
 }
 const selection = shallowRef(null);
@@ -132,7 +132,7 @@ async function open({ attemptId, visualId } = {}) {
   let expected = selection.value;
   if (expected?.attemptId !== attemptId || expected.visualId !== visualId || !resource.value) {
     expected = { attemptId, visualId, ...(learningAvailable.value ? { learningBinding: Object.freeze(
-      Object.fromEntries(["actorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath"]
+      Object.fromEntries(["actorKey", "viewerActorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath"]
         .map(key => [key, props.learningBinding[key]]))) } : {}) };
     selection.value = expected;
     resource.value = null;
@@ -390,7 +390,7 @@ watch([visible, () => display.value.phase], () => {
   void pauseHidden();
 }, { flush: "post" });
 watch([actorKey, () => props.projectSlug, () => props.sessionId, () => props.attemptId,
-  () => props.learningBinding?.actorKey, () => props.learningBinding?.learnerId,
+  () => props.learningBinding?.actorKey, () => props.learningBinding?.viewerActorKey, () => props.learningBinding?.learnerId,
   () => props.learningBinding?.projectSlug,
   () => props.learningBinding?.learningAttemptId, () => props.learningBinding?.sessionId,
   () => props.learningBinding?.sessionsApiPath], () => {

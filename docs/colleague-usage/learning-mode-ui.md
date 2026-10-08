@@ -55,7 +55,9 @@ account, mode or route during a request does not undo admitted lesson work; a
 late result cannot open a new conversation or select the new view. Local request
 errors are cleared when their view is retired. Colleague can explain this flow
 and offer existing actions; a how-to question alone does not authorize execution.
-Private provider key entry remains a human-only step.
+Private provider key entry remains a human-only step. A diagram belongs to its
+original signed-in learner and Main conversation; changing accounts retires its
+display and pending reads rather than transferring it to the next person.
 
 This attachment composes the original Preview choices and opens the original
 lesson and conversation controls. Actual Main teaching and its visual/current

@@ -194,3 +194,16 @@ retry acknowledgement without repeating navigation; mobile preparation remains
 outside that cache and only its original async branch yields. Main attachment
 still requires real initiating-client effects, typed browser/native identity
 correlation and canonical cue/ACK fields from the original server coordinator.
+
+
+## Actual viewer and retained Learning identity
+
+The Main Learning binding captures the original viewerActorKey before deriving
+its composite actorKey for transport, draft and learner/attempt isolation. The
+Preview compares only that captured viewer field with the current global viewer,
+while retaining both keys in its selected-resource and held-read retirement fence.
+It does not parse or replace the composite key, mutate Working identities or
+infer authorization. The original server resource/checkpoint owners still check
+fresh learner/attempt/pin/session access. The compiled Preview regression receives
+the identity from the actual same Main runtime, with observation disabled in the
+fixture; this identity proof is separate from installed/native/browser acceptance.
