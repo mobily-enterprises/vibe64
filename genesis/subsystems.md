@@ -10,6 +10,10 @@ learner reservations outside projects, reusing Core atomic writes and Kernel loc
 Owns installed immutable course definitions/locks and revisioned enablement, and
 declared visual asset reads from exact installed lesson pins. These are internal
 server facilities without course controls or source access for Colleague.
+Owns the unchanged pure canonical delivered-question and completed-practical
+proof readers used by the existing Colleague consumer. Delivery promotion,
+interactive admission, connection receipts and Helper/control coordination
+remain with that consumer; these reads neither grant a pass nor add Main teaching.
 Owns bounded durable assessment receipts and lesson resume state, checked against
 the installed pin, plus a read-only teaching brief without executable assets or
 source paths. Owns internal pinned-rubric grading through the existing retained

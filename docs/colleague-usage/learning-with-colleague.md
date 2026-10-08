@@ -83,8 +83,9 @@ teaching turn after reading the exact lesson brief and learning revision. Finish
 the current diagram/audio cue first, or proceed when there is no cue. Retain the
 same request ID for a retry and record the help actually provided. After success,
 the entire final reply must be exactly the returned question text, with no added
-preface or explanation. The tool result is **prepared**, not delivered or passed;
-Vibe64 checks the actual canonical final separately. This adds no learner button.
+preface or explanation. The tool result is **prepared**, not delivered or passed.
+The question is ready only after its exact final reply completes in this
+conversation; text in a progress update does not count. This adds no learner button.
 
 If preparation or staging fails, keep the saved attempt and read or retry the same
 question request. A saved question with failed staging is not confirmed delivered;

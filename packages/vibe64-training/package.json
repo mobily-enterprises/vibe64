@@ -10,6 +10,7 @@
     "./server/presentation-actions": "./src/server/presentationActions.js",
     "./server/teaching-brief": "./src/server/teachingBrief.js",
     "./server/teaching": "./src/server/teaching.js",
+    "./server/delivery-proof": "./src/server/deliveryProof.js",
     "./server/teaching-actions": "./src/server/teachingActions.js",
     "./server/answer-assessment": "./src/server/answerAssessment.js",
     "./server/assessment-actions": "./src/server/assessmentActions.js",

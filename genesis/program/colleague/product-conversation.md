@@ -694,8 +694,11 @@ the original Stop/disconnection lifetime. It adds no speech or grading authority
 The existing Colleague state read optionally asks the host-supplied
 `context.trainingTeaching.readQuestionReference` for one bounded issued reference.
 The read also supplies the latest actually delivered native reference as a host
-routing hint. It derives that hint through the same completed-output/current-scope
-checks, skips prepared and invalid marks, and never uses retained Fresh history.
+routing hint. It derives that hint through Public Training's unchanged canonical
+delivery reader, which checks completed output/current scope, skips prepared and invalid
+marks, and never uses retained Fresh history. The same Training owner projects
+exact completed native practical receipts; Colleague retains its current
+conversation record and all original admission/control coordination.
 A host with independently active normal and author-preview stores selects the
 original teaching owner by that exact attempt; an absent hint retains ordinary
 normal-owner discovery. The selected owner still validates its active question,
@@ -739,8 +742,9 @@ the release's prospective upgrade; no historical question association is inferre
 current admitted interactive turn and its original context user-message IDs. It
 requires the saved server-owned question capture and exact current-scope native
 question delivery/final-output proof. Archives, autonomous turns, caller
-snapshots and unrelated messages cannot supply evidence. It neither imports
-Training nor writes progress; the host's single `trainingAssessment` owner
+snapshots and unrelated messages cannot supply evidence. It uses the shared
+Training proof readers without writing progress; the host's single
+`trainingAssessment` owner
 validates the pin/question, grades and saves through its native assessment owner.
 
 The operation reuses original `summaryRunning`/`summaryAbort` serialization,

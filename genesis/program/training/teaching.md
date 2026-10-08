@@ -11,6 +11,7 @@
 - `packages/vibe64-runtime/src/shared/agentExecutionProfiles.js`
 - `tests/server/vibe64TrainingAssessmentGrader.unit.test.js`
 - `packages/vibe64-training/src/server/teaching.js`
+- `packages/vibe64-training/src/server/deliveryProof.js`
 - `tests/server/vibe64TrainingTeaching.unit.test.js`
 - `packages/vibe64-training/src/server/answerAssessment.js`
 - `packages/vibe64-training/src/server/assessmentActions.js`
@@ -196,6 +197,34 @@ guidance rather than silently truncating teaching text or rubrics. Missing or
 changed content retains the installed reader's actionable error. This module is
 not a registration owner, prompt, teacher runtime or learner UI; the shared
 action catalogue below projects its returned facts.
+
+## Canonical delivery and completed-practical proof readers
+
+The server-only `./server/delivery-proof` export owns the existing pure
+`deliveredQuestion(state,reference)` and `completedPracticalQuestions(state)`
+readers. They consume the trusted current `record.scopeId` and original canonical
+`record.conversationLog`; they neither authenticate caller records nor create
+metadata, promote delivery, evaluate an answer or write progress. The existing
+Colleague consumer imports these same functions at its original call sites.
+
+Delivery requires the current logical conversation and exact turn, a delivered
+mark, completed non-superseded native runtime, matching optional full reference,
+and the actual canonical final output ID and trimmed question text. Prepared
+marks, commentary, unrelated finals and retained earlier conversations do not
+qualify. Completed practical projection consumes only the original successful
+`assistant_action_execute` receipt for version 1 practical evaluation, with exact
+submission/observation, accepted same-turn learner message and captured pin,
+assessment/hash and delivered-question correlation. It retains newest-first
+ordering, exact reference/submission deduplication and the original limit of 64 proofs.
+
+The original teaching owner independently requires the matching saved practical
+pass before suppressing that issued question. A tool receipt alone is not a pass.
+The source readers move unchanged; all original Colleague consumer assertions
+remain their evidence. Colleague retains transaction delivery promotion,
+interactive-turn/cue eligibility, fresh authority, message admission, practical
+sequence/connection receipts and serialized Helper/cancellation control. This
+export adds no Main teaching integration, historical conversion, new runtime,
+state format, model-supplied evidence or parallel progress owner.
 
 ## Shared lesson operations
 
