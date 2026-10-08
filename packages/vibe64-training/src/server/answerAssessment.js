@@ -14,7 +14,7 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
     throw new TypeError("Answer assessment requires the original learner, teaching and installed-content owners.");
   }
 
-  async function evaluate(kind, { actor, attemptId, expectedRevision, submissionId, message, observation, checkResult } = {}, { state, context, helper, requireCurrent } = {}) {
+  async function evaluate(kind, { actor, attemptId, expectedRevision, submissionId, message, observation, checkResult } = {}, { state, context, helper, requireCurrent, signal: suppliedSignal } = {}) {
     const saved = await learners.readState({ actor, includeCompletion: true });
     const attempt = saved.progress.attempts.find(value => value.attemptId === saved.progress.activeAttemptId);
     const captured = message?.data?.trainingQuestion;
@@ -73,6 +73,7 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
       // Native replay reconciles a derived summary without another inference,
       // even when the lesson has since advanced to its next question.
       await requireCurrent?.();
+      suppliedSignal?.throwIfAborted();
       return learners.recordAssessment({ actor, attemptId, expectedRevision, ...previous });
     }
     const evidenceId = kind === "practical" ? "observationId" : "messageId";
@@ -88,7 +89,7 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
     if (!isDeepStrictEqual(current.question, question)) {
       throw failure("VIBE64_TRAINING_QUESTION_STALE", "The admitted question facts no longer match the saved lesson question.");
     }
-    const signal = state?.summaryAbort?.signal;
+    const signal = suppliedSignal || state?.summaryAbort?.signal;
     if (!signal) throw new Error("Assess an answer within the original admitted Helper lifetime.");
     signal.throwIfAborted();
     const grader = createTrainingAssessmentGrader({ content, helper });
@@ -99,6 +100,7 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
     await teaching.captureQuestion({ actor, reference });
     signal.throwIfAborted();
     await requireCurrent?.();
+    signal.throwIfAborted();
     return learners.recordAssessment({ actor, attemptId, expectedRevision, submissionId,
       assessmentId: question.assessmentId, evidence, assistance: question.assistance, ...result });
   }

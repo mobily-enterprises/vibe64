@@ -381,3 +381,52 @@ test("native practical cancellation stale questions and concurrent checkpoints p
   assert.equal((await f.read()).active.learning.submissions.length, 0);
   assert.equal(f.state.record.summaryHelper, null);
 });
+
+test("the original admitted assessment accepts a supplied native lifetime without a Colleague state", async t => {
+  const f = await answerFixture(t);
+  const { evaluateAdmittedTrainingAssessment } = await import("../../packages/vibe64-training/src/server/conversationAssessment.js");
+  const controller = new AbortController();
+  let checks = 0;
+  const helper = { async runHelper(state, context, input) {
+    assert.equal(state, undefined, "the native domain caller supplies no fabricated Colleague state");
+    assert.equal(context, f.context);
+    return f.helper.runHelper(f.state, context, input);
+  } };
+  const facilities = { assessment: f.owner, helper, signal: controller.signal, async requireCurrent() { checks++; } };
+  const result = await evaluateAdmittedTrainingAssessment("answer", f.input, f.context, facilities);
+  assert.equal(result.attempt.learning.submissions[0].evidence.text, f.input.message.text);
+  assert.equal(result.attempt.learning.submissions[0].outcome, "passed");
+  assert.equal(f.state.record.summaryHelper, null, "the original retained Helper cleaned its receipt");
+  assert.equal(checks, 4);
+  const before = await f.read();
+  const runs = f.calls.filter(value => value.run).length;
+  controller.abort(new Error("The admitted native tool was stopped before replay"));
+  await assert.rejects(evaluateAdmittedTrainingAssessment("answer", f.input, f.context, facilities), /stopped before replay/);
+  assert.deepEqual(await f.read(), before);
+  assert.equal(f.calls.filter(value => value.run).length, runs);
+});
+
+test("the original assessment checks supplied native cancellation after its final awaited authority refresh", async t => {
+  const f = await answerFixture(t);
+  const { evaluateAdmittedTrainingAssessment } = await import("../../packages/vibe64-training/src/server/conversationAssessment.js");
+  const controller = new AbortController();
+  const entered = Promise.withResolvers(), release = Promise.withResolvers();
+  let checks = 0, writes = 0;
+  const owner = createTrainingAnswerAssessment({
+    content: createInstalledTrainingContent({ systemRoot: path.join(f.root, "system") }), teaching: f.teaching,
+    learners: { ...f.learners, async recordAssessment(...args) {
+      writes++; return f.learners.recordAssessment(...args);
+    } } });
+  const before = await f.read();
+  const pending = evaluateAdmittedTrainingAssessment("answer", f.input, f.context, {
+    assessment: owner, state: f.state, helper: f.helper, signal: controller.signal,
+    async requireCurrent() { if (++checks === 3) { entered.resolve(); await release.promise; } }
+  });
+  await entered.promise;
+  controller.abort(new Error("The native turn was stopped during final authority refresh"));
+  release.resolve();
+  await assert.rejects(pending, /stopped during final authority refresh/);
+  assert.equal(writes, 0);
+  assert.deepEqual(await f.read(), before);
+  assert.equal(f.state.record.summaryHelper, null);
+});

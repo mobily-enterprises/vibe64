@@ -116,6 +116,16 @@ between Helper cleanup and canonical save; it adds no teaching authority, second
 progress writer or Main tool registration. Unconfigured direct domain callers
 retain their original behavior and remain responsible for admitted evidence.
 
+The admitted assessment pipeline may forward an actual native `signal` to the
+original answer owner. This replaces only the need for a Colleague summary state
+in a configured native caller; unconfigured callers retain `state.summaryAbort.signal`.
+The owner checks supplied cancellation before retained replay and checks the
+actual signal after the final awaited current guard, immediately before its
+original progress writer. The existing grader and Helper adapter remain unchanged;
+Main must still supply its real accepted-message/WRITE/pin and retained cleanup
+owner. The original twelve Grader-file cases stay intact, with two appended
+native-lifetime and final-refresh cancellation cases.
+
 The internal answer owner receives a canonical accepted user message from the
 original Colleague admission owner. It checks this learner's prepared exercise pin, or reserved no-exercise answer pin, and
 saved question snapshot, uses the actual message identity and words, then invokes

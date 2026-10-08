@@ -99,3 +99,9 @@ Question preparation checks current teaching access again after reading the pinn
 lesson and before replaying or saving a question. Stop during that check refuses
 the save. Keep the retained attempt and retry from a current authorized turn;
 this guard does not by itself make Main lesson tools available.
+
+An assessment stopped while its final access check is pending refuses the progress
+save. A native teaching host can supply its actual Stop signal to the existing
+assessment owner; it still needs the accepted answer and retained Helper receipt.
+Read the saved result before retrying. This prerequisite alone enables no new
+teaching control or Main tool.
