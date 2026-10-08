@@ -365,7 +365,8 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
     "",
     "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and uses the project's default managed app identity. Use --identity to select another configured name or guest.",
     "Use --target for a declared web target: Vibe64 waits for it, tests with its identity, and restores the previous Preview after the command ends. The project owns test database isolation, fixtures, and disabling external side effects. List targets with vibe64-helper preview targets --json.",
-    "Do not overlap a suite with live preview browser actions or Preview ensure/restart/target changes. Wait on the original command through cleanup and restoration, then confirm playwright status has no active run and preview status is ready. Read-only status and logs are safe during a suite."
+    "Do not overlap a suite with live preview browser actions or Preview ensure/restart/target changes. Wait on the original command through cleanup and restoration, then confirm playwright status has no active run and preview status is ready. Read-only status and logs are safe during a suite.",
+    "For a background command, use its existing execution/session wait with about a 30-second window where supported. Do not repeatedly reread empty or unchanged logs between brief waits; inspect new output, changed state or a specific blocker."
   ].join("\\n") + "\\n");
   process.exit(0);
 }

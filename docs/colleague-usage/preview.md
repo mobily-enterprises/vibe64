@@ -102,6 +102,9 @@ also applies after cancelling a suite. If restoration fails, ask the coding
 agent to recover that existing run before another check. **Test Preview**
 identifies the test environment while it is selected. Colleague can explain the
 sequence and offer coding-agent assistance through the existing chat controls.
+While a suite runs in the background, the coding agent waits on its existing
+execution and checks logs when output or state changes, rather than repeatedly
+reading unchanged logs between short waits.
 
 The coding agent can read `vibe64-helper playwright --help` before a project has
 browser tests or a matching test runtime. Help starts neither Preview nor a browser.

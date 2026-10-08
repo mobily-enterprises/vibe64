@@ -204,6 +204,7 @@ function usageText() {
     "Inside browser eval, navigate with await page.goto(new URL('/your-path', preview.url).href).",
     "The direct application endpoint in diagnostics bypasses Preview identity; do not use it for interactive browsing.",
     "Managed Playwright suites and live preview browser actions are sequential. Wait on the suite through cleanup and restoration before browser actions or Preview ensure/restart/target changes; confirm playwright status has no active run and preview status is ready. Read-only status and logs are safe during a suite.",
+    "For background commands, wait on the existing execution/session with about a 30-second window where supported; do not repeatedly reread empty or unchanged logs between brief waits.",
     "This is the canonical preview server for the configured primary application.",
     "Do not start a duplicate copy of that application on another port.",
     "A distinct secondary application explicitly requested by the user, such as a reference app, may run separately without replacing this preview."
