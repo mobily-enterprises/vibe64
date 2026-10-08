@@ -49,6 +49,17 @@ const ACTION_CANCEL_SESSION_PROMPT_HINTS = "vibe64.terminals.prompt-hints.cancel
 const ACTION_READ_CANONICAL_AGENT_GOAL = "vibe64.terminals.agent-goal.canonical.read";
 const ACTION_UPDATE_CANONICAL_AGENT_GOAL = "vibe64.terminals.agent-goal.canonical.update";
 
+const practiceOutputAccess = Object.freeze({
+  "vibe64.terminals.outputs.read": "observe",
+  "vibe64.terminals.output-result.read": "observe",
+  "vibe64.terminals.output-terminal.read": "observe",
+  [ACTION_START_OUTPUT_TARGET]: "write",
+  [ACTION_OPEN_OUTPUT_TARGET]: "write",
+  [ACTION_SELECT_PREVIEW_IDENTITY]: "write",
+  "vibe64.terminals.output-target.stop": "control",
+  "vibe64.terminals.output-terminal.close": "control"
+});
+
 function action({ assistant, channels, execute, id, idempotency = "optional", input, kind = "command" }) {
   return withVibe64ActionContext({
     id,
@@ -61,9 +72,17 @@ function action({ assistant, channels, execute, id, idempotency = "optional", in
     idempotency,
     audit: { actionName: id },
     observability: {},
-    execute
-  }, { learningAccess: id === ACTION_READ_CANONICAL_AGENT_GOAL ? "observe"
-    : id === ACTION_UPDATE_CANONICAL_AGENT_GOAL ? "write" : false });
+    execute: practiceOutputAccess[id] ? (input, context, deps) => {
+      const learning = context?.vibe64Action?.learning;
+      if (learning && learning.learningScope.noExercise !== false) {
+        throw Object.assign(new Error("This output requires the saved lesson’s actual prepared practice workspace."), {
+          code: "vibe64_learning_source_required", statusCode: 409
+        });
+      }
+      return execute(input, context, deps);
+    } : execute
+  }, { learningAccess: practiceOutputAccess[id] || (id === ACTION_READ_CANONICAL_AGENT_GOAL ? "observe"
+    : id === ACTION_UPDATE_CANONICAL_AGENT_GOAL ? "write" : false) });
 }
 
 function createTerminalActions({ terminals } = {}) {

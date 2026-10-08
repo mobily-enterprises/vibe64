@@ -1,4 +1,4 @@
-import { computed, inject, nextTick, onBeforeMount, onBeforeUnmount, ref, unref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeMount, onBeforeUnmount, ref, watch } from "vue";
 import {
   launchPreviewLocationStorageKey,
   launchPreviewToolbarStorageKey,
@@ -598,6 +598,9 @@ function launchPreviewAddressNavigationUrl({
 
 function useVibe64OutputControlsSurface(props) {
   const {
+    outputProjectSlug,
+    outputStorageScope,
+    practiceBindingCurrent,
     activeOutputTarget,
     previewTestNotice,
     expandTerminal,
@@ -636,6 +639,7 @@ function useVibe64OutputControlsSurface(props) {
     rememberParameters,
     run,
     startNewlyConfiguredWorkspaceSetup,
+    stopTerminal,
     terminal,
     terminalCanRestart,
     terminalCanRetry,
@@ -664,7 +668,8 @@ function useVibe64OutputControlsSurface(props) {
     sourceOperationsSuspended: () => props.sourceOperationsSuspended,
     windowDisplayed: () => props.windowDisplayed,
     busy: () => props.busy,
-    session: () => props.session
+    session: () => props.session,
+    learningBinding: () => props.learningBinding
   });
 
   const runMenuDisabled = computed(() => Boolean(
@@ -708,7 +713,9 @@ function useVibe64OutputControlsSurface(props) {
   const previewVisitedUrl = ref("");
   const previewToolbarExpanded = ref(false);
   const previewToolbarPosition = ref("center");
-  const projectSlug = useVibe64ProjectSlug();
+  const workingProjectSlug = useVibe64ProjectSlug();
+  const projectSlug = outputProjectSlug || workingProjectSlug;
+  const storageScope = outputStorageScope || projectSlug;
   const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
   const embeddedTerminalVisible = computed(() => Boolean(
     props.embeddedPreview &&
@@ -771,10 +778,10 @@ function useVibe64OutputControlsSurface(props) {
     )
   ));
   const previewToolbarStorageKey = computed(() => props.embeddedPreview && props.session
-    ? launchPreviewToolbarStorageKey(props.session, projectSlug.value)
+    ? launchPreviewToolbarStorageKey(props.session, storageScope.value)
     : "");
   const previewLocationStorageKey = computed(() => props.embeddedPreview && props.session
-    ? launchPreviewLocationStorageKey(props.session, projectSlug.value)
+    ? launchPreviewLocationStorageKey(props.session, storageScope.value)
     : "");
   const previewContextTarget = computed(() => (
     embeddedAutoStartTarget.value || activeOutputTarget.value || embeddedStartTarget.value || null
@@ -876,7 +883,7 @@ function useVibe64OutputControlsSurface(props) {
   const previewBackAvailable = computed(() => previewHistory.value.length > 1);
   const previewPaneDisplayed = computed(() => props.previewDisplayed !== false);
   const previewReadyForIframe = computed(() => Boolean(
-    ["ready", "stale"].includes(previewState.value) &&
+    (!practiceBindingCurrent || practiceBindingCurrent.value) && ["ready", "stale"].includes(previewState.value) &&
     previewBaseUrl.value
   ));
   const previewIdentityAvailable = computed(() => Boolean(
@@ -1231,7 +1238,7 @@ function useVibe64OutputControlsSurface(props) {
   }
 
   function handleOrientationAvailable(event) {
-    if (!orientationFields(event.data, ["type", "protocolVersion", "instanceId"]) ||
+    if (props.learningBinding || !orientationFields(event.data, ["type", "protocolVersion", "instanceId"]) ||
         event.data.protocolVersion !== 1 || !orientationUuid(event.data.instanceId) || event.ports?.length ||
         !props.embeddedPreview || !previewFrameRequestId.value || !previewUrl.value ||
         !projectSlug.value || !props.session?.sessionId || !terminalSessionId.value) return;
@@ -2291,6 +2298,7 @@ function useVibe64OutputControlsSurface(props) {
     retryTerminal,
     runMenuDisabled,
     showLaunchLog,
+    stopTerminal,
     setTerminalExpanded,
     terminal,
     terminalCanRestart,
@@ -2301,6 +2309,7 @@ function useVibe64OutputControlsSurface(props) {
     terminalError,
     terminalIndicatorLabel,
     terminalIndicatorState,
+    terminalIsRunning,
     terminalStatus,
     terminalSubtitle,
     terminalTitle,

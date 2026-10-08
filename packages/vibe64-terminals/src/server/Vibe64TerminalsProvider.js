@@ -93,6 +93,10 @@ function createVibe64TerminalsFeature({
         terminals,
         uploads
       });
+      registerRoutes(http, {
+        fastify, actions: actionCatalogue, learningScoped: true,
+        routeSurface: "app", terminals
+      });
       return { terminals };
     },
     actions: ({ terminals }) => createTerminalActions({ terminals }),

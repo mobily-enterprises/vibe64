@@ -120,7 +120,8 @@ const ActualAutopilotPreview = Vue.defineComponent({
   props: { model: Object, requestTemporaryAi: Function },
   setup({ model, requestTemporaryAi }) {
     return {
-      props: Vue.computed(() => ({ ...model, sourceWorkspaceAvailable: model.appAvailable,
+      props: Vue.computed(() => ({ ...model, sourceWorkspaceAvailable: model.sourceWorkspaceAvailable ?? model.appAvailable,
+        outputWorkspaceAvailable: model.appAvailable,
         learningAttemptId: model.attemptId, sessionSelectionArchived: model.archived,
         previewToolbarTeleportTarget: "#actual-preview-toolbar" })),
       projectSlug: Vue.computed(() => model.projectSlug),
@@ -165,10 +166,20 @@ function nodeText(node) {
 
 // Real Onboarding setup/template, QueryClient, command, feedback and realtime;
 // only Vuetify presentation and the ready OutputControls slot are stand-ins.
-function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceLearning = false } = {}) {
+function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceLearning = false, practiceApp = false } = {}) {
   mocks.live = live;
   if (withPresentation || withAutopilotPreview) mocks.visuals = [];
   const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, lessonsAvailable, appAvailable, attemptId, sessionId: "session-a", projectSlug: "project-a", presentation: null });
+  if (practiceApp) {
+    props.sourceWorkspaceAvailable = false;
+    props.sessionId = "saved-practice-initial";
+    props.projectSlug = "exact-practice";
+    props.conversationRuntime = { identity: {
+      actorKey: "learning-member-42", viewerActorKey: "member-42", learnerId: "42", projectSlug: "",
+      learningAttemptId: attemptId, sessionId: props.sessionId, noExercise: false,
+      sourceProjectSlug: props.projectSlug, sessionsApiPath: `/api/learning/${attemptId}/vibe64/sessions`
+    } };
+  }
   const reads = [];
   const visualReads = [];
   const learningMainReads = [];
@@ -191,6 +202,12 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   const colleaguePreview = Vue.shallowRef(null);
   const transport = {
     request(url, options) {
+      if (practiceApp && url === `${props.conversationRuntime.identity.sessionsApiPath}/${props.sessionId}/onboarding`) {
+        expect(options.method).toBe("GET");
+        const response = Promise.withResolvers(); reads.push({ url, options, ...response });
+        if (closed) response.resolve(opening());
+        return response.promise;
+      }
       if (withLearningMain && url === `/api/learning/${props.attemptId}/vibe64/sessions/${props.sessionId}`) {
         expect(options.method).toBe("GET");
         learningMainReads.push({ url, options });
@@ -306,7 +323,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   app.component("TrainingPreviewPresentation", PreviewPresentation);
   app.component("Vibe64ProjectOnboarding", Onboarding);
   app.component("Vibe64OutputControls", Vue.defineComponent({
-    props: ["previewDisplayed", "windowDisplayed", "toolbarTeleportTarget"],
+    props: ["previewDisplayed", "windowDisplayed", "toolbarTeleportTarget", "learningBinding"],
     setup(controls) {
       outputs.controls.value = controls;
       outputs.mounted(); Vue.onBeforeUnmount(outputs.unmounted);
@@ -315,7 +332,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   }));
   app.use(VueQueryPlugin, { queryClient });
   app.provide(VIBE64_COLLEAGUE_PREVIEW_KEY, colleaguePreview);
-  if (withPresentation || withAutopilotPreview) app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
+  if (withPresentation || withAutopilotPreview || practiceApp) app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
   app.provide(Vue.ssrContextKey, { modules: new Set() });
   app.provide(routeLocationKey, Vue.reactive({ path: "/app/project/project-a", params: {}, query: {}, matched: [] }));
   app.provide("jskit.shell-web.runtime.web-error.client", feedback);
@@ -1542,4 +1559,45 @@ it("opens the same lesson player for a captured practice Main target and retires
     expect(bridge.presentation.state.phase).toBe("closed");
     await expect(bridge.presentation.command({ ...visualRequest, commandId: "retired", name: "advance", parameters: { label: "No" } })).rejects.toThrow(/selected|identity/u);
   } finally { fixture.close(); }
+});
+
+it("actual practice App keeps Learning admission and Main presentation while showing only original output controls", async () => {
+  const attemptId = "12345678-1234-4234-8234-123456789abc";
+  const fixture = mountOnboarding({ practiceApp: true, withAutopilotPreview: true, lessonsAvailable: true,
+    appAvailable: true, attemptId, projectPane: "dashboard" });
+  try {
+    fixture.button("App").props.onClick(); await Vue.nextTick();
+    await vi.waitFor(() => expect(fixture.reads).toHaveLength(1));
+    expect(fixture.reads[0].url).toBe(`/api/learning/${attemptId}/vibe64/sessions/saved-practice-initial/onboarding`);
+    expect(fixture.reads[0].options.query || {}).toEqual({});
+    fixture.reads[0].resolve(opening("ready", fixture.props.sessionId));
+    await vi.waitFor(() => expect(fixture.outputs.mounted).toHaveBeenCalledOnce());
+    expect(fixture.outputs.controls.value.learningBinding).toBe(fixture.props.conversationRuntime.identity);
+    expect(fixture.colleaguePreview.value.learningAttemptId).toBe(attemptId);
+    expect(fixture.colleaguePreview.value.projectSlug).toBe("exact-practice");
+    expect(fixture.props.conversationRuntime.identity.projectSlug).toBe("");
+    fixture.props.projectSlug = "unrelated-working"; await Vue.nextTick();
+    expect(fixture.reads).toHaveLength(1);
+    expect(fixture.requestTemporaryAi).not.toHaveBeenCalled();
+    const presentation = fixture.colleaguePreview.value.presentation;
+    fixture.viewer.value = { actorKey: "different-member" }; await Vue.nextTick();
+    expect(Vue.toValue(mocks.query.enabled)).toBe(false);
+    await expect(presentation.open({ attemptId, visualId: "alternate" })).rejects.toThrow();
+    expect(fixture.visualReads).toHaveLength(0);
+    expect(fixture.reads).toHaveLength(1);
+  } finally { fixture.close(); }
+});
+
+it("practice onboarding does not mount template, Temporary AI or Env mutation controls", async () => {
+  mocks.live = false;
+  mocks.resource = { data: Vue.ref(null), isFetching: Vue.ref(false), loadError: Vue.ref(""), reload: vi.fn() };
+  const binding = { noExercise: false, sourceProjectSlug: "exact-practice", learnerId: "42",
+    viewerActorKey: "member-42", learningAttemptId: "12345678-1234-4234-8234-123456789abc",
+    sessionId: "session-a", sessionsApiPath: "/api/learning/12345678-1234-4234-8234-123456789abc/vibe64/sessions" };
+  const html = await render("new", { learningBinding: binding }, { missingKeys: ["API_KEY"], warning: "" });
+  expect(html).toContain("Practice setup needs attention");
+  expect(html).not.toContain("Use this starter");
+  expect(html).not.toContain("Start through conversation");
+  expect(html).not.toContain("Open Env");
+  expect(html).not.toContain("Open Temporary AI");
 });

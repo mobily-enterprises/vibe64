@@ -111,3 +111,36 @@ test("output tools share HTTP ownership and bounded state without grants, paths 
       assert.equal(toolSet.tools.some(tool => tool.actionId === `vibe64.terminals.${id}`), false, id);
   }));
 });
+
+test("output definitions admit only the explicitly bound physical Learning scope", async () => {
+  const calls = [];
+  const terminals = { outputTargetStatus: (...args) => { calls.push(args); return { ok: true }; } };
+  const definitions = createTerminalActions({ terminals });
+  const attemptId = "12345678-1234-4234-8234-123456789abc";
+  const expected = new Map([
+    ["outputs.read", "observe"], ["output-terminal.read", "observe"], ["output-result.read", "observe"],
+    ["output-target.start", "write"], ["output-target.open", "write"], ["preview-identity.select", "write"],
+    ["output-target.stop", "control"], ["output-terminal.close", "control"]
+  ]);
+  for (const [suffix, access] of expected) {
+    const action = definitions.find(item => item.id === `vibe64.terminals.${suffix}`);
+    assert.ok(action, suffix);
+    assert.equal(action.extensions.vibe64.learningAccess, access);
+    for (const noExercise of [true, undefined]) {
+      await assert.rejects(action.execute({ sessionId: "initial-session", learningAttemptId: attemptId }, {
+        vibe64Action: { learning: { learningScope: { noExercise, attemptId } } }
+      }), { code: "vibe64_learning_source_required", statusCode: 409 });
+    }
+  }
+  let admissions = 0;
+  const read = definitions.find(item => item.id === "vibe64.terminals.outputs.read");
+  assert.deepEqual(await read.execute({ sessionId: "initial-session", learningAttemptId: attemptId }, {
+    vibe64Action: { learning: { learningScope: { noExercise: false, attemptId },
+      runLearningOperation(operation) { admissions += 1; return operation(); } } }
+  }), { ok: true });
+  assert.equal(admissions, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], "initial-session");
+  for (const suffix of ["agent-terminal.start", "global-terminal.start", "temporary-conversation.create"])
+    assert.equal(Boolean(definitions.find(item => item.id === `vibe64.terminals.${suffix}`)?.extensions.vibe64.learningAccess), false);
+});

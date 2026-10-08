@@ -372,3 +372,66 @@ test("terminal websocket preserves rapid input order across delayed writes and a
   assert.deepEqual(socket.sent.at(-1), { error: "Input rejected.", type: "error" });
   socket.handlers.close();
 });
+
+test("terminal websocket close during original project authority read never attaches an observer", async () => {
+  await withProjectRequestContext(async ({ projectContext, slug }) => {
+    let enter;
+    let release;
+    const entered = new Promise(resolve => { enter = resolve; });
+    const blocked = new Promise(resolve => { release = resolve; });
+    const delayedProject = Object.create(projectContext);
+    Object.defineProperty(delayedProject, "readWorkspaceProject", { value: async (...args) => {
+      enter(); await blocked;
+      return projectContext.readWorkspaceProject(...args);
+    } });
+    let handler;
+    let subscriptions = 0;
+    registerTerminalWebSocketRoute({ get(_path, _options, callback) { handler = callback; } }, {
+      projectContext: delayedProject, routePath: "/terminal/ws", service: {},
+      subscribe() { subscriptions += 1; return { unsubscribe() {} }; }, write() {}
+    });
+    const socket = testSocket();
+    handler(socket, { protocol: "https", headers: { host: "example.com", origin: "https://example.com" },
+      ip: "10.0.0.8", params: { slug, sessionId: "session-1", terminalSessionId: "terminal-1" },
+      vibe64User: { email: "owner@example.com" } });
+    await entered;
+    socket.handlers.close(); release();
+    await delay(10);
+    assert.equal(subscriptions, 0);
+    assert.deepEqual(socket.sent, []);
+    assert.equal(socket.handlers.message, undefined);
+  });
+});
+
+test("terminal websocket releases a late observer exactly once without snapshot or queued input", async () => {
+  let handler;
+  let enter;
+  let release;
+  let subscriber;
+  let isClosed;
+  const entered = new Promise(resolve => { enter = resolve; });
+  const blocked = new Promise(resolve => { release = resolve; });
+  let releases = 0;
+  let writes = 0;
+  registerTerminalWebSocketRoute({ get(_path, _options, callback) { handler = callback; } }, {
+    projectScoped: false, routePath: "/terminal/ws", service: {},
+    async subscribe(_service, context) {
+      subscriber = context.subscriber; isClosed = context.isClosed; enter(); await blocked;
+      return { terminalSessionId: "terminal-1", unsubscribe() { releases += 1; } };
+    }, write() { writes += 1; }
+  });
+  const socket = testSocket();
+  handler(socket, { protocol: "https", headers: { host: "example.com", origin: "https://example.com" },
+    ip: "10.0.0.8", params: { sessionId: "session-1", terminalSessionId: "terminal-1" },
+    vibe64User: { email: "owner@example.com" } });
+  await entered;
+  assert.equal(isClosed(), false);
+  socket.handlers.close(); socket.handlers.error();
+  assert.equal(isClosed(), true);
+  await socket.handlers.message(Buffer.from(JSON.stringify({ type: "input", data: "late" })));
+  subscriber({ type: "terminal.output", line: "late" }); release();
+  await delay(10);
+  assert.equal(releases, 1);
+  assert.equal(writes, 0);
+  assert.deepEqual(socket.sent, []);
+});

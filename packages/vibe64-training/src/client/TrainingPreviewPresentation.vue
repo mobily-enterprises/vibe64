@@ -20,7 +20,7 @@ const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
 const actorKey = computed(() => unref(viewer)?.actorKey || "");
 const learningAvailable = computed(() => {
   const binding = props.learningBinding;
-  return !props.appAvailable && props.lessonsAvailable && binding &&
+  return (!props.appAvailable || binding?.noExercise === false) && props.lessonsAvailable && binding &&
     (binding.noExercise === false
       ? /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u.test(binding.sourceProjectSlug || "") && props.projectSlug === binding.sourceProjectSlug
       : !props.projectSlug) &&
@@ -125,7 +125,7 @@ async function ready(expected) {
 }
 
 async function open({ attemptId, visualId } = {}) {
-  if (!actorKey.value || !props.active || (!learningAvailable.value && (!props.appAvailable || !props.projectSlug)) || !props.sessionId ||
+  if (!actorKey.value || !props.active || (props.learningBinding && !learningAvailable.value) || (!learningAvailable.value && (!props.appAvailable || !props.projectSlug)) || !props.sessionId ||
       (props.attemptId && props.attemptId !== attemptId) ||
       !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(attemptId || "") ||
       !/^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u.test(visualId || "")) {

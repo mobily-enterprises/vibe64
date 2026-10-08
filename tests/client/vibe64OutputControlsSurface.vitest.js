@@ -893,3 +893,14 @@ it("reload, service and session replacement fence old real ports while native di
   expect(f.tickets.at(-1).current()).toBe(false);
   expect(f.responses).toHaveLength(0);
 });
+
+it("a Learning App cannot feed the retired Colleague orientation producer", async () => {
+  const fixture = mountOrientationSurface();
+  try {
+    fixture.props.learningBinding = { noExercise: false, sourceProjectSlug: "practice" };
+    fixture.load(); fixture.announce(); await nextTick();
+    expect(fixture.init()).toBeUndefined();
+    expect(fixture.tickets).toEqual([]);
+    expect(fixture.responses).toEqual([]);
+  } finally { fixture.dispose(); }
+});

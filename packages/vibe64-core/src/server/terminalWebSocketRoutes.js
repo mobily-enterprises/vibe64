@@ -59,6 +59,7 @@ function registerTerminalWebSocketRoute(
       };
 
       const closeWithError = (closeCode, error, errorCode = "") => {
+        if (closed) return;
         sendSocketJson(socket, {
           ...(errorCode ? { code: errorCode } : {}),
           error,
@@ -72,6 +73,9 @@ function registerTerminalWebSocketRoute(
         return;
       }
 
+      // Close can precede any awaited authority or observer attachment.
+      socket.on("close", closeSubscription);
+      socket.on("error", closeSubscription);
       void (async () => {
         let projectContextValue;
         try {
@@ -86,6 +90,7 @@ function registerTerminalWebSocketRoute(
           return;
         }
 
+        if (closed) return;
         const withProjectContext = (operation) => {
           return projectScoped
             ? runWithProjectRequestContext(projectContextValue, operation)
@@ -94,6 +99,7 @@ function registerTerminalWebSocketRoute(
 
         const routeParams = request.params || {};
         const sessionId = String(routeParams.sessionId || "");
+        const learningAttemptId = String(routeParams.learningAttemptId || "");
         const terminalSessionId = String(routeParams.terminalSessionId || "");
         const toolId = String(routeParams.toolId || "");
         const jobId = String(routeParams.jobId || "");
@@ -102,6 +108,7 @@ function registerTerminalWebSocketRoute(
         let messageQueue = Promise.resolve();
         socket.on("message", (rawMessage) => {
           messageQueue = messageQueue.then(async () => {
+            if (closed) return;
             try {
               await withProjectContext(async () => {
                 const message = JSON.parse(rawMessage.toString());
@@ -129,6 +136,8 @@ function registerTerminalWebSocketRoute(
                     request,
                     rows: message.rows,
                     sessionId,
+                    learningAttemptId,
+                    isClosed: () => closed,
                     terminalSessionId,
                     toolId
                   });
@@ -150,19 +159,21 @@ function registerTerminalWebSocketRoute(
           return messageQueue;
         });
 
-        socket.on("close", closeSubscription);
-        socket.on("error", closeSubscription);
-
+        if (closed) return;
         void withProjectContext(() => Promise.resolve(subscribe(service, {
           jobId,
+          learningAttemptId,
           request,
           sessionId,
+          isClosed: () => closed,
           subscriber: (message) => {
+            if (closed) return;
             sendSocketJson(socket, message);
           },
           terminalSessionId,
           toolId
         }))).then((result) => {
+          if (closed) { result?.unsubscribe?.(); return; }
           if (result?.ok === false) {
             closeWithError(
               1008,

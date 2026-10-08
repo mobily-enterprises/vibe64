@@ -557,7 +557,7 @@
         <div class="vibe64-launch-controls__preview-diagnostic-actions">
           <component
             :is="resourceRecoveryControl"
-            v-if="resourceRecoveryControl && resourceAdmissionId"
+            v-if="!learningBinding && resourceRecoveryControl && resourceAdmissionId"
             :key="`${session?.sessionId}:${resourceAdmissionId}`"
             :admission-id="resourceAdmissionId"
             :session-id="session?.sessionId || ''"
@@ -625,6 +625,7 @@
         :open="terminalExpanded"
         presentation="inline"
         show-copy
+        :show-interrupt="!learningBinding"
         :stage="terminalSubtitle"
         :status="terminalStatus"
         :subtitle="terminalSubtitle"
@@ -635,6 +636,7 @@
         @update:open="setTerminalExpanded"
       >
         <template #actions-before>
+          <v-btn v-if="learningBinding && terminalIsRunning" :disabled="operationBusy" size="small" variant="text" @click="stopTerminal">Stop</v-btn>
           <v-btn
             v-if="previewTerminalRecoveryVisible"
             :disabled="operationBusy"
@@ -658,6 +660,7 @@
       :open="terminalExpanded"
       presentation="floating"
       show-copy
+      :show-interrupt="!learningBinding"
       :stage="terminalSubtitle"
       :status="terminalStatus"
       :subtitle="terminalSubtitle"
@@ -665,7 +668,11 @@
       :terminal="terminal"
       :title="terminalTitle"
       @update:open="setTerminalExpanded"
-    />
+    >
+      <template #actions-before>
+        <v-btn v-if="learningBinding && terminalIsRunning" :disabled="operationBusy" size="small" variant="text" @click="stopTerminal">Stop</v-btn>
+      </template>
+    </Vibe64LongRunningTerminal>
 
     <v-dialog v-model="outputOptionsVisible" aria-label="Preview options" max-width="520" :persistent="operationBusy" scrollable>
       <v-card>
@@ -881,6 +888,7 @@ const props = defineProps({
     type: Object,
     default: null
   },
+  learningBinding: { default: null, type: Object },
   sourceOperationsSuspended: {
     default: false,
     type: Boolean
@@ -1016,6 +1024,7 @@ const {
   retryTerminal,
   runMenuDisabled,
   showLaunchLog,
+  stopTerminal,
   setTerminalExpanded,
   terminal,
   terminalCanRestart,
@@ -1025,6 +1034,7 @@ const {
   terminalError,
   terminalIndicatorLabel,
   terminalIndicatorState,
+  terminalIsRunning,
   terminalStatus,
   terminalSubtitle,
   terminalTitle,

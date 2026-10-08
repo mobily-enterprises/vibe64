@@ -20,6 +20,7 @@
           {{ resource.isFetching.value ? 'Checking setup…' : 'Recheck setup' }}
         </v-btn>
         <Vibe64TemporaryAiFixAction
+          v-if="!learning"
           :disabled="askDisabled"
           :pending="asking"
           title="Open Temporary AI to resolve project setup"
@@ -39,7 +40,8 @@
       <h2 class="text-title-medium">Set up your project's environment</h2>
       <p v-if="environmentSetup.warning">{{ environmentSetup.warning }}</p>
       <template v-if="environmentSetup.missingKeys.length">
-        <p>This project requires environment values. Add them in Env, then recheck setup.</p>
+        <p v-if="learning">Ask the installation owner to supply these practice environment values, then recheck setup.</p>
+        <p v-else>This project requires environment values. Add them in Env, then recheck setup.</p>
         <details>
           <summary>Required configuration</summary>
           <ul>
@@ -48,7 +50,7 @@
         </details>
       </template>
       <div class="project-preview__warning-actions">
-        <v-btn :to="projectAppPath(projectSlug, '/dashboard/env')" size="small" variant="flat" color="primary">Open Env</v-btn>
+        <v-btn v-if="!learning" :to="projectAppPath(projectSlug, '/dashboard/env')" size="small" variant="flat" color="primary">Open Env</v-btn>
         <v-btn :disabled="!enabled || resource.isFetching.value" size="small" variant="text" @click="resource.reload()">
           {{ resource.isFetching.value ? 'Checking setup…' : 'Recheck setup' }}
         </v-btn>
@@ -59,6 +61,10 @@
     </div>
     <section v-else class="project-onboarding" aria-label="Project setup" :aria-busy="pending">
       <v-skeleton-loader v-if="!onboarding" type="heading, paragraph, card" />
+      <template v-else-if="learning">
+        <h2>Practice setup needs attention</h2>
+        <p>This lesson needs its prepared practice app. Recheck setup; if it still cannot run, ask the installation owner to restore the lesson workspace.</p>
+      </template>
       <template v-else-if="state === 'new'">
         <p class="project-onboarding__eyebrow">Your starting point</p>
         <h2>What would you like to build with?</h2>
@@ -107,7 +113,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
@@ -117,10 +123,12 @@ import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { useTrainingPreviewRegistration } from "@local/vibe64-training/client/preview-registration";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { vibe64ResourceResponseError } from "@/lib/vibe64ApiResponses.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
 
 const props = defineProps({
   active: Boolean,
+  learningBinding: { type: Object, default: null },
   presentationActive: Boolean,
   presentation: { type: Object, default: null },
   archived: Boolean,
@@ -129,18 +137,33 @@ const props = defineProps({
   requestTemporaryAi: { type: Function, required: true },
   sessionId: { type: String, required: true }
 });
-const projectSlug = useVibe64ProjectSlug();
+const workingProjectSlug = useVibe64ProjectSlug();
+const capturedLearning = props.learningBinding ? Object.freeze(Object.fromEntries([
+  "actorKey", "viewerActorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath", "noExercise", "sourceProjectSlug", "projectSlug"
+].map(key => [key, props.learningBinding[key]]))) : null;
+const learning = computed(() => Boolean(capturedLearning || props.learningBinding));
+const projectSlug = computed(() => capturedLearning ? capturedLearning.sourceProjectSlug : workingProjectSlug.value);
 const purpose = ref("");
 const applying = ref("");
 const asking = ref(false);
 let disposed = false;
 onBeforeUnmount(() => { disposed = true; });
-const enabled = computed(() => props.active && !props.archived && Boolean(props.sessionId));
+const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, null);
+const learningBindingCurrent = computed(() => !learning.value || (capturedLearning && props.learningBinding &&
+    Object.keys(capturedLearning).every(key => capturedLearning[key] === props.learningBinding[key]) &&
+    capturedLearning.noExercise === false && !capturedLearning.projectSlug && capturedLearning.learnerId &&
+    capturedLearning.viewerActorKey === (viewer?.value || viewer)?.actorKey &&
+    capturedLearning.sessionId === props.sessionId &&
+    capturedLearning.sessionsApiPath === `/api/learning/${capturedLearning.learningAttemptId}/vibe64/sessions`));
+const enabled = computed(() => props.active && !props.archived && Boolean(props.sessionId) && learningBindingCurrent.value);
 const resource = useEndpointResource({
   enabled,
-  path: computed(() => resolveStudioRequestUrl("/api/vibe64/onboarding")),
-  readQuery: computed(() => ({ sessionId: props.sessionId })),
-  queryKey: computed(() => ["vibe64", "project-onboarding", projectSlug.value, props.sessionId]),
+  path: computed(() => learning.value
+    ? `${capturedLearning?.sessionsApiPath || ""}/${encodeURIComponent(capturedLearning?.sessionId || "")}/onboarding`
+    : resolveStudioRequestUrl("/api/vibe64/onboarding")),
+  readQuery: computed(() => learning.value ? {} : ({ sessionId: props.sessionId })),
+  queryKey: computed(() => ["vibe64", "project-onboarding", learning.value
+    ? [capturedLearning?.learnerId, capturedLearning?.learningAttemptId] : projectSlug.value, capturedLearning ? capturedLearning.sessionId : props.sessionId]),
   queryOptions: { refetchOnMount: "always", refetchOnWindowFocus: true },
   realtime: {
     events: ["vibe64.project.changed", "vibe64.session.changed"],
@@ -174,6 +197,11 @@ const showPreview = computed(() => {
   return onboarding.value !== null && state.value !== "new" && state.value !== "adoption";
 });
 const displayedPreview = {
+  ...(capturedLearning ? {
+    get learningAttemptId() { return capturedLearning.learningAttemptId; },
+    get learnerId() { return capturedLearning.learnerId; },
+    get noExercise() { return capturedLearning.noExercise; }
+  } : {}),
   get presentation() { return props.presentation; },
   get projectSlug() { return projectSlug.value; },
   get sessionId() { return props.sessionId; },
@@ -186,10 +214,10 @@ const displayedPreview = {
     return "checking-project-setup";
   }
 };
-useTrainingPreviewRegistration(displayedPreview, () => props.active || props.presentationActive);
+useTrainingPreviewRegistration(displayedPreview, () => (props.active || props.presentationActive) && learningBindingCurrent.value);
 const pending = computed(() => Boolean(applying.value || asking.value));
-const starterDisabled = computed(() => pending.value || props.busy || !enabled.value);
-const askDisabled = computed(() => pending.value || !enabled.value || !props.canAsk);
+const starterDisabled = computed(() => learning.value || pending.value || props.busy || !enabled.value);
+const askDisabled = computed(() => learning.value || pending.value || !enabled.value || !props.canAsk);
 const groups = computed(() => {
   const grouped = new Map();
   for (const template of onboarding.value?.templates || []) {

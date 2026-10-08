@@ -36,9 +36,9 @@ function vibe64GlobalCodexTerminalWebSocketUrl(_scopeId, terminalSessionId) {
   return resolveWebSocketUrl(`${vibe64GlobalCodexTerminalPath(VIBE64_ENDPOINT, terminalSessionId)}/ws`);
 }
 
-function vibe64OutputTerminalWebSocketUrl(sessionId, terminalSessionId) {
+function vibe64OutputTerminalWebSocketUrl(sessionId, terminalSessionId, sessionsEndpoint = VIBE64_SESSIONS_ENDPOINT) {
   return resolveWebSocketUrl(
-    `${vibe64OutputRunPath(VIBE64_SESSIONS_ENDPOINT, sessionId, terminalSessionId)}/ws`
+    `${vibe64OutputRunPath(sessionsEndpoint, sessionId, terminalSessionId)}/ws`
   );
 }
 

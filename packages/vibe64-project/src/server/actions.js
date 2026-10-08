@@ -167,8 +167,15 @@ function action({ assistant, events = [], execute, id, input, kind, ownerRequire
     },
     observability: {},
     events,
-    execute
-  }, { ownerRequired });
+    execute: id === ACTION_READ_ONBOARDING ? (input, context, deps) => {
+      if (context?.vibe64Action?.learning && context.vibe64Action.learning.learningScope.noExercise !== false) {
+        throw Object.assign(new Error("Project setup requires the saved lesson’s prepared practice workspace."), {
+          code: "vibe64_learning_source_required", statusCode: 409
+        });
+      }
+      return execute(input, context, deps);
+    } : execute
+  }, { ownerRequired, ...(id === ACTION_READ_ONBOARDING ? { learningAccess: "observe" } : {}) });
 }
 
 function createProjectActions({ project } = {}) {

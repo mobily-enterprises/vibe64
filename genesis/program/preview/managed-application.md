@@ -394,3 +394,48 @@ can clean a predecessor server’s service without its original source directory
 Standalone services use their executor-owned process handles. Orderly editor
 shutdown drains owned services. Service SIGTERM handlers own external cleanup;
 commands must not detach untracked workers.
+
+## Prepared Learning App adapter
+
+The original Terminals provider additionally registers only output read,
+declared Run/open, Stop, terminal read/close, immutable download and preview
+identity routes below the saved Learning-attempt namespace. Its allowlist derives
+from explicit existing-action Learning metadata. Original handlers, target
+validation, source/Git/Env/Workspace setup, process sharing and launch proxy remain
+the owners. Each action reenters fresh original false-scope admission; true
+source-less attempts are refused before the service body. The output namespace
+remains the original `learning:[learner,attempt]` scope, never a display slug.
+
+The same Core WebSocket loop registers only the output stream in that namespace.
+Each attachment and resize obtains the existing internal Session context grant
+and fresh practice operation; raw input is refused. Early close/error registration
+and a closed check around awaited attachment release a late observer exactly
+once without a snapshot or cancelling admitted app work. Original Working raw
+input FIFO and origin/loopback/hosted authentication remain intact.
+
+The same keyed Host exposes separate output availability for the captured false
+scope while source-tool availability remains false. Existing App controls capture
+actual own learner/attempt/initial-session/API identity, use the actual source slug
+only for display, and partition browser caches/preferences by learner/attempt.
+A changed binding or viewer refuses new reads/effects rather than borrowing the
+visible Working project. The original terminal read-only option blocks typing;
+its visible Learning Stop calls the existing Stop HTTP action. Working Ctrl-C
+continues over the original terminal driver. Manual PTY, Env/Save/renewal and
+resource-recovery affordances requiring ordinary project admission remain absent.
+
+The existing onboarding read alone gains a false-scope URL adapter; template,
+Temporary AI and Env mutation controls remain absent. Main diagram registration
+continues alongside App using the same captured Learning binding and player.
+The former Colleague orientation producer is disabled for Learning App: actual
+Main practical gestures/observations still require their coordinated original
+producer integration, not a pass inferred from Run or an iframe. This source
+adapter does not establish installed, real-process or learner acceptance.
+
+Relevant original proofs are `terminalWebSocketRoutes.unit.test.js`,
+`vibe64TerminalControlRoutes.unit.test.js`, `vibe64OutputActionTools.unit.test.js`,
+`vibe64OnboardingActionTools.unit.test.js`, `vibe64OutputControls.vitest.js`,
+`vibe64OutputControlsSurface.vitest.js`, `vibe64ProjectOnboarding.vitest.js` and
+`useVibe64SessionRuntimeHost.vitest.js`; additive cases require root-coordinated
+serial execution. No test result is asserted by this draft explanation.
+
+The existing Onboarding Preview registration carries its captured Learning attempt, learner and no-exercise fields when App is available. Its original screen status and presentation handle stay on that registration; the same captured viewer/session/scope predicate gates registration independently of the App-only setup read. A hidden App does not disable a valid lesson presentation, and a stale identity cannot re-register a Working Preview handle.

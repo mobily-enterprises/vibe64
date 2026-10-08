@@ -518,3 +518,32 @@ it("captures a confirmed practice Learning source slug separately without enabli
     expect(mountedHostMocks.request).not.toHaveBeenCalled();
   } finally { app.unmount(); }
 });
+
+it("only captured source-bearing Learning exposes App while all source tools remain unavailable", async () => {
+  const trueFixture = mountedHostFixture({ learning: true });
+  try { expect(trueFixture.host.outputWorkspaceAvailable.value).toBe(false); }
+  finally { trueFixture.app.unmount(); }
+  const f = mountedHostFixture(); f.app.unmount();
+  const session = { sessionId: "saved-initial", purpose: "learning", learningAttemptId: f.attemptId,
+    noExercise: false, projectSlug: "practice-confirmed", agentSession: { turn: {} } };
+  f.state.sessions = [session]; f.props.sessionId = session.sessionId;
+  mountedHostMocks.conversation.mockImplementation(() => shallowRef({ mounted: {
+    session: ref(session), detailState: ref({}), agentConnectionError: ref(""), agentConnectionStatus: ref("connected"), refresh: vi.fn(async () => {})
+  }, sendAgentMessage: f.send }));
+  let host;
+  const app = mountedHostRenderer.createApp({ setup() { host = useVibe64SessionRuntimeHost(f.hostProps, vi.fn()); return () => h("div"); } });
+  app.mount({});
+  try {
+    expect(host.outputWorkspaceAvailable.value).toBe(true);
+    expect(host.sourceWorkspaceAvailable.value).toBe(false);
+    expect(host.codexTerminalCanStart.value).toBe(false);
+    f.props.projectContext = { slug: "unrelated-working" }; f.props.sessionId = "working-later";
+    f.state.sessions = [{ ...session, projectSlug: "wrong-later-row" }]; await nextTick();
+    expect(host.outputWorkspaceAvailable.value).toBe(true);
+    expect(host.sourceWorkspaceAvailable.value).toBe(false);
+    expect(toValue(mountedHostMocks.conversation.mock.calls.at(-1)[0].sessionsApiPath))
+      .toBe(`/api/learning/${f.attemptId}/vibe64/sessions`);
+    await expect(host.saveSessionWork()).resolves.toBe(false);
+    await expect(host.retryWorkspaceSetup()).resolves.toBe(false);
+  } finally { app.unmount(); }
+});

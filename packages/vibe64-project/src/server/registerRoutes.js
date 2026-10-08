@@ -41,16 +41,34 @@ import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRout
 function registerRoutes(http, {
   projectContext = null,
   routeSurface = "",
-  routeRelativePath = ""
+  routeRelativePath = "",
+  learningScoped = false
 } = {}) {
-  const routes = createVibe64FeatureRoutes(http, {
+  const featureRoutes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 project routes only accept loopback Studio requests.",
     projectContext,
-    routeRelativePath,
+    routeRelativePath: routeRelativePath || (learningScoped ? "learning/:learningAttemptId/vibe64" : ""),
     routeSurface,
+    projectScoped: !learningScoped,
     tags: ["studio", "vibe64-project"]
   });
 
+  const routes = learningScoped ? {
+    ...featureRoutes,
+    actionRoute(method, suffix, options) {
+      if (options.actionId !== ACTION_READ_ONBOARDING || method !== "GET") return;
+      featureRoutes.actionRoute(method, "/sessions/:sessionId/onboarding", { ...options, query: undefined, buildInput(request) {
+        const learningAttemptId = request.params?.learningAttemptId;
+        if (!learningAttemptId) throw Object.assign(new Error("Use the exact saved lesson URL."), {
+          code: "vibe64_learning_attempt_required", statusCode: 400
+        });
+        const { vibe64User: _ignored, ...input } = options.buildInput(request);
+        void _ignored;
+        return { ...input, sessionId: request.params.sessionId, learningAttemptId };
+      } });
+    },
+    serviceRoute() {}
+  } : featureRoutes;
   routes.actionRoute("GET", "/repository/remote", {
     actionId: "vibe64.project.repository.remote.read",
     summary: "Read local Git remote configuration and last observed freshness."

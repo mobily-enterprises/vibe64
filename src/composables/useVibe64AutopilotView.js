@@ -103,6 +103,7 @@ const vibe64AutopilotViewProps = {
     type: Boolean
   },
   sourceWorkspaceAvailable: { default: true, type: Boolean },
+  outputWorkspaceAvailable: { default: null, type: Boolean },
   lessonsAvailable: Boolean,
   learningAttemptId: { default: "", type: String },
   agentConnectionError: {

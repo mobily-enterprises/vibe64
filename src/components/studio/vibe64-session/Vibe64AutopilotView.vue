@@ -762,7 +762,7 @@
       >
         <TrainingPreviewPresentation
           :lessons-available="props.lessonsAvailable"
-          :app-available="props.sourceWorkspaceAvailable"
+          :app-available="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"
           :attempt-id="props.learningAttemptId"
           :learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"
           :active="props.active && (props.lessonsAvailable || props.projectPane === 'preview') && !props.sessionSelectionArchived"
@@ -772,7 +772,8 @@
           <template #lessons><slot name="dashboard" :dashboard-context="dashboardContext" /></template>
           <template #default="{ appVisible, presentation }">
             <Vibe64ProjectOnboarding
-              v-if="props.sourceWorkspaceAvailable"
+              v-if="props.outputWorkspaceAvailable ?? props.sourceWorkspaceAvailable"
+              :learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"
               :active="props.active && (props.lessonsAvailable ? appVisible : props.projectPane === 'preview')"
               :presentation-active="props.active && props.lessonsAvailable && !props.sessionSelectionArchived"
               :archived="props.sessionSelectionArchived"
@@ -783,9 +784,10 @@
               :presentation="presentation"
             >
               <Vibe64OutputControls
-                :ask-codex-to-fix-preview-identity="assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null"
-                :attach-preview-file="attachPreviewFile"
-                :prepare-preview-file="attachPreviewFileProducer"
+                :learning-binding="props.sourceWorkspaceAvailable ? null : props.conversationRuntime?.identity"
+                :ask-codex-to-fix-preview-identity="props.sourceWorkspaceAvailable && assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null"
+                :attach-preview-file="props.sourceWorkspaceAvailable ? attachPreviewFile : null"
+                :prepare-preview-file="props.sourceWorkspaceAvailable ? attachPreviewFileProducer : null"
                 :auto-start-managed-preview="!props.sessionSelectionArchived"
                 button-label="Run"
                 button-size="small"
@@ -796,7 +798,7 @@
                 embedded-preview
                 :preview-displayed="(props.lessonsAvailable || props.projectPane === 'preview') && appVisible"
                 :session="props.session"
-                :source-operations-suspended="sourceOperationsSuspended"
+                :source-operations-suspended="props.sourceWorkspaceAvailable ? sourceOperationsSuspended : agentActive"
                 :toolbar-teleport-target="(props.lessonsAvailable || props.projectPane === 'preview') && appVisible ? props.previewToolbarTeleportTarget : ''"
                 :window-displayed="props.active"
                 @preview-attachment-state="updatePreviewAttachmentState"

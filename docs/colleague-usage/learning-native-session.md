@@ -100,9 +100,24 @@ diagram. A confirmed diagram state is retained separately from an assessment pas
 On a phone, use the existing conversation and Preview view controls to switch
 between the teacher and diagram.
 
-If Preview reports that the practice App controls are unavailable, retain the
-lesson and its saved workspace. This installation cannot yet run the practical
-App step through that Learning view. Ask the installation owner to enable its
-practice App support; do not substitute a Working conversation or claim the
-practical passed from an explanation or diagram. Colleague can explain the
-controls and help you recover; Main remains the lesson teacher.
+Choose **App** in Preview to use the prepared practice app. **Run** starts its
+declared output; **Restart preview** or **Restart** restarts that same output when
+shown. **Show run output** opens its log. Stop in that log stops the app without
+stopping Main or deleting the log; closing the log only hides it. The practice
+console is read-only. On a phone, closing its full-screen log returns to the
+underlying view.
+
+The App remains attached to this lesson's saved workspace when you select another
+Working project. **Lessons** returns to the picker and **Presentation** returns
+to the lesson diagram. A visible app or successful Run does not by itself confirm
+a practical or pass an assessment; follow Main's actual practical instructions.
+
+If setup, source, account access or resource admission refuses the run, retain the
+lesson and workspace and read the exact error. Use **Recheck setup** for a setup
+read failure; ask the installation owner to restore missing source, configuration
+or resources. This Learning view does not expose Env changes, starter replacement,
+Save, manual command terminals or Workspace setup retry. Do not substitute a
+Working conversation to bypass the refusal. Colleague can explain the controls
+and help you recover; Main remains the lesson teacher.
+
+The App setup view retains the same lesson presentation handle and saved lesson identity. Switching between App, Lessons and Presentation does not switch to a working project. A changed account or saved lesson target retires that view; open the current Learning session again.

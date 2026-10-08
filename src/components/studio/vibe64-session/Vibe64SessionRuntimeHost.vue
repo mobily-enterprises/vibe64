@@ -6,6 +6,7 @@
   >
     <Vibe64AutopilotView
       :source-workspace-available="sourceWorkspaceAvailable"
+      :output-workspace-available="outputWorkspaceAvailable"
       :lessons-available="props.lessonsAvailable"
       :learning-attempt-id="learningAttemptId"
       :active="autopilotModeActive"
@@ -185,6 +186,7 @@ const {
   saveSessionWork,
   sessionsApiPath,
   sourceWorkspaceAvailable,
+  outputWorkspaceAvailable,
   learningAttemptId,
   sessionRenewal,
   selectedAgentTerminalId,

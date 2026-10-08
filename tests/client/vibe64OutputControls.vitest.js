@@ -782,3 +782,101 @@ function fakeStorage() {
     })
   };
 }
+
+import { provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
+
+it("practice output controls use captured Learning reads and named Stop while Working Ctrl-C keeps raw FIFO input", async () => {
+  const Vue = await import("vue");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { VIBE64_ASSISTANT_VIEWER_KEY } = await import("../../src/lib/vibe64AssistantHost.js");
+  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
+  const { vibe64OutputTerminalWebSocketUrl } = await import("../../src/lib/vibe64SessionApi.js");
+  const attemptId = "12345678-1234-4234-8234-123456789abc";
+  const api = `/api/learning/${attemptId}/vibe64/sessions`;
+  const session = Vue.ref({ sessionId: "saved-initial", metadata: {
+    source_kind: "session_clone", source_path: "/controlled/practice/sessions/active/saved-initial/source", source_path_authority: "managed_session_source"
+  } });
+  const binding = Vue.ref({ actorKey: "learning-member-42", viewerActorKey: "member-42", learnerId: "42",
+    learningAttemptId: attemptId, sessionId: "saved-initial", noExercise: false,
+    sourceProjectSlug: "exact-practice", sessionsApiPath: api });
+  const viewer = Vue.ref({ actorKey: "member-42" });
+  const requests = [];
+  const sockets = [];
+  class ControlledSocket {
+    static OPEN = 1; static CLOSED = 3; static CLOSING = 2;
+    readyState = 1; handlers = new Map(); sent = [];
+    constructor(url) { this.url = url; sockets.push(this); queueMicrotask(() => this.handlers.get("open")?.()); }
+    addEventListener(name, callback) { this.handlers.set(name, callback); }
+    send(message) { this.sent.push(JSON.parse(message)); }
+    close() { this.readyState = 3; this.handlers.get("close")?.(); }
+  }
+  vi.stubGlobal("window", { location: new URL("http://127.0.0.1:5173/app/project/exact-practice"),
+    localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
+  vi.stubGlobal("WebSocket", ControlledSocket);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  configureHttpWebClient({ request(url, options) {
+    requests.push({ url, options });
+    return Promise.resolve(url.endsWith("/stop") ? { ok: true, id: "output-1", status: "exited", exitCode: 0 }
+      : { ok: true, outputTargets: [], preview: { state: "idle" } });
+  } });
+  let controls;
+  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
+    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp({ setup() {
+    controls = useVibe64OutputControls({ session, learningBinding: binding }); return () => Vue.h("div");
+  } });
+  provideConversationFixture(app, { on() {}, off() {} }, "member-42");
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
+  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  try {
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].url).toBe(`${api}/saved-initial/outputs`);
+    expect(controls.outputProjectSlug.value).toBe("exact-practice");
+    expect(controls.outputStorageScope.value).toBe(`learning:${JSON.stringify(["42", attemptId])}`);
+    expect(controls.practiceBindingCurrent.value).toBe(true);
+    expect(vibe64OutputTerminalWebSocketUrl("saved-initial", "output-1", api)).toContain(
+      `/api/learning/${attemptId}/vibe64/sessions/saved-initial/output-runs/output-1/terminal/ws`);
+    expect(vibe64OutputTerminalWebSocketUrl("working", "output-1")).toContain("/vibe64/sessions/working/output-runs/output-1/terminal/ws");
+    await expect(controls.startNewlyConfiguredWorkspaceSetup()).resolves.toBe(false);
+    await expect(controls.publishPreviewState({ route: "/" })).resolves.toBe(false);
+    controls.terminal.applyTerminalSession({ id: "output-1", status: "running" });
+    expect(controls.terminal.sendCtrlC).toBe(controls.stopTerminal);
+    await expect(controls.stopTerminal()).resolves.toBe(true);
+    const stops = requests.filter(request => request.options.method === "POST");
+    expect(stops).toHaveLength(1);
+    expect(stops[0].url).toBe(`${api}/saved-initial/output-runs/output-1/stop`);
+    expect(stops[0].options.body).toEqual({});
+    expect(sockets.flatMap(socket => socket.sent).filter(message => message.type === "input")).toEqual([]);
+    const confirmedRequestCount = requests.length;
+    viewer.value = { actorKey: "different-member" }; await Vue.nextTick();
+    expect(controls.practiceBindingCurrent.value).toBe(false);
+    await expect(controls.run({ id: "app", available: true })).resolves.toBe(false);
+    expect(requests).toHaveLength(confirmedRequestCount);
+    binding.value = { ...binding.value, sourceProjectSlug: "changed-row" };
+    viewer.value = { actorKey: "member-42" }; await Vue.nextTick();
+    expect(controls.practiceBindingCurrent.value).toBe(false);
+    expect(controls.outputProjectSlug.value).toBe("exact-practice");
+    await expect(controls.refresh()).resolves.toBeNull();
+    expect(requests).toHaveLength(confirmedRequestCount);
+    let working;
+    const workingApp = renderer.createApp({ setup() {
+      working = useVibe64OutputControls({ session: Vue.ref({ ...session.value, sessionId: "working-one", metadata: { ...session.value.metadata,
+        source_path: "/controlled/working/sessions/active/working-one/source" } }) });
+      return () => Vue.h("div");
+    } });
+    provideConversationFixture(workingApp, { on() {}, off() {} }, "local");
+    workingApp.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+    workingApp.use(VueQueryPlugin, { queryClient }); workingApp.mount({});
+    try {
+      await vi.waitFor(() => expect(working.loading.value).toBe(false));
+      await Vue.nextTick();
+      working.terminal.applyTerminalSession({ id: "working-output", status: "running" });
+      await expect(working.terminal.sendCtrlC()).resolves.toBe(true);
+      expect(sockets.flatMap(socket => socket.sent).filter(message => message.type === "input"))
+        .toEqual([{ type: "input", data: "\u0003" }]);
+      expect(requests.filter(request => request.options.method === "POST")).toHaveLength(1);
+    } finally { workingApp.unmount(); }
+  } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
+});

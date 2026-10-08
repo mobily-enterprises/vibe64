@@ -79,8 +79,12 @@ its original final-result seam is available; progress alone cannot authorize the
 accepted thread/turn/message guards fence every effect and final progress save;
 the original retained Helper, transcript transaction and native checkpoint remain
 the execution, receipt and delivery owners. Practice presentation retains its
-actual captured initial session and display-only source slug; App output
-integration is unfinished. Claude, installed/browser acceptance and complete
+actual captured initial session and display-only source slug. Terminals supplies
+the closed false-scope App/output route and stream adapter through its existing
+actions, process and proxy owners; Project supplies only its original onboarding
+read. The same client App uses captured Learning transport identity while source
+and manual-terminal controls remain absent. Actual Main practical producer
+integration and installed acceptance remain open. Claude, installed/browser acceptance and complete
 Main practical teaching remain unfinished.
 The Training Feature supplies
 canonical Training HTTP/action composition in Public and consumes an optional

@@ -232,3 +232,14 @@ Opening a runtime publishes only its closed-to-open transition. Repeated tab
 opens still refresh the persisted runtime timestamp for dormancy, but do not
 invalidate every open tab's project resources. The terminal service serializes
 opens per runtime root so simultaneous visits observe one transition.
+
+## Prepared practice onboarding read
+
+The existing Project provider registers the original onboarding read under the
+Learning attempt/session URL as a false-scope observation action. The URL supplies
+its exact initial-session identity before original action validation; the original
+Working query adapter stays unchanged. This uses the same Project store, source,
+Genesis inspection and environment-read owner under fresh saved-attempt access.
+No template, Env write, project selection or source operation is registered in
+that route surface. The same onboarding component suppresses those ordinary
+project affordances for Learning and keeps setup-read recovery explicit.

@@ -5,6 +5,7 @@ import {
   terminalControlTextInputValidator
 } from "./inputSchemas.js";
 import {
+  createTerminalActions,
   ACTION_CANCEL_SESSION_PROMPT_HINTS,
   ACTION_OPEN_OUTPUT_TARGET,
   ACTION_LIST_TEMPORARY_CONVERSATIONS,
@@ -188,6 +189,8 @@ function registerRoutes(
   {
     fastify,
     projectContext = null,
+    actions = null,
+    learningScoped = false,
     routeSurface = "",
     routeRelativePath = "",
     terminals,
@@ -197,16 +200,38 @@ function registerRoutes(
   if (!terminals || typeof terminals !== "object") {
     throw new TypeError(VIBE64_TERMINALS_UNAVAILABLE);
   }
-  if (!uploads || typeof uploads.readSingleMultipartFile !== "function") {
+  if (!learningScoped && (!uploads || typeof uploads.readSingleMultipartFile !== "function")) {
     throw new TypeError("Vibe64 terminal routes require runtime.uploads.");
   }
-  const routes = createVibe64FeatureRoutes(http, {
+  const featureRoutes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 terminal routes only accept loopback Studio requests.",
     projectContext,
-    routeRelativePath,
+    routeRelativePath: routeRelativePath || (learningScoped ? "learning/:learningAttemptId/vibe64" : ""),
     routeSurface,
+    projectScoped: !learningScoped,
     tags: ["studio", "vibe64-terminals"]
   });
+  const learningActions = learningScoped ? new Set(createTerminalActions({ terminals })
+    .filter(action => action.extensions.vibe64.learningAccess &&
+      (action.id.startsWith("vibe64.terminals.output") || action.id === ACTION_SELECT_PREVIEW_IDENTITY)).map(action => action.id)) : null;
+  const routes = learningScoped ? {
+    ...featureRoutes,
+    actionRoute(method, suffix, options) {
+      if (!learningActions.has(options.actionId)) return;
+      featureRoutes.actionRoute(method, suffix, { ...options, buildInput(request) {
+        const learningAttemptId = request.params?.learningAttemptId;
+        if (!learningAttemptId) throw Object.assign(new Error("Use the exact saved lesson URL."), {
+          code: "vibe64_learning_attempt_required", statusCode: 400
+        });
+        return { ...withoutVibe64User(options.buildInput?.(request) || {}), learningAttemptId };
+      } });
+    },
+    serviceRoute(method, suffix, options, handler) {
+      if (method === "GET" && suffix === "/sessions/:sessionId/output-results/:resultId") {
+        featureRoutes.serviceRoute(method, suffix, options, handler);
+      }
+    }
+  } : featureRoutes;
   routes.actionRoute("GET", "/codex-terminal", {
     actionId: "vibe64.terminals.global-terminal.status",
     summary: "Read global Vibe64 Codex terminal status."
@@ -489,7 +514,7 @@ function registerRoutes(
   });
 
   registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, {
-    projectContext
+    projectContext, actions, learningScoped
   });
 }
 
@@ -597,8 +622,24 @@ function registerTerminalSnapshotRoutes(routes, {
 }
 
 function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, {
-  projectContext = null
+  projectContext = null, actions = null, learningScoped = false
 } = {}) {
+  if (learningScoped && typeof actions?.execute !== "function") {
+    throw new TypeError("Practice output sockets require the original action authority owner.");
+  }
+  async function learningOutputOperation(request, { sessionId, learningAttemptId }, operation) {
+    const grant = await actions.execute({ actionId: "vibe64.sessions.conversation.context.read",
+      input: { sessionId, learningAttemptId },
+      context: { channel: "internal", surface: "app", requestMeta: { request } } });
+    if (grant.project?.learningScope?.noExercise !== false ||
+        typeof grant.project.runLearningOperation !== "function") {
+      throw Object.assign(new Error("Open the output of this lesson’s exact prepared practice workspace."), {
+        code: "vibe64_learning_source_required", statusCode: 409
+      });
+    }
+    return grant.project.runLearningOperation(operation);
+  }
+  if (!learningScoped) {
   registerTerminalWebSocketRoute(fastify, {
     projectContext,
     routePath: `${routes.routeBase}/codex-terminal/:terminalSessionId/ws`,
@@ -638,18 +679,26 @@ function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, {
     }
   });
 
+  }
   registerTerminalWebSocketRoute(fastify, {
     projectContext,
+    projectScoped: !learningScoped,
     routePath: `${routes.routeBase}/sessions/:sessionId/output-runs/:terminalSessionId/terminal/ws`,
     service: terminals,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
-    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
-      return service.subscribeOutputTargetTerminal(sessionId, terminalSessionId, subscriber);
+    subscribe(service, { request, sessionId, learningAttemptId, subscriber, terminalSessionId, isClosed }) {
+      const subscribe = () => isClosed?.() ? { ok: true } :
+        service.subscribeOutputTargetTerminal(sessionId, terminalSessionId, subscriber);
+      return learningScoped ? learningOutputOperation(request, { sessionId, learningAttemptId }, subscribe) : subscribe();
     },
-    resize(service, { cols, rows, sessionId, terminalSessionId }) {
-      return service.resizeOutputTargetTerminal(sessionId, terminalSessionId, { cols, rows });
+    resize(service, { request, cols, rows, sessionId, learningAttemptId, terminalSessionId, isClosed }) {
+      const resize = () => isClosed?.() ? { ok: true } : service.resizeOutputTargetTerminal(sessionId, terminalSessionId, { cols, rows });
+      return learningScoped ? learningOutputOperation(request, { sessionId, learningAttemptId }, resize) : resize();
     },
     write(service, { data, sessionId, terminalSessionId }) {
+      if (learningScoped) throw Object.assign(new Error("Use Run and Stop; this Learning output is a read-only console."), {
+        code: "vibe64_learning_output_input_unavailable", statusCode: 403
+      });
       return service.writeOutputTargetTerminal(sessionId, terminalSessionId, data);
     }
   });
