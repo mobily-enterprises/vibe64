@@ -325,3 +325,85 @@ describe("direct assistant realtime state", () => {
     expect(mountedSessionRealtimeShouldRefresh({ payload: routingProgress }, "session-1")).toBe(true);
   });
 });
+
+
+describe("Learning and Working current shortcut publication", () => {
+  it("retains distinct paths on one serialized chain while coalescing only each path's latest selection", async () => {
+    const calls = [];
+    let releaseFirst;
+    let firstStarted;
+    let active = 0;
+    let maxActive = 0;
+    const gate = new Promise(resolve => { releaseFirst = resolve; });
+    const started = new Promise(resolve => { firstStarted = resolve; });
+    const publisher = createVibe64CurrentSessionPublisher({
+      coalesceByPath: true,
+      async publish(publication) {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        calls.push(publication);
+        if (calls.length === 1) { firstStarted(); await gate; }
+        active -= 1;
+      }
+    });
+    publisher.request({ apiPath: "/working/current", sessionId: "working-first" });
+    await started;
+    publisher.request({ apiPath: "/learning/attempt-a/current", sessionId: "learning-first" });
+    publisher.request({ apiPath: "/working/current", sessionId: "working-old" });
+    publisher.request({ apiPath: "/learning/attempt-a/current", sessionId: "learning-latest" });
+    const finished = publisher.request({ apiPath: "/working/current", sessionId: "working-latest" });
+    releaseFirst();
+    await finished;
+    expect(calls).toEqual([
+      { apiPath: "/working/current", sessionId: "working-first" },
+      { apiPath: "/learning/attempt-a/current", sessionId: "learning-latest" },
+      { apiPath: "/working/current", sessionId: "working-latest" }
+    ]);
+    expect(maxActive).toBe(1);
+  });
+
+  it("retains clear/re-entry across actual attempt paths and discards pending work only when stopped", async () => {
+    const calls = [];
+    let release;
+    let started;
+    const gate = new Promise(resolve => { release = resolve; });
+    const firstStarted = new Promise(resolve => { started = resolve; });
+    const publisher = createVibe64CurrentSessionPublisher({
+      coalesceByPath: () => true,
+      async publish(publication) {
+        calls.push(publication);
+        if (calls.length === 1) { started(); await gate; }
+      }
+    });
+    publisher.request({ apiPath: "/learning/a/current", sessionId: "session-a" });
+    await firstStarted;
+    publisher.request({ apiPath: "/learning/a/current", sessionId: "" });
+    const switched = publisher.request({ apiPath: "/learning/b/current", sessionId: "session-b" });
+    release();
+    await switched;
+    await publisher.request({ apiPath: "/learning/a/current", sessionId: "session-a" });
+    expect(calls).toEqual([
+      { apiPath: "/learning/a/current", sessionId: "session-a" },
+      { apiPath: "/learning/a/current", sessionId: "" },
+      { apiPath: "/learning/b/current", sessionId: "session-b" },
+      { apiPath: "/learning/a/current", sessionId: "session-a" }
+    ]);
+    const pending = publisher.request({ apiPath: "/working/current", sessionId: "never-published" });
+    publisher.stop();
+    await pending;
+    await publisher.request({ apiPath: "/learning/a/current", sessionId: "also-not-published" });
+    expect(calls).toHaveLength(4);
+  });
+
+  it("keeps original global latest coalescing when path coalescing is omitted or its configured getter is false", async () => {
+    for (const options of [{}, { coalesceByPath: () => false }]) {
+      const calls = [];
+      const publisher = createVibe64CurrentSessionPublisher({ ...options, publish: async publication => { calls.push(publication); } });
+      publisher.request({ apiPath: "/project-a/current", sessionId: "session-a" });
+      await publisher.request({ apiPath: "/project-b/current", sessionId: "session-b" });
+      expect(calls).toEqual([{ apiPath: "/project-b/current", sessionId: "session-b" }]);
+      await publisher.request({ apiPath: "/project-b/current", sessionId: "session-b" });
+      expect(calls).toHaveLength(1);
+    }
+  });
+});

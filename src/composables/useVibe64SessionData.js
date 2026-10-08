@@ -1,4 +1,4 @@
-import { computed, onScopeDispose, proxyRefs, ref, watch } from "vue";
+import { computed, onScopeDispose, proxyRefs, ref, unref, watch } from "vue";
 import { useVibe64SessionDialogs } from "@/composables/useVibe64SessionDialogs.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
@@ -28,7 +28,8 @@ import {
 import {
   enrichVibe64SessionForDisplay,
   shortVibe64SessionId as shortSessionId,
-  visibleVibe64Sessions
+  visibleVibe64Sessions,
+  vibe64SessionMatchesPurpose
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
   vibe64SessionDisplayTitle,
@@ -55,6 +56,8 @@ import {
   agentTurnRealtimeOverlayFromPayload,
   latestAgentTurnRealtimeOverlay
 } from "@/lib/vibe64AgentTurnRealtimeOverlay.js";
+
+import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "assistant-stream",
@@ -196,15 +199,55 @@ function refetchEndpointResource(resource) {
 }
 
 function useVibe64SessionData({
-  onTitleChange = null
+  onTitleChange = null,
+  learningResource = null,
+  purposeFilter = ""
 } = {}) {
   const notifyTitleChange = typeof onTitleChange === "function" ? onTitleChange : () => null;
   const queryClient = useQueryClient();
   const projectSlug = useVibe64ProjectSlug();
   const paths = usePaths();
-  const sessionSelection = useVibe64SessionSelection({
-    projectSlug
+  const learningMode = computed(() => readRefOrGetterValue(purposeFilter) === "learning");
+  const learningEndpoint = computed(() => readRefOrGetterValue(learningResource));
+  const learningPayload = computed(() => unref(learningEndpoint.value?.data));
+  const learningAccessDenied = computed(() => {
+    const error = unref(learningEndpoint.value?.query?.error);
+    return [401, 403].includes(Number(error?.statusCode || error?.status || error?.response?.status));
   });
+  const learningLearnerId = computed(() => {
+    const payload = learningPayload.value;
+    return !learningAccessDenied.value && payload?.ok === true && payload?.available === true &&
+      typeof payload.learnerId === "string" ? payload.learnerId : "";
+  });
+  const learningLoaded = computed(() => Boolean(learningLearnerId.value && Array.isArray(learningPayload.value?.sessions)));
+  const learningLoading = computed(() => Boolean(unref(learningEndpoint.value?.isInitialLoading) || unref(learningEndpoint.value?.isLoading)));
+  const learningSessions = computed(() => learningLoaded.value ? learningPayload.value.sessions : []);
+  const learningCollectionError = computed(() => {
+    const workingIds = new Set(sessionList.items.map(session => session.sessionId));
+    const seen = new Set();
+    for (const session of learningSessions.value) {
+      if (workingIds.has(session.sessionId) || seen.has(session.sessionId)) {
+        return "The saved Learning and Working conversations have conflicting identities. Keep the confirmed list and ask the owner to inspect it.";
+      }
+      seen.add(session.sessionId);
+    }
+    return "";
+  });
+  const learningLoadError = computed(() => String(unref(learningEndpoint.value?.loadError) ||
+    (learningAccessDenied.value ? "Access to these learning conversations is no longer confirmed." : learningCollectionError.value) ||
+    (!learningEndpoint.value ? "Learning conversations are unavailable in this installation." : "")));
+  const selectionScope = computed(() => learningMode.value ? `learning:${learningLearnerId.value}` : String(projectSlug.value || "").trim());
+  const workingSelection = useVibe64SessionSelection({ projectSlug });
+  const learningSelection = useVibe64SessionSelection({
+    projectSlug, purpose: "learning", learnerId: learningLearnerId
+  });
+  const activeSelection = () => learningMode.value ? learningSelection : workingSelection;
+  const sessionSelection = {
+    selectedId: computed(() => activeSelection().selectedId.value),
+    select: id => activeSelection().select(id),
+    clear: () => activeSelection().clear(),
+    selectAvailableId: (items, options) => activeSelection().selectAvailableId(items, options)
+  };
 
   const selectedSessionId = sessionSelection.selectedId;
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
@@ -219,6 +262,7 @@ function useVibe64SessionData({
     projectSlug.value
   ));
   const sessionListResource = useEndpointResource({
+    enabled: computed(() => !learningEndpoint.value || Boolean(projectSlug.value)),
     fallbackLoadError: "Vibe64 sessions could not be loaded.",
     path: sessionsApiPath,
     queryKey: sessionListQueryKey,
@@ -232,20 +276,21 @@ function useVibe64SessionData({
     requestRecoveryLabel: "Vibe64 sessions",
     realtime: {
       events: [VIBE64_SESSION_CHANGED_EVENT, "connect"],
-      matches: (event) => sessionListRealtimeShouldRefresh(event, projectSlug.value)
+      matches: (event) => !event?.payload?.learningAttemptId && sessionListRealtimeShouldRefresh(event, projectSlug.value)
     }
   });
+  const workingLoadError = computed(() => sessionListResource.loadError.value);
   const sessionList = proxyRefs({
     unavailableItems: computed(() => sessionListResource.data.value?.unavailableSessions || []),
     items: computed(() => {
       const payload = sessionListResource.data.value || {};
       return Array.isArray(payload.sessions) ? payload.sessions : [];
     }),
-    loadError: sessionListResource.loadError,
-    isInitialLoading: sessionListResource.isInitialLoading,
-    isLoading: sessionListResource.isLoading,
+    loadError: computed(() => learningMode.value ? learningLoadError.value : sessionListResource.loadError.value),
+    isInitialLoading: computed(() => learningMode.value ? !learningLoaded.value && learningLoading.value : sessionListResource.isInitialLoading.value),
+    isLoading: computed(() => learningMode.value ? learningLoading.value : sessionListResource.isLoading.value),
     pages: computed(() => {
-      const payload = sessionListResource.data.value;
+      const payload = learningMode.value ? (learningLoaded.value ? learningPayload.value : null) : sessionListResource.data.value;
       return payload && typeof payload === "object" && !Array.isArray(payload) ? [payload] : [];
     }),
     reload: sessionListResource.reload,
@@ -255,6 +300,7 @@ function useVibe64SessionData({
   const createSessionCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+    buildCommandOptions: (_model, { context }) => ({ method: "POST", path: context?.apiPath }),
     buildRawPayload: (_model, { context }) => vibe64RealtimeOriginPayload({
       assistantSelection: context?.assistantSelection || {},
       ...(context?.workflowEngineId ? { workflowEngineId: context.workflowEngineId } : {}),
@@ -297,6 +343,7 @@ function useVibe64SessionData({
     writeMethod: "PUT"
   });
   const currentSessionPublisher = createVibe64CurrentSessionPublisher({
+    coalesceByPath: () => Boolean(learningEndpoint.value),
     async publish({ apiPath, sessionId }) {
       const response = await updateCurrentSessionCommand.run({
         apiPath,
@@ -322,8 +369,12 @@ function useVibe64SessionData({
   });
   const archiveAttempts = ref({});
   const agentActivityBySessionId = ref({});
-  const sessions = computed(() => {
-    const items = new Map((sessionList.items || []).map((session) => [session.sessionId, session]));
+  let confirmedCollectionScope = "";
+  const sessions = computed((previous) => {
+    const collectionScope = JSON.stringify([projectSlug.value, learningLearnerId.value]);
+    if (learningCollectionError.value) return confirmedCollectionScope === collectionScope ? previous || [] : [];
+    confirmedCollectionScope = collectionScope;
+    const items = new Map([...(sessionList.items || []), ...learningSessions.value].map((session) => [session.sessionId, session]));
     for (const [id, attempt] of Object.entries(archiveAttempts.value)) {
       if (attempt.succeeded) {
         items.delete(id);
@@ -352,10 +403,22 @@ function useVibe64SessionData({
       };
     });
   });
-  const availableSessions = computed(() => sessions.value.filter((session) => !session.archiving));
+  const availableSessions = computed(() => sessions.value.filter((session) => !session.archiving &&
+    vibe64SessionMatchesPurpose(session, readRefOrGetterValue(purposeFilter))));
   const selectedListSession = computed(() => {
     return sessions.value.find((session) => session.sessionId === selectedSessionId.value) || null;
   });
+  const selectedSessionsApiPath = computed(() => {
+    const session = selectedListSession.value;
+    if (session?.purpose === "learning") {
+      return learningLearnerId.value && session.learningAttemptId
+        ? `/api/learning/${encodeURIComponent(session.learningAttemptId)}/vibe64/sessions` : "";
+    }
+    return learningMode.value ? "" : sessionsApiPath.value;
+  });
+  const selectedCurrentSessionApiPath = computed(() => selectedListSession.value?.purpose === "learning"
+    ? selectedSessionsApiPath.value ? `${selectedSessionsApiPath.value}/current` : ""
+    : learningMode.value ? "" : currentSessionApiPath.value);
   const selectedSessionMissing = computed(() => {
     const selectedId = String(selectedSessionId.value || "").trim();
     if (
@@ -370,7 +433,7 @@ function useVibe64SessionData({
   });
   const selectionRenewalPredecessorId = computed(() => {
     const selectedId = String(selectedSessionId.value || "").trim();
-    if (!selectedId || sessionList.pages.length < 1 || String(sessionList.loadError || "").trim()) {
+    if (learningMode.value || selectedListSession.value?.purpose === "learning" || !selectedId || sessionList.pages.length < 1 || String(sessionList.loadError || "").trim()) {
       return "";
     }
     if (sessionList.unavailableItems.some((session) => session.sessionId === selectedId)) {
@@ -422,10 +485,10 @@ function useVibe64SessionData({
   const isSelectedSessionArchived = computed(() => isArchivedVibe64Session(selectedSession.value || {}));
   const pageLoading = computed(() => Boolean(sessionList.isLoading));
   const canCreateSession = computed(() => {
-    return creationOptions.value.canCreate === true;
+    return !learningMode.value && creationOptions.value.canCreate === true;
   });
   const createSessionVisible = computed(() => (
-    creationOptions.value.showCreateAction === true
+    !learningMode.value && creationOptions.value.showCreateAction === true
   ));
   const createSessionTitle = computed(() => {
     if (creationOptions.value.disabledReason) {
@@ -442,7 +505,13 @@ function useVibe64SessionData({
   });
 
   async function refreshSessionList() {
-    return refetchEndpointResource(sessionListResource);
+    const learning = learningEndpoint.value;
+    if (!learning) return refetchEndpointResource(sessionListResource);
+    const [result] = await Promise.all([
+      projectSlug.value ? refetchEndpointResource(sessionListResource) : undefined,
+      refetchEndpointResource(learning)
+    ]);
+    return result;
   }
 
   let refreshSessionDataInFlight = null;
@@ -492,6 +561,8 @@ function useVibe64SessionData({
 
   function selectSessionId(sessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
+    if (learningMode.value && (!learningLoaded.value || learningLoading.value || learningLoadError.value ||
+        !availableSessions.value.some(session => session.sessionId === normalizedSessionId))) return;
     if (sessions.value.some((session) => session.sessionId === normalizedSessionId && session.archiving)) {
       return;
     }
@@ -506,13 +577,17 @@ function useVibe64SessionData({
   }
 
   function clearSelectedSession() {
-    emptySessionListObservedForProject = String(projectSlug.value || "").trim();
+    if (learningMode.value && (!learningLoaded.value || learningLoading.value || learningLoadError.value)) return;
+    const aliasPath = learningMode.value ? selectedCurrentSessionApiPath.value : "";
+    emptySessionListObservedForProject = selectionScope.value;
     sessionSelection.clear();
+    if (aliasPath) void currentSessionPublisher.request({ apiPath: aliasPath, sessionId: "" });
   }
 
   function selectPreviousSession(sessionId) {
-    const index = sessions.value.findIndex((session) => session.sessionId === sessionId);
-    const previous = sessions.value.slice(0, Math.max(0, index)).filter((session) => !session.archiving).at(-1);
+    const navigation = sessions.value.filter(session => vibe64SessionMatchesPurpose(session, readRefOrGetterValue(purposeFilter)));
+    const index = navigation.findIndex((session) => session.sessionId === sessionId);
+    const previous = navigation.slice(0, Math.max(0, index)).filter((session) => !session.archiving).at(-1);
     selectSessionId(previous?.sessionId || availableSessions.value.at(-1)?.sessionId || "");
   }
 
@@ -535,6 +610,7 @@ function useVibe64SessionData({
         delete archiveAttempts.value[sessionId];
       }
     },
+    archiveAllowed: computed(() => selectedListSession.value?.purpose !== "learning"),
     isSelectedSessionArchived,
     refreshSessionData,
     selectedSessionId,
@@ -551,10 +627,16 @@ function useVibe64SessionData({
   });
   useRealtimeEvent({
     event: VIBE64_SESSION_CHANGED_EVENT,
-    matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value,
+    matches: ({ payload = {} } = {}) => payload.learningAttemptId
+      ? !payload.projectSlug && learningLearnerId.value && [learningPayload.value?.active, ...(learningPayload.value?.history || []),
+        ...learningSessions.value].some(attempt => (attempt?.attemptId || attempt?.learningAttemptId) === payload.learningAttemptId)
+      : payload.projectSlug === projectSlug.value,
     onEvent: ({ payload = {} } = {}) => {
       const id = String(payload.sessionId || "");
       if (!id) return;
+      if (payload.learningAttemptId && sessionListRealtimeShouldRefresh({ payload })) {
+        void refetchEndpointResource(learningEndpoint.value)?.catch?.(() => null);
+      }
       const activity = agentTurnRealtimeOverlayFromPayload(payload, id);
       if (activity) {
         agentActivityBySessionId.value[id] = latestAgentTurnRealtimeOverlay(
@@ -562,6 +644,7 @@ function useVibe64SessionData({
           { active: activity.active, revision: activity.revision }
         );
       }
+      if (payload.learningAttemptId) return;
       if (payload.reason === "session-archiving") {
         const session = sessions.value.find((item) => item.sessionId === id);
         if (session) {
@@ -580,7 +663,7 @@ function useVibe64SessionData({
   });
   watch(() => sessionList.items, (items) => {
     for (const id of Object.keys(agentActivityBySessionId.value)) {
-      if (!items.some((session) => session.sessionId === id)) delete agentActivityBySessionId.value[id];
+      if (![...items, ...learningSessions.value].some((session) => session.sessionId === id)) delete agentActivityBySessionId.value[id];
     }
     for (const [id, attempt] of Object.entries(archiveAttempts.value)) {
       if (attempt.succeeded || archive.archivingSessionId === id) continue;
@@ -607,16 +690,21 @@ function useVibe64SessionData({
   let createSessionInFlight = null;
 
   async function createSession(assistantSelection = {}, { pullRequestNumber, workflowEngineId, repositoryBranch } = {}) {
+    if (learningMode.value) return { ok: false, error: "Open this saved lesson through its supported lesson controls; ordinary project creation is unavailable in Learning mode." };
     if (createSessionInFlight) {
       return createSessionInFlight;
     }
     const startedAtMs = Date.now();
     const creationProjectSlug = String(projectSlug.value || "").trim();
+    const creationApiPath = sessionsApiPath.value;
+    const creationAliasPath = currentSessionApiPath.value;
+    const creationQueryKey = [...sessionListQueryKey.value];
+    const creationSelection = workingSelection.capture?.() || { select: id => workingSelection.select(id) };
     vibe64SessionDebugLog("client.sessionData.createSession.start");
     createSessionPending.value = true;
     createSessionInFlight = (async () => {
       try {
-        const response = await createSessionCommand.run({ assistantSelection, pullRequestNumber, workflowEngineId, repositoryBranch });
+        const response = await createSessionCommand.run({ assistantSelection, pullRequestNumber, workflowEngineId, repositoryBranch, apiPath: creationApiPath });
         if (
           !sessionDataDisposed &&
           creationProjectSlug === String(projectSlug.value || "").trim()
@@ -625,7 +713,7 @@ function useVibe64SessionData({
             response?.creation &&
             response?.limits
           ) {
-            queryClient.setQueryData(sessionListQueryKey.value, (currentPayload) => {
+            queryClient.setQueryData(creationQueryKey, (currentPayload) => {
               if (
                 !currentPayload ||
                 typeof currentPayload !== "object" ||
@@ -658,12 +746,18 @@ function useVibe64SessionData({
             });
           }
           if (response?.sessionId) {
-            selectSessionId(response.sessionId);
+            if (learningMode.value) {
+              creationSelection?.select(response.sessionId);
+              if (response.ok !== false) void currentSessionPublisher.request({ apiPath: creationAliasPath, sessionId: response.sessionId });
+            } else {
+              selectSessionId(response.sessionId);
+            }
           }
-          refreshSessionDataInBackground({
-            includeList: true,
-            reason: "create-session"
-          });
+          if (learningMode.value) {
+            void refetchEndpointResource(sessionListResource)?.catch?.(() => null);
+          } else {
+            refreshSessionDataInBackground({ includeList: true, reason: "create-session" });
+          }
         }
         vibe64SessionDebugLog("client.sessionData.createSession.done", {
           ...vibe64SessionDebugSummary(response || {}),
@@ -690,7 +784,8 @@ function useVibe64SessionData({
     const nextSessions = availableSessions.value;
     return {
       createSessionRunning: createSessionRunning.value,
-      currentSessionApiPath: currentSessionApiPath.value,
+      currentSessionApiPath: selectedCurrentSessionApiPath.value,
+      selectionScope: selectionScope.value,
       selectionRenewal: selectionRenewalResource.data.value?.renewal || null,
       selectionRenewalLoadError: String(
         selectionRenewalResource.loadError?.value || ""
@@ -711,7 +806,7 @@ function useVibe64SessionData({
       selectedSessionId: String(selectedSessionId.value || ""),
       sessionIds: nextSessions.map((session) => session.sessionId).join("|"),
       sessionListInitialLoading: sessionList.isInitialLoading,
-      sessionListLoaded: sessionList.pages.length > 0,
+      sessionListLoaded: sessionList.pages.length > 0 && (!learningMode.value || learningLoaded.value),
       sessionListLoadError: String(sessionList.loadError || ""),
       sessionListLoading: sessionList.isLoading
     };
@@ -728,6 +823,7 @@ function useVibe64SessionData({
       sessionCount: nextSessions.length
     });
     if (
+      (learningMode.value && !state.sessionListLoaded) ||
       state.sessionListInitialLoading ||
       state.sessionListLoadError ||
       shouldPreserveSelectedSessionDuringRefresh({
@@ -740,7 +836,7 @@ function useVibe64SessionData({
       return;
     }
     if (!state.selectedSessionId && nextSessions.length === 0) {
-      emptySessionListObservedForProject = state.projectSlug;
+      emptySessionListObservedForProject = state.selectionScope;
     }
     if (state.selectionRenewalPredecessorId) {
       if (
@@ -782,7 +878,7 @@ function useVibe64SessionData({
     }
     if (
       !state.selectedSessionId &&
-      emptySessionListObservedForProject === state.projectSlug
+      emptySessionListObservedForProject === state.selectionScope
     ) {
       return;
     }
@@ -831,12 +927,19 @@ function useVibe64SessionData({
     createSessionVisible,
     createSessionTitle,
     isSelectedSessionArchived,
+    learningLearnerId,
+    learningLoadError,
+    learningLoaded,
+    learningLoading,
+    workingLoadError,
+    availableSessions,
     pageLoading,
     refreshSessionData,
     selectSessionId,
     selectedSession,
     selectedSessionId,
     selectedSessionTitle,
+    selectedSessionsApiPath,
     sessionList,
     sessions,
     sessionsApiPath,

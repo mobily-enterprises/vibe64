@@ -46,6 +46,13 @@ the canonical project and from other sessions.
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 - `src/composables/useVibe64SessionData.js`
 - `src/composables/useVibe64SessionDialogs.js`
+- `src/composables/useVibe64SessionSelection.js`
+- `src/composables/useStoredSelection.js`
+- `src/lib/vibe64CurrentSessionPublisher.js`
+- `tests/client/vibe64SessionSelection.vitest.js`
+- `tests/client/vibe64SessionCreation.vitest.js`
+- `tests/client/useVibe64SessionData.vitest.js`
+- `tests/client/useVibe64SessionDialogs.vitest.js`
 
 ## Public contract
 
@@ -67,6 +74,35 @@ wrong-purpose selected session is hidden without changing the original selection
 or automatically selecting another identity. Omitted filters retain the original
 behavior. This is a presentation prerequisite, not Training admission or completed
 host mode/selection integration; there is one original panel, no alternate runtime.
+
+The optional Learning resource contributes its canonical API-returned own learner
+and safe saved session summaries to the same original Data collection. The
+purpose filter changes navigation and reconciliation, never the full collection.
+Two instances of the same original selection owner remember Working per project
+and Learning per actual learner. Learning uses no storage while identity is
+unconfirmed; it does not reuse Working selection or create an attempt-specific
+picker memory. Existing Working URL priority remains unchanged while hidden.
+Transient Learning read failures retain confirmed rows and fence new selection
+and shortcut writes. Revoked access removes that learner's rows. Conflicting
+Working/Learning identities report an error and retain the previous collection
+only within the same project and learner; actor/project changes cannot inherit it.
+
+The original Working sessions API path stays project-scoped. The visible Learning
+selection uses its saved attempt under the same registered sessions/current
+suffix. Working creation captures its original path, query and selector before
+awaiting, so changing the visible filter cannot retarget its completion. The same
+current-session publisher serializes all writes; configured Learning composition
+coalesces only each path's latest pending selection so another scope cannot erase
+its update. Omitted or false opt-in retains original global latest coalescing,
+deduplication and disposal. Direct concurrent commands are unsuitable: the shared
+command owner refuses a second run while busy. A configured full-list refresh
+uses both original resources, with Working read only for an actual project.
+Separate original Working and Learning load errors support retained keyed hosts.
+The original archive dialog accepts an explicit optional eligibility gate; Data
+disallows a Learning target without falsely marking its actual lifecycle archived.
+Ordinary New session, renewal and archive are not lesson operations. These client
+owner checks do not prove visible host mode controls, native teaching or browser
+acceptance.
 
 Session and temporary-conversation actions resolve their project and acting user
 through the shared action boundary. The acting user is trusted context, never

@@ -43,13 +43,16 @@ function readPreferredId(preferredId = "") {
 
 function useStoredSelection({
   preferredId = "",
-  storageKey = ""
+  storageKey = "",
+  enabled = true
 } = {}) {
+  const selectionEnabled = computed(() => Boolean(typeof enabled === "function" ? enabled() : unref(enabled)));
   const activeStorageKey = computed(() => readStorageKey(storageKey));
   const activePreferredId = computed(() => readPreferredId(preferredId));
-  const selectedId = ref(activePreferredId.value || readStoredValue(activeStorageKey.value));
+  const selectedId = ref(selectionEnabled.value ? activePreferredId.value || readStoredValue(activeStorageKey.value) : "");
 
   function select(id = "") {
+    if (!selectionEnabled.value) return;
     selectedId.value = String(id || "").trim();
     writeStoredValue(activeStorageKey.value, selectedId.value);
   }
@@ -62,6 +65,7 @@ function useStoredSelection({
     fallbackId = "",
     getId = (item) => item?.id
   } = {}) {
+    if (!selectionEnabled.value) return "";
     if (items.length === 0) {
       clear();
       return "";
@@ -89,17 +93,35 @@ function useStoredSelection({
     return selectedId.value;
   }
 
+  function capture() {
+    const key = activeStorageKey.value;
+    const admitted = selectionEnabled.value;
+    return Object.freeze({
+      select(id = "") {
+        if (!admitted) return;
+        const value = String(id || "").trim();
+        writeStoredValue(key, value);
+        if (selectionEnabled.value && activeStorageKey.value === key) selectedId.value = value;
+      }
+    });
+  }
+
+  watch(selectionEnabled, (nextEnabled) => {
+    selectedId.value = nextEnabled ? activePreferredId.value || readStoredValue(activeStorageKey.value) : "";
+  }, { flush: "sync" });
+
   watch(activeStorageKey, (nextStorageKey) => {
-    selectedId.value = activePreferredId.value || readStoredValue(nextStorageKey);
+    if (selectionEnabled.value) selectedId.value = activePreferredId.value || readStoredValue(nextStorageKey);
   });
 
   watch(activePreferredId, (nextPreferredId) => {
-    if (nextPreferredId) {
+    if (selectionEnabled.value && nextPreferredId) {
       selectedId.value = nextPreferredId;
     }
   });
 
   return {
+    capture,
     clear,
     select,
     selectAvailableId,

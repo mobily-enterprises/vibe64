@@ -10,6 +10,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 
 function useVibe64SessionDialogs({
+  archiveAllowed = true,
   beginArchive = () => null,
   finishArchive = () => null,
   isSelectedSessionArchived,
@@ -60,6 +61,7 @@ function useVibe64SessionDialogs({
 
   function requestArchiveSelectedSession() {
     if (
+      !readRefOrGetterValue(archiveAllowed) ||
       !unref(selectedSessionId) ||
       archivingSessionId.value ||
       archiveCommand.isRunning ||

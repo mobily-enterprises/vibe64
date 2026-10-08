@@ -83,14 +83,17 @@ vi.mock("@/composables/useVibe64SessionRepositoryStatusRegistry.js", () => ({
 }));
 
 vi.mock("@/composables/useVibe64SessionSelection.js", () => ({
-  useVibe64SessionSelection: () => ({
+  useVibe64SessionSelection: (options = {}) => {
+    if (creationHarness.selectionFactory) return creationHarness.selectionFactory(options);
+    return {
     clear() {
       creationHarness.selectedId.value = "";
     },
     select: creationHarness.select,
     selectAvailableId: creationHarness.selectAvailableId,
     selectedId: creationHarness.selectedId
-  })
+    };
+  }
 }));
 
 import {
@@ -791,5 +794,110 @@ describe("background session archive selection", () => {
     expect(sessionData.sessions.value.at(-1).archiving).toBe(false);
     expect(creationHarness.feedback).toHaveBeenCalledOnce();
     scope.stop();
+  });
+});
+
+
+describe("one Working and Learning session collection", () => {
+  function learningResource() {
+    return { data: ref({ ok: true, available: true, learnerId: "actual-owner", sessions: [
+      { sessionId: "learning-first", purpose: "learning", learningAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", lessonCode: "V64-START-00", status: "active", revision: 1 }
+    ] }), isInitialLoading: ref(false), isLoading: ref(false), loadError: ref(""), query: { error: ref(null) }, reload: vi.fn(async () => null) };
+  }
+
+  it("retains one full collection, filters reconciliation and publishes only the selected actual Learning attempt alias", async () => {
+    creationHarness.queryData.value.sessions = [{ sessionId: "working-first", status: "active" }];
+    creationHarness.selectedId.value = "learning-first";
+    const resource = learningResource();
+    const filter = ref("learning");
+    creationHarness.selectionFactory = (await vi.importActual("../../src/composables/useVibe64SessionSelection.js")).useVibe64SessionSelection;
+    const localScope = effectScope();
+    const data = localScope.run(() => useVibe64SessionData({ learningResource: () => resource, purposeFilter: () => filter.value }));
+    try {
+      await nextTick();
+      expect(data.sessions.value.map(row => row.sessionId).sort()).toEqual(["learning-first", "working-first"]);
+      expect(data.availableSessions.value.map(row => row.sessionId)).toEqual(["learning-first"]);
+      expect(data.sessionsApiPath.value).toBe("/api/project-a/vibe64/sessions");
+      expect(data.selectedSessionsApiPath.value).toBe("/api/learning/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/vibe64/sessions");
+      expect(data.learningLearnerId.value).toBe("actual-owner");
+      await vi.waitFor(() => expect(creationHarness.updateRun).toHaveBeenCalledWith({ apiPath: "/api/learning/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/vibe64/sessions/current", sessionId: "learning-first" }));
+      expect(data.canCreateSession.value).toBe(false);
+      expect(data.createSessionVisible.value).toBe(false);
+      expect(await data.createSession()).toMatchObject({ ok: false });
+      expect(creationHarness.createRun).not.toHaveBeenCalled();
+      data.archive.request();
+      expect(data.archive.open).toBe(false);
+      expect(creationHarness.renewalEndpointResource.reload).not.toHaveBeenCalled();
+      await data.refreshSessionData({ includeList: true, reason: "hidden-working-completed" });
+      expect(creationHarness.refetch).toHaveBeenCalledOnce();
+      expect(resource.reload).toHaveBeenCalledOnce();
+      expect(data.workingLoadError.value).toBe("");
+      const aliasCalls = creationHarness.updateRun.mock.calls.length;
+      resource.loadError.value = "Updates unavailable";
+      await nextTick();
+      data.selectSessionId("learning-first");
+      expect(data.learningLoadError.value).toBe("Updates unavailable");
+      expect(data.sessions.value.some(row => row.sessionId === "learning-first")).toBe(true);
+      expect(creationHarness.updateRun.mock.calls.length).toBe(aliasCalls);
+      resource.query.error.value = { statusCode: 403 };
+      await nextTick();
+      expect(data.learningLearnerId.value).toBe("");
+      expect(data.sessions.value.some(row => row.sessionId === "learning-first")).toBe(false);
+      expect(creationHarness.updateRun.mock.calls.length).toBe(aliasCalls);
+    } finally { localScope.stop(); creationHarness.selectionFactory = null; }
+  });
+
+  it("rejects identity collisions without relabeling a confirmed host and never carries that snapshot across actor or project changes", async () => {
+    creationHarness.queryData.value.sessions = [{ sessionId: "working-first", status: "active" }];
+    creationHarness.selectedId.value = "learning-first";
+    const resource = learningResource();
+    creationHarness.selectionFactory = (await vi.importActual("../../src/composables/useVibe64SessionSelection.js")).useVibe64SessionSelection;
+    const localScope = effectScope();
+    const data = localScope.run(() => useVibe64SessionData({ learningResource: resource, purposeFilter: ref("learning") }));
+    try {
+      await nextTick();
+      const confirmed = data.sessions.value;
+      resource.data.value = { ...resource.data.value, sessions: [
+        { ...resource.data.value.sessions[0], sessionId: "working-first" }
+      ] };
+      await nextTick();
+      expect(data.learningLoadError.value).toContain("conflicting identities");
+      expect(data.sessions.value).toBe(confirmed);
+      expect(data.sessions.value.find(row => row.sessionId === "working-first").purpose).not.toBe("learning");
+      resource.data.value = { ...resource.data.value, learnerId: "different-owner" };
+      await nextTick();
+      expect(data.sessions.value).toEqual([]);
+      resource.data.value = { ...resource.data.value, learnerId: "actual-owner" };
+      creationHarness.projectSlug.value = "project-b";
+      await nextTick();
+      expect(data.sessions.value).toEqual([]);
+    } finally { localScope.stop(); creationHarness.selectionFactory = null; }
+  });
+
+  it("captures a pending Working creation path, query and selection before switching the visible mode", async () => {
+    const pending = deferred();
+    creationHarness.createRun.mockImplementation(() => pending.promise);
+    const resource = learningResource();
+    const filter = ref("working");
+    creationHarness.selectionFactory = (await vi.importActual("../../src/composables/useVibe64SessionSelection.js")).useVibe64SessionSelection;
+    const localScope = effectScope();
+    const data = localScope.run(() => useVibe64SessionData({ learningResource: () => resource, purposeFilter: () => filter.value }));
+    try {
+      // The existing selection owner capture facility is proved in its original
+      // file; this original Data fixture observes the command and publication.
+      const request = data.createSession();
+      expect(creationHarness.createRun.mock.calls[0][0].apiPath).toBe("/api/project-a/vibe64/sessions");
+      filter.value = "learning";
+      await nextTick();
+      pending.resolve({ ok: true, sessionId: "working-created-late", creation: { canCreate: true }, limits: { maxOpenSessions: 3, openSessionCount: 1 } });
+      await request;
+      await nextTick();
+      expect(data.selectedSessionId.value).toBe("learning-first");
+      expect(creationHarness.select).not.toHaveBeenCalledWith("working-created-late");
+      await vi.waitFor(() => expect(creationHarness.updateRun).toHaveBeenCalledWith({ apiPath: "/api/project-a/vibe64/sessions/current", sessionId: "working-created-late" }));
+      expect(data.sessionsApiPath.value).toBe("/api/project-a/vibe64/sessions");
+      expect(data.sessions.value.some(row => row.sessionId === "working-created-late")).toBe(true);
+      expect(creationHarness.querySetData.mock.calls[0][0]).toEqual(["vibe64", "project", "project-a", "app", "public", "sessions"]);
+    } finally { localScope.stop(); creationHarness.selectionFactory = null; }
   });
 });

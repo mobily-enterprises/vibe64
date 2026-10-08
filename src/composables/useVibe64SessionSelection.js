@@ -21,9 +21,13 @@ function useVibe64SessionSelection({
   projectSlug = useVibe64ProjectSlug(),
   route = useRoute(),
   learnerId = "",
-  learningAttemptId = ""
+  learningAttemptId = "",
+  purpose = ""
 } = {}) {
+  const pickerLearning = computed(() => unref(purpose) === "learning");
+  const learningLearner = computed(() => String(unref(learnerId) || "").trim());
   const learningScope = computed(() => {
+    if (unref(purpose) === "working") return null;
     const learner = String(unref(learnerId) || "").trim();
     const attempt = String(unref(learningAttemptId) || "").trim();
     if (!learner && !attempt) {
@@ -35,7 +39,12 @@ function useVibe64SessionSelection({
     return { learner, attempt };
   });
   return useStoredSelection({
+    enabled: computed(() => !pickerLearning.value || Boolean(learningLearner.value)),
     preferredId: computed(() => {
+      if (pickerLearning.value) {
+        if (!learningLearner.value) return "";
+        return selectedSessionIdFromRoute({ query: { session: route?.query?.learningSession } });
+      }
       const scope = learningScope.value;
       if (!scope) {
         return selectedSessionIdFromRoute(route);
@@ -48,6 +57,9 @@ function useVibe64SessionSelection({
       return selectedSessionIdFromRoute({ query: { session: route?.query?.learningSession } });
     }),
     storageKey: computed(() => {
+      if (pickerLearning.value) {
+        return learningLearner.value ? `${SELECTED_SESSION_STORAGE_KEY}:learning:${encodeURIComponent(learningLearner.value)}` : "";
+      }
       const scope = learningScope.value;
       return scope
         ? `${SELECTED_SESSION_STORAGE_KEY}:learning:${encodeURIComponent(scope.learner)}:attempt:${encodeURIComponent(scope.attempt)}`

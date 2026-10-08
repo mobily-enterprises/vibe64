@@ -51,6 +51,22 @@ attempt or turn an ordinary session into a teacher. Desktop and mobile use the
 same navigation contract. Colleague can explain the mode; changing it does not
 authorize starting or ending a lesson.
 
+When the host connects Working and Learning to these tabs, each mode remembers
+its own selected conversation. A Working conversation that finishes opening
+while you view Learning stays with its original project and does not replace the
+lesson you are viewing. Switching modes preserves hidden conversations and
+unsent drafts; it does not stop their work.
+
+If Learning updates fail temporarily, the last confirmed lesson conversations
+remain visible. Wait for a successful refresh before selecting another lesson.
+If access is denied or your account changes, another learner's conversations
+must not remain available. If a conflicting-conversation error appears, retain
+your work and ask the owner to inspect it. Colleague can explain these states;
+it cannot grant access or repair saved identities. Ordinary **New session** and
+**Archive session** are Working operations, not ways to start or end a lesson.
+These rules apply on desktop and mobile; this prerequisite alone does not add
+the visible mode control or complete lesson delivery.
+
 ## Archive a session
 
 Select the session, choose **Archive session**, and confirm **Archive session**

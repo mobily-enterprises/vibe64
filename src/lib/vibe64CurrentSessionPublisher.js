@@ -1,4 +1,5 @@
 function createVibe64CurrentSessionPublisher({
+  coalesceByPath = false,
   onError = () => null,
   publish
 } = {}) {
@@ -6,7 +7,7 @@ function createVibe64CurrentSessionPublisher({
     throw new TypeError("Current Vibe64 session publisher requires publish().");
   }
 
-  let pendingPublication = null;
+  const pendingPublications = new Map();
   let publicationChain = Promise.resolve();
   let lastPublishedIdentity = null;
   let stopped = false;
@@ -17,17 +18,18 @@ function createVibe64CurrentSessionPublisher({
     }
     const apiPath = String(publication?.apiPath || "");
     const sessionId = String(publication?.sessionId || "").trim();
-    pendingPublication = {
+    const publicationKey = (typeof coalesceByPath === "function" ? coalesceByPath() : coalesceByPath) ? apiPath : "";
+    pendingPublications.set(publicationKey, {
       apiPath,
       identity: JSON.stringify([apiPath, sessionId]),
       sessionId
-    };
+    });
     publicationChain = publicationChain.catch(() => null).then(async () => {
-      if (stopped || !pendingPublication) {
+      if (stopped || pendingPublications.size === 0) {
         return;
       }
-      const publication = pendingPublication;
-      pendingPublication = null;
+      const [key, publication] = pendingPublications.entries().next().value;
+      pendingPublications.delete(key);
       if (publication.identity === lastPublishedIdentity) {
         return;
       }
@@ -46,7 +48,7 @@ function createVibe64CurrentSessionPublisher({
 
   function stop() {
     stopped = true;
-    pendingPublication = null;
+    pendingPublications.clear();
   }
 
   return Object.freeze({
