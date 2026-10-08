@@ -5,6 +5,9 @@
 - `packages/vibe64-training/src/server/teachingBrief.js`
 - `packages/vibe64-training/src/server/installedContent.js`
 - `packages/vibe64-training/src/server/learnerState.js`
+- `packages/vibe64-training/src/server/learningSessions.js`
+- `tests/server/vibe64SessionsDirect.unit.test.js`
+- `tests/server/vibe64ActionContext.unit.test.js`
 - `tests/server/vibe64TrainingTeachingBrief.unit.test.js`
 - `packages/vibe64-training/src/server/assessmentGrader.js`
 - `packages/vibe64-colleague/src/server/conversationSummary.js`
@@ -576,3 +579,42 @@ attempts can expose their exact retained identity for history, not execution.
 The reader creates no directories, repairs no summary and writes no progress.
 No browser field, assistant result or caller-selected path supplies this scope.
 This prerequisite is not a Main launcher or a teaching admission implementation.
+
+### Same Main session for a no-exercise attempt
+
+`createTrainingLearningSessions` freshly reads the original learner reservation
+and verified installed no-exercise pin. It returns an internal context for the
+same Project factory, Session service, Runtime and Store. Creation uses the
+original preparation/end lock and a server-reserved `learning-<attemptId>`;
+reopening reads that exact original record instead of creating another session.
+The existing immutable Store binding verifies learner, attempt, pin and namespace.
+No project source, database slot, setup runner or second session registry exists.
+
+Observation/control retains historical identity. Creation/new work requires the
+confirmed active attempt; instructions re-read activity and the full pin before
+and after the original teaching brief. The raw user message remains separate from
+these bounded native instructions. This internal factory does not authenticate an
+actor: the original action context's optional `resolveLearningContext` host
+facility supplies its freshly authenticated actor on every operation. Only
+explicit source-independent actions declare a learning access scope. Working
+project routes and repository/setup operations do not inherit that authority.
+
+The same Main transport accepts a typed learning attempt/session selector while
+retaining the original project/session array format. This is transport provenance,
+not a new stored conversation or provider identity. Original native admission,
+account/process sharing and control ownership remain unchanged. Host registration,
+visible Learning mode launch, real native application-tool admission and exercise
+lesson composition remain unfinished; this prerequisite does not certify a
+teaching or grading session.
+
+### Shared canonical teaching delivery coordination
+
+The original Colleague's delivered-question promotion, staging, accepted-answer
+reader and delivered-question capture now use Training's existing
+`deliveryProof.js` owner. These operations use the original conversation log and
+transaction; prepared questions still require the exact completed native output
+before promotion. Accepted answers retain their saved user receipt, words and
+question/delivery correlation. Colleague retains current actor/turn/generation,
+interactive admission, cancellation and its serialized Helper lifetime. Main must
+supply those same native guarantees before it can use these operations; moving
+these functions alone does not register Main teaching tools or grading authority.

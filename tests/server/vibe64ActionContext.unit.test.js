@@ -116,3 +116,97 @@ test("only an action's declared lifecycle scope can enter a deleting project", a
   await archive.execute({ text: "resume", projectSlug: "alpha" });
   assert.equal(archive.calls[0].project.slug, "alpha");
 });
+
+const learningAttempt = "12345678-1234-4234-8234-123456789abc";
+
+function learningActionFixture({ learningAccess = "observe", resolver = true } = {}) {
+  const calls = [];
+  const state = { actor: { uid: 42, username: "learner", role: "member" }, active: true, foreign: false };
+  const actions = createActionCatalogue();
+  const definition = withVibe64ActionContext({
+    id: "vibe64.test.learning", kind: "query", channels: ["api", "internal"], surfaces: ["app"],
+    input: { schema: createSchema({ sessionId: { type: "string", required: true } }), mode: "create" },
+    execute(input) {
+      const current = currentProjectRequestContext();
+      calls.push({ input, current });
+      return { attemptId: current.learningScope.attemptId, learnerId: current.learningScope.learnerId };
+    }
+  }, { learningAccess });
+  actions.register({ contributorId: "learning-test", domain: "test", actions: [definition] });
+  registerVibe64ActionContext(actions, {
+    resolveUser: async () => state.actor,
+    authorizeProject() { throw new Error("A source-less learning operation cannot authorize a substitute project."); },
+    ...(resolver ? { async resolveLearningContext(input) {
+      calls.push({ resolution: input });
+      if (input.access === "write" && !state.active) throw Object.assign(new Error("Ended attempt"), { code: "attempt_inactive" });
+      return { projectRuntimeRoot: "/private/actual-learner/attempt", learningScope: {
+        learnerId: state.foreign ? "other-person" : String(input.actor.uid), attemptId: input.attemptId,
+        pin: { lesson: { code: "REAL-LESSON" } }, noExercise: true
+      } };
+    } } : {})
+  });
+  const execute = (input = {}, context = {}) => actions.execute({ actionId: definition.id,
+    input: { sessionId: "learning-session", ...input }, context: { channel: "internal", surface: "app", ...context } });
+  return { calls, state, execute };
+}
+
+test("learning operations resolve the exact attempt and current actor through the original action contributor", async () => {
+  const f = learningActionFixture();
+  assert.deepEqual(await f.execute({ learningAttemptId: learningAttempt }), { attemptId: learningAttempt, learnerId: "42" });
+  assert.equal(f.calls[0].resolution.actor, f.state.actor);
+  assert.equal(f.calls[0].resolution.sessionId, "learning-session");
+  assert.equal(f.calls[0].resolution.access, "observe");
+  assert.equal(f.calls[1].input.learningAttemptId, undefined);
+  assert.equal(f.calls[1].input.vibe64User, f.state.actor);
+  assert.equal(f.calls[1].current.slug, undefined);
+  assert.equal(currentProjectRequestContext(), null);
+  f.state.actor = null;
+  await assert.rejects(f.execute({ learningAttemptId: learningAttempt }), { statusCode: 401 });
+  assert.equal(f.calls.length, 2);
+});
+
+test("learning route and input cannot mix another attempt, project or reserved authority", async () => {
+  const f = learningActionFixture();
+  const second = "12345678-1234-4234-8234-123456789abd";
+  await assert.rejects(f.execute({ learningAttemptId: second }, {
+    requestMeta: { request: { params: { learningAttemptId: learningAttempt } } }
+  }), { code: "vibe64_learning_attempt_mismatch" });
+  for (const [input, context] of [
+    [{ learningAttemptId: learningAttempt, projectSlug: "working" }, {}],
+    [{ learningAttemptId: learningAttempt }, { projectSlug: "working" }],
+    [{ learningAttemptId: learningAttempt }, { requestMeta: { request: { params: { slug: "working" } } } }]
+  ]) await assert.rejects(f.execute(input, context), { code: "vibe64_learning_project_mismatch" });
+  await assert.rejects(f.execute({ learningAttemptId: learningAttempt }, { vibe64Action: {
+    user: f.state.actor, learning: { learningScope: { attemptId: learningAttempt } }
+  } }), { code: "vibe64_action_context_reserved" });
+  await assert.rejects(f.execute({ learningAttemptId: "../private" }), { code: "vibe64_learning_attempt_invalid" });
+  assert.equal(f.calls.length, 0);
+});
+
+test("learning authority fails closed when host support or actor binding is missing", async () => {
+  const unsupported = learningActionFixture({ resolver: false });
+  await assert.rejects(unsupported.execute({ learningAttemptId: learningAttempt }), { code: "vibe64_learning_unavailable" });
+  assert.equal(unsupported.calls.length, 0);
+  const foreign = learningActionFixture();
+  foreign.state.foreign = true;
+  await assert.rejects(foreign.execute({ learningAttemptId: learningAttempt }), { code: "vibe64_learning_scope_mismatch" });
+  assert.equal(foreign.calls.length, 1);
+  const ordinary = fixture();
+  await assert.rejects(ordinary.execute({ text: "do not borrow working authority", learningAttemptId: learningAttempt }), {
+    code: "vibe64_learning_unavailable"
+  });
+  assert.equal(ordinary.calls.length, 0);
+});
+
+test("learning writes recheck active authority; ended observations retain the same original context owner", async () => {
+  const write = learningActionFixture({ learningAccess: "write" });
+  await write.execute({ learningAttemptId: learningAttempt });
+  write.state.active = false;
+  await assert.rejects(write.execute({ learningAttemptId: learningAttempt }), { code: "attempt_inactive" });
+  assert.equal(write.calls.filter(value => value.current).length, 1);
+  const observe = learningActionFixture();
+  observe.state.active = false;
+  await observe.execute({ learningAttemptId: learningAttempt });
+  assert.equal(observe.calls[1].current.learningScope.attemptId, learningAttempt);
+  assert.equal(currentProjectRequestContext(), null);
+});

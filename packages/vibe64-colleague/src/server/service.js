@@ -4,7 +4,8 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { createConversationRuntime, createConversationTranscript, createConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
-import { deliveredQuestion, completedPracticalQuestions } from "@local/vibe64-training/server/delivery-proof";
+import { deliveredQuestion, completedPracticalQuestions, promoteTrainingQuestionDeliveries,
+  stageTrainingQuestionDelivery, readAcceptedTrainingAnswer, captureDeliveredTrainingQuestion } from "@local/vibe64-training/server/delivery-proof";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
@@ -84,17 +85,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const state = conversationOwners.get(key);
       if (!state || state.record.runtimeId !== key) throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
       const conversationLog = await Promise.all([...turns.keys()].map(id => transaction.readTurn(id)));
-      for (const [index, turn] of conversationLog.entries()) {
-        const mark = turn.metadata?.trainingQuestionDelivery;
-        const final = turn.messages.findLast(message => message.role === "assistant" && message.text.trim());
-        if (mark?.phase !== "prepared" || mark.conversationId !== state.record.scopeId || mark.turnId !== turn.turnId ||
-            turn.metadata.runtime?.status !== "complete" || !final?.outputId ||
-            final.text.trim() !== mark.questionText) continue;
-        await transaction.updateTurnMetadata(turn.turnId, { trainingQuestionDelivery: {
-          ...mark, phase: "delivered", outputId: final.outputId
-        } });
-        conversationLog[index] = await transaction.readTurn(turn.turnId);
-      }
+      await promoteTrainingQuestionDeliveries(conversationLog, state.record.scopeId, transaction);
       const selected = state.selecting;
       const selectedConfiguration = selected?.configuration;
       const committedSelection = selected && !metadata.runtime?.replacement && metadata.runtime?.engine === selected.engine &&
@@ -737,20 +728,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     const operation = Promise.resolve().then(async () => {
       await requireCurrent();
       const log = await transcript.readConversationLog(state.record.runtimeId);
-      const turn = log.find(value => value.turnId === admitted.turnId);
-      const message = turn?.messages.find(value =>
-        value.role === "user" && value.messageId === input.messageId && value.receipt !== false);
-      const captured = message?.data?.trainingQuestion;
-      const reference = captured && { attemptId: captured.attemptId, questionId: captured.question?.id,
-        assessmentId: captured.question?.assessmentId, issuedRevision: captured.question?.issuedRevision,
-        topicHash: captured.pin?.topic?.topicHash, lessonHash: captured.pin?.lesson?.hash };
-      const delivery = reference && deliveredQuestion(state, reference);
-      const questionTurn = log.find(value => value.turnId === delivery?.turnId);
-      if (!message || !delivery || !isDeepStrictEqual(delivery, captured.delivery) ||
-          typeof captured.question?.text !== "string" ||
-          captured.question.text.trim() !== questionTurn?.metadata?.trainingQuestionDelivery?.questionText) {
+      const accepted = readAcceptedTrainingAnswer(log, { ...admitted, messageId: input.messageId });
+      if (!accepted) {
         throw failure("Evaluate an accepted learner answer associated with its exact delivered native question.");
       }
+      const { message, reference } = accepted;
       if (kind === "practical") {
         connection = state.connections.get(context.colleague.clientId);
         practical = connection?.trainingPractical;
@@ -896,20 +878,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const state = await stateFor(context);
       const admitted = interactiveTrainingTurn(state, context);
       const captured = await context.trainingTeaching.captureQuestion({ actor: authenticatedVibe64User(context), reference });
-      const { conversationId, turnId } = admitted;
-      const mark = { schemaVersion: 1, reference: structuredClone(reference), questionText: captured.question.text.trim(),
-        conversationId, turnId, phase: "prepared" };
       return storage.write(state.record.runtimeId, async transaction => {
         if (!isDeepStrictEqual(interactiveTrainingTurn(state, context), admitted)) {
           throw failure("The admitted lesson question turn changed before staging.");
         }
-        const turn = await transaction.readTurn(turnId);
-        const previous = turn?.metadata?.trainingQuestionDelivery;
-        if (previous) {
-          if (!isDeepStrictEqual(previous.reference, mark.reference)) throw failure("This native turn already stages another question.");
-          return previous;
-        }
-        await transaction.updateTurnMetadata(turnId, { trainingQuestionDelivery: mark });
+        const mark = await stageTrainingQuestionDelivery(transaction, { ...admitted, reference, captured });
+        if (!isDeepStrictEqual(mark.reference, reference)) throw failure("This native turn already stages another question.");
         return mark;
       });
     },
@@ -1481,13 +1455,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           return { status: "accepted", messageId: input.messageId, turnId: previousTurn.turnId, duplicate: true };
         }
         let trainingQuestion;
-        const delivery = input.trainingQuestion && deliveredQuestion(state, input.trainingQuestion);
-        if (delivery) {
+        if (input.trainingQuestion) {
           try {
-            const captured = await context.trainingTeaching?.captureQuestion({
-              actor: authenticatedVibe64User(context), reference: input.trainingQuestion
+            trainingQuestion = await captureDeliveredTrainingQuestion(state.record.conversationLog, {
+              conversationId: state.record.scopeId, reference: input.trainingQuestion,
+              teaching: context.trainingTeaching, actor: authenticatedVibe64User(context)
             });
-            if (captured) trainingQuestion = { ...structuredClone(captured), delivery };
           } catch { /* A stale question leaves this request ordinary and ungraded. */ }
         }
         assertCurrentConversation(state, expected);

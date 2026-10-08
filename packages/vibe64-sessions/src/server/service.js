@@ -843,67 +843,95 @@ function createService({
           }
         }
         const vibe64User = trustedAssistantUser(input);
+        let learningRuntime = null;
+        if (currentProjectRequestContext()?.learningScope) {
+          if (sessionId === undefined) {
+            throw new TypeError("Learning creation requires a server-reserved session ID.");
+          }
+          if (expectedCommit !== undefined || ["repositoryBranch", "pullRequestNumber", "expectedCommit",
+            "sourceContext", "sourcePath", "sourceRoot", "projectSessionSourceRoot", "createSessionSource"]
+            .some(name => Object.hasOwn(input, name))) {
+            throw new TypeError("A source-less learning session cannot select source, branch, pull request or commit options.");
+          }
+          learningRuntime = await project.createRuntime(sessionRuntimeOptions(terminals));
+          if (!learningRuntime.learningScope) {
+            throw new TypeError("Learning creation requires the trusted Project learning runtime.");
+          }
+        }
         const pullRequest = input.pullRequestNumber == null ? null : await project.resolvePullRequestSource({
           number: input.pullRequestNumber, vibe64User
         });
         if (pullRequest && input.repositoryBranch) throw new Error("Choose a branch or a pull request for this session.");
         const { assistantSelection, assistantRouting } = await resolveSessionStart(input, { vibe64User });
-        const runtime = await project.createRuntime(sessionRuntimeOptions(terminals));
-        if (
-          typeof project.developmentDatabasePolicy !== "function" ||
-          typeof project.runProjectSessionPolicyExclusive !== "function"
-        ) {
-          throw new TypeError("Session creation requires the project session policy boundary.");
+        const runtime = learningRuntime || await project.createRuntime(sessionRuntimeOptions(terminals));
+        if (runtime.learningScope && !learningRuntime) {
+          throw new TypeError("Learning creation requires the trusted Project learning context.");
         }
-        const created = await project.runProjectSessionPolicyExclusive(async () => {
-          const visibleOpenSessions = await runtime.listSessionSummaries({
-            statusGroup: "open"
-          });
-          const openSessions = await sessionsOccupyingPolicySlots(runtime, visibleOpenSessions);
-          const policy = await project.developmentDatabasePolicy({ openSessions });
-          if (policy?.creation?.canCreate !== true) {
-            throw sessionCreationLimitError(policy);
-          }
-          if (sessionId !== undefined) {
-            if (typeof runtime.store?.assertSessionCreationAbsent !== "function") {
-              throw new TypeError("Reserved session creation requires the session store's absence check.");
-            }
-            await runtime.store.assertSessionCreationAbsent(sessionId);
-          }
-          const repositoryBranch = input.repositoryBranch ? await project.resolveSessionBranch({
-            selection: input.repositoryBranch, vibe64User
-          }) : null;
-          const session = await runtime.createSession({
-            ...(sessionId === undefined ? {} : { sessionId }),
-            metadata: {
-              ...(repositoryBranch ? { repository_branch: repositoryBranch.name } : {}),
-              ...(pullRequest ? { github_pull_request: JSON.stringify(pullRequest) } : {}),
-              [ASSISTANT_ROUTING_METADATA]: JSON.stringify(assistantRouting),
-              [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(
-                assistantSelection
-              ),
-              created_by: text(vibe64User?.username || vibe64User?.name)
-            },
-            sourceContext: {
-              ...(expectedCommit === undefined ? {} : { expectedCommit }),
-              ...(repositoryBranch ? { expectedCommit: repositoryBranch.commit } : {}),
-              ...(pullRequest ? { expectedCommit: pullRequest.headCommit } : {}),
-              vibe64User
-            }
-          });
-          const updatedPolicy = await project.developmentDatabasePolicy({
-            openSessions: [...openSessions, session]
-          });
-          return {
-            session,
-            updatedPolicy
-          };
-        }, {
-          operation: "create-session"
+        const createAdmittedSession = ({ repositoryBranch = null } = {}) => runtime.createSession({
+          ...(sessionId === undefined ? {} : { sessionId }),
+          metadata: {
+            ...(repositoryBranch ? { repository_branch: repositoryBranch.name } : {}),
+            ...(pullRequest ? { github_pull_request: JSON.stringify(pullRequest) } : {}),
+            [ASSISTANT_ROUTING_METADATA]: JSON.stringify(assistantRouting),
+            [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(
+              assistantSelection
+            ),
+            created_by: text(vibe64User?.username || vibe64User?.name)
+          },
+          ...(!runtime.learningScope ? { sourceContext: {
+            ...(expectedCommit === undefined ? {} : { expectedCommit }),
+            ...(repositoryBranch ? { expectedCommit: repositoryBranch.commit } : {}),
+            ...(pullRequest ? { expectedCommit: pullRequest.headCommit } : {}),
+            vibe64User
+          } } : {})
         });
+        let created;
+        if (runtime.learningScope) {
+          if (typeof runtime.store?.assertSessionCreationAbsent !== "function") {
+            throw new TypeError("Reserved session creation requires the session store's absence check.");
+          }
+          await runtime.store.assertSessionCreationAbsent(sessionId);
+          created = { session: await createAdmittedSession() };
+        } else {
+          if (
+            typeof project.developmentDatabasePolicy !== "function" ||
+            typeof project.runProjectSessionPolicyExclusive !== "function"
+          ) {
+            throw new TypeError("Session creation requires the project session policy boundary.");
+          }
+          created = await project.runProjectSessionPolicyExclusive(async () => {
+            const visibleOpenSessions = await runtime.listSessionSummaries({
+              statusGroup: "open"
+            });
+            const openSessions = await sessionsOccupyingPolicySlots(runtime, visibleOpenSessions);
+            const policy = await project.developmentDatabasePolicy({ openSessions });
+            if (policy?.creation?.canCreate !== true) {
+              throw sessionCreationLimitError(policy);
+            }
+            if (sessionId !== undefined) {
+              if (typeof runtime.store?.assertSessionCreationAbsent !== "function") {
+                throw new TypeError("Reserved session creation requires the session store's absence check.");
+              }
+              await runtime.store.assertSessionCreationAbsent(sessionId);
+            }
+            const repositoryBranch = input.repositoryBranch ? await project.resolveSessionBranch({
+              selection: input.repositoryBranch, vibe64User
+            }) : null;
+            const session = await createAdmittedSession({ repositoryBranch });
+            const updatedPolicy = await project.developmentDatabasePolicy({
+              openSessions: [...openSessions, session]
+            });
+            return {
+              session,
+              updatedPolicy
+            };
+          }, {
+            operation: "create-session"
+          });
+        }
         let setup = null;
         try {
-          setup = await setupRunner.start({
+          if (!runtime.learningScope) setup = await setupRunner.start({
             retry: true,
             runtime,
             session: created.session
@@ -943,7 +971,7 @@ function createService({
             originId: input.originId
           });
         }
-        return publicSession(currentSession, {
+        return publicSession(currentSession, runtime.learningScope ? {} : {
           creation: created.updatedPolicy.creation,
           limits: created.updatedPolicy.limits
         });

@@ -4498,3 +4498,91 @@ test("question discovery carries only the latest actually delivered native attem
   assert.equal((await f.service.read({}, f.context)).trainingQuestion, null);
   assert.equal(reads.at(-1), undefined, "retained old delivery is not a discovery hint in a fresh conversation");
 });
+
+// Original Colleague assertions above continue to exercise these moved owners.
+import { createConversationStorage as createTrainingTranscriptStorage } from "@jskit-ai/assistant-core/server/conversation";
+import { promoteTrainingQuestionDeliveries, stageTrainingQuestionDelivery,
+  readAcceptedTrainingAnswer, captureDeliveredTrainingQuestion } from "../../packages/vibe64-training/src/server/deliveryProof.js";
+
+test("shared Training delivery coordination uses the original transaction and exact canonical final", async () => {
+  let record = { metadata: {}, turns: new Map() };
+  const storage = createTrainingTranscriptStorage({
+    readRecord: async () => record,
+    writeRecord: async (_id, next) => { record = next; }
+  });
+  const conversationId = "learning-native-session", turnId = randomUUID();
+  const reference = { attemptId: randomUUID(), questionId: "q-1", assessmentId: "Answer",
+    issuedRevision: 1, topicHash: "topic", lessonHash: "lesson" };
+  const captured = { question: { text: "Which receipt confirms delivery?" } };
+  const stage = () => storage.write(conversationId, transaction => stageTrainingQuestionDelivery(transaction,
+    { conversationId, turnId, reference, captured }));
+  await storage.write(conversationId, transaction => transaction.appendMessage(turnId,
+    { role: "user", messageId: randomUUID(), text: "Ask me a question.", at: "2026-10-08T00:00:00.000Z" }));
+  const mark = await stage();
+  assert.equal(mark.phase, "prepared");
+  assert.deepEqual(await stage(), mark);
+  await storage.write(conversationId, async transaction => {
+    const conflicting = await stageTrainingQuestionDelivery(transaction,
+      { conversationId, turnId, reference: { ...reference, questionId: "q-2" }, captured });
+    assert.deepEqual(conflicting, mark);
+    assert.deepEqual((await transaction.readTurn(turnId)).metadata.trainingQuestionDelivery, mark);
+    await transaction.replaceAssistant(turnId, { role: "assistant", outputId: "native-output-1",
+      text: captured.question.text, at: "2026-10-08T00:00:01.000Z" });
+    const log = [await transaction.readTurn(turnId)];
+    await promoteTrainingQuestionDeliveries(log, conversationId, transaction);
+    assert.equal(log[0].metadata.trainingQuestionDelivery.phase, "prepared");
+    await transaction.updateTurnMetadata(turnId, { runtime: { status: "complete" } });
+    log[0] = await transaction.readTurn(turnId);
+    await promoteTrainingQuestionDeliveries(log, "another-conversation", transaction);
+    assert.equal(log[0].metadata.trainingQuestionDelivery.phase, "prepared");
+    await promoteTrainingQuestionDeliveries(log, conversationId, transaction);
+    assert.deepEqual(log[0].metadata.trainingQuestionDelivery, { ...mark, phase: "delivered", outputId: "native-output-1" });
+  });
+});
+
+test("shared Training accepted-answer coordination retains exact words, actor and native question identities", async () => {
+  const conversationId = "learning-native-session", turnId = randomUUID(), questionTurnId = randomUUID(), messageId = randomUUID();
+  const reference = { attemptId: randomUUID(), questionId: "q-1", assessmentId: "Answer",
+    issuedRevision: 1, topicHash: "topic", lessonHash: "lesson" };
+  const delivery = { conversationId, turnId: questionTurnId, outputId: "native-output-1" };
+  const captured = { schemaVersion: 1, learnerId: "learner-1", attemptId: reference.attemptId,
+    pin: { topic: { topicHash: "topic" }, lesson: { hash: "lesson" } },
+    question: { id: "q-1", assessmentId: "Answer", issuedRevision: 1, text: "Which receipt?", assistance: "none" } };
+  const message = { role: "user", receipt: true, messageId, text: "The canonical completed native output.",
+    data: { trainingQuestion: { ...captured, delivery } } };
+  const log = [{ turnId: questionTurnId, metadata: { runtime: { status: "complete" }, trainingQuestionDelivery: {
+    schemaVersion: 1, reference, questionText: "Which receipt?", phase: "delivered", ...delivery } },
+    messages: [{ role: "assistant", text: "Which receipt?", outputId: delivery.outputId }] },
+    { turnId, messages: [message] }];
+  const admitted = { conversationId, turnId, messageId };
+  const answer = readAcceptedTrainingAnswer(log, admitted);
+  assert.equal(answer.message, message);
+  assert.deepEqual(answer.reference, reference);
+  assert.deepEqual(answer.delivery, delivery);
+  for (const mismatch of [{ conversationId: "another-session" }, { turnId: questionTurnId }, { messageId: "unknown" }]) {
+    assert.equal(readAcceptedTrainingAnswer(log, { ...admitted, ...mismatch }), null);
+  }
+  for (const corrupt of [
+    value => { value[1].messages[0].receipt = false; },
+    value => { value[1].messages[0].data.trainingQuestion.delivery.outputId = "forged"; },
+    value => { value[1].messages[0].data.trainingQuestion.question.text = "Other question"; },
+    value => { value[0].metadata.runtime.supersededBy = "successor"; },
+    value => { value[0].metadata.runtime.status = "cancelled"; },
+    value => { value[0].messages[0].outputId = "another-native-output"; }
+  ]) {
+    const changed = structuredClone(log); corrupt(changed);
+    assert.equal(readAcceptedTrainingAnswer(changed, admitted), null);
+  }
+  const actor = { id: "actual-actor" }; let calls = 0;
+  const teaching = { async captureQuestion(input) {
+    calls += 1; assert.equal(input.actor, actor); assert.equal(input.reference, reference); return captured;
+  } };
+  const association = await captureDeliveredTrainingQuestion(log, { conversationId, reference, teaching, actor });
+  assert.deepEqual(association, { ...captured, delivery });
+  association.question.text = "caller mutation";
+  assert.equal(captured.question.text, "Which receipt?");
+  assert.equal(await captureDeliveredTrainingQuestion(log, { conversationId: "another-session", reference, teaching, actor }), undefined);
+  assert.equal(calls, 1);
+  await assert.rejects(captureDeliveredTrainingQuestion(log, { conversationId, reference, actor,
+    teaching: { captureQuestion: async () => { throw new Error("Actor permission revoked"); } } }), /permission revoked/);
+});

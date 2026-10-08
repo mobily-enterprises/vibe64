@@ -146,7 +146,11 @@ function currentProjectVibe64User() {
 function currentProjectScopeKey({
   fallback = "global"
 } = {}) {
-  const slug = String(currentProjectRequestContext()?.slug || "").trim();
+  const context = currentProjectRequestContext();
+  if (context?.learningScope) {
+    return `learning:${JSON.stringify([context.learningScope.learnerId, context.learningScope.attemptId])}`;
+  }
+  const slug = String(context?.slug || "").trim();
   if (slug) {
     return `project:${slug}`;
   }

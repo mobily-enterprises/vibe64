@@ -10,10 +10,12 @@ learner reservations outside projects, reusing Core atomic writes and Kernel loc
 Owns installed immutable course definitions/locks and revisioned enablement, and
 declared visual asset reads from exact installed lesson pins. These are internal
 server facilities without course controls or source access for Colleague.
-Owns the unchanged pure canonical delivered-question and completed-practical
-proof readers used by the existing Colleague consumer. Delivery promotion,
-interactive admission, connection receipts and Helper/control coordination
-remain with that consumer; these reads neither grant a pass nor add Main teaching.
+Owns the original canonical delivered-question and completed-practical proof
+readers plus delivery promotion, staging, accepted-answer correlation and
+delivered-question capture, immediately reused by the original Colleague
+consumer. Interactive admission, connection receipts and Helper/control
+coordination remain with the consumer; these operations neither grant a pass
+nor add Main teaching.
 Owns bounded durable assessment receipts and lesson resume state, checked against
 the installed pin, plus a read-only teaching brief without executable assets or
 source paths. Owns internal pinned-rubric grading through the existing retained
@@ -30,8 +32,12 @@ supply concrete resources and provisioning. Reserved
 no-exercise quizzes reuse these pins and answer owners without project effects;
 practical and visual operations retain their preparation gates. Its read-only internal learning-scope reader derives the actual learner/attempt
 and installed no-exercise pin with a private server namespace. It reports current
-and ended state without repair; runtime construction/admission stays with the
-existing session and conversation owners. Teaching
+and ended state without repair. Its internal learning-session coordinator derives
+the authenticated attempt context and fresh pinned teaching instructions while
+using the original preparation lock, Project factory and Main Session creation.
+Historical observation/control cannot admit new lesson work. Runtime construction,
+native admission and all providers stay with existing owners. Host routes and
+Main application-tool integration remain unfinished. Teaching
 delivery, public standalone provisioning and installation controls remain incomplete. JSKIT and
 Genesis do not own teaching semantics. Topic source
 and generated bundles are author-controlled files, rather than database tables.

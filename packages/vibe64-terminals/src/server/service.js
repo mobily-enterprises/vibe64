@@ -1166,7 +1166,9 @@ function createService({
       if (!actions || authority.sessionId !== conversationId) return false;
       const grant = await actions.execute({
         actionId: "vibe64.sessions.conversation.context.read",
-        input: { projectSlug: authority.projectSlug, sessionId: conversationId },
+        input: authority.learningAttemptId
+          ? { learningAttemptId: authority.learningAttemptId, sessionId: conversationId }
+          : { projectSlug: authority.projectSlug, sessionId: conversationId },
         context: authority.requestContext
       });
       return grant.actor.id === authority.actorId;

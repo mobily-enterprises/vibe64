@@ -302,10 +302,14 @@ function createService({
     : getStudioProjectContext());
 
   function selectedTargetRoot() {
+    if (currentProjectRequestContext()?.learningScope) return "";
     return String(currentProjectTargetRoot() || studioProjectContext.targetRoot || "").trim();
   }
 
   function requireSelectedTargetRoot() {
+    if (currentProjectRequestContext()?.learningScope) {
+      throw vibe64Error("This learning session has no project source.", "vibe64_session_source_required");
+    }
     const target = selectedTargetRoot();
     if (target) {
       return target;
@@ -314,6 +318,7 @@ function createService({
   }
 
   function selectedSourceRoot() {
+    if (currentProjectRequestContext()?.learningScope) return "";
     const requestSource = currentProjectSourceRoot();
     if (requestSource) {
       return requestSource;
@@ -357,6 +362,7 @@ function createService({
   }
 
   function selectedSessionSourceRoot() {
+    if (currentProjectRequestContext()?.learningScope) return "";
     const requestRoot = currentProjectSessionSourceRoot();
     if (requestRoot) {
       return requestRoot;
@@ -368,6 +374,20 @@ function createService({
   }
 
   function sessionStore() {
+    const learningContext = currentProjectRequestContext();
+    if (learningContext?.learningScope) {
+      const actorId = String(learningContext.vibe64User?.uid ?? learningContext.vibe64User?.username ?? "");
+      if (!actorId || actorId !== learningContext.learningScope.learnerId ||
+          learningContext.slug || learningContext.targetRoot || learningContext.sourceRoot || learningContext.projectSessionSourceRoot) {
+        throw vibe64Error("Use this authenticated learner's private session context.", "vibe64_learning_scope_mismatch");
+      }
+      return createVibe64SessionStore({
+        logger,
+        projectContextRoot: learningContext.projectRuntimeRoot,
+        projectRuntimeRoot: learningContext.projectRuntimeRoot,
+        learningScope: learningContext.learningScope
+      });
+    }
     const target = requireSelectedTargetRoot();
     return createVibe64SessionStore({
       logger,
@@ -1173,8 +1193,18 @@ function createService({
   }
 
   async function createRuntime(options = {}) {
-    const target = requireSelectedTargetRoot();
     const requestContext = currentProjectRequestContext() || {};
+    if (requestContext.learningScope) {
+      return new Vibe64SessionRuntime({
+        inspectSourceByDefault: false,
+        projectContextRoot: requestContext.projectRuntimeRoot,
+        projectRuntimeRoot: requestContext.projectRuntimeRoot,
+        learningScope: requestContext.learningScope,
+        learningInstructions: requestContext.learningInstructions,
+        store: sessionStore()
+      });
+    }
+    const target = requireSelectedTargetRoot();
     return new Vibe64SessionRuntime({
       createSessionSource: options.createSessionSource,
       inspectSourceByDefault: options.inspectSource !== false,

@@ -196,6 +196,24 @@ actor, capacity, source preparation and publication policy. Setup or publication
 failure does not falsify a session already saved. This seam alone adds no learner
 start control or training operation.
 
+The same `createSession` also accepts the existing Project runtime for a trusted
+server learning context. It requires a reserved internal ID and refuses branch,
+PR, commit and source options before source resolution. The original trusted
+actor, workflow initialization, effective Senior/backup and selected connection
+access policy still precede the write. Its one shared metadata body uses the
+original fields; Runtime/Store alone creates the immutable learning binding.
+After the store's real absence preflight, the original locked staged create owns
+atomic publication and duplicate refusal. This branch creates no source,
+workspace setup, development database slot or synthetic capacity policy; its
+result is the actual public session view without `creation`/`limits` fields.
+The common inspect and `session-created` publication sequence remains unchanged,
+including truthful retention after inspection/publication failures. Ordinary
+source creation retains PR/routing/runtime/policy/source/setup order and its
+existing result fields. Browser purpose/scope/ID arguments do not enable learning.
+Training must freshly authorize the actor, exact active attempt and installed
+no-exercise pin before supplying the context; this internal creation adaptation
+does not itself expose Main Learning mode or prove a native teaching trial.
+
 Session text and metadata are replaced atomically, like the store's JSON records.
 Concurrent readers see a complete previous or next value during assistant changes;
 a failed replacement preserves the saved value. This does not make multiple

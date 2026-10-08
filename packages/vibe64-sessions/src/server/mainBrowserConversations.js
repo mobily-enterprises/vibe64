@@ -16,8 +16,8 @@ function withoutFields(schema, excluded) {
 }
 
 const messageFields = withoutFields(agentMessageActionInputValidator.schema,
-  ["sessionId", "vibe64User", "message", "messageId", "attachmentIds", "submissionKind"]);
-const selectionFields = withoutFields(assistantSelectionUpdateActionInputValidator.schema, ["sessionId", "vibe64User"]);
+  ["sessionId", "vibe64User", "learningAttemptId", "message", "messageId", "attachmentIds", "submissionKind"]);
+const selectionFields = withoutFields(assistantSelectionUpdateActionInputValidator.schema, ["sessionId", "vibe64User", "learningAttemptId"]);
 const mainConversationDataSchema = createSchema(messageFields);
 const mainConversationSelectionSchema = createSchema(selectionFields);
 
@@ -55,7 +55,9 @@ function createMainBrowserConversations({ actions, terminals } = {}) {
       const temporary = temporaryConversationTarget(id);
       const target = temporary || mainConversationTarget(id);
       if (!target) throw unavailable();
-      const accessTarget = { projectSlug: target.projectSlug, sessionId: target.sessionId };
+      const accessTarget = target.learningAttemptId
+        ? { learningAttemptId: target.learningAttemptId, sessionId: target.sessionId }
+        : { projectSlug: target.projectSlug, sessionId: target.sessionId };
       const request = context?.requestMeta?.request;
       // Never retain an action contributor's cached authority for a later read,
       // subscription publication or mutation.

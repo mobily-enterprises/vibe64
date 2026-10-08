@@ -70,6 +70,22 @@ const ACTION_INSPECT_REPOSITORY_HISTORY = "vibe64.repository.history.inspect";
 const ACTION_INSPECT_REPOSITORY_VERSION_FILES = "vibe64.repository.history.files.inspect";
 const ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF = "vibe64.repository.history.diff.inspect";
 
+// Only existing source-independent Main operations may enter a learning scope.
+// Repository, setup, renewal and project operations retain project authority.
+const learningAccess = {
+  [ACTION_READ_CONVERSATION_CONTEXT]: "observe",
+  [ACTION_LIST_SESSIONS]: "observe",
+  [ACTION_LIST_ARCHIVED_SESSIONS]: "observe",
+  [ACTION_INSPECT_SESSION]: "observe",
+  [ACTION_READ_SESSION_CONVERSATION_LOG]: "observe",
+  [ACTION_INSPECT_ASSISTANT_ACCESS]: "observe",
+  [ACTION_SEND_AGENT_MESSAGE]: "write",
+  [ACTION_UPDATE_ASSISTANT_SELECTION]: "write",
+  [ACTION_RENAME_SESSION]: "write",
+  [ACTION_INTERRUPT_AGENT_TURN]: "control",
+  [ACTION_UPDATE_SESSION_PRESENCE]: "control"
+};
+
 function action({
   assistant,
   events = [],
@@ -96,7 +112,7 @@ function action({
     observability: {},
     events,
     execute
-  }, { projectScoped });
+  }, { projectScoped, learningAccess: learningAccess[id] || false });
 }
 
 function withoutSessionId(input = {}) {
@@ -118,7 +134,7 @@ function createSessionActions({ sessions } = {}) {
         input: sessionIdInputValidator,
         execute: (_input, context) => ({
           actor: context.actor,
-          project: context.vibe64Action.project,
+          project: context.vibe64Action.learning || context.vibe64Action.project,
           user: authenticatedVibe64User(context)
         })
       }),
