@@ -77,6 +77,12 @@ Close, Stop and collapsible task details retain their own existing behavior.
 
 ## Public contract
 
+Embedded Preview hides its iframe during active editing, and retains that cover
+after interruption, failure, or a gap between goal turns. Only **Preview changes**
+reveals it, using the existing refresh and stale-output restart operations.
+The cover is local to the mounted workspace and resets on session change; it
+neither snapshots source nor rolls back data or stops managed browser checks.
+
 Output targets may declare `Data: test` or `Data: development` in the Vibe64-owned
 Outputs grammar. This optional field reaches target views unchanged. Test-data
 targets show a persistent amber banner in embedded Preview; their app launchers

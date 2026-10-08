@@ -904,6 +904,22 @@ function useVibe64OutputControlsSurface(props) {
   }));
   const previewFrameRequestId = computed(() => previewFrameRequest.value.id);
   const previewUrl = computed(() => previewFrameRequest.value.src);
+  const previewChangesHidden = ref(false);
+  watch([() => props.session?.sessionId, () => props.busy, () => props.sourceOperationsSuspended, previewUrl],
+    ([sessionId, busy, suspended, url], previous = []) => {
+      if (sessionId !== previous[0]) previewChangesHidden.value = false;
+      if ((busy || suspended) && url) previewChangesHidden.value = true;
+    }, { immediate: true, flush: "sync" });
+
+  async function revealPreviewChanges() {
+    if (props.busy || props.sourceOperationsSuspended) return;
+    if (previewState.value === "stale") {
+      const result = await restartTerminal();
+      if (result?.ok === false) return;
+    }
+    await reloadPreview();
+    if (!props.busy && !props.sourceOperationsSuspended) previewChangesHidden.value = false;
+  }
   const previewFrameLoaded = computed(() => Boolean(
     previewUrl.value &&
     previewFrameRequestId.value > 0 &&
@@ -2145,6 +2161,8 @@ function useVibe64OutputControlsSurface(props) {
 
   return {
     outputOptionsAction,
+    previewChangesHidden,
+    revealPreviewChanges,
     previewTestNotice,
     outputOptionsAvailable,
     outputOptionsError,

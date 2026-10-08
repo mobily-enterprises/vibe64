@@ -735,6 +735,8 @@ interrupt a person's navigation away while the database loads.
 Preview visibly identifies a declared test-data target and managed browser-test
 handover. It shows restoration in progress and retains a red recovery notice
 after failed cleanup or restoration, instead of presenting test data as normal.
+During edits the embedded app is covered. It stays covered through interruptions
+and goal pauses until the person selects **Preview changes**.
 The diagram keeps the working space: routine search and Fit
 stay visible, while occasional display and arrangement controls live in an
 options menu. Overview concepts can be dragged continuously without waiting for

@@ -626,6 +626,41 @@ describe("Vibe64 launch controls surface", () => {
 
 
 const mountedSurfaces = [];
+
+it("keeps interrupted and goal-turn changes covered until an explicit reveal", async () => {
+  const f = mountOrientationSurface();
+  f.props.busy = true;
+  expect(f.state.previewChangesHidden.value).toBe(true);
+  const generation = f.state.previewFrameRequestId.value;
+  await f.state.revealPreviewChanges();
+  expect(f.state.previewFrameRequestId.value).toBe(generation);
+  f.props.busy = false;
+  await nextTick();
+  expect(f.state.previewChangesHidden.value).toBe(true);
+  f.props.busy = true;
+  f.props.busy = false;
+  await nextTick();
+  expect(f.state.previewChangesHidden.value).toBe(true);
+  await f.state.revealPreviewChanges();
+  expect(f.state.previewChangesHidden.value).toBe(false);
+  expect(f.state.previewFrameRequestId.value).toBeGreaterThan(generation);
+  f.props.sourceOperationsSuspended = true;
+  expect(f.state.previewChangesHidden.value).toBe(true);
+  f.props.sourceOperationsSuspended = false;
+  f.props.session = { sessionId: "another-session" };
+  expect(f.state.previewChangesHidden.value).toBe(false);
+});
+
+it("keeps the cover when a stale backend cannot restart", async () => {
+  const f = mountOrientationSurface();
+  f.props.busy = true;
+  f.props.busy = false;
+  f.outputs.previewState.value = "stale";
+  f.outputs.restartTerminal.mockResolvedValue({ ok: false });
+  await f.state.revealPreviewChanges();
+  expect(f.outputs.restartTerminal).toHaveBeenCalledTimes(1);
+  expect(f.state.previewChangesHidden.value).toBe(true);
+});
 afterEach(() => {
   for (const fixture of mountedSurfaces.splice(0)) fixture.dispose();
   vi.unstubAllGlobals();
@@ -650,7 +685,7 @@ function mountOrientationSurface() {
   const target = { id: "app", presentation: { kind: "web" } };
   Object.assign(outputs, { activeOutputTarget: ref(target), outputTargets: ref([target]), previewState: ref("ready"),
     terminal: ref({ metadata: { outputTargetId: "app" } }), terminalSessionId: ref("terminal-a"),
-    launchActions: ref([{ href: "https://preview.example.test/" }]), publishPreviewState: vi.fn(), refresh: vi.fn(async () => {}) });
+    launchActions: ref([{ href: "https://preview.example.test/" }]), publishPreviewState: vi.fn(), refresh: vi.fn(async () => {}), restartTerminal: vi.fn(async () => ({ ok: true })) });
   surfaceHost.outputs = outputs;
   surfaceHost.projectSlug = ref("practice");
   const windowListeners = new Map();

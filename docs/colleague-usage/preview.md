@@ -1,5 +1,16 @@
 # Previewing a web application
 
+While the coding agent works, **Updating app…** covers the embedded app. After
+the agent stops, **App changes are hidden** remains until you select **Preview
+changes**. Interrupting the agent, a failed turn, or a pause between goal turns
+does not reveal changes. The button is disabled during active edits. Selecting
+it refreshes Preview, restarting a stale backend through the existing output
+command when required. This is a display cover, not a rollback or a saved app
+version. It applies to the current workspace on desktop and mobile; reloading
+the editor or switching sessions starts a new Preview view. Managed browser
+checks continue independently. Colleague can explain the button; it does not
+silently reveal or certify changes.
+
 An amber **Test Preview** bar means the selected app target declares isolated
 test data. It remains visible above the app on desktop and mobile, even with
 the Preview toolbar collapsed. Changes in that target use its test data rather

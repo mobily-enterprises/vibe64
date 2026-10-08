@@ -522,15 +522,23 @@
       </div>
       <iframe
         v-if="previewUrl"
+        :inert="previewChangesHidden ? true : undefined"
+        :aria-hidden="previewChangesHidden ? 'true' : undefined"
         :key="previewFrameRequestId"
         ref="previewFrame"
         allow="clipboard-write; microphone; autoplay"
         class="vibe64-launch-controls__preview-frame"
+        :style="previewChangesHidden ? { visibility: 'hidden' } : undefined"
         :data-preview-frame-request-id="previewFrameRequestId"
         :src="previewUrl"
         title="App preview"
         @load="handlePreviewFrameLoad"
       />
+      <div v-if="previewChangesHidden" class="vibe64-launch-controls__preview-empty vibe64-launch-controls__edit-cover" role="status">
+        <strong>{{ busy || sourceOperationsSuspended ? 'Updating app…' : 'App changes are hidden' }}</strong>
+        <span>Your app will stay hidden until you choose to preview the changes.</span>
+        <v-btn :disabled="busy || sourceOperationsSuspended || operationBusy" color="primary" variant="flat" @click="revealPreviewChanges">Preview changes</v-btn>
+      </div>
       <div
         v-if="previewLoadingOverlayVisible"
         class="vibe64-launch-controls__preview-empty vibe64-launch-controls__preview-overlay"
@@ -916,6 +924,8 @@ const {
   embeddedManualStartButtonDisabled,
   resourceAdmissionId,
   testApproval,
+  previewChangesHidden,
+  revealPreviewChanges,
   previewTestNotice,
   acceptResourceRetry,
   embeddedManualStartButtonVisible,
@@ -1614,6 +1624,8 @@ onBeforeUnmount(() => {
     rgb(var(--v-theme-surface));
   z-index: 1;
 }
+
+.vibe64-launch-controls__edit-cover { background: rgb(var(--v-theme-surface)); z-index: 2; }
 
 .vibe64-launch-controls__preview-diagnostic {
   align-self: center;
