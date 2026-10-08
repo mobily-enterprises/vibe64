@@ -14,7 +14,7 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
     throw new TypeError("Answer assessment requires the original learner, teaching and installed-content owners.");
   }
 
-  async function evaluate(kind, { actor, attemptId, expectedRevision, submissionId, message, observation, checkResult } = {}, { state, context, helper } = {}) {
+  async function evaluate(kind, { actor, attemptId, expectedRevision, submissionId, message, observation, checkResult } = {}, { state, context, helper, requireCurrent } = {}) {
     const saved = await learners.readState({ actor, includeCompletion: true });
     const attempt = saved.progress.attempts.find(value => value.attemptId === saved.progress.activeAttemptId);
     const captured = message?.data?.trainingQuestion;
@@ -72,6 +72,7 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
       }
       // Native replay reconciles a derived summary without another inference,
       // even when the lesson has since advanced to its next question.
+      await requireCurrent?.();
       return learners.recordAssessment({ actor, attemptId, expectedRevision, ...previous });
     }
     const evidenceId = kind === "practical" ? "observationId" : "messageId";
@@ -96,6 +97,8 @@ function createTrainingAnswerAssessment({ learners, content, teaching } = {}) {
       assistance: question.assistance }, context);
     signal.throwIfAborted();
     await teaching.captureQuestion({ actor, reference });
+    signal.throwIfAborted();
+    await requireCurrent?.();
     return learners.recordAssessment({ actor, attemptId, expectedRevision, submissionId,
       assessmentId: question.assessmentId, evidence, assistance: question.assistance, ...result });
   }

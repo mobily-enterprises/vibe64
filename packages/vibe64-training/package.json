@@ -25,7 +25,8 @@
     "./server/learning-sessions": "./src/server/learningSessions.js",
     "./server/preparation": "./src/server/preparation.js",
     "./server/installed-catalogue": "./src/server/installedCatalogue.js",
-    "./server/routes": "./src/server/registerRoutes.js"
+    "./server/routes": "./src/server/registerRoutes.js",
+    "./server/conversation-assessment": "./src/server/conversationAssessment.js"
   },
   "jskit": {
     "kind": "runtime",

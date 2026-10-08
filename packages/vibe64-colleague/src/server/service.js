@@ -1,3 +1,4 @@
+import { evaluateAdmittedTrainingAssessment } from "@local/vibe64-training/server/conversation-assessment";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -744,18 +745,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           observation: practical.observation, checkResult: practical.checkResult });
       }
       await requireCurrent();
-      const helper = { async runHelper(...args) {
-        const text = await summaries.runHelper(...args);
-        await requireCurrent();
-        return text;
-      } };
-      const result = await evaluate.call(context.trainingAssessment, { actor: authenticatedVibe64User(context),
+      return evaluateAdmittedTrainingAssessment(kind, {
         attemptId: input.attemptId, expectedRevision: input.expectedRevision, submissionId: input.submissionId,
         message: structuredClone(message),
         ...(kind === "practical" ? { observation: structuredClone(practicalFacts.observation), checkResult: structuredClone(practicalFacts.checkResult) } : {})
-      }, { state, context, helper });
-      await requireCurrent();
-      return result;
+      }, context, { assessment: context.trainingAssessment, state, helper: summaries, requireCurrent });
     }).finally(() => {
       context.signal?.removeEventListener("abort", abort);
       if (state.summaryRunning === operation) state.summaryRunning = null;

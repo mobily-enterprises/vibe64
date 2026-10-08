@@ -4627,3 +4627,82 @@ test("the extracted retained Helper keeps its original native receipt and cleanu
   assert.equal(cleanup.executionProfile.workloadId, "training_assessment");
   assert.equal(f.observations.starts.length, 0, "the primary parent model was never used as the Helper");
 });
+
+
+for (const boundary of ["logout", "operation-abort"]) {
+  test(`the original assessment writer refuses ${boundary} during its final awaited question check`, { timeout: 5000 }, async t => {
+    const entered = Promise.withResolvers(), release = Promise.withResolvers();
+    t.after(() => release.resolve());
+    const f = await fixture(t, [call("issue-question"), reply(capturedQuestion.question.text),
+      call("evaluate"), reply("The retired assessment cannot save.")]);
+    const operationAbort = new AbortController();
+    let captures = 0, saves = 0, result;
+    const teaching = { async captureQuestion() {
+      captures++;
+      if (captures === 4) { entered.resolve(); await release.promise; }
+      return structuredClone(capturedQuestion);
+    } };
+    const attempt = { attemptId: issuedQuestion.attemptId, pin: structuredClone(capturedQuestion.pin),
+      preparation: { phase: "ready" }, learning: { submissions: [] } };
+    const assessment = createTrainingAnswerAssessment({ teaching,
+      learners: {
+        async readState() { return { revision: 7, progress: { learnerId: "NDI", activeAttemptId: attempt.attemptId, attempts: [attempt] } }; },
+        async recordAssessment() { saves++; return { revision: 8, outcome: "passed" }; }
+      },
+      content: { async readLesson() { return { lesson: { assessments: [{ id: issuedQuestion.assessmentId, kind: "answer" }] },
+        rubrics: [{ id: issuedQuestion.assessmentId, text: "The learner names Colleague as someone to ask for help." }] }; } }
+    });
+    f.context.trainingTeaching = teaching;
+    f.observations.expectedHelperWorkload = "training_assessment";
+    f.observations.helperAnswer = JSON.stringify({ outcome: "passed", explanation: "The accepted answer names Colleague." });
+    f.observations.onOperation = async (input, native) => {
+      const context = { ...native, signal: operationAbort.signal, trainingTeaching: teaching, trainingAssessment: assessment };
+      if (input.value === "issue-question") return f.service.stageTrainingQuestion(issuedQuestion, context);
+      result = f.service.evaluateTrainingAnswer(answerEvaluation, context).then(value => value, error => error);
+      await result;
+    };
+    await f.send("Teach me.", "prepare-question");
+    await f.service.wait(f.context);
+    await f.send("I would ask Colleague.", answerEvaluation.messageId, { trainingQuestion: issuedQuestion });
+    await Promise.race([entered.promise, f.service.wait(f.context).then(value => {
+      throw new Error(`The final question check was not reached: ${value.error}`);
+    })]);
+    if (boundary === "logout") f.observations.allow = false;
+    else operationAbort.abort(new Error("The assessment operation was retired"));
+    release.resolve();
+    assert.ok(await result instanceof Error);
+    f.observations.allow = true;
+    await f.service.wait(f.context);
+    assert.equal(captures, 4, "the original final pinned-question read was held after Helper cleanup");
+    assert.equal(saves, 0, "no stale result reaches the canonical learner CAS");
+    assert.equal(f.observations.helperCalls.filter(value => value.input?.prompt).length, 1);
+    assert.equal(f.observations.helperCalls.filter(value => value.cleanup).length, 1);
+  });
+}
+
+test("the shared assessment cut uses the authenticated actor and fences retained replay before its original writer", async () => {
+  const { evaluateAdmittedTrainingAssessment } = await import("../../packages/vibe64-training/src/server/conversationAssessment.js");
+  const actor = { uid: 42, username: "alice", role: "member" };
+  const context = { requestMeta: { request: { vibe64User: actor } } };
+  const attempt = { attemptId: issuedQuestion.attemptId, pin: structuredClone(capturedQuestion.pin), preparation: { phase: "ready" },
+    learning: { submissions: [{ submissionId: answerEvaluation.submissionId, assessmentId: issuedQuestion.assessmentId,
+      assistance: capturedQuestion.question.assistance, outcome: "passed", explanation: "Already assessed.",
+      evidence: { kind: "answer", learnerId: "NDI", attemptId: issuedQuestion.attemptId, messageId: answerEvaluation.messageId,
+        questionId: issuedQuestion.questionId, text: "I would ask Colleague." } }] } };
+  let checks = 0, writes = 0;
+  const assessment = createTrainingAnswerAssessment({ learners: {
+    async readState(input) { assert.equal(input.actor, actor); return { revision: 8,
+      progress: { learnerId: "NDI", activeAttemptId: attempt.attemptId, attempts: [attempt] } }; },
+    async recordAssessment() { writes++; }
+  }, content: { async readLesson() { throw new Error("Replay cannot read another rubric"); } },
+  teaching: { async captureQuestion() { throw new Error("Replay cannot infer another question"); } } });
+  await assert.rejects(evaluateAdmittedTrainingAssessment("answer", { ...answerEvaluation, actor: { uid: 99 },
+    message: { role: "user", receipt: true, messageId: answerEvaluation.messageId, text: "I would ask Colleague.",
+      data: { trainingQuestion: { ...structuredClone(capturedQuestion),
+        delivery: { conversationId: "original-native", turnId: "question-turn", outputId: "native-output" } } } }
+  }, context, { assessment, state: {}, helper: { async runHelper() { throw new Error("Replay cannot invoke Helper"); } },
+    async requireCurrent() { if (++checks === 2) throw new Error("Original admission was revoked"); }
+  }), /Original admission was revoked/);
+  assert.equal(checks, 2);
+  assert.equal(writes, 0);
+});

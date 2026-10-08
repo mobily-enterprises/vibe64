@@ -65,3 +65,9 @@ existing Stop and cleanup behavior; it does not by itself enable Main grading.
 If cleanup is unconfirmed, retain the attempt and resolve that failure before
 requesting another evaluation. Colleague must not report a pass from missing or
 unfinished Helper evidence.
+
+If Stop, cancellation or loss of access retires an evaluation while its final
+question check is pending, the result is refused before it saves a pass. Reopen
+the retained attempt with current access and read its saved result before
+requesting another evaluation. This assessment prerequisite does not yet enable
+the left Main teacher's lesson tools.

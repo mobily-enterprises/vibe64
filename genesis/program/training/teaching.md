@@ -21,6 +21,7 @@
 - `packages/vibe64-training/src/server/deliveryProof.js`
 - `tests/server/vibe64TrainingTeaching.unit.test.js`
 - `packages/vibe64-training/src/server/answerAssessment.js`
+- `packages/vibe64-training/src/server/conversationAssessment.js`
 - `packages/vibe64-training/src/server/assessmentActions.js`
 - `packages/vibe64-training/src/server/teachingActions.js`
 - `tests/server/vibe64TrainingActionTools.unit.test.js`
@@ -103,6 +104,17 @@ check and uses real standalone finite execution against a loopback HTTP transpor
 fixture; it does not claim hosted fleet or learner gesture acceptance.
 
 ### Admitted answer assessment
+
+Training's internal `evaluateAdmittedTrainingAssessment` shares Colleague's
+original authenticated-actor, Helper and domain invocation block. Colleague still
+owns its interactive actor/turn/generation, cue, practical facts, serialized
+Helper lifetime and fresh authorization checks. The shared invocation supplies
+that exact current-admission guard to the original answer owner, which checks it
+immediately before both retained replay and new assessment CAS. It also rechecks
+cancellation after the final awaited pinned-question read. This closes the await
+between Helper cleanup and canonical save; it adds no teaching authority, second
+progress writer or Main tool registration. Unconfigured direct domain callers
+retain their original behavior and remain responsible for admitted evidence.
 
 The internal answer owner receives a canonical accepted user message from the
 original Colleague admission owner. It checks this learner's prepared exercise pin, or reserved no-exercise answer pin, and

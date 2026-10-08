@@ -840,6 +840,16 @@ conversation loop or browser authoring control is introduced.
 
 ### Browser question admission
 
+The existing native answer/practical coordinator delegates only its original
+authenticated actor, Helper invocation and domain call to Training's shared
+conversation-assessment owner. Its original current actor, native turn,
+generation, cue, practical observation and cancellation checks remain here. The
+same fresh-current guard now reaches the canonical assessment writer after its
+last awaited question read and before retained replay. No retired operation can
+save a stale result merely because the Helper already finished cleanup. This
+shared cut does not enable Main teaching or remove Colleague's compatibility
+caller before that path is proved.
+
 The original browser facade omits undefined Training owners so native action
 contributors can supply them on each operation; explicit owners or null remain
 unchanged. Future admitted answers retain the existing canonical question
