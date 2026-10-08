@@ -21,6 +21,14 @@ button/check correlation and declared SVG/controller protocol unless the person'
 request explicitly changes that content. New lesson content may be authored as
 a draft using the existing template below; a draft is not another learner release.
 
+For the revised Learning flow, Main teaches the lesson and Colleague stays the
+general supervisor. Keep the introduction’s original Colleague leave/restore task:
+the learner uses that real drawer and returns to its retained task while the Main
+lesson stays saved. Hiding Main does not replace that practical. Review genuine
+workspace, application and diagram evidence before calling the candidate ready;
+content validation does not supply missing teaching controls. Changed teaching
+text needs a new immutable topic/course pin, keeping earlier learners’ versions.
+
 ## Delegate and review
 
 For example: “In this lesson-authoring project and session, improve the introduction's
