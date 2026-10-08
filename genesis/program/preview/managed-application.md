@@ -118,7 +118,9 @@ and a ready restored Preview, then performs live inspection. Read-only status
 and logs remain available while tests run. This guidance uses the existing test
 owner and recovery guard; it adds no execution or locking mechanism.
 For background commands, instructions and help prefer an existing execution
-wait of about 30 seconds where supported. Status and failure excerpts are read
+wait of about 30 seconds where supported, explicitly `yield_time_ms: 30000`
+for empty command polls. Shorter waits serve interactive input or a specific
+immediate check. Status and failure excerpts are read
 for new output, changed state or a concrete blocker, avoiding repeated reads of
 empty or unchanged logs between brief waits.
 

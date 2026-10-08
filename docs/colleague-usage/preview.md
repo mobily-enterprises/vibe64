@@ -105,6 +105,8 @@ sequence and offer coding-agent assistance through the existing chat controls.
 While a suite runs in the background, the coding agent waits on its existing
 execution and checks logs when output or state changes, rather than repeatedly
 reading unchanged logs between short waits.
+Where its command tool supports `yield_time_ms`, an empty progress wait uses
+`30000`; shorter waits are for interactive input or a specific immediate check.
 
 The coding agent can read `vibe64-helper playwright --help` before a project has
 browser tests or a matching test runtime. Help starts neither Preview nor a browser.
