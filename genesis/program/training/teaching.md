@@ -693,6 +693,14 @@ interactive admission, cancellation and its serialized Helper lifetime. Main mus
 supply those same native guarantees before it can use these operations; moving
 these functions alone does not register Main teaching tools or grading authority.
 
+Training also owns the original admitted staging coordination: capture the exact
+actor/reference, enter the original canonical storage transaction, recheck the
+host's admitted turn, stage through `stageTrainingQuestionDelivery`, and refuse
+a conflicting retained reference with the host's original failure. Colleague
+immediately supplies its unchanged interactive/cue/generation guard and physical
+runtime ID. The current guard may await a Main authority check; Main still must
+supply its actual fresh WRITE/native request binding before exposing tools.
+
 ### Existing learning conversation summary projection
 
 `learningSessions.readSessions({actor})` reads only this actor's original bounded

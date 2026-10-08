@@ -6,7 +6,7 @@ import { isDeepStrictEqual } from "node:util";
 import { createConversationRuntime, createConversationTranscript, createConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { deliveredQuestion, completedPracticalQuestions, promoteTrainingQuestionDeliveries,
-  stageTrainingQuestionDelivery, readAcceptedTrainingAnswer, captureDeliveredTrainingQuestion } from "@local/vibe64-training/server/delivery-proof";
+  stageAdmittedTrainingQuestion, readAcceptedTrainingAnswer, captureDeliveredTrainingQuestion } from "@local/vibe64-training/server/delivery-proof";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
@@ -871,14 +871,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     async stageTrainingQuestion(reference, context) {
       const state = await stateFor(context);
       const admitted = interactiveTrainingTurn(state, context);
-      const captured = await context.trainingTeaching.captureQuestion({ actor: authenticatedVibe64User(context), reference });
-      return storage.write(state.record.runtimeId, async transaction => {
-        if (!isDeepStrictEqual(interactiveTrainingTurn(state, context), admitted)) {
-          throw failure("The admitted lesson question turn changed before staging.");
+      return stageAdmittedTrainingQuestion(reference, {
+        actor: authenticatedVibe64User(context), teaching: context.trainingTeaching,
+        storage, storageId: state.record.runtimeId, admitted, failure,
+        requireCurrent() {
+          if (!isDeepStrictEqual(interactiveTrainingTurn(state, context), admitted)) {
+            throw failure("The admitted lesson question turn changed before staging.");
+          }
         }
-        const mark = await stageTrainingQuestionDelivery(transaction, { ...admitted, reference, captured });
-        if (!isDeepStrictEqual(mark.reference, reference)) throw failure("This native turn already stages another question.");
-        return mark;
       });
     },
     evaluateTrainingAnswer(input, context) {

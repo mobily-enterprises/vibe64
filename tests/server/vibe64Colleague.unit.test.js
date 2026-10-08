@@ -4706,3 +4706,49 @@ test("the shared assessment cut uses the authenticated actor and fences retained
   assert.equal(checks, 2);
   assert.equal(writes, 0);
 });
+
+
+test("shared admitted question staging preserves the original transaction, actor and current-turn fence", async () => {
+  const { stageAdmittedTrainingQuestion } = await import("../../packages/vibe64-training/src/server/deliveryProof.js");
+  let record = { metadata: {}, turns: new Map() }, writes = 0, checks = 0;
+  const storage = createTrainingTranscriptStorage({ readRecord: async () => record,
+    writeRecord: async (_id, next) => { writes++; record = next; } });
+  const admitted = { conversationId: "actual-main-conversation", turnId: randomUUID() };
+  const actor = { uid: 42, username: "alice" };
+  const reference = { attemptId: randomUUID(), questionId: "question-1", assessmentId: "Answer",
+    issuedRevision: 1, topicHash: "topic", lessonHash: "lesson" };
+  const failure = text => Object.assign(new Error(text), { code: "original-host-failure" });
+  let active = true;
+  const facilities = { actor, storage, storageId: "original-canonical-record", admitted, failure,
+    teaching: { async captureQuestion(input) {
+      assert.equal(input.actor, actor); assert.equal(input.reference, reference);
+      return { question: { text: "Which canonical receipt confirms delivery?" } };
+    } },
+    async requireCurrent() { checks++; if (!active) throw failure("The actual admitted turn was retired"); }
+  };
+  await storage.write(facilities.storageId, transaction => transaction.appendMessage(admitted.turnId,
+    { role: "user", messageId: randomUUID(), text: "Ask the saved lesson question.", at: "2026-10-08T00:00:00.000Z" }));
+  const mark = await stageAdmittedTrainingQuestion(reference, facilities);
+  assert.deepEqual(mark, { schemaVersion: 1, reference, questionText: "Which canonical receipt confirms delivery?",
+    ...admitted, phase: "prepared" });
+  assert.deepEqual(await stageAdmittedTrainingQuestion(reference, facilities), mark);
+  assert.equal(checks, 2);
+  const before = structuredClone(record), writesBefore = writes;
+  await assert.rejects(stageAdmittedTrainingQuestion({ ...reference, questionId: "other-question" }, {
+    ...facilities, teaching: { captureQuestion: async () => ({ question: { text: "A different question?" } }) }
+  }), { code: "original-host-failure", message: "This native turn already stages another question." });
+  assert.deepEqual(record, before);
+  assert.equal(writes, writesBefore);
+  const captureEntered = Promise.withResolvers(), captureRelease = Promise.withResolvers();
+  const pending = stageAdmittedTrainingQuestion(reference, { ...facilities,
+    teaching: { async captureQuestion() {
+      captureEntered.resolve(); await captureRelease.promise;
+      return { question: { text: "Which canonical receipt confirms delivery?" } };
+    } }
+  });
+  await captureEntered.promise;
+  active = false; captureRelease.resolve();
+  await assert.rejects(pending, { code: "original-host-failure", message: "The actual admitted turn was retired" });
+  assert.deepEqual(record, before);
+  assert.equal(writes, writesBefore, "retired staging never commits the canonical record");
+});

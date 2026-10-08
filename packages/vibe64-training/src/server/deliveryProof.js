@@ -71,6 +71,20 @@ async function stageTrainingQuestionDelivery(transaction, { conversationId, turn
   return mark;
 }
 
+// Original Colleague staging coordination. The host retains its actual admitted
+// turn, transaction identity and current-authority check.
+async function stageAdmittedTrainingQuestion(reference, {
+  actor, teaching, storage, storageId, admitted, requireCurrent, failure
+}) {
+  const captured = await teaching.captureQuestion({ actor, reference });
+  return storage.write(storageId, async transaction => {
+    await requireCurrent();
+    const mark = await stageTrainingQuestionDelivery(transaction, { ...admitted, reference, captured });
+    if (!isDeepStrictEqual(mark.reference, reference)) throw failure("This native turn already stages another question.");
+    return mark;
+  });
+}
+
 function readAcceptedTrainingAnswer(log, { conversationId, turnId, messageId }) {
   const turn = log.find(value => value.turnId === turnId);
   const message = turn?.messages.find(value =>
@@ -95,4 +109,5 @@ async function captureDeliveredTrainingQuestion(log, { conversationId, reference
 }
 
 export { deliveredQuestion, completedPracticalQuestions, promoteTrainingQuestionDeliveries,
-  stageTrainingQuestionDelivery, readAcceptedTrainingAnswer, captureDeliveredTrainingQuestion };
+  stageTrainingQuestionDelivery, stageAdmittedTrainingQuestion,
+  readAcceptedTrainingAnswer, captureDeliveredTrainingQuestion };
