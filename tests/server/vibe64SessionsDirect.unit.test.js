@@ -4393,3 +4393,90 @@ test("saved learning collection uses the original exact summary reader without c
     assert.equal(f.createdInputs.length, 1);
   });
 });
+
+
+test("the original Sessions Feature registers a separate internal teaching WRITE grant without changing its observe catalogue", async () => {
+  await withTemporaryRoot(async root => {
+    const { Vibe64SessionsProvider } = await import("../../packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js");
+    const { ACTION_READ_TEACHING_WRITE_CONTEXT, createLearningTeachingContextActions } = await import("../../packages/vibe64-sessions/src/server/actions.js");
+    const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
+    const { registerVibe64ActionContext } = await import("../../packages/vibe64-core/src/server/actionContext.js");
+    const f = await learningSessionCreationFixture(root);
+    const created = await f.learningSessions.openSession({ actor: f.actor, attemptId: f.scope.attemptId });
+    const target = { learningAttemptId: f.scope.attemptId, sessionId: created.sessionId };
+    const actions = createActionCatalogue();
+    const definitions = [];
+    const routes = [];
+    const outputs = await Vibe64SessionsProvider.setup({
+      accounts: { initializeModelRouting: async () => assert.fail("Feature registration must not start routing") },
+      events: { publish: async () => assert.fail("Feature registration must not publish session work") },
+      http: { router: { register: (...args) => routes.push(args) } },
+      project: f.project,
+      sourceEditor: {},
+      terminals: { openBrowserConversation: () => assert.fail("Feature registration must not open native work") },
+      actionCatalogue: { ...actions, register(entry) { definitions.push(...entry.actions); actions.register(entry); } }
+    }, {});
+    assert.equal(typeof outputs.sessions.sendAgentMessage, "function");
+    assert.ok(routes.length > 0, "The original Feature registers its original HTTP routes");
+    assert.ok(routes.every(route => !route[1].includes("teaching-context")));
+    assert.deepEqual(definitions.slice(0, -1).map(value => value.id), createSessionActions({ sessions: f.service }).map(value => value.id));
+    assert.equal(definitions.at(-1).id, createLearningTeachingContextActions()[0].id);
+    const gate = definitions.at(-1);
+    assert.equal(gate.id, ACTION_READ_TEACHING_WRITE_CONTEXT);
+    assert.deepEqual(gate.channels, ["internal"]);
+    assert.deepEqual(gate.surfaces, ["app"]);
+    assert.equal(gate.extensions.assistant, undefined);
+    assert.equal(gate.extensions.vibe64.learningAccess, "write");
+    assert.equal(definitions.find(value => value.id === ACTION_READ_CONVERSATION_CONTEXT).extensions.vibe64.learningAccess, "observe");
+    let user = f.actor;
+    const admissions = [];
+    registerVibe64ActionContext(actions, {
+      resolveUser: async () => user,
+      authorizeProject: () => assert.fail("Teaching must not authorize a fabricated Working project"),
+      async resolveLearningContext(input) {
+        admissions.push(input);
+        if (input.actor !== f.actor) return f.context;
+        return f.learningSessions.resolveContext(input);
+      }
+    });
+    const execute = (actionId = gate.id, input = target, context = {}) => actions.execute({ actionId, input,
+      context: { surface: "app", channel: "internal", requestMeta: { request: {} }, ...context } });
+    const grant = await execute();
+    assert.equal(grant.actor.id, f.actor.uid);
+    assert.equal(grant.user, f.actor);
+    assert.deepEqual(grant.project.learningScope, f.scope);
+    assert.deepEqual(admissions.at(-1), { actor: f.actor, attemptId: f.scope.attemptId, sessionId: created.sessionId, access: "write" });
+    await assert.rejects(execute(gate.id, target, { channel: "api" }));
+    await assert.rejects(execute(gate.id, target, { vibe64Action: { learning: f.context, user: f.actor } }),
+      { code: "vibe64_action_context_reserved" });
+    f.trainingState.active = false;
+    await assert.rejects(execute(), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+    assert.deepEqual((await execute(ACTION_READ_CONVERSATION_CONTEXT)).project.learningScope, f.scope,
+      "historical observe retains its original authority without admitting teaching");
+    f.trainingState.active = true;
+    f.trainingState.scope.pin.lesson.hash = "d".repeat(64);
+    await assert.rejects(execute(), { code: "vibe64_learning_session_scope_mismatch" });
+    f.trainingState.scope = structuredClone(f.scope);
+    await assert.rejects(execute(gate.id, { ...target, sessionId: "missing-learning" }), { code: "vibe64_session_not_found" });
+    user = { ...f.actor, uid: "99" };
+    await assert.rejects(execute(), { code: "vibe64_learning_scope_mismatch" });
+    user = null;
+    await assert.rejects(execute(), { code: "vibe64_auth_required" });
+    assert.equal(f.createdInputs.length, 1);
+    assert.equal(f.nativeMessages.length, 0);
+  });
+});
+
+test("teaching WRITE context has no API/model projection and refuses caller authority snapshots", async () => {
+  const { ACTION_READ_TEACHING_WRITE_CONTEXT, createLearningTeachingContextActions } = await import("../../packages/vibe64-sessions/src/server/actions.js");
+  const gate = createLearningTeachingContextActions().find(value => value.id === ACTION_READ_TEACHING_WRITE_CONTEXT);
+  for (const key of ["actor", "pin", "projectRuntimeRoot", "teachingAuthority"]) {
+    const patched = gate.input.schema.patch({ sessionId: "learning-session", [key]: {} });
+    assert.equal(patched.errors[key].code, "FIELD_NOT_ALLOWED", key);
+  }
+  await assert.rejects(gate.execute({ sessionId: "working-session", projectSlug: "working" }, {
+    actor: { id: "42" }, vibe64Action: { user: { uid: "42" }, project: { slug: "working" } }
+  }), { code: "vibe64_learning_authority_required" });
+  assert.deepEqual(gate.channels, ["internal"]);
+  assert.equal(gate.extensions.assistant, undefined);
+});

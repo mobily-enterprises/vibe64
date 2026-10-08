@@ -59,6 +59,7 @@ const ACTION_INSPECT_SESSION_CHANGES = "vibe64.sessions.changes.inspect";
 const ACTION_INSPECT_SESSION_CHANGE_DIFF = "vibe64.sessions.changes.diff.inspect";
 const ACTION_READ_SESSION_CONVERSATION_LOG = "vibe64.sessions.conversation-log.read";
 const ACTION_READ_CONVERSATION_CONTEXT = "vibe64.sessions.conversation.context.read";
+const ACTION_READ_TEACHING_WRITE_CONTEXT = "vibe64.sessions.conversation.teaching-context.read";
 const ACTION_RETRY_WORKSPACE_SETUP = "vibe64.sessions.workspace-setup.retry";
 const ACTION_ARCHIVE_SESSION = "vibe64.sessions.archive";
 const ACTION_SEND_AGENT_MESSAGE = "vibe64.sessions.agent-message.send";
@@ -77,6 +78,7 @@ const learningAccess = {
   [ACTION_UPDATE_CURRENT_SESSION]: "control",
   [ACTION_LIST_ASSISTANT_CAPABILITIES]: "observe",
   [ACTION_READ_CONVERSATION_CONTEXT]: "observe",
+  [ACTION_READ_TEACHING_WRITE_CONTEXT]: "write",
   [ACTION_LIST_SESSIONS]: "observe",
   [ACTION_LIST_ARCHIVED_SESSIONS]: "observe",
   [ACTION_INSPECT_SESSION]: "observe",
@@ -124,6 +126,35 @@ function withoutSessionId(input = {}) {
   return rest;
 }
 
+function conversationContextGrant(_input, context) {
+  return {
+    actor: context.actor,
+    project: context.vibe64Action.learning || context.vibe64Action.project,
+    user: authenticatedVibe64User(context)
+  };
+}
+
+// A genuine new Main teaching admission gate, registered alongside the unchanged
+// original session catalogue. It is neither a browser route nor a model tool.
+function createLearningTeachingContextActions() {
+  return Object.freeze([{
+    ...action({
+      id: ACTION_READ_TEACHING_WRITE_CONTEXT,
+      kind: "query",
+      input: sessionIdInputValidator,
+      execute(input, context) {
+        if (!context.vibe64Action.learning) {
+          throw Object.assign(new Error("Teaching requires this person's exact authorized learning conversation."), {
+            code: "vibe64_learning_authority_required", statusCode: 403
+          });
+        }
+        return conversationContextGrant(input, context);
+      }
+    }),
+    channels: ["internal"]
+  }]);
+}
+
 function createSessionActions({ sessions } = {}) {
   if (!sessions) {
     throw new TypeError("createSessionActions requires sessions.");
@@ -135,11 +166,7 @@ function createSessionActions({ sessions } = {}) {
         id: ACTION_READ_CONVERSATION_CONTEXT,
         kind: "query",
         input: sessionIdInputValidator,
-        execute: (_input, context) => ({
-          actor: context.actor,
-          project: context.vibe64Action.learning || context.vibe64Action.project,
-          user: authenticatedVibe64User(context)
-        })
+        execute: conversationContextGrant
       }),
       // This grant stays inside the application's conversation adapter. It has
       // no HTTP route or assistant tool projection.
@@ -484,6 +511,7 @@ export {
   ACTION_LIST_ARCHIVED_SESSIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
   ACTION_READ_CONVERSATION_CONTEXT,
+  ACTION_READ_TEACHING_WRITE_CONTEXT,
   ACTION_REQUEST_SESSION_RENEWAL_DRAFT,
   ACTION_RETRY_SESSION_RENEWAL,
   ACTION_RETRY_WORKSPACE_SETUP,
@@ -495,5 +523,6 @@ export {
   ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
   ACTION_UPDATE_SESSION_PRESENCE,
   ACTION_UPDATE_SESSION_WORK,
-  createSessionActions
+  createSessionActions,
+  createLearningTeachingContextActions
 };

@@ -635,6 +635,17 @@ This prerequisite is not a Main launcher or a teaching admission implementation.
 
 ### Same Main session for a no-exercise attempt
 
+The same Sessions Feature separately registers the internal
+`vibe64.sessions.conversation.teaching-context.read` grant. It uses the original
+action-context contributor with learning `write` access; the original
+conversation-context observation grant stays unchanged. Each invocation resolves
+the current authenticated learner, active confirmed attempt and exact saved
+session binding. It has no API route or assistant extension and accepts no actor,
+pin, root or retained authority snapshot. It grants authority only: the original
+Main native owner must additionally admit the actual live turn/account and its
+immutable pin before every teaching effect. Registration alone does not supply
+tools, capture answers, start a Helper or write progress.
+
 `createTrainingLearningSessions` freshly reads the original learner reservation
 and verified installed no-exercise pin. It returns an internal context for the
 same Project factory, Session service, Runtime and Store. Creation uses the

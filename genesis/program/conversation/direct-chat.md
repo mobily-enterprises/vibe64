@@ -2,6 +2,15 @@
 
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
+
+Learning Main teaching has a separate internal Sessions WRITE-authority grant.
+The original observation grant remains read-only. The same authenticated action
+contributor resolves current saved learner/attempt/session authority on every
+invocation, refusing ended attempts, foreign bindings and caller authority
+snapshots. This grant is not a model tool, HTTP route, native turn admission or
+teacher implementation; actual application tools still require the original
+native owner and explicit trusted learning composition.
+
 JSKIT's conversation runtime owns native instruction installation and refresh
 for Codex, Claude and OpenCode, shared by main chat and Colleague. Vibe64 supplies
 Genesis-composed project guidance or an application's current instructions, plus

@@ -71,3 +71,9 @@ question check is pending, the result is refused before it saves a pass. Reopen
 the retained attempt with current access and read its saved result before
 requesting another evaluation. This assessment prerequisite does not yet enable
 the left Main teacher's lesson tools.
+
+Teaching requires current write access to the exact retained learning attempt.
+Being able to read historical chat does not permit another lesson evaluation.
+If access or the active attempt changes, reopen the intended lesson with current
+access before requesting new teaching work. The internal authority prerequisite
+adds no person-facing control or lesson tool by itself.
