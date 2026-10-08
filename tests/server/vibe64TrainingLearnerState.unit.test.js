@@ -2826,3 +2826,204 @@ test("configured practice Learning binds the saved actual initial Main session a
   await assert.rejects(() => context.runLearningOperation(() => assert.fail()), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
   assert.equal((await learning.readSessions({ actor: f.actor }))[0].sessionId, created.sessionId);
 });
+
+// Uses the original installed fixture, Core/Project/Git/Runtime source creator,
+// and saved preparation owner. No provider/native work or fabricated setup pass.
+async function historicalPracticeFixture(t, { archived = false } = {}) {
+  const f = await fixture(t);
+  const [{ createStudioProjectContext }, { createService: createProject }, { createManagedProjectRepositoryService },
+    { createSessionSource }, { createTrainingLearningSessions }, { upgradeLearningPracticeHistory }, { createService: createSessions }] = await Promise.all([
+    import("../../packages/vibe64-core/src/server/studioProjectContext.js"),
+    import("../../packages/vibe64-project/src/server/service.js"),
+    import("../../packages/vibe64-project/src/server/managedRepository.js"),
+    import("../../packages/vibe64-terminals/src/server/sessionSource.js"),
+    import("../../packages/vibe64-training/src/server/learningSessions.js"),
+    import("../../packages/vibe64-training/src/server/practiceHistoryUpgrade.js"),
+    import("../../packages/vibe64-sessions/src/server/service.js")
+  ]);
+  const core = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
+    explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true } });
+  const project = createProject({ projectContext: core });
+  const repository = createManagedProjectRepositoryService({ projectContext: core, projectService: project });
+  const reserved = await f.reserve();
+  await f.state.beginPreparation({ actor: f.actor, attemptId: reserved.attempt.attemptId, expectedRevision: reserved.revision });
+  const saved = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId: reserved.attempt.attemptId, access: "create" });
+  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot });
+  const exercise = await content.readExercise({ ...f.pin.topic, lessonCode: f.pin.lesson.code, lessonHash: f.pin.lesson.hash });
+  let legacyRuntime, initial, working, projectRecordPath, archiveOperation;
+  await core.runWithPracticeProjectScope({ actor: f.actor, training: saved.training, access: "create" }, async () => {
+    await repository.createManagedGitProject({ slug: saved.projectSlug, training: saved.training }, {
+      async initializeProject({ projectRoot }) {
+        for (const file of exercise.files) {
+          await fs.mkdir(path.dirname(path.join(projectRoot, file.path)), { recursive: true });
+          await fs.writeFile(path.join(projectRoot, file.path), file.bytes, { flag: "wx" });
+        }
+      }
+    });
+    const proof = await repository.verifyTrainingProjectSource({ slug: saved.projectSlug, training: saved.training }, { files: exercise.files });
+    projectRecordPath = core.projectRecordPathForSlug(saved.projectSlug);
+    await project.runInProjectContext(saved.projectSlug, async () => {
+      legacyRuntime = await project.createRuntime({ inspectSource: false,
+        createSessionSource: input => project.runProjectSourceExclusive(async () => createSessionSource({ ...input,
+          project: await project.readCurrentProject() }), { operation: "session-source-create" }) });
+      assert.equal(legacyRuntime.learningScope, null, "this is the original unflagged preparation source path");
+      initial = await legacyRuntime.createSession({ sessionId: saved.initialSessionId, sourceContext: { expectedCommit: proof.commit, vibe64User: f.actor } });
+      working = await legacyRuntime.createSession({ sessionId: "intentional-working", sourceContext: { expectedCommit: proof.commit, vibe64User: f.actor } });
+      await legacyRuntime.store.writeMetadataValue(initial.sessionId, "agent_identity_conversation_id", "retain-original-native-identity");
+      await legacyRuntime.store.writeConversationUserMessage(initial.sessionId, { text: "Retain these historical words" });
+      if (archived) {
+        // Actual original Sessions archive phases, original source recovery and
+        // original Runtime tar publication. This fixture has no native work.
+        let closes = 0;
+        const sessions = createSessions({ project, terminals: { async closeSessionTerminals() { closes++; } },
+          workspaceSetupRunner: { isRunning: () => false }, publishSessionChanged: async () => {} });
+        const result = await sessions.archiveSession(initial.sessionId);
+        assert.equal(result.ok, true, result.error);
+        assert.equal(closes, 1);
+        archiveOperation = (await legacyRuntime.store.readSession(initial.sessionId)).metadata.session_archive_operation;
+        assert.equal(JSON.parse(archiveOperation).status, "running");
+        assert.equal(JSON.parse(archiveOperation).phase, "source");
+      }
+    });
+  });
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups/20261008-learning-practice-history");
+  const messages = [];
+  const run = (apply = false, report = (level, message) => messages.push({ level, message })) => upgradeLearningPracticeHistory({
+    systemRoot: f.systemRoot, backupRoot, apply, report });
+  const learning = createTrainingLearningSessions({ learners: f.state,
+    teachingBrief: createTrainingTeachingBrief({ learners: f.state, content }), project,
+    sessions: { ...createSessions({ project, terminals: { async closeSessionTerminals() {} },
+      workspaceSetupRunner: { isRunning: () => false }, publishSessionChanged: async () => {} }),
+      createSession() { assert.fail("historical open must not create a session"); } }, projectContext: core, practiceSessions: true });
+  return { ...f, core, project, repository, content, saved, legacyRuntime, initial, working, projectRecordPath, archiveOperation, backupRoot, messages, run, learning };
+}
+
+test("historical practice adoption validates the original saved initial source session without promoting preparation or rewriting progress", async t => {
+  const f = await historicalPracticeFixture(t);
+  const { runWithProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const progress = await fs.readFile(f.paths.progress);
+  const active = await fs.readFile(f.paths.active);
+  const source = await fs.readFile(path.join(f.initial.sourcePath, "server.mjs"));
+  const working = await f.legacyRuntime.store.readSession(f.working.sessionId);
+  const native = await fs.readFile(path.join(f.legacyRuntime.store.paths(f.initial.sessionId).metadataRoot, "agent_identity_conversation_id"));
+  const before = await treeState(f.systemRoot);
+  await f.run();
+  assert.deepEqual(await treeState(f.systemRoot), before, "check writes no installation state");
+  await assert.rejects(f.learning.resolveContext({ actor: f.actor, attemptId: f.saved.scope.attemptId,
+    sessionId: f.initial.sessionId, access: "observe" }), { code: "vibe64_learning_session_scope_mismatch" });
+  await f.run(true);
+  const context = await f.learning.resolveContext({ actor: f.actor, attemptId: f.saved.scope.attemptId,
+    sessionId: f.initial.sessionId, access: "observe" });
+  await runWithProjectRequestContext(context, async () => {
+    const runtime = await f.project.createRuntime({ inspectSource: false });
+    assert.deepEqual(runtime.learningScope, f.saved.scope);
+    assert.equal((await runtime.store.readSession(f.initial.sessionId)).metadata.agent_identity_conversation_id, "retain-original-native-identity");
+  });
+  const summaries = await f.learning.readSessions({ actor: f.actor });
+  assert.deepEqual(summaries.map(value => value.sessionId), [f.initial.sessionId]);
+  assert.equal(summaries[0].noExercise, false);
+  assert.deepEqual(await f.legacyRuntime.store.readSession(f.working.sessionId), working);
+  assert.deepEqual(await fs.readFile(f.paths.progress), progress);
+  assert.deepEqual(await fs.readFile(f.paths.active), active);
+  assert.deepEqual(await fs.readFile(path.join(f.initial.sourcePath, "server.mjs")), source);
+  assert.deepEqual(await fs.readFile(path.join(f.legacyRuntime.store.paths(f.initial.sessionId).metadataRoot, "agent_identity_conversation_id")), native);
+  assert.equal((await f.state.readState({ actor: f.actor })).active.preparation.phase, "preparing", "adoption is not a setup success or lesson proof");
+  const manifest = await fs.readFile(path.join(f.backupRoot, "manifest.json"));
+  await f.run(true);
+  assert.deepEqual(await fs.readFile(path.join(f.backupRoot, "manifest.json")), manifest, "retry preserves original publisher manifest");
+});
+
+test("historical archived practice retry revalidates the frozen binding against saved ownership and retains archive history", async t => {
+  const f = await historicalPracticeFixture(t, { archived: true });
+  const archivePath = path.join(f.legacyRuntime.store.paths().archivedSessionsRoot, `${f.initial.sessionId}.tar.gz`);
+  const original = await fs.readFile(archivePath);
+  await assert.rejects(f.run(true, (_level, message) => {
+    if (message.startsWith("Published state:") && message.endsWith(".tar.gz")) throw new Error("interrupted historical archive publication");
+  }), /interrupted historical archive publication/u);
+  const manifest = await fs.readFile(path.join(f.backupRoot, "manifest.json"));
+  const savedRecord = JSON.parse(await fs.readFile(f.projectRecordPath, "utf8"));
+  await updateProjectRecordMetadata(f.projectRecordPath, { ...savedRecord,
+    training: { ...savedRecord.training, learnerKey: Buffer.from("other-owner").toString("base64url") } });
+  const partial = await fs.readFile(archivePath);
+  await assert.rejects(f.run(true), /differs from its saved Training marker/u);
+  assert.deepEqual(await fs.readFile(archivePath), partial);
+  assert.deepEqual(await fs.readFile(path.join(f.backupRoot, "manifest.json")), manifest);
+  await updateProjectRecordMetadata(f.projectRecordPath, savedRecord);
+  await f.run(true);
+  const recordPath = path.join(f.legacyRuntime.store.paths().archivedSessionsRoot, `${f.initial.sessionId}.json`);
+  const record = JSON.parse(await fs.readFile(recordPath, "utf8"));
+  assert.deepEqual(JSON.parse(record.index.metadata.learning_session), { schemaVersion: 1, ...f.saved.scope, conversationId: f.initial.sessionId });
+  // The successful original archive keeps its running/source marker; migration
+  // validates published pair/status, not an invented cleared/completed marker.
+  const { createVibe64SessionStore } = await import("@local/vibe64-runtime/server");
+  const bound = createVibe64SessionStore({ projectContextRoot: f.legacyRuntime.projectContextRoot,
+    projectRuntimeRoot: f.legacyRuntime.stateRoot, projectSessionSourceRoot: f.legacyRuntime.projectSessionSourceRoot, learningScope: f.saved.scope });
+  assert.equal((await bound.readSession(f.initial.sessionId)).metadata.session_archive_operation, f.archiveOperation);
+  const beforeArchive = path.join(f.backupRoot, "before", path.relative(f.systemRoot, archivePath));
+  assert.deepEqual(await fs.readFile(beforeArchive), original);
+  assert.deepEqual(await fs.readFile(path.join(f.backupRoot, "manifest.json")), manifest);
+  const afterArchive = path.join(f.backupRoot, "after", path.relative(f.systemRoot, archivePath));
+  await fs.writeFile(afterArchive, "corrupt frozen archive");
+  await assert.rejects(f.run(true), /archive/u);
+  assert.deepEqual(await fs.readFile(path.join(f.backupRoot, "manifest.json")), manifest);
+});
+
+test("historical practice adoption rejects conflicting normal and author-preview claims and malformed production progress", async t => {
+  const f = await historicalPracticeFixture(t);
+  const previewRoot = path.join(f.systemRoot, "author-preview");
+  const previewUser = path.join(previewRoot, "training/users", Buffer.from("42").toString("base64url"));
+  await fs.mkdir(previewUser, { recursive: true, mode: 0o700 });
+  await fs.copyFile(f.paths.progress, path.join(previewUser, "progress.json"));
+  await fs.copyFile(f.paths.active, path.join(previewUser, "active-lesson.json"));
+  const before = await treeState(f.systemRoot);
+  await assert.rejects(f.run(true), /multiple saved learner namespaces/u);
+  assert.deepEqual(await treeState(f.systemRoot), before);
+  await fs.rm(previewRoot, { recursive: true });
+  await fs.writeFile(f.paths.progress, '{"schemaVersion":1,"retained":"invalid-original"}\n');
+  const invalid = await treeState(f.systemRoot);
+  await assert.rejects(f.run(true));
+  assert.deepEqual(await treeState(f.systemRoot), invalid);
+  await assert.rejects(fs.access(path.join(f.backupRoot, "manifest.json")), { code: "ENOENT" });
+});
+
+test("post-upgrade original Preparation resumes the same still-pending initial source session with no new session or pin", async t => {
+  const f = await historicalPracticeFixture(t);
+  const { createTrainingService } = await import("../../packages/vibe64-training/src/server/preparation.js");
+  const beforeManifest = await fs.readFile(f.legacyRuntime.store.paths(f.initial.sessionId).manifestPath);
+  const beforeSource = await fs.readFile(path.join(f.initial.sourcePath, "server.mjs"));
+  await f.run(true);
+  const preparation = createTrainingService({ catalogue: createInstalledTrainingCatalogue({ systemRoot: f.systemRoot }),
+    content: f.content, learners: f.state, projectContext: f.core, projectRepositoryService: f.repository,
+    project: f.project, learningSessions: f.learning,
+    sessions: { createSession() { assert.fail("Resume must retain the already-adopted exact initial session"); } },
+    terminals: { workspaceSetupIsPrepared() { assert.fail("this fixture has no successful Workspace setup to claim"); } } });
+  const resumed = await preparation.prepareLesson({ actor: f.actor, attemptId: f.saved.scope.attemptId });
+  assert.equal(resumed.attempt.preparation.initialSessionId, f.initial.sessionId);
+  assert.equal(resumed.attempt.preparation.phase, "preparing");
+  assert.equal(resumed.previewReady, false);
+  assert.deepEqual(resumed.attempt.pin, f.pin);
+  assert.deepEqual(await fs.readFile(f.legacyRuntime.store.paths(f.initial.sessionId).manifestPath), beforeManifest);
+  assert.deepEqual(await fs.readFile(path.join(f.initial.sourcePath, "server.mjs")), beforeSource);
+  assert.deepEqual((await f.learning.readSessions({ actor: f.actor })).map(value => value.sessionId), [f.initial.sessionId]);
+});
+
+test("saved ready historical preparation is adopted only at its original initial session and missing ready state is not replaced", async t => {
+  const f = await historicalPracticeFixture(t);
+  // Original owner writes a supported saved-ready fixture. This is schema and
+  // correlation evidence, not a claim that this fixture ran Workspace setup.
+  const current = await f.state.resumeAttempt({ actor: f.actor, attemptId: f.saved.scope.attemptId });
+  await f.state.recordPreparationReady({ actor: f.actor, attemptId: f.saved.scope.attemptId,
+    initialSessionId: f.initial.sessionId, expectedRevision: current.revision });
+  const progress = await fs.readFile(f.paths.progress);
+  const active = await fs.readFile(f.paths.active);
+  await f.run(true);
+  assert.deepEqual(await fs.readFile(f.paths.progress), progress);
+  assert.deepEqual(await fs.readFile(f.paths.active), active);
+  assert.equal((await f.state.readState({ actor: f.actor })).active.preparation.phase, "ready");
+  assert.deepEqual((await f.learning.readSessions({ actor: f.actor })).map(value => value.sessionId), [f.initial.sessionId]);
+  await fs.rm(f.legacyRuntime.store.paths(f.initial.sessionId).sessionRoot, { recursive: true });
+  const missing = await treeState(f.systemRoot);
+  await assert.rejects(f.run(true), /no original state for its frozen replacement/u);
+  assert.deepEqual(await treeState(f.systemRoot), missing);
+  assert.deepEqual(await fs.readFile(f.paths.progress), progress);
+});

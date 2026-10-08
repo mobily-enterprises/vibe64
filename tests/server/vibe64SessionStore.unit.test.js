@@ -2567,3 +2567,145 @@ test("source-bearing Learning refuses missing source configuration, foreign scop
       ...sourceMetadata(root, "caller-practice-binding"), learning_session: session.metadata.learning_session } }), { code: "vibe64_learning_scope_invalid" });
   });
 });
+
+// New offline-owner companions; the complete original file prefix is retained.
+test("offline practice binding stages only the authoritative initial session and keeps ordinary metadata writes forbidden", async () => {
+  await withTemporaryRoot(async root => {
+    const { managedSessionSourceRoot, sourceMetadata } = await import("./vibe64TestHelpers.js");
+    const { publishStateUpgradeFiles } = await import("@local/vibe64-core/server/stateUpgradeFiles");
+    const scope = { ...privateLessonScope(), noExercise: false };
+    const id = `training-${scope.attemptId}`;
+    const options = { projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root), projectSessionSourceRoot: managedSessionSourceRoot(root) };
+    const legacy = createVibe64SessionStore(options);
+    const session = await legacy.createSession({ sessionId: id, runtimeKind: "genesis", metadata: { ...sourceMetadata(root, id), agent_identity_conversation_id: "retained-native-thread" } });
+    const other = await legacy.createSession({ sessionId: "intentional-working", runtimeKind: "genesis", metadata: sourceMetadata(root, "intentional-working") });
+    await legacy.writeConversationUserMessage(id, { text: "Retain my original message", messageId: "original-practice-message" });
+    const manifest = await readFile(legacy.paths(id).manifestPath);
+    const history = await readFile(path.join(legacy.paths(id).conversationLogRoot, "transcript.json"));
+    const working = await legacy.readSession(other.sessionId);
+    const scratch = path.join(path.dirname(root), "upgrade-scratch");
+    await mkdir(scratch, { mode: 0o700 });
+    const prepared = await legacy.prepareLearningSessionBindingUpgrade({ temporaryRoot: scratch, sessionId: id, learningScope: scope });
+    assert.equal(prepared.found, true);
+    assert.equal(prepared.updates.length, 1);
+    assert.equal(prepared.updates[0].filePath, path.join(session.metadataRoot, "learning_session"));
+    assert.equal(prepared.updates[0].original, null);
+    await assert.rejects(access(prepared.updates[0].filePath), { code: "ENOENT" });
+    await assert.rejects(legacy.writeMetadataValue(id, "learning_session", prepared.updates[0].contents), { code: "vibe64_learning_session_binding_immutable" });
+    const systemRoot = path.dirname(path.dirname(projectRuntimeRoot(root)));
+    await publishStateUpgradeFiles({ systemRoot, backupRoot: path.join(systemRoot, "upgrades/backups/store-binding-test"), apply: true,
+      report() {}, prepareUpdates: async () => prepared.updates });
+    const own = createVibe64SessionStore({ ...options, learningScope: scope });
+    const adopted = await own.readSessionNativeDescriptor(id);
+    assert.equal(adopted.nativeExecutionRoot, session.metadata.source_path);
+    assert.deepEqual(adopted.learning, { schemaVersion: 1, ...scope, conversationId: id });
+    assert.equal((await own.readSession(id)).metadata.agent_identity_conversation_id, "retained-native-thread");
+    assert.deepEqual(await readFile(own.paths(id).manifestPath), manifest);
+    assert.deepEqual(await readFile(path.join(own.paths(id).conversationLogRoot, "transcript.json")), history);
+    assert.deepEqual(await legacy.readSession(other.sessionId), working);
+    assert.deepEqual((await legacy.prepareLearningSessionBindingUpgrade({ temporaryRoot: scratch, sessionId: id, learningScope: scope })).updates, []);
+    await assert.rejects(legacy.readSession(id), { code: "vibe64_learning_session_scope_mismatch" });
+    await assert.rejects(own.deleteMetadataValue(id, "learning_session"), { code: "vibe64_learning_session_binding_immutable" });
+  });
+});
+
+test("offline practice archive upgrade pairs the original tar and sidecar and validates the frozen pair on retry", async () => {
+  await withTemporaryRoot(async root => {
+    const { managedSessionSourceRoot, sourceMetadata } = await import("./vibe64TestHelpers.js");
+    const { publishStateUpgradeFiles } = await import("@local/vibe64-core/server/stateUpgradeFiles");
+    const scope = { ...privateLessonScope(), noExercise: false };
+    const id = `training-${scope.attemptId}`;
+    const options = { projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root), projectSessionSourceRoot: managedSessionSourceRoot(root) };
+    const legacy = createVibe64SessionStore(options);
+    await legacy.createSession({ sessionId: id, runtimeKind: "genesis", metadata: sourceMetadata(root, id) });
+    await legacy.writeConversationUserMessage(id, { text: "Retained archived words" });
+    await legacy.writeStatus(id, "archived");
+    await legacy.publishSessionArchive(id);
+    const manifest = await legacy.readManifest(id);
+    const originalConversation = await legacy.readConversationLog(id);
+    const jsonPath = path.join(legacy.paths().archivedSessionsRoot, `${id}.json`);
+    const archivePath = path.join(legacy.paths().archivedSessionsRoot, `${id}.tar.gz`);
+    const originalRecord = JSON.parse(await readFile(jsonPath, "utf8"));
+    const originalArchive = await readFile(archivePath);
+    const scratch = path.join(path.dirname(root), "archive-upgrade-scratch");
+    await mkdir(scratch, { mode: 0o700 });
+    const prepared = await legacy.prepareLearningSessionBindingUpgrade({ temporaryRoot: scratch, sessionId: id, learningScope: scope });
+    assert.deepEqual(prepared.updates.map(value => value.filePath), [archivePath, jsonPath]);
+    assert.deepEqual(await readFile(archivePath), originalArchive, "preparation does not publish the archive");
+    assert.deepEqual(JSON.parse(await readFile(jsonPath, "utf8")), originalRecord);
+    const systemRoot = path.dirname(path.dirname(projectRuntimeRoot(root)));
+    const backupRoot = path.join(systemRoot, "upgrades/backups/archive-binding-test");
+    await assert.rejects(publishStateUpgradeFiles({ systemRoot, backupRoot, apply: true,
+      prepareUpdates: async () => prepared.updates, report(_level, message) {
+        if (message.startsWith("Published state:") && message.endsWith(`${id}.tar.gz`)) throw new Error("interrupted between archive and sidecar");
+      } }), /interrupted between archive and sidecar/u);
+    assert.deepEqual(JSON.parse(await readFile(jsonPath, "utf8")), originalRecord);
+    const saved = JSON.parse(await readFile(path.join(backupRoot, "manifest.json"), "utf8"));
+    const frozen = saved.files.map(value => ({ filePath: path.join(systemRoot, value.path), replacementPath: path.join(backupRoot, "after", value.path) }));
+    const retry = await legacy.prepareLearningSessionBindingUpgrade({ temporaryRoot: scratch, sessionId: id, learningScope: scope, preparedReplacements: frozen });
+    assert.equal(retry.found, true);
+    await publishStateUpgradeFiles({ systemRoot, backupRoot, apply: true, report() {}, prepareUpdates: () => assert.fail("frozen publisher retries do not regenerate after bytes") });
+    const currentRecord = JSON.parse(await readFile(jsonPath, "utf8"));
+    assert.deepEqual({ ...currentRecord, index: { ...currentRecord.index, metadata: originalRecord.index.metadata } }, originalRecord);
+    assert.deepEqual(JSON.parse(currentRecord.index.metadata.learning_session), { schemaVersion: 1, ...scope, conversationId: id });
+    const own = createVibe64SessionStore({ ...options, learningScope: scope });
+    assert.equal((await own.readSessionNativeDescriptor(id)).archived, true);
+    assert.deepEqual(await own.readManifest(id), manifest);
+    assert.deepEqual(await own.readConversationLog(id), originalConversation);
+    await assert.rejects(legacy.prepareLearningSessionBindingUpgrade({ temporaryRoot: scratch, sessionId: id,
+      learningScope: { ...scope, learnerId: "43" }, preparedReplacements: frozen }), { code: "vibe64_learning_session_scope_mismatch" });
+    assert.deepEqual((await legacy.prepareLearningSessionBindingUpgrade({ temporaryRoot: scratch, sessionId: id, learningScope: scope })).updates, []);
+  });
+});
+
+test("offline practice binding refuses unrelated IDs, malformed bindings, unsafe metadata and renewal records before publishing", async () => {
+  await withTemporaryRoot(async root => {
+    const { sourceMetadata } = await import("./vibe64TestHelpers.js");
+    const scope = { ...privateLessonScope(), noExercise: false };
+    const id = `training-${scope.attemptId}`;
+    const legacy = createStore(root);
+    await legacy.createSession({ sessionId: id, runtimeKind: "genesis", metadata: sourceMetadata(root, id) });
+    const scratch = path.join(path.dirname(root), "refusal-scratch");
+    await mkdir(scratch, { mode: 0o700 });
+    const input = { temporaryRoot: scratch, sessionId: id, learningScope: scope };
+    await assert.rejects(legacy.prepareLearningSessionBindingUpgrade({ ...input, sessionId: "ordinary-working" }), /exact saved initial/u);
+    const file = path.join(legacy.paths(id).metadataRoot, "learning_session");
+    await writeFile(file, "{}");
+    await assert.rejects(legacy.prepareLearningSessionBindingUpgrade(input), { code: "vibe64_learning_session_scope_mismatch" });
+    await fs.rm(file);
+    const source = path.join(legacy.paths(id).metadataRoot, "source_kind");
+    const bytes = await readFile(source);
+    await fs.rm(source);
+    await fs.symlink(path.join(root, "external"), source);
+    await assert.rejects(legacy.prepareLearningSessionBindingUpgrade(input), /symbolic link/u);
+    await fs.rm(source);
+    await writeFile(source, bytes);
+    await legacy.writeSessionRenewalStateRecord(id, { sessionId: id, stage: "needs-original-owner" });
+    await assert.rejects(legacy.prepareLearningSessionBindingUpgrade(input), /retains renewal state/u);
+    await assert.rejects(access(file), { code: "ENOENT" });
+  });
+});
+
+
+test("offline practice binding refuses unfinished or malformed published archive operations", async () => {
+  for (const marker of ["not-json", "null", JSON.stringify({ status: "failed", phase: "source" }),
+    JSON.stringify({ status: "running", phase: "resources" }), JSON.stringify({ status: "running", phase: "stopping" })]) {
+    await withTemporaryRoot(async root => {
+      const { sourceMetadata } = await import("./vibe64TestHelpers.js");
+      const scope = { ...privateLessonScope(), noExercise: false };
+      const id = `training-${scope.attemptId}`;
+      const legacy = createStore(root);
+      await legacy.createSession({ sessionId: id, runtimeKind: "genesis", metadata: sourceMetadata(root, id) });
+      await legacy.writeMetadataValue(id, "session_archive_operation", marker);
+      await legacy.writeStatus(id, "archived");
+      await legacy.publishSessionArchive(id);
+      const archivePath = path.join(legacy.paths().archivedSessionsRoot, `${id}.tar.gz`);
+      const recordPath = path.join(legacy.paths().archivedSessionsRoot, `${id}.json`);
+      const before = await Promise.all([readFile(archivePath), readFile(recordPath)]);
+      const scratch = path.join(path.dirname(root), "invalid-archive-scratch");
+      await mkdir(scratch, { mode: 0o700 });
+      await assert.rejects(legacy.prepareLearningSessionBindingUpgrade({ temporaryRoot: scratch, sessionId: id, learningScope: scope }), /retains a renewal or archive operation/u);
+      assert.deepEqual(await Promise.all([readFile(archivePath), readFile(recordPath)]), before);
+    });
+  }
+});

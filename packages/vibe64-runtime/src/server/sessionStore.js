@@ -25,7 +25,7 @@ import {
 } from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
-import { managedSessionSourcePath, sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { explicitPathIsManagedSessionSource, managedSessionSourcePath, sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
@@ -2182,6 +2182,14 @@ function createVibe64SessionStore({
   }
 
   async function readMetadataFromPaths(sessionPaths) {
+    const metadata = await readUnboundMetadataFromPaths(sessionPaths);
+    learningSessionBinding(metadata, admittedLearningScope, sessionPaths.sessionId);
+    return metadata;
+  }
+
+  // Offline upgrades validate a supported old record before adding its binding.
+  // Ordinary readers always pass through readMetadataFromPaths above.
+  async function readUnboundMetadataFromPaths(sessionPaths) {
     const names = sortedFileNames(
       await readDirectoryEntries(sessionPaths.metadataRoot),
       (name) => METADATA_NAME_PATTERN.test(name)
@@ -2194,9 +2202,7 @@ function createVibe64SessionStore({
         ];
       })
     );
-    const metadata = Object.fromEntries(metadataEntries);
-    learningSessionBinding(metadata, admittedLearningScope, sessionPaths.sessionId);
-    return metadata;
+    return Object.fromEntries(metadataEntries);
   }
 
   async function readSessionNativeDescriptor(sessionId) {
@@ -5129,7 +5135,7 @@ function createVibe64SessionStore({
   }
 
   // Stage through the session/archive owner. The offline publisher owns backups.
-  async function prepareSessionStateUpgrade({ temporaryRoot, inspectSession, transformRenewal }) {
+  async function prepareSessionStateUpgrade({ temporaryRoot, inspectSession, transformRenewal, transformArchiveRecord }) {
     const relativeScratch = path.relative(normalizedStateRoot, temporaryRoot || normalizedStateRoot);
     if (!path.isAbsolute(temporaryRoot || "") || typeof inspectSession !== "function" ||
         !(relativeScratch === ".." || relativeScratch.startsWith(`..${path.sep}`))) {
@@ -5157,7 +5163,7 @@ function createVibe64SessionStore({
     const readRegularText = async (filePath) => await checkedPath(filePath) ? readTextIfExists(filePath) : "";
     await checkedPath(temporaryRoot, true);
     const updates = [];
-    const inspect = (sessionPaths) => inspectSession(sessionPaths, { checkedPath, inventory, readRegularText });
+    const inspect = (sessionPaths, archiveRecord = null) => inspectSession(sessionPaths, { checkedPath, inventory, readRegularText, archiveRecord });
     const rootPaths = paths();
     await checkedPath(normalizedStateRoot, true);
     await checkedPath(rootPaths.sessionsRoot, true);
@@ -5182,8 +5188,13 @@ function createVibe64SessionStore({
         if (record.sessionId !== sessionId) throw new Error(`Session archive identity does not match ${filePath}.`);
         await validateSessionArchive(filePath);
         await withExtractedSessionArchive(record, async (sessionPaths) => {
-          const changes = await inspect(sessionPaths);
-          if (!changes.length) return;
+          const changes = await inspect(sessionPaths, record);
+          const nextArchiveRecord = transformArchiveRecord ? await transformArchiveRecord({ record: parsed, sessionPaths }) : null;
+          if (nextArchiveRecord) sessionArchiveRecordFromJson(nextArchiveRecord, { archivePath: filePath, metadataPath });
+          if (!changes.length) {
+            if (nextArchiveRecord) updates.push({ filePath: metadataPath, original: rawRecord, contents: `${JSON.stringify(nextArchiveRecord, null, 2)}\n` });
+            return;
+          }
           for (const change of changes) {
             if (change.contents === null) { await rm(change.filePath); continue; }
             await mkdir(path.dirname(change.filePath), { recursive: true, mode: 0o700 });
@@ -5196,6 +5207,7 @@ function createVibe64SessionStore({
           if (!result.ok) throw new Error(`Cannot stage upgraded archive for ${sessionId}.`);
           await validateSessionArchive(replacementPath);
           updates.push({ filePath, replacementPath });
+          if (nextArchiveRecord) updates.push({ filePath: metadataPath, original: rawRecord, contents: `${JSON.stringify(nextArchiveRecord, null, 2)}\n` });
         }, { temporaryRoot });
       }
     };
@@ -5217,6 +5229,134 @@ function createVibe64SessionStore({
     }
     await inspectArchives(rootPaths.archivedSessionsRoot);
     return updates;
+  }
+
+  // Typed stopped-writer upgrade preparation; this never publishes files or
+  // weakens the ordinary immutable binding writer. Training supplies the exact
+  // saved learner/pin and maps only the original publisher's frozen after files.
+  async function prepareLearningSessionBindingUpgrade({ temporaryRoot, sessionId, learningScope,
+    preparedReplacements = [] } = {}) {
+    const scope = validateLearningSessionScope(learningScope);
+    const id = assertValidVibe64SessionId(sessionId);
+    if (!scope || scope.noExercise !== false || id !== `training-${scope.attemptId}` || admittedLearningScope ||
+        !Array.isArray(preparedReplacements) || preparedReplacements.some(value => !isPlainObject(value) ||
+          Object.keys(value).length !== 2 || typeof value.filePath !== "string" || typeof value.replacementPath !== "string")) {
+      throw new Error("Offline practice binding requires the exact saved initial source session and frozen file references.");
+    }
+    const binding = JSON.stringify({ schemaVersion: 1, ...scope, conversationId: id });
+    const files = [];
+    let found = false;
+    let currentArchive = null;
+    const validateMetadata = (metadata, { archived = false } = {}) => {
+      if (Object.hasOwn(metadata, LEARNING_SESSION_METADATA)) learningSessionBinding(metadata, scope, id);
+      if (!explicitPathIsManagedSessionSource({ sessionId: id, metadata }, metadata.source_path)) {
+        throw new Error(`Practice session ${id} has no valid original managed source descriptor. Inspect it before upgrading.`);
+      }
+      const archiveMarker = metadata.session_archive_operation;
+      let completedArchive = false;
+      if (archived && archiveMarker) {
+        try {
+          const operation = JSON.parse(archiveMarker);
+          completedArchive = isPlainObject(operation) && operation.status === "running" && operation.phase === "source";
+        } catch { /* Preserve malformed recovery evidence and refuse below. */ }
+      }
+      if (metadata.renewal_id || metadata.renewal_quiesced_id || archiveMarker && !completedArchive) {
+        throw new Error(`Practice session ${id} retains a renewal or archive operation. Finish its original owner transaction before upgrading.`);
+      }
+    };
+    // A persisted renewal record is not a proof that its native/source transaction
+    // is complete. Keep this bounded initial-session cut fail closed.
+    const renewal = renewalStatePath(id);
+    let renewalInfo;
+    try { renewalInfo = await lstat(renewal); } catch (error) { if (!isMissingPathError(error)) throw error; }
+    if (renewalInfo) throw new Error(`Practice session ${id} retains renewal state. Finish or inspect its original transaction before upgrading.`);
+    const updates = await prepareSessionStateUpgrade({ temporaryRoot,
+      async inspectSession(sessionPaths, { checkedPath, inventory, archiveRecord }) {
+        if (sessionPaths.sessionId !== id) return [];
+        if (found) throw new Error(`Practice session ${id} has multiple state incarnations. Finish archive recovery before upgrading.`);
+        found = true;
+        await checkedPath(sessionPaths.sessionRoot, true);
+        await checkedPath(sessionPaths.manifestPath);
+        await readManifestFromPaths(sessionPaths);
+        const status = assertVibe64SessionStatus(await readStatusFromPaths(sessionPaths));
+        if (RENEWAL_TRANSITION_VIBE64_SESSION_STATUSES.has(status)) throw new Error(`Practice session ${id} is in a renewal transition.`);
+        for (const entry of await inventory(sessionPaths.metadataRoot)) {
+          const info = await lstat(path.join(sessionPaths.metadataRoot, entry.name));
+          if (!info.isFile() || info.nlink !== 1) throw new Error(`Practice session ${id} requires regular non-aliased metadata.`);
+        }
+        const metadata = await readUnboundMetadataFromPaths(sessionPaths);
+        if (archiveRecord && status !== VIBE64_SESSION_STATUS.ARCHIVED) throw new Error(`Practice archive ${id} has non-archived contents.`);
+        validateMetadata(metadata, { archived: Boolean(archiveRecord) });
+        const filePath = metadataFilePath(sessionPaths, LEARNING_SESSION_METADATA);
+        if (archiveRecord) {
+          for (const filename of [archiveRecord.archivePath, archiveRecord.metadataPath]) {
+            const info = await lstat(filename);
+            if (!info.isFile() || info.nlink !== 1) throw new Error(`Practice archive ${id} requires a regular non-aliased pair.`);
+          }
+          currentArchive = archiveRecord;
+          files.push({ filePath: archiveRecord.archivePath, kind: "archive" }, { filePath: archiveRecord.metadataPath, kind: "archive-metadata" });
+          const indexed = archiveRecord.index.metadata?.[LEARNING_SESSION_METADATA];
+          if (indexed !== undefined) learningSessionBinding({ learning_session: indexed }, scope, id);
+          if (Boolean(indexed) !== Object.hasOwn(metadata, LEARNING_SESSION_METADATA) && !preparedReplacements.length) {
+            throw new Error(`Practice archive ${id} has inconsistent binding and index. Inspect its original transaction before upgrading.`);
+          }
+        } else files.push({ filePath, kind: "metadata" });
+        if (Object.hasOwn(metadata, LEARNING_SESSION_METADATA)) return [];
+        return [{ filePath, original: null, contents: `${binding}\n` }];
+      },
+      transformArchiveRecord({ record, sessionPaths }) {
+        if (sessionPaths.sessionId !== id || record.index.metadata?.[LEARNING_SESSION_METADATA] !== undefined) return null;
+        return { ...record, index: { ...record.index, metadata: { ...record.index.metadata, [LEARNING_SESSION_METADATA]: binding } } };
+      }
+    });
+    if (!found && preparedReplacements.length) throw new Error(`Practice session ${id} has no original state for its frozen replacement. Restore or inspect the original owner before retrying.`);
+    const replacements = new Map();
+    for (const replacement of preparedReplacements) {
+      if (!path.isAbsolute(replacement.replacementPath) || replacements.has(replacement.filePath) ||
+          !files.some(value => value.filePath === replacement.filePath)) {
+        throw new Error(`Practice session ${id} has an unrelated or duplicate frozen replacement. Inspect its upgrade backup.`);
+      }
+      replacements.set(replacement.filePath, replacement.replacementPath);
+    }
+    const readFrozen = async filename => {
+      const info = await lstat(filename);
+      if (!info.isFile() || info.nlink !== 1) throw new Error(`Practice session ${id} requires regular frozen upgrade files.`);
+      return readFile(filename, "utf8");
+    };
+    if (preparedReplacements.length) {
+      if (!found || replacements.size !== files.length) throw new Error(`Practice session ${id} has an incomplete frozen replacement set.`);
+      if (!currentArchive) {
+        learningSessionBinding({ learning_session: normalizeText(await readFrozen(replacements.get(files[0].filePath))) }, scope, id);
+      } else {
+        const archivePath = replacements.get(currentArchive.archivePath);
+        const metadataPath = replacements.get(currentArchive.metadataPath);
+        let value;
+        try { value = JSON.parse(await readFrozen(metadataPath)); }
+        catch (cause) { throw new Error(`Frozen practice archive ${id} has invalid metadata. Inspect its original backup.`, { cause }); }
+        const record = sessionArchiveRecordFromJson(value, { archivePath, metadataPath });
+        if (record.sessionId !== id) throw new Error(`Frozen practice archive ${id} has a different session identity.`);
+        learningSessionBinding({ learning_session: record.index.metadata?.[LEARNING_SESSION_METADATA] }, scope, id);
+        const info = await lstat(archivePath);
+        if (!info.isFile() || info.nlink !== 1) throw new Error(`Frozen practice archive ${id} is not a regular file.`);
+        await validateSessionArchive(archivePath);
+        await withExtractedSessionArchive(record, async sessionPaths => {
+          const root = await lstat(sessionPaths.metadataRoot);
+          if (!root.isDirectory()) throw new Error(`Frozen practice archive ${id} has an unsafe metadata root.`);
+          const entries = await readdir(sessionPaths.metadataRoot, { withFileTypes: true });
+          for (const entry of entries) {
+            const info = await lstat(path.join(sessionPaths.metadataRoot, entry.name));
+            if (!info.isFile() || info.nlink !== 1) throw new Error(`Frozen practice archive ${id} has unsafe metadata paths.`);
+          }
+          const metadata = await readUnboundMetadataFromPaths(sessionPaths);
+          learningSessionBinding(metadata, scope, id);
+          if (assertVibe64SessionStatus(await readStatusFromPaths(sessionPaths)) !== VIBE64_SESSION_STATUS.ARCHIVED) {
+            throw new Error(`Frozen practice archive ${id} has non-archived contents.`);
+          }
+          validateMetadata(metadata, { archived: true });
+        }, { temporaryRoot });
+      }
+    }
+    return { found, files, updates };
   }
 
   async function prepareConversationStorageUpgrade({ temporaryRoot }) {
@@ -5283,6 +5423,7 @@ function createVibe64SessionStore({
     prepareRenewalSessionArchive,
     prepareAssistantRoutingStateUpgrade,
     prepareConversationStorageUpgrade,
+    prepareLearningSessionBindingUpgrade,
     conversationMessageIdExists,
     conversationStorage,
     deleteMetadataValue,

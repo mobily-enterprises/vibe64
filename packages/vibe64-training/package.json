@@ -24,6 +24,7 @@
     "./server/learner-state": "./src/server/learnerState.js",
     "./server/learning-sessions": "./src/server/learningSessions.js",
     "./server/preparation": "./src/server/preparation.js",
+    "./server/practiceHistoryUpgrade": "./src/server/practiceHistoryUpgrade.js",
     "./server/installed-catalogue": "./src/server/installedCatalogue.js",
     "./server/routes": "./src/server/registerRoutes.js",
     "./server/conversation-assessment": "./src/server/conversationAssessment.js",

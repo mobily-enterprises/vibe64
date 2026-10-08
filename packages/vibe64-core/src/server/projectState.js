@@ -1,3 +1,4 @@
+import { lstat, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -5,6 +6,45 @@ import {
   normalizeTargetRoot,
   normalizeText
 } from "./core.js";
+
+const PROJECT_SLUG_MAX_LENGTH = 48;
+const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
+
+function normalizeProjectSlug(value = "") {
+  const slug = String(value || "").trim();
+  if (!PROJECT_SLUG_PATTERN.test(slug)) {
+    const error = new Error("Project slug must start with a lowercase letter or number and contain only lowercase letters, numbers, underscores, or dashes.");
+    error.code = "vibe64_invalid_project_slug";
+    throw error;
+  }
+  if (slug.length > PROJECT_SLUG_MAX_LENGTH) {
+    const error = new Error(`Project slug must be ${PROJECT_SLUG_MAX_LENGTH} characters or fewer.`);
+    error.code = "vibe64_invalid_project_slug";
+    throw error;
+  }
+  return slug;
+}
+
+const EXTERNAL_PROJECT_LOCAL_ROOTS_DIR = "projects";
+
+// Offline maintenance inventories runtime state, including closed/deleting and
+// standalone projects, without creating directories or recovering project state.
+async function listProjectRuntimeRoots(systemRoot) {
+  if (!path.isAbsolute(systemRoot || "") || path.resolve(systemRoot) === path.parse(systemRoot).root) {
+    throw new Error("Project state inventory requires an absolute, non-root system directory.");
+  }
+  const root = path.join(systemRoot, EXTERNAL_PROJECT_LOCAL_ROOTS_DIR);
+  let entries;
+  try {
+    if (!(await lstat(root)).isDirectory()) throw new Error("Project state inventory requires a regular projects directory.");
+    entries = await readdir(root, { withFileTypes: true });
+  }
+  catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  if (entries.some((entry) => entry.isSymbolicLink())) {
+    throw new Error("Project state inventory contains a symbolic link. Inspect it before upgrading.");
+  }
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(root, entry.name)).sort();
+}
 
 const PROJECT_STATE_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
 const PROJECT_RECORD_FILE = "project.json";
@@ -118,6 +158,10 @@ function resolveProjectInfoCachePath({
 }
 
 export {
+  normalizeProjectSlug,
+  PROJECT_SLUG_MAX_LENGTH,
+  EXTERNAL_PROJECT_LOCAL_ROOTS_DIR,
+  listProjectRuntimeRoots,
   PROJECT_DEPLOYMENTS_DIR,
   PROJECT_CANONICAL_REPOSITORY_DIR,
   PROJECT_GITHUB_MIRROR_DIR,

@@ -18,6 +18,10 @@ import {
   resolveExplicitStudioTargetRoot
 } from "./studioRoots.js";
 import {
+  normalizeProjectSlug,
+  PROJECT_SLUG_MAX_LENGTH,
+  listProjectRuntimeRoots,
+  EXTERNAL_PROJECT_LOCAL_ROOTS_DIR,
   resolveProjectRecordPath,
   resolveProjectRuntimeRoot,
   resolveProjectSessionsRoot,
@@ -51,9 +55,6 @@ import {
   projectRepositoryView
 } from "./projectRepository.js";
 
-const PROJECT_SLUG_MAX_LENGTH = 48;
-const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
-const EXTERNAL_PROJECT_LOCAL_ROOTS_DIR = "projects";
 const DEFAULT_HOSTED_REPOSITORY_BRANCH = "main";
 
 let configuredContext = null;
@@ -140,21 +141,6 @@ function projectSlugFromName(value = "") {
     .replace(/^-+|-+$/gu, "");
 }
 
-function normalizeProjectSlug(value = "") {
-  const slug = String(value || "").trim();
-  if (!PROJECT_SLUG_PATTERN.test(slug)) {
-    const error = new Error("Project slug must start with a lowercase letter or number and contain only lowercase letters, numbers, underscores, or dashes.");
-    error.code = "vibe64_invalid_project_slug";
-    throw error;
-  }
-  if (slug.length > PROJECT_SLUG_MAX_LENGTH) {
-    const error = new Error(`Project slug must be ${PROJECT_SLUG_MAX_LENGTH} characters or fewer.`);
-    error.code = "vibe64_invalid_project_slug";
-    throw error;
-  }
-  return slug;
-}
-
 function projectSlugFromInput(input = {}) {
   const explicitSlug = String(input?.slug || input?.projectSlug || "").trim();
   if (explicitSlug) {
@@ -191,25 +177,6 @@ function resolveCatalogProjectRuntimeRoot({
     throw error;
   }
   return projectRuntimeRoot;
-}
-
-// Offline maintenance inventories runtime state, including closed/deleting and
-// standalone projects, without creating directories or recovering project state.
-async function listProjectRuntimeRoots(systemRoot) {
-  if (!path.isAbsolute(systemRoot || "") || path.resolve(systemRoot) === path.parse(systemRoot).root) {
-    throw new Error("Project state inventory requires an absolute, non-root system directory.");
-  }
-  const root = path.join(systemRoot, EXTERNAL_PROJECT_LOCAL_ROOTS_DIR);
-  let entries;
-  try {
-    if (!(await lstat(root)).isDirectory()) throw new Error("Project state inventory requires a regular projects directory.");
-    entries = await readdir(root, { withFileTypes: true });
-  }
-  catch (error) { if (error.code === "ENOENT") return []; throw error; }
-  if (entries.some((entry) => entry.isSymbolicLink())) {
-    throw new Error("Project state inventory contains a symbolic link. Inspect it before upgrading.");
-  }
-  return entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(root, entry.name)).sort();
 }
 
 async function assertDirectoryUsable(directoryPath = "") {

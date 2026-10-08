@@ -744,3 +744,46 @@ and the previous registry refuses its newer completed ledger. Existing Working
 and no-exercise Learning bindings, metadata and progress are unchanged. There is
 no historical adoption, inference or lazy repair. Full practice preparation,
 teacher transport and installed learner acceptance require their own proofs.
+
+
+## Historical preparation-owned practice binding
+
+`20261008-learning-practice-history` is appended after the unchanged prospective
+practice boundary. The assembled candidate CLI supplies the Public Training
+operation; Core retains registry/lock/ledger ownership. Check and apply require
+the exact original saved learner, exercise attempt/pin, immutable managed-project
+marker and preparation-owned initial session. Normal and isolated author-preview
+state are inventoried separately; conflicting claims block activation. Preview
+validation permits drafts only in that existing isolated owner, never for normal
+learners. No model/browser path or account claim supplies upgrade authority.
+
+This explicit historical policy adopts only that exact initial session as
+source-bearing Learning. Older absence meant Working, so it does not convert every
+session in a practice project or infer lesson intent from a name. Unrelated
+Working sessions remain unchanged. Source files, Git commits, provider/native
+identities, transcripts, learner progress, active summary and assessment receipts
+are retained. Preparing does not become ready, ended does not become active,
+and a missing ready session is never replaced. Missing preparing effects are
+reported without manufacturing them. Corrupt pins/progress, incompatible markers,
+multiple incarnations and unsafe aliases refuse the upgrade.
+
+The original Runtime offline owner stages the immutable `learning_session` field;
+ordinary reads/writers still refuse historical adoption. Archived initial sessions
+require both the tar and its original JSON index. A successfully published
+archive may retain the original running/source archive-operation marker; exact
+published pair/status/identity supplies completion, not an invented cleared
+marker. Active/closing unfinished archive operations and retained renewal state
+require inspection through their original owner before conversion. This bounded
+upgrade neither adopts a renewal successor nor interprets completion from its
+raw marker.
+
+Every changed file has original and replacement copies verified through the
+existing upgrade-owned backup manifest before publication. Training revalidates
+saved ownership against the frozen replacement binding/archive pair on every
+retry, including when the publisher resumes a partly published pair without
+calling its preparation callback. Changed authority, modified backup or current
+bytes matching neither saved side blocks activation. Keep all writers stopped;
+retry the same candidate with the same backup. Never edit the ledger, remove
+history or restart an older release against partial state to bypass the error.
+Existing native-tool compatibility/replacement recovery remains separate; this
+upgrade changes neither installed tool manifests nor native histories.

@@ -55,7 +55,13 @@ teaching instructions. Preparation reuses its already-held original barrier;
 subsequent effects reenter the original saved-attempt admission. Captured
 observation/control cannot admit new work or change project selection. Runtime
 construction, immutable session binding and native providers remain with their
-existing owners; no historical session is silently adopted or replaced. Main
+existing owners; no historical session is silently adopted or replaced. The
+explicit numbered practice-history operation separately adopts only an exact
+preparation-owned initial session under its saved learner/pin and immutable
+project marker. Training owns authority/retry validation, Runtime owns offline
+metadata/archive staging, Core owns verified file publication and the ledger;
+Online retains stopped-service activation. Progress/source/native histories and
+unreferenced Working sessions remain unchanged. Main
 teaching coordinator supplies the exact four learning-read, brief-read,
 question-prepare and answer-evaluate actions to the original Codex/OpenCode Main native
 host for no-exercise attempts. Fresh originating-request WRITE authority and

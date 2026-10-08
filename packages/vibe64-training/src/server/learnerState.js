@@ -4,7 +4,7 @@ import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
-import { normalizeProjectSlug } from "@local/vibe64-core/server/studioProjectContext";
+import { normalizeProjectSlug } from "@local/vibe64-core/server/projectState";
 import { assertValidVibe64SessionId } from "@local/vibe64-runtime/server/sessionStore";
 import { canonicalJson } from "./content.js";
 import { list, validateContent } from "./contentSchemas.js";

@@ -69,3 +69,19 @@ If preparation reports
 missing source, retain the attempt and resolve that failure before continuing;
 a conversation alone cannot replace the workspace. Existing conversations and
 progress remain unchanged.
+
+
+If an older prepared practice lesson reports that its Learning binding does not
+match the saved attempt, keep its original session, workspace and progress. Ask
+the installation owner to finish the candidate's stopped-service practice-history
+upgrade, then Resume the same saved lesson. This is an operator step; Colleague
+can explain the error but cannot run a state upgrade. The upgrade retains the
+original conversation and source and changes only the preparation-owned initial
+session's Learning association. Other Working sessions are left alone.
+
+A missing prepared session, conflicting ownership or unfinished archive/renewal
+requires the owner's specific recovery before upgrading. Do not create a
+replacement, delete history or change the lesson pin to bypass it. Finishing
+the upgrade does not complete Workspace setup or prove a lesson pass. If native
+tool compatibility is then refused, retain the same history and use the
+installation's supported connection/replacement recovery.

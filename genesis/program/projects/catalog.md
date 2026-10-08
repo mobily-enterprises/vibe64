@@ -28,6 +28,7 @@ workspace.
 - `docs/colleague-usage/starter-apps.md`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `packages/vibe64-core/src/server/studioProjectContext.js`
+- `packages/vibe64-core/src/server/projectState.js`
 - `packages/vibe64-core/src/server/projectRequestContext.js`
 - `packages/vibe64-training/src/server/learnerState.js`
 - `packages/vibe64-training/src/server/learningSessions.js`
@@ -104,6 +105,11 @@ user effects. Practice-session Learning purpose/collection, authenticated transp
 Main teacher/Preview integration and all-provider native lifetime acceptance are
 still required. Source renewal remains unsupported for this practice increment;
 its existing ordinary policy is unchanged. This is not installed/browser proof.
+
+Core’s exact project-slug validator and read-only runtime-root inventory live in
+`projectState.js`. The live Project context retains its original exports and
+callers. Offline Training state upgrades use the same implementations without
+loading live Project execution or Genesis dependencies.
 
 All thirty-six project HTTP operations dispatch named `vibe64.project.*` actions.
 The canonical inputs enforce required fields and exclude caller-supplied actors;

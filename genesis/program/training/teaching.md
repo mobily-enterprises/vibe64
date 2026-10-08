@@ -898,3 +898,29 @@ Core `studioProjectContext.js`, `projectRequestContext.js`, `actionContext.js`,
 Project and Sessions original services; focused original Core/Project/Learner/
 Preparation/Session/ActionContext tests retain their assertion bodies and default
 policies except the documented additive saved-scope fixture projection.
+
+
+### Offline adoption of original prepared practice sessions
+
+Training owns `practiceHistoryUpgrade.js`, assembled by the existing candidate
+upgrade CLI through one typed Core delegate. Its durable authority comes from
+the original Learner read-only progress/pin/preparation and exact immutable
+project marker, separately for normal and author-preview state. The policy
+explicitly adopts only the saved preparation-owned initial session. Field
+absence previously meant Working; project prefixes and display usernames are
+not purpose or learner authority. Unreferenced sessions remain Working.
+
+The original Core runtime inventory and Runtime offline session owner supply
+actual paths and archive pairing. The original backup publisher supplies frozen
+before/after publication; Training independently revalidates every frozen after
+binding against fresh saved authority on retry. Progress, pins, source, native
+identity and grading receipts are not rewritten. Preparing/ended state retains
+its meaning. Renewal transactions require their original owner's interpretation
+and are not adopted by this bounded cut. There is no request backfill, new
+journal, runtime, native retirement or historical teaching-proof inference.
+
+Source and draft-original-file tests do not establish installed activation,
+actual fleet history counts, all-provider continuity or learner acceptance.
+Sources: `packages/vibe64-training/src/server/practiceHistoryUpgrade.js`,
+`bin/upgrade-state.js`, existing Core `stateUpgrades.js`/`stateUpgradeFiles.js`,
+original `vibe64TrainingLearnerState.unit.test.js` and `stateUpgrades.unit.test.js`.

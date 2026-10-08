@@ -9,6 +9,7 @@ the canonical project and from other sessions.
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/assistantContracts.js`
 - `packages/vibe64-core/src/server/actionContext.js`
+- `packages/vibe64-core/src/server/projectState.js`
 
 - `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
@@ -614,3 +615,30 @@ native teacher adoption remain separate composed acceptance requirements.
 Historical ready unflagged sessions refuse; this source does not backfill them.
 Their supported adoption requires a separately reviewed numbered stopped-service
 upgrade, preserving old source, history and published upgrade immutability.
+
+
+### Offline historical practice binding
+
+`SessionStore.prepareLearningSessionBindingUpgrade` is a typed offline staging
+operation for the exact saved preparation initial session. It reuses the
+original active/closing/archive inventory and original metadata reader body,
+then applies the existing exact learning binding validator. Normal reads and
+immutable binding writes retain their original refusal. The inventory's narrow
+optional archive-record hook stages the matching original JSON index alongside
+the tar; default existing upgrades are unchanged. Fully published archives
+retain their original operation metadata, validated through the original
+archive/status/identity boundary. Unfinished live archive or renewal state is
+not a conversion shortcut.
+
+The Training owner supplies durable learner/pin/project authority and validates
+frozen after references; the original Core publisher verifies backups/hashes
+and atomically publishes the prepared set. No ordinary source, native, history
+or progress owner is replaced. Original Store and Learner companions preserve
+ordinary writer refusal, source/native IDs, archived sidecar/history and actual
+Preparation same-session resume; these are source-component proofs, not fleet
+activation or all-provider acceptance.
+
+The read-only runtime-root inventory and original project-slug validator are
+owned by Core `projectState.js`;
+`studioProjectContext.js` retains its existing export. Offline upgrades use that
+small owner without loading live project execution or Genesis dependencies.
