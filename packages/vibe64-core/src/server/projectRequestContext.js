@@ -11,6 +11,7 @@ import {
 
 const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
 const projectContextStorage = new AsyncLocalStorage();
+const practiceScopeKey = Symbol("Vibe64 server practice scope");
 
 function projectSlugFromRequest(request = {}) {
   return normalizeProjectSlug(request.params?.slug);
@@ -27,6 +28,26 @@ async function resolveProjectRequestContext({
     (resolvedProjectContext?.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot())
   ).trim();
   const vibe64User = request?.vibe64User || null;
+  const practice = resolvedProjectContext.currentPracticeProjectScope?.();
+  if (practice) {
+    if (slug !== practice.slug) {
+      throw Object.assign(new Error("Practice access belongs to the exact saved project."), { code: "vibe64_practice_scope_mismatch" });
+    }
+    const { project } = await resolvedProjectContext.readWorkspaceProject({ slug });
+    return Object.freeze({
+      projectRecordPath: project.projectRecordPath,
+      projectRuntimeRoot: project.projectRuntimeRoot,
+      projectSessionSourceRoot: project.projectSessionSourceRoot,
+      projectsRoot: practice.projectsRoot,
+      slug,
+      sourceConfigRoot: "",
+      sourceRoot: "",
+      systemRoot: practice.systemRoot,
+      targetRoot: project.projectRoot,
+      vibe64User: practice.vibe64User,
+      [practiceScopeKey]: currentProjectRequestContext()[practiceScopeKey]
+    });
+  }
   const explicitContext = explicitProjectRequestContextForSlug(resolvedProjectContext, slug, projectsRoot);
   if (explicitContext) {
     await assertProjectDirectoryUsable(explicitContext.targetRoot);
@@ -112,7 +133,35 @@ function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", pr
 }
 
 function currentProjectRequestContext() {
-  return projectContextStorage.getStore() || null;
+  const context = projectContextStorage.getStore() || null;
+  if (context?.[practiceScopeKey] && !context[practiceScopeKey].active()) {
+    throw Object.assign(new Error("Practice access ended with its owning callback. Read the saved lesson again."), { code: "vibe64_practice_scope_expired" });
+  }
+  return context;
+}
+
+function currentPracticeProjectScope(owner) {
+  const grant = currentProjectRequestContext()?.[practiceScopeKey];
+  if (!grant) return null;
+  if (grant.owner !== owner) {
+    throw Object.assign(new Error("Practice access belongs to its original Project context."), { code: "vibe64_practice_context_mismatch" });
+  }
+  return grant.scope;
+}
+
+// Core calls this with its exact derived scope. The private token survives only
+// inside the original ALS callback; ordinary request/context fields cannot grant it.
+async function runWithPracticeProjectContext(owner, scope, operation) {
+  if (typeof operation !== "function") throw new TypeError("Practice access requires an owning callback.");
+  let active = true;
+  const context = Object.freeze({ ...scope,
+    [practiceScopeKey]: { owner, scope, active: () => active }
+  });
+  try {
+    return await projectContextStorage.run(context, () => operation());
+  } finally {
+    active = false;
+  }
 }
 
 function currentProjectTargetRoot() {
@@ -190,6 +239,8 @@ function projectRequestErrorStatusCode(error = {}) {
 
 export {
   VIBE64_PROJECT_ROUTE_BASE,
+  currentPracticeProjectScope,
+  runWithPracticeProjectContext,
   currentProjectRecordPath,
   currentProjectRequestContext,
   currentProjectRuntimeRoot,

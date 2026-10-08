@@ -30,7 +30,7 @@ const Vibe64TrainingProvider = defineFeature({
     const learners = createTrainingLearnerState({ systemRoot, content });
     const brief = createTrainingTeachingBrief({ learners, content });
     const exercises = createTrainingService({ catalogue, content, learners, projectContext, project, sessions, terminals });
-    const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions });
+    const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, projectContext });
     registerVibe64ActionContext(actionCatalogue, {
       admissionScope: "learning-only",
       resolveUser({ request }) {

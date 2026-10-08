@@ -7,7 +7,7 @@ function learningError(code, message, statusCode = 409) {
 
 // Training derives authority and instructions from the saved reservation. Main's
 // original Project/Session/Runtime owners retain storage, routing and execution.
-function createTrainingLearningSessions({ learners, teachingBrief, project, sessions } = {}) {
+function createTrainingLearningSessions({ learners, teachingBrief, project, sessions, projectContext } = {}) {
   if (typeof learners?.readLearningSessionScope !== "function" ||
       typeof learners?.runPreparationExclusive !== "function" ||
       typeof teachingBrief?.readBrief !== "function" ||
@@ -71,6 +71,32 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     return context;
   }
 
+  async function resolvePracticeContext({ actor, attemptId, sessionId, access = "observe" } = {}, operation) {
+    if (typeof operation !== "function" || typeof learners.readExerciseProjectScope !== "function" ||
+        typeof projectContext?.runWithPracticeProjectScope !== "function") {
+      throw new TypeError("Practice admission requires its saved learner, original Project context and owning callback.");
+    }
+    const run = async () => {
+      const saved = await learners.readExerciseProjectScope({ actor, attemptId, access });
+      if (sessionId && sessionId !== saved.initialSessionId) {
+        throw learningError("VIBE64_TRAINING_SESSION_MISMATCH", "Use this saved practice attempt's exact initial session.");
+      }
+      return projectContext.runWithPracticeProjectScope({ actor, training: saved.training, access }, async () => {
+        if (sessionId) {
+          await project.runInProjectContext(saved.projectSlug, async () => {
+            const runtime = await project.createRuntime({ inspectSource: false });
+            await runtime.store.readSession(sessionId);
+          });
+        }
+        return operation({ projectSlug: saved.projectSlug,
+          ...(saved.initialSessionId ? { initialSessionId: saved.initialSessionId } : {}) });
+      });
+    };
+    // End and fresh practice writes use the original preparation barrier.
+    return access === "create" || access === "write"
+      ? learners.runPreparationExclusive({ actor, attemptId }, run)
+      : run();
+  }
   async function readSessions({ actor } = {}) {
     const state = await learners.readState({ actor });
     const summaries = [];
@@ -121,7 +147,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     });
   }
 
-  return Object.freeze({ resolveContext, openSession, readSessions });
+  return Object.freeze({ resolveContext, resolvePracticeContext, openSession, readSessions });
 }
 
 export { createTrainingLearningSessions };

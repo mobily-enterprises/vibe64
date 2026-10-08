@@ -545,6 +545,41 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     };
   }
 
+  // Read the original saved exercise identity, never infer it from a project
+  // name or source directory. The caller owns callback-scoped Project admission.
+  async function readExerciseProjectScope({ actor, attemptId, access = "observe" } = {}) {
+    if (!["observe", "control", "write", "create"].includes(access)) {
+      throw new TypeError("Use an explicit practice operation scope.");
+    }
+    const paths = userPaths(actor);
+    if (typeof attemptId !== "string" || !uuidPattern.test(attemptId)) {
+      throw new Error("Use the exact saved exercise attempt ID.");
+    }
+    const state = await loadState(paths);
+    const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
+    if (!attempt) throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
+    const lesson = await verifyInstalled(attempt.pin);
+    if (!lesson.lesson.exercise) {
+      throw failure("VIBE64_TRAINING_EXERCISE_MISSING", "This saved lesson has no practice project. Use its source-less learning conversation.", 409);
+    }
+    const active = state.progress.activeAttemptId === attemptId && !attempt.ended;
+    if ((access === "write" || access === "create") && (!active || !state.activeSummaryCurrent)) {
+      throw failure("VIBE64_TRAINING_ATTEMPT_INACTIVE", "Resume this exact confirmed active lesson before admitting practice work.", 409);
+    }
+    if (typeof installed.readExercise !== "function") {
+      throw failure("VIBE64_TRAINING_EXERCISE_UNAVAILABLE", "This installed content reader cannot supply the lesson's exact bundled exercise.", 409);
+    }
+    const exercise = await installed.readExercise({ ...attempt.pin.topic,
+      lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    return {
+      training: { schemaVersion: 1, learnerKey: paths.learner.key, attemptId, pin: structuredClone(attempt.pin),
+        exercise: { kind: "bundled", sourcePath: exercise.sourcePath } },
+      projectSlug: attempt.projectSlug,
+      ...(attempt.preparation.initialSessionId ? { initialSessionId: attempt.preparation.initialSessionId } : {}),
+      active, activeSummaryCurrent: state.activeSummaryCurrent
+    };
+  }
+
   async function reserveAttempt({ actor, requestId, expectedRevision, pin: inputPin } = {}) {
     const paths = userPaths(actor);
     if (typeof requestId !== "string" || !requestPattern.test(requestId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
@@ -971,7 +1006,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return writePreparation({ actor, attemptId, initialSessionId, expectedRevision }, "failure", { stage, code, message });
   }
 
-  return { readState, readLearningSessionScope, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive, beginPreparation, recordPreparationReady, recordPreparationFailure, saveLessonResume, recordAssessment };
+  return { readState, readLearningSessionScope, readExerciseProjectScope, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive, beginPreparation, recordPreparationReady, recordPreparationFailure, saveLessonResume, recordAssessment };
 }
 
 export { createTrainingLearnerState, evidenceSchema, passedAssessmentIds, validateSnapshot };

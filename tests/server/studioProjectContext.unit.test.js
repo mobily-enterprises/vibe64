@@ -1620,3 +1620,185 @@ test("Corrupt stored project training provenance is rejected without repairing m
     assert.equal(await readFile(recordPath, "utf8"), corruptBytes);
   });
 });
+
+
+test("local practice callback uses the same real record and Project ALS without widening local catalogue", async () => {
+  await withTemporaryRoot(async root => {
+    const { currentProjectRequestContext, runWithProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+    const working = path.join(root, "working");
+    await mkdir(working);
+    const context = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+      explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true, mode: "local" } });
+    const project = createProjectService({ projectContext: context });
+    const training = trainingProvenance();
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    const actor = { uid: 42, username: "learner" };
+    const workingBefore = await context.listProjects();
+    let retained;
+    let later;
+    let releaseLater;
+    const afterCallback = new Promise(resolve => { releaseLater = resolve; });
+    await context.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
+      const before = await context.readWorkspaceProjectState({ slug });
+      assert.equal(before.projectRuntimeRoot, path.join(context.systemRoot, "projects", slug));
+      assert.equal(before.projectContextRoot, path.join(context.systemRoot, "training", "practice", "NDI", training.attemptId, slug));
+      assert.deepEqual(before.metadata, {});
+      const created = await context.createWorkspaceProjectRecord({ slug, training });
+      assert.equal(created.project.slug, slug);
+      assert.equal(created.project.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+      assert.equal(created.project.sourceRoot, undefined, "original record result does not fabricate a source root");
+      assert.equal((await context.readWorkspaceProjectState({ slug })).metadata.training.attemptId, training.attemptId);
+      await project.runInProjectContext(slug, async () => {
+        assert.deepEqual(context.currentPracticeProjectScope().training, training, "original nested Project context retains the exact live grant");
+        assert.equal(currentProjectRequestContext().learningScope, undefined);
+        assert.equal(currentProjectRequestContext().createLearningSession, undefined);
+        const actual = await project.readCurrentProject();
+        assert.equal(actual.slug, slug);
+        assert.equal(actual.projectRoot, before.projectContextRoot);
+        assert.equal(actual.canonicalRepositoryPath, path.join(before.projectRuntimeRoot, "canonical-repository", "repository.git"));
+        assert.equal((await project.createRuntime({ inspectSource: false })).projectContextRoot, actual.projectRoot);
+        retained = currentProjectRequestContext();
+        later = afterCallback.then(() => context.readWorkspaceProjectState({ slug })).catch(error => error);
+      });
+      await assert.rejects(() => context.readWorkspaceProject({ slug: "working" }), { code: "vibe64_practice_scope_mismatch" });
+      await assert.rejects(() => context.selectWorkspaceProject({ slug }), { code: "vibe64_project_catalog_unavailable" });
+      assert.equal(context.targetRoot, working, "scope does not retarget ordinary Working selection");
+    });
+    releaseLater();
+    assert.equal((await later).code, "vibe64_practice_scope_expired");
+    await assert.rejects(() => runWithProjectRequestContext(retained, () => context.readWorkspaceProjectState({ slug })),
+      { code: "vibe64_practice_scope_expired" });
+    await assert.rejects(() => runWithProjectRequestContext({ practiceProjectScope: { training }, slug },
+      () => context.readWorkspaceProjectState({ slug })), { code: "vibe64_project_catalog_unavailable" });
+    await assert.rejects(() => context.readWorkspaceProject({ slug }), { code: "vibe64_project_catalog_unavailable" });
+    await assert.rejects(() => resolveProjectRequestContext({ projectContext: context, request: { params: { slug }, vibe64User: actor } }),
+      { code: "vibe64_project_route_unavailable" });
+    assert.deepEqual(await context.listProjects(), workingBefore);
+    await context.runWithPracticeProjectScope({ actor, training }, async () => {
+      assert.equal((await context.readWorkspaceProject({ slug })).project.slug, slug, "fresh explicit admission can reread the same original record");
+      await assert.rejects(() => context.createWorkspaceProjectRecord({ slug, training }), { code: "vibe64_practice_scope_mismatch" });
+    });
+    await runWithProjectRequestContext({ learningScope: { noExercise: true }, createLearningSession: () => assert.fail() }, () =>
+      context.runWithPracticeProjectScope({ actor, training }, async () => {
+        assert.equal(currentProjectRequestContext().learningScope, undefined);
+        assert.equal(currentProjectRequestContext().createLearningSession, undefined);
+        await project.runInProjectContext(slug, async () => {
+          assert.equal(currentProjectRequestContext().learningScope, undefined);
+          assert.equal(currentProjectRequestContext().createLearningSession, undefined);
+          assert.deepEqual(context.currentPracticeProjectScope().training, training);
+        });
+      }));
+  });
+});
+
+test("local practice scope refuses foreign identity, unmarked storage and aliases while retaining atomic original rollback", async () => {
+  await withTemporaryRoot(async root => {
+    const working = path.join(root, "working");
+    await mkdir(working);
+    await writeFile(path.join(working, "keep.txt"), "keep");
+    const context = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+      explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
+    const training = trainingProvenance();
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    const actor = { uid: 42 };
+    await assert.rejects(() => context.runWithPracticeProjectScope({ actor: { uid: 43 }, training, access: "create" }, () => assert.fail()),
+      { code: "vibe64_practice_scope_mismatch" });
+    await assert.rejects(() => context.runWithPracticeProjectScope({ actor, training, access: "any" }, () => assert.fail()), /supported/u);
+    let roots;
+    const failed = new Error("original prepare failed");
+    await assert.rejects(() => context.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
+      roots = await context.readWorkspaceProjectState({ slug });
+      await assert.rejects(() => context.createWorkspaceProjectRecord({ slug, training, repository: { mode: "github", github: { fullName: "examples/app" } } }));
+      return context.createWorkspaceProjectRecord({ slug, training }, { prepare: async () => { throw failed; } });
+    }), error => error === failed);
+    await assert.rejects(() => access(roots.projectContextRoot), { code: "ENOENT" });
+    await assert.rejects(() => access(roots.projectRuntimeRoot), { code: "ENOENT" });
+    assert.equal(await readFile(path.join(working, "keep.txt"), "utf8"), "keep");
+    await mkdir(roots.projectContextRoot);
+    await assert.rejects(() => context.runWithPracticeProjectScope({ actor, training }, () => assert.fail()),
+      { code: "vibe64_practice_scope_mismatch" });
+    await rm(roots.projectContextRoot, { recursive: true });
+    await fs.promises.symlink(working, roots.projectContextRoot);
+    await assert.rejects(() => context.runWithPracticeProjectScope({ actor, training }, () => assert.fail()),
+      { code: "vibe64_practice_path_unsafe" });
+    await rm(roots.projectContextRoot);
+    await context.runWithPracticeProjectScope({ actor, training, access: "create" }, () => context.createWorkspaceProjectRecord({ slug, training }));
+    const changed = structuredClone(training);
+    changed.pin.lesson.hash = "e".repeat(64);
+    await assert.rejects(() => context.runWithPracticeProjectScope({ actor, training: changed }, () => assert.fail()),
+      { code: "vibe64_practice_scope_mismatch" });
+    await context.runWithPracticeProjectScope({ actor, training }, async () => {
+      const state = await context.readWorkspaceProjectState({ slug });
+      await writeFile(state.projectRecordPath, JSON.stringify({ repository: { mode: "managed_git", defaultBranch: "main" } }));
+      await assert.rejects(() => context.readWorkspaceProject({ slug }), { code: "vibe64_practice_scope_mismatch" });
+    });
+  });
+});
+
+test("simultaneous local practice callbacks stay on their exact original runtime roots", async () => {
+  await withTemporaryRoot(async root => {
+    const working = path.join(root, "working");
+    await mkdir(working);
+    const context = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+      explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
+    const first = trainingProvenance();
+    const second = structuredClone(first);
+    second.attemptId = "12345678-1234-4234-8234-123456789abd";
+    let admitted = 0;
+    let release;
+    const both = new Promise(resolve => { release = resolve; });
+    await Promise.all([first, second].map(training => context.runWithPracticeProjectScope({ actor: { uid: 42 }, training, access: "create" }, async () => {
+      const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+      const before = await context.readWorkspaceProjectState({ slug });
+      admitted++;
+      if (admitted === 2) release();
+      await both;
+      const created = await context.createWorkspaceProjectRecord({ slug, training });
+      assert.equal(created.project.projectRuntimeRoot, before.projectRuntimeRoot);
+      assert.equal((await context.readWorkspaceProjectState({ slug })).metadata.training.attemptId, training.attemptId);
+      const other = training === first ? second : first;
+      await assert.rejects(() => context.readWorkspaceProjectState({ slug: `training-${other.attemptId.replaceAll("-", "")}` }),
+        { code: "vibe64_practice_scope_mismatch" });
+    })));
+    const { listProjectRuntimeRoots } = await import("../../packages/vibe64-core/src/server/studioProjectContext.js");
+    assert.deepEqual(await listProjectRuntimeRoots(context.systemRoot), [first, second].map(training =>
+      path.join(context.systemRoot, "projects", `training-${training.attemptId.replaceAll("-", "")}`)).sort());
+    assert.equal(context.targetRoot, working);
+  });
+});
+
+test("original catalogue orphan cleanup retains only an exact marked real private practice namespace", async () => {
+  await withTemporaryRoot(async root => {
+    const working = path.join(root, "working");
+    await mkdir(working);
+    const roots = { explicitSystemRoot: path.join(root, "system"), explicitManagedSourceRoot: path.join(root, "source"), home: root, env: {} };
+    const local = createStudioProjectContext({ ...roots, explicitTargetRoot: working, runtimeProfile: { local: true } });
+    const catalogue = createStudioProjectContext({ ...roots, explicitProjectsRoot: path.join(root, "catalogue") });
+    const training = trainingProvenance();
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    let practice;
+    await local.runWithPracticeProjectScope({ actor: { uid: 42 }, training, access: "create" }, async () => {
+      await local.createWorkspaceProjectRecord({ slug, training });
+      practice = await local.readWorkspaceProjectState({ slug });
+    });
+    const recordBefore = await readFile(practice.projectRecordPath);
+    const retainedSession = path.join(practice.projectRuntimeRoot, "sessions", "retained.txt");
+    await writeTestFile(retainedSession, "retained admitted session\n");
+    const misleadingSlug = "training-22345678123442348234123456789abc";
+    const orphans = ["ordinary-orphan", "training-unmarked", misleadingSlug];
+    for (const orphan of orphans) {
+      const created = await catalogue.createWorkspaceProjectRecord({ slug: orphan, ...(orphan === misleadingSlug ? { training } : {}) });
+      await rm(created.project.projectRoot, { recursive: true });
+    }
+    assert.deepEqual((await catalogue.listWorkspaceProjects()).projects, [], "private practice is preserved, never listed or authorized by catalogue");
+    assert.deepEqual(await readFile(practice.projectRecordPath), recordBefore);
+    assert.equal(await readFile(retainedSession, "utf8"), "retained admitted session\n");
+    for (const orphan of orphans) await assert.rejects(() => access(catalogue.projectRuntimeRootForSlug(orphan)), { code: "ENOENT" });
+    await assert.rejects(() => catalogue.readWorkspaceProject({ slug }), { code: "vibe64_project_path_not_accessible" });
+    await rm(practice.projectContextRoot, { recursive: true });
+    await fs.promises.symlink(working, practice.projectContextRoot);
+    await assert.rejects(() => catalogue.listWorkspaceProjects(), { code: "vibe64_practice_path_unsafe" });
+    assert.deepEqual(await readFile(practice.projectRecordPath), recordBefore, "unsafe alias cannot authorize destructive cleanup");
+    assert.equal(await readFile(retainedSession, "utf8"), "retained admitted session\n");
+  });
+});

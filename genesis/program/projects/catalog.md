@@ -19,6 +19,11 @@ workspace.
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `packages/vibe64-core/src/server/studioProjectContext.js`
+- `packages/vibe64-core/src/server/projectRequestContext.js`
+- `packages/vibe64-training/src/server/learnerState.js`
+- `packages/vibe64-training/src/server/learningSessions.js`
+- `tests/server/studioProjectContext.unit.test.js`
+- `tests/server/vibe64TrainingLearnerState.unit.test.js`
 - `tests/server/assistantRoutingStateInventory.unit.test.js`
 - `src/composables/useVibe64ProjectsResource.js`
 - `src/composables/useProjectSelectionGate.js`
@@ -31,6 +36,38 @@ workspace.
 - `packages/vibe64-core/src/server/projectRuntimeOpenState.js`
 
 ## Public contract
+
+Standalone lesson practice admission uses the same Project context, record
+creation, rollback and request-context storage. Training reads the actual actor's
+saved attempt and verifies its installed pin and bundled exercise before entering
+the bounded `resolvePracticeContext` callback. Fresh creation and writing require
+the exact current active attempt under the original preparation barrier; ended
+history may be observed without admitting new work. A supplied session must be
+the saved initial session and is read through the original Project runtime/store.
+
+Core derives the private namespace from installation roots, learner key and
+attempt, and requires the original immutable project training marker and managed
+Git policy. Runtime roots remain in the original `system/projects/<slug>` tree so
+upgrade inventory, canonical repository and cleanup ownership remain intact.
+Existing unmarked, mismatched or aliased storage is refused without repair.
+Original catalogue orphan cleanup retains a runtime only when its normalized
+managed Git training marker, exact reserved slug and real private namespace match.
+This protects practice history if the same installation is opened with catalogue
+enabled, without listing the practice project or granting catalogue access.
+The private grant survives exact nested Project resolution but expires with its
+owning callback; it cannot come from HTTP fields or inherit source-less Learning
+authority. Ordinary local catalogue and route refusals remain unchanged.
+
+This prerequisite admits a real practice record through an attached saved-attempt
+caller. It does not yet provision the bundled repository, create/setup the practice
+session, expose scoped practice transport, or prove Preview/native acceptance.
+The existing standalone exercise-preparation refusal remains in place until those
+original owners are composed. No old pin, progress or project record is migrated.
+Preparation must enter this Core scope inside its already-held original barrier,
+without reacquiring the non-reentrant Training preparation lock. Subsequent
+provisioning must preserve admitted asynchronous Workspace setup and native
+callbacks after a request returns: retained observation/control identity is
+distinct from fresh effect admission, and no expired effect grant is reusable.
 
 All thirty-six project HTTP operations dispatch named `vibe64.project.*` actions.
 The canonical inputs enforce required fields and exclude caller-supplied actors;
