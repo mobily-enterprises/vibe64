@@ -463,7 +463,14 @@ and carries missed or corrected history into the next ordinary Send.
 Vibe64 owns workflow chat modes, actor-aware destination resolution, isolated request
 classification and delivery, per-turn attribution, cancellation, Router-gated
 bounded implementation continuation, Senior review and optional Deslop in Auto that respect current user intent, current checklist plans, explicit Senior completion and
-archived/reopened plan snapshots outside source. Senior and Junior retain one effective orchestrator per actor.
+archived/reopened plan snapshots outside source. The original private plan owner
+now binds stable scope and separate Progress as one revision-fenced artifact;
+its original read/mutation queue protects paired reads and document retirement.
+Senior owns scope/lifecycle; Junior writes Progress. Both native roles read the
+full pair through the existing paged helper, and the existing viewer shows both
+tabs for current and archived artifacts. The numbered stopped-service upgrade
+preserves legacy bytes and IDs through the original Runtime inventory and Core
+publisher; normal reads do not convert history. Senior and Junior retain one effective orchestrator per actor.
 Deslop uses that workflow's Senior model for direct behavior-preserving cleanup.
 Foreign Helper and Backup chat turns reuse ordinary changeover.
 Temporary conversation discovery and explicit-close cleanup belong here too;

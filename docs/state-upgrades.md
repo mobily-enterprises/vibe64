@@ -787,3 +787,27 @@ retry the same candidate with the same backup. Never edit the ledger, remove
 history or restart an older release against partial state to bypass the error.
 Existing native-tool compatibility/replacement recovery remains separate; this
 upgrade changes neither installed tool manifests nor native histories.
+
+
+## Paired Plan and Progress
+
+`20261008-plan-progress` appends the paired work-plan format boundary. With all
+session/plan writers stopped, the candidate command reuses Runtime's original
+active/closing/scoped/archive/prepared-renewal walk and Core's verified before/after
+backup publisher. It inventories exact current and history files, retains original
+Markdown/status/inline evidence, legacy archive IDs and times, publishes immutable
+plan documents and one atomic paired record, then retires the old path. Separate
+progress is absent for old records; no historical evidence is inferred or split.
+
+Check is read-only. Apply creates and verifies this script's before/after backups
+under `upgrades/backups/20261008-plan-progress/` before any original is replaced.
+The existing publisher's manifest resumes interrupted publication against exact
+original/prepared bytes; conflicts, corrupt records, links and changed writers
+block activation. Existing current paired records are validated and preserved.
+Reads/startup never migrate data. A prior candidate must not run against the newer
+ledger/layout. Fresh explicit new Plan writes create empty Progress; replacement
+archives both old documents, and Make current restores the exact pair as Active.
+
+The off-tree implementation draft has not been executed or accepted; focused
+original lifecycle, reader, viewer and numbered-upgrade backup/retry evidence is
+required before activation.

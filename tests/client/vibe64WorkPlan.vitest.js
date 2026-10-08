@@ -77,7 +77,7 @@ it("archives the displayed current revision without starting AI and opens preser
   mocks.request.mockResolvedValueOnce({ ok: true, notice: "Archived Reporting. Available in Plan history." });
   await f.state().changePlan("archive");
   expect(mocks.request).toHaveBeenCalledWith("/api/projects/fixture/sessions/one/work-plan/archive", {
-    method: "POST", body: { expectedRevision: revision }
+    method: "POST", body: { expectedRevision: revision, expectedProgressRevision: "" }
   });
   expect(mocks.resource.reload).toHaveBeenCalledOnce();
   expect(f.state().showHistory).toBe(true);
@@ -222,4 +222,21 @@ it("publishes only its active lifetime and does not clear a replacement owner on
   app.unmount();
   app = null;
   expect(f.colleague.value).toBe(replacement);
+});
+
+
+it("Plan and Progress select the same artifact and accumulate companion pages at exact paired revisions", async () => {
+  const f = mount({ ...active, progressAvailable: true, progressRevision: "e".repeat(64), progressText: "# Progress\nVerified evidence" });
+  expect(f.state().document).toBe("plan");
+  f.state().document = "progress";
+  await nextTick();
+  expect(f.state().sections.flatMap(section => section.blocks)).not.toEqual([]);
+  expect(f.state().archiveId).toBe("");
+  mocks.request.mockResolvedValueOnce({ ...active, revision: "b".repeat(64), progressRevision: "e".repeat(64), progressText: "", hasMore: true, nextOffset: 100 })
+    .mockResolvedValueOnce({ text: "", progressText: "Actual complete companion", hasMore: false });
+  const result = await mocks.options.queryOptions.queryFn({ signal: new AbortController().signal });
+  expect(result.text).toBe(active.text);
+  expect(result.progressText).toBe("Actual complete companion");
+  expect(mocks.request.mock.calls[1][0]).toContain("expectedProgressRevision=" + "e".repeat(64));
+  expect(mocks.request.mock.calls[1][0]).toContain("expectedRevision=" + "b".repeat(64));
 });

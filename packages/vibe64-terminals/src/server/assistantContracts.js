@@ -84,15 +84,17 @@ function workPlanTool() {
   const fields = {
     ok: { type: "boolean", required: true }, available: { type: "boolean", required: false },
     sessionId: shortText, code: shortText, error: { type: "string", maxLength: 1000, required: false },
+    progressText: { type: "string", noTrim: true, maxLength: 16000, required: false },
+    progressRevision: shortText, artifactRevision: shortText, progressAvailable: { type: "boolean", required: false },
     title: shortText, archiveId: shortText, checked: { type: "integer", required: false }, total: { type: "integer", required: false },
-    history: { type: "array", required: false, items: createSchema({ id: shortText, title: shortText, status: shortText, archivedAt: shortText, revision: shortText, checked: { type: "integer", required: false }, total: { type: "integer", required: false } }) },
+    history: { type: "array", required: false, items: createSchema({ id: shortText, title: shortText, status: shortText, archivedAt: shortText, revision: shortText, progressRevision: shortText, artifactRevision: shortText, progressAvailable: { type: "boolean", required: false }, checked: { type: "integer", required: false }, total: { type: "integer", required: false } }) },
     status: shortText, revision: { type: "string", maxLength: 64, required: false },
     text: { type: "string", noTrim: true, maxLength: 32000, required: false },
     offset: { type: "integer", min: 0, required: false }, nextOffset: { type: "integer", min: 0, required: false },
     totalCharacters: { type: "integer", min: 0, required: false }, hasMore: { type: "boolean", required: false }
   };
   return {
-    description: "Read Main chat's Auto working plan without starting AI. Offset/limit count Unicode characters; pages contain at most 16000. Follow nextOffset while hasMore, passing the first page's revision as expectedRevision on every later page. If changed, restart the read. Never call a partial page the complete plan. Current and archived plans remain readable after completion. Use archiveId from history to read an archived snapshot. Execute, change, reopen or archive a plan through an explicit chat request; Auto routes by intent. Temporary chats do not support Auto plans.",
+    description: "Read Main chat's paired Plan and Progress without starting AI. Always finish BOTH text and progressText across every page before implementing, reviewing or claiming a complete read. Offset/limit count Unicode characters; pages contain at most 16000. Follow nextOffset while hasMore, passing the first page's revision and progressRevision as expectedRevision and expectedProgressRevision on every later page. If changed, restart the read. Never call a partial page the complete plan. Current and archived plans remain readable after completion. Use archiveId from history to read an archived snapshot. Execute, change, reopen or archive a plan through an explicit chat request; Auto routes by intent. Temporary chats do not support Auto plans.",
     output: { mode: "replace", schema: createSchema(fields) },
     transformResult(result = {}) {
       return Object.fromEntries(Object.entries(result).filter(([key]) => Object.hasOwn(fields, key)));

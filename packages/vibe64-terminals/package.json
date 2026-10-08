@@ -14,7 +14,8 @@
     "./server/nativeConversationBindings": "./src/server/nativeConversationRetirement.js",
     "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js",
     "./shared/assistantWorkPlan": "./src/shared/assistantWorkPlan.js",
-    "./server/retainedConversationHelper": "./src/server/retainedConversationHelper.js"
+    "./server/retainedConversationHelper": "./src/server/retainedConversationHelper.js",
+    "./server/assistantPlanProgressUpgrade": "./src/server/assistantPlanProgressUpgrade.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -64,6 +65,10 @@
           {
             "subpath": "./server/vibe64OutputTargets",
             "summary": "Translates explicit Vibe64 Outputs declarations into Vibe64-owned output runs."
+          },
+          {
+            "subpath": "./server/assistantPlanProgressUpgrade",
+            "summary": "Prepares paired Plan and Progress conversion through the original stopped-writer session inventory and verified backup publisher."
           }
         ],
         "capabilities": [

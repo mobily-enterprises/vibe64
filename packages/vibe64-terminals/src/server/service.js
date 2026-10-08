@@ -1432,7 +1432,7 @@ function createService({
       }
       const result = await manageWorkPlan(context, restoring
         ? { operation: "reopen", archiveId: input.archiveId }
-        : { operation: "archive", expectedRevision: input.expectedRevision }, "user");
+        : { operation: "archive", expectedRevision: input.expectedRevision, expectedProgressRevision: input.expectedProgressRevision }, "user");
       if (restoring) result.notice = "The archived plan is now current and active. Ask in chat to continue its work.";
       await publishAgentSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice } });
       return { ok: true, sessionId, ...result };

@@ -545,7 +545,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
             .map((name) => [name, context.vibe64User[name]])) : null,
           reviewMessage: [
             preferences.review ? "Automatic review and Deslop:" : "Automatic review:",
-            "Check the preceding implementation against my request, accepted steering and any plan explicitly involved in that work. Inspect the implementation and evidence, fix in-scope issues, and run relevant checks. Explicitly complete an involved plan when every requirement is verified; otherwise leave it active with specific unchecked gaps. Leave unrelated plans unchanged. Do not ask for permission merely to review or complete verified work.",
+            "Check the preceding implementation against my request, accepted steering and any plan explicitly involved in that work. Inspect the implementation and evidence, fix in-scope issues, and run relevant checks. Explicitly complete an involved plan when every requirement is verified; otherwise leave Plan active and record specific gaps and verification evidence in its paired Progress document. Read every page of BOTH before reviewing; checklist marks do not establish completion. Leave unrelated plans unchanged. Do not ask for permission merely to review or complete verified work.",
             ...(preferences.review ? [
               "Then perform Deslop on the coding changes and your review fixes, following the project's Deslop guidance. Keep that cleanup behavior-preserving and preserve unrelated work and staging.",
               "Perform both parts yourself in this turn; do not delegate cleanup or start a separate Deslop turn. Run relevant checks after cleanup."
@@ -805,7 +805,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
                 `Original request: ${state.input.message}`,
                 `Accepted steering: ${JSON.stringify(autoExecution.steering)}`,
                 `Router's suggested next step (verify against the request and current plan): ${decision.nextStep}`,
-                "Read the current plan when involved. Continue independent work while identifying any genuinely blocked portion. Report implementation as incomplete if work remains; Senior review follows when ready."].join("\n\n") };
+                "Read every page of BOTH current Plan and Progress when involved. Preserve the stable agreed scope and record actual evidence in Progress. Continue independent work while identifying any genuinely blocked portion. Report implementation as incomplete if work remains; Senior review follows when ready."].join("\n\n") };
             state.status = "implementation_pending";
             delete state.reviewStatus;
             await save(current, state);

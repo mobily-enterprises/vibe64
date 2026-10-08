@@ -26,6 +26,7 @@ const open = ref(false);
 const archiveId = ref("");
 const notice = ref("");
 const view = ref("current");
+const document = ref("plan");
 const showHistory = computed(() => view.value === "history" && !archiveId.value);
 const pendingOperation = ref("");
 const feedback = useShellWebErrorRuntime();
@@ -43,12 +44,14 @@ const resource = useEndpointResource({
       const first = await read({ limit: "16000", ...(selectedArchive ? { archiveId: selectedArchive } : {}) });
       let page = first;
       let text = first.text || "";
+      let progressText = first.progressText || "";
       while (page.hasMore) {
-        page = await read({ limit: "16000", offset: String(page.nextOffset), expectedRevision: first.revision,
+        page = await read({ limit: "16000", offset: String(page.nextOffset), expectedRevision: first.revision, expectedProgressRevision: first.progressRevision || "",
           ...(selectedArchive ? { archiveId: selectedArchive } : {}) });
         text += page.text;
+        progressText += page.progressText || "";
       }
-      return { ...first, text };
+      return { ...first, text, progressText };
     }
   }
 });
@@ -122,7 +125,7 @@ async function changePlan(operation) {
   pendingOperation.value = operation;
   try {
     const result = await getHttpWebClient().request(target + "/" + operation, {
-      method: "POST", body: restoring ? { archiveId: archiveId.value } : { expectedRevision: plan.value.current.revision }
+      method: "POST", body: restoring ? { archiveId: archiveId.value } : { expectedRevision: plan.value.current.revision, expectedProgressRevision: plan.value.current.progressRevision || "" }
     });
     if (result?.ok === false) throw new Error(result.error || "The plan could not be updated.");
     if (target !== endpoint.value || actor !== actorKey.value) return;
@@ -147,7 +150,7 @@ const sections = computed(() => {
       prose = [];
     }
   };
-  for (const line of parseWorkPlanLines(plan.value?.text || "")) {
+  for (const line of parseWorkPlanLines((document.value === "progress" ? plan.value?.progressText : plan.value?.text) || "")) {
     if (line.checked !== undefined) {
       flush();
       result.push({ checked: line.checked, blocks: parseLongTextReviewBlocks(line.text) });
@@ -163,6 +166,7 @@ watch([sessionId, sessionsPath, actorKey], () => {
   archiveId.value = "";
   notice.value = "";
   view.value = "current";
+  document.value = "plan";
   pendingOperation.value = "";
 });
 watch(() => props.active, (active) => {
@@ -234,7 +238,7 @@ watch(() => props.active, (active) => {
                 <v-chip :color="item.status === 'completed' ? 'success' : undefined" size="small" variant="tonal">
                   <span class="text-high-emphasis">{{ item.status === 'completed' ? 'Completed' : 'Unfinished' }}</span>
                 </v-chip>
-                <span v-if="typeof item.total === 'number'" class="text-body-small text-medium-emphasis">{{ item.checked }} / {{ item.total }} checked</span>
+                <span v-if="typeof item.total === 'number'" class="text-body-small text-medium-emphasis">{{ item.total }} requirements</span>
               </div>
             </v-list-item>
           </v-list>
@@ -253,10 +257,15 @@ watch(() => props.active, (active) => {
             >
               <span class="text-high-emphasis">{{ plan.status === 'completed' ? 'Completed' : archiveId ? 'Unfinished' : 'Active' }}</span>
             </v-chip>
-            <span class="text-body-small text-medium-emphasis">{{ plan.checked }} / {{ plan.total }} checked</span>
+            <span class="text-body-small text-medium-emphasis">{{ plan.total }} requirements</span>
           </div>
+          <v-tabs v-model="document" grow height="48" aria-label="Plan documents" class="mb-4">
+            <v-tab value="plan">Plan</v-tab>
+            <v-tab value="progress">Progress</v-tab>
+          </v-tabs>
+          <p v-if="document === 'progress' && !plan.progressAvailable" class="text-body-medium mb-4">This historical plan has no separate Progress document. Its original evidence remains in Plan.</p>
           <div v-for="(section, index) in sections" :key="index" :class="{ 'work-plan-item': section.checked !== undefined }">
-            <input v-if="section.checked !== undefined" type="checkbox" :checked="section.checked" disabled aria-label="Recorded completion">
+            <input v-if="section.checked !== undefined" type="checkbox" :checked="section.checked" disabled aria-label="Recorded checklist mark">
             <LongTextPreviewBlocks :blocks="section.blocks" />
           </div>
         </template>

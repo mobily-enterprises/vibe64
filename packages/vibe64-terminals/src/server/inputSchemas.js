@@ -210,16 +210,19 @@ const terminalControlKeyInputValidator = validator({
 const emptyInputValidator = validator({});
 const projectRuntimeInputValidator = validator({ reason: optionalText });
 const sessionInputValidator = validator({ sessionId: sessionIdField });
+const workPlanProgressRevision = { type: "string", pattern: "^(?:[a-f0-9]{64})?$", maxLength: 64, noTrim: true };
 const workPlanReadInputValidator = validator({
   sessionId: sessionIdField,
   archiveId: { ...optionalText, minLength: 64, maxLength: 64 },
   offset: { type: "integer", min: 0, required: false },
   limit: { type: "integer", min: 1, max: 16000, required: false },
-  expectedRevision: { ...optionalText, minLength: 64, maxLength: 64 }
+  expectedRevision: { ...optionalText, minLength: 64, maxLength: 64 },
+  expectedProgressRevision: { ...workPlanProgressRevision, required: false }
 });
 const workPlanArchiveInputValidator = validator({
   sessionId: sessionIdField,
-  expectedRevision: { ...requiredText, minLength: 64, maxLength: 64 }
+  expectedRevision: { ...requiredText, minLength: 64, maxLength: 64 },
+  expectedProgressRevision: { ...workPlanProgressRevision, required: true }
 });
 const workPlanRestoreInputValidator = validator({
   sessionId: sessionIdField,

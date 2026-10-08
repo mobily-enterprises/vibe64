@@ -9,6 +9,7 @@ import { upgradeAssistantPlans } from "@local/vibe64-accounts/server/assistantPl
 import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory } from "@local/vibe64-colleague/server/conversationUpgrade";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 import { upgradeLearningPracticeHistory } from "@local/vibe64-training/server/practiceHistoryUpgrade";
+import { upgradePlanProgress } from "@local/vibe64-terminals/server/assistantPlanProgressUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -33,6 +34,7 @@ try {
     upgradeColleagueConversationHistory,
     inspectConversationUndoRetirement,
     upgradeLearningPracticeHistory,
+    upgradePlanProgress,
     report: (level, message) => {
       const line = `[vibe64-upgrade] ${level.toUpperCase()}: ${message}`;
       if (level === "warning") console.error(line);

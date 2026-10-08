@@ -5034,7 +5034,7 @@ function createVibe64SessionStore({
     ));
   }
 
-  async function prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform, transformTurnMetadata, transformHelperRecord, includePlans = false }) {
+  async function prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform, transformTurnMetadata, transformHelperRecord, includePlans = false, transformPlanProgress }) {
     if (typeof transform !== "function") throw new Error("Routing upgrade requires a transform.");
     const inspectSession = async (sessionPaths, { checkedPath, inventory, readRegularText }) => {
       await checkedPath(sessionPaths.sessionRoot, true);
@@ -5080,6 +5080,33 @@ function createVibe64SessionStore({
         if (!previous || typeof plan.text !== "string") throw new Error("Plan upgrade cannot create an unknown conversation's plan.");
         if (previous.original !== plan.text) changes.push({ filePath: previous.filePath, original: previous.original, contents: plan.text });
         if (previous.originalOld !== null) changes.push({ filePath: previous.oldPath, original: previous.originalOld, contents: null });
+      }
+      if (transformPlanProgress) {
+        for (const scope of [{ conversationId: "", root: sessionPaths.sessionRoot }, ...conversations.map(({ record, filePath }) => ({
+          conversationId: record.conversationId, root: path.dirname(filePath)
+        }))]) {
+          const root = path.join(scope.root, "plans");
+          const files = [];
+          for (const entry of await inventory(root)) {
+            if (entry.isDirectory()) {
+              if (!["plan", "progress", "archive"].includes(entry.name)) throw new Error("Unknown plan directory. Inspect it before upgrading.");
+              for (const child of await inventory(path.join(root, entry.name))) {
+                if (!child.isFile() || !/^[a-f0-9]{64}\.(md|json)$/u.test(child.name)) throw new Error("Unknown saved plan document. Inspect it before upgrading.");
+                const filePath = path.join(root, entry.name, child.name);
+                files.push({ name: entry.name + "/" + child.name, text: await readRegularText(filePath), archivedAt: (await lstat(filePath)).mtime.toISOString() });
+              }
+            } else {
+              if (!entry.isFile() || !["current.md", "current.json"].includes(entry.name)) throw new Error("Unknown current plan record. Inspect it before upgrading.");
+              files.push({ name: entry.name, text: await readRegularText(path.join(root, entry.name)) });
+            }
+          }
+          for (const patch of transformPlanProgress(files)) {
+            if (!isPlainObject(patch) || !/^(current\.(md|json)|(archive|plan|progress)\/[a-f0-9]{64}\.(md|json))$/u.test(patch.name) ||
+                !(patch.text === null || typeof patch.text === "string")) throw new Error("Plan-progress upgrade attempted an unrelated write.");
+            const original = files.find(file => file.name === patch.name)?.text ?? null;
+            if (original !== patch.text) changes.push({ filePath: path.join(root, patch.name), original, contents: patch.text });
+          }
+        }
       }
       for (const [name, value] of Object.entries(next.metadata || {})) {
         if (!["assistant_routing", "assistant_routing_request", "assistant_routing_goal"].includes(name) || typeof value !== "string") {

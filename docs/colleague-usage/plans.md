@@ -6,7 +6,7 @@ you want to inspect. Temporary chats do not have Auto plans.
 ## Create or update a plan
 
 Ask **Senior**, directly or through **Auto**, to make a plan. This means a saved
-Vibe64 checklist available through the plan icon. You can explicitly request a
+short Vibe64 scope checklist available through the plan icon. Plan and Progress are two tabs for one artifact: Plan defines the agreed deliverables and acceptance criteria; Progress holds actual work, evidence and blockers. You can explicitly request a
 chat-only draft or another format instead.
 
 Senior checks whether there is a current plan first. If there is, say whether to
@@ -16,7 +16,7 @@ and replace the plan already authorizes that choice; the archive stays in Histor
 Senior confirms creation or updates after the plan helper has saved the result.
 
 Both direct Senior and Junior receive the plan format and command instructions.
-Junior can read plans and update checklist progress and evidence. Creating,
+Both roles must read Plan and Progress before implementing or reviewing. Junior can update Progress; Senior owns agreed Plan scope changes. Creating,
 reopening, archiving and completing a plan still require Senior. An unsuccessful
 save must be reported, and a chat outline alone is not a saved plan.
 
@@ -26,8 +26,9 @@ save must be reported, and a chat outline alone is not a saved plan.
    It is highlighted in muted yellow while the current plan is active. Its label
    is **View active plan** or **View plan and history**.
 2. Select **Current plan**. The selected tab has a coloured underline.
-3. Read the **Active** or **Completed** status, checked-item count, checklist and
-   evidence. Scroll inside the dialog for a longer document.
+3. Read the **Active** or **Completed** status and number of requirements. Select
+   **Plan** for the stable scope checklist or **Progress** for work, evidence and
+   blockers. Both tabs belong to the same current or archived artifact.
 
 The same controls appear on desktop and mobile. The dialog fits the viewport and
 keeps its dimensions when you change views. Select **Close plan** to return to chat.
@@ -35,9 +36,10 @@ The icon remains available after completion and when only archived plans remain.
 When there is no current plan, the icon opens **History** directly.
 There is no icon when the session has neither a current plan nor history.
 
-The checkboxes record the coding models' work; they are not manually editable.
-Junior updates checks and evidence during implementation. Senior reviews the
-work, can uncheck unsupported claims, and explicitly marks the plan completed.
+The scope checklist remains stable during execution; it is not a live progress gauge.
+Recorded marks in historical plans remain visible. Junior records implementation
+and verification in Progress. Senior reads both documents, verifies every agreed
+acceptance requirement against the work and evidence, and explicitly completes the artifact.
 A finished turn or a fully ticked checklist alone does not complete a plan.
 Updates appear while the viewer is open.
 
@@ -47,16 +49,16 @@ Updates appear while the viewer is open.
 2. While the request runs, the control says **Archiving…**. On success, the viewer
    switches to **History**, where the saved plan is listed.
 
-Archiving preserves the exact document and removes it from the current slot;
+Archiving preserves the exact Plan and Progress pair and removes it from the current slot;
 it does not mark unfinished work completed. Archive is disabled while the
 assistant or its review is running. Wait for that work to finish.
 If archiving fails, the plan stays visible and shared error feedback explains
 the problem. If the plan changed, refresh the viewer before trying again.
 
-## Read an archived plan
+## Read an archived plan and progress
 
 1. Select **History**. Each entry shows its title, archive date, **Completed** or
-   **Unfinished** status, and checklist progress. An empty list says
+   **Unfinished** status, and number of requirements. An empty list says
    **No archived plans**.
 2. Select an entry. **History** stays selected, and **Archived · read-only** plus
    the archive date remain above the document while you scroll.
@@ -67,14 +69,15 @@ the problem. If the plan changed, refresh the viewer before trying again.
 If there is no current plan, open an archive and select **Make current** in the
 header. It says **Restoring…** while moving the plan back to the current slot,
 then switches to **Current plan**. The plan reopens as **Active**, keeping its
-checklist and evidence, and disappears from History. This starts no AI work.
+Plan and Progress together, and disappears from History. This starts no AI work.
 Archiving it later moves it back to History. Make current is disabled while the
 assistant or its review is running; a competing current plan prevents the move.
 If the move fails, shared error feedback explains the problem.
 
 If a current plan already exists, either archive it first or explicitly ask Senior
 in Main chat to reopen the desired archive, identifying its title and date.
-If this replaces a current plan, Senior identifies which plan will be archived
+Creating a new plan starts fresh Progress; it does not inherit the previous artifact's evidence. Reopening an archive retains that archive's exact Progress, including when it replaces another current plan.
+If this replaces a current plan, Senior identifies which paired artifact will be archived
 and confirms your choice unless you already authorized replacement. To implement
 an active plan, explicitly request it in chat; the viewer has no Implement button.
 
@@ -84,9 +87,9 @@ A loading placeholder means the selected document has not arrived yet. A load
 error includes **Retry**. Do not treat a partially loaded plan as the whole record.
 
 Colleague can explain these steps and, when its plan-reading action is available
-for the session, offer to read the plan or summarize outstanding checks. It can
+for the session, offer to read the plan or summarize the recorded work and blockers from both documents. It can
 read an archive by its history identity without starting a coding turn. It must
-finish all pages before claiming to have reviewed the complete document.
+finish all pages of both documents before claiming to have reviewed the complete artifact.
 You can also ask **“Show me this session's plan”**, or name another accessible
 project and session. Colleague opens that session's Main chat and the same
 **Plan and history** dialog. It selects **Current plan** when one exists,
@@ -115,14 +118,14 @@ for that request. For example, “Junior developer: say hello” needs no plan, 
 Without an explicit role, Senior handles discussing, writing and improving plans,
 review and Deslop. Junior implements an existing plan: say “Execute the plan” or
 ask it to continue implementation. Answering the plan's open questions so coding
-can proceed also defaults to Junior; recording accepted choices or checklist
+can proceed also defaults to Junior; recording accepted choices or implementation
 progress does not change that default. An explicit Senior or Junior request
 always takes precedence. Junior also handles other questions and work, including
 implementation without a plan. The router uses your new request, the last three
 visible messages and a short current-plan summary to understand follow-ups.
 
 After an Auto implementation turn, Router checks the original request, accepted
-steering, the full current plan, the latest five visible messages and the execution
+steering, the full current Plan and Progress, the latest five visible messages and the execution
 outcome. The status says **Router is deciding whether to continue, review or wait…**.
 It chooses one outcome:
 
@@ -176,7 +179,7 @@ review.
 
 Executing the current plan requires it to be Active. A missing or Completed plan
 is explained without reviving an old task. Independent work does not need a plan.
-Junior can update checklist progress; only Senior can manage its lifecycle and
+Junior can update Progress; only Senior can manage its lifecycle and
 explicitly mark it Completed after verifying the evidence.
 
 If an automatic handoff failed before its message was sent, you can type a new
@@ -187,3 +190,6 @@ retries the original handoff, and **Stop** cancels it without sending new work.
 A handoff with unconfirmed delivery still requires **Check delivery** first.
 Colleague can explain these choices and offer to help you continue; sending new
 work requires your direct request or accepted offer.
+
+
+Older history may have no separate Progress document. Its original inline evidence remains exact in Plan; the Progress tab explains that absence. Opening it never rewrites or splits old history. If a mutation reports that an offline upgrade is required, ask the installation operator to stop writers, back up and apply the candidate state upgrade. Do not edit private plan files or replace a history entry to bypass the error. A changed Plan or Progress revision requires a fresh paired read before retry.

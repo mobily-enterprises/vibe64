@@ -822,6 +822,8 @@ resource edits refreshes facts without restarting the native conversation.
 
 - `packages/vibe64-terminals/src/server/assistantRouting.js`
 - `packages/vibe64-terminals/src/server/assistantWorkPlan.js`
+- `packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20261008-plan-progress.js`
 - `packages/vibe64-terminals/src/shared/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/agentPlanCommand.js`
 - `packages/vibe64-accounts/src/server/assistantPlanUpgrade.js`
@@ -1228,7 +1230,7 @@ Auto classifies role and task independently. An explicitly addressed Senior or
 Junior wins for every task, including plan implementation; otherwise plan
 discussion/management, review and Deslop default to Senior. Plan implementation
 and confirmations of open choices that allow it to proceed default to Junior,
-as do all other requests. Recording accepted choices or checklist progress does
+as do all other requests. Recording accepted choices or implementation progress does
 not change the implementation default. The helper receives the new
 message, the last three visible user/assistant messages in chronological order,
 and a bounded current-plan summary. Private thinking and tool output are excluded.
@@ -1245,18 +1247,24 @@ Planning plus implementation is an implementation request with the same Junior
 default unless the user requests a role; it is not an unsent split workflow.
 The selected role's plan lifecycle permissions still apply.
 
-Main chat owns <sessionRoot>/plans/current.md and plans/archive/<revision>.md.
-These are runtime artifacts outside source Git. Session archive, restore and
-retention own them with the surrounding conversation. Snapshots preserve both
-active and completed plans; archive placement is independent of completion.
-The current Markdown has Status: active or Status: completed, a title and
-checklists. No other heading structure is required. Its content digest protects
-concurrent edits and paginated reads; history lists titles, status and dates.
-The stopped-service 20260929-plan-history upgrade moves legacy work-plan/plan.md,
-converts explicit implemented status to completed and other statuses to active,
-and reconciles display snapshots from the actual document, never turn success.
-It preserves exact body text, takes backups and includes archived/closing sessions
-and temporary conversation artifacts. Ordinary reads never perform migration.
+Main chat owns one paired Plan/Progress artifact outside source Git under the same
+session/scoped-conversation plans directory. Immutable Markdown documents live in
+plan/<revision>.md and progress/<revision>.md; one current.json atomically selects
+both. Archive/<pairIdentity>.json captures the exact pair and time, and the original
+session archive/restore/retention owner retains the containing directory. Scope
+revision is still the digest of exact Plan text; progress updates change only their
+own revision. Unreferenced immutable documents are removed by this owner after
+publication and after validating every retained reference; they are not an extra
+progress journal. All public current/page/history reads and mutations share the original
+per-path queue for the entire pair read or publication/cleanup; internal owner
+reads remain unlocked to avoid recursive queue waits. Reads reject missing,
+linked, conflicting or changed documents.
+Legacy current.md and archive/<planRevision>.md remain readable unchanged. Mutation
+requires the stopped-writer 20261008-plan-progress upgrade, which reuses the original
+Runtime session/archive/prepared-renewal inventory and Core verified backup publisher.
+It retains exact old Markdown, inline evidence, archive IDs and dates; it does not
+infer a split or derive completion from native success. Existing published upgrades
+remain unchanged. Ordinary reads and startup perform no conversion.
 
 Direct Senior and Junior receive the same saved-plan format and helper guidance
 as plan-related Auto turns. A request to make a plan means a persisted Vibe64
@@ -1270,7 +1278,7 @@ attach the current plan; Junior's lifecycle permissions remain unchanged.
 The model uses vibe64-helper plan read/history/new/write/complete/archive/reopen,
 through the existing bound session command socket. The server derives Senior,
 Junior or review authority from the admitted turn, never a caller's claimed role.
-Junior can write checklist progress and evidence only. Senior owns lifecycle
+Junior can write only paired Progress; Senior owns agreed scope changes. Senior owns lifecycle
 commands. Replacing the current plan requires an archive acknowledgement after
 the user authorizes replacement and is told which plan will be retained. An
 explicit archive-and-replace request supplies that authorization. Archive moves the exact current
@@ -1278,15 +1286,14 @@ record to History. Reopening an archive publishes its body as the active current
 plan, then removes the selected history entry; replacing another current plan
 archives that other plan first. Reopening the current plan creates no duplicate.
 Completion is an
-explicit Senior operation; unchecked requirements prevent it. Ending a coding or
+explicit admitted Senior/review operation at exact Plan and Progress revisions. A nonempty scope is required; checkmarks are not a completion gate or proof. Senior must review actual evidence against every acceptance requirement. Ending a coding or
 review turn only ends execution and cannot promote a plan's status.
 
 The viewer reads canonical current/history pages independently of the latest
 routing request or selected chat mode. The document icon sits in the existing
 composer toolbar beside the usage percentage, without a separate row. It uses warning tone for
 an active plan, neutral tone otherwise, and remains available for completed or
-archived plans. The full checklist renders with model-maintained checkboxes and
-Markdown evidence. work-plan-changed events refresh open viewers; stable content
+archived plans. Plan and Progress are two tabs inside the SAME current/history viewer. Plan shows stable requirements; Progress shows actual work, evidence and blockers. Legacy recorded marks remain visible without a checked-count progress gauge. work-plan-changed events refresh open viewers; stable content
 containers preserve scrolling. Complete pagination uses one revision throughout;
 a changed document cannot be presented as a mixture of revisions.
 Colleague's plan-viewer navigation invokes the same local opening owner. It
@@ -1298,7 +1305,7 @@ Recover controls are removed. Current plan and History are labelled Material tab
 with a visible selection indicator. The dialog keeps the same viewport-bounded
 width and height across documents, loading, and empty or populated history;
 its content scrolls internally. History rows show title, archived date, completion
-state and checklist progress. An opened archive keeps a read-only context strip
+state and number of requirements. An opened archive keeps a read-only context strip
 and Back to history action above the scrolling document. Loading uses a skeleton;
 action failures use shared feedback and preserve the displayed plan. Archive invokes the authenticated work-plan.archive action at
 the displayed current revision, preserves the snapshot without completing it,
@@ -1312,9 +1319,7 @@ pending review. Neither control starts AI. Other lifecycle and execution
 requests use chat. Task instructions are maintained in `docs/colleague-usage/plans.md`.
 
 Discussion is read-only. Beginning a Senior turn never modifies or invalidates a
-plan. Junior preserves delivered work and ticks only evidenced requirements.
-Senior review may uncheck unsupported claims, add missing in-scope acceptance
-checks and fix defects. Auto schedules one Senior review after reviewable
+plan. Junior preserves delivered work and records actual evidence in Progress without ticking or rewriting scope. Senior reads both documents, verifies the agreed requirements, records gaps in Progress and fixes in-scope defects. Auto schedules one Senior review after reviewable
 implementation by either role when Router confirms continuation fits the user's
 latest intent, even when the implementer and reviewer use the
 same exact model selection. Greetings, answers, planning, requested reviews and
@@ -3501,3 +3506,15 @@ actual admitted native turn and cancellation. Input JSON cannot supply authority
 and request data never becomes native input or persisted metadata. Working Send
 keeps its original two-argument call. This provenance prerequisite does not
 register the teacher manifest or complete Main teaching acceptance.
+
+
+Paired helper read returns both text and progressText within one aggregate Unicode
+page budget, and later pages fence both captured revisions. Implementers and reviewers
+must actually finish the existing paged helper reads before work/review; an optional
+link is not a read. The original private socket still derives role from the admitted
+request. Server enforcement proves the returned pair/pages, role and revision fences,
+not the model's semantic inspection of stdout or code correctness. The initial Router
+retains its bounded classification outline; it is not a full paired read. Follow-up
+review receives the actual full pair through the original readWorkPlan capture and
+retains its bounded oversized-context refusal, current actor, Stop and native receipt
+checks. A successful review turn alone never completes the artifact.

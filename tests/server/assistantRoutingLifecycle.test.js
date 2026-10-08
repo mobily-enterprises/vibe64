@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { readWorkPlan, readWorkPlanPage, manageWorkPlan, workPlanPath } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { readWorkPlan, readWorkPlanPage, manageWorkPlan, workPlanPath, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
@@ -12,6 +12,19 @@ import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/cod
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileRequest } from "@local/vibe64-runtime/shared";
 import { assistantRoutingStatusLabel, recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRouting";
+
+// Explicit offline fixture publication; production readers never convert legacy data.
+async function publishPlanFixture(context, text) {
+  const root = path.dirname(workPlanPath(context));
+  for (const { name, text: contents } of planProgressUpgradeChanges([{ name: "current.md", text }])) {
+    const filename = path.join(root, name);
+    if (contents === null) await rm(filename, { force: true });
+    else {
+      await mkdir(path.dirname(filename), { recursive: true, mode: 0o700 });
+      await writeFile(filename, contents, { mode: 0o600 });
+    }
+  }
+}
 
 function planDocument(status = "active") {
   return `# Required-field validation
@@ -35,7 +48,7 @@ test("working plan pages preserve full Unicode text and reject mixing revisions"
   assert.deepEqual(await readWorkPlanPage(f.context), { available: false, current: null, history: [] });
   const text = `${planDocument()}\n${"🙂 quoted \"text\" ".repeat(2300)}\n  `;
   await mkdir(path.dirname(workPlanPath(f.context)), { recursive: true });
-  await writeFile(workPlanPath(f.context), text);
+  await publishPlanFixture(f.context, text);
   let page = await readWorkPlanPage(f.context);
   assert.equal(page.status, "active");
   const revision = page.revision;
@@ -52,7 +65,7 @@ test("working plan pages preserve full Unicode text and reject mixing revisions"
   await assert.rejects(readWorkPlanPage(f.context, { offset: 1 }), { code: "vibe64_work_plan_revision_required" });
   await assert.rejects(readWorkPlanPage(f.context, { offset: page.totalCharacters + 1, expectedRevision: revision }),
     { code: "vibe64_work_plan_offset_invalid" });
-  await writeFile(workPlanPath(f.context), `${text}\nchanged`);
+  await publishPlanFixture(f.context, `${text}\nchanged`);
   await assert.rejects(readWorkPlanPage(f.context, { offset: 16000, expectedRevision: revision }), { code: "vibe64_work_plan_changed" });
   assert.notEqual((await readWorkPlanPage(f.context)).revision, revision);
   assert.equal(f.sends.length, 0);
@@ -90,7 +103,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   const context = { runtime: { store, stateRoot: root }, session, vibe64User: { role: "owner", username: "owner" } };
   if (readyPlan) {
     await mkdir(path.dirname(workPlanPath(context)), { recursive: true });
-    await writeFile(workPlanPath(context), planDocument());
+    await publishPlanFixture(context, planDocument());
     metadata.assistant_routing_request = JSON.stringify({ status: "done", workPlan: await readWorkPlan(context) });
   }
   const sends = [];
@@ -291,7 +304,7 @@ for (const mode of ["senior", "junior"]) {
       const file = workPlanPath(f.context);
       if (planState === "active") {
         await mkdir(path.dirname(file), { recursive: true });
-        await writeFile(file, planDocument("active"));
+        await publishPlanFixture(f.context, planDocument("active"));
         f.metadata.assistant_routing_request = JSON.stringify({ status: "done", workPlan: await readWorkPlan(f.context) });
       } else if (planState === "unreadable") {
         await mkdir(file, { recursive: true });
@@ -309,7 +322,7 @@ for (const mode of ["senior", "junior"]) {
       assert.doesNotMatch(prompt, /Read the plan|Read the working plan|Progress and blockers|Status: blocked|Do not change application files/);
       assert.match(prompt, /Unrelated requests do not need a plan/);
       assert.match(prompt, /means save a Vibe64 checklist through vibe64-helper plan/);
-      assert.match(prompt, /Writes require expectedRevision from the latest read/);
+      assert.match(prompt, /Writes require expectedRevision and expectedProgressRevision from the latest paired read/);
       assert.match(prompt, /Only report a plan created or updated after the helper succeeds/);
       if (mode === "junior") assert.match(prompt, /You cannot create, archive, reopen or complete the plan/);
       await f.service.afterTurn("session-1", completion(), f.context);
@@ -319,7 +332,7 @@ for (const mode of ["senior", "junior"]) {
       assert.equal(f.state().workPlan, null);
       assert.equal(f.state().error, undefined);
       if (planState === "absent") await assert.rejects(lstat(path.dirname(file)), { code: "ENOENT" });
-      else if (planState === "active") assert.equal(await readFile(file, "utf8"), planDocument("active"));
+      else if (planState === "active") assert.equal((await readWorkPlan(f.context)).text, planDocument("active"));
       else assert.ok((await lstat(file)).isDirectory());
     });
   }
@@ -374,7 +387,7 @@ for (const planStatus of ["absent", "active", "completed"]) {
       const f = await fixture(t, undefined, { readyPlan: false });
       if (planStatus !== "absent") {
         await mkdir(path.dirname(workPlanPath(f.context)), { recursive: true });
-        await writeFile(workPlanPath(f.context), planDocument(planStatus));
+        await publishPlanFixture(f.context, planDocument(planStatus));
       }
       const before = await readWorkPlan(f.context);
       f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
@@ -390,7 +403,7 @@ for (const planStatus of ["absent", "active", "completed"]) {
 
 test("new planning leaves a completed document intact until Senior explicitly replaces it", async (t) => {
   const f = await fixture(t);
-  await writeFile(workPlanPath(f.context), planDocument("completed"));
+  await publishPlanFixture(f.context, planDocument("completed"));
   f.metadata.assistant_routing_request = JSON.stringify({ status: "done", workPlan: await readWorkPlan(f.context) });
   f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"discussion"}' });
   await f.service.send("session-1", { ...request, message: "How does this work?" }, f.context);
@@ -411,7 +424,7 @@ for (const mode of ["senior", "auto"]) {
     await f.service.send("session-1", { ...request, message }, f.context);
     const prompt = f.sends[0].input.message;
     assert.match(prompt, /means save a Vibe64 checklist through vibe64-helper plan/);
-    assert.match(prompt, /Read the current plan first/);
+    assert.match(prompt, /Read all pages of BOTH current Plan and Progress first/);
     assert.match(prompt, /ask whether to update it or archive it and start a new plan/);
     assert.match(prompt, /wait for their answer before replacing it/);
     assert.match(prompt, /explicit instruction to archive and replace already counts/);
@@ -1501,13 +1514,15 @@ test("Auto routes execution through Router and only Senior explicitly completes 
   await f.service.send("session-1", { ...request, messageId: "execute", message: "Complete it then." }, f.context);
   assert.equal(f.helperCalls(), 2);
   let plan = await readWorkPlan(f.context);
-  await manageWorkPlan(f.context, { operation: "write", expectedRevision: plan.revision, text: "# Validation\n- [x] Reject empty name — focused test passed" }, "junior");
+  await manageWorkPlan(f.context, { operation: "progress-write", expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision, text: "# Progress\nReject empty name — focused test passed" }, "junior");
+  assert.equal((await readWorkPlan(f.context)).text, plan.text, "Junior evidence preserves the original agreed scope bytes");
+  assert.equal((await readWorkPlan(f.context)).progressText, "# Progress\nReject empty name — focused test passed");
   await f.service.afterTurn("session-1", completion("turn-2"), f.context);
   assert.equal(f.state().workPlan.status, "active", "finished coding cannot complete the plan");
   assert.equal(f.sends[2].selection.modelId, "gpt-6-astra");
-  assert.match(f.sends[2].input.message, /uncheck unsupported claims/);
+  assert.match(f.sends[2].input.message, /record specific gaps and verification evidence in its paired Progress document/);
   plan = await readWorkPlan(f.context);
-  await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision }, "review");
+  await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision }, "review");
   await f.service.afterTurn("session-1", completion("turn-3"), f.context);
   assert.equal(f.state().workPlan.status, "completed");
   assert.equal(f.sends.length, 3, "review never starts another implementation cycle");
@@ -1529,7 +1544,7 @@ for (const role of ["junior", "senior", "review"]) {
 for (const state of ["completed", "absent"]) {
   test(`execution with ${state} plan explains why it cannot start without reopening`, async t => {
     const f = await fixture(t, undefined, { readyPlan: state !== "absent" });
-    if (state === "completed") await writeFile(workPlanPath(f.context), planDocument("completed"));
+    if (state === "completed") await publishPlanFixture(f.context, planDocument("completed"));
     const before = await readWorkPlan(f.context);
     await assert.rejects(f.service.send("session-1", request, f.context),
       state === "completed" ? /already completed/ : /no current plan/);
@@ -1568,7 +1583,7 @@ for (const outcome of ["failed", "interrupted", "stopped"]) {
 test("plan changes during routing prevent execution of a different document", async t => {
   const f = await fixture(t);
   f.router.respond = async () => {
-    await writeFile(workPlanPath(f.context), planDocument() + "\nChanged scope.\n");
+    await publishPlanFixture(f.context, planDocument() + "\nChanged scope.\n");
     return { ok: true, text: '{"mode":"junior","reason":"plan_implementation"}' };
   };
   await assert.rejects(f.service.send("session-1", request, f.context), /plan changed/);
@@ -1753,7 +1768,7 @@ for (const role of ["senior", "junior"]) {
       const f = await fixture(t, undefined, { readyPlan: false });
       if (planStatus !== "absent") {
         await mkdir(path.dirname(workPlanPath(f.context)), { recursive: true });
-        await writeFile(workPlanPath(f.context), planDocument(planStatus));
+        await publishPlanFixture(f.context, planDocument(planStatus));
       }
       const before = await readWorkPlan(f.context);
       f.router.respond = async () => ({ ok: true,
@@ -1803,7 +1818,7 @@ for (const deslop of [false, true]) {
 
 test("standalone Senior implementation leaves an unrelated completed plan out of its review", async t => {
   const f = await fixture(t);
-  await writeFile(workPlanPath(f.context), planDocument("completed"));
+  await publishPlanFixture(f.context, planDocument("completed"));
   const before = await readWorkPlan(f.context);
   f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"explicit_implementation"}' });
   await f.service.send("session-1", { ...request, message: "Senior, create hello.txt" }, f.context);
@@ -1900,10 +1915,18 @@ test("continuation preserves an explicitly selected Senior implementation role",
 
 test("Router receives a complete long plan including its final blocker without truncation", async t => {
   const f = await fixture(t);
-  await writeFile(workPlanPath(f.context), planDocument() + "\nEvidence: " + "x".repeat(60_000) + "\n- [ ] LAST REQUIREMENT needs an explicit decision\n");
+  await publishPlanFixture(f.context, planDocument() + "\nEvidence: " + "x".repeat(60_000) + "\n- [ ] LAST REQUIREMENT needs an explicit decision\n");
+  const plan = await readWorkPlan(f.context);
+  const progressText = "# Progress\n" + "Original verification evidence 🙂\n".repeat(700) + "FINAL PROGRESS BLOCKER\n";
+  await manageWorkPlan(f.context, { operation: "progress-write", expectedRevision: plan.revision,
+    expectedProgressRevision: plan.progressRevision || "", text: progressText }, "junior");
   await f.service.send("session-1", request, f.context);
   await f.service.afterTurn("session-1", completion(), f.context);
   const input = f.router.reviewInputs[0];
+  const captured = JSON.parse(input.message.slice(input.message.indexOf("\n") + 1));
+  assert.equal(captured.plan.text, (await readWorkPlan(f.context)).text);
+  assert.equal(captured.plan.progressText, progressText, "The actual review capture includes the entire companion, not a link or Router outline");
+  assert.match(input.message, /FINAL PROGRESS BLOCKER/);
   assert.match(input.message, /LAST REQUIREMENT/);
   assert.ok(input.message.length > 60_000);
   assert.ok(input.message.length < input.executionProfile.limits.maxInputCharacters);
@@ -1928,7 +1951,7 @@ for (const scenario of ["stop", "failure", "native question", "goal", "access re
     f.router.review = async () => {
       if (scenario === "stop") await f.service.cancel("session-1", f.context);
       if (scenario === "access removed") f.connections.set("codex:deepseek", { available: false });
-      if (scenario === "plan changed") await writeFile(workPlanPath(f.context), planDocument() + "\n- [ ] Newly changed scope\n");
+      if (scenario === "plan changed") await publishPlanFixture(f.context, planDocument() + "\n- [ ] Newly changed scope\n");
       if (scenario === "conversation changed") f.context.runtime.store.readConversationTail = async () => [{ user: { text: "Stop, do not continue." } }];
       return continueOutcome();
     };
