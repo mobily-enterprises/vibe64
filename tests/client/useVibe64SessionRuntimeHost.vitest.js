@@ -296,3 +296,38 @@ describe("Vibe64 direct session runtime host", () => {
     });
   });
 });
+
+describe("session navigation projections", () => {
+  it("keeps an explicitly empty navigation view empty while background work remains active", () => {
+    const sessions = [
+      { sessionId: "working", agentThinking: true },
+      { sessionId: "learning", agentThinking: false }
+    ];
+    expect(runtimeHostToolbarSessions({
+      activeAgentThinking: true,
+      fallbackSessions: sessions,
+      selectedSession: { sessionId: "working", agentSession: { turn: { active: true } } },
+      selectedSessionId: "working",
+      sessions: []
+    })).toEqual([]);
+    expect(sessions).toEqual([
+      { sessionId: "working", agentThinking: true },
+      { sessionId: "learning", agentThinking: false }
+    ]);
+  });
+
+  it("uses the authoritative list only when a navigation projection is absent", () => {
+    const input = {
+      fallbackSessions: [{ sessionId: "working" }],
+      selectedSession: { sessionId: "working", agentSession: { turn: { active: true } } },
+      selectedSessionId: "working"
+    };
+    expect(runtimeHostToolbarSessions(input)).toEqual([{ sessionId: "working", agentThinking: true }]);
+    expect(runtimeHostToolbarSessions({ ...input, sessions: null })).toEqual([
+      { sessionId: "working", agentThinking: true }
+    ]);
+    expect(runtimeHostToolbarSessions({ ...input, sessions: [{ sessionId: "learning" }] })).toEqual([
+      { sessionId: "learning" }
+    ]);
+  });
+});

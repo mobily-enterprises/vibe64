@@ -105,7 +105,9 @@ connection keeps its current activity visible. A failed check or disconnected
 browser shows recovery information and, when available, **Retry**.
 Switching back to a loaded session reveals its existing chat without reloading
 history or checking the assistant again. Hidden chats continue receiving live
-updates, including changes to AI access and configuration. Returning after a real
+updates, including changes to AI access and configuration. An empty set of tabs
+does not prove that background work stopped. Colleague should inspect the exact
+session before reporting its state. Returning after a real
 connection loss can still require recovery. Known repository state is also reused;
 explicit Refresh and checks for changes made outside Vibe64 remain available.
 Opening a session also checks your AI access. Sending waits for that result;

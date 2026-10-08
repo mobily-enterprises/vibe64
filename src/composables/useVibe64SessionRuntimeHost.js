@@ -44,12 +44,14 @@ function proxySessionDialogs(dialogs = {}) {
 
 function runtimeHostToolbarSessions({
   activeAgentThinking = false,
+  fallbackSessions = [],
   selectedSession = null,
   selectedSessionId = "",
-  sessions = []
+  sessions = null
 } = {}) {
   const currentId = String(selectedSessionId || "").trim();
-  return (Array.isArray(sessions) ? sessions : []).map((session) => {
+  const navigationSessions = sessions ?? fallbackSessions;
+  return (Array.isArray(navigationSessions) ? navigationSessions : []).map((session) => {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) {
       return session;
@@ -186,11 +188,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
   const selectedSessionTitle = computed(() => (
     vibe64SessionDisplayTitle(selectedSession.value || {}) ||
     `Session ${props.sessionData.shortSessionId(selectedSessionId.value)}`
-  ));
-  const toolbarSessions = computed(() => (
-    props.toolbarSessions?.length
-      ? props.toolbarSessions
-      : unref(props.sessionData.sessions) || []
   ));
   const autopilotAgentThinking = ref(false);
   const activeAgentWorking = computed(() => runtimeHostAgentWorking({
@@ -360,9 +357,10 @@ function useVibe64SessionRuntimeHost(props, emit) {
     selectSession: props.sessionData.selectSessionId,
     sessions: computed(() => runtimeHostToolbarSessions({
       activeAgentThinking: activeAgentWorking.value,
+      fallbackSessions: unref(props.sessionData.sessions),
       selectedSession: selectedSession.value,
       selectedSessionId: selectedSessionId.value,
-      sessions: toolbarSessions.value
+      sessions: props.toolbarSessions
     })),
     shortSessionId: props.sessionData.shortSessionId
   });

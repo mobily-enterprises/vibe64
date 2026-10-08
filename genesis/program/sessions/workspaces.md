@@ -30,6 +30,7 @@ the canonical project and from other sessions.
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
 - `src/composables/useVibe64SessionPanel.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
+- `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `src/components/studio/Vibe64SessionPanel.vue`
 - `src/components/studio/Vibe64UnavailableSessions.vue`
 - `src/lib/vibe64SessionInfo.js`
@@ -46,6 +47,11 @@ the canonical project and from other sessions.
 Session URL selection initializes the current session and follows subsequent
 navigation. Available-session reconciliation preserves a newer explicit tab
 selection instead of repeatedly restoring the session from the earlier URL.
+
+The mounted runtime respects an explicitly empty navigation projection in both
+the session toolbar and dashboard. Only an omitted projection uses the full
+session list. Navigation does not mutate the authoritative session collection,
+cancel its work, or replace the runtime's exact selected-session identity.
 
 Session and temporary-conversation actions resolve their project and acting user
 through the shared action boundary. The acting user is trusted context, never

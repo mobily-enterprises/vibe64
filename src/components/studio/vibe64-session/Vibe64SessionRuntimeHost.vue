@@ -71,7 +71,7 @@
           name="dashboard"
           :dashboard-context="{
             ...(dashboardSlotProps?.dashboardContext || {}),
-            sessions: props.toolbarSessions
+            sessions: props.toolbarSessions ?? autopilotSessionToolbar.sessions
           }"
         />
       </template>
@@ -121,7 +121,7 @@ const props = defineProps({
     type: String
   },
   toolbarSessions: {
-    default: () => [],
+    default: null,
     type: Array
   },
   projectPane: {
