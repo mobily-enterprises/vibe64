@@ -61,7 +61,7 @@ function uiRenderer() {
 const uiWidget = { setup: (_props, { attrs, slots }) => () => Vue.h("div", attrs, slots.default?.()) };
 function nodes(root) { return [root, ...root.children.flatMap(nodes)]; }
 
-async function mountLearningIndex({ gestures = null, practiceChoices = [] } = {}) {
+async function mountLearningIndex({ gestures = null, practiceChoices = [], authorTrial = null } = {}) {
   const route = Vue.reactive({ fullPath: "/app?mode=learning" });
   const calls = { panels: 0, unmounts: 0, gateProps: null, pickerProps: null, select: [] };
   const owner = { learningMode: Vue.ref(true), purposeFilter: Vue.ref("learning"), learnerId: Vue.ref("learner"),
@@ -74,6 +74,12 @@ async function mountLearningIndex({ gestures = null, practiceChoices = [] } = {}
   owner.startLesson = async input => { calls.start = input; opened({ attemptId: "attempt", learnerId: "learner", sessionId: "learning-session" }); };
   owner.resumeLesson = async attempt => { calls.resume = attempt; };
   owner.retryStart = async () => { calls.retry = true; };
+  if (authorTrial) {
+    owner.authorPreviewEnabled = Vue.ref(true);
+    owner.authorPreviewResource = { data: Vue.ref({ ok: true, available: true, authorPreview: true }), isLoading: Vue.ref(false), loadError: Vue.ref("") };
+    owner.savedAuthorPreview = Vue.ref(authorTrial);
+    owner.resumeAuthorPreview = async attemptId => { calls.authorPreview = attemptId; };
+  }
   const picker = { props: ["canStart", "canResume", "learningResult"], emits: ["start", "resume", "refresh"], setup(props, { emit }) {
     calls.pickerProps = props;
     return () => Vue.h("button", { "data-test": "start-lesson", onClick: () => emit("start", { courseId: "course", release: "0.1.7", lessonCode: "V64-START-00", expectedRevision: 3 }) });
@@ -277,4 +283,18 @@ it("shared original shell refs are per mount and only local composition supplies
     expect(localSource).toContain('import { Vibe64Colleague } from "@local/vibe64-colleague/client"');
     expect(localSource).not.toContain("createConversationRuntime");
   } finally { local.app.unmount(); hosted.app.unmount(); }
+});
+
+
+it("adds one saved author-trial control to the SAME launcher and retained Panel without released-course start", async () => {
+  const view = await mountLearningIndex({ authorTrial: { attemptId: "saved-preview",
+    pin: { topic: { release: "0.1.8", commit: "f".repeat(40) }, lesson: { code: "DRAFT-ONE" } } } });
+  try {
+    const button = nodes(view.root).find(node => node.props?.["data-test"] === "resume-author-trial");
+    expect(button).toBeTruthy(); expect(button.props.disabled).toBeFalsy();
+    button.props.onClick(); await Vue.nextTick();
+    expect(view.calls.authorPreview).toBe("saved-preview"); expect(view.calls.start).toBeUndefined();
+    expect(view.calls.panels).toBe(1); expect(view.calls.unmounts).toBe(0);
+    expect(view.calls.pickerProps.learningResult).toBe(view.owner.learningResource.data.value);
+  } finally { view.app.unmount(); }
 });

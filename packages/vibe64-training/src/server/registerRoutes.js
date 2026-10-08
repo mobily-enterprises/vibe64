@@ -27,4 +27,17 @@ function registerTrainingRoutes(http) {
   actionRoute("POST", "/attempts/:attemptId/continue", "lesson.continue", true);
 }
 
-export { registerTrainingRoutes };
+// Hosted snapshot admission stays with its existing owner. This adapter only
+// reads the already saved trial; it never captures source or reserves a lesson.
+function registerTrainingAuthorPreviewRoutes(http) {
+  const routes = createVibe64FeatureRoutes(http, {
+    projectScoped: false, routeRelativePath: "vibe64/training", routeSurface: "app",
+    tags: ["studio", "vibe64-training"]
+  });
+  routes.actionRoute("GET", "/author-preview", {
+    actionId: "vibe64.training.author-preview.read", buildInput: () => ({}),
+    summary: "Read the authenticated owner's saved isolated author trial."
+  });
+}
+
+export { registerTrainingRoutes, registerTrainingAuthorPreviewRoutes };

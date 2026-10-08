@@ -257,3 +257,22 @@ failure. Preview-course ordinary Start remains disabled. These checks do
 not establish actual native question-to-gesture-to-Send, Helper/check/rubric
 progress, genuine trusted browser clicks, mobile display, speech or whole-lesson
 acceptance. Those remain separate required gates.
+
+
+## Saved hosted author-trial launcher
+
+The host opts into one original owner-only `author-preview.read` HTTP adapter.
+Normal standalone resources/defaults perform no extra preview read. The existing
+Learning owner masks its saved trial on actor/role change and uses the same
+actor-envelope endpoint resource. One card in the original launcher displays that
+isolated active pin and delegates Resume to the same saved-attempt preparation,
+empty-body Learning Create and loaded-row Panel selector. It neither reserves on
+read nor merges normal progress. A changed trial/role/account fences new Create
+and late selection while keeping already admitted effects truthful. An uncertain
+Create retries exact Resume/Create through the original idempotent opener.
+Snapshot acquisition and explicit end/new-start refresh remain the existing
+hosted Colleague actions with original Git/source/account guards. Published Start
+eligibility and immutable pins are unchanged; no draft course is promoted. Main
+uses the existing paired saved-scope teacher/player/progress owners. Actual
+installed owner/member/browser/native simultaneous normal/trial acceptance and
+standalone snapshot admission remain separate gates.

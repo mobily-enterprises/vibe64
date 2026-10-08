@@ -1191,3 +1191,40 @@ test("Main practical read contract preserves the original bounded DTO and refuse
   f.auth.user = null; await assert.rejects(execute(input), { code: "vibe64_auth_required" });
   assert.equal(reads, 1);
 });
+
+
+// Optional HTTP read uses the original owner action, not a new snapshot service.
+test("saved author-trial HTTP read retains fresh owner/actor isolation and performs no source or start effects", async t => {
+  const f = await fixture(t);
+  const [{ registerTrainingAuthorPreviewRoutes }, { default: Fastify }] = await Promise.all([
+    import("../../packages/vibe64-training/src/server/registerRoutes.js"), import("fastify")
+  ]);
+  const actions = createActionCatalogue(); const server = Fastify(); t.after(() => server.close());
+  let user = { ...f.auth.user, role: "owner" }; const seen = [];
+  actions.register({ contributorId: "saved-author-preview", domain: "training", actions: createTrainingAuthorPreviewActions({ preview: {
+    async readState({ actor }) { seen.push(actor); return f.learners.readState({ actor, includeCompletion: true }); },
+    startLesson() { assert.fail("read must not capture source, reserve or prepare"); }
+  } }).map(value => ({ ...value, channels: ["api"], surfaces: ["app"] })) });
+  registerVibe64ActionContext(actions, { resolveUser: () => user, authorizeProject() { assert.fail("saved read needs no project/source"); } });
+  server.decorateRequest("executeAction", function ({ actionId, input }) {
+    return actions.execute({ actionId, input, context: { channel: "api", surface: this.routeOptions.config.surface, requestMeta: { request: this } } });
+  });
+  const registered = [];
+  registerTrainingAuthorPreviewRoutes({ router: { register(method, url, options, handler) {
+    registered.push([method, url]); server.route({ method, url, config: { surface: options.surface }, handler });
+  } } });
+  assert.deepEqual(registered, [["GET", "/api/vibe64/training/author-preview"]]);
+  const ownerState = await f.learners.reserveAttempt({ actor: user, requestId: "saved-trial", expectedRevision: 0, pin: f.pin });
+  const ownerRead = await server.inject({ method: "GET", url: "/api/vibe64/training/author-preview?sourceRoot=/forged&actor=forged" });
+  assert.equal(ownerRead.statusCode, 200); assert.equal(ownerRead.json().active.attemptId, ownerState.attempt.attemptId);
+  assert.equal(ownerRead.json().authorPreview, true); assert.doesNotMatch(ownerRead.body, excluded);
+  const foreign = { uid: 999, username: "other-owner", role: "owner" }; user = foreign;
+  const ownEmpty = await server.inject({ method: "GET", url: "/api/vibe64/training/author-preview" });
+  assert.equal(ownEmpty.statusCode, 200); assert.equal(ownEmpty.json().active, null);
+  assert.equal(seen.at(-1).uid, foreign.uid, "a different owner reads only their own saved state");
+  const before = seen.length; user = { ...foreign, role: "member" };
+  assert.equal((await server.inject({ method: "GET", url: "/api/vibe64/training/author-preview" })).statusCode, 403);
+  user = null;
+  assert.equal((await server.inject({ method: "GET", url: "/api/vibe64/training/author-preview" })).statusCode, 401);
+  assert.equal(seen.length, before, "member/sign-out refuses before original preview read");
+});

@@ -178,3 +178,77 @@ it("retains exact retry rather than claiming a failed Create response is an open
   expect(mode.startRetry.value).toEqual(selection);
   expect(opened).not.toHaveBeenCalled();
 });
+
+
+// New opt-in uses the SAME original real Query/resource/command fixture. Default
+// fixture and every existing assertion above remain unchanged.
+async function mountSavedAuthorTrial() {
+  app.unmount(); queryClient.clear();
+  const enabled = ref(true);
+  read.mockImplementation(async path => path.endsWith("/author-preview")
+    ? { ok: true, available: true, authorPreview: true, revision: 7,
+        active: { attemptId: B, pin: { topic: { commit: "b".repeat(40) }, lesson: { code: "DRAFT-ONE" } } }, history: [] }
+    : path.endsWith("/learning") ? progress(`learner-${viewer.value.actorKey}`) : { ok: true, courses: [] });
+  app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
+    .createApp({ setup() { mode = useVibe64LearningMode({ authorPreview: enabled, onConversationOpened: opened }); return () => null; } });
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  app.use(VueQueryPlugin, { queryClient }); app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer); app.mount({});
+  await flush(); return enabled;
+}
+
+it("opens only the already admitted author trial through original Resume/Create and loaded-row callback", async () => {
+  await mountSavedAuthorTrial();
+  const normal = JSON.parse(JSON.stringify(mode.learningResource.data.value));
+  harness.command.mockResolvedValueOnce({ ok: true, available: true, active: { attemptId: B } })
+    .mockResolvedValueOnce({ ok: true, sessionId: `learning-${B}` });
+  const outcome = await mode.resumeAuthorPreview(B);
+  expect(harness.command.mock.calls).toEqual([[`/api/vibe64/training/attempts/${B}/resume`, {}], [`/api/learning/${B}/vibe64/sessions`, {}]]);
+  expect(opened).toHaveBeenCalledWith({ attemptId: B, sessionId: `learning-${B}`, learnerId: "learner-owner" });
+  expect(outcome).toMatchObject({ attemptId: B, current: true, ended: false });
+  expect(mode.learningResource.data.value).toEqual(normal);
+  expect(harness.command.mock.calls.some(([path]) => path.includes("/lessons/start") || path.includes("author-preview"))).toBe(false);
+  await expect(mode.resumeAuthorPreview(A)).rejects.toThrow("exact saved author trial");
+});
+
+it("masks saved author trial immediately on role loss and refuses new requests without effects", async () => {
+  const enabled = await mountSavedAuthorTrial(); const count = read.mock.calls.length;
+  enabled.value = false;
+  expect(mode.savedAuthorPreview.value).toBeNull(); expect(mode.authorPreviewResource.data.value).toBeNull();
+  await mode.authorPreviewResource.reload(); await mode.authorPreviewResource.query.refetch();
+  expect(read).toHaveBeenCalledTimes(count);
+  await expect(mode.resumeAuthorPreview(B)).rejects.toThrow("exact saved author trial");
+  expect(harness.command).not.toHaveBeenCalled();
+});
+
+it.each(["role", "actor", "attempt"])("keeps author Resume admitted but fences Create when %s changes", async change => {
+  const enabled = await mountSavedAuthorTrial(); const admitted = Promise.withResolvers();
+  harness.command.mockReturnValueOnce(admitted.promise); const pending = mode.resumeAuthorPreview(B);
+  if (change === "role") enabled.value = false;
+  if (change === "actor") viewer.value = { actorKey: "another-owner" };
+  if (change === "attempt") {
+    read.mockImplementation(async path => path.endsWith("/author-preview")
+      ? { ok: true, available: true, authorPreview: true, active: { attemptId: A } }
+      : path.endsWith("/learning") ? progress("learner-owner") : { ok: true, courses: [] });
+    await mode.authorPreviewResource.reload();
+  }
+  admitted.resolve({ ok: true, available: true, active: { attemptId: B } });
+  expect(await pending).toMatchObject({ attemptId: B, current: false, sessionId: "" });
+  expect(harness.command).toHaveBeenCalledTimes(1); expect(opened).not.toHaveBeenCalled();
+});
+
+it("preserves uncertain author Create for exact Resume retry and refuses selection after preview read revocation", async () => {
+  await mountSavedAuthorTrial();
+  harness.command.mockResolvedValueOnce({ ok: true, available: true, active: { attemptId: B } }).mockRejectedValueOnce(new Error("Create acknowledgement lost"));
+  await expect(mode.resumeAuthorPreview(B)).rejects.toThrow("Create acknowledgement lost");
+  expect(opened).not.toHaveBeenCalled();
+  read.mockImplementation(async path => {
+    if (path.endsWith("/author-preview")) throw Object.assign(new Error("owner revoked"), { status: 403 });
+    return path.endsWith("/learning") ? progress("learner-owner") : { ok: true, courses: [] };
+  });
+  harness.command.mockResolvedValueOnce({ ok: true, available: true, active: { attemptId: B } }).mockResolvedValueOnce({ ok: true, sessionId: `learning-${B}` });
+  const outcome = await mode.resumeAuthorPreview(B);
+  expect(outcome).toMatchObject({ attemptId: B, sessionId: `learning-${B}`, current: false });
+  expect(harness.command.mock.calls[2]).toEqual(harness.command.mock.calls[0]);
+  expect(harness.command.mock.calls[3]).toEqual(harness.command.mock.calls[1]);
+  expect(mode.savedAuthorPreview.value).toBeNull(); expect(opened).not.toHaveBeenCalled();
+});

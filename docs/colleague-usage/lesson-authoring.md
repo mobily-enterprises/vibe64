@@ -146,18 +146,19 @@ immutable. Check both the exact local lock and actual requested Git publication;
 
 ## Operator installation is separate
 
-An isolated draft teaching preview is not available through the current lesson
-controls yet. A draft can be validated and bundled, but ordinary lesson delivery
-still requires a published lesson in an enabled course. The internal preview
-reader and separate progress-store composition do not by themselves open a
-preview or admit a trial. Do not report an author's trial as published learner
-progress or change a draft's status merely to bypass this limitation.
+In supported hosted installations, ask Colleague to admit your exact clean
+committed snapshot from the authorized authoring session. Then turn on Learning
+mode in that project view and use **Resume author trial** under **Lessons** to
+open its same Main teacher. This saved trial has isolated progress; it is not an
+enabled learner course. Ordinary **Start** still requires a published lesson in
+an enabled release. Local validation/bundling alone admits no trial. Do not change
+a draft's status to bypass that guard or report a trial as published progress.
 
 Internal snapshot acquisition also retains the authoring session's normal
 source protections: AI work, pending review or cleanup, and Workspace setup
 must finish before its committed content can be captured. A closing, renewing
-or unavailable source is refused. This adds no preview button, automatically
-stops no work and does not publish the source.
+or unavailable source is refused. The saved trial control captures no source,
+automatically stops no work and does not publish the source.
 
 A workspace operator can now provision approved local lesson content through the
 terminal commands documented in [Local operator provisioning](../training-content.md#local-operator-provisioning).
@@ -182,7 +183,7 @@ installation, learner delivery, assessment completion or pilot acceptance.
 Question delivery keeps its exact lesson attempt attached to your answer. An
 unfinished question or one retained from an earlier fresh conversation does not
 become a new assessment. Switching the displayed Preview is not permission to
-move an answer or a diagram checkpoint into another lesson's progress. These
-routing foundations do not add a draft-preview launcher: the current authoring
-commands remain the ones described above, and assembled author-preview admission
-and refresh remain under development.
+move an answer or a diagram checkpoint into another lesson's progress. The
+saved trial control uses the original snapshot admission and explicit refresh
+operations described above. Edited source requires a deliberately ended old trial
+and a newly admitted committed snapshot; Resume keeps the existing pin.

@@ -10,7 +10,7 @@ const TRAINING_PATH = "/api/vibe64/training";
 
 // This UI adapter owns neither admission nor progress. Original Training and
 // Sessions actions reauthorize every captured attempt before changing anything.
-export function useVibe64LearningMode({ onConversationOpened = null } = {}) {
+export function useVibe64LearningMode({ onConversationOpened = null, authorPreview = false } = {}) {
   const route = useRoute();
   const router = useRouter();
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
@@ -22,12 +22,12 @@ export function useVibe64LearningMode({ onConversationOpened = null } = {}) {
   watch(() => [actorKey.value, route.fullPath, learningMode.value], () => { generation += 1; }, { flush: "sync" });
   onScopeDispose(() => { disposed = true; generation += 1; });
 
-  function readResource(name) {
+  function readResource(name, enabled = null) {
     const client = getHttpWebClient();
     const original = useEndpointResource({
       path: `${TRAINING_PATH}/${name}`,
       queryKey: computed(() => ["vibe64", "training", name, actorKey.value || "signed-out"]),
-      enabled: computed(() => Boolean(actorKey.value)),
+      enabled: computed(() => Boolean(actorKey.value) && (!enabled || toValue(enabled) === true)),
       // Tag the existing query result with its admitted reader. Query observers
       // may retain old data briefly while switching keys; it cannot become the
       // next person's progress, even before the observer's next Vue update.
@@ -41,11 +41,11 @@ export function useVibe64LearningMode({ onConversationOpened = null } = {}) {
     const data = computed(() => {
       const status = Number(original.query.error.value?.statusCode || original.query.error.value?.status || 0);
       const result = original.data.value;
-      return actorKey.value && status !== 401 && status !== 403 && result?.reader === actorKey.value
+      return actorKey.value && (!enabled || toValue(enabled) === true) && status !== 401 && status !== 403 && result?.reader === actorKey.value
         ? result.value : null;
     });
     async function refetch(options) {
-      if (!actorKey.value || disposed) return null;
+      if (!actorKey.value || disposed || (enabled && toValue(enabled) !== true)) return null;
       const reader = actorKey.value;
       const result = await original.query.refetch(options);
       return { ...result, data: reader === actorKey.value && !disposed ? data.value : null };
@@ -56,6 +56,13 @@ export function useVibe64LearningMode({ onConversationOpened = null } = {}) {
 
   const coursesResource = readResource("courses");
   const learningResource = readResource("learning");
+  const authorPreviewEnabled = computed(() => toValue(authorPreview) === true);
+  const authorPreviewResource = authorPreview === false ? null : readResource("author-preview", authorPreviewEnabled);
+  const savedAuthorPreview = computed(() => {
+    const result = authorPreviewResource?.data.value;
+    return result?.ok === true && result.available === true && result.authorPreview === true && !result.active?.ended
+      ? result.active || null : null;
+  });
   const learnerId = computed(() => learningResource.data.value?.ok === true && learningResource.data.value?.available === true
     && typeof learningResource.data.value.learnerId === "string" ? learningResource.data.value.learnerId : "");
   const busy = ref(false);
@@ -84,11 +91,13 @@ export function useVibe64LearningMode({ onConversationOpened = null } = {}) {
     return Object.freeze({ actor: actorKey.value, learnerId: learnerId.value, generation });
   }
   const current = scope => !disposed && scope.actor === actorKey.value && scope.learnerId === learnerId.value
-    && scope.generation === generation && learningMode.value;
+    && scope.generation === generation && learningMode.value
+    && (!scope.authorPreviewAttemptId || (authorPreviewEnabled.value &&
+      savedAuthorPreview.value?.attemptId === scope.authorPreviewAttemptId && !authorPreviewResource.loadError.value));
 
   async function refresh() {
     if (!actorKey.value || disposed) return null;
-    return Promise.all([coursesResource.reload(), learningResource.reload()]);
+    return Promise.all([coursesResource.reload(), learningResource.reload(), ...(authorPreviewResource ? [authorPreviewResource.reload()] : [])]);
   }
 
   async function prepare(path, body, scope, { openConversation = true, attemptId = "" } = {}) {
@@ -113,6 +122,7 @@ export function useVibe64LearningMode({ onConversationOpened = null } = {}) {
     }
     if (current(scope)) {
       await learningResource.reload();
+      if (scope.authorPreviewAttemptId) await authorPreviewResource.reload();
       if (conversation && current(scope)) {
         onConversationOpened?.({ attemptId: admitted.attemptId, sessionId: conversation.sessionId, learnerId: scope.learnerId });
       }
@@ -157,7 +167,17 @@ export function useVibe64LearningMode({ onConversationOpened = null } = {}) {
     } finally { busy.value = false; }
   }
 
+  async function resumeAuthorPreview(attemptId, options = {}) {
+    if (busy.value) return null;
+    const scope = Object.freeze({ ...capture(), authorPreviewAttemptId: attemptId });
+    if (!attemptId || !current(scope)) throw new Error("Read this owner's exact saved author trial before reopening it.");
+    busy.value = true;
+    try {
+      return await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/resume`, {}, scope, { ...options, attemptId });
+    } finally { busy.value = false; }
+  }
+
   return Object.freeze({ learningMode, purposeFilter, setLearningMode,
     coursesResource, learningResource, learnerId, busy, startRetry,
-    refresh, startLesson, retryStart, resumeLesson });
+    refresh, startLesson, retryStart, resumeLesson, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
 }
