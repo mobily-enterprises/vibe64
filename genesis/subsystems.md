@@ -19,7 +19,10 @@ admission and Helper; it cannot accept model-supplied answers or outcomes. Inter
 declared exercise checks reuse the original project/App/managed-command owners and
 confirm server observations, not learner passes. Provides shared fresh-actor
 course/read/start/resume and current interactive question-preparation actions; a host
-binds exercise preparation, otherwise start/resume reports unavailable. Reserved
+composes the shared preparation coordinator with the original project/repository,
+session and Workspace setup facilities; otherwise start/resume reports unavailable.
+This subsystem owns start/resume/end/retained-pin continuation policy while hosts
+supply concrete resources and provisioning. Reserved
 no-exercise quizzes reuse these pins and answer owners without project effects;
 practical and visual operations retain their preparation gates. Teaching
 delivery, public standalone provisioning and installation controls remain incomplete. JSKIT and

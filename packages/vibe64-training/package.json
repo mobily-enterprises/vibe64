@@ -20,6 +20,7 @@
     "./server/installed-content": "./src/server/installedContent.js",
     "./server/content-installer": "./src/server/contentInstaller.js",
     "./server/learner-state": "./src/server/learnerState.js",
+    "./server/preparation": "./src/server/preparation.js",
     "./server/installed-catalogue": "./src/server/installedCatalogue.js"
   },
   "jskit": {

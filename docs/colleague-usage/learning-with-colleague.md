@@ -10,9 +10,11 @@ courses or read your saved lesson. These reads make no project or progress chang
 A direct request to start a listed lesson, or accepting Colleague's offer, lets the
 host reserve the exact lesson and prepare its exercise when declared; ask to
 resume after an interruption to keep
-the exact saved attempt. Starting is unavailable when the installation has no
-exercise preparation owner. An empty course list needs the owner's installation
-and enablement, not an assistant-created substitute. Setup completion is not a
+the exact saved attempt. Starting can report unavailable when this installation
+does not support lesson preparation. Ask the owner to configure lesson support,
+then retry the same saved attempt when one exists. Main Learning mode is not
+available yet. An empty course list needs the owner's installation and enablement,
+not an assistant-created substitute. Setup completion is not a
 running Preview or a completed lesson. Only the host's supported assessment and
 presentation operations can establish their actual results; never invent a pass.
 

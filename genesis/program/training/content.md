@@ -7,8 +7,10 @@ sources and check pinned reads. Private server-only state retains one exact less
 active reservation per learner, with bounded immutable ended-attempt history. An internal installed catalogue validates approved whole
 course locks and toggles enablement without changing their pinned release identity.
 Internal assessment and resume writes retain pinned evidence and derive lesson
-completion. Teaching runtime, hosted provisioning and public installation/start
-actions are not provided yet.
+completion. The shared preparation coordinator composes these original state/content
+owners with existing project, repository, session and Workspace setup facilities.
+A standalone learning host and the Main Learning-mode teacher remain unfinished;
+the module alone does not provide infrastructure or prove a delivered lesson.
 
 ## Sources
 
@@ -20,6 +22,7 @@ actions are not provided yet.
 - `packages/vibe64-training/src/server/installedContent.js`
 - `packages/vibe64-training/src/server/contentInstaller.js`
 - `packages/vibe64-training/src/server/learnerState.js`
+- `packages/vibe64-training/src/server/preparation.js`
 - `packages/vibe64-core/src/server/projectRecordMetadata.js`
 - `packages/vibe64-core/src/server/stateUpgrades.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261006-training-preparation.js`
@@ -38,6 +41,7 @@ actions are not provided yet.
 - `tests/server/vibe64TrainingInstalledContent.unit.test.js`
 - `tests/server/vibe64TrainingContentInstaller.unit.test.js`
 - `tests/server/vibe64TrainingLearnerState.unit.test.js`
+- `tests/server/vibe64TrainingPreparation.unit.test.js`
 - `tests/server/studioProjectContext.unit.test.js`
 - `tests/server/stateUpgrades.unit.test.js`
 - `tests/server/vibe64ManagedProject.unit.test.js`
@@ -233,8 +237,9 @@ requires exact bytes in ordinary nonexecutable files. Extra empty trees, aliases
 unsafe modes and changed source fail without repair. It returns the branch and
 commit for the original session branch guard; it neither freezes later authority
 nor proves app readiness. Existing sessions use their original lifecycle recovery
-without repeating seed checks or overwriting learner edits. No product operation
-activates this proof in this increment.
+without repeating seed checks or overwriting learner edits. The shared preparation
+coordinator uses this proof through its supplied original project/repository owner
+before first session creation; the module does not provide a standalone host.
 
 The original Core project metadata normalizer accepts optional schema-1 `training`
 provenance at trusted record creation: `learnerKey`, `attemptId`, the exact
@@ -244,7 +249,8 @@ validates and copies this structure without importing Training. Creation and
 preparation receive independent marker copies; existing metadata updates cannot
 attach, alter or remove it. Ordinary records omit it and public project projections
 are unchanged. The marker records association, not authorization or readiness.
-No browser create field or product operation writes it in this increment. The
+Browser input cannot supply this marker. The shared preparation coordinator
+provides it through the original trusted project-creation facility. The
 ordered `20261006-training-preparation` no-op ledger boundary records support for
 these new writes. It must be applied with writers stopped before future activation;
 registration alone starts no training operation.
@@ -289,6 +295,43 @@ original installed reader at live content while reading a staged users tree; it
 adds no separate validator or state repair. Tests execute its actual
 snippets. Live host stopping and off-host retention are not established by those
 filesystem fixtures.
+
+## Shared lesson preparation coordinator
+
+The server-only `./server/preparation` export provides `createTrainingService`
+with the original catalogue, content, learner, project-context, project/repository,
+session and terminal owners supplied by its composition. It owns lesson
+start/resume/end and retained-pin continuation policy, not a new provisioner,
+session runtime, Git writer, execution gateway or state journal.
+
+A new start checks the current enabled exact course and published lesson and
+reserves its immutable pin before effects. Preparation takes the original
+learner preparation lock and reads the installed descriptor. A no-exercise
+lesson remains reserved without project/session/setup effects; an incompatible
+exercise checkpoint refuses without repair. For an exercise, the original
+managed initializer copies only verified ordinary bundled files and retains its
+commit/rollback behavior. Existing project provenance, repository mode and exact
+reserved session identity must agree. Unmarked directories and missing prepared
+projects/sessions are not silently adopted or replaced. Initial source is
+verified before first session creation; later learner work is never reset to
+exercise seed bytes. Workspace setup uses its original lifecycle, and a saved
+success is checked against its current recipe. Pending/failed setup is not ready.
+Preparation does not claim Preview liveness, delivery or an assessment pass.
+
+End excludes in-progress preparation. Retrying an already ended operation cannot
+take the independent successor's preparation lock. Explicit continuation derives
+its pin from that person's retained ended history, even after release disablement,
+and passes the original caller revision to the state writer. It refuses another
+active attempt and cannot adopt a racing same-pin successor. Bounded stable
+request identities, original errors, retry identities and all existing state
+schemas are retained unchanged. No source read or automatic course enablement
+is introduced.
+
+The original coordinator and its original twenty-one controlled-owner unit cases
+move together without changing bodies or assertions. Hosts retain their resource
+bindings, concrete repository composition and actual lifecycle integration
+proofs. The shared module and unit fixtures alone do not prove standalone
+provisioning, hosted native execution or Main teacher/browser acceptance.
 
 ## Durable assessment and lesson resume
 
