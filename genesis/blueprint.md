@@ -8,6 +8,20 @@ and live connections.
 Vibe64 is the visual, managed shell around Genesis for people building software
 with an AI coding agent.
 
+The approved learning direction gives the existing left-hand session agent the
+teacher role. Colleague remains the general supervisor for application assistance
+and coordination. A yellow learner plate with a black L enters Learning mode,
+with a yellow-ish active appearance and learning-session navigation. Working
+sessions are hidden from that view while their work, drafts and histories remain
+intact. Both use the same session/conversation implementation. The existing
+Preview area offers App, Lessons and Presentation, retaining application and
+interactive SVG/animation state. These mode and teacher changes are planned,
+not yet a completed learner-facing feature.
+Public Vibe64 owns this shared learning experience. Text lessons work without
+Online or a speech service; optional speech uses the existing voice integration.
+Lesson authors retain the original coding-agent and reviewed Git workflows,
+with the same teacher/player used for an isolated author trial.
+
 Teaching authors can validate local topic content and produce reproducible lesson
 bundles through the Vibe64 command. Draft lessons stay labelled as drafts. This
 authoring facility does not yet install a course, start an exercise or teach a learner.
