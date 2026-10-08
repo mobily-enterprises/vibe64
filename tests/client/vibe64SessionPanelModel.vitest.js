@@ -62,3 +62,31 @@ describe("plain Vibe64 session presentation", () => {
     });
   });
 });
+
+
+describe("purpose-filtered original session navigation", () => {
+  it("defaults historical sessions to Working and preserves canonical order and records", () => {
+    const sessions = [
+      { createdAt: "2026-01-03", sessionId: "learn", status: "active", purpose: "learning" },
+      { createdAt: "2026-01-02", sessionId: "working", status: "active", purpose: "working" },
+      { createdAt: "2026-01-01", sessionId: "historical", status: "active" },
+      { createdAt: "2026-01-04", sessionId: "old-learning", status: "archived", purpose: "learning" }
+    ];
+    const before = structuredClone(sessions);
+    expect(visibleVibe64Sessions(sessions, "working").map(s => s.sessionId)).toEqual(["historical", "working"]);
+    expect(visibleVibe64Sessions(sessions, "learning").map(s => s.sessionId)).toEqual(["learn"]);
+    expect(visibleVibe64Sessions(sessions).map(s => s.sessionId)).toEqual(["historical", "working", "learn"]);
+    expect(sessions).toEqual(before);
+  });
+
+  it("does not interpret unknown claimed purposes or filters as Learning or Working", () => {
+    const sessions = [
+      { sessionId: "unknown", status: "active", purpose: "other" },
+      { sessionId: "normal", status: "active" }
+    ];
+    expect(visibleVibe64Sessions(sessions, "learning")).toEqual([]);
+    expect(visibleVibe64Sessions(sessions, "working").map(s => s.sessionId)).toEqual(["normal"]);
+    expect(visibleVibe64Sessions(sessions, "other")).toEqual([]);
+    expect(visibleVibe64Sessions(sessions).map(s => s.sessionId)).toEqual(["normal", "unknown"]);
+  });
+});

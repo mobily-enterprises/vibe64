@@ -248,3 +248,111 @@ describe("useVibe64SessionPanel", () => {
     expect(projected.some((session) => session.repositoryWorkState.state === "saved")).toBe(false);
   });
 });
+
+
+import { computed, effectScope, nextTick, reactive, ref } from "vue";
+import { vi } from "vitest";
+import { useVibe64SessionPanel, vibe64SessionPanelProps } from "../../src/composables/useVibe64SessionPanel.js";
+
+const purposePanelHarness = vi.hoisted(() => ({ data: null, registryInput: null }));
+vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }));
+vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ref("project") }));
+vi.mock("@/composables/useVibe64SessionData.js", () => ({ useVibe64SessionData: () => purposePanelHarness.data }));
+vi.mock("@/composables/useVibe64SessionRepositoryStatusRegistry.js", () => ({
+  useVibe64SessionRepositoryStatusRegistry: input => {
+    purposePanelHarness.registryInput = input;
+    return { observe: vi.fn(), refresh: vi.fn() };
+  }
+}));
+vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
+  useEndpointResource: () => ({ data: ref({}), loadError: ref("") })
+}));
+
+function mountPurposePanel(purposeFilter = "") {
+  const sessions = ref([
+    { sessionId: "work", status: "active", draft: "keep working words" },
+    { sessionId: "learn", status: "active", purpose: "learning", draft: "keep learner words" }
+  ]);
+  const selectedSessionId = ref("work");
+  const selectSessionId = vi.fn(id => { selectedSessionId.value = id; });
+  purposePanelHarness.data = {
+    sessions, selectedSessionId,
+    selectedSession: computed(() => sessions.value.find(s => s.sessionId === selectedSessionId.value) || null),
+    isSelectedSessionArchived: ref(false), sessionsApiPath: ref("/original/sessions"),
+    sessionList: reactive({ loadError: "", isInitialLoading: false }),
+    createSessionRunning: ref(false), canCreateSession: ref(false),
+    createSessionVisible: ref(false), createSessionTitle: ref("Unavailable"),
+    selectSessionId, refreshSessionData: vi.fn()
+  };
+  const props = reactive({ purposeFilter });
+  const scope = effectScope();
+  const panel = scope.run(() => useVibe64SessionPanel(props, vi.fn()));
+  return { scope, panel, props, data: purposePanelHarness.data };
+}
+
+describe("same session panel purpose filtering", () => {
+  it("filters navigation while preserving original live enrichment and default behavior", () => {
+    const sessions = [ { sessionId: "work" }, { sessionId: "learn", purpose: "learning" } ];
+    const args = { sessions, runtimeStateBySessionId: { learn: { busy: true } } };
+    expect(vibe64SessionPanelProps.purposeFilter.default).toBe("");
+    expect(sessionPanelToolbarSessions(args).map(s => s.sessionId)).toEqual(["work", "learn"]);
+    expect(sessionPanelToolbarSessions({ ...args, purposeFilter: "working" }).map(s => s.sessionId)).toEqual(["work"]);
+    expect(sessionPanelToolbarSessions({ ...args, purposeFilter: "learning" })).toMatchObject([
+      { sessionId: "learn", agentThinking: true }
+    ]);
+    expect(sessions).toEqual([ { sessionId: "work" }, { sessionId: "learn", purpose: "learning" } ]);
+  });
+
+  it("hides the wrong-purpose selection without selecting another session or losing mounted work/drafts", async () => {
+    const f = mountPurposePanel("working");
+    try {
+      f.panel.setRuntimeBusy({ sessionId: "work", busy: true });
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["work"]);
+      f.props.purposeFilter = "learning";
+      await nextTick();
+      expect(f.panel.toolbar.sessions.map(s => s.sessionId)).toEqual(["learn"]);
+      expect(f.panel.selection.selectedSessionId).toBe("");
+      expect(f.panel.selection.selectedSession).toBe(null);
+      expect(f.panel.emptyLayoutVisible.value).toBe(true);
+      expect(f.data.selectedSessionId.value).toBe("work");
+      expect(f.data.selectSessionId).not.toHaveBeenCalled();
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["work"]);
+      expect(purposePanelHarness.registryInput.sessions).toBe(f.data.sessions);
+      f.data.selectedSessionId.value = "learn";
+      await nextTick();
+      expect(f.panel.selection.selectedSessionId).toBe("learn");
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["work", "learn"]);
+      f.props.purposeFilter = "working";
+      await nextTick();
+      expect(f.panel.selection.selectedSessionId).toBe("");
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["work", "learn"]);
+      expect(f.panel.toolbar.sessions[0].agentThinking).toBe(true);
+      expect(f.data.sessions.value.map(s => s.draft)).toEqual(["keep working words", "keep learner words"]);
+      f.data.sessions.value = f.data.sessions.value.filter(s => s.sessionId !== "work");
+      await nextTick();
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["learn"]);
+      expect(f.data.selectSessionId).not.toHaveBeenCalled();
+    } finally { f.scope.stop(); }
+  });
+
+  it("retains hidden mounted sessions through failed refresh and excludes actual archiving sessions", async () => {
+    const f = mountPurposePanel();
+    try {
+      f.data.selectedSessionId.value = "learn";
+      await nextTick();
+      expect(f.panel.selection.selectedSessionId).toBe("learn");
+      expect(f.panel.toolbar.sessions).toHaveLength(2);
+      f.props.purposeFilter = "working";
+      f.data.sessionList.loadError = "Updates unavailable";
+      f.data.sessions.value = [];
+      await nextTick();
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["work", "learn"]);
+      f.data.sessionList.loadError = "";
+      f.data.sessions.value = [{ sessionId: "learn", purpose: "learning", archiving: true }];
+      await nextTick();
+      expect(f.panel.runtimeHostSessionIds.value).toEqual([]);
+      expect(f.data.selectedSessionId.value).toBe("learn");
+      expect(f.data.selectSessionId).not.toHaveBeenCalled();
+    } finally { f.scope.stop(); }
+  });
+});

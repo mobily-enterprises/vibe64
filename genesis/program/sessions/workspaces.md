@@ -31,6 +31,9 @@ the canonical project and from other sessions.
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
 - `src/composables/useVibe64SessionPanel.js`
+- `src/lib/vibe64SessionPanelModel.js`
+- `tests/client/vibe64SessionPanelModel.vitest.js`
+- `tests/client/useVibe64SessionPanel.vitest.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `src/components/studio/Vibe64SessionPanel.vue`
@@ -54,6 +57,16 @@ The mounted runtime respects an explicitly empty navigation projection in both
 the session toolbar and dashboard. Only an omitted projection uses the full
 session list. Navigation does not mutate the authoritative session collection,
 cancel its work, or replace the runtime's exact selected-session identity.
+
+The existing panel supports an optional Working/Learning purpose filter for
+navigation and visible selected-session projection. Missing historical purpose
+reads as Working without a state write. The original full canonical session
+collection still governs mounted runtime retention, repository observation and
+pruning; a filtered toolbar cannot unmount hidden work or erase drafts. A
+wrong-purpose selected session is hidden without changing the original selection
+or automatically selecting another identity. Omitted filters retain the original
+behavior. This is a presentation prerequisite, not Training admission or completed
+host mode/selection integration; there is one original panel, no alternate runtime.
 
 Session and temporary-conversation actions resolve their project and acting user
 through the shared action boundary. The acting user is trusted context, never
