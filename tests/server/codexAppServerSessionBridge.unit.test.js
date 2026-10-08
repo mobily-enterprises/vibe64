@@ -2632,3 +2632,109 @@ test("session renewal never resumes the predecessor or an unrelated successor th
     (error) => error?.code === "vibe64_session_renewal_fresh_thread_required"
   );
 });
+
+// Additive bound-tool metadata cases; every original test above is retained.
+import { createHash as toolSchemaHash } from "node:crypto";
+import {
+  codexAppServerThreadPreparationForSession,
+  codexAppServerToolSchemaIdentityForSession,
+  writeCodexAppServerIdentityMetadata
+} from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+
+const boundLearningSchemas = { schemas: [{ type: "function", function: {
+  name: "learning_read", description: "Read this exact learning attempt", parameters: { type: "object", properties: {}, additionalProperties: false }
+} }] };
+const boundLearningSchemaIdentity = toolSchemaHash("sha256").update(JSON.stringify(boundLearningSchemas.schemas.map(({ function: tool }) => ({
+  type: "function", name: tool.name, description: tool.description, inputSchema: tool.parameters
+})))).digest("hex");
+
+test("learning Codex schemas use the original identity transaction and retained thread mismatch refusal", async () => {
+  const runtime = fakeRuntime();
+  runtime.learningScope = { learnerId: "owner", attemptId: "exact-attempt" };
+  const metadata = {};
+  let inMutation = false;
+  const mutate = runtime.store.mutateSession;
+  runtime.store.mutateSession = async (id, callback) => mutate(id, async () => {
+    inMutation = true;
+    try { return await callback(); } finally { inMutation = false; }
+  });
+  const write = runtime.store.writeMetadataValue;
+  runtime.store.writeMetadataValue = async (id, name, value) => {
+    assert.equal(inMutation, true, "schema and original native identity share the existing mutation");
+    metadata[name] = value;
+    return write(id, name, value);
+  };
+  runtime.store.readMetadata = async () => ({ ...metadata });
+  const calls = [];
+  const provider = {
+    ...contextTurnProviderParts(calls),
+    ensureRuntime: async () => appServerRuntime(),
+    async startThread(params) { calls.push({ method: "start", params }); return { id: "learning-thread" }; },
+    async resumeThread(id, params) { calls.push({ method: "resume", params, id }); return { id }; }
+  };
+  const options = { observeThread() {}, provider, runtime, workdir: "/learning/native", applicationTools: boundLearningSchemas,
+    session: { sessionId: "learning-session", metadata: {} },
+    providerReady({ threadId }) { calls.push({ method: "ready", threadId }); } };
+  await ensureCodexAppServerThreadForSession(options);
+  assert.equal(metadata.codex_conversation_tool_schema_identity, boundLearningSchemaIdentity);
+  assert.equal(metadata.agent_identity_conversation_id, "learning-thread");
+  assert.deepEqual(calls.map(row => row.method), ["ready", "start", "ready"]);
+  assert.equal(calls[0].threadId, "");
+  assert.equal(calls[2].threadId, "learning-thread");
+  assert.equal(calls[1].params.dynamicTools[0].name, "learning_read");
+  const resumed = { ...options, session: { sessionId: "learning-session", metadata: { ...metadata } } };
+  calls.length = 0;
+  await ensureCodexAppServerThreadForSession(resumed);
+  assert.deepEqual(calls.map(row => row.method), ["ready", "resume", "ready"]);
+  assert.deepEqual(calls[1].params.dynamicTools, boundLearningSchemas.schemas.map(({ function: tool }) => ({
+    type: "function", name: tool.name, description: tool.description, inputSchema: tool.parameters
+  })));
+  delete metadata.codex_conversation_tool_schema_identity;
+  const savedWrites = runtime.writes.length;
+  calls.length = 0;
+  await assert.rejects(ensureCodexAppServerThreadForSession(resumed), /different application tool entry points/);
+  assert.deepEqual(calls, [], "old bindings are not resumed or replaced to retrofit tools");
+  assert.equal(runtime.writes.length, savedWrites);
+  assert.equal(metadata.agent_identity_conversation_id, "learning-thread");
+});
+
+test("learning Codex schema reads stay fresh and refuse a changed native identity", async () => {
+  const session = { sessionId: "learning-session", metadata: {
+    agent_identity_provider: "codex", agent_identity_conversation_id: "same-thread", agent_identity_status: "ready",
+    agent_identity_workdir: "/learning/native", agent_transport_id: "codex_app_server",
+    codex_conversation_tool_schema_identity: "a".repeat(64)
+  } };
+  let current = { ...session.metadata, codex_conversation_tool_schema_identity: "b".repeat(64) };
+  const runtime = { learningScope: {}, store: { readMetadata: async id => {
+    assert.equal(id, session.sessionId); return { ...current };
+  } } };
+  const prepared = codexAppServerThreadPreparationForSession({ runtime, session, workdir: "/learning/native" });
+  assert.equal(await prepared.identity.readToolSchemaIdentity("/learning/native"), "b".repeat(64));
+  assert.equal(codexAppServerToolSchemaIdentityForSession(session, "/other/native"), "");
+  current.agent_identity_conversation_id = "successor-thread";
+  await assert.rejects(prepared.identity.readToolSchemaIdentity("/learning/native"), /identity changed/);
+  current = { ...session.metadata, agent_identity_workdir: "/changed/native" };
+  await assert.rejects(prepared.identity.readToolSchemaIdentity("/learning/native"), /identity changed/);
+  current = { ...session.metadata, codex_conversation_tool_schema_identity: "invalid" };
+  await assert.rejects(prepared.identity.readToolSchemaIdentity("/learning/native"), /schema identity is invalid/);
+});
+
+test("optional Codex schema identity cannot widen ordinary Main or write malformed metadata", async () => {
+  const runtime = fakeRuntime();
+  assert.throws(() => codexAppServerThreadPreparationForSession({ runtime, applicationTools: boundLearningSchemas }),
+    /admitted learning session/);
+  await assert.rejects(writeCodexAppServerIdentityMetadata({ runtime, sessionId: "normal-session", threadId: "thread",
+    workdir: "/normal/native", toolSchemaIdentity: boundLearningSchemaIdentity }), /admitted learning session/);
+  assert.deepEqual(runtime.writes, []);
+  runtime.learningScope = {};
+  for (const toolSchemaIdentity of [null, 4, "A".repeat(64), "a".repeat(63), ` ${"a".repeat(64)}`]) {
+    await assert.rejects(writeCodexAppServerIdentityMetadata({ runtime, sessionId: "learning-session", threadId: "thread",
+      workdir: "/learning/native", toolSchemaIdentity }), /SHA256 hash/);
+  }
+  assert.deepEqual(runtime.writes, []);
+  const ordinary = codexAppServerIdentityMetadata({ threadId: "thread", workdir: "/normal/native" });
+  assert.equal(Object.hasOwn(ordinary, "codex_conversation_tool_schema_identity"), false);
+  const prepared = codexAppServerThreadPreparationForSession({ runtime: fakeRuntime(), providerReady() { assert.fail("no tools"); } });
+  assert.equal(Object.hasOwn(prepared, "applicationTools"), false);
+  assert.equal(Object.hasOwn(prepared, "providerReady"), false);
+});

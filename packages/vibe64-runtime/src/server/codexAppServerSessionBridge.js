@@ -478,12 +478,16 @@ function codexAppServerIdentityMetadata({
   capturedAt = new Date().toISOString(),
   terminalSessionId = "",
   threadId = "",
+  toolSchemaIdentity,
   workdir = ""
 } = {}) {
   const normalizedThreadId = normalizeAgentText(threadId);
   const normalizedWorkdir = normalizeWorkdir(workdir);
   if (!normalizedThreadId || !normalizedWorkdir) {
     throw new Error("Codex app-server identity requires a thread id and workdir.");
+  }
+  if (toolSchemaIdentity !== undefined && (typeof toolSchemaIdentity !== "string" || !/^[a-f0-9]{64}$/u.test(toolSchemaIdentity))) {
+    throw new TypeError("Codex application tool schema identity must be a SHA256 hash.");
   }
   const runtimeMetadata = codexAppServerRuntimeMetadata(appServerRuntime);
   const hostCli = runtimeMetadata.endpoint
@@ -496,6 +500,7 @@ function codexAppServerIdentityMetadata({
   return {
     [`${prefix}_conversation_id`]: normalizedThreadId,
     [`${prefix}_conversation_workdir`]: normalizedWorkdir,
+    ...(toolSchemaIdentity !== undefined ? { codex_conversation_tool_schema_identity: toolSchemaIdentity } : {}),
     agent_identity_model_provider: modelProviderId,
     agent_identity_captured_at: capturedAt,
     agent_identity_conversation_id: normalizedThreadId,
@@ -524,8 +529,12 @@ async function writeCodexAppServerIdentityMetadata({
   sessionId = "",
   terminalSessionId = "",
   threadId = "",
+  toolSchemaIdentity,
   workdir = ""
 } = {}) {
+  if (toolSchemaIdentity !== undefined && !runtime?.learningScope) {
+    throw new TypeError("Codex application tools require an admitted learning session.");
+  }
   const supplemental = additionalMetadata &&
     typeof additionalMetadata === "object" &&
     !Array.isArray(additionalMetadata)
@@ -540,6 +549,7 @@ async function writeCodexAppServerIdentityMetadata({
       appServerRuntime,
       terminalSessionId,
       threadId,
+      toolSchemaIdentity,
       workdir
     })
   };
@@ -903,20 +913,36 @@ function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   return normalizeAgentText(metadata.agent_identity_conversation_id);
 }
 
+function codexAppServerToolSchemaIdentityForSession(session = {}, workdir = "") {
+  if (!codexAppServerThreadIdForSession(session, workdir)) return "";
+  const identity = session.metadata?.codex_conversation_tool_schema_identity;
+  if (identity === undefined || identity === "") return "";
+  if (typeof identity !== "string" || !/^[a-f0-9]{64}$/u.test(identity)) {
+    throw new TypeError("The saved Codex application tool schema identity is invalid.");
+  }
+  return identity;
+}
+
 function codexAppServerThreadPreparationForSession({
   agentSettings = {},
+  applicationTools,
   hostContext = null,
   observeThread,
   provider,
+  providerReady,
   runtime,
   session = {},
   workdir = ""
 } = {}) {
+  if (applicationTools && !runtime?.learningScope) {
+    throw new TypeError("Codex application tools require an admitted learning session.");
+  }
   return {
     observeThread,
     provider,
     workdir,
     projectHooks: true,
+    ...(applicationTools ? { applicationTools, providerReady } : {}),
     settings(normalizedWorkdir, config) {
       const threadSettings = codexAppServerThreadSettings({
         agentSettings,
@@ -934,11 +960,20 @@ function codexAppServerThreadPreparationForSession({
     },
     identity: {
       read: normalizedWorkdir => codexAppServerThreadIdForSession(session, normalizedWorkdir),
+      async readToolSchemaIdentity(normalizedWorkdir) {
+        const threadId = codexAppServerThreadIdForSession(session, normalizedWorkdir);
+        if (!threadId) return "";
+        const current = { metadata: await runtime.store.readMetadata(session.sessionId) };
+        if (codexAppServerThreadIdForSession(current, normalizedWorkdir) !== threadId) {
+          throw new Error("The prepared Codex conversation identity changed before its application tools were read.");
+        }
+        return codexAppServerToolSchemaIdentityForSession(current, normalizedWorkdir);
+      },
       get pauseGoal() { return session.metadata?.codex_changeover_pause_goal === "yes"; },
       clearPause() { return runtime.store.writeMetadataValue(session.sessionId, "codex_changeover_pause_goal", ""); },
-      write({ appServerRuntime, threadId, workdir }) {
+      write({ appServerRuntime, threadId, toolSchemaIdentity, workdir }) {
         return writeCodexAppServerIdentityMetadata({
-          appServerRuntime, runtime, sessionId: session.sessionId, threadId, workdir
+          appServerRuntime, runtime, sessionId: session.sessionId, threadId, toolSchemaIdentity, workdir
         });
       }
     },
@@ -991,6 +1026,7 @@ export {
   codexAppServerProjectHookTrustConfig,
   codexAppServerThreadIdForSession,
   codexAppServerThreadPreparationForSession,
+  codexAppServerToolSchemaIdentityForSession,
   codexAppServerThreadStartSettings,
   codexAppServerThreadSettings,
   codexAppServerTurnSettings,

@@ -700,3 +700,19 @@ never create or repair, and refuse a claimed foreign or malformed scope. Future
 format changes or adoption of existing history still require the numbered
 stopped-writer upgrade procedure with script-owned backups. This prospective
 format support alone activates neither a Main launcher nor a lesson.
+
+## Optional learning Codex tool schema identity
+
+An explicitly supplied learning Main tool configuration can write
+`codex_conversation_tool_schema_identity`, a lowercase SHA256 hash, in the same
+original metadata mutation as its native Codex thread/workdir identity. It
+records that native binding's tool entry points, not permission to execute them.
+The original binding replacement retires the optional field with its predecessor.
+Ordinary unconfigured native identity writes do not add it.
+
+Existing metadata and native histories remain unchanged. Reads validate the
+matching native thread and workdir, never stamp a missing hash or reconstruct a
+catalogue. A retained thread with absent or differing identity refuses a new
+nonempty manifest through the shared native owner before resume. This is a
+new-write-only attribute with no historical conversion or numbered repair;
+authorized recovery and activation of actual lesson tools remain separate work.

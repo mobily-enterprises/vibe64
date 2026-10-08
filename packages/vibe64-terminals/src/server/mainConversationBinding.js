@@ -21,6 +21,7 @@ import { VIBE64_SESSION_STATUS, conversationMessageIdentity, conversationMessage
 import {
   codexAppServerThreadIdForSession,
   codexAppServerThreadPreparationForSession,
+  codexAppServerToolSchemaIdentityForSession,
   codexAppServerTurnSettings,
   writeCodexAppServerIdentityMetadata
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
@@ -388,7 +389,8 @@ export async function createSessionConversationBinding(provider, sessionId, opti
         ...(Object.hasOwn(value, "turn") ? { turn: value.turn } : {}),
         delivery: await original.state.read(), nativeResult: value.nativeResult };
     },
-    ...(host.state.readIdentity ? { identity: { ...conversation.identity, read: host.state.readIdentity } } : {}),
+    ...(host.state.readIdentity ? { identity: { ...conversation.identity, read: host.state.readIdentity,
+      ...(host.state.readToolSchemaIdentity ? { readToolSchemaIdentity: host.state.readToolSchemaIdentity } : {}) } } : {}),
     native: engine === "codex" ? {
       ...host.native,
       messagePreparation: createCodexMainMessagePreparation(sessionId, host.messageEnvironment, host.native.messagePreparation)
@@ -890,6 +892,9 @@ export function createMainConversationBinding(store, sessionId, context) {
           (name === "agent_identity_conversation_id" || /^(?:codex(?:_[a-z0-9_-]+)?|claude|opencode)_conversation_id$/u.test(name)) &&
           metadata[name] === expectedId);
         if (bindingNames.length < 2) fail("The native conversation binding is incomplete.");
+        if (selection.engineId === "codex" && Object.hasOwn(metadata, "codex_conversation_tool_schema_identity")) {
+          bindingNames.push("codex_conversation_tool_schema_identity");
+        }
         return { bindingNames, previous: { conversationId: expectedId, assistantSelection: selection,
           modelProviderId: metadata.codex_routing_home_provider || metadata.agent_identity_model_provider || selection.modelProviderId,
           workdir: metadata.agent_identity_workdir } };
@@ -932,8 +937,11 @@ export function createMainConversationBinding(store, sessionId, context) {
           identity: {
             ...binding.identity,
             read: workdir => codexAppServerThreadIdForSession(session, workdir),
-            write({ appServerRuntime, threadId, workdir }) {
-              return writeCodexAppServerIdentityMetadata({ appServerRuntime, runtime, sessionId, threadId, workdir });
+            async readToolSchemaIdentity(workdir = session.nativeExecutionRoot || terminalWorktreePath(session)) {
+              return codexAppServerToolSchemaIdentityForSession({ metadata: await store.readMetadata(sessionId) }, workdir);
+            },
+            write({ appServerRuntime, threadId, toolSchemaIdentity, workdir }) {
+              return writeCodexAppServerIdentityMetadata({ appServerRuntime, runtime, sessionId, threadId, toolSchemaIdentity, workdir });
             }
           }
         } : {})

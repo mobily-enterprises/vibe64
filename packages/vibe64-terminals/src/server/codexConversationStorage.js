@@ -3,7 +3,7 @@ import { normalizeCodexThreadId } from "@jskit-ai/assistant-core/server/codex-co
 import { codexAppServerTurnState as nativeCodexAppServerTurnState } from "@jskit-ai/assistant-core/server/codex-turn";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
-import { codexAppServerThreadIdForSession } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import { codexAppServerThreadIdForSession, codexAppServerToolSchemaIdentityForSession } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { agentTerminalIdentityForWorkdir, agentTerminalIdentityState } from "./agentTerminalIdentity.js";
 import { activeCodexTerminal } from "./codexTerminalAccess.js";
 import { terminalWorktreePath } from "./terminalShared.js";
@@ -109,7 +109,10 @@ function createCodexConversationStorage({ projectService, runOwner }) {
       store.learningScope ? store.readSessionNativeDescriptor(normalizedSessionId)
         : store.readSessionSourceDescriptor(normalizedSessionId),
       readCodexAppServerAgentRunForSession(store, normalizedSessionId),
-      Promise.all(CODEX_STATE_METADATA_NAMES.map(async (name) => [
+      Promise.all([
+        ...CODEX_STATE_METADATA_NAMES,
+        ...(store.learningScope ? ["agent_transport_id", "codex_conversation_tool_schema_identity"] : [])
+      ].map(async (name) => [
         name,
         await store.readMetadataValue(normalizedSessionId, name)
       ]))
@@ -129,6 +132,10 @@ function createCodexConversationStorage({ projectService, runOwner }) {
       async readIdentity() {
         const current = await readCodexStateSession(sessionId);
         return codexThreadIdForWorkdir(current, nativeStateWorkdir(current));
+      },
+      async readToolSchemaIdentity() {
+        const current = await readCodexStateSession(sessionId);
+        return codexAppServerToolSchemaIdentityForSession(current, nativeStateWorkdir(current));
       },
       async read() {
         const current = await readCodexStateSession(sessionId);

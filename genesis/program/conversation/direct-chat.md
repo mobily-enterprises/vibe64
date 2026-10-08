@@ -3392,3 +3392,13 @@ notifications. The original resource/actor fences, provider reconciliation,
 submission/steering, goal and receipt owners remain authoritative. No second
 chat, provider, store or controller is added. Actual mode attachment, native
 teaching and browser/device acceptance remain separate open requirements.
+
+Opted source-less learning Codex bindings retain the shared native application
+tool schema hash in their original identity transaction. Early readiness can
+receive the same supplied schemas that JSKIT injects for Send; Public does not
+build another catalogue or native dispatcher. Fresh reads validate the original
+native thread and workdir, and replacement retires the optional hash with that
+binding after the original completeness check. Unconfigured threads retain their
+original settings. A differing retained manifest fails before resume without
+rewriting the saved binding or replacing history. Exact teacher admission,
+catalogue composition and installed native acceptance remain separate prerequisites.

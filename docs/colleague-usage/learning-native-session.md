@@ -48,3 +48,13 @@ Standalone lesson support uses the computer owner's local identity. Your existin
 Colleague history and Working conversations retain their ownership. If lessons
 are unavailable, keep your saved work and ask the installation owner to enable
 lesson support.
+
+Lesson tools must be supplied by the installation for that exact learning
+conversation. Teaching instructions alone do not make those tools available.
+If preparation reports that the saved conversation was created with different
+application tool entry points, its history and lesson attempt remain intact.
+Keep the attempt and ask the installation owner to resolve the tool setup and
+supported recovery before retrying. Colleague must not erase history, create a
+substitute conversation or claim that tool availability proves an assessment
+passed. Ordinary Working conversations and bounded Helpers keep their existing
+capabilities.

@@ -13009,3 +13009,106 @@ test("Codex real provider restores the same-account Helper after an actual auth 
     await rm(accountRoot, { recursive: true, force: true });
   }
 });
+
+// Additive binding cases use the existing Runtime/Store learning constructor
+// fixture shape from codexOuterTurnCheckpoint.unit.test.js, without inference.
+import { Vibe64SessionRuntime as LearningBindingRuntime } from "@local/vibe64-runtime/server";
+import { createMainConversationBinding as schemaMainBinding } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import { createCodexConversationStorage as schemaNativeStorage } from "../../packages/vibe64-terminals/src/server/codexConversationStorage.js";
+import { createCodexConversationPreparation as schemaPreparation } from "../../packages/vibe64-terminals/src/server/codexConversationPreparation.js";
+
+test("learning Main reads schema identity through fresh original bounded storage and retires it with its native binding", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-learning-schema-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const learningScope = { learnerId: "42", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", noExercise: true,
+    pin: { course: { courseId: "first-course", release: "0.1.0" }, topic: { schemaVersion: 1, topicId: "getting-started",
+      release: "0.1.0", repository: "vibe64/learn-getting-started", commit: "a".repeat(40), topicHash: "b".repeat(64) },
+      lesson: { code: "V64-START-00", hash: "c".repeat(64) } } };
+  const runtime = new LearningBindingRuntime({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "private"),
+    learningScope, learningInstructions: async () => "Teach this pinned lesson.",
+    promptRenderer: async () => assert.fail("No source prompt"), promptEnvironment: async () => assert.fail("No project Env") });
+  const id = "learning-schema-session";
+  await runtime.store.createSession({ sessionId: id, runtimeKind: "genesis", metadata: {
+    assistant_selection: serializeVibe64AssistantSelection({ agentId: "codex", catalogRevision: `sha256:${"f".repeat(64)}`,
+      engineId: "codex", modelId: "gpt-5.5", modelProviderId: "openai", variantId: "high" })
+  } });
+  const session = await runtime.getSession(id, { inspectSource: false });
+  const workdir = await runtime.getNativeExecutionRoot(id);
+  const nativeStorage = schemaNativeStorage({ projectService: { createSessionStore: async () => runtime.store },
+    runOwner: { readAgentRunForSession: async () => null } });
+  const state = nativeStorage.state(id);
+  const threadId = randomUUID();
+  const original = schemaMainBinding(runtime.store, id, { runtime, session,
+    readSession: () => runtime.getSession(id, { inspectSource: false }) });
+  const native = original.conversation({ publish() {} });
+  const supplied = await createSessionConversationBinding({ id: "codex", async prepareConversationHost() {
+    return { context: { runtime, session }, namespace: "original-learning", state, native: { messagePreparation: {} }, publish() {} };
+  } }, id);
+  assert.equal(await supplied.identity.readToolSchemaIdentity(), "");
+  await native.identity.write({ appServerRuntime: { modelProviderId: "openai" }, threadId,
+    toolSchemaIdentity: "d".repeat(64), workdir });
+  assert.equal(await supplied.identity.read(), threadId, "the captured empty snapshot is not reused");
+  assert.equal(await supplied.identity.readToolSchemaIdentity(), "d".repeat(64));
+  const readSession = runtime.getSession;
+  runtime.getSession = async () => assert.fail("Fresh schema reads do not hydrate Runtime history or acquire a provider");
+  try {
+    await runtime.store.writeMetadataValue(id, "codex_conversation_tool_schema_identity", "e".repeat(64));
+    assert.equal(await supplied.identity.readToolSchemaIdentity(), "e".repeat(64));
+  } finally { runtime.getSession = readSession; }
+  const binding = await original.identity.inspect(threadId);
+  assert.ok(binding.bindingNames.includes("codex_conversation_tool_schema_identity"));
+  await original.state.transaction(tx => tx.releaseBinding(binding));
+  assert.equal(await runtime.store.readMetadataValue(id, "codex_conversation_tool_schema_identity"), "");
+  assert.equal(await state.readIdentity(), "");
+  assert.equal(await state.readToolSchemaIdentity(), "");
+  await runtime.store.writeMetadataValue(id, "agent_identity_conversation_id", "incomplete-thread");
+  await runtime.store.writeMetadataValue(id, "codex_conversation_tool_schema_identity", "d".repeat(64));
+  await assert.rejects(original.identity.inspect("incomplete-thread"), /binding is incomplete/,
+    "an optional schema hash cannot substitute for either of the original two native IDs");
+});
+
+test("original learning readiness forwards only the supplied schema facility and Send retains its original preparation", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-learning-readiness-schema-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const learningScope = { learnerId: "42", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", noExercise: true,
+    pin: { course: { courseId: "first-course", release: "0.1.0" }, topic: { schemaVersion: 1, topicId: "getting-started",
+      release: "0.1.0", repository: "vibe64/learn-getting-started", commit: "a".repeat(40), topicHash: "b".repeat(64) },
+      lesson: { code: "V64-START-00", hash: "c".repeat(64) } } };
+  const runtime = new LearningBindingRuntime({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "private"),
+    learningScope, learningInstructions: async () => "Teach this pinned lesson." });
+  const id = "learning-readiness-session";
+  await runtime.store.createSession({ sessionId: id, runtimeKind: "genesis" });
+  const applicationTools = { schemas: [{ type: "function", function: { name: "learning_read",
+    parameters: { type: "object", properties: {}, additionalProperties: false } } }] };
+  const providerReady = () => assert.fail("Inspection must not register native dispatch");
+  const preparation = schemaPreparation({ projectService: { createRuntime: async () => runtime },
+    runtimeHost: {}, sessionRuntimeHost: { createRuntimeForSession: async () => runtime, codexAppServerManagedThreadIdentity: () => ({}) },
+    accountPreparation: { codexToolHomeResult: async () => ({ ok: true, toolHomeSource: root }),
+      codexReconnectTerminalFailureForError: async () => null },
+    sessionEnvironment: { vibe64SessionContextInput: () => null, codexProjectTerminalEnvFailureResult: async () => null },
+    health: { running: async () => ({ healthAttempt: null }),
+      ready: async () => {}, failure: async () => {} }, enabled: true, publishSessionChanged() {} });
+  const options = { applicationTools, providerReady };
+  const ready = await preparation.readiness(id, options);
+  assert.equal(ready.session.sessionId, id);
+  // Inspect the original early readiness owner directly; registration and
+  // inference remain native owner's responsibilities, not this fixture.
+  await preparation.threadReadiness(id, options, async (_id, context, phases) => {
+    const contract = phases.preparation(context.session);
+    assert.equal(contract.applicationTools, applicationTools, "no schema catalogue copy");
+    assert.equal(contract.providerReady, providerReady);
+    assert.equal(typeof contract.identity.readToolSchemaIdentity, "function");
+    return { currentSession: context.session, thread: { threadId: "same-learning-thread" } };
+  });
+  const send = preparation.message(id);
+  const context = await send.readContext();
+  const contract = send.threadPreparation({}, context).preparation(context.session);
+  assert.equal(typeof contract.identity.readToolSchemaIdentity, "function");
+  assert.equal(Object.hasOwn(contract, "applicationTools"), false,
+    "Send schemas are injected by the original shared message owner, not regenerated in Public");
+  assert.equal(Object.hasOwn(contract, "providerReady"), false);
+  const plainRuntime = { learningScope: null, getSession: async () => assert.fail("ordinary supplied tools refused before session preparation") };
+  const normal = schemaPreparation({ projectService: {}, runtimeHost: {}, sessionRuntimeHost: { createRuntimeForSession: async () => plainRuntime },
+    accountPreparation: {}, sessionEnvironment: {}, health: {}, enabled: true });
+  await assert.rejects(normal.readiness("ordinary", options), /admitted learning session/);
+});

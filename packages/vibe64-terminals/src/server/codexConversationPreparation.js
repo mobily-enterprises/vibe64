@@ -119,11 +119,14 @@ function createCodexConversationPreparation({
     });
   }
 
-  async function prepareCodexSessionReadiness(sessionId) {
+  async function prepareCodexSessionReadiness(sessionId, options = {}) {
     if (!codexAppServerPromptDeliveryEnabled) {
       return { value: await writeCodexAppServerControlDisabledFailure(sessionId) };
     }
     const runtime = await createRuntimeForSession();
+    if (options.applicationTools && !runtime.learningScope) {
+      throw new TypeError("Codex application tools require an admitted learning session.");
+    }
     const session = await runtime.getSession(sessionId, { inspectSource: false });
     const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
     return {
@@ -163,7 +166,7 @@ function createCodexConversationPreparation({
       },
       async prepare(operation) {
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, () => (
-          withCodexAppServerThreadReadiness(sessionId, {}, operation)
+          withCodexAppServerThreadReadiness(sessionId, options, operation)
         ), { operation: "prepare-agent-session", waitMs: 10_000 });
         return exclusive.value;
       }
@@ -171,7 +174,7 @@ function createCodexConversationPreparation({
   }
 
   async function withCodexAppServerThreadReadiness(sessionId, {
-    agentSettings = {}
+    agentSettings = {}, applicationTools, providerReady
   } = {}, operation) {
     const context = await codexAppServerSessionContext(sessionId);
     if (context.ok === false) {
@@ -184,6 +187,9 @@ function createCodexConversationPreparation({
       toolHomeSource,
       workdir
     } = context;
+    if (applicationTools && !runtime.learningScope) {
+      throw new TypeError("Codex application tools require an admitted learning session.");
+    }
     let healthAttempt = null;
     try {
       const health = await writeCodexAppServerRunning(runtime, sessionId, {
@@ -208,6 +214,8 @@ function createCodexConversationPreparation({
         preparation(currentSession) {
           return codexAppServerThreadPreparationForSession({
             agentSettings: { ...codexAgentSettingsFromSession(currentSession), ...agentSettings },
+            applicationTools,
+            providerReady,
             hostContext: vibe64SessionContextInput(),
             runtime,
             session: currentSession,
