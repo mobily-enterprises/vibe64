@@ -15,7 +15,9 @@ explicit start/resume intent through the original Training operations. It owns
 neither API reads, permission/pin/progress rules nor writes. One shared client
 Learning UI adapter supplies actor-scoped original Training reads and captured
 Start/Resume/Open coordination; server owners retain admission and progress.
-Retained Preview and Main Learning-mode placement remain host integration work.
+The same original Panel retains Learning Main and Preview views; the host supplies
+actual viewer, layout and selected saved-session context. Live learner acceptance
+remains a separate gate.
 Owns the original canonical delivered-question and completed-practical proof
 readers plus delivery promotion, staging, accepted-answer correlation and
 delivered-question capture, originally reused by Colleague and now composed by
@@ -30,8 +32,11 @@ and bounded partial/completed facts moved once from Colleague, which immediately
 reuses them with its unchanged connection and admission lifetime. Main uses the
 same collector with its saved practice authority, current delivered question and
 accepted browser identity; assessment retains the original Helper and sole
-learner writer. Frontend person-event and installed native practical proof remain
-open.
+learner writer. Training also owns the original browser person-event collector and workspace
+settler, moved once with immediate Colleague/Online consumer reuse. The selected
+Main supplies its exact delivered question and captured saved practice target;
+hosts supply real drawer/view and actual local or authenticated actor facts. Native question-to-
+gesture-to-answer, acoustic and whole-lesson acceptance remain open.
 Owns the original ephemeral browser presentation transaction and cue/receipt
 predicates, immediately consumed by Colleague using its unchanged connection
 objects. One original pending slot, deadlines, output binding and terminal ACK
@@ -91,9 +96,9 @@ actual captured initial session and display-only source slug. Terminals supplies
 the closed false-scope App/output route and stream adapter through its existing
 actions, process and proxy owners; Project supplies only its original onboarding
 read. The same client App uses captured Learning transport identity while source
-and manual-terminal controls remain absent. Actual Main practical producer
-integration and installed acceptance remain open. Claude, installed/browser acceptance and complete
-Main practical teaching remain unfinished.
+and manual-terminal controls remain absent. Main practical observations reuse the same server producer, declared checks,
+Helper and progress writer. Actual provider, installed/browser/device and whole-
+lesson acceptance remain open.
 The Training Feature supplies
 canonical Training HTTP/action composition in Public and consumes an optional
 host's exact existing services without duplicating hosted authority or writers.

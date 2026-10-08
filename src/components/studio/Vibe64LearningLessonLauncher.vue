@@ -68,6 +68,6 @@ async function request(operation) {
 
 <style scoped>
 .vibe64-learning-launcher { min-height: 0; overflow-y: auto; padding: 1rem; }
-.vibe64-learning-launcher__status { color: rgb(var(--v-theme-on-surface-variant)); font-size: .875rem; }
+.vibe64-learning-launcher__status { color: rgba(var(--v-theme-on-surface), 0.72); font-size: .875rem; }
 .vibe64-learning-launcher__error { flex: 0 0 auto; margin-block: .75rem; }
 </style>

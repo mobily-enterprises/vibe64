@@ -11,6 +11,9 @@ and the authenticated person's saved progress. Choose **Start** for an available
 lesson or **Resume** for the exact saved attempt. Disabled, unavailable, loading
 and error states are shown by the original lesson picker. Choosing a release is
 not permission to install or enable it. Refresh rereads catalogue and progress.
+A course labelled **Preview course** is not available through ordinary Start,
+even when its individual lessons are published. It needs an authorized author
+trial or a released, enabled course; changing views does not bypass that rule.
 
 After a confirmed active Start or Resume, the existing Main conversation is
 opened and selected only if its loaded row matches your learner and attempt.
@@ -30,8 +33,8 @@ narrated diagram waits for its confirmed final explanation and actual sound and
 motion completion. Hiding or stopping it does not count as completed teaching.
 If its cue receipt was not confirmed, read the current status before continuing;
 do not assume the explanation or motion succeeded.
-When Colleague opens a diagram, keep that same browser open until its operation
-is confirmed. Stop or starting a fresh Colleague conversation retires its old
+When Main opens a lesson diagram, keep that same browser open until its operation
+is confirmed. Stop or a replacement Learning conversation retires its old
 explanation; an old confirmation cannot complete a new one.
 
 Source-less Learning conversations show Lessons and omit App. A supported declared

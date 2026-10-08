@@ -2,7 +2,7 @@
 import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { computed, inject, nextTick, onBeforeUnmount, ref, shallowRef, unref, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { resolveStudioRequestUrl } from "/src/lib/studioUrls.js";
 import TrainingVisualPlayer from "./TrainingVisualPlayer.vue";
 import { useTrainingPreviewRegistration } from "./useTrainingPreviewRegistration.js";
@@ -17,6 +17,15 @@ const props = defineProps({
   sessionId: { type: String, required: true }
 });
 const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
+function showApp(event) {
+  const owner = learnerGestures?.value;
+  const ticket = props.active && props.appAvailable ? owner?.begin(event, "preview-select", {
+    projectSlug: props.projectSlug, sessionId: props.sessionId }) : null;
+  mode.value = "app";
+  collapsed.value = false;
+  if (ticket) void owner.finish(ticket);
+}
 const actorKey = computed(() => unref(viewer)?.actorKey || "");
 const learningAvailable = computed(() => {
   const binding = props.learningBinding;
@@ -427,6 +436,7 @@ useTrainingPreviewRegistration({
   get learningAttemptId() { return props.attemptId; },
   get learnerId() { return props.learningBinding?.learnerId; },
   get noExercise() { return props.learningBinding?.noExercise; },
+  get appVisible() { return props.active && appVisible.value; },
   get screen() { return undefined; }
 }, () => props.active && learningAvailable.value);
 defineExpose({ presentation });
@@ -435,7 +445,7 @@ defineExpose({ presentation });
 <template>
   <section class="training-preview">
     <div v-if="selection || lessonsAvailable" class="training-preview__choices" aria-label="Preview content">
-      <v-btn v-if="appAvailable" min-height="48" :variant="appVisible ? 'tonal' : 'text'" :aria-pressed="appVisible" @click="mode = 'app'; collapsed = false">{{ lessonsAvailable ? 'App' : 'App preview' }}</v-btn>
+      <v-btn v-if="appAvailable" min-height="48" :variant="appVisible ? 'tonal' : 'text'" :aria-pressed="appVisible" @click="showApp($event)">{{ lessonsAvailable ? 'App' : 'App preview' }}</v-btn>
       <v-btn v-if="lessonsAvailable" min-height="48" :variant="lessonsVisible ? 'tonal' : 'text'" :aria-pressed="lessonsVisible" @click="mode = 'lessons'; collapsed = false">Lessons</v-btn>
       <v-btn min-height="48" :disabled="!selection" :variant="visible ? 'tonal' : 'text'" :aria-pressed="visible" @click="mode = 'presentation'; collapsed = false">{{ lessonsAvailable ? 'Presentation' : 'Colleague presentation' }}</v-btn>
       <v-btn v-if="mode === 'presentation'" min-height="48" variant="text" @click="collapsed = !collapsed">

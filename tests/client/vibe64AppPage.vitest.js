@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { createRenderer, defineComponent, nextTick, reactive, ref, shallowRef } from "vue";
+import { createRenderer, defineComponent, h, nextTick, onBeforeUnmount, reactive, ref, shallowRef } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
 const pageFixture = vi.hoisted(() => ({ route: null, router: null }));
 vi.mock("vue-router", async importOriginal => ({
@@ -27,12 +27,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mountAppPage({ mobile = true, path = "/app/project/practice" } = {}) {
+function mountAppPage({ mobile = true, path = "/app/project/practice", withLearningChild = false } = {}) {
   pageFixture.route = reactive({ path, params: { slug: "practice" }, query: {} });
   pageFixture.router = { push: vi.fn(async () => {}), afterEach: vi.fn(() => () => {}) };
   const media = { matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() };
   vi.stubGlobal("window", { matchMedia: () => media });
-  const layout = shallowRef(null);
+  const layout = shallowRef(null), view = shallowRef(null);
+  const learningLayout = { projectSlug: "saved-practice", learningAttemptId: "saved-attempt", learnerId: "own", ready: true,
+    projectVisible: true, chatVisible: true };
+  const learningView = { learningBinding: { learningAttemptId: "saved-attempt", learnerId: "own" }, ready: true };
+  const learningChild = defineComponent({ setup() {
+    layout.value = learningLayout; view.value = learningView;
+    onBeforeUnmount(() => { if (layout.value === learningLayout) layout.value = null; if (view.value === learningView) view.value = null; });
+    return () => null;
+  } });
   const event = { type: "click", isTrusted: true };
   const begin = vi.fn((input, control) => input === event ? { control } : null);
   let page;
@@ -44,14 +52,15 @@ function mountAppPage({ mobile = true, path = "/app/project/practice" } = {}) {
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   const app = renderer.createApp(defineComponent({ setup() {
     page = useVibe64AppPage();
-    return () => null;
+    return () => withLearningChild ? h(learningChild) : null;
   } }));
   app.provide(VIBE64_COLLEAGUE_LAYOUT_KEY, layout);
+  app.provide(VIBE64_COLLEAGUE_VIEW_KEY, view);
   app.provide(VIBE64_TRAINING_LEARNER_GESTURE_KEY, gestures);
   app.mount({});
   mountedPages.push(app);
   page.handleProjectSelectionReady({ currentProject: { slug: "practice" } });
-  return { page, layout, event, begin, finish, media };
+  return { page, layout, view, learningLayout, learningView, event, begin, finish, media, app };
 }
 
 import {
@@ -302,4 +311,18 @@ describe("Vibe64 app page", () => {
       }
     }, "alpha")).toBe(false);
   });
+});
+
+
+it("original parent mount cannot overwrite an already selected Learning child and only the live Working page reclaims release", () => {
+  const fixture = mountAppPage({ withLearningChild: true });
+  expect(fixture.view.value).toBe(fixture.learningView);
+  expect(fixture.layout.value).toBe(fixture.learningLayout);
+  fixture.view.value = null;
+  const workingLayout = fixture.layout.value;
+  expect(workingLayout).not.toBe(fixture.learningLayout); expect(workingLayout.projectSlug).toBe("practice");
+  expect(workingLayout.ready).toBe(true);
+  fixture.layout.value = fixture.learningLayout; fixture.view.value = fixture.learningView;
+  fixture.app.unmount(); mountedPages.splice(mountedPages.indexOf(fixture.app), 1);
+  expect(fixture.view.value).toBeNull(); expect(fixture.layout.value).toBeNull();
 });

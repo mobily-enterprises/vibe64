@@ -17,6 +17,7 @@ import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64Loca
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
 import { ref } from "vue";
+import Vibe64LearningPracticeProjectSelector from "@/components/studio/Vibe64LearningPracticeProjectSelector.vue";
 import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
 import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
 
@@ -84,7 +85,8 @@ async function changeLearningMode(value) {
         :class="{ 'studio-home-shell-heading--chat-collapsed': chatCollapsed }"
       >
         <div class="studio-home-shell-title-area">
-          <v-menu location="bottom start">
+          <Vibe64LearningPracticeProjectSelector v-if="learningMode" :panel="panel" />
+          <v-menu v-else location="bottom start">
             <template #activator="{ props: menuProps }">
               <v-btn
                 class="studio-home-shell-project-selector"
@@ -102,7 +104,7 @@ async function changeLearningMode(value) {
                 :active="project.slug === projectSlug"
                 :title="project.slug"
                 :subtitle="project.projectRoot"
-                @click="openProject(project)"
+                @click="openProject(project, $event)"
               />
               <v-list-item
                 v-if="switcherProjects.length === 0"
@@ -185,7 +187,7 @@ async function changeLearningMode(value) {
             {{ mobileProjectAction.label }}
             <v-icon :icon="mdiChevronRight" size="15" />
           </button>
-          <v-btn v-if="learningMode" variant="text" @click="setChatCollapsed(!chatCollapsed)">
+          <v-btn v-if="learningMode" variant="text" @click="setChatCollapsed(!chatCollapsed, $event)">
             {{ chatCollapsed ? "Show chat" : "Show lessons" }}
           </v-btn>
         </div>

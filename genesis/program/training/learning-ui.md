@@ -18,6 +18,11 @@ reads and commands without creating a second session panel or progress owner.
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
 - `packages/vibe64-training/src/client/TrainingPreviewPresentation.vue`
+- `packages/vibe64-training/src/client/useTrainingLearnerGestures.js`
+- `packages/vibe64-training/src/client/useTrainingWorkspaceObservation.js`
+- `src/components/Vibe64AssistantShellContext.vue`
+- `src/components/Vibe64LocalColleagueHost.vue`
+- `src/components/studio/Vibe64LearningPracticeProjectSelector.vue`
 - `packages/vibe64-training/src/client/useTrainingPresentationCue.js`
 - `packages/vibe64-training/src/client/createTrainingNavigation.js`
 - `packages/vibe64-training/src/client/useTrainingPreviewRegistration.js`
@@ -120,8 +125,9 @@ was moved from Onboarding unchanged; source-backed Onboarding immediately reuses
 it at the same active/presentationActive sites, while only an actual source-less
 Learning wrapper supplies the new registration. Hidden App still reports no
 setup screen. No extra bridge, renderer, progress reader or receipt writer is
-introduced. Main canonical question/cue/navigation/ACK integration and actual
-installed/browser/device acceptance remain separate gates.
+introduced. Main supplies its canonical question/cue/navigation/ACK integration through the
+same original owners. Actual installed/native/browser/device acceptance remains
+a separate gate.
 
 Original checkpoint/cue methods retain their implementation. Exact before-source
 runs exposed a prior hidden-pause race: a genuine second hide was dropped while
@@ -149,8 +155,9 @@ facilities are its existing readonly scope, Preview handle, actual voice session
 one receipt transport and product error ref. Navigation, genuine gestures,
 question capture and workspace observations remain with their original owners.
 
-This move retains Colleague compatibility while Main's canonical delivered
-question/cue and receipt transport remain absent. No selected attempt, saved
+This move retains Colleague compatibility. Main supplies its canonical delivered
+question, cue and receipt transport through its existing selected presentation
+binding. No selected attempt, saved
 progress or flattened Main history is promoted into those facts. Main speech now reuses its original voice controller with the actual Learning
 transport scope described below; an empty project path cannot supply that scope. Native/source-less visual
 and installed/browser/audio acceptance remain open.
@@ -191,9 +198,9 @@ mounted/actor/client scope, the original host callback getter, host mobile
 preparation, original acknowledgement operation and error ref. Its actor-reset
 order and unmount fence remain at the original consumer sites. Cached receipts
 retry acknowledgement without repeating navigation; mobile preparation remains
-outside that cache and only its original async branch yields. Main attachment
-still requires real initiating-client effects, typed browser/native identity
-correlation and canonical cue/ACK fields from the original server coordinator.
+outside that cache and only its original async branch yields. Main attaches the same navigation owner with its captured initiating client,
+typed browser/native identity and canonical cue/ACK fields from the original
+server coordinator. Actual browser/native acceptance remains separate.
 
 
 ## Actual viewer and retained Learning identity
@@ -207,3 +214,46 @@ infer authorization. The original server resource/checkpoint owners still check
 fresh learner/attempt/pin/session access. The compiled Preview regression receives
 the identity from the actual same Main runtime, with observation disabled in the
 fixture; this identity proof is separate from installed/native/browser acceptance.
+
+
+## Original practical gesture coordination
+
+Training owns the original Colleague client ticket collector and Online workspace
+settling observer once, with immediate reuse by their original consumers. Original
+trusted-click grammar, question fields, eight-ticket bound, awaited-read fences,
+12-second settling deadline, drawer/phone gates and real App port correlation stay
+with those bodies. No browser pass, receipt journal, grader, player or native
+controller is added. Main attaches the same collector only for an exact selected
+saved practice target and original authoritative trainingQuestion, using its
+existing presentation clientId and the original Learning observation route. The
+server derives its typed conversation identity and reauthorizes the saved pin.
+
+The shared root provides the original companion refs and one actual Colleague
+body handle. Online keeps its authenticated AuthGate viewer and original host;
+standalone explicitly supplies its established local display scope and mounts the
+same Colleague component. No local routed-navigation adapter is invented. The
+selected Learning Autopilot publishes original layout/view facts after its same
+Main snapshot is present; this does not grant project access. On release, only an
+already-mounted original Working page reclaims its original layout.
+
+Practice project lists actual loaded own-learner saved rows and delegates to the
+same original session selector. It captures a person click before selection and
+settles only a confirmed selection. Automatic Start/Resume callbacks supply no
+gesture. Show chat and App choices forward their native event, while the original
+App observer retains server instance, interaction, player/frame and request IDs.
+Main and general Colleague remain different conversations: only the real drawer's
+hide/use/restore is eligible for that rubric. Main's pending return question keeps
+one exact actual body/conversation provenance; a replaced drawer requires a genuinely
+repeated question, and temporary missing data never resets it. Original Colleague
+collector defaults have no new drawer provenance watcher.
+
+The original collector/settler and Main/Panel/context composition are implemented
+in the source cohort. Focused original-owner component checks have run. Actual
+standalone browser checks at 1280×900 and 390×844 retain the Working draft and
+App counter across Learning switches, with a 380-pixel right Colleague drawer
+on desktop and a full-screen Colleague dialog on phone. The launcher status
+uses the existing on-surface text token after a real white-on-white contrast
+failure. Preview-course ordinary Start remains disabled. These checks do
+not establish actual native question-to-gesture-to-Send, Helper/check/rubric
+progress, genuine trusted browser clicks, mobile display, speech or whole-lesson
+acceptance. Those remain separate required gates.

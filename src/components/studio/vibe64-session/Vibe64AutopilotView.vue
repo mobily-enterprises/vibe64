@@ -863,11 +863,12 @@
 <script setup>
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
+import { useDisplay } from "vuetify";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
 import {
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
-import { VIBE64_ASSISTANT_HOST_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_HOST_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY } from "@/lib/vibe64AssistantHost.js";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -1589,6 +1590,48 @@ function requestSessionRenewal(returnFocusTarget = null) {
 
 // The selected app layer is shared with host-owned companions; retained sessions cannot claim it.
 const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
+const learningViewRef = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
+const learningLayoutRef = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
+const learningPreviewRef = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
+const workspaceWidth = props.conversationRuntime?.identity?.learningAttemptId ? useDisplay().width : ref(0);
+const learningIdentity = computed(() => props.conversationRuntime?.identity?.learningAttemptId ? props.conversationRuntime.identity : null);
+const learningSelected = computed(() => Boolean(learningIdentity.value && props.active && !props.sessionSelectionArchived &&
+  props.conversationRuntime?.available?.value));
+const learningLayout = Object.freeze({
+  get projectSlug() { return learningIdentity.value?.sourceProjectSlug || ""; },
+  get learningAttemptId() { return learningIdentity.value?.learningAttemptId; },
+  get learnerId() { return learningIdentity.value?.learnerId; },
+  get ready() { return learningSelected.value && Boolean(props.conversationRuntime?.conversationReady?.value); },
+  get projectVisible() { return workspaceWidth.value > 980 || chatCollapsed.value; },
+  get chatVisible() { return !chatCollapsed.value; }
+});
+const learningView = Object.freeze({
+  get projectSlug() { return learningLayout.projectSlug; }, get sessionId() { return learningIdentity.value?.sessionId || ""; },
+  get learningBinding() { return learningIdentity.value; }, get ready() { return learningLayout.ready; },
+  get hostConversationSelected() { return false; }, get temporarySelected() { return false; },
+  get conversationId() { return ""; },
+  get pane() {
+    if (!learningLayout.projectVisible) return "chat";
+    const preview = learningPreviewRef?.value;
+    const binding = learningIdentity.value;
+    return binding && preview?.sessionId === binding.sessionId && preview.learningAttemptId === binding.learningAttemptId &&
+      preview.learnerId === binding.learnerId && (preview.projectSlug || "") === (binding.sourceProjectSlug || "") &&
+      (preview.appVisible === true || preview.presentation?.state?.visible === true) ? "preview" : "lessons";
+  }
+});
+watchEffect(() => {
+  if (learningSelected.value) {
+    if (learningLayoutRef) learningLayoutRef.value = learningLayout;
+    if (learningViewRef) learningViewRef.value = learningView;
+  } else {
+    if (learningViewRef?.value === learningView) learningViewRef.value = null;
+    if (learningLayoutRef?.value === learningLayout) learningLayoutRef.value = null;
+  }
+}, { flush: "sync" });
+onBeforeUnmount(() => {
+  if (learningViewRef?.value === learningView) learningViewRef.value = null;
+  if (learningLayoutRef?.value === learningLayout) learningLayoutRef.value = null;
+});
 const assistantLayerSelected = computed(() => props.active && !props.sessionSelectionArchived && !temporaryAiWorkspace.value?.visible);
 const assistantLayer = reactive({
   get sessionId() { return sessionId.value; },

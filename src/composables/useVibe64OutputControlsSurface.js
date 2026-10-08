@@ -1238,7 +1238,8 @@ function useVibe64OutputControlsSurface(props) {
   }
 
   function handleOrientationAvailable(event) {
-    if (props.learningBinding || !orientationFields(event.data, ["type", "protocolVersion", "instanceId"]) ||
+    if ((props.learningBinding && (props.learningBinding.noExercise !== false ||
+        learnerGestures?.value?.matchesLearning?.(props.learningBinding) !== true)) || !orientationFields(event.data, ["type", "protocolVersion", "instanceId"]) ||
         event.data.protocolVersion !== 1 || !orientationUuid(event.data.instanceId) || event.ports?.length ||
         !props.embeddedPreview || !previewFrameRequestId.value || !previewUrl.value ||
         !projectSlug.value || !props.session?.sessionId || !terminalSessionId.value) return;

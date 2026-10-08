@@ -214,6 +214,8 @@ const displayedPreview = {
     return "checking-project-setup";
   }
 };
+// Preserve the live App accessor: spreading a getter would freeze its initial value.
+if (capturedLearning) Object.defineProperty(displayedPreview, "appVisible", { enumerable: true, get: () => props.active });
 useTrainingPreviewRegistration(displayedPreview, () => (props.active || props.presentationActive) && learningBindingCurrent.value);
 const pending = computed(() => Boolean(applying.value || asking.value));
 const starterDisabled = computed(() => learning.value || pending.value || props.busy || !enabled.value);

@@ -13,7 +13,7 @@ import * as Vue from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { routeLocationKey } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { alternateVisualResource } from "../fixtures/trainingVisualFixture.js";
 import { provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
 import { createTemporaryConversationFixture, temporaryRequestBody } from "./helpers/temporaryConversationFixture.js";
@@ -166,7 +166,7 @@ function nodeText(node) {
 
 // Real Onboarding setup/template, QueryClient, command, feedback and realtime;
 // only Vuetify presentation and the ready OutputControls slot are stand-ins.
-function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceLearning = false, practiceApp = false } = {}) {
+function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceLearning = false, practiceApp = false, learnerGestureOwner = null } = {}) {
   mocks.live = live;
   if (withPresentation || withAutopilotPreview) mocks.visuals = [];
   const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, lessonsAvailable, appAvailable, attemptId, sessionId: "session-a", projectSlug: "project-a", presentation: null });
@@ -332,6 +332,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   }));
   app.use(VueQueryPlugin, { queryClient });
   app.provide(VIBE64_COLLEAGUE_PREVIEW_KEY, colleaguePreview);
+  if (learnerGestureOwner) app.provide(VIBE64_TRAINING_LEARNER_GESTURE_KEY, Vue.shallowRef(learnerGestureOwner));
   if (withPresentation || withAutopilotPreview || practiceApp) app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
   app.provide(Vue.ssrContextKey, { modules: new Set() });
   app.provide(routeLocationKey, Vue.reactive({ path: "/app/project/project-a", params: {}, query: {}, matched: [] }));
@@ -1600,4 +1601,74 @@ it("practice onboarding does not mount template, Temporary AI or Env mutation co
   expect(html).not.toContain("Start through conversation");
   expect(html).not.toContain("Open Env");
   expect(html).not.toContain("Open Temporary AI");
+});
+
+
+it("the original App choice forwards only its person event before changing actual Preview visibility", async () => {
+  const effects = [], event = { type: "click", isTrusted: true }, ticket = Object.freeze({ id: "app-choice" });
+  let fixture;
+  const owner = {
+    begin(actual, control, target) { effects.push({ phase: "begin", actual, control, target, appVisible: fixture.colleaguePreview.value.appVisible }); return actual?.isTrusted ? ticket : null; },
+    async finish(actual) { await vi.waitFor(() => expect(fixture.colleaguePreview.value.appVisible).toBe(true)); effects.push({ phase: "finish", actual, appVisible: fixture.colleaguePreview.value.appVisible }); }
+  };
+  fixture = mountOnboarding({ practiceApp: true, withAutopilotPreview: true, lessonsAvailable: true, appAvailable: true,
+    attemptId: "12345678-1234-4234-8234-123456789abc", learnerGestureOwner: owner });
+  try {
+    expect(effects).toEqual([]);
+    fixture.button("App").props.onClick(event);
+    await vi.waitFor(() => expect(effects).toHaveLength(2));
+    expect(effects).toEqual([{ phase: "begin", actual: event, control: "preview-select",
+      target: { projectSlug: "exact-practice", sessionId: "saved-practice-initial" }, appVisible: false },
+      { phase: "finish", actual: ticket, appVisible: true }]);
+    await vi.waitFor(() => expect(fixture.reads).toHaveLength(1));
+    fixture.reads[0].resolve(opening("ready", fixture.props.sessionId));
+    const displayedApp = fixture.colleaguePreview.value;
+    expect(displayedApp.appVisible).toBe(true);
+    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    expect(effects).toHaveLength(2);
+    await vi.waitFor(() => expect(displayedApp.appVisible).toBe(false));
+    fixture.button("App").props.onClick({ type: "click", isTrusted: false }); await Vue.nextTick();
+    expect(effects).toHaveLength(3); expect(effects.at(-1).phase).toBe("begin");
+    await vi.waitFor(() => expect(displayedApp.appVisible).toBe(true));
+    expect(fixture.colleaguePreview.value).toBe(displayedApp);
+  } finally { fixture.close(); }
+});
+
+
+it("the actual selected Learning workspace publisher waits for the original snapshot and truthfully observes phone App visibility", async () => {
+  const source = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue"), "utf8");
+  const start = source.indexOf("const assistantHost = inject(");
+  const end = source.indexOf("const assistantLayerSelected = computed(", start);
+  expect(start).toBeGreaterThan(0); expect(end).toBeGreaterThan(start);
+  const layout = Vue.shallowRef(null), view = Vue.shallowRef(null), preview = Vue.shallowRef(null), width = Vue.ref(1200);
+  const keyNames = ["VIBE64_ASSISTANT_HOST_KEY", "VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY"];
+  const keys = Object.fromEntries(keyNames.map(name => [name, Symbol(name)]));
+  const binding = Object.freeze({ actorKey: "scoped", viewerActorKey: "member", learnerId: "own", learningAttemptId: "saved-attempt",
+    sessionId: "saved-initial", sourceProjectSlug: "practice", noExercise: false });
+  const ready = Vue.ref(false), available = Vue.ref(true), collapsed = Vue.ref(false);
+  const props = Vue.shallowReactive({ active: true, sessionSelectionArchived: false, conversationRuntime: {
+    identity: binding, conversationReady: ready, available } });
+  let selected;
+  const renderer = Vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp({ setup() {
+    const args = ["inject", "ref", "computed", "watchEffect", "onBeforeUnmount", "useDisplay", "props", "chatCollapsed", ...keyNames];
+    selected = new Function(...args, `${source.slice(start, end)}\nreturn {learningView,learningLayout};`)(Vue.inject, Vue.ref, Vue.computed,
+      Vue.watchEffect, Vue.onBeforeUnmount, () => ({ width }), props, collapsed, ...keyNames.map(name => keys[name]));
+    return () => null;
+  } });
+  app.provide(keys.VIBE64_ASSISTANT_HOST_KEY, Vue.shallowRef(null)); app.provide(keys.VIBE64_COLLEAGUE_VIEW_KEY, view);
+  app.provide(keys.VIBE64_COLLEAGUE_LAYOUT_KEY, layout); app.provide(keys.VIBE64_COLLEAGUE_PREVIEW_KEY, preview);
+  const root = {}; app.mount(root);
+  try {
+    expect(view.value).toBe(selected.learningView); expect(layout.value.ready).toBe(false);
+    ready.value = true; expect(layout.value.ready).toBe(true); expect(view.value.pane).toBe("lessons");
+    preview.value = { ...binding, projectSlug: "practice", appVisible: true, presentation: { state: { visible: false } } };
+    expect(view.value.pane).toBe("preview"); expect(layout.value.chatVisible).toBe(true);
+    width.value = 500; expect(layout.value.projectVisible).toBe(false); expect(view.value.pane).toBe("chat");
+    collapsed.value = true; expect(layout.value.projectVisible).toBe(true); expect(layout.value.chatVisible).toBe(false);
+    expect(view.value.pane).toBe("preview");
+    preview.value = { ...preview.value, learningAttemptId: "foreign" }; expect(view.value.pane).toBe("lessons");
+    available.value = false; expect(view.value).toBeNull(); expect(layout.value).toBeNull();
+    available.value = true; props.active = false; expect(view.value).toBeNull();
+  } finally { app.unmount(); }
 });

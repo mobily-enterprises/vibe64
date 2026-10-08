@@ -1,4 +1,7 @@
-import { computed, inject, proxyRefs, toValue } from "vue";
+import { computed, inject, onBeforeUnmount, proxyRefs, ref, toValue, watch } from "vue";
+import { useTrainingLearnerGestures } from "@local/vibe64-training/client/learner-gestures";
+import { useTrainingWorkspaceObservation } from "@local/vibe64-training/client/workspace-observation";
+import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { useTrainingMainPresentation } from "@local/vibe64-training/client/main-presentation";
 import { useVibe64Voice } from "@local/vibe64-voice/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
@@ -11,7 +14,7 @@ import { useVibe64MountedSessionData } from "./useVibe64MountedSessionData.js";
 import { useVibe64ConversationLog } from "./useVibe64ConversationLog.js";
 import { useVibe64AssistantAccess } from "./useVibe64AssistantAccess.js";
 import { useVibe64AgentSettings } from "./useVibe64AgentSettings.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_BODY_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
 import { agentTurnControlPayloadFromContext, VIBE64_SESSION_CHANGED_EVENT, vibe64SessionEventMatchesScope, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
@@ -57,6 +60,44 @@ function createConversationApplication(conversation, { identity, viewer, summary
     enabled: computed(() => available.value &&
       (toValue(summarySession)?.noExercise !== false || identity.noExercise === false))
   }) : null;
+  if (identity.learningAttemptId !== undefined && identity.noExercise === false && presentation) {
+    const channel = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
+    const body = inject(VIBE64_COLLEAGUE_BODY_KEY, null);
+    const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
+    const view = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
+    const feedback = channel ? useShellWebErrorRuntime() : null;
+    const rawActor = computed(() => toValue(viewer)?.actorKey || "");
+    const selected = () => current.value && active.value && available.value && rawActor.value === identity.viewerActorKey;
+    const matchingView = computed(() => {
+      const binding = view?.value?.learningBinding;
+      return binding && ["actorKey", "viewerActorKey", "learnerId", "learningAttemptId", "sessionId", "sourceProjectSlug"]
+        .every(key => binding[key] === identity[key]) ? view.value : null;
+    });
+    const focus = computed(() => ({ projectSlug: identity.sourceProjectSlug, sessionId: identity.sessionId,
+      pane: matchingView.value?.pane || "" }));
+    const workspace = useTrainingWorkspaceObservation({ actor: rawActor, layout: layout || ref(null), view: matchingView, focus,
+      selection: { projectSlug: ref(""), restoring: ref(false), error: computed(() => mounted.detailState.value?.error || "") } });
+    const product = computed(() => ({ conversationId: mainConversationId(identity), trainingQuestion: trainingQuestion.value }));
+    const drawer = { owner: computed(() => body?.value?.actorKey === identity.viewerActorKey ? body.value : null),
+      conversationId: computed(() => body?.value?.actorKey === identity.viewerActorKey ? body.value.conversationId : ""),
+      bodyVisible: computed(() => body?.value?.actorKey === identity.viewerActorKey && body.value.visible === true),
+      xs: computed(() => body?.value?.compact === true) };
+    const gestures = useTrainingLearnerGestures({ scope: { actorKey: rawActor, product, clientId: presentation.clientId, current: selected, learningBinding: identity, preserveDrawer: true },
+      workspace: { get focus() { return focus.value; }, settle: workspace }, drawer,
+      observe: async options => {
+        const { conversationId: _derivedByServer, ...requestBody } = options.body;
+        const result = await getHttpWebClient().request(`${identity.sessionsApiPath}/${encodeURIComponent(identity.sessionId)}/training/observations`,
+          { ...options, body: requestBody });
+        if (result?.ok === false) throw new Error(result.error || "The practical observation was not confirmed.");
+        return result;
+      }, failure: error => feedback?.report({ source: "vibe64.training", intent: "action-feedback", severity: "error",
+        message: error.message, dedupeKey: `vibe64.training:${error.message}`, dedupeWindowMs: 1000 }) });
+    watch(() => selected(), valid => {
+      if (valid && channel) channel.value = gestures;
+      else { gestures.clear(); if (channel?.value === gestures) channel.value = null; }
+    }, { immediate: true, flush: "sync" });
+    onBeforeUnmount(() => { if (channel?.value === gestures) channel.value = null; });
+  }
   // A goal can stay pinned to another native engine after a chat selection.
   // Product invalidations refresh the same binding; they own no goal cache.
   const refreshGoal = () => { if (!globalThis.document?.hidden) void conversation.refreshGoal(); };
@@ -127,6 +168,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     }
   }
   return { identity, mounted, conversationLog, access, agentSettings, available, steerable, trainingQuestion, presentation,
+    ...(identity.learningAttemptId !== undefined ? { conversationReady: computed(() => Boolean(conversation.snapshot.value)) } : {}),
     ...(identity.learningAttemptId !== undefined ? { async prepareVoice() {
       if (!current.value || !available.value || !access.canUseChat.value) throw new Error("This lesson conversation is no longer available for voice.");
       // Prepare ONLY a newly opened voice session, before the original controller

@@ -9,7 +9,7 @@ import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealt
 import { useQueryClient } from "@tanstack/vue-query";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { vibe64RealtimePayloadFromCurrentTab } from "@/lib/vibe64BrowserTabOrigin.js";
-import { VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_COLLEAGUE_LAYOUT_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
 import { invalidateGithubIssueQueries } from "@/lib/vibe64GithubProject.js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
@@ -165,6 +165,9 @@ function useVibe64AppPage() {
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value && chatCollapsed.value);
   const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value);
   const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
+  const selectedCompanionView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
+  let pageMounted = false;
+  let learningLayoutWasSelected = false;
   const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
   const layoutOwner = {
     get projectSlug() { return projectSlug.value; },
@@ -270,6 +273,7 @@ function useVibe64AppPage() {
   });
 
   onMounted(() => {
+    pageMounted = true;
     setHomeShellActive(true);
     if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
       mobilePaneMediaQuery = window.matchMedia("(max-width: 980px)");
@@ -280,10 +284,11 @@ function useVibe64AppPage() {
         mobilePaneMediaQuery.addListener?.(syncMobilePaneLayout);
       }
     }
-    if (colleagueLayout) colleagueLayout.value = layoutOwner;
+    if (colleagueLayout && !selectedCompanionView?.value?.learningBinding) colleagueLayout.value = layoutOwner;
   });
 
   onBeforeUnmount(() => {
+    pageMounted = false;
     if (colleagueLayout?.value === layoutOwner) colleagueLayout.value = null;
     removeProjectNavigation();
     clearSelfTargetAutoSelectTimer();
@@ -295,6 +300,16 @@ function useVibe64AppPage() {
     }
     mobilePaneMediaQuery = null;
   });
+
+  // Only release of a new Learning display returns this already-mounted
+  // Working page's original layout. No source/project authority changes.
+  watch(() => selectedCompanionView?.value?.learningBinding, binding => {
+    if (binding) learningLayoutWasSelected = true;
+    else if (pageMounted && learningLayoutWasSelected && colleagueLayout) {
+      learningLayoutWasSelected = false;
+      colleagueLayout.value = layoutOwner;
+    }
+  }, { flush: "sync" });
 
   watch(() => [
     projectSlug.value,

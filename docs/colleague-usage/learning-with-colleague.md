@@ -243,6 +243,5 @@ commit and hash. **Refresh lessons** requests fresh reads; loading and read erro
 do not create or repair state. Desktop and phone use the same controls, with
 wrapping content and scrollable choices. Colleague can explain these choices and
 offer its supported start/resume operation, but only an accepted offer or direct
-request authorizes execution. The picker is attached through Learning mode;
-combined Preview, Main teaching
-and live browser acceptance remain open. See `learning-mode-ui`.
+request authorizes execution. Use the saved Main conversation for teaching and its supported Preview controls.
+If unavailable, retain the attempt and ask the owner for help. See `learning-mode-ui`.

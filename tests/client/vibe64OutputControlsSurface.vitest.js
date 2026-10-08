@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRenderer, markRaw, nextTick, reactive, ref, shallowRef } from "vue";
+import { useTrainingLearnerGestures } from "../../packages/vibe64-training/src/client/useTrainingLearnerGestures.js";
 import { MessageChannel } from "node:worker_threads";
 import { VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
@@ -698,7 +699,7 @@ async function portFlush() {
   await new Promise(resolve => setTimeout(resolve, 10));
   await nextTick();
 }
-function mountOrientationSurface() {
+function mountOrientationSurface({ createOwner = null } = {}) {
   // Supply the existing output owner's read state, not an alternate bridge.
   const outputs = Object.fromEntries([
     "launchButtonsDisabled", "loading", "loadError", "operationBusy", "launchError", "launchStarting", "launchWaiting",
@@ -740,7 +741,10 @@ function mountOrientationSurface() {
   const channel = shallowRef(owner);
   let state;
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode: () => null, nextSibling: () => null });
-  const app = renderer.createApp({ setup() { state = useVibe64OutputControlsSurface(props); return () => null; } });
+  const app = renderer.createApp({ setup() {
+    if (createOwner) channel.value = createOwner();
+    state = useVibe64OutputControlsSurface(props); return () => null;
+  } });
   app.provide(VIBE64_TRAINING_LEARNER_GESTURE_KEY, channel);
   app.mount({});
   const posts = [];
@@ -903,4 +907,35 @@ it("a Learning App cannot feed the retired Colleague orientation producer", asyn
     expect(fixture.tickets).toEqual([]);
     expect(fixture.responses).toEqual([]);
   } finally { fixture.dispose(); }
+});
+
+
+it("eligible actual Main collector consumes the same real App port/request/display identities, while a changed Learning binding is refused", async () => {
+  const identity = Object.freeze({ actorKey: "scoped", viewerActorKey: "member", learnerId: "own", learningAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    sessionId: "session-a", sourceProjectSlug: "practice", noExercise: false });
+  const question = { attemptId: identity.learningAttemptId, questionId: "delivered-app", assessmentId: "try-the-application",
+    issuedRevision: 4, topicHash: "a".repeat(64), lessonHash: "b".repeat(64) };
+  const observations = [], current = ref(true);
+  const fixture = mountOrientationSurface({ createOwner: () => useTrainingLearnerGestures({
+    scope: { actorKey: ref("member"), clientId: "same-client", product: ref({ conversationId: "typed-main", trainingQuestion: question }),
+      current: () => current.value, learningBinding: identity },
+    workspace: { focus: { projectSlug: "practice", sessionId: "session-a", pane: "preview" },
+      settle: async () => ({ projectSlug: "practice", sessionId: "session-a", mainChatVisible: false, projectVisible: true, pane: "preview", ready: true }) },
+    drawer: { bodyVisible: ref(false), xs: ref(false) },
+    observe: async request => { observations.push(structuredClone(request.body)); return { ok: true }; }, failure: error => { throw error; } }) });
+  fixture.props.learningBinding = identity;
+  fixture.load(); fixture.announce(); fixture.packet("ready"); fixture.packet("button", { interactionId });
+  fixture.packet("request", { interactionId, method: "POST", path: "/api/greeting" });
+  expect(observations).toEqual([]);
+  fixture.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" }); await portFlush();
+  expect(observations).toHaveLength(1);
+  expect(observations[0].reference).toEqual(question);
+  expect(observations[0].exercise).toEqual({ instanceId, interactionId, requestId,
+    playerInstanceId: fixture.init().data.playerInstanceId, frameRequestId: fixture.state.previewFrameRequestId.value });
+  fixture.packet("response-displayed", { interactionId, requestId, message: "Hello from the server!" }); await portFlush();
+  expect(observations).toHaveLength(1);
+  current.value = false;
+  fixture.props.learningBinding = { ...identity, learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
+  await fixture.state.reloadPreview(); fixture.replaceFrame(); fixture.load(); fixture.announce();
+  expect(fixture.posts.filter(post => post.data.type === "orientation-init")).toHaveLength(1);
 });

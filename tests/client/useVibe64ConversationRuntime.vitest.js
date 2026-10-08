@@ -1,13 +1,15 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { computed, createRenderer, h, onScopeDispose, reactive, ref, nextTick, ssrContextKey } from "vue";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY, VIBE64_COLLEAGUE_BODY_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_LAYOUT_KEY } from "../../src/lib/vibe64AssistantHost.js";
 const mocks = vi.hoisted(() => ({ mounted: vi.fn(), log: vi.fn(), access: vi.fn(), request: vi.fn(), read: vi.fn() }));
 vi.mock("../../src/composables/useVibe64MountedSessionData.js", () => ({ useVibe64MountedSessionData: mocks.mounted }));
 vi.mock("../../src/composables/useVibe64ConversationLog.js", () => ({ useVibe64ConversationLog: mocks.log }));
 vi.mock("../../src/composables/useVibe64AssistantAccess.js", () => ({ useVibe64AssistantAccess: mocks.access }));
 vi.mock("../../src/composables/useVibe64AgentSettings.js", () => ({ useVibe64AgentSettings: () => ({ settings: ref({ providerId: "codex" }), requestSettings: ref(null) }) }));
 vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => ({ request: (url, options) => url.includes("/training/presentation") ? Promise.resolve({ ok: true, navigation: null, cue: null }) : options?.method === "GET" ? mocks.read(url, options) : mocks.request(url, options) }) }));
+// Same feedback resource interface; original tests have no practical commands.
+vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: vi.fn() }) }));
 import { useVibe64ConversationRuntime } from "../../src/composables/useVibe64ConversationRuntime.js";
 import { createProjectVoiceBinding } from "../../packages/vibe64-voice/src/client/projectVoiceBinding.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
@@ -19,7 +21,7 @@ const renderer = createRenderer({ createElement: () => ({}), createText: () => (
 const releases = [];
 afterEach(() => { releases.splice(0).reverse().forEach(release => release()); vi.clearAllMocks(); });
 function fixture({ readGoal = () => null, status = "ready", steering = true,
-  learningAttemptId, learnerId, projectSlug = "one", sessionId = "s1", sessionsApiPath = "/api/vibe64/sessions", beforeMount } = {}) {
+  learningAttemptId, learnerId, noExercise, sourceProjectSlug, projectSlug = "one", sessionId = "s1", sessionsApiPath = "/api/vibe64/sessions", beforeMount } = {}) {
   const disposed = [];
   const owners = [];
   mocks.mounted.mockImplementation(identity => {
@@ -40,11 +42,11 @@ function fixture({ readGoal = () => null, status = "ready", steering = true,
   mocks.access.mockReturnValue(access);
   mocks.request.mockResolvedValue({ ok: true });
   const viewer = ref({ actorKey: "owner" });
-  const selected = reactive({ sessionId, projectSlug, learningAttemptId, learnerId, sessionsApiPath });
+  const selected = reactive({ sessionId, projectSlug, learningAttemptId, learnerId, noExercise, sourceProjectSlug, sessionsApiPath });
   let runtime;
   const app = renderer.createApp({ setup() {
     runtime = useVibe64ConversationRuntime({ sessionId: computed(() => selected.sessionId), projectSlug: computed(() => selected.projectSlug), sessionsApiPath: computed(() => selected.sessionsApiPath),
-      learningAttemptId: computed(() => selected.learningAttemptId), learnerId: computed(() => selected.learnerId) });
+      learningAttemptId: computed(() => selected.learningAttemptId), learnerId: computed(() => selected.learnerId), noExercise: computed(() => selected.noExercise), sourceProjectSlug: computed(() => selected.sourceProjectSlug) });
     return () => h("div");
   } });
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
@@ -124,6 +126,7 @@ describe("retained project conversation ownership", () => {
     const pending = Promise.withResolvers(); mocks.request.mockReturnValue(pending.promise);
     const sending = runtime.send({ message: "Check it" }, { messageId: "same-id" });
     expect(await runtime.send({ message: "Check it" }, { messageId: "same-id" })).toBe(false);
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(1));
     f.receipt(runtime.identity, { user: { messageId: "same-id", text: "Check it" } });
     expect(await sending).toEqual({ ok: true });
     expect(mocks.request).toHaveBeenCalledTimes(1);
@@ -784,4 +787,52 @@ describe("actual Main VoiceHost awaits the captured reader's first hydration", (
       expect(mocks.request.mock.calls.filter(([url]) => url.endsWith("/messages"))).toEqual([]);
     } finally { await mounted.close(); endpoints.restore(); }
   });
+});
+
+
+it("actual retained Main snapshot/client feeds the same original three-control collector and exact saved Learning API", async () => {
+  const attempt = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const channel = ref(null), layout = ref(null), view = ref(null);
+  const body = ref({ actorKey: "owner", conversationId: "real-general", visible: false, compact: false });
+  const query = new QueryClient({ defaultOptions: { queries: { retry: false } } }); releases.push(() => query.clear());
+  const f = fixture({ learningAttemptId: attempt, learnerId: "own", noExercise: false, sourceProjectSlug: "practice",
+    projectSlug: "", sessionId: "saved-initial", sessionsApiPath: `/api/learning/${attempt}/vibe64/sessions`,
+    beforeMount(app) { app.use(VueQueryPlugin, { queryClient: query });
+      for (const [key, value] of [[VIBE64_TRAINING_LEARNER_GESTURE_KEY, channel], [VIBE64_COLLEAGUE_BODY_KEY, body],
+        [VIBE64_COLLEAGUE_VIEW_KEY, view], [VIBE64_COLLEAGUE_LAYOUT_KEY, layout]]) app.provide(key, value); } });
+  await vi.waitFor(() => expect(f.runtime.value).toBeTruthy());
+  const runtime = f.runtime.value, identity = runtime.identity;
+  view.value = { learningBinding: identity, sessionId: "saved-initial", ready: true, conversationId: "",
+    temporarySelected: false, hostConversationSelected: false, pane: "preview" };
+  layout.value = { projectSlug: "practice", learningAttemptId: attempt, learnerId: "own", ready: true,
+    chatVisible: true, projectVisible: true };
+  expect(channel.value.begin({ type: "click", isTrusted: true }, "project-select")).toBeNull();
+  const question = { attemptId: attempt, questionId: "delivered-practical", assessmentId: "workspace-navigation",
+    issuedRevision: 3, topicHash: "a".repeat(64), lessonHash: "b".repeat(64) };
+  f.snapshot(identity, { trainingQuestion: question });
+  await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(question));
+  expect(channel.value.matchesLearning(identity)).toBe(true);
+  expect(channel.value.begin({ type: "click", isTrusted: false }, "project-select")).toBeNull();
+  for (const control of ["project-select", "chat-show", "preview-select"]) {
+    const ticket = channel.value.begin({ type: "click", isTrusted: true }, control,
+      { projectSlug: "practice", sessionId: "saved-initial" });
+    expect(ticket).toBeTruthy(); await channel.value.finish(ticket);
+  }
+  const observations = mocks.request.mock.calls.filter(([url]) => url.endsWith("/training/observations"));
+  expect(observations).toHaveLength(3);
+  for (const [url, options] of observations) {
+    expect(url).toBe(`/api/learning/${attempt}/vibe64/sessions/saved-initial/training/observations`);
+    expect(options.method).toBe("POST"); expect(options.body.conversationId).toBeUndefined();
+    expect(options.body.clientId).toBe(runtime.presentation.clientId);
+    expect(options.body.reference).toEqual(question);
+    expect(options.body.workspace).toEqual({ projectSlug: "practice", sessionId: "saved-initial", mainChatVisible: true,
+      projectVisible: true, pane: "preview", ready: true, colleagueVisible: false });
+  }
+  expect(observations.map(([, options]) => options.body.control)).toEqual(["project-select", "chat-show", "preview-select"]);
+  view.value.ready = false;
+  const held = channel.value.begin({ type: "click", isTrusted: true }, "preview-select");
+  const pending = channel.value.finish(held);
+  f.viewer.value = { actorKey: "another" };
+  expect(await pending).toBe(false);
+  expect(mocks.request.mock.calls.filter(([url]) => url.endsWith("/training/observations"))).toHaveLength(3);
 });

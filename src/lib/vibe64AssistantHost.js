@@ -22,3 +22,6 @@ export const VIBE64_ASSISTANT_VIEWER_KEY = Symbol("vibe64.assistant.viewer");
 // Native application controls capture learner gestures in the current Colleague
 // connection. Programmatic navigation and focus publication do not use this owner.
 export const VIBE64_TRAINING_LEARNER_GESTURE_KEY = Symbol("vibe64.training.learner-gesture");
+
+// One actual general Colleague body; not Main's chat or another voice frame.
+export const VIBE64_COLLEAGUE_BODY_KEY = Symbol("vibe64.colleague.body");

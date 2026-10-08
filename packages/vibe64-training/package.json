@@ -39,6 +39,8 @@
     "./server/main-presentation-actions": "./src/server/mainPresentationActions.js",
     "./server/main-presentation-routes": "./src/server/mainPresentationRoutes.js",
     "./client/main-presentation": "./src/client/useTrainingMainPresentation.js",
+    "./client/learner-gestures": "./src/client/useTrainingLearnerGestures.js",
+    "./client/workspace-observation": "./src/client/useTrainingWorkspaceObservation.js",
     "./server/visual-resource-actions": "./src/server/visualResourceActions.js",
     "./server/visual-resource-routes": "./src/server/visualResourceRoutes.js",
     "./client/preview-registration": "./src/client/useTrainingPreviewRegistration.js",

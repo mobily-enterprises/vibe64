@@ -23,6 +23,7 @@ describe("Vibe64LocalAppIndex", () => {
 // Actual app-index and launcher setup/templates; only saved native sessions and
 // presentation widgets are bounded fixtures. No teacher/runtime is fabricated.
 import * as Vue from "vue";
+import * as HostKeys from "../../src/lib/vibe64AssistantHost.js";
 import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import { readFileSync } from "node:fs";
@@ -60,7 +61,7 @@ function uiRenderer() {
 const uiWidget = { setup: (_props, { attrs, slots }) => () => Vue.h("div", attrs, slots.default?.()) };
 function nodes(root) { return [root, ...root.children.flatMap(nodes)]; }
 
-async function mountLearningIndex() {
+async function mountLearningIndex({ gestures = null, practiceChoices = [] } = {}) {
   const route = Vue.reactive({ fullPath: "/app?mode=learning" });
   const calls = { panels: 0, unmounts: 0, gateProps: null, pickerProps: null, select: [] };
   const owner = { learningMode: Vue.ref(true), purposeFilter: Vue.ref("learning"), learnerId: Vue.ref("learner"),
@@ -86,12 +87,16 @@ async function mountLearningIndex() {
   });
   const panel = { props: ["learningResource", "purposeFilter", "chatCollapsed", "projectPane", "active"], setup(props, { slots, expose }) {
     calls.panels++; calls.panelProps = props; Vue.onUnmounted(() => { calls.unmounts++; });
-    expose({ selectLearningConversation(identity) { calls.select.push(identity); return true; } });
+    expose({ selectLearningConversation(identity) { calls.select.push(identity); return true; },
+      learningPracticeChoices: practiceChoices,
+      selectLearningPracticeProject(choice, event) { calls.practice = { choice, event }; return true; } });
     return () => Vue.h("article", { "data-test": "retained-panel" }, slots.dashboard?.());
   } };
   const gate = { props: { forcePicker: Boolean, navigateOnSelect: Boolean }, setup(props) { calls.gateProps = props; return () => Vue.h("aside"); } };
   const component = compiledUi(path.resolve("src/components/studio/Vibe64LocalAppIndex.vue"), {
     vue: Vue,
+    "./Vibe64LearningPracticeProjectSelector.vue": { default: compiledUi(path.resolve("src/components/studio/Vibe64LearningPracticeProjectSelector.vue"), { vue: Vue }) },
+    "@/lib/vibe64AssistantHost.js": HostKeys,
     "@/components/StudioAppShellLayout.vue": { default: shell },
     "@/components/studio/ProjectSelectionGate.vue": { default: gate },
     "@/components/studio/Vibe64AuthSettingsButton.vue": { default: uiWidget },
@@ -100,7 +105,8 @@ async function mountLearningIndex() {
     "@/composables/useVibe64LearningMode.js": { useVibe64LearningMode(options) { opened = options.onConversationOpened; return owner; } }
   });
   const root = { children: [] }; const app = uiRenderer().createApp(component);
-  for (const tag of ["v-app-bar", "v-btn", "v-icon", "v-spacer", "v-main", "v-container", "v-alert"]) app.component(tag, uiWidget);
+  if (gestures) app.provide(HostKeys.VIBE64_TRAINING_LEARNER_GESTURE_KEY, Vue.shallowRef(gestures));
+  for (const tag of ["v-app-bar", "v-btn", "v-icon", "v-spacer", "v-main", "v-container", "v-alert", "v-menu", "v-list", "v-list-item"]) app.component(tag, uiWidget);
   app.mount(root); await Vue.nextTick();
   return { app, root, owner, calls, route };
 }
@@ -196,4 +202,79 @@ it("keeps the original empty Temporary host out of Learning and fences its late 
   close(); expect(closed).toBe(0);
   props.purposeFilter = "working"; props.active = false; close(); expect(closed).toBe(0);
   props.active = true; close(); expect(closed).toBe(1);
+});
+
+
+it("actual root Learning controls forward the real click and do not count automatic lesson opening", async () => {
+  const event = { type: "click", isTrusted: true };
+  const choice = { sessionId: "saved-initial", attemptId: "saved-attempt", learnerId: "learner", projectSlug: "practice" };
+  const effects = [];
+  const ticket = Object.freeze({ id: "person-show-chat" });
+  const view = await mountLearningIndex({ practiceChoices: [choice], gestures: {
+    begin(actual, control) { effects.push([actual, control]); return ticket; },
+    finish(actual) { effects.push([actual]); return true; }
+  } });
+  try {
+    expect(effects).toEqual([]);
+    const project = nodes(view.root).find(node => node.props?.title === "practice");
+    expect(project).toBeTruthy(); project.props.onClick(event);
+    expect(view.calls.practice).toEqual({ choice, event });
+    const show = nodes(view.root).find(node => node.props?.onClick && nodes(node).some(child => child.text?.trim() === "Show chat"));
+    expect(show).toBeTruthy(); show.props.onClick(event); await Vue.nextTick();
+    expect(effects).toEqual([[event, "chat-show"], [ticket]]);
+    expect(view.calls.panelProps.chatCollapsed).toBe(false);
+    // Hide is not an independently graded show gesture.
+    show.props.onClick(event); await Vue.nextTick();
+    expect(effects).toHaveLength(2);
+  } finally { view.app.unmount(); }
+});
+
+it("prepared project person choice revalidates the original loaded row before native selection and observation", () => {
+  const source = readFileSync(path.resolve("src/components/studio/Vibe64SessionPanel.vue"), "utf8");
+  const original = source.match(/function selectLearningConversation\([\s\S]*?\n\}/u)?.[0];
+  const method = source.match(/function selectLearningPracticeProject\([\s\S]*?\n\}/u)?.[0];
+  expect(original).toBeTruthy(); expect(method).toBeTruthy();
+  const choice = { sessionId: "saved", attemptId: "attempt", learnerId: "own", projectSlug: "practice" };
+  const calls = [], props = { purposeFilter: "learning", active: true };
+  const sessionData = { learningLearnerId: Vue.ref("own"), selectedSessionId: Vue.ref(""),
+    availableSessions: Vue.ref([{ sessionId: "saved", purpose: "learning", learningAttemptId: "attempt" }]),
+    selectSessionId(id) { calls.push(["select", id]); this.selectedSessionId.value = id; } };
+  const ticket = Object.freeze({ id: "person-project" });
+  const learnerGestures = Vue.ref({ begin(event, control, target) { calls.push(["begin", event, control, target]); return event?.isTrusted ? ticket : null; },
+    finish(value) { calls.push(["finish", value]); }, discard(value) { calls.push(["discard", value]); } });
+  const select = new Function("props", "sessionData", "learningPracticeChoices", "learnerGestures",
+    `${original}\n${method}\nreturn selectLearningPracticeProject;`)(props, sessionData, Vue.ref([choice]), learnerGestures);
+  const event = { type: "click", isTrusted: true };
+  expect(select({ ...choice, learnerId: "foreign" }, event)).toBe(false); expect(calls).toEqual([]);
+  expect(select(choice, event)).toBe(true);
+  expect(calls).toEqual([["begin", event, "project-select", { projectSlug: "practice", sessionId: "saved" }], ["select", "saved"], ["finish", ticket]]);
+  calls.length = 0; props.active = false;
+  expect(select(choice, event)).toBe(false); expect(calls).toEqual([]);
+  props.active = true; sessionData.selectedSessionId.value = ""; sessionData.selectSessionId = () => {};
+  expect(select(choice, event)).toBe(false); expect(calls.at(-1)).toEqual(["discard", ticket]);
+});
+
+it("shared original shell refs are per mount and only local composition supplies the established local display identity", () => {
+  const context = compiledUi(path.resolve("src/components/Vibe64AssistantShellContext.vue"), { vue: Vue, "@/lib/vibe64AssistantHost.js": HostKeys });
+  const mount = local => {
+    let captured;
+    const probe = { setup() { captured = Object.fromEntries(Object.entries(HostKeys).map(([name, key]) => [name, Vue.inject(key, null)])); return () => Vue.h("aside"); } };
+    const root = { children: [] }, app = uiRenderer().createApp({ setup: () => () => Vue.h(context, { local }, { default: () => Vue.h(probe) }) });
+    app.mount(root); return { app, captured };
+  };
+  const local = mount(true), hosted = mount(false);
+  try {
+    expect(local.captured.VIBE64_ASSISTANT_VIEWER_KEY).toEqual({ actorKey: "local" });
+    expect(hosted.captured.VIBE64_ASSISTANT_VIEWER_KEY).toBeNull();
+    for (const key of ["VIBE64_COLLEAGUE_BODY_KEY", "VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY", "VIBE64_TRAINING_LEARNER_GESTURE_KEY"]) {
+      expect(Vue.isRef(local.captured[key])).toBe(true); expect(local.captured[key].value).toBeNull();
+      expect(local.captured[key]).not.toBe(hosted.captured[key]);
+    }
+    const appSource = readFileSync(path.resolve("src/App.vue"), "utf8");
+    expect(appSource).toContain("<Vibe64AssistantShellContext local>");
+    expect(appSource).toContain("<Vibe64LocalColleagueHost />");
+    const localSource = readFileSync(path.resolve("src/components/Vibe64LocalColleagueHost.vue"), "utf8");
+    expect(localSource).toContain('import { Vibe64Colleague } from "@local/vibe64-colleague/client"');
+    expect(localSource).not.toContain("createConversationRuntime");
+  } finally { local.app.unmount(); hosted.app.unmount(); }
 });

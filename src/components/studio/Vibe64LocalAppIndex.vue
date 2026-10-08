@@ -2,13 +2,22 @@
 import StudioAppShellLayout from "@/components/StudioAppShellLayout.vue";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButton.vue";
-import { ref } from "vue";
+import { inject, ref } from "vue";
+import Vibe64LearningPracticeProjectSelector from "./Vibe64LearningPracticeProjectSelector.vue";
+import { VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
 import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
 
 const panel = ref(null);
 const chatCollapsed = ref(true);
+const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
+function toggleChat(event) {
+  const owner = learnerGestures?.value;
+  const ticket = chatCollapsed.value ? owner?.begin(event, "chat-show") : null;
+  chatCollapsed.value = !chatCollapsed.value;
+  if (ticket) void owner.finish(ticket);
+}
 const learning = useVibe64LearningMode({ onConversationOpened(identity) {
   if (panel.value?.selectLearningConversation(identity)) chatCollapsed.value = false;
 } });
@@ -19,7 +28,8 @@ const { learningMode, purposeFilter, learningResource, setLearningMode } = learn
   <StudioAppShellLayout show-learning-mode-control :learning-mode="learningMode" :fill-viewport="learningMode" @update:learning-mode="setLearningMode">
     <template #top-left>
       <div class="vibe64-local-app-index__top">{{ learningMode ? "Lessons" : "Projects" }}</div>
-      <v-btn v-if="learningMode" variant="text" @click="chatCollapsed = !chatCollapsed">
+      <Vibe64LearningPracticeProjectSelector v-if="learningMode" :panel="panel" />
+      <v-btn v-if="learningMode" variant="text" @click="toggleChat($event)">
         {{ chatCollapsed ? "Show chat" : "Show lessons" }}
       </v-btn>
     </template>

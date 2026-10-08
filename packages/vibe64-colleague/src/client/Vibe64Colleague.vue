@@ -1,5 +1,6 @@
 <script setup>
 import { useVibe64Voice } from "@local/vibe64-voice/client";
+import { useTrainingLearnerGestures } from "@local/vibe64-training/client/learner-gestures";
 import { useTrainingPresentationCue } from "@local/vibe64-training/client/presentation-cue";
 import { createTrainingNavigation } from "@local/vibe64-training/client/navigation";
 import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
@@ -8,7 +9,7 @@ import { VNavigationDrawer } from "vuetify/components";
 import { computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { mdiArrowTopRight, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
-import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY, VIBE64_COLLEAGUE_BODY_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
 import { mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
 import { createAssistantApi } from "@jskit-ai/assistant-core/client";
@@ -38,12 +39,14 @@ const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
 const voiceTranscript = ref(null);
 const displayedPreview = inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null);
 const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
+const colleagueBody = inject(VIBE64_COLLEAGUE_BODY_KEY, null);
 const { holding: holdingAvatar, pointerDown: startAvatarPress, pointerUp: endAvatarPress,
   cancel: cancelAvatarPress, click: avatarClick } = useVoiceLauncher({
   open: openVoice, enabled: () => props.holdToTalk && !shown.value && !voice?.controller.state.session, onError: reportFailure
 });
 async function toggleConversation(event) {
-  const ticket = beginNativeGesture(event, bodyVisible.value ? "colleague-minimize" : "colleague-restore");
+  const owner = learnerGestures?.value || nativeGestureOwner;
+  const ticket = owner.begin(event, bodyVisible.value ? "colleague-minimize" : "colleague-restore");
   if (shown.value) {
     voice?.controller.minimize();
     open.value = false;
@@ -53,7 +56,7 @@ async function toggleConversation(event) {
     open.value = true;
     await openVoice();
   } else open.value = true;
-  if (ticket) void finishNativeGesture(ticket);
+  if (ticket) void owner.finish(ticket);
 }
 async function openVoice() {
   if (!voice || freshOperation.value || freshBusy.value) return false;
@@ -312,101 +315,12 @@ const voicePreviews = computed(() => {
 const voicePreview = computed(() => voicePreviews.value.find(preview => preview.id === voiceTranscript.value?.id)
   || voicePreviews.value[0] || null);
 const bodyVisible = computed(() => open.value || Boolean(voiceSession.value && voice.controller.state.visible));
-const nativeTickets = new Map();
-const nativeControls = ["project-select", "session-select", "preview-select", "chat-show", "colleague-minimize", "colleague-restore"];
-function nativeQuestion() {
-  const question = product.value.trainingQuestion;
-  if (!question || !["workspace-navigation", "return-to-colleague", "try-the-application"].includes(question.assessmentId)) return null;
-  return Object.freeze(Object.fromEntries(["attemptId", "questionId", "assessmentId", "issuedRevision", "topicHash", "lessonHash"]
-    .map(key => [key, question[key]])));
-}
-function nativeScopeCurrent(ticket) {
-  return mounted && nativeTickets.has(ticket) && actorKey.value === ticket.actorKey &&
-    product.value.conversationId === ticket.conversationId && JSON.stringify(nativeQuestion()) === JSON.stringify(ticket.reference);
-}
-function beginNativeGesture(event, control, target = {}) {
-  const reference = nativeQuestion();
-  if (!mounted || !event?.isTrusted || event.type !== "click" || !nativeControls.includes(control) ||
-      !reference || reference.assessmentId === "try-the-application" || !actorKey.value || !product.value.conversationId || !props.settleWorkspace || nativeTickets.size >= 8 ||
-      (control === "colleague-minimize" && !bodyVisible.value) || (control === "colleague-restore" && bodyVisible.value)) return null;
-  if (reference.assessmentId !== "return-to-colleague" &&
-      ["colleague-minimize", "colleague-restore"].includes(control)) return null;
-  const projectSlug = target.projectSlug || props.focus.projectSlug;
-  const sessionId = target.sessionId || (!target.projectSlug || target.projectSlug === props.focus.projectSlug ? props.focus.sessionId : "");
-  const ticket = Object.freeze({ actorKey: actorKey.value, conversationId: product.value.conversationId,
-    reference, gestureId: crypto.randomUUID(), control, target: Object.freeze({ projectSlug, sessionId }) });
-  nativeTickets.set(ticket, true);
-  return ticket;
-}
-async function finishNativeGesture(ticket) {
-  if (!nativeScopeCurrent(ticket)) return false;
-  try {
-    const workspace = await props.settleWorkspace({ control: ticket.control, ...ticket.target }, () => nativeScopeCurrent(ticket));
-    if (!nativeScopeCurrent(ticket)) return false;
-    if (ticket.control === "colleague-minimize" && bodyVisible.value) return false;
-    if (ticket.control === "colleague-restore" && !bodyVisible.value) return false;
-    const result = await requestColleague("/training/observations", { method: "POST", body: {
-      clientId, conversationId: ticket.conversationId, gestureId: ticket.gestureId, control: ticket.control,
-      reference: ticket.reference, workspace: { ...workspace, colleagueVisible: bodyVisible.value }
-    } });
-    if (!nativeScopeCurrent(ticket)) return false;
-    return result;
-  } catch (error) {
-    if (nativeScopeCurrent(ticket)) {
-      reportFailure(new Error(`The lesson observation was not confirmed. Repeat this step; your workspace action was not undone. ${error.message}`));
-    }
-    return false;
-  } finally {
-    nativeTickets.delete(ticket);
-  }
-}
-function beginExercise(frame, currentFrame) {
-  const reference = nativeQuestion();
-  if (!mounted || reference?.assessmentId !== "try-the-application" || !actorKey.value || !product.value.conversationId ||
-      !props.settleWorkspace || nativeTickets.size >= 8 || !currentFrame() ||
-      frame.projectSlug !== props.focus.projectSlug || frame.sessionId !== props.focus.sessionId ||
-      props.focus.pane !== "preview" || (xs.value && bodyVisible.value)) return null;
-  const ticket = Object.freeze({ actorKey: actorKey.value, conversationId: product.value.conversationId,
-    reference, gestureId: crypto.randomUUID(), control: "exercise-response", currentFrame,
-    target: Object.freeze({ projectSlug: frame.projectSlug, sessionId: frame.sessionId }),
-    exercise: Object.freeze({ instanceId: frame.instanceId, interactionId: frame.interactionId,
-      playerInstanceId: frame.playerInstanceId, frameRequestId: frame.frameRequestId }) });
-  nativeTickets.set(ticket, true);
-  return ticket;
-}
-function exerciseCurrent(ticket) {
-  return nativeScopeCurrent(ticket) && ticket.currentFrame() && props.focus.pane === "preview" &&
-    props.focus.projectSlug === ticket.target.projectSlug && props.focus.sessionId === ticket.target.sessionId &&
-    !(xs.value && bodyVisible.value);
-}
-async function finishExercise(ticket, response = null) {
-  try {
-    // An omitted response retires an unfinished interaction without sending an observation.
-    if (!response || !exerciseCurrent(ticket)) return false;
-    const workspace = await props.settleWorkspace({ control: ticket.control, ...ticket.target }, () => exerciseCurrent(ticket));
-    if (!exerciseCurrent(ticket)) return false;
-    const result = await requestColleague("/training/observations", { method: "POST", body: {
-      clientId, conversationId: ticket.conversationId, gestureId: ticket.gestureId, control: ticket.control,
-      reference: ticket.reference, workspace: { ...workspace, colleagueVisible: bodyVisible.value },
-      exercise: { ...ticket.exercise, requestId: response.requestId }
-    } });
-    return exerciseCurrent(ticket) ? result : false;
-  } catch (error) {
-    if (exerciseCurrent(ticket)) {
-      reportFailure(new Error(`The application observation was not confirmed. Press Ask the server again when Preview is ready. ${error.message}`));
-    }
-    return false;
-  } finally {
-    nativeTickets.delete(ticket);
-  }
-}
-const nativeGestureOwner = { begin: beginNativeGesture, finish: finishNativeGesture, beginExercise, finishExercise };
-watch(() => [actorKey.value, product.value.conversationId, JSON.stringify(nativeQuestion())], () => nativeTickets.clear(), { flush: "sync" });
-watch(() => [props.focus.projectSlug, props.focus.sessionId, props.focus.pane, xs.value, bodyVisible.value], () => {
-  for (const ticket of nativeTickets.keys()) {
-    if (ticket.control === "exercise-response" && !exerciseCurrent(ticket)) nativeTickets.delete(ticket);
-  }
-}, { flush: "sync" });
+const bodyOwner = Object.freeze({ get visible() { return mounted && bodyVisible.value; },
+  get actorKey() { return actorKey.value; }, get conversationId() { return product.value.conversationId; },
+  get compact() { return xs.value; } });
+const nativeGestureOwner = useTrainingLearnerGestures({ scope: { actorKey, product, clientId },
+  workspace: { get focus() { return props.focus; }, get settle() { return props.settleWorkspace; } },
+  drawer: { bodyVisible, xs }, observe: options => requestColleague("/training/observations", options), failure: reportFailure });
 
 const adapter = computed(() => {
   const supplied = conversation.adapter.value;
@@ -697,9 +611,13 @@ watch(() => props.focus, (focus) => {
     if (mounted && expectedActor === actorKey.value) productError.value = error.message;
   });
 }, { deep: true });
+watch(() => learnerGestures?.value, owner => {
+  if (mounted && learnerGestures && !owner) learnerGestures.value = nativeGestureOwner;
+});
 onMounted(() => {
   if (voice) voice.launcher.value = launcher.value?.$el;
-  if (learnerGestures) learnerGestures.value = nativeGestureOwner;
+  if (colleagueBody) colleagueBody.value = bodyOwner;
+  if (learnerGestures && !learnerGestures.value) learnerGestures.value = nativeGestureOwner;
   void refresh();
   window.addEventListener("focus", refresh);
   window.addEventListener("blur", cancelAvatarPress);
@@ -710,7 +628,8 @@ onBeforeUnmount(() => {
   realtimeSocket.off("connect", refresh);
   presentationCue.retire("Colleague left this browser view.");
   if (learnerGestures?.value === nativeGestureOwner) learnerGestures.value = null;
-  nativeTickets.clear();
+  if (colleagueBody?.value === bodyOwner) colleagueBody.value = null;
+  nativeGestureOwner.clear();
   mounted = false;
   if (voice?.controller.state.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") void voice.controller.end({ discard: true });
   cancelAvatarPress();

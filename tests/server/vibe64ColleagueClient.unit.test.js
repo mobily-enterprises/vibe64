@@ -4,6 +4,7 @@ import { registerHooks } from "node:module";
 import test from "node:test";
 import * as vue from "vue";
 import { useTrainingPresentationCue } from "../../packages/vibe64-training/src/client/useTrainingPresentationCue.js";
+import { useTrainingLearnerGestures } from "../../packages/vibe64-training/src/client/useTrainingLearnerGestures.js";
 import { createTrainingNavigation } from "../../packages/vibe64-training/src/client/createTrainingNavigation.js";
 import { routeLocationKey } from "vue-router";
 import * as mdi from "@mdi/js";
@@ -636,7 +637,7 @@ function conversationSnapshot(response = {}, streamRevision = response.streamRev
   };
 }
 
-function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer = null, sessionStorage = null, preview = null, gestureChannel = null, voiceHost = null) {
+function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer = null, sessionStorage = null, preview = null, gestureChannel = null, voiceHost = null, bodyChannel = null) {
   const notices = [];
   const events = [];
   const requests = [];
@@ -729,13 +730,14 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "@local/vibe64-voice/client": { useVibe64Voice: () => voice },
     "@local/vibe64-training/client/presentation-cue": { useTrainingPresentationCue },
     "@local/vibe64-training/client/navigation": { createTrainingNavigation },
+    "@local/vibe64-training/client/learner-gestures": { useTrainingLearnerGestures },
     "@jskit-ai/assistant-voice/client": { ConversationDialog: {}, VoiceConversationControls: {}, projectConversationVoiceState,
       useVoiceLauncher: launcherModule.exports.useVoiceLauncher },
     "@jskit-ai/assistant-runtime/client": { useAssistantConversation },
     "@jskit-ai/assistant-core/client": { createAssistantApi },
     "@jskit-ai/realtime/client/composables/useRealtimeEvent": realtimeComposables,
     "@mdi/js": mdi,
-    "/src/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher"), VIBE64_ASSISTANT_VIEWER_KEY: Symbol("viewer"), VIBE64_COLLEAGUE_PREVIEW_KEY: Symbol("preview"), VIBE64_TRAINING_LEARNER_GESTURE_KEY: Symbol("learner-gesture") },
+    "/src/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAUNCHER_KEY: Symbol("launcher"), VIBE64_ASSISTANT_VIEWER_KEY: Symbol("viewer"), VIBE64_COLLEAGUE_PREVIEW_KEY: Symbol("preview"), VIBE64_TRAINING_LEARNER_GESTURE_KEY: Symbol("learner-gesture"), VIBE64_COLLEAGUE_BODY_KEY: Symbol("body") },
     "@jskit-ai/shell-web/client/error": { useShellWebErrorRuntime: () => ({ report: notice => notices.push(notice) }) },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantConversationStatus: {}, AssistantPromptInput: {}, AssistantTranscript: {} },
     "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConversationLogPage },
@@ -776,6 +778,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   if (viewer) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_ASSISTANT_VIEWER_KEY, viewer);
   if (preview) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_PREVIEW_KEY, preview);
   if (gestureChannel) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_TRAINING_LEARNER_GESTURE_KEY, gestureChannel);
+  if (bodyChannel) app.provide(imports["/src/lib/vibe64AssistantHost.js"].VIBE64_COLLEAGUE_BODY_KEY, bodyChannel);
   app.provide(routeLocationKey, vue.reactive({ path: "/" }));
   app.provide("jskit.realtime.runtime.client.socket", socket);
   app.mount({});
@@ -2240,4 +2243,79 @@ test("Main origin ceiling refuses prospectively through the original navigation 
   assert.deepEqual(cue.voiceState(saved, "main", [turn]).messages, []);
   cue.voiceState({ messages: [], streamingReply: null }, "main", []);
   assert.deepEqual(cue.voiceState(saved, "main", [turn]).messages, [], "page omission cannot evict suppression");
+});
+
+
+test("the actual general Colleague body delegates its trusted minimize/restore to selected Main without replacing its owner", async t => {
+  const observations = [], body = vue.shallowRef(null);
+  const main = { begin(event, control) { return event === nativeClick ? { control } : null; },
+    async finish(ticket) { observations.push({ control: ticket.control, visible: body.value.visible,
+      actor: body.value.actorKey, conversationId: body.value.conversationId }); } };
+  const channel = vue.shallowRef(main);
+  const view = mount(t, async () => ({ conversationId: "general-same", messages: [], status: "ready" }),
+    vue.reactive({ name: "Colleague" }), vue.ref({ actorKey: "member" }), null, null, channel, null, body);
+  await flush();
+  const owner = body.value;
+  assert.equal(channel.value, main);
+  view.state.draft.value = "Keep the supervisor draft";
+  await view.state.toggleConversation(nativeClick); await flush();
+  const voice = view.state.voice.controller.state.session;
+  await view.state.toggleConversation(nativeClick); await flush();
+  await view.state.toggleConversation(nativeClick); await flush();
+  assert.equal(body.value, owner);
+  assert.equal(channel.value, main);
+  assert.deepEqual(observations.map(value => [value.control, value.visible]),
+    [["colleague-restore", true], ["colleague-minimize", false], ["colleague-restore", true]]);
+  assert.ok(observations.every(value => value.actor === "member" && value.conversationId === "general-same"));
+  assert.equal(view.state.voice.controller.state.session, voice);
+  assert.equal(view.state.draft.value, "Keep the supervisor draft");
+  assert.equal(view.requests.some(value => value.url.endsWith("/training/observations")), false);
+});
+
+function mountMainGestureOwner(t, question = { ...workspaceQuestion, assessmentId: "return-to-colleague" }) {
+  const product = vue.ref({ conversationId: "actual-typed-main", trainingQuestion: question });
+  const actor = vue.ref("member"), current = vue.ref(true), visible = vue.ref(true), owner = vue.shallowRef({ body: "A" });
+  const conversationId = vue.ref("general-A"), requests = [], notices = [];
+  const scope = { actorKey: actor, product, clientId: "actual-client", current: () => current.value, preserveDrawer: true };
+  let gestures;
+  const renderer = vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp({ setup() {
+    gestures = useTrainingLearnerGestures({ scope,
+      workspace: { focus: { projectSlug: "practice", sessionId: "practice-session", pane: "preview" }, settle: async () => ({ ...nativeWorkspace }) },
+      drawer: { bodyVisible: visible, xs: vue.ref(false), owner, conversationId },
+      observe: async request => { requests.push(structuredClone(request.body)); return { ok: true }; }, failure: error => notices.push(error.message) });
+    return () => null;
+  } });
+  app.mount({}); t.after(() => app.unmount());
+  return { gestures, product, actor, current, visible, owner, conversationId, requests, notices };
+}
+
+test("Main return practical retains the actual general body across collapse but refuses A-to-fresh-B evidence until a repeated question", async t => {
+  const f = mountMainGestureOwner(t);
+  const first = f.gestures.begin(nativeClick, "colleague-minimize"); assert.ok(first);
+  f.visible.value = false; assert.equal((await f.gestures.finish(first)).ok, true);
+  f.current.value = false; f.gestures.clear(); f.current.value = true;
+  const use = f.gestures.begin(nativeClick, "preview-select"); assert.ok(use);
+  assert.equal((await f.gestures.finish(use)).ok, true);
+  f.conversationId.value = "general-B";
+  f.product.value = { ...f.product.value, trainingQuestion: null };
+  f.product.value = { ...f.product.value, trainingQuestion: { ...workspaceQuestion, assessmentId: "return-to-colleague" } };
+  assert.equal(f.gestures.begin(nativeClick, "colleague-restore"), null);
+  assert.equal(f.requests.length, 2);
+  assert.match(f.notices[0], /Colleague changed.*repeat the question/u);
+  f.product.value = { ...f.product.value, trainingQuestion: { ...f.product.value.trainingQuestion, questionId: "genuine-repeat" } };
+  const restore = f.gestures.begin(nativeClick, "colleague-restore"); assert.ok(restore);
+  f.visible.value = true; assert.equal((await f.gestures.finish(restore)).ok, true);
+  assert.equal(f.requests.length, 3);
+  assert.equal(f.requests[2].reference.questionId, "genuine-repeat");
+});
+
+test("Main's selected lifetime and actual body handle fence held receipts; synthetic events still allocate no ticket", async t => {
+  const f = mountMainGestureOwner(t);
+  assert.equal(f.gestures.begin({ type: "click", isTrusted: false }, "colleague-minimize"), null);
+  const ticket = f.gestures.begin(nativeClick, "colleague-minimize"); assert.ok(ticket);
+  f.visible.value = false; f.owner.value = { body: "new body, same conversation" };
+  assert.equal(await f.gestures.finish(ticket), false);
+  assert.deepEqual(f.requests, []);
+  assert.equal(f.gestures.begin(nativeClick, "colleague-restore"), null);
 });

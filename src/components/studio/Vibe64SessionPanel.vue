@@ -200,7 +200,7 @@
 
 <script setup>
 import { computed, inject, provide } from "vue";
-import { VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_HOST_CONVERSATION_KEY, VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64SessionArchiveDialog from "@/components/studio/vibe64-session/Vibe64SessionArchiveDialog.vue";
 import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
@@ -273,7 +273,27 @@ function selectLearningConversation({ sessionId, attemptId, learnerId } = {}) {
   sessionData.selectSessionId(sessionId);
   return sessionData.selectedSessionId.value === sessionId;
 }
-defineExpose({ selectLearningConversation });
+const learnerGestures = inject(VIBE64_TRAINING_LEARNER_GESTURE_KEY, null);
+const learningPracticeChoices = computed(() => props.purposeFilter === "learning" && sessionData.learningLearnerId.value
+  ? sessionData.availableSessions.value.filter(row => row.purpose === "learning" && row.noExercise === false &&
+      row.projectSlug && row.learningAttemptId && row.archived !== true)
+    .map(row => Object.freeze({ sessionId: row.sessionId, attemptId: row.learningAttemptId,
+      learnerId: sessionData.learningLearnerId.value, projectSlug: row.projectSlug })) : []);
+function selectLearningPracticeProject(choice, event) {
+  const actual = learningPracticeChoices.value.find(row => ["sessionId", "attemptId", "learnerId", "projectSlug"]
+    .every(key => row[key] === choice?.[key]));
+  if (!props.active || !actual) return false;
+  const owner = learnerGestures?.value;
+  const ticket = owner?.begin(event, "project-select", { projectSlug: actual.projectSlug, sessionId: actual.sessionId });
+  const selected = selectLearningConversation(actual);
+  if (ticket) {
+    if (selected) void owner.finish(ticket);
+    else owner.discard(ticket);
+  }
+  return selected;
+}
+defineExpose({ selectLearningConversation, selectLearningPracticeProject,
+  get learningPracticeChoices() { return learningPracticeChoices.value; } });
 
 async function createSessionForEmptyState(assistantSelection = {}, options = {}) {
   const response = await toolbar.createSession?.(assistantSelection, options);
