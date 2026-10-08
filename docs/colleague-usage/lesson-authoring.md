@@ -145,6 +145,12 @@ reader and separate progress-store composition do not by themselves open a
 preview or admit a trial. Do not report an author's trial as published learner
 progress or change a draft's status merely to bypass this limitation.
 
+Internal snapshot acquisition also retains the authoring session's normal
+source protections: AI work, pending review or cleanup, and Workspace setup
+must finish before its committed content can be captured. A closing, renewing
+or unavailable source is refused. This adds no preview button, automatically
+stops no work and does not publish the source.
+
 A workspace operator can now provision approved local lesson content through the
 terminal commands documented in [Local operator provisioning](../training-content.md#local-operator-provisioning).
 `install-topic` installs a clean committed topic; `installed-courses` reads the

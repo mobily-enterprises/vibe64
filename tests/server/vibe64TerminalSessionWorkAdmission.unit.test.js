@@ -1756,3 +1756,192 @@ test("detached Main failure releases admission and an inherited writer can run t
   assert.equal(inherited.value.ok, true);
   assert.equal(native.promptCalls.length, 2);
 });
+
+async function exclusiveSourceReadFixture(t, lock = agentWriteLockHarness(), options = {}) {
+  const fixture = await terminalServiceFixture(t, lock, {
+    assistantSelection: { engineId: "opencode", agentId: "build", modelProviderId: "opencode", modelId: "big-pickle",
+      variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` },
+    ...options
+  });
+  const { runProjectSourceExclusive } = await import("../../packages/vibe64-project/src/server/projectSourceMutationLock.js");
+  fixture.projectService.runProjectSourceExclusive = (operation, lockOptions) =>
+    runProjectSourceExclusive(fixture.runtime.stateRoot, operation, lockOptions);
+  return fixture;
+}
+
+test("internal source read uses the exact clean worktree under original session then project admission", async t => {
+  const lock = agentWriteLockHarness();
+  const f = await exclusiveSourceReadFixture(t, lock);
+  const source = f.session.metadata.source_path;
+  await execFileAsync("git", ["init", "--quiet"], { cwd: source });
+  await writeFile(path.join(source, "topic.txt"), "Committed author source.\n");
+  await execFileAsync("git", ["add", "topic.txt"], { cwd: source });
+  await execFileAsync("git", ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false",
+    "-c", "user.name=Source read fixture", "-c", "user.email=source@example.invalid", "commit", "--quiet", "-m", "Pinned source"], { cwd: source });
+  const head = (await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: source })).stdout.trim();
+  const metadataBefore = JSON.stringify(f.session.metadata);
+  let calls = 0;
+  const snapshot = await f.service.runSessionSourceReadExclusive(f.session.sessionId, async context => {
+    calls++;
+    assert.equal(context.runtime, f.runtime);
+    assert.equal(context.session, f.session);
+    assert.equal(context.sourceRoot, source);
+    assert.equal(lock.held, true);
+    const owner = JSON.parse(await readFile(path.join(f.runtime.stateRoot, "locks/source-mutation.lock"), "utf8"));
+    assert.equal(owner.operation, "read-session-source");
+    assert.equal(owner.pid, process.pid);
+    assert.equal((await execFileAsync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: context.sourceRoot })).stdout, "");
+    assert.equal((await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: context.sourceRoot })).stdout.trim(), head);
+    return readFile(path.join(context.sourceRoot, "topic.txt"), "utf8");
+  });
+  assert.equal(snapshot, "Committed author source.\n");
+  assert.equal(calls, 1);
+  assert.equal(lock.held, false);
+  await assert.rejects(access(path.join(f.runtime.stateRoot, "locks/source-mutation.lock")), { code: "ENOENT" });
+  assert.equal(JSON.stringify(f.session.metadata), metadataBefore);
+  const failure = new Error("Snapshot validation refused.");
+  await assert.rejects(f.service.runSessionSourceReadExclusive(f.session.sessionId, () => { throw failure; }), error => error === failure);
+  assert.equal(lock.held, false);
+  await assert.rejects(access(path.join(f.runtime.stateRoot, "locks/source-mutation.lock")), { code: "ENOENT" });
+  assert.equal(await f.service.runSessionSourceReadExclusive(f.session.sessionId, () => "retry admitted"), "retry admitted");
+  assert.equal((await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: source })).stdout.trim(), head);
+  assert.equal((await execFileAsync("git", ["status", "--porcelain"], { cwd: source })).stdout, "");
+  await assert.rejects(f.service.runSessionSourceReadExclusive("", () => assert.fail("Invalid ID must not select current source.")), { code: "vibe64_invalid_session_id" });
+  await assert.rejects(f.service.runSessionSourceReadExclusive(f.session.sessionId, null), TypeError);
+});
+
+test("source read retains original active turn and native goal guards without stopping or reading source", async t => {
+  // Reconciliation re-enters the original participant lease. The simple
+  // contention harness cannot model that reentrancy and would await itself.
+  const f = await exclusiveSourceReadFixture(t, { store: {} }, {
+    assistantSelection: CODEX_SELECTION,
+    codexAppServerProviderFactory: () => ({
+      close() {}, async ensureAvailable() { throw new Error("Controlled status verification failure"); },
+      async stopRuntime() { return { stopped: true, processExitVerified: true }; }
+    })
+  });
+  for (const run of [
+    { active: true, state: "active", runId: "working" },
+    { active: false, state: "active", runId: "native-state" },
+    { active: false, state: "completed", providerGoalStatus: "active", providerGoalThreadId: "goal-thread", providerThreadId: "goal-thread" }
+  ]) {
+    f.session.agentRuns = [run];
+    await assert.rejects(f.service.runSessionSourceReadExclusive(f.session.sessionId, () => assert.fail("Active work must retain the source.")), {
+      code: "vibe64_session_source_read_agent_active", retryable: true
+    });
+    assert.deepEqual(f.session.agentRuns, [run]);
+  }
+  f.session.agentRuns = [];
+  await assert.rejects(access(path.join(f.runtime.stateRoot, "locks/source-mutation.lock")), { code: "ENOENT" });
+});
+
+test("source read preserves pending routing, helper and replacement guards before source acquisition", async t => {
+  const f = await exclusiveSourceReadFixture(t);
+  const read = () => f.service.runSessionSourceReadExclusive(f.session.sessionId, () => assert.fail("Unfinished coordination must retain source."));
+  for (const request of [{ status: "routing" }, { status: "review_pending" }, { status: "complete", helper: { conversationId: "helper-cleanup" } }]) {
+    f.session.metadata.assistant_routing_request = JSON.stringify(request);
+    await assert.rejects(read(), { code: "vibe64_assistant_routing_pending", retryable: true });
+    assert.deepEqual(JSON.parse(f.session.metadata.assistant_routing_request), request);
+  }
+  delete f.session.metadata.assistant_routing_request;
+  await f.runtime.store.writeSessionConversation(f.session.sessionId, "pending-review", {
+    routingMetadata: { assistant_routing_request: JSON.stringify({ status: "review_pending" }) }
+  });
+  try {
+    await assert.rejects(read(), { code: "vibe64_assistant_routing_pending" });
+    assert.equal(JSON.parse((await f.runtime.store.readSessionConversation(f.session.sessionId, "pending-review")).routingMetadata.assistant_routing_request).status, "review_pending");
+  } finally { await f.runtime.store.deleteSessionConversation(f.session.sessionId, "pending-review"); }
+  f.session.metadata.assistant_changeover = JSON.stringify({ replacement: { status: "preparing" } });
+  await assert.rejects(read(), { code: "vibe64_conversation_replacement_pending" });
+  f.session.metadata.assistant_changeover = JSON.stringify({ rewind: { completed: false } });
+  await assert.rejects(read(), { code: "vibe64_conversation_rewind_pending" });
+  delete f.session.metadata.assistant_changeover;
+  await assert.rejects(access(path.join(f.runtime.stateRoot, "locks/source-mutation.lock")), { code: "ENOENT" });
+});
+
+test("source read refuses running setup, closing and unavailable managed source without a fallback", async t => {
+  const f = await exclusiveSourceReadFixture(t);
+  const read = () => f.service.runSessionSourceReadExclusive(f.session.sessionId, () => assert.fail("Unavailable source must not be read."));
+  f.session.workspaceSetup = { status: "running" };
+  assert.equal(f.service.workspaceSetupIsRunning(f.session.sessionId), false,
+    "A saved running setup also needs explicit recovery; absence from this process is not completion.");
+  await assert.rejects(read(), { code: "vibe64_session_source_read_setup_running", retryable: true });
+  f.session.workspaceSetup = { status: "unconfigured" };
+  f.session.metadata.session_closing_reason = "archiving";
+  await assert.rejects(read(), { code: "vibe64_session_source_read_unavailable" });
+  delete f.session.metadata.session_closing_reason;
+  for (const change of [
+    { source_removed: "yes" }, { source_path_authority: "untrusted" },
+    { source_path: path.join(f.session.sessionRoot, "source") }
+  ]) {
+    const original = { ...f.session.metadata };
+    Object.assign(f.session.metadata, change);
+    await assert.rejects(read(), { code: "vibe64_session_source_root_missing" });
+    f.session.metadata = original;
+  }
+  await assert.rejects(f.service.runSessionSourceReadExclusive("other-session", () => assert.fail("Exact session mismatch must not choose the selected source.")), {
+    code: "vibe64_session_not_found"
+  });
+  f.runtime.getSession = async () => { throw Object.assign(new Error("Exact session missing"), { code: "vibe64_session_not_found" }); };
+  await assert.rejects(read(), { code: "vibe64_session_not_found" });
+});
+
+test("source read uses the original archive and renewal public admission fences", async t => {
+  for (const state of ["archived", "renewal-quiesced"]) {
+    const f = await exclusiveSourceReadFixture(t, { store: {} });
+    if (state === "archived") {
+      await f.runtime.store.writeStatus(f.session.sessionId, "archived");
+      await f.runtime.store.publishSessionArchive(f.session.sessionId);
+    } else {
+      await f.runtime.store.quiesceSessionForRenewal({ sourceSessionId: f.session.sessionId,
+        renewalId: "author-source-renewal", quiescedAt: "2026-10-08T00:00:00Z" });
+    }
+    await assert.rejects(f.service.runSessionSourceReadExclusive(f.session.sessionId, () => assert.fail("Retired or renewing source is not admissible.")), {
+      code: state === "archived" ? "vibe64_session_archived" : "vibe64_session_renewal_quiesced"
+    });
+    await assert.rejects(access(path.join(f.runtime.stateRoot, "locks/source-mutation.lock")), { code: "ENOENT" });
+  }
+});
+
+test("source read rechecks original active work after waiting for preparation", { timeout: 15_000 }, async t => {
+  const contended = deferred();
+  const f = await exclusiveSourceReadFixture(t, { store: {} }, {
+    assistantSelection: CODEX_SELECTION,
+    codexAppServerProviderFactory: () => ({ close() {}, async ensureAvailable() { throw new Error("Controlled connection failure"); },
+      async stopRuntime() { return { stopped: true, processExitVerified: true }; } }),
+    logger: { info() {}, warn(event) { if (event.event === "vibe64.session_lock.contended") contended.resolve(event); } }
+  });
+  const entered = deferred();
+  const release = deferred();
+  const preparing = runVibe64AgentWriteExclusive(f.runtime, f.session.sessionId, async () => {
+    entered.resolve(); await release.promise;
+  }, { operation: "prepare-agent-session" });
+  await entered.promise;
+  const requested = f.service.runSessionSourceReadExclusive(f.session.sessionId, () => assert.fail("A turn admitted while waiting must prevent source capture.")).catch(error => error);
+  try {
+    const event = await contended.promise;
+    assert.equal(event.owner.operation, "prepare-agent-session");
+    assert.equal(event.waitMs, 10_000);
+    f.session.agentRuns = [{ active: true, state: "active", runId: "started-during-source-wait" }];
+  } finally { release.resolve(); await preparing; }
+  assert.equal((await requested).code, "vibe64_session_source_read_agent_active");
+  f.session.agentRuns = [];
+  await assert.rejects(access(path.join(f.runtime.stateRoot, "locks/source-mutation.lock")), { code: "ENOENT" });
+});
+
+test("source read preserves reconnection timeout and requires original project source locking", async t => {
+  const f = await exclusiveSourceReadFixture(t, { store: {} });
+  const read = () => f.service.runSessionSourceReadExclusive(f.session.sessionId, () => assert.fail("No source work is admitted after timeout."));
+  f.runtime.store.runSessionExclusive = async (_id, _name, _operation, options) => {
+    assert.equal(options.waitMs, 10_000);
+    assert.equal(options.operation, "read-session-source");
+    return { acquired: false, value: null, blockingOperation: "prepare-agent-session" };
+  };
+  await assert.rejects(read(), {
+    code: "vibe64_agent_write_mode_busy", retryable: true,
+    message: "The assistant is still reconnecting. Wait until it is ready, then try again.",
+    details: { blockingOperation: "prepare-agent-session" }
+  });
+  delete f.projectService.runProjectSourceExclusive;
+  await assert.rejects(read(), { code: "vibe64_project_source_lock_unavailable" });
+});

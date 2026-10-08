@@ -2786,6 +2786,50 @@ function createService({
       }, (context) => saveSessionWorkInsideWrite(sessionId, input, context));
     },
 
+    // Internal server facility: callbacks are never accepted by an action or
+    // model. Snapshot validation/installation remains with its content owner.
+    async runSessionSourceReadExclusive(sessionId, operation) {
+      const id = assertValidVibe64SessionId(sessionId);
+      if (typeof operation !== "function") {
+        throw new TypeError("Exclusive session source reads require an internal operation.");
+      }
+      if (typeof projectService.runProjectSourceExclusive !== "function") {
+        throw Object.assign(new Error("Session source reads require the project source mutation lock."), {
+          code: "vibe64_project_source_lock_unavailable"
+        });
+      }
+      return runSessionRepositoryWrite(id, {}, {
+        operation: "read-session-source",
+        activeCode: "vibe64_session_source_read_agent_active",
+        activeMessage: "Wait for the assistant turn to finish before reading its committed source snapshot."
+      }, async (context) => {
+        if (closing || context.session.status !== VIBE64_SESSION_STATUS.ACTIVE || sessionIsClosing(context.session)) {
+          throw Object.assign(new Error("Committed source reads require an open session that is not closing or renewing."), {
+            code: "vibe64_session_source_read_unavailable", statusCode: 409
+          });
+        }
+        if (workspaceSetup.isRunning(id) || context.session.workspaceSetup?.status === "running") {
+          throw Object.assign(new Error("Workspace setup must finish before reading this session's committed source snapshot."), {
+            code: "vibe64_session_source_read_setup_running", statusCode: 409, retryable: true
+          });
+        }
+        requireCompletedConversationRewind(context.session);
+        await service.assertSessionRenewalIdle(id, context);
+        // Repository admission owns the session lease. Save takes this same
+        // project lock downstream; acquiring it here preserves that order.
+        return projectService.runProjectSourceExclusive(async () => {
+          const session = await context.runtime.getSession(id, { inspectSource: false });
+          const sourceRoot = terminalSessionSourceRoot(session);
+          if (session.sessionId !== id || !sourceRoot) {
+            throw Object.assign(new Error("This exact session has no available managed source."), {
+              code: "vibe64_session_source_root_missing", statusCode: 409
+            });
+          }
+          return operation({ runtime: context.runtime, session, sourceRoot });
+        }, { operation: "read-session-source" });
+      });
+    },
+
     async createSessionPullRequest(sessionId, input = {}) {
       if (
         typeof input.title !== "string" || !input.title.trim() || input.title.length > 256 ||

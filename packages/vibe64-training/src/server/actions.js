@@ -119,6 +119,19 @@ function operationError(cause) {
   });
 }
 
+const endedResult = result => ({ ok: true, available: true, revision: result.revision,
+  attempt: active(result.attempt), active: active(result.active), replayed: result.replayed === true,
+  previewReady: false });
+const prepared = result => {
+  if (result?.ok === false || !result?.attempt) {
+    throw Object.assign(new Error("Exercise preparation did not return a saved attempt."), { code: "VIBE64_TRAINING_PREPARATION_FAILED" });
+  }
+  if (result.attempt.ended) return { ...endedResult(result), completion: null };
+  return { ok: true, available: true, revision: result.revision,
+    active: active(result.attempt), completion: completion(result.completion), previewReady: false,
+    ...(result.setup?.status ? { setupStatus: result.setup.status } : {}) };
+};
+
 // Composition supplies the original readers and one exercise preparation owner.
 // This factory registers neither a teacher loop nor a standalone provisioner.
 function createTrainingActions({ catalogue, learners, teachingBrief, exercises = null } = {}) {
@@ -147,18 +160,6 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
     error: operation === "end" ? "Lesson retirement is unavailable in this installation. Reading learning state does not end an attempt or dispose of its exercise."
       : operation === "continue" ? "Retained lesson continuation is unavailable in this installation. Keep the original progress and ask the owner to restore the exercise."
       : "Lesson exercise preparation is unavailable in this installation. Reading learning state and teaching content does not prepare an exercise." });
-  const endedResult = result => ({ ok: true, available: true, revision: result.revision,
-    attempt: active(result.attempt), active: active(result.active), replayed: result.replayed === true,
-    previewReady: false });
-  const prepared = result => {
-    if (result?.ok === false || !result?.attempt) {
-      throw Object.assign(new Error("Exercise preparation did not return a saved attempt."), { code: "VIBE64_TRAINING_PREPARATION_FAILED" });
-    }
-    if (result.attempt.ended) return { ...endedResult(result), completion: null };
-    return { ok: true, available: true, revision: result.revision,
-      active: active(result.attempt), completion: completion(result.completion), previewReady: false,
-      ...(result.setup?.status ? { setupStatus: result.setup.status } : {}) };
-  };
 
   return Object.freeze([
     definition("courses.list", {}, "Read installed course releases and their exact lesson choices. Read this again in the current teaching turn before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare an exercise. Drafts and disabled releases are not available for new teaching admissions. Topic IDs identify pinned content, not usage-guide topics.", async () => {
@@ -209,4 +210,42 @@ function createTrainingActions({ catalogue, learners, teachingBrief, exercises =
   ]);
 }
 
-export { createTrainingActions, operationError };
+// Hosts acquire source through their existing session owner. The shared action
+// layer retains the original bounded learning projections and actor authority.
+function createTrainingAuthorPreviewActions({ preview } = {}) {
+  if (typeof preview?.readState !== "function" || typeof preview?.startLesson !== "function") {
+    throw new TypeError("Author preview actions require an admitted source/preview owner.");
+  }
+  const output = { ...resultOutput, schema: createSchema({ ...resultOutput.schema.getFieldDefinitions(),
+    authorPreview: { type: "boolean", required: true } }) };
+  const definition = (name, fields, description, execute, projectScoped) => withVibe64ActionContext({
+    id: `vibe64.training.author-preview.${name}`, version: 1, kind: name === "read" ? "query" : "command",
+    idempotency: name === "start" ? "domain_native" : "none",
+    input: { mode: "create", schema: createSchema(fields) }, output: null,
+    extensions: { assistant: { alwaysAvailable: true, description, output } },
+    async execute(input, context) {
+      const actor = authenticatedVibe64User(context);
+      try { return boundedResult({ ...await execute(input, actor), authorPreview: true }); }
+      catch (cause) {
+        if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;
+        throw operationError(cause);
+      }
+    }
+  }, { projectScoped, ownerRequired: true });
+  return Object.freeze([
+    definition("read", {}, "Read this signed-in owner's isolated author-preview state and revision. It does not read source, install a topic, refresh a preview or affect normal learner progress. Snapshot admission is not lesson delivery. The Learning mode teacher launcher is unfinished; report that limitation rather than deliver this lesson through the supervisor's Colleague conversation.", async (_input, actor) => {
+      const result = await preview.readState({ actor });
+      return { ok: true, available: true, revision: result.revision, activeSummaryCurrent: result.activeSummaryCurrent,
+        active: active(result.active), completion: completion(result.completion),
+        history: result.progress.attempts.filter(value => value.ended).map(active) };
+    }, false),
+    definition("start", {
+      projectSlug: { ...text, maxLength: 128 }, sessionId: { ...text, maxLength: 128 },
+      lessonCode: id, expectedCommit: { ...text, maxLength: 40, pattern: "^[a-f0-9]{40}$" },
+      requestId: { ...requestId, maxLength: 18 }, expectedRevision: revision
+    }, "Admit a lesson snapshot only after the owner's direct request or accepted offer. Use the exact authorized authoring project/session, clean committed topic root, lesson code, observed 40-character commit and author-preview.read revision. The host reads that exact session under original idle/lifecycle/source guards and installs its immutable snapshot. A local commit is not remote publication or an enabled learner course. Use the same at-most18-character request and unchanged source arguments on uncertain retry; retained reservations reuse their saved pin without reading edited source. A fresh request refuses an active author preview. To explicitly refresh, read author-preview.read, end its exact attempt through lesson.end only when requested, then use a new author-preview.start request for the new committed snapshot and returned revision. Report end confirmed/start pending separately if start fails. Never silently end, replace, retarget or merge ordinary learner progress. Return the exact preview attempt for the Learning mode teacher integration; that launcher remains unfinished. Do not teach through this supervisor conversation or claim a completed trial. Preparation is not running Preview or a pass. Colleague has no source paths or shell access.", async (input, actor) =>
+      prepared(await preview.startLesson({ actor, ...pick(input, ["projectSlug", "sessionId", "lessonCode", "expectedCommit", "requestId", "expectedRevision"]) })), true)
+  ]);
+}
+
+export { createTrainingActions, createTrainingAuthorPreviewActions, operationError };

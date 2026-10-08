@@ -822,3 +822,72 @@ test("presentation supplies its exact captured attempt ID to the configured orig
   assert.equal(reads.length, 1);
   assert.deepEqual(reads[0], { actor: f.auth.user, attemptId, includeCompletion: true });
 });
+
+import { createTrainingAuthorPreviewActions } from "../../packages/vibe64-training/src/server/actions.js";
+
+test("author preview API/tools retain bounded original projections and fresh owner/source authority", async t => {
+  const f = await fixture(t);
+  f.auth.user.role = "owner";
+  const calls = [];
+  let projectAllowed = true;
+  const preview = {
+    async readState(input) { calls.push({ kind: "read", input }); return f.learners.readState({ ...input, includeCompletion: true }); },
+    async startLesson(input) {
+      calls.push({ kind: "start", input });
+      return { ...await f.learners.reserveAttempt({ actor: input.actor, requestId: input.requestId,
+        expectedRevision: input.expectedRevision, pin: f.pin }), sourceRoot: "/PRIVATE_SOURCE", previewReady: true,
+        setup: { status: "pending", command: "PRIVATE_SHELL" } };
+    }
+  };
+  const actions = createActionCatalogue();
+  const definitions = createTrainingAuthorPreviewActions({ preview });
+  actions.register({ contributorId: "preview", domain: "training", actions: definitions.map(value => ({ ...value,
+    channels: ["api", "automation"], surfaces: ["app"] })) });
+  registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
+    projectContext: { projectsRoot: "/test/projects", async readWorkspaceProject({ slug }) {
+      return { project: { slug, path: `/test/projects/${slug}` } };
+    } },
+    authorizeProject({ slug }) {
+      assert.equal(slug, "author-source");
+      if (!projectAllowed) throw Object.assign(new Error("Source access revoked"), { statusCode: 403 });
+    } });
+  const execute = (name, input = {}, extra = {}) => actions.execute({ actionId: `vibe64.training.author-preview.${name}`,
+    input, context: { channel: "api", surface: "app", ...extra } });
+  const input = { projectSlug: "author-source", sessionId: "requested-author", lessonCode: "USE-ONE",
+    expectedCommit: f.pin.topic.commit, requestId: "preview-one", expectedRevision: 0 };
+  const initial = await execute("read");
+  assert.equal(initial.active, null);
+  assert.equal(initial.authorPreview, true);
+  const started = await execute("start", input);
+  assert.equal(started.active.pin.lesson.code, "USE-ONE");
+  assert.equal(started.previewReady, false);
+  assert.equal(started.authorPreview, true);
+  assert.doesNotMatch(JSON.stringify(started), excluded);
+  assert.deepEqual(calls.at(-1).input, { actor: f.auth.user, ...input });
+  const tools = createServiceToolCatalog(actions, { maxDirectTools: 100 });
+  const context = { channel: "automation", surface: "app" };
+  const toolSet = tools.resolveToolSet(context);
+  const tool = toolSet.tools.find(value => value.actionId === "vibe64.training.author-preview.start");
+  assert.ok(tool);
+  assert.doesNotThrow(() => tools.toOpenAiToolSchema(tool));
+  const replay = await tools.executeToolCall({ toolName: tool.name, toolSet, context, argumentsText: JSON.stringify(input) });
+  assert.equal(replay.ok, true, JSON.stringify(replay));
+  assert.equal(replay.result.active.attemptId, started.active.attemptId);
+  assert.equal(replay.result.replayed, undefined, "original prepared projection does not invent reservation readiness");
+  assert.doesNotMatch(JSON.stringify(replay), excluded);
+  const before = calls.length;
+  await assert.rejects(execute("start", input, { requestMeta: { request: { params: { slug: "different-source" } } } }),
+    { code: "vibe64_action_project_mismatch" });
+  await assert.rejects(execute("start", { ...input, vibe64User: { uid: 999, role: "owner" } }));
+  await assert.rejects(execute("start", { ...input, sourceRoot: "/forged/source" }));
+  await assert.rejects(execute("start", { ...input, requestId: "request-id-is-too-long" }));
+  projectAllowed = false;
+  await assert.rejects(execute("start", input), { statusCode: 403 });
+  assert.equal(calls.length, before);
+  f.auth.user.role = "member";
+  await assert.rejects(execute("read"), { code: "vibe64_owner_required" });
+  await assert.rejects(execute("start", input), { code: "vibe64_owner_required" });
+  f.auth.user = null;
+  await assert.rejects(execute("read"), { statusCode: 401 });
+  assert.equal(calls.length, before, "revocation cannot reach the preview owner");
+});

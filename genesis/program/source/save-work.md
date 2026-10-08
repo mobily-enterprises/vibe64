@@ -358,6 +358,16 @@ before any AI conversation has started.
 
 ## Implementation map
 
+- The internal `runSessionSourceReadExclusive(sessionId, operation)` facility
+  admits a server-owned snapshot callback through the original repository
+  admission owner and then the existing project source lock. It reloads the
+  exact session and resolves its source through the original managed source
+  authority. Active turns/native goals, unfinished replacement/rewind,
+  routing/helper cleanup, temporary work, closing/renewal and running Workspace
+  setup remain fenced by their existing owners. A persisted running setup is
+  also refused until explicit recovery confirms completion. The callback may
+  validate and install content elsewhere; it receives no model-supplied path
+  and exposes no action, shell command, publication or preview control.
 - `packages/vibe64-execution/src/server/gitTurnCheckpoint.js` captures private,
   non-advertised worktree checkpoints without changing the user's index. Each
   checkpoint retains the preceding checkpoint as recoverable history while its
