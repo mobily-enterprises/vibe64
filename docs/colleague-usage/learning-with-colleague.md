@@ -12,19 +12,16 @@ host reserve the exact lesson and prepare its exercise when declared; ask to
 resume after an interruption to keep
 the exact saved attempt. Starting can report unavailable when this installation
 does not support lesson preparation. Ask the owner to configure lesson support,
-then retry the same saved attempt when one exists. Main Learning mode is not
-available yet. The optional yellow **L** control is prepared for the same app
-header. Its accessible name is **Learning mode**; its pressed state reports
-whether Learning mode is selected, and its hover label offers **Switch to
-Learning mode** or **Switch to Working mode**. It stays hidden until the host
-connects the actual authorized lesson conversation. The control does not create
-a lesson, project or conversation by itself. Learning remembers its session
-separately for each learner and lesson attempt; this does not move or reset your
-Working selection. Native teaching, retained mode navigation and Preview choices
-still require their application integration and live acceptance. An empty course list needs the owner's installation and enablement,
-not an assistant-created substitute. Setup completion is not a
-running Preview or a completed lesson. Only the host's supported assessment and
-presentation operations can establish their actual results; never invent a pass.
+then retry the same saved attempt when one exists.
+The yellow **L** control and original session panel now attach Learning mode;
+read `learning-mode-ui` for its exact controls and retained Working selection.
+Main is the intended teacher; Colleague remains the general supervisor. Native
+Main teaching, combined Preview and live acceptance are unfinished. The legacy
+Colleague teaching integration below is retained until that move is proved;
+it is not a separate approved teaching design. An empty catalogue needs owner
+installation/enablement, not an invented substitute. Setup readiness does not
+prove running Preview or lesson completion; only actual supported operations
+establish those results.
 
 A lesson without a declared practice exercise stays reserved: it creates no
 project, session or Workspace setup. The fresh teaching brief identifies this
@@ -43,15 +40,12 @@ the reserved session's actual `workspaceSetupStatus`. Resume rechecks that setup
 and saves proven readiness before `question.prepare`. Do not claim still running
 or nothing broken from the checkpoint. Ready is not running App Preview.
 
-Before every new start, read `vibe64.training.courses.list` in that same teaching
-turn and choose an enabled release and its listed lesson. Read
-`vibe64.training.learning.read` for the learner's current revision and existing
-attempt. Earlier course results in chat history are not a fresh catalogue read;
-the operator may have enabled a newer release or disabled an older one. If a
-start is refused, inspect current courses and learning state before explaining
-why. A disabled old release does not prove that the current course is unavailable.
-Do not call a rejected start successful or reuse its request identity with a
-different release.
+Before each start, read `vibe64.training.courses.list` in that teaching turn
+and `vibe64.training.learning.read` for the current revision/attempt. Choose an
+enabled listed release/lesson; historical catalogue results may be obsolete.
+After refusal, reread both before explaining it. A disabled old release does not
+prove the current course unavailable. Never call rejection successful or reuse
+its request identity for another release.
 
 The catalogue's topic IDs identify pinned lesson content, not ordinary help
 topics. Do not pass them to `usage.guide.read`. After a successful start, read the
@@ -86,23 +80,19 @@ and needs a retry. After substantial help or a demonstration, ask for an
 independent follow-up. There is no raw pass-writing control: use only the host-registered native
 assessment operation, which reads the admitted message and actual observation.
 
-When the host registers **question.prepare**, use it in the current interactive
-teaching turn after reading the exact lesson brief and learning revision. Finish
-the current diagram/audio cue first, or proceed when there is no cue. Retain the
-same request ID for a retry and record the help actually provided. After success,
-the entire final reply must be exactly the returned question text, with no added
-preface or explanation. The tool result is **prepared**, not delivered or passed.
-The question is ready only after its exact final reply completes in this
-conversation; text in a progress update does not count. This adds no learner button.
+Use host-registered **question.prepare** in the current interactive teaching
+turn after reading the exact brief/revision and finishing any diagram/audio cue.
+Record actual help; retries retain the same request ID. After success, the whole
+final reply must equal the returned question text without additions. **Prepared**
+is not delivered or passed: only that exact completed final reply in this chat
+establishes delivery, never progress text. No learner button is added.
 
-If preparation or staging fails, keep the saved attempt and read or retry the same
-question request. A saved question with failed staging is not confirmed delivered;
-do not invent another ID to hide an uncertain result. Historical questions without
-help/issued-revision provenance cannot be graded; explicitly prepare a new question
-rather than treating missing information as no help. Later diagram or pause
-checkpoints retain that same question. Replacing it makes an old queued answer
-reference stale. No question save or display is an accepted learner answer or a
-permission to evaluate or pass on someone's behalf.
+Failed preparation/staging retains the attempt and request for read/retry; never
+invent an ID to hide uncertainty. Historical questions without help/issued-revision
+provenance require explicit fresh preparation, not an assumption of no help.
+Later cue/pause checkpoints retain the question; replacement makes queued old
+answers stale. Saving/displaying a question neither accepts an answer nor grants
+evaluation/pass authority.
 
 A teaching cue binds one declared diagram transition to the actual final
 Colleague explanation, never a tool-progress sentence. Motion follows audible
@@ -136,28 +126,19 @@ writers stopped, then complete hosted activation before the release claims
 answer correlation. The boundary records only its ledger entry: it does not
 rewrite old questions, messages or replies, invent provenance, or grade answers.
 
-Quiz assessment uses your accepted chat message and the question actually asked
-in that conversation. Colleague cannot substitute a paraphrase or set a pass.
-The configured Helper evaluates the pinned rubric and progress retains its
-feedback. Retrying an uncertain submission keeps the same identity and reads its
-saved result; do not invent another submission to bypass a consumed answer.
-If the Helper is unavailable, configure its existing AI Accounts model routing
-and retry. An interruption, stale question or failed save does not mean a pass.
-Without native answer support, keep the attempt/question; practicals need
-observed evidence. There is no new button and no permission to evaluate unrelated
-historical messages.
+Native quiz evaluation uses only the accepted learner message in the current
+interactive Colleague turn and its actually delivered question. Caller text,
+paraphrases, provisional words and unrelated history cannot substitute. The
+original restricted Helper evaluates the pinned rubric; the progress owner saves
+its feedback. Retrying the same submission reads its result before another
+inference; a new identity cannot bypass a consumed answer.
 
-
-The native answer-evaluation facility uses only the accepted learner message in
-the current interactive Colleague turn, associated with the question actually
-delivered in this chat. Caller text, provisional words and older unrelated chat
-messages cannot substitute for that answer. Evaluation uses the original
-restricted Helper and saves through the lesson progress owner; a retained
-submission retry reads its original result before another inference. Stopping
-Colleague or retiring that turn cancels evaluation without awarding a pass.
-Missing evaluation support or an interrupted Helper leaves the result unsaved
-and recoverable, not silently passed. This internal integration introduces no
-learner grading button; hosted tool registration and activation remain required.
+Stopping Colleague or retiring that turn cancels evaluation without a pass.
+Missing support, interruption, stale questions or failed saves remain unsaved
+and recoverable. Keep the attempt/question; practicals require observed evidence.
+A confirmed Helper setup failure needs its existing AI Accounts model routing
+configured before retrying. There is no learner grading button or authority to
+assess unrelated history; host registration and activation remain required.
 
 
 ### Practising the native workspace controls
@@ -195,12 +176,10 @@ action was not undone. A reload or changed question may require repeating an
 unfinished sequence. Progress is awarded only through the separate verified
 assessment operation and pinned rubric, including your explanation.
 
-Native observation retries retain the original gesture acknowledgement, including
-its original step count. Completing the sequence records an observation, not a
-pass. Conflicting retry details are rejected. After a server restart, repeat the
-whole sequence; a completed workspace action was not undone. Saved demonstration
-or substantial assistance remains teacher-origin evidence, rather than an
-independent learner attempt.
+Observation retries retain the original gesture acknowledgement/step count;
+conflicting details are rejected. Completion is an observation, not a pass.
+After server restart repeat the sequence; workspace actions were not undone.
+Demonstration/substantial help remains teacher-origin, not independent evidence.
 
 For an admitted practical question, assessment now combines the native receipt
 for your action in the prepared exercise with your actual accepted explanation.
@@ -266,5 +245,6 @@ commit and hash. **Refresh lessons** requests fresh reads; loading and read erro
 do not create or repair state. Desktop and phone use the same controls, with
 wrapping content and scrollable choices. Colleague can explain these choices and
 offer its supported start/resume operation, but only an accepted offer or direct
-request authorizes execution. This component is not yet attached to a hosted
-Preview route; Main Learning mode and its live browser acceptance remain open.
+request authorizes execution. The picker is attached through Learning mode;
+combined Preview, Main teaching
+and live browser acceptance remain open. See `learning-mode-ui`.

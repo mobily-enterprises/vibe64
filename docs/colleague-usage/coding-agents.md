@@ -7,26 +7,19 @@ Main chat remains available for Codex, Claude and OpenCode when Colleague is not
 enabled. Open the intended project and session directly; Colleague is not a
 prerequisite for **Send**, **Steer** or **Stop**.
 
-Main and temporary chats use your current Studio login. If that login expires,
-sign in again and reopen the intended chat before retrying. Check any uncertain
-delivery first; signing in does not submit the message again. These steps are
-the same on desktop and mobile.
-After a reload, history and live updates reconnect to the project and session
-shown in that chat.
-When the session reports that a turn finished, Main chat checks the same
-conversation again if its completion update was missed. This refreshes the
-saved reply and temporary live output without sending your request again.
-If old live fragments remain visible, reload the page to reconnect the same
-chat; inspect the existing reply before deciding whether to send more work.
+Main and temporary chats use your Studio login. If it expires, sign in and
+reopen the intended chat. Check uncertain delivery before retrying; signing in
+or reloading reconnects history and updates without resending. Main also refreshes
+the same conversation after a reported finish if its completion update was missed.
+If old live fragments remain, reload and inspect the saved reply before sending
+more work. These steps apply on desktop and mobile.
 
-If chat updates fail, a compact warning keeps the loaded messages and your draft
-visible. Select **Reload chat** inside that warning to reconnect to the same
-conversation. This restores observation; it does not resend your request or stop
-the agent. A connection warning alone cannot tell you whether the agent is still
-working. If access is denied, cached messages are cleared and **Reload chat** is
-hidden: sign in with the authorized account and reopen the intended conversation.
-The warning and recovery control work the same on desktop and phone. Colleague
-can explain these steps; reconnecting this browser view requires your interaction.
+A compact connection warning keeps loaded messages and drafts. Its **Reload
+chat** reconnects observation without resending or stopping work; the warning
+alone cannot establish whether the agent is running. Access denial clears cached
+messages and hides Reload: sign in with the authorized account and reopen chat.
+Desktop and phone use the same recovery. Colleague can explain it; reconnecting
+this browser view requires your interaction.
 
 ## Send, steer and stop
 
@@ -50,13 +43,11 @@ Your draft, uploaded file references and failed requests stay with the same
 signed-in person, project and session across a page reload. Restoring them does
 not send anything. Review an unconfirmed request before using **Retry**; when
 **Check delivery** is shown, it checks the existing request without resending it.
-If a rejected **Steer** returns to the composer, **Retry** keeps its original
-request ID and leaves any newer text you appended in the composer.
-If the turn finished before steering arrived, the request is shown as failed
-rather than **Check delivery**. It is not automatically sent as new work.
-Retry retains that steering request; use its **Cancel** or **Edit** recovery
-before deliberately sending a new request. A genuine lost receipt remains
-uncertain until the existing delivery check confirms it.
+A rejected **Steer** returns to the composer; **Retry** retains its request ID
+and any newer draft text. Steering arriving after a finished turn is failed,
+not **Check delivery**, and never becomes new work automatically. Use its
+**Cancel** or **Edit** recovery before deliberately sending new work. A genuinely
+lost receipt stays uncertain until the delivery check confirms it.
 If OpenCode cannot confirm delivery, checking its status does not send the request
 again. An unavailable receipt remains uncertain; inspect the conversation before
 deciding what to send next. This also applies to steering instructions.
@@ -73,13 +64,11 @@ error; an installation problem requires the workspace operator.
 When Claude or OpenCode reports a model or execution failure, read the reported
 conversation status and check any reply before deciding whether to send another
 request. Reply text by itself does not prove that the turn completed successfully.
-If cleanup cannot be confirmed, the conversation reports the problem before
-starting replacement work. Restore the execution service and use **Stop** again.
-Wait for Stop to succeed before starting replacement work; do not resubmit an
-uncertain request to work around that failure.
-This also applies when startup failed before a reply appeared. Closing the
-project retries its pending cleanup and reports a failure if exit is still
-unconfirmed; do not treat a failed Close as successful cleanup.
+Unconfirmed cleanup blocks replacement work, including after failed startup.
+Restore the execution service and retry **Stop**; wait for success before new
+work. Do not resubmit an uncertain request as a workaround. Project **Close**
+also retries pending cleanup and reports unconfirmed exit; a failed Close is
+not successful cleanup.
 If Codex reports lost observation, wait for it to confirm that work stopped.
 If Stop cannot be confirmed, restore the connection and select **Stop** again;
 the same conversation retains its cleanup responsibility. Checking or reopening
@@ -127,10 +116,9 @@ fails, the chat stays available; resolve the reported error and try **Close** ag
 Closing removes that conversation's history and attachments after cleanup succeeds;
 source edits remain. The same controls apply on desktop and compact screens.
 
-If OpenCode reports that its installed version is unsupported, ask the workspace
-operator to repair the runtime before retrying. Repeating the message cannot
-change the installed version. Colleague can explain that startup error; repairing
-the host installation requires the operator. This applies on desktop and mobile.
+An unsupported OpenCode version needs operator runtime repair before retrying;
+repeating a message cannot fix it. Colleague can explain this startup error on
+desktop or mobile but cannot repair the host installation.
 
 If OpenCode produces reasoning without a final answer, it makes one automatic
 attempt to obtain that answer. Wait for the result before sending again. If it
@@ -168,10 +156,9 @@ An unavailable status does not mean the goal was cleared.
 Open **Goal** to find these controls. For a long objective, use **View full goal**
 to read it, then **Close** to return to the controls. This works on desktop and mobile.
 
-If Codex reports that it could not load its model catalogue, ask the workspace
-operator to check the Codex installation and connection, then restart the
-assistant service. Colleague can explain the error but cannot perform that host
-operation. This recovery is the same on desktop and mobile.
+If Codex cannot load its model catalogue, ask the operator to check its
+installation/connection and restart the assistant service. Colleague can explain
+this desktop/mobile recovery but cannot perform the host operation.
 
 If Codex stops while the editor restores its managed controls, its notice identifies
 that interruption. An interruption with no known cause is not reported as a
