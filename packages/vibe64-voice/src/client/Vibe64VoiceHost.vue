@@ -4,7 +4,10 @@ import { createVoiceConversationController, VoiceConversationHost } from "@jskit
 import { VIBE64_VOICE_KEY } from "./voiceHost.js";
 const props = defineProps({ preferences: { type: Object, default: () => ({}) } });
 const emit = defineEmits(["read-aloud-change", "playback"]);
-const controller = createVoiceConversationController({ connectSpeech: binding => binding.socketUrl });
+const controller = createVoiceConversationController({ connectSpeech(binding) {
+  if (!binding.prepareVoice) return binding.socketUrl;
+  return binding.prepareVoice().then(() => binding.socketUrl);
+} });
 const launcher = shallowRef(null);
 const slots = useSlots();
 const Avatar = visual => slots.avatar?.(visual);

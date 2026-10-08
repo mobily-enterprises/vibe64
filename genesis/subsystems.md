@@ -18,10 +18,13 @@ Start/Resume/Open coordination; server owners retain admission and progress.
 Retained Preview and Main Learning-mode placement remain host integration work.
 Owns the original canonical delivered-question and completed-practical proof
 readers plus delivery promotion, staging, accepted-answer correlation and
-delivered-question capture, immediately reused by the original Colleague
-consumer. Interactive admission, connection receipts and Helper/control
-coordination remain with the consumer; these operations neither grant a pass
-nor add Main teaching.
+delivered-question capture, originally reused by Colleague and now composed by
+the admitted Main teacher. The shared eight-action teacher role set excludes
+these teaching effects from Colleague's common discovery/contract/execute policy;
+the original action boundaries also authenticate and require Main authority.
+Colleague retains lifecycle, progress and authoring coordination. Its private
+compatibility producer remains source-preserved until the corresponding Main
+producer and original assertions are proved; it grants no supervisor tool access.
 Owns the original ephemeral browser presentation transaction and cue/receipt
 predicates, immediately consumed by Colleague using its unchanged connection
 objects. One original pending slot, deadlines, output binding and terminal ACK
@@ -34,8 +37,9 @@ Owns bounded durable assessment receipts and lesson resume state, checked agains
 the installed pin, plus a read-only teaching brief without executable assets or
 source paths. Owns internal pinned-rubric grading through the existing retained
 tool-free Helper; admission, serialized lifetime and progress writes stay with
-their original owners. The answer-assessment action binds the original native Colleague
-admission and Helper; it cannot accept model-supplied answers or outcomes. Internal
+their original owners. The answer-assessment action requires Main's accepted
+native message and the original retained Helper; it cannot accept model-supplied
+answers or outcomes. Internal
 declared exercise checks reuse the original project/App/managed-command owners and
 confirm server observations, not learner passes. Provides shared fresh-actor
 course/read/start/resume and current interactive question-preparation actions; a host
@@ -62,13 +66,22 @@ project marker. Training owns authority/retry validation, Runtime owns offline
 metadata/archive staging, Core owns verified file publication and the ledger;
 Online retains stopped-service activation. Progress/source/native histories and
 unreferenced Working sessions remain unchanged. Main
-teaching coordinator supplies the exact four learning-read, brief-read,
-question-prepare and answer-evaluate actions to the original Codex/OpenCode Main native
-host for no-exercise attempts. Fresh originating-request WRITE authority and
+teaching coordinator supplies nine learning, question, assessment and declared
+visual actions to the original Codex/OpenCode Main native host for no-exercise
+and authorized prepared practice attempts. Source-bearing validation precedes
+the fresh authority grant, retaining the actual source/Genesis/Env/Git owners.
+The captured Main browser uses the existing subscriber to refresh one
+presentation resource and the original navigation/cue/player and speech owners.
+Three browser-only presentation read/focus/acknowledgement actions remain outside
+the model tool catalogue. Codex narrated cues require the original final-result
+owner and exact canonical output. OpenCode narrated cues remain unsupported until
+its original final-result seam is available; progress alone cannot authorize them. Fresh originating-request WRITE authority and
 accepted thread/turn/message guards fence every effect and final progress save;
 the original retained Helper, transcript transaction and native checkpoint remain
-the execution, receipt and delivery owners. Claude, practice teaching,
-Main cue/navigation receipts and installed/browser acceptance remain unfinished.
+the execution, receipt and delivery owners. Practice presentation retains its
+actual captured initial session and display-only source slug; App output
+integration is unfinished. Claude, installed/browser acceptance and complete
+Main practical teaching remain unfinished.
 The Training Feature supplies
 canonical Training HTTP/action composition in Public and consumes an optional
 host's exact existing services without duplicating hosted authority or writers.

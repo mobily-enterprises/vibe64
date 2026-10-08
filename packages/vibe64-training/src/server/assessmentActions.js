@@ -1,6 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { operationError } from "./actions.js";
+import { requireTrainingMainTeacher } from "./teachingRole.js";
 
 const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 64 };
 const revision = { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER };
@@ -38,10 +39,10 @@ function createTrainingAssessmentActions({ colleague, mainTeaching } = {}) {
       if (!authenticatedVibe64User(context)) {
         throw Object.assign(new Error("Sign in before evaluating a lesson answer."), { code: "vibe64_auth_required", statusCode: 401 });
       }
+      const coordinator = requireTrainingMainTeacher(context, [kind === "practical" ? "evaluateTrainingPractical" : "evaluateTrainingAnswer"]);
       try {
         const admitted = { attemptId: input.attemptId, expectedRevision: input.expectedRevision,
           submissionId: input.submissionId, messageId: input.messageId };
-        const coordinator = context.trainingMain || colleague;
         const saved = kind === "practical"
           ? await coordinator.evaluateTrainingPractical({ ...admitted, observationId: input.observationId }, context)
           : await coordinator.evaluateTrainingAnswer(admitted, context);
@@ -55,7 +56,7 @@ function createTrainingAssessmentActions({ colleague, mainTeaching } = {}) {
             required: completion.required, passed: completion.passed, completed: completion.completed } };
       } catch (cause) { throw operationError(cause); }
     }
-  }, { projectScoped: false })));
+  }, { projectScoped: false, ...(kind === "answer" ? { learningAccess: "write" } : {}) })));
 }
 
 export { createTrainingAssessmentActions };

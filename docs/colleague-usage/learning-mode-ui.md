@@ -62,9 +62,24 @@ Private provider key entry remains a human-only step. A diagram belongs to its
 original signed-in learner and Main conversation; changing accounts retires its
 display and pending reads rather than transferring it to the next person.
 
-This attachment composes the original Preview choices and opens the original
-lesson and conversation controls. Actual Main teaching and its visual/current
-question/cue receipt connection and desktop/mobile live acceptance remain
-separate delivery gates. Declared visual resources and checkpoint controls do
-not establish that Main can pilot or narrate them yet. Opening a conversation does not
-itself send a teaching request.
+To request teaching, open the exact saved Learning Main conversation and ask
+“Teach me this lesson.” Starting or resuming the lesson does not itself send that
+request. Main can use the lesson's declared diagrams in that same browser;
+Colleague remains available for general help and workspace supervision. Text
+teaching does not require voice, and private key entry remains your action.
+
+For a narrated diagram, keep the initiating browser and exact lesson conversation
+open until its operation is confirmed. Its explanation waits until Main has
+finished that turn. Stopping or interrupting an unfinished explanation prevents
+it from playing later when you ask a new question. With sound off, use
+**Continue** only after the explanation is ready. A visible diagram or saved
+state does not itself mean narration, motion or an assessment succeeded.
+
+If an operation is unconfirmed, read its current status before requesting a
+repeat. A reload or changed lesson/account cannot reuse an old cue confirmation.
+Switching the compact screen between chat and Preview retains the same active
+lesson; selecting a different session or account retires its old presentation.
+
+While a lesson’s narrated visual explanation awaits its final response, optional
+thinking and interim speech stay silent too. Your speech preferences remain saved;
+fresh confirmed replies use the same voice controls. This does not hide chat text.

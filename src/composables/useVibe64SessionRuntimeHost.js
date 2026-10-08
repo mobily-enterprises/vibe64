@@ -171,11 +171,14 @@ function useVibe64SessionRuntimeHost(props, emit) {
   const learningScope = initialSession?.purpose === "learning" ? {
     learningAttemptId: String(initialSession.learningAttemptId || "").trim(),
     learnerId: String(readRefOrGetterValue(props.sessionData.learningLearnerId) || "").trim(),
-    sessionId: initialSession.sessionId
+    sessionId: initialSession.sessionId,
+    noExercise: initialSession.noExercise !== false,
+    sourceProjectSlug: initialSession.noExercise === false ? String(initialSession.projectSlug || "").trim() : ""
   } : null;
   if (learningScope && (
     !learningScope.learnerId || !learningScope.learningAttemptId ||
-    learningScope.sessionId !== `learning-${learningScope.learningAttemptId}`
+    (learningScope.noExercise ? learningScope.sessionId !== `learning-${learningScope.learningAttemptId}`
+      : !learningScope.sessionId || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u.test(learningScope.sourceProjectSlug))
   )) {
     throw new Error("This learning conversation has no confirmed learner and attempt.");
   }
@@ -195,7 +198,9 @@ function useVibe64SessionRuntimeHost(props, emit) {
     sessionsApiPath,
     ...(learningScope ? {
       learningAttemptId: learningScope.learningAttemptId,
-      learnerId: learningScope.learnerId
+      learnerId: learningScope.learnerId,
+      noExercise: learningScope.noExercise,
+      sourceProjectSlug: learningScope.sourceProjectSlug
     } : {}),
     summarySession: selectedListSession
   });

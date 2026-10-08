@@ -1,3 +1,4 @@
+import { isTrainingTeacherAction } from "@local/vibe64-training/server/teaching-role";
 import { publicCue, createTrainingPresentationCoordination } from "@local/vibe64-training/server/presentation-coordination";
 import { evaluateAdmittedTrainingAssessment } from "@local/vibe64-training/server/conversation-assessment";
 import { randomUUID } from "node:crypto";
@@ -114,8 +115,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       }
       return true;
     },
-    toolPolicy: ({ actionId, kind, context }) => !context.colleague.autonomous || kind === "query" ||
-      !context.colleague.readOnly && assignmentCommands.has(actionId),
+    toolPolicy: ({ actionId, kind, context }) => !isTrainingTeacherAction(actionId) &&
+      (!context.colleague.autonomous || kind === "query" ||
+        !context.colleague.readOnly && assignmentCommands.has(actionId)),
     connections: { resolve: ({ integrationId, context }) => terminals.resolveConversationConnection({
       integrationId, assistantSelection: context.assistantSelection
     }, { vibe64User: authenticatedVibe64User(context) }) }

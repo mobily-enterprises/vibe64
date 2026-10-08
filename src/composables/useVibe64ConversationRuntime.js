@@ -1,4 +1,6 @@
 import { computed, inject, proxyRefs, toValue } from "vue";
+import { useTrainingMainPresentation } from "@local/vibe64-training/client/main-presentation";
+import { useVibe64Voice } from "@local/vibe64-voice/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { createAssistantApi } from "@jskit-ai/assistant-core/client";
 import { mainConversationId, mainConversationTarget } from "@local/vibe64-sessions/shared/conversation";
@@ -9,7 +11,7 @@ import { useVibe64MountedSessionData } from "./useVibe64MountedSessionData.js";
 import { useVibe64ConversationLog } from "./useVibe64ConversationLog.js";
 import { useVibe64AssistantAccess } from "./useVibe64AssistantAccess.js";
 import { useVibe64AgentSettings } from "./useVibe64AgentSettings.js";
-import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_PREVIEW_KEY } from "@/lib/vibe64AssistantHost.js";
 import { agentTurnControlPayloadFromContext, VIBE64_SESSION_CHANGED_EVENT, vibe64SessionEventMatchesScope, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
@@ -49,6 +51,12 @@ function createConversationApplication(conversation, { identity, viewer, summary
     if (!available.value || identity.learningAttemptId === undefined || reference?.attemptId !== identity.learningAttemptId) return null;
     return Object.freeze(projectTrainingQuestion(reference));
   });
+  const presentation = identity.learningAttemptId !== undefined ? useTrainingMainPresentation({ identity,
+    current, preview: inject(VIBE64_COLLEAGUE_PREVIEW_KEY, null), voice: useVibe64Voice(),
+    ready: computed(() => Boolean(conversation.snapshot.value)),
+    enabled: computed(() => available.value &&
+      (toValue(summarySession)?.noExercise !== false || identity.noExercise === false))
+  }) : null;
   // A goal can stay pinned to another native engine after a chat selection.
   // Product invalidations refresh the same binding; they own no goal cache.
   const refreshGoal = () => { if (!globalThis.document?.hidden) void conversation.refreshGoal(); };
@@ -80,6 +88,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     if (identity.learningAttemptId !== undefined && reference?.attemptId === identity.learningAttemptId) {
       data.trainingQuestion = projectTrainingQuestion(reference);
     }
+    if (presentation) data.clientId = Object.hasOwn(authored, "clientId") ? authored.clientId : presentation.clientId;
     return { ...authored, submissionKind, data, request: { text: String(authored.message || ""), data,
       ...(authored.attachmentIds?.length ? { attachmentIds: authored.attachmentIds } : {}),
       ...(submissionKind === "steer" ? { steer: true } : {}) } };
@@ -112,9 +121,22 @@ function createConversationApplication(conversation, { identity, viewer, summary
         : await conversation.cancel();
       if (result?.ok === false) throw vibe64ApiError(result, "Assistant turn could not be interrupted.");
       return result;
-    } finally { void mounted.refresh({ reason: "agent-turn-interrupted" }).catch(() => {}); }
+    } finally {
+      presentation?.retire("The person stopped this Main explanation.");
+      void mounted.refresh({ reason: "agent-turn-interrupted" }).catch(() => {});
+    }
   }
-  return { identity, mounted, conversationLog, access, agentSettings, available, steerable, trainingQuestion,
+  return { identity, mounted, conversationLog, access, agentSettings, available, steerable, trainingQuestion, presentation,
+    ...(identity.learningAttemptId !== undefined ? { async prepareVoice() {
+      if (!current.value || !available.value || !access.canUseChat.value) throw new Error("This lesson conversation is no longer available for voice.");
+      // Prepare ONLY a newly opened voice session, before the original controller
+      // releases its old owner or primes the new queue. Reconnect/page loads do
+      // not re-run this gate or disable an already admitted microphone.
+      if (!conversation.snapshot.value) await conversation.reload();
+      if (!current.value || !available.value || !access.canUseChat.value || !conversation.snapshot.value || conversation.error.value) {
+        throw new Error("Wait for this lesson’s chat updates to load, then open voice again.");
+      }
+    } } : {}),
     canSubmit: conversation.canSubmit, queueWhileSending: conversation.queueWhileSending,
     delivery: conversation.delivery, draft: conversation.draft, draftAttachments: conversation.draftAttachments,
     draftRetry: conversation.draftRetry, draftRetryMatches: conversation.draftRetryMatches,
@@ -130,7 +152,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
 }
 
 /** Main text and voice consume one supplied retained conversation. */
-function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath, learningAttemptId, learnerId, active = true, summarySession } = {}) {
+function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath, learningAttemptId, learnerId, noExercise, sourceProjectSlug, active = true, summarySession } = {}) {
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   const identity = computed(() => {
     const target = { sessionId: String(toValue(sessionId) || ""), projectSlug: String(toValue(projectSlug) || ""),
@@ -141,9 +163,15 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
       target.viewerActorKey = target.actorKey;
       target.learningAttemptId = attempt;
       target.learnerId = typeof toValue(learnerId) === "string" ? toValue(learnerId) : "";
+      if (toValue(noExercise) === false) {
+        target.noExercise = false;
+        target.sourceProjectSlug = String(toValue(sourceProjectSlug) || "");
+      }
       // Only the host's actual API-returned own learner identity scopes this
       // Main binding. It neither changes the global viewer nor grants access.
-      const ready = !target.projectSlug && target.learnerId && target.actorKey &&
+      const sourceConfirmed = target.noExercise !== false ||
+        /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u.test(target.sourceProjectSlug);
+      const ready = sourceConfirmed && !target.projectSlug && target.learnerId && target.actorKey &&
         target.sessionsApiPath === `/api/learning/${attempt}/vibe64/sessions`;
       target.actorKey = ready ? JSON.stringify(["learning", target.actorKey, target.learnerId, attempt]) : "";
     }
@@ -156,7 +184,8 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
       try { return mainConversationId(target); } catch { return ""; }
     },
     actorKey: () => identity.value.actorKey, endpoint: "/api/assistant/app", surfaceId: "app", hostSurfaceId: "app",
-    workspaceSlug: "", active, goal: true, deferWhileWorking: true, draftStorage: () => browserDraftStorage(identity.value),
+    workspaceSlug: "", active, goal: true, deferWhileWorking: true,
+    onEvent: event => binding.runtime.value?.application.presentation?.receiveEvent(event), draftStorage: () => browserDraftStorage(identity.value),
     api: createAssistantApi({ request: (url, options) => getHttpWebClient().request(url, options),
       resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app" }),
     application(conversation) {

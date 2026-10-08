@@ -165,7 +165,7 @@ function nodeText(node) {
 
 // Real Onboarding setup/template, QueryClient, command, feedback and realtime;
 // only Vuetify presentation and the ready OutputControls slot are stand-ins.
-function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false } = {}) {
+function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false, withLearningMain = false, practiceLearning = false } = {}) {
   mocks.live = live;
   if (withPresentation || withAutopilotPreview) mocks.visuals = [];
   const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, lessonsAvailable, appAvailable, attemptId, sessionId: "session-a", projectSlug: "project-a", presentation: null });
@@ -200,7 +200,10 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
         const scope = JSON.stringify([viewer.value?.actorKey, props.projectSlug, props.sessionId, url]);
         if (options.method === "POST") {
           expect(savedVisual?.scope).toBe(scope);
-          if (url.startsWith("/api/learning/")) expect(Object.hasOwn(options.body, "projectSlug")).toBe(false);
+          if (url.startsWith("/api/learning/")) {
+            if (practiceLearning) expect(options.body.projectSlug).toBe(props.conversationRuntime.identity.sourceProjectSlug);
+            else expect(Object.hasOwn(options.body, "projectSlug")).toBe(false);
+          }
           else expect(options.body.projectSlug).toBe(props.projectSlug);
           expect(options.body.sessionId).toBe(props.sessionId);
           expect(options.body.expectedRevision).toBe(checkpointRevision);
@@ -1501,4 +1504,42 @@ it("passes the actual retained Main Learning identity into the compiled Preview 
     }
     expect(fixture.checkpointWrites).toHaveLength(0); expect(fixture.conversationRequests).toHaveLength(0);
   } finally { identityApp.unmount(); fixture.close(); }
+});
+
+
+it("opens the same lesson player for a captured practice Main target and retires a changed source display identity", async () => {
+  const fixture = mountOnboarding({ withAutopilotPreview: true, lessonsAvailable: true, appAvailable: false, projectPane: "dashboard", practiceLearning: true });
+  try {
+    configureActualLearningPreview(fixture, { noExercise: false, sourceProjectSlug: "practice-confirmed" });
+    fixture.props.sessionId = `training-${visualRequest.attemptId}`;
+    fixture.props.conversationRuntime.identity.sessionId = fixture.props.sessionId;
+    await Vue.nextTick(); await Vue.nextTick();
+    const bridge = fixture.colleaguePreview.value;
+    expect(bridge).toBeTruthy(); expect(bridge.projectSlug).toBe("practice-confirmed");
+    expect(bridge.sessionId).toBe(fixture.props.sessionId);
+    expect(fixture.props.conversationRuntime.identity.projectSlug).toBe("");
+    const opening = bridge.presentation.open(visualRequest);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    const expectedUrl = `/api/learning/${visualRequest.attemptId}/vibe64/sessions/${fixture.props.sessionId}/training/visuals/alternate`;
+    expect(fixture.visualReads[0].url).toBe(expectedUrl);
+    fixture.visualReads[0].resolve(visualResource());
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1)); mocks.visuals[0].ready();
+    expect(await opening).toMatchObject({ ok: true, phase: "ready", visible: true });
+    const command = bridge.presentation.command({ ...visualRequest, commandId: "practice-advance", name: "advance", parameters: { label: "Seen" } });
+    await vi.waitFor(() => expect(mocks.visuals[0].operations).toHaveLength(1));
+    mocks.visuals[0].finish(0, { state: "arrived", paused: true });
+    expect(await command).toMatchObject({ ok: true, commandId: "practice-advance", phase: "completed", state: "arrived" });
+    expect(fixture.checkpointWrites[0].url).toBe(expectedUrl);
+    expect(fixture.checkpointWrites[0].options.body).toEqual({ requestId: expect.any(String), expectedRevision: 0,
+      projectSlug: "practice-confirmed", sessionId: fixture.props.sessionId,
+      snapshot: { state: "arrived", paused: true, labels: {} } });
+    expect(fixture.button("App")).toBeNull(); expect(fixture.outputs.mounted).not.toHaveBeenCalled();
+    expect(fixture.reads).toHaveLength(0); expect(fixture.writes).toHaveLength(0);
+    fixture.props.projectSlug = "unrelated-working"; await Vue.nextTick();
+    expect(bridge.projectSlug).toBe("practice-confirmed"); expect(bridge.presentation.state.phase).toBe("ready");
+    fixture.props.conversationRuntime.identity.sourceProjectSlug = "different-confirmed-source";
+    await Vue.nextTick(); await Vue.nextTick();
+    expect(bridge.presentation.state.phase).toBe("closed");
+    await expect(bridge.presentation.command({ ...visualRequest, commandId: "retired", name: "advance", parameters: { label: "No" } })).rejects.toThrow(/selected|identity/u);
+  } finally { fixture.close(); }
 });

@@ -65,11 +65,13 @@ function createTrainingTeachingOwner({ learners, content } = {}) {
     }
     const lesson = await content.readLesson({ ...attempt.pin.topic,
       lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
-    const learningVisual = learningScope?.noExercise === true &&
+    const learningVisual = typeof learningScope?.noExercise === "boolean" &&
       learningScope.learnerId === state.progress.learnerId &&
       learningScope.attemptId === requestedAttemptId &&
       isDeepStrictEqual(learningScope.pin, attempt.pin) &&
-      attempt.preparation.phase === "reserved" && !lesson.lesson.exercise;
+      (learningScope.noExercise
+        ? attempt.preparation.phase === "reserved" && !lesson.lesson.exercise
+        : attempt.preparation.phase === "ready" && Boolean(attempt.preparation.initialSessionId) && Boolean(lesson.lesson.exercise));
     if ((learningScope && !learningVisual) || (!questionPreparationReady(attempt, lesson, assessmentId) && !learningVisual)) {
       throw failure("VIBE64_TRAINING_PREPARATION_REQUIRED", "Finish the saved exercise preparation before preparing or capturing a question.");
     }

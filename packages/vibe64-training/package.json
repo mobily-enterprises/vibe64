@@ -12,6 +12,7 @@
     "./server/teaching-brief": "./src/server/teachingBrief.js",
     "./server/teaching": "./src/server/teaching.js",
     "./server/delivery-proof": "./src/server/deliveryProof.js",
+    "./server/teaching-role": "./src/server/teachingRole.js",
     "./server/teaching-actions": "./src/server/teachingActions.js",
     "./server/answer-assessment": "./src/server/answerAssessment.js",
     "./server/assessment-actions": "./src/server/assessmentActions.js",
@@ -31,11 +32,15 @@
     "./client/presentation-cue": "./src/client/useTrainingPresentationCue.js",
     "./client/navigation": "./src/client/createTrainingNavigation.js",
     "./server/main-teaching": "./src/server/mainTeaching.js",
+    "./server/main-presentation-actions": "./src/server/mainPresentationActions.js",
+    "./server/main-presentation-routes": "./src/server/mainPresentationRoutes.js",
+    "./client/main-presentation": "./src/client/useTrainingMainPresentation.js",
     "./server/visual-resource-actions": "./src/server/visualResourceActions.js",
     "./server/visual-resource-routes": "./src/server/visualResourceRoutes.js",
     "./client/preview-registration": "./src/client/useTrainingPreviewRegistration.js",
     "./server/presentation-coordination": "./src/server/presentationCoordination.js",
-    "./client/presentation-operation": "./src/client/presentationOperation.js"
+    "./client/presentation-operation": "./src/client/presentationOperation.js",
+    "./shared/presentation-schemas": "./src/shared/presentationSchemas.js"
   },
   "jskit": {
     "kind": "runtime",

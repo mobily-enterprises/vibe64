@@ -1,4 +1,5 @@
-import { computed, createRenderer, h, onScopeDispose, reactive, ref, nextTick } from "vue";
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
+import { computed, createRenderer, h, onScopeDispose, reactive, ref, nextTick, ssrContextKey } from "vue";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
 const mocks = vi.hoisted(() => ({ mounted: vi.fn(), log: vi.fn(), access: vi.fn(), request: vi.fn(), read: vi.fn() }));
@@ -6,7 +7,7 @@ vi.mock("../../src/composables/useVibe64MountedSessionData.js", () => ({ useVibe
 vi.mock("../../src/composables/useVibe64ConversationLog.js", () => ({ useVibe64ConversationLog: mocks.log }));
 vi.mock("../../src/composables/useVibe64AssistantAccess.js", () => ({ useVibe64AssistantAccess: mocks.access }));
 vi.mock("../../src/composables/useVibe64AgentSettings.js", () => ({ useVibe64AgentSettings: () => ({ settings: ref({ providerId: "codex" }), requestSettings: ref(null) }) }));
-vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => ({ request: (url, options) => options?.method === "GET" ? mocks.read(url, options) : mocks.request(url, options) }) }));
+vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => ({ request: (url, options) => url.includes("/training/presentation") ? Promise.resolve({ ok: true, navigation: null, cue: null }) : options?.method === "GET" ? mocks.read(url, options) : mocks.request(url, options) }) }));
 import { useVibe64ConversationRuntime } from "../../src/composables/useVibe64ConversationRuntime.js";
 import { createProjectVoiceBinding } from "../../packages/vibe64-voice/src/client/projectVoiceBinding.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
@@ -18,7 +19,7 @@ const renderer = createRenderer({ createElement: () => ({}), createText: () => (
 const releases = [];
 afterEach(() => { releases.splice(0).reverse().forEach(release => release()); vi.clearAllMocks(); });
 function fixture({ readGoal = () => null, status = "ready", steering = true,
-  learningAttemptId, learnerId, projectSlug = "one", sessionId = "s1", sessionsApiPath = "/api/vibe64/sessions" } = {}) {
+  learningAttemptId, learnerId, projectSlug = "one", sessionId = "s1", sessionsApiPath = "/api/vibe64/sessions", beforeMount } = {}) {
   const disposed = [];
   const owners = [];
   mocks.mounted.mockImplementation(identity => {
@@ -47,7 +48,13 @@ function fixture({ readGoal = () => null, status = "ready", steering = true,
     return () => h("div");
   } });
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
-  provideConversationFixture(app, socket, "owner"); app.mount({});
+  provideConversationFixture(app, socket, "owner");
+  if (!beforeMount) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    app.use(VueQueryPlugin, { queryClient });
+    releases.push(() => queryClient.clear());
+  }
+  beforeMount?.(app, { socket, read, selected }); app.mount({});
   releases.push(() => app.unmount());
   return { app, runtime, selected, viewer, owners, disposed, access, socket,
     snapshot(identity, fields) {
@@ -431,7 +438,7 @@ describe("same Main voice binding for actual source-less Learning", () => {
     expect(binding.conversationId).toBe(mainConversationId({ learningAttemptId: attempt, sessionId: "lesson" }));
     expect(binding.socketUrl).toBe(`${path}/lesson/voice/ws`); expect(binding.label).toBe("Lesson · lesson");
     expect(binding.preferenceTarget).toBe("coding"); expect(binding.defaults).toEqual({ readAloud: true });
-    const context = binding.captureContext(); expect(context).toEqual(runtime.identity);
+    const context = binding.captureContext(); expect(context).toEqual({ ...runtime.identity, clientId: runtime.presentation.clientId });
     binding.retain(); releases.push(() => binding.release());
     await binding.submitText("Teach me the next step", { messageId: "lesson-voice", context });
     expect(mocks.request).toHaveBeenCalledTimes(1);
@@ -510,7 +517,7 @@ describe("Main lesson answer context uses the original conversation snapshot", (
   it("never associates an earlier ordinary recording with a later delivered question", async () => {
     const f = lessonFixture(); const runtime = f.runtime.value;
     const binding = createProjectVoiceBinding(runtime); const context = binding.captureContext();
-    expect(context).toEqual(runtime.identity);
+    expect(context).toEqual({ ...runtime.identity, clientId: runtime.presentation.clientId });
     const question = lessonQuestion();
     f.snapshot(runtime.identity, { trainingQuestion: question });
     await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(question));
@@ -548,5 +555,233 @@ describe("Main lesson answer context uses the original conversation snapshot", (
     learning.snapshot(target.identity, { trainingQuestion: { ...lessonQuestion(), attemptId: learningAttemptB } });
     await vi.waitFor(() => expect(target.trainingQuestion.value).toBe(null));
     expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Deferred first hydration uses the original reader, mounted product host,
+// controller, session and transport. Only their browser/service endpoints are controlled.
+async function mountedOriginalMainVoice() {
+  const { default: VoiceHost } = await import("../../packages/vibe64-voice/src/client/Vibe64VoiceHost.vue");
+  const { useVibe64Voice, VIBE64_VOICE_KEY } = await import("../../packages/vibe64-voice/src/client/voiceHost.js");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  let voice;
+  const Probe = { setup() { voice = useVibe64Voice(); return () => h("div"); } };
+  // The test pipeline compiles SFCs for SSR; retain the actual Host setup and
+  // lifecycle while rendering only its supplied probe slot in this renderer.
+  const MountedVoiceHost = { ...VoiceHost, render() { return h("div", this.$slots.default?.()); } };
+  const host = renderer.createApp({ render: () => h(MountedVoiceHost, {
+    preferences: { actorKey: "owner", coding: { readAloud: true, vocalizeThinking: true, vocalizeInterimTurns: true } }
+  }, { default: () => h(Probe) }) });
+  host.provide(ssrContextKey, { modules: new Set() });
+  host.mount({});
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const controlled = { heldId: "", httpReads: 0, socketAcknowledgements: 0, response: null,
+    gate: Promise.withResolvers() };
+  let readState;
+  function beforeMount(app, { socket, read }) {
+    readState = read;
+    app.use(VueQueryPlugin, { queryClient });
+    app.provide(VIBE64_VOICE_KEY, voice);
+    const originalEmit = socket.emit.bind(socket);
+    socket.emit = (name, input, acknowledge) => {
+      if (name === "assistant.conversation.subscribe" && input.conversationId === controlled.heldId) {
+        controlled.socketAcknowledgements += 1;
+        // Original socket owns its epoch/subscription/reducer; only ACK timing changes.
+        void controlled.gate.promise.then(response => {
+          expect(response).toBe(read(input.conversationId));
+          originalEmit(name, input, acknowledge);
+        });
+        return;
+      }
+      return originalEmit(name, input, acknowledge);
+    };
+    mocks.read.mockImplementation(url => {
+      if (url.endsWith("/goal")) return null;
+      if (url.includes("/training/presentation")) return { ok: true, navigation: null, cue: null };
+      const id = decodeURIComponent(url.split("/conversations/")[1]);
+      if (id !== controlled.heldId) return read(id);
+      controlled.httpReads += 1;
+      return controlled.gate.promise;
+    });
+  }
+  function hold(identity) {
+    controlled.heldId = mainConversationId(identity);
+    controlled.response = readState(controlled.heldId);
+    const user = { role: "user", messageId: "historic-question", text: "Earlier accepted request", receipt: true };
+    const assistant = { role: "assistant", messageId: "historic-answer", outputId: "historic-output",
+      text: "This is an earlier completed answer and must not be narrated again.", status: "completed" };
+    // Saved SERVER response, not a seeded Runtime/voice snapshot. Both channels await it.
+    controlled.response.conversationLog.push({ turnId: "historic-turn", messages: [user, assistant],
+      user, assistant, metadata: { runtime: { status: "complete", origin: "user" } } });
+  }
+  let closed = false;
+  async function close() {
+    if (closed) return;
+    closed = true;
+    controlled.gate.resolve(controlled.response);
+    await voice.controller.dispose();
+    host.unmount();
+    queryClient.clear();
+  }
+  return { voice, controlled, beforeMount, hold,
+    release: () => controlled.gate.resolve(controlled.response), close };
+}
+
+function controlledVoiceBrowserEndpoints() {
+  const sockets = [];
+  const frames = [];
+  const audioContexts = [];
+  const microphone = vi.fn(async () => { throw new Error("This target-order test never opens a microphone."); });
+  class Socket {
+    constructor(url) {
+      this.url = url; this.readyState = 1; this.listeners = new Map(); sockets.push(this);
+      queueMicrotask(() => this.fire("message", { data: JSON.stringify({ type: "voice.ready", voices: [] }) }));
+    }
+    addEventListener(name, listener) {
+      if (!this.listeners.has(name)) this.listeners.set(name, new Set());
+      this.listeners.get(name).add(listener);
+    }
+    removeEventListener(name, listener) { this.listeners.get(name)?.delete(listener); }
+    fire(name, event) { for (const listener of [...this.listeners.get(name) || []]) listener(event); }
+    send(value) { frames.push({ url: this.url, body: JSON.parse(value) }); }
+    close() { if (this.readyState === 3) return; this.readyState = 3; this.fire("close", {}); }
+  }
+  class AudioContext {
+    constructor() { this.state = "running"; this.currentTime = 0; this.destination = {}; audioContexts.push(this); }
+    createGain() { return { gain: { value: 1 }, connect() {}, disconnect() {} }; }
+    createAnalyser() { return { connect() {}, disconnect() {} }; }
+    resume() { return Promise.resolve(); }
+    close() { this.state = "closed"; return Promise.resolve(); }
+  }
+  vi.stubGlobal("WebSocket", Socket);
+  vi.stubGlobal("window", { AudioContext, addEventListener() {}, removeEventListener() {} });
+  vi.stubGlobal("location", { href: "http://localhost/app" });
+  vi.stubGlobal("navigator", { mediaDevices: { getUserMedia: microphone } });
+  return { sockets, frames, audioContexts, microphone,
+    speech: () => frames.filter(frame => frame.body.type === "speak.start"),
+    restore: () => vi.unstubAllGlobals() };
+}
+
+const hydrationAttempt = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+function selectHydrationSession(f, sessionId) { f.selected.sessionId = sessionId; }
+function hydrationRuntime(f, sessionId) {
+  expect(f.runtime.value.identity.sessionId).toBe(sessionId);
+  return f.runtime.value;
+}
+
+describe("actual Main VoiceHost awaits the captured reader's first hydration", () => {
+  it("retains the original capture target and lease until hydration, primes history silently once, then speaks only the next canonical output", async () => {
+    const endpoints = controlledVoiceBrowserEndpoints();
+    const mounted = await mountedOriginalMainVoice();
+    try {
+      const f = fixture({ projectSlug: "", learningAttemptId: hydrationAttempt, learnerId: "42",
+        sessionId: "old-target", sessionsApiPath: `/api/learning/${hydrationAttempt}/vibe64/sessions`,
+        beforeMount: mounted.beforeMount });
+      const original = f.runtime.value;
+      const oldBinding = createProjectVoiceBinding(original, { presentation: "inline" });
+      const oldRelease = vi.spyOn(oldBinding, "release");
+      expect(await mounted.voice.open(oldBinding)).toBe(true);
+      const oldSession = mounted.voice.controller.state.session;
+      const oldCapture = oldBinding.captureContext();
+      mounted.hold({ ...original.identity, sessionId: "hydrating-target" });
+      selectHydrationSession(f, "hydrating-target"); await nextTick();
+      const target = hydrationRuntime(f, "hydrating-target");
+      const binding = createProjectVoiceBinding(target, { presentation: "inline" });
+      const retained = vi.spyOn(binding, "retain");
+      expect(typeof target.prepareVoice).toBe("function");
+      expect(target.conversationLog.turns).toEqual([]);
+      const opening = mounted.voice.open(binding);
+      await vi.waitFor(() => expect(mounted.controlled.httpReads).toBeGreaterThan(0));
+      expect(mounted.controlled.socketAcknowledgements).toBeGreaterThan(0);
+      expect(mounted.voice.controller.state.binding.id).toBe(oldBinding.id);
+      expect(mounted.voice.controller.state.binding.captureContext()).toEqual(oldCapture);
+      expect(mounted.voice.controller.state.session).toBe(oldSession);
+      expect(oldRelease).not.toHaveBeenCalled();
+      expect(retained).not.toHaveBeenCalled();
+      expect(binding.available).toBe(true); // No availability=false hydration shortcut.
+      expect(endpoints.microphone).not.toHaveBeenCalled();
+      expect(endpoints.speech()).toEqual([]);
+      mounted.release();
+      expect(await opening).toBe(true);
+      expect(oldRelease).toHaveBeenCalledTimes(1);
+      expect(retained).toHaveBeenCalledTimes(1);
+      expect(mounted.voice.controller.state.session).not.toBe(oldSession);
+      expect(mounted.voice.controller.state.binding.captureContext().sessionId).toBe("hydrating-target");
+      await vi.waitFor(() => expect(target.conversationLog.turns).toHaveLength(1));
+      expect(mounted.voice.controller.state.session.voiceAnswer.value).toBe(mounted.controlled.response.conversationLog[0].assistant.text);
+      await nextTick();
+      expect(endpoints.speech()).toEqual([]);
+      f.socket.notify({ type: "phase" }, binding.conversationId); await nextTick();
+      expect(await mounted.voice.open(binding)).toBe(true);
+      expect(retained).toHaveBeenCalledTimes(1);
+      expect(endpoints.speech()).toEqual([]);
+      const words = "This new canonical answer may now be sent to the speech service.";
+      f.receipt(target.identity, { user: { role: "user", messageId: "fresh-question", text: "Next question", receipt: true },
+        assistant: { role: "assistant", messageId: "fresh-answer", outputId: "fresh-output", text: words, status: "completed" },
+        metadata: { runtime: { status: "complete", origin: "user" } } });
+      await vi.waitFor(() => expect(endpoints.speech()).toHaveLength(1));
+      expect(endpoints.speech()[0].body).toMatchObject({ type: "speak.start", text: words, stream: true });
+      expect(endpoints.speech()[0].url).toContain("/hydrating-target/voice/ws");
+      f.socket.notify({ type: "phase" }, binding.conversationId); await nextTick();
+      expect(endpoints.speech()).toHaveLength(1);
+      expect(endpoints.speech().some(frame => frame.body.text.includes("earlier completed answer"))).toBe(false);
+      expect(endpoints.microphone).not.toHaveBeenCalled();
+      expect(mocks.request.mock.calls.filter(([url]) => url.endsWith("/messages"))).toEqual([]);
+    } finally { await mounted.close(); endpoints.restore(); }
+  });
+
+  it("supersedes a held prepare without creating a target session or releasing the existing capture lease", async () => {
+    const endpoints = controlledVoiceBrowserEndpoints(); const mounted = await mountedOriginalMainVoice();
+    try {
+      const f = fixture({ projectSlug: "", learningAttemptId: hydrationAttempt, learnerId: "42", sessionId: "retained-target",
+        sessionsApiPath: `/api/learning/${hydrationAttempt}/vibe64/sessions`, beforeMount: mounted.beforeMount });
+      const original = f.runtime.value; const oldBinding = createProjectVoiceBinding(original, { presentation: "inline" });
+      const oldRelease = vi.spyOn(oldBinding, "release");
+      expect(await mounted.voice.open(oldBinding)).toBe(true);
+      const oldSession = mounted.voice.controller.state.session;
+      mounted.hold({ ...original.identity, sessionId: "superseded-target" });
+      selectHydrationSession(f, "superseded-target"); await nextTick();
+      const binding = createProjectVoiceBinding(hydrationRuntime(f, "superseded-target"), { presentation: "inline" });
+      const retained = vi.spyOn(binding, "retain"); const opening = mounted.voice.open(binding);
+      await vi.waitFor(() => expect(mounted.controlled.httpReads).toBeGreaterThan(0));
+      const staying = mounted.voice.open(oldBinding); // Actual controller revision supersedes pending activation.
+      expect(mounted.voice.controller.state.session).toBe(oldSession);
+      expect(oldRelease).not.toHaveBeenCalled();
+      mounted.release(); expect(await opening).toBe(false); expect(await staying).toBe(true);
+      expect(mounted.voice.controller.state.session).toBe(oldSession);
+      expect(mounted.voice.controller.state.binding.id).toBe(oldBinding.id);
+      expect(mounted.voice.controller.state.binding.captureContext().sessionId).toBe("retained-target");
+      expect(retained).not.toHaveBeenCalled(); expect(oldRelease).not.toHaveBeenCalled();
+      expect(endpoints.sockets).toEqual([]); expect(endpoints.audioContexts).toEqual([]);
+      expect(endpoints.microphone).not.toHaveBeenCalled();
+      expect(mocks.request.mock.calls.filter(([url]) => url.endsWith("/messages"))).toEqual([]);
+    } finally { await mounted.close(); endpoints.restore(); }
+  });
+
+  it("refuses a held first hydration after the actual viewer changes without creating the new voice lease", async () => {
+    const endpoints = controlledVoiceBrowserEndpoints(); const mounted = await mountedOriginalMainVoice();
+    try {
+      const f = fixture({ projectSlug: "", learningAttemptId: hydrationAttempt, learnerId: "42", sessionId: "old-owner-target",
+        sessionsApiPath: `/api/learning/${hydrationAttempt}/vibe64/sessions`, beforeMount: mounted.beforeMount });
+      const original = f.runtime.value; const oldBinding = createProjectVoiceBinding(original, { presentation: "inline" });
+      expect(await mounted.voice.open(oldBinding)).toBe(true);
+      mounted.hold({ ...original.identity, sessionId: "revoked-target" });
+      selectHydrationSession(f, "revoked-target"); await nextTick();
+      const target = hydrationRuntime(f, "revoked-target");
+      const binding = createProjectVoiceBinding(target, { presentation: "inline" }); const retained = vi.spyOn(binding, "retain");
+      const result = mounted.voice.open(binding).then(value => ({ value }), error => ({ error }));
+      await vi.waitFor(() => expect(mounted.controlled.httpReads).toBeGreaterThan(0));
+      f.viewer.value = { actorKey: "another-person" }; await nextTick();
+      mounted.release();
+      const outcome = await result;
+      expect(outcome.error).toBeInstanceOf(Error);
+      expect(outcome.error.message).toMatch(/load|available|voice/i);
+      expect(target.available.value).toBe(false);
+      expect(retained).not.toHaveBeenCalled();
+      expect(mounted.voice.controller.state.binding?.id).not.toBe(binding.id);
+      expect(endpoints.sockets).toEqual([]); expect(endpoints.audioContexts).toEqual([]);
+      expect(endpoints.microphone).not.toHaveBeenCalled();
+      expect(mocks.request.mock.calls.filter(([url]) => url.endsWith("/messages"))).toEqual([]);
+    } finally { await mounted.close(); endpoints.restore(); }
   });
 });

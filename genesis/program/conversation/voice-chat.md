@@ -15,6 +15,7 @@ runtime while retaining its own identity, authorization and conversation history
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `src/App.vue`
+- `packages/vibe64-training/src/client/useTrainingMainPresentation.js`
 
 ## Public contract
 
@@ -224,3 +225,26 @@ The microphone remains available for hands-free restart during pending delivery.
 JSKIT preserves the prior pending transcript and newer original recording owner;
 busy Pause or hold release finalizes newer words after the previous admission.
 The idle launcher's microphone icon reflects actual capture, rather than readiness.
+
+### Candidate Learning Main presentation speech preparation
+
+Only a Learning Main binding supplies prepareVoice. Before the existing controller
+activates, retains or creates a new voice target, the same Vibe64VoiceHost callback
+awaits that captured binding's authoritative original conversation snapshot. It
+uses the original reader's reload only when no snapshot exists and refuses a
+changed or unavailable target. Default bindings still return their original socket
+URL directly. Availability is not used as a loading flag and the application adds
+no voice queue, history cache, seen ledger or generic controller state.
+
+The original controller already awaits connection preparation before releasing
+its previous target. Actual deferred first-snapshot ordering, old microphone
+ownership and silent initial-history priming must be proved in the original
+mounted Main consumer/controller test. Late older-page history behavior remains
+an open acceptance gate; this candidate does not infer deletion from page absence
+or promise safe tombstone reset on a fresh attachment.
+
+Learning Main cue ownership also projects the original optional-narration
+eligibility flag for its unconfirmed or retired originating request. Raw turns,
+loading and saved thinking/interim preferences remain unchanged; the existing
+voice tracker consumes activity silently without resetting its identities.
+Working and Colleague keep their original narration projection.

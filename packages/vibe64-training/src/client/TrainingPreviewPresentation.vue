@@ -1,4 +1,5 @@
 <script setup>
+import { mainConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { computed, inject, nextTick, onBeforeUnmount, ref, shallowRef, unref, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
@@ -19,14 +20,17 @@ const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
 const actorKey = computed(() => unref(viewer)?.actorKey || "");
 const learningAvailable = computed(() => {
   const binding = props.learningBinding;
-  return !props.appAvailable && props.lessonsAvailable && !props.projectSlug && binding &&
+  return !props.appAvailable && props.lessonsAvailable && binding &&
+    (binding.noExercise === false
+      ? /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u.test(binding.sourceProjectSlug || "") && props.projectSlug === binding.sourceProjectSlug
+      : !props.projectSlug) &&
     actorKey.value && binding.viewerActorKey === actorKey.value && typeof binding.actorKey === "string" && binding.actorKey && binding.learnerId && !binding.projectSlug &&
     binding.learningAttemptId === props.attemptId && binding.sessionId === props.sessionId &&
     /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(props.attemptId) &&
     binding.sessionsApiPath === `/api/learning/${props.attemptId}/vibe64/sessions`;
 });
 function sameLearningBinding(expected) {
-  return learningAvailable.value && ["actorKey", "viewerActorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath"]
+  return learningAvailable.value && ["actorKey", "viewerActorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath", "noExercise", "sourceProjectSlug"]
     .every(key => expected[key] === props.learningBinding[key]);
 }
 const selection = shallowRef(null);
@@ -132,7 +136,8 @@ async function open({ attemptId, visualId } = {}) {
   let expected = selection.value;
   if (expected?.attemptId !== attemptId || expected.visualId !== visualId || !resource.value) {
     expected = { attemptId, visualId, ...(learningAvailable.value ? { learningBinding: Object.freeze(
-      Object.fromEntries(["actorKey", "viewerActorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath"]
+      Object.fromEntries(["actorKey", "viewerActorKey", "learnerId", "learningAttemptId", "sessionId", "sessionsApiPath",
+        ...(props.learningBinding.noExercise === false ? ["noExercise", "sourceProjectSlug"] : [])]
         .map(key => [key, props.learningBinding[key]]))) } : {}) };
     selection.value = expected;
     resource.value = null;
@@ -175,7 +180,7 @@ async function saveCheckpoint(expected, transition) {
   if (transition !== transitionRevision || instance !== value.playerInstanceId) return;
   checkpointOperation = { expected, instance, transition, actor: actorKey.value, projectSlug: props.projectSlug,
     body: { requestId: crypto.randomUUID(), expectedRevision: fresh.revision,
-      ...(!expected.learningBinding ? { projectSlug: props.projectSlug } : {}),
+      ...(!expected.learningBinding || expected.learningBinding.noExercise === false ? { projectSlug: props.projectSlug } : {}),
       sessionId: props.sessionId, snapshot: value.snapshot } };
   await retryCheckpoint();
 }
@@ -253,7 +258,10 @@ async function armCue(input) {
   const expected = exactSelection(input);
   await ready(expected);
   for (const key of ["cueId", "commandId", "navigationId", "conversationId", "turnId", "clientId"]) {
-    if (typeof input[key] !== "string" || !/^[a-zA-Z0-9:_-]{1,128}$/u.test(input[key])) {
+    const mainIdentity = key === "conversationId" && expected.learningBinding && sameLearningBinding(expected.learningBinding) &&
+      typeof input[key] === "string" && new TextEncoder().encode(input[key]).byteLength <= 256 &&
+      input[key] === mainConversationId({ learningAttemptId: expected.attemptId, sessionId: expected.learningBinding.sessionId });
+    if (!mainIdentity && (typeof input[key] !== "string" || !/^[a-zA-Z0-9:_-]{1,128}$/u.test(input[key]))) {
       throw new Error("A lesson cue requires its exact admitted conversation and command identities.");
     }
   }
@@ -391,7 +399,7 @@ watch([visible, () => display.value.phase], () => {
 }, { flush: "post" });
 watch([actorKey, () => props.projectSlug, () => props.sessionId, () => props.attemptId,
   () => props.learningBinding?.actorKey, () => props.learningBinding?.viewerActorKey, () => props.learningBinding?.learnerId,
-  () => props.learningBinding?.projectSlug,
+  () => props.learningBinding?.projectSlug, () => props.learningBinding?.noExercise, () => props.learningBinding?.sourceProjectSlug,
   () => props.learningBinding?.learningAttemptId, () => props.learningBinding?.sessionId,
   () => props.learningBinding?.sessionsApiPath], () => {
   retireCue("The learner or exercise changed.", false);
@@ -418,6 +426,7 @@ useTrainingPreviewRegistration({
   get sessionId() { return props.sessionId; },
   get learningAttemptId() { return props.attemptId; },
   get learnerId() { return props.learningBinding?.learnerId; },
+  get noExercise() { return props.learningBinding?.noExercise; },
   get screen() { return undefined; }
 }, () => props.active && learningAvailable.value);
 defineExpose({ presentation });
@@ -433,6 +442,9 @@ defineExpose({ presentation });
         {{ collapsed ? 'Restore presentation' : 'Minimise presentation' }}
       </v-btn>
     </div>
+    <p v-if="!appAvailable && learningBinding?.noExercise === false" role="status">
+      The practice App controls are unavailable in this installation. Keep this lesson and its saved workspace; lesson diagrams use Presentation.
+    </p>
     <div v-if="cue && ['awaiting-audio', 'awaiting-continue'].includes(cue.phase)" class="training-preview__choices">
       <p role="status">{{ cue.error || 'The explanation is ready. Continue when you are ready to watch.' }}</p>
       <v-btn min-height="48" variant="tonal" @click="continueCue">{{ cue.phase === 'awaiting-audio' ? 'Play diagram without sound' : 'Continue' }}</v-btn>

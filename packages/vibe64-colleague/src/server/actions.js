@@ -1,6 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createColleagueUsageKnowledge } from "./usageKnowledge.js";
+import { presentationReceipt, presentationCueReceipt, presentationClientId } from "@local/vibe64-training/shared/presentation-schemas";
 
 const text = { type: "string", noTrim: false, maxLength: 256, required: false };
 const integrationId = { ...text, noTrim: true, minLength: 1, maxLength: 200 };
@@ -24,21 +25,6 @@ const focusSchema = createSchema({
   lessonCuePhase: { type: "string", required: false, enum: ["armed", "awaiting-audio", "awaiting-continue", "playing", "completed", "interrupted", "failed"] }
 });
 const focusField = { type: "object", schema: focusSchema, required: false };
-const presentationReceipt = { type: "object", required: false, schema: createSchema({
-  attemptId: { ...text, required: true, maxLength: 36 }, visualId: { ...text, required: true, maxLength: 64 },
-  playerInstanceId: { ...text, required: true, minLength: 1, maxLength: 64 },
-  phase: { type: "string", required: false, enum: ["ready", "armed", "completed"] },
-  commandId: { ...text, maxLength: 64 }, state: { ...text, maxLength: 64 },
-  cueId: { ...text, maxLength: 64 }, navigationId: { ...text, maxLength: 128 },
-  conversationId: text, turnId: text, clientId: text, outputId: text,
-  canonicalFinal: { type: "boolean", required: false },
-  audioPhase: { ...text, maxLength: 32 }, visualPhase: { ...text, maxLength: 32 }, error: { ...text, maxLength: 2000 },
-  description: { ...text, maxLength: 2000 },
-  snapshot: { type: "object", required: false, schema: createSchema({
-    state: { ...text, required: true, maxLength: 64 }, paused: { type: "boolean", required: true },
-    labels: { type: "object", additionalProperties: true, required: true }
-  }) }
-}) };
 const navigationOutput = {
   mode: "replace",
   schema: createSchema({
@@ -48,7 +34,7 @@ const navigationOutput = {
     presentation: presentationReceipt
   })
 };
-const clientId = { ...text, minLength: 1, maxLength: 128, required: true };
+const clientId = presentationClientId;
 const modelSelectionFields = {
   assistantSelection: { type: "object", additionalProperties: true, required: true }
 };
@@ -240,15 +226,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     definition("navigation.acknowledge", {
       clientId, commandId: clientId, ok: { type: "boolean", required: true },
       error: { ...text, maxLength: 2000 }, focus: focusField, presentation: presentationReceipt,
-      cue: { type: "object", required: false, schema: createSchema({
-        ...Object.fromEntries(["cueId", "commandId", "navigationId", "conversationId", "turnId", "clientId", "attemptId", "visualId", "playerInstanceId", "outputId"]
-          .map(key => [key, { ...text, required: true, maxLength: key === "attemptId" ? 36 : 256 }])),
-        phase: { type: "string", required: true, enum: ["completed", "interrupted", "failed"] },
-        canonicalFinal: { type: "boolean", required: true },
-        audioPhase: { type: "string", required: true, enum: ["waiting", "off", "started", "completed", "interrupted", "failed"] },
-        visualPhase: { type: "string", required: true, enum: ["ready", "pending", "accepted", "completed", "interrupted", "failed"] },
-        state: { ...text, maxLength: 64 }, description: { ...text, maxLength: 2000 }, error: { ...text, maxLength: 2000 }
-      }) }
+      cue: presentationCueReceipt
     }, (input, context) => colleague.acknowledgeNavigation(input, context)),
     definition("navigation.open", { projectSlug: text, sessionId: text, conversationId: text, integrationId, integrationEnvironment, databaseView, databaseTable, planView,
       pane: { type: "string", required: false, enum: ["preview", "settings", "repository-settings", "env", "integrations", "access", "resources", "deploy", "history", "health", "session", "changes", "repository", "files", "database", "system", "ai-terminal", "issues", "pull-requests"] }

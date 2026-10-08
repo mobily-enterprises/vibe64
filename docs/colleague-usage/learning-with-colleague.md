@@ -1,4 +1,4 @@
-# Learn with Colleague
+# Lessons: Main teaches, Colleague supervises
 
 For authoring and Git publication, read `lesson-authoring`. For pinned content
 and owner recovery, read `teaching-content`.
@@ -15,20 +15,23 @@ does not support lesson preparation. Ask the owner to configure lesson support,
 then retry the same saved attempt when one exists.
 The yellow **L** control and original session panel now attach Learning mode;
 read `learning-mode-ui` for its exact controls and retained Working selection.
-Main is the intended teacher; Colleague remains the general supervisor. Native
-Main teaching, combined Preview and live acceptance are unfinished. The legacy
-Colleague teaching integration below is retained until that move is proved;
-it is not a separate approved teaching design. An empty catalogue needs owner
-installation/enablement, not an invented substitute. Setup readiness does not
-prove running Preview or lesson completion; only actual supported operations
-establish those results.
+The saved lesson's Main conversation is its teacher. Colleague supervises
+lesson selection, saved progress and authoring assignments. Its catalogue and
+execution refuse question preparation, quiz/practical grading and the five lesson
+visual operations, including old loaded contracts. Ask the actual Main to teach;
+if the host lacks that Main facility, keep the lesson pending rather than using
+Colleague as a substitute. Creating or resuming an attempt does not prove its
+Main chat opened. An empty catalogue needs owner installation/enablement,
+not an invented substitute.
 
 A lesson without a declared practice exercise stays reserved: it creates no
-project, session or Workspace setup. The fresh teaching brief identifies this
-with `lesson.exerciseRequired: false`. Colleague can teach its declared quizzes
-and grade your actual accepted answers through the same pinned rubric and saved
-progress. Do not repeatedly resume or inspect a nonexistent practice session.
-This does not allow practical assessments or diagrams to bypass preparation.
+practice project or Workspace setup. Its separately opened Learning Main is a
+private teacher conversation, not a practice exercise. The fresh teaching brief identifies this
+with `lesson.exerciseRequired: false`. The supported Main teacher can ask its declared quizzes
+and assess actual accepted answers through the same pinned rubric and saved
+progress. Main practical assessment requires its genuine observation facility;
+missing support leaves the practical incomplete. Do not repeatedly resume or inspect a nonexistent practice session.
+Practicals and diagrams retain their readiness guards.
 If a no-exercise lesson unexpectedly retains an exercise-preparation checkpoint,
 keep the progress and explicitly end/restart that lesson through its existing
 operations; it is not silently changed to ready.
@@ -40,7 +43,7 @@ the reserved session's actual `workspaceSetupStatus`. Resume rechecks that setup
 and saves proven readiness before `question.prepare`. Do not claim still running
 or nothing broken from the checkpoint. Ready is not running App Preview.
 
-Before each start, read `vibe64.training.courses.list` in that teaching turn
+Before each start, read `vibe64.training.courses.list` in that supervisor turn
 and `vibe64.training.learning.read` for the current revision/attempt. Choose an
 enabled listed release/lesson; historical catalogue results may be obsolete.
 After refusal, reread both before explaining it. A disabled old release does not
@@ -54,13 +57,14 @@ provides the teaching text, rubrics and diagrams. A missing help topic is not
 evidence that an installed course's content is missing. If the native brief or
 preparation actually fails, report that result and retain its exact saved target.
 
-A host-enabled lesson diagram uses the existing Preview area's **App preview** /
-**Colleague presentation** choice, with **Minimise presentation** and **Restore
-presentation**. The application and diagram remain mounted while switching.
+A host-enabled Main lesson diagram uses the existing Preview area's lesson
+**Presentation**. Read `learning-mode-ui` for its actual view choices; **App**
+requires a real prepared exercise. The application and diagram remain mounted
+while switching supported views.
 Hidden supported motion pauses; restoring a diagram does not automatically replay
 it. Diagram state and completion are display facts, not learner assessment evidence.
-Authenticated visual tool delivery and speech correlation are separate host work;
-this presentation component alone cannot claim that teaching is active.
+A diagram component alone does not establish active teaching or completed
+narration. Require its actual Main/native and player receipts.
 
 
 For explicitly ending a lesson and continuing its retained pin in a fresh exercise, read
@@ -95,7 +99,7 @@ answers stale. Saving/displaying a question neither accepts an answer nor grants
 evaluation/pass authority.
 
 A teaching cue binds one declared diagram transition to the actual final
-Colleague explanation, never a tool-progress sentence. Motion follows audible
+Main explanation, never a tool-progress sentence. Motion follows audible
 speech start; with sound off, **Continue** follows the finished transcript
 explanation. **Play diagram without sound** is an explicit recovery while sound
 has not started. The next cue/question waits for actual display and required audio
@@ -106,7 +110,7 @@ minimised, preserving its voice session and separate typed draft.
 
 
 When the host supplies the question owner, a typed Send captures the question
-actually delivered by the completed Colleague reply in this chat. A saved lesson
+actually delivered by the completed Main reply in that lesson chat. A saved lesson
 checkpoint or tool-progress sentence alone does not make a question available.
 Speech keeps the question captured when that utterance began, including while it waits behind a working reply or remains in review.
 Showing a newer question does not move those earlier words to it. A valid native
@@ -119,26 +123,22 @@ You can keep talking or typing if that question was replaced or its pinned
 content is unavailable. The message remains an ordinary, ungraded conversation
 message; it is never assigned to the newer question automatically. An accepted
 message retry keeps its original receipt. Old questions without recorded issuance
-remain ungradable until a new question is explicitly prepared. This is a local
-work-in-progress integration; operators must apply the prospective
-`20261007-training-question-admission` boundary with learner and conversation
-writers stopped, then complete hosted activation before the release claims
-answer correlation. The boundary records only its ledger entry: it does not
-rewrite old questions, messages or replies, invent provenance, or grade answers.
+remain ungradable until the Main teacher explicitly prepares a new question.
+Operators apply required state upgrades with writers stopped before activation.
+Upgrades do not invent old question provenance or grade historical words.
 
 Native quiz evaluation uses only the accepted learner message in the current
-interactive Colleague turn and its actually delivered question. Caller text,
+interactive Main teaching turn and its actually delivered question. Caller text,
 paraphrases, provisional words and unrelated history cannot substitute. The
 original restricted Helper evaluates the pinned rubric; the progress owner saves
 its feedback. Retrying the same submission reads its result before another
 inference; a new identity cannot bypass a consumed answer.
 
-Stopping Colleague or retiring that turn cancels evaluation without a pass.
+Stopping the Main teacher or retiring its admitted turn cancels evaluation without a pass.
 Missing support, interruption, stale questions or failed saves remain unsaved
 and recoverable. Keep the attempt/question; practicals require observed evidence.
 A confirmed Helper setup failure needs its existing AI Accounts model routing
-configured before retrying. There is no learner grading button or authority to
-assess unrelated history; host registration and activation remain required.
+configured before retrying. Unrelated history cannot be assessed; host support is required.
 
 
 ### Practising the native workspace controls
@@ -153,12 +153,12 @@ Colleague can explain these steps, but its own navigation is a demonstration,
 not evidence that you performed them.
 
 Keep one delivered challenge and its question reference across all three steps.
-Colleague may explain one substep at a time, but must not prepare a new question
+The Main teacher may explain one substep at a time, but must not prepare a new question
 between project selection, revealing its Main chat and Preview selection:
 that replaces the challenge and resets its observation collection. On a phone,
 receive the task before minimising Colleague; return after the steps and explain
-what you did before assessment. Colleague's context reports accepted steps as
-`trainingPracticalProgress`; it should acknowledge each and coach the next move.
+what you did before assessment. The supported Main practical owner must acknowledge the actual accepted steps
+and coach the next move; ordinary Colleague chat is not a grading path.
 These collecting facts are not a completed observation or pass. Only the final
 native step supplies `trainingPractical` for assessment.
 
@@ -183,19 +183,17 @@ Demonstration/substantial help remains teacher-origin, not independent evidence.
 
 For an admitted practical question, assessment now combines the native receipt
 for your action in the prepared exercise with your actual accepted explanation.
-Colleague must not replace your explanation with its own description of the
-activity. A teacher demonstration or a failed declared exercise check cannot
+The Main teacher must not replace your explanation with its own description of
+the activity. A teacher demonstration or a failed declared exercise check cannot
 count as your pass. Retrying the same saved assessment reads its original result;
-using the same observation for another submission is refused. This is an internal
-assessment facility, not a new visible grading control or proof that the hosted
-lesson is complete.
+using the same observation for another submission is refused. Native assessment is not a learner grading button or proof of lesson completion.
 
 ### Trying the real application
 
 For the application practical, show **App preview**, press the application's
 **Ask the server** button yourself, and read its greeting and request reference.
 If the diagram is showing, switch back to App preview first. On a phone,
-minimise Colleague so the real App is visible. Tell Colleague in ordinary words
+minimise Colleague so the real App is visible. Tell the Main teacher in ordinary words
 what you pressed and what replied; a verified request alone does not replace
 this explanation.
 

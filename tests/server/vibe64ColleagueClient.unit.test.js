@@ -2129,3 +2129,115 @@ test("watch details preserve the conversation and use existing resume/cancel adm
   assert.equal(view.state.watches.value.length, 0);
   assert.equal(view.state.assignments.value.length, 0);
 });
+
+
+// Genuine new Main native saved-block timing. The SAME shared cue/voice owners
+// run here; synthesis/playback transport is controlled, not acoustic acceptance.
+test("Main holds saved native blocks before checkpoint; failed A never speaks after proven B", async t => {
+  const { useVoiceConversation } = await import(new URL("./voiceConversation.js", import.meta.resolve("@jskit-ai/assistant-voice/client")));
+  const { useVoiceTransport } = await import(new URL("./voiceTransport.js", import.meta.resolve("@jskit-ai/assistant-voice/client")));
+  const scope = vue.effectScope(); t.after(() => scope.stop());
+  const cue = vue.ref(null); const turns = vue.ref([]); const spoken = []; const receipts = [];
+  const target = "actual-learning-main"; const actor = { mounted: true, actorKey: "own-viewer", clientId: "own-client",
+    conversationId: target, runtimeConversationId: target };
+  let shared; let session;
+  const presentation = { get state() { return { cue: cue.value }; }, playback(event) { receipts.push(event); },
+    observeCue() {}, retireCue() {} };
+  const makeCue = (turnId, cueId) => ({ clientId: actor.clientId, conversationId: target, turnId, cueId,
+    navigationId: `navigation-${cueId}`, outputId: "", canonicalFinal: false, phase: "armed" });
+  const user = id => ({ role: "user", messageId: id, text: `Request ${id}`, receipt: true });
+  scope.run(() => {
+    shared = useTrainingPresentationCue({ scope: () => actor, presentation: () => presentation,
+      voiceSession: vue.ref(null), acknowledge: async () => ({ ok: true }), error: vue.ref(""), holdMainReplies: true });
+    session = useVoiceConversation({ id: "same-main-binding", conversationId: target, defaults: { readAloud: true },
+      get state() { return shared.voiceState(projectConversationVoiceState({ turns: turns.value }), target, turns.value); },
+      get narration() { return shared.narration({ turns: turns.value, loading: false, working: true,
+        eligible: true, vocalizeThinking: true, vocalizeInterimTurns: true, thinkingSounds: false }, target); },
+      onPlayback(event) { shared.playback(event, target); }, submitText: async () => ({ delivered: true }) }, {
+      createTransport(configuration) {
+        const transport = useVoiceTransport(configuration);
+        transport.speak = async (text, turnId) => { spoken.push(text); transport.activeSpeechTurnId.value = turnId;
+          configuration.onPlayback({ turnId, phase: "started" }); return true; };
+        transport.appendSpeech = text => { spoken.push(text); return true; };
+        transport.endSpeech = () => { const turnId = transport.activeSpeechTurnId.value;
+          configuration.onPlayback({ turnId, phase: "completed" }); transport.activeSpeechTurnId.value = ""; };
+        return transport;
+      }
+    });
+  });
+  t.after(() => session.close());
+  await flush();
+  cue.value = makeCue("000001", "cue-a");
+  turns.value = [{ turnId: "000001", user: user("request-a"), assistant: {
+    role: "assistant", messageId: "native-block-a", outputId: "native-block-a", text: "Do not speak this unfinished A." } }];
+  await flush(); assert.deepEqual(spoken, [], "saved patch before checkpoint is held, not merely its stream overlay");
+  turns.value = [{ ...turns.value[0], thinking: [{ role: "thinking", messageId: "thinking-a", text: "Unconfirmed thinking A." }],
+    commentary: [{ role: "commentary", messageId: "commentary-a", text: "Unconfirmed interim A." }] }];
+  await flush();
+  await new Promise(resolve => setTimeout(resolve, 800));
+  assert.deepEqual(spoken, [], "optional narration cannot bypass the final hold at its original settle deadline");
+  cue.value = { ...cue.value, phase: "interrupted" };
+  await flush(); assert.deepEqual(spoken, [], "Stop does not release an unconfirmed saved reply");
+  session.stopSpeech(); session.inviteSpeech("request-b");
+  cue.value = makeCue("000002", "cue-b");
+  turns.value = [...turns.value, { turnId: "000002", user: user("request-b"), assistant: {
+    role: "assistant", messageId: "native-block-b", outputId: "native-block-b", text: "Hold B until its exact final." } }];
+  await flush(); assert.deepEqual(spoken, [], "a new invitation/cue must not expose the failed older A");
+  turns.value = [turns.value[0], { ...turns.value[1], assistant: { role: "assistant", messageId: "native-final-b",
+    outputId: "native-final-b", text: "The verified final B." } }];
+  await flush(); assert.deepEqual(spoken, [], "saving the final text alone is not native checkpoint proof");
+  cue.value = { ...cue.value, canonicalFinal: true, outputId: "native-final-b", phase: "bound" };
+  await flush();
+  assert.deepEqual(spoken, ["The verified final B."], "the exact proven B reaches the original queue once");
+  assert.deepEqual(receipts.map(event => [event.outputId, event.phase]), [["native-final-b", "started"], ["native-final-b", "completed"]]);
+  turns.value = turns.value.map(turn => ({ ...turn })); await flush();
+  assert.deepEqual(spoken, ["The verified final B."], "history/state refresh does not speak B twice");
+});
+
+test("Main saved-reply hold is opt-in; original Colleague projection is unchanged", t => {
+  const scope = vue.effectScope(); t.after(() => scope.stop());
+  const cue = vue.ref({ clientId: "own", conversationId: "original", turnId: "000001", phase: "armed", canonicalFinal: false });
+  const saved = { messages: [{ id: "saved", role: "assistant", text: "Original saved reply." }],
+    streamingReply: { id: "stream", role: "assistant", text: "Original stream." }, status: "working" };
+  let shared;
+  scope.run(() => { shared = useTrainingPresentationCue({ scope: () => ({ mounted: true, actorKey: "actor", clientId: "own", conversationId: "original" }),
+    presentation: () => ({ state: { cue: cue.value } }), voiceSession: vue.ref(null), acknowledge: async () => ({ ok: true }), error: vue.ref("") }); });
+  assert.deepEqual(shared.voiceState(saved, "original"), { ...saved, streamingReply: null });
+  assert.equal(shared.voiceState(saved, "other"), saved);
+});
+
+test("Main origin ceiling refuses prospectively through the original navigation ACK before player or audio effects", async t => {
+  const owner = vue.effectScope(); t.after(() => owner.stop());
+  const value = vue.ref(null), receipts = [], effects = [];
+  const current = { mounted: true, actorKey: "own", clientId: "client", conversationId: "main", runtimeConversationId: "main" };
+  let cue, navigation;
+  owner.run(() => {
+    cue = useTrainingPresentationCue({ scope: () => current, presentation: () => ({ state: { cue: value.value } }),
+      voiceSession: vue.ref(null), acknowledge: async () => ({ ok: true }), error: vue.ref(""), holdMainReplies: true });
+    navigation = createTrainingNavigation({ scope: () => current, beforeNavigate: () => undefined,
+      navigate: () => async command => { cue.requireCueCapacity(); effects.push(command.id); return {}; },
+      acknowledge: async receipt => { receipts.push(receipt); }, error: vue.ref("") });
+  });
+  for (let index = 0; index < 128; index += 1) {
+    value.value = { clientId: "client", conversationId: "main", turnId: `turn-${index}`, cueId: `cue-${index}`,
+      phase: "failed", canonicalFinal: false };
+  }
+  await flush();
+  const command = { id: "after-128", status: "pending", presentation: { operation: "cue" } };
+  await navigation.handle(command);
+  assert.deepEqual(effects, [], "capacity is checked inside the original effect before armCue/playback");
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].ok, false);
+  assert.match(receipts[0].error, /128 interrupted explanations/u);
+  await navigation.handle(command);
+  assert.equal(receipts.length, 2, "same original navigation receipt can be acknowledged again without another effect");
+  assert.deepEqual(receipts[1], receipts[0]);
+  // New cue and missing loaded pages do not clear old origins.
+  value.value = { clientId: "client", conversationId: "main", turnId: "new", phase: "armed", canonicalFinal: false };
+  assert.throws(() => cue.requireCueCapacity(), /128/u);
+  const saved = { messages: [{ id: "old-output", role: "assistant", text: "Old suppressed reply." }], streamingReply: null };
+  const turn = { turnId: "turn-0", assistant: { outputId: "old-output" } };
+  assert.deepEqual(cue.voiceState(saved, "main", [turn]).messages, []);
+  cue.voiceState({ messages: [], streamingReply: null }, "main", []);
+  assert.deepEqual(cue.voiceState(saved, "main", [turn]).messages, [], "page omission cannot evict suppression");
+});

@@ -1,4 +1,4 @@
-# Lessons without a practice workspace
+# Main lesson conversations
 
 Use the yellow **L** plate and the existing **Lessons** pane to Start or Resume
 your saved lesson attempt. The same left Main conversation is the intended
@@ -17,8 +17,7 @@ workspace or reset its progress to hide a preparation failure.
 For lessons without a practice workspace, Codex and OpenCode Main can use the
 lesson teaching tools supplied by your installation. If those tools are
 unavailable, keep the saved attempt and conversation, check the selected AI
-account, and report the exact error before retrying. Claude and practice-workspace
-teaching are not available through these four lesson tools yet. Changing workflows
+account, and report the exact error before retrying. If a provider cannot use these tools, keep the conversation and ask the installation owner to check its lesson support. Changing workflows
 or sending ordinary chat does not enable missing teaching, grading or presentation
 capabilities; do not reset progress or create a substitute workspace to hide the
 failure.
@@ -85,3 +84,25 @@ replacement, delete history or change the lesson pin to bypass it. Finishing
 the upgrade does not complete Workspace setup or prove a lesson pass. If native
 tool compatibility is then refused, retain the same history and use the
 installation's supported connection/replacement recovery.
+
+
+## A prepared practice lesson
+
+Start or Resume the saved lesson in **Lessons**, then select its Learning
+conversation in the same session list. Ask Main to teach that lesson. The
+conversation belongs to the lesson’s prepared workspace; changing the visible
+Working project does not move it. Keep the existing attempt and history if its
+source is unavailable, and ask the owner to restore that saved workspace.
+
+Main can use a declared lesson diagram in **Presentation** when the installation
+supports it. **Lessons** returns to the picker; **Presentation** returns to the same
+diagram. A confirmed diagram state is retained separately from an assessment pass.
+On a phone, use the existing conversation and Preview view controls to switch
+between the teacher and diagram.
+
+If Preview reports that the practice App controls are unavailable, retain the
+lesson and its saved workspace. This installation cannot yet run the practical
+App step through that Learning view. Ask the installation owner to enable its
+practice App support; do not substitute a Working conversation or claim the
+practical passed from an explanation or diagram. Colleague can explain the
+controls and help you recover; Main remains the lesson teacher.

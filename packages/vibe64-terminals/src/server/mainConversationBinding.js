@@ -369,7 +369,14 @@ export async function createSessionConversationBinding(provider, sessionId, opti
   const conversation = original.conversation({ engine, publish: host.publish, checkpoint: host.checkpoint });
   const teaching = ["codex", "opencode"].includes(engine) && runtime.learningScope && runtime.learningTeaching
     ? runtime.learningTeaching.bindConversation({ runtime, sessionId, actions: openingContext.teachingActions,
-      terminals: openingContext.teachingTerminals, native: { async readTurn() {
+      terminals: openingContext.teachingTerminals, native: {
+        ...(engine === "codex" ? { readFinalAssistantResult({ threadId, turnId }) {
+          // Read the existing final owner, scoped to this immutable Main session.
+          const result = host.native.runOwner.readFinalAssistantResult(sessionId, threadId, turnId);
+          return result ? structuredClone(result) : null;
+        } } : {}),
+        notifyPresentation: event => host.publish(sessionId, event),
+        async readTurn() {
         if (engine === "codex") {
           const current = await host.state.read();
           return { ...codexAppServerTurnState(current.session),

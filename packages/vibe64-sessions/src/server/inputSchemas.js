@@ -102,6 +102,7 @@ const sessionRenameActionInputValidator = requiredInputSchema({
 });
 
 const agentMessageFields = {
+  clientId: { type: "string", noTrim: false, minLength: 1, maxLength: 128, required: false },
   trainingQuestion: { type: "object", required: false, schema: trainingQuestionReferenceSchema },
   planRevision: { type: "string", maxLength: 64, required: false },
   reviewAction: { type: "string", enum: ["retry"], required: false },

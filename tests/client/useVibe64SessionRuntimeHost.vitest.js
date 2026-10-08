@@ -480,3 +480,41 @@ describe("captured host list errors", () => {
     } finally { f.app.unmount(); }
   });
 });
+
+
+it("captures a confirmed practice Learning source slug separately without enabling unadapted App or source controls", async () => {
+  const f = mountedHostFixture({ learning: true });
+  f.app.unmount();
+  const attemptId = f.attemptId;
+  const session = { sessionId: `training-${attemptId}`, purpose: "learning", learningAttemptId: attemptId,
+    noExercise: false, projectSlug: "practice-confirmed", agentSession: { turn: {} } };
+  f.state.sessions = [session]; f.props.sessionId = session.sessionId;
+  mountedHostMocks.conversation.mockImplementation(() => shallowRef({
+    mounted: { session: ref(session), detailState: ref({}), agentConnectionError: ref(""),
+      agentConnectionStatus: ref("connected"), refresh: vi.fn(async () => {}) }, sendAgentMessage: f.send
+  }));
+  let host;
+  const app = mountedHostRenderer.createApp({ setup() {
+    host = useVibe64SessionRuntimeHost(f.hostProps, vi.fn()); return () => h("div");
+  } });
+  mountedHostMocks.conversation.mockClear(); app.mount({});
+  try {
+    const captured = mountedHostMocks.conversation.mock.calls[0][0];
+    expect(toValue(captured.sessionId)).toBe(session.sessionId);
+    expect(toValue(captured.projectSlug)).toBe("");
+    expect(captured.noExercise).toBe(false); expect(captured.sourceProjectSlug).toBe("practice-confirmed");
+    expect(captured.learningAttemptId).toBe(attemptId);
+    expect(toValue(captured.sessionsApiPath)).toBe(`/api/learning/${attemptId}/vibe64/sessions`);
+    f.state.sessions = [{ ...session, projectSlug: "wrong-later-row" }];
+    f.props.projectContext = { slug: "unrelated-working" }; f.props.sessionId = "unrelated-working-session";
+    f.state.apiPath = "/api/projects/unrelated-working/vibe64/sessions"; await nextTick();
+    expect(toValue(captured.sessionId)).toBe(session.sessionId);
+    expect(captured.sourceProjectSlug).toBe("practice-confirmed"); expect(toValue(captured.projectSlug)).toBe("");
+    expect(host.runtimeProjectContext.value).toEqual({});
+    expect(host.sourceWorkspaceAvailable.value).toBe(false); expect(host.codexTerminalCanStart.value).toBe(false);
+    await expect(host.saveSessionWork()).resolves.toBe(false);
+    await expect(host.updateSessionWork()).resolves.toBe(false);
+    await expect(host.retryWorkspaceSetup()).resolves.toBe(false);
+    expect(mountedHostMocks.request).not.toHaveBeenCalled();
+  } finally { app.unmount(); }
+});

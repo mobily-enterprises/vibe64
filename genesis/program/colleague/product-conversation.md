@@ -30,6 +30,7 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `packages/vibe64-colleague/src/server/assignments.js`
 - `packages/vibe64-colleague/src/server/conversationSummary.js`
 - `packages/vibe64-colleague/src/server/protocol.js`
+- `packages/vibe64-training/src/server/teachingRole.js`
 - `packages/vibe64-colleague/src/server/usageKnowledge.js`
 - `docs/colleague-usage/colleague.md`
 - `docs/colleague-usage/lesson-authoring.md`
@@ -49,6 +50,20 @@ active work, role, goal and access checks remain in the existing routing owner.
 - `packages/vibe64-colleague/src/server/conversationUpgrade.js`
 
 ## Public contract
+
+Colleague is the lesson supervisor and authoring coordinator, not a second teacher.
+The Training-owned exact eight-action role set is applied before its original
+interactive/autonomous policy. The same common catalogue predicate governs direct
+schemas, search, contracts and execution, retaining the original assignment-only
+background mutation rule. Original Training execute boundaries authenticate first,
+then refuse Colleague authority and require the actual Main coordinator before
+question, grading or player effects. Lifecycle/progress/brief reads, start/resume/
+end/continuation, authoring assignments and ordinary navigation remain available
+through their existing permissions. No saved history is rewritten. Compatibility
+teacher coordination remains source-preserved until its Main counterpart is proved;
+it grants no supervisor tool authority. Unsupported Main practical assessment
+remains an explicit facility error, not a legacy fallback.
+
 
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application
 tools, native history, admission, cancellation and model replacement. Its service
@@ -755,6 +770,13 @@ the release's prospective upgrade; no historical question association is inferre
 
 
 ## Native lesson answer evaluation
+
+The following original teacher/observation coordination is preserved for the
+remaining Main counterpart migration and old receipt/history interpretation.
+It is not supervisor authority: the common tool policy and Training contract
+role guards refuse new Colleague question, grading and visual effects. The
+original actual gesture producer remains until Main owns its genuine receipt;
+its presence must not be advertised as a supported Colleague grading path.
 
 `evaluateTrainingAnswer` selects the actual canonical user message from the
 current admitted interactive turn and its original context user-message IDs. It

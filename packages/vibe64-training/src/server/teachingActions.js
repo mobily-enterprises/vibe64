@@ -1,6 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { operationError } from "./actions.js";
+import { requireTrainingMainTeacher } from "./teachingRole.js";
 import { trainingQuestionReferenceSchema } from "./teaching.js";
 
 const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 64 };
@@ -32,19 +33,17 @@ function createTrainingTeachingActions({ colleague, mainTeaching } = {}) {
     async execute(input, context) {
       const actor = authenticatedVibe64User(context);
       if (!actor) throw Object.assign(new Error("Sign in before preparing a lesson question."), { code: "vibe64_auth_required", statusCode: 401 });
+      const coordinator = requireTrainingMainTeacher(context, ["requireTrainingQuestionTurn", "stageTrainingQuestion"]);
       const teaching = context.trainingTeaching;
       if (typeof teaching?.prepareQuestion !== "function") {
         throw Object.assign(new Error("Question preparation is unavailable in this installation."), { code: "VIBE64_TRAINING_TEACHING_UNAVAILABLE", statusCode: 503 });
       }
       let saved;
       try {
-        const coordinator = context.trainingMain || colleague;
-        const facilities = context.trainingMain
-          ? await coordinator.requireTrainingQuestionTurn(context, input)
-          : await coordinator.requireTrainingQuestionTurn(context);
+        const facilities = await coordinator.requireTrainingQuestionTurn(context, input);
         saved = await teaching.prepareQuestion({ actor, attemptId: input.attemptId,
           expectedRevision: input.expectedRevision, requestId: input.requestId,
-          assessmentId: input.assessmentId, text: input.text, assistance: input.assistance }, context.trainingMain ? facilities : undefined);
+          assessmentId: input.assessmentId, text: input.text, assistance: input.assistance }, facilities);
         await coordinator.stageTrainingQuestion(saved.reference, context);
         return { ok: true, revision: saved.revision, replayed: saved.replayed,
           assessmentId: saved.snapshot.question.assessmentId, questionText: saved.snapshot.question.text,
@@ -61,7 +60,7 @@ function createTrainingTeachingActions({ colleague, mainTeaching } = {}) {
         throw operationError(cause);
       }
     }
-  }, { projectScoped: false })]);
+  }, { projectScoped: false, learningAccess: "write" })]);
 }
 
 export { createTrainingTeachingActions };

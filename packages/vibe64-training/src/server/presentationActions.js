@@ -1,7 +1,8 @@
+import { isDeepStrictEqual } from "node:util";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { operationError } from "./actions.js";
-import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { requireTrainingMainTeacher } from "./teachingRole.js";
 
 const identity = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 64, pattern: "^[a-zA-Z0-9-]{1,64}$" };
 const fields = {
@@ -17,8 +18,8 @@ const output = { mode: "replace", schema: createSchema({
 
 // Teaching chooses a declared operation. The original Colleague navigation
 // receipt waits for the initiating browser and the original sandbox player.
-function createTrainingPresentationActions({ learners, content, colleague } = {}) {
-  if (typeof learners?.readState !== "function" || typeof content?.readVisual !== "function" || typeof colleague?.navigate !== "function") {
+function createTrainingPresentationActions({ learners, content, colleague, mainTeaching } = {}) {
+  if (typeof learners?.readState !== "function" || typeof content?.readVisual !== "function" || (!mainTeaching?.bindConversation && typeof colleague?.navigate !== "function")) {
     throw new TypeError("Training presentation actions require the learner, content and Colleague owners.");
   }
   const definition = (operation, extra, description) => withVibe64ActionContext({
@@ -30,11 +31,16 @@ function createTrainingPresentationActions({ learners, content, colleague } = {}
     async execute(input, context) {
       const actor = authenticatedVibe64User(context);
       if (!actor) throw Object.assign(new Error("Sign in before showing a lesson presentation."), { statusCode: 401, code: "vibe64_auth_required" });
+      const coordinator = requireTrainingMainTeacher(context, ["requirePresentationAttempt",
+        operation === "cue-read" ? "readPresentationCue" : "navigatePresentation"]);
       try {
+        const mainScope = await coordinator.requirePresentationAttempt(input.attemptId);
         const saved = await learners.readState({ actor, attemptId: input.attemptId, includeCompletion: true });
         const attempt = saved.active;
-        if (attempt?.attemptId !== input.attemptId || attempt.projectSlug !== (context.vibe64Action?.project?.slug || currentProjectRequestContext()?.slug) ||
-            attempt.preparation.phase !== "ready" || !attempt.preparation.initialSessionId) {
+        if (attempt?.attemptId !== input.attemptId || !isDeepStrictEqual(mainScope.pin, attempt.pin) ||
+            (mainScope.noExercise !== true && (mainScope.noExercise !== false ||
+              attempt.preparation.phase !== "ready" || !attempt.preparation.initialSessionId ||
+              attempt.projectSlug !== mainScope.projectSlug || attempt.preparation.initialSessionId !== mainScope.sessionId))) {
           throw Object.assign(new Error("Use the signed-in learner's current prepared exercise project and exact attempt."), {
             code: "VIBE64_TRAINING_PRESENTATION_ATTEMPT_MISMATCH", statusCode: 409
           });
@@ -58,10 +64,10 @@ function createTrainingPresentationActions({ learners, content, colleague } = {}
           Object.assign(presentation, { commandId: input.commandId, name: declared.name, parameters });
         }
         if (operation === "cue") presentation.cueId = input.cueId;
+        await coordinator.requirePresentationAttempt(input.attemptId);
         const result = operation === "cue-read"
-          ? await colleague.readCue({ attemptId: attempt.attemptId, visualId: resource.id, cueId: input.cueId }, context)
-          : await colleague.navigate({ projectSlug: attempt.projectSlug,
-            sessionId: attempt.preparation.initialSessionId, pane: "preview", presentation }, context);
+          ? await coordinator.readPresentationCue({ attemptId: attempt.attemptId, visualId: resource.id, cueId: input.cueId }, context)
+          : await coordinator.navigatePresentation(presentation, context);
         if (Buffer.byteLength(JSON.stringify(result)) > 16 * 1024) {
           throw Object.assign(new Error("The presentation receipt exceeds its limit; no state was silently omitted."), {
             code: "VIBE64_TRAINING_PRESENTATION_RESULT_TOO_LARGE"
@@ -72,11 +78,11 @@ function createTrainingPresentationActions({ learners, content, colleague } = {}
         throw operationError(cause);
       }
     }
-  });
+  }, { learningAccess: ["snapshot", "cue-read"].includes(operation) ? "observe" : "write" });
   return Object.freeze([
-    definition("open", {}, "Show one declared visual in this learner's prepared exercise Preview, only after a teaching request or accepted offer. Supply exact projectSlug, attemptId and visualId from the saved lesson and teaching brief. Wait for the original player's ready receipt before describing it as visible. App preview stays mounted. This does not play narration, grade an answer or prove a transition completed."),
+    definition("open", {}, "As the Main teacher, show one declared visual in this learner's selected lesson Presentation, only after a teaching request or accepted offer. Supply exact attemptId and visualId from the saved lesson and teaching brief; Vibe64 derives the current Main conversation and browser. No-exercise lessons need no project. Unsupported practice presentation must be reported truthfully. Wait for the original player's ready receipt before describing it as visible. App preview stays mounted. This does not play narration, grade an answer or prove a transition completed."),
     definition("command", { commandId: identity, name: identity, parameters: { type: "object", required: false, additionalProperties: true } },
-      "Pilot a declared lesson diagram command with its exact visual/attempt/project and command ID. Reuse that ID with identical parameters for an uncertain retry; never guess a different command or re-open to replay. The initiating browser must have this visual selected. Wait for completed, not accepted, before describing the visual result. This receipt does not prove narration finished or grant an assessment pass."),
+      "As the Main teacher, pilot a declared lesson diagram command with its exact visual/attempt and command ID; Vibe64 derives the current conversation and browser. Reuse that ID with identical parameters for an uncertain retry; never guess a different command or re-open to replay. The initiating browser must have this visual selected. Wait for completed, not accepted, before describing the visual result. This receipt does not prove narration finished or grant an assessment pass."),
     definition("cue", { cueId: identity, commandId: identity, name: identity, parameters: { type: "object", required: false, additionalProperties: true } },
       "Arm one declared diagram transition for your next short FINAL explanation in the current admitted teaching turn. First show its exact visual/start state. This returns armed, never motion or narration completed. Then give only that explanation without another tool/progress sentence or question. The native final output ID is captured by Vibe64, not supplied by you. Motion starts on its actual audible start, or on the person's Continue with sound off. Before another cue or question, read cue.read and require completed; interruption needs an explicit requested repeat. This grants no assessment pass or autonomous follow-up."),
     definition("cue-read", { cueId: identity },

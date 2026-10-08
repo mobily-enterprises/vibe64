@@ -26,11 +26,15 @@ export function createProjectVoiceBinding(runtime, view = {}) {
     socketUrl: learning
       ? `${identity.sessionsApiPath}/${encodeURIComponent(identity.sessionId)}/voice/ws`
       : `/api/app/${encodeURIComponent(identity.projectSlug)}/vibe64/sessions/${encodeURIComponent(identity.sessionId)}/voice/ws`,
+    ...(learning ? { prepareVoice: () => runtime.prepareVoice() } : {}),
     get label() { return `${learning ? "Lesson" : identity.projectSlug} · ${runtime.mounted.session.value?.sessionName || identity.sessionId}`; },
-    get state() { return projectVoiceState(runtime); },
+    get state() {
+      const state = projectVoiceState(runtime);
+      return learning && runtime.presentation ? runtime.presentation.voiceState(state, runtime.conversationLog.turns || []) : state;
+    },
     get available() { return runtime.available.value; },
     get narration() {
-      return {
+      const narration = {
         turns: runtime.conversationLog.turns || [],
         loading: runtime.conversationLog.loading === true,
         working: runtime.mounted.session.value?.agentSession?.turn?.active === true,
@@ -39,11 +43,14 @@ export function createProjectVoiceBinding(runtime, view = {}) {
         vocalizeInterimTurns: false,
         thinkingSounds: true
       };
+      return learning && runtime.presentation ? runtime.presentation.narration(narration) : narration;
     },
     get adapter() { return view.adapter || null; },
     get presentation() { return view.presentation || "dialog"; },
     get onTranscript() { return view.onTranscript; },
+    ...(learning ? { onPlayback: event => runtime.presentation?.playback(event) } : {}),
     captureContext: () => ({ ...identity,
+      ...(learning && runtime.presentation ? { clientId: runtime.presentation.clientId } : {}),
       ...(learning && runtime.trainingQuestion?.value ? { trainingQuestion: { ...runtime.trainingQuestion.value } } : {}) }),
     retain() { retained = runtime.retain(); runtime = retained.runtime; },
     release() { retained?.release(); retained = null; },
@@ -54,6 +61,7 @@ export function createProjectVoiceBinding(runtime, view = {}) {
         throw new Error("This recording belongs to another conversation.");
       }
       return runtime.send({ message: text, agentSettings: runtime.agentSettings.requestSettings.value,
+        ...(learning && context.clientId !== undefined ? { clientId: context.clientId } : {}),
         ...(learning ? { trainingQuestion: context.trainingQuestion ? { ...context.trainingQuestion } : null } : {}) }, { messageId });
     },
     cancelWork: () => runtime.interrupt()

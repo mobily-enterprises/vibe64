@@ -31,12 +31,28 @@
 - `packages/vibe64-training/src/server/conversationAssessment.js`
 - `packages/vibe64-training/src/server/assessmentActions.js`
 - `packages/vibe64-training/src/server/teachingActions.js`
+- `packages/vibe64-training/src/server/teachingRole.js`
 - `tests/server/vibe64TrainingActionTools.unit.test.js`
 - `packages/vibe64-training/src/server/declaredCheck.js`
 - `tests/server/vibe64TrainingDeclaredCheck.unit.test.js`
 - `tests/fixtures/training/orientation-response.mjs`
+- `packages/vibe64-training/src/shared/presentationSchemas.js`
+- `packages/vibe64-training/src/server/mainPresentationActions.js`
+- `packages/vibe64-training/src/server/mainPresentationRoutes.js`
+- `packages/vibe64-training/src/client/useTrainingMainPresentation.js`
 
 ## Public contract
+
+Main alone owns admitted teaching operations. The shared eight-action teacher
+identity set excludes question preparation, answer/practical evaluation and five
+visual operations from Colleague's existing tool policy. Each original contract
+also authenticates then requires Main authority, so retained contracts and direct
+API dispatch cannot reinstate a supervisor teaching effect. Main admission,
+question staging, exact final proof, Helper, pinned rubrics, original learner CAS
+and genuine browser receipts remain their original owners. Registration and
+compatibility source preservation do not establish that Main practical assessment
+or source-bearing presentation is supported; those need their actual producers.
+
 
 ### Bound no-exercise Main teaching
 
@@ -45,8 +61,8 @@ delivery-proof and retained Helper owners for the exact saved no-exercise attemp
 The original Main host supplies its Runtime/Store, native turn reader, action
 catalogue and Terminals; it installs one catalogue at Codex and OpenCode readiness
 and Send.
-Only learning-state read, teaching-brief read, question preparation and accepted
-answer evaluation are exposed. The original search/contract/execute policy stays
+Learning-state read, teaching-brief read, question preparation, accepted answer
+evaluation and the original five declared visual operations are exposed. The original search/contract/execute policy stays
 in place; no shell, paths, supplied actor, answer words or passed outcome is added.
 
 The mapper reexecutes the original Sessions internal WRITE grant using the private
@@ -67,11 +83,10 @@ it neither grades a final reply nor writes native output/status from the tool
 runtime. The Main read wrapper projects a bounded current reference only after
 fresh observation access, for the existing typed/voice capture owner.
 
-This source composition covers Codex and OpenCode no-exercise Main only. Ordinary Working,
+The initial source composition covered Codex and OpenCode no-exercise Main only. The practice extension is described below. Ordinary Working,
 Temporary, Helper and Colleague compatibility callers retain their original
-defaults. Claude dispatch, source-backed practice, Main cue/navigation
-receipts, actual model/native adoption and packaged desktop/mobile acceptance
-remain open. The native integration fixture reuses the exact original Teaching
+defaults. Actual provider/model adoption and packaged desktop/mobile acceptance remain
+open; the later sections record the bounded presentation and practice additions. The native integration fixture reuses the exact original Teaching
 fixture through one shared test helper and the original Runtime/Store/controller
 lifecycle; its controlled provider completion is not live model acceptance.
 OpenCode uses the original shared process, native tool identity/input match and
@@ -156,9 +171,11 @@ fixture; it does not claim hosted fleet or learner gesture acceptance.
 ### Admitted answer assessment
 
 Training's internal `evaluateAdmittedTrainingAssessment` shares Colleague's
-original authenticated-actor, Helper and domain invocation block. Colleague still
-owns its interactive actor/turn/generation, cue, practical facts, serialized
-Helper lifetime and fresh authorization checks. The shared invocation supplies
+original authenticated-actor, Helper and domain invocation block. Main supplies
+its accepted actor/turn, serialized Helper lifetime and fresh authorization.
+Colleague's original private interactive/cue/practical coordination remains
+source-preserved for the unfinished producer move; it grants no supervisor
+teaching contract. The shared invocation supplies
 that exact current-admission guard to the original answer owner, which checks it
 immediately before both retained replay and new assessment CAS. It also rechecks
 cancellation after the final awaited pinned-question read. This closes the await
@@ -177,9 +194,10 @@ owner. The original twelve Grader-file cases stay intact, with two appended
 native-lifetime and final-refresh cancellation cases.
 
 The internal answer owner receives a canonical accepted user message from the
-original Colleague admission owner. It checks this learner's prepared exercise pin, or reserved no-exercise answer pin, and
+admitted conversation owner. Main uses the original Store/message/native tuple.
+It checks this learner's prepared exercise pin, or reserved no-exercise answer pin, and
 saved question snapshot, uses the actual message identity and words, then invokes
-the existing pinned-rubric grader through Colleague's original retained Helper.
+the existing pinned-rubric grader through the original retained Helper.
 It has no message writer, provider process or public outcome setter. The original
 learner owner records the result with CAS and consumed-evidence protection.
 
@@ -194,9 +212,9 @@ its original revision fence before saving.
 
 The answer-evaluation action accepts only attempt/revision/submission/message
 identities; no supplied text, assistance, question or outcome. It projects the
-actual saved assessment feedback and completion counts. Online registers the action
-against the original Colleague accepted-turn owner and retained Helper. Focused
-native admission and wiring checks cover that boundary; full learner acceptance
+actual saved assessment feedback and completion counts. Public and its configured host register
+the same action requiring Main's accepted-turn coordinator and retained Helper.
+Focused native admission and wiring checks cover the recorded boundary; full learner acceptance
 remains separate. This action does not
 assess practical learner gestures or execute a declared check.
 
@@ -286,7 +304,9 @@ no canonical message writes, public action, grading caller or conversation loop.
 
 The shared `question.prepare` action re-resolves the authenticated actor through
 the original global action context. The host supplies the same named teaching
-owner used by native admission, and the original Colleague turn/staging facility.
+owner used by native admission and the admitted Main turn/staging facility.
+The original Colleague facility remains preserved as migration evidence, but the
+supervisor role guard refuses it before saving or staging effects.
 Before saving anything, native `requireTrainingQuestionTurn` checks the current
 accepted interactive turn, scope/generation/client and completed explanation cue
 (or no cue). The action then prepares the exact installed assessment question
@@ -899,6 +919,35 @@ Project and Sessions original services; focused original Core/Project/Learner/
 Preparation/Session/ActionContext tests retain their assertion bodies and default
 policies except the documented additive saved-scope fixture projection.
 
+### Captured no-exercise Main browser presentation
+
+The candidate Main adapter uses one client identity per original retained Main
+application. Its prospective authored message data associates that browser with
+the exact accepted request; UUID replay retains the original facts. Three API-only
+operations in the existing Learning namespace read, report focus and acknowledge
+the same extracted presentation transaction. Original Colleague definitions
+immediately import their unchanged receipt schemas from Training. Model tools
+remain the original five visual operations plus the original four teaching
+operations; they cannot supply the client, actor, session or route authority.
+The original action context adds explicit Learning observe/write admission only
+for those nine captured operations. Default project/Colleague behavior remains.
+
+The original completed native checkpoint owns cue final verification. An existing
+configuration publication invalidates one product resource through Main's original
+reader; no second subscriber or player is introduced. Main voice alone holds
+originating saved replies and streams until exact native/output proof; visible
+chat and canonical storage remain unchanged. Interrupted unconfirmed origin IDs
+remain with the original retained application lifetime. At 128 such origins, the
+client refuses a new cue before effects through the original failed navigation
+ACK; it never evicts an old origin because a loaded page omitted it.
+
+This candidate is not attached or validated. In particular, cue-only completion
+needs an actual genuine final carrier guard, not merely the last nonempty saved
+assistant message. Native ordering, API/actor revocation, deferred initial voice
+hydration, compiled player and installed acceptance remain required. It admits
+only no-exercise Learning sessions. The later practice slice retains this same
+presentation owner; actual installed/native acceptance remains separate. Original question promotion is independent.
+
 
 ### Offline adoption of original prepared practice sessions
 
@@ -924,3 +973,44 @@ actual fleet history counts, all-provider continuity or learner acceptance.
 Sources: `packages/vibe64-training/src/server/practiceHistoryUpgrade.js`,
 `bin/upgrade-state.js`, existing Core `stateUpgrades.js`/`stateUpgradeFiles.js`,
 original `vibe64TrainingLearnerState.unit.test.js` and `stateUpgrades.unit.test.js`.
+
+
+### Practice Main teacher and one visual Preview
+
+The same `mainTeaching.js` binding accepts a constructor-authorized false
+Learning scope. Every fresh Main grant retains the original learner/attempt/pin
+check and validates the original active source descriptor through
+`Runtime.getNativeExecutionRoot` before refreshing the original action grant.
+Access revoked during that awaited source read cannot reuse an earlier grant.
+It does not alias the source to a private
+source-less native directory. The existing native owners retain Genesis/Env,
+source setup and Git checkpoints. The pinned teaching system instructions remain
+separate from the original source prompt.
+
+For a practice visual, the existing Main coordinator returns transient exact
+project/session facts from the fresh original Project grant. Presentation admission
+requires the original ready exercise, exact saved initial session and full pin.
+The same browser transaction, native-final cue proof, Helper, diagram player and
+learner resume writer remain owners. No practical receipt/producer is added.
+
+A keyed Host captures `noExercise:false` and `sourceProjectSlug` from the actual
+API-owned saved row; chat remains the original Learning tuple and scoped URL, with
+no transport project slug. The display-only source slug binds the same Preview
+handle and checkpoint. A later row, purpose filter or visible Working project
+cannot retarget that capture. Raw viewer/composite learner fences remain unchanged.
+
+This first coherent slice intentionally leaves the App owners unmounted in the
+practice Learning view. It reports unavailable controls, without reporting the
+physical source absent. The required next implementation is the closed Learning
+adapter for ORIGINAL output GET/Run/open/restart/Stop/log/stream handlers, using
+fresh false-scope admission and exact saved initial target. Manual PTY, Save,
+renewal, archive and ordinary Create policies are not broadened. Focused evidence
+is recorded in the delivery checklist; it does not establish packaged/native/device
+or practical acceptance.
+
+Original evidence: the full original Host and Teaching test prefixes remain
+byte-identical; the Preview fixture has only a declared opt-in checkpoint field
+assertion adaptation whose inverse restores its full original prefix. Appended
+cases use the actual compiled Preview subtree and real original Runtime/Store
+and installed ready-content/learner owners; the Main authority wire is controlled,
+not live authenticated host/native proof.

@@ -14,6 +14,9 @@ import { createManagedProjectRepositoryService } from "@local/vibe64-project/ser
 import { createTrainingLearningSessions } from "./learningSessions.js";
 import { createTrainingTeachingOwner } from "./teaching.js";
 import { createTrainingAnswerAssessment } from "./answerAssessment.js";
+import { createTrainingPresentationActions } from "./presentationActions.js";
+import { createTrainingMainPresentationActions } from "./mainPresentationActions.js";
+import { registerTrainingMainPresentationRoutes } from "./mainPresentationRoutes.js";
 import { createTrainingMainTeaching } from "./mainTeaching.js";
 import { createTrainingTeachingActions } from "./teachingActions.js";
 import { createTrainingAssessmentActions } from "./assessmentActions.js";
@@ -29,6 +32,7 @@ const Vibe64TrainingProvider = defineFeature({
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
   setup({ http, project, sessions, terminals, trainingHost }, { actionCatalogue }) {
     registerTrainingRoutes(http);
+    registerTrainingMainPresentationRoutes(http);
     registerTrainingVisualResourceRoutes(http);
     registerTrainingVisualResourceRoutes(http, { learningScoped: true });
     if (trainingHost) return { training: trainingHost };
@@ -66,11 +70,13 @@ const Vibe64TrainingProvider = defineFeature({
     registerLearningSessionRoutes(http, { learningScoped: true, routeSurface: "app" });
     return { training: Object.freeze({ catalogue, content, learners, brief, exercises, learningSessions, teaching, assessment, mainTeaching }) };
   },
-  actions({ training, trainingHost }, { actionCatalogue }) {
+  actions({ training, trainingHost, project }, { actionCatalogue }) {
     if (trainingHost) return [];
     return [...createTrainingActions({ catalogue: training.catalogue, learners: training.learners,
       teachingBrief: training.brief, exercises: training.exercises, learningSessions: training.learningSessions }),
     ...createTrainingTeachingActions({ mainTeaching: training.mainTeaching }),
+    ...createTrainingPresentationActions({ learners: training.learners, content: training.content, mainTeaching: training.mainTeaching }),
+    ...createTrainingMainPresentationActions({ project, actions: actionCatalogue }),
     ...createTrainingAssessmentActions({ mainTeaching: training.mainTeaching }).filter(action => action.id === "vibe64.training.answer.evaluate"),
     ...createTrainingVisualResourceActions({ learners: training.learners, content: training.content,
       teaching: training.teaching, actions: actionCatalogue })];
