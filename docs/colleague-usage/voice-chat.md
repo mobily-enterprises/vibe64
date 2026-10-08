@@ -78,9 +78,8 @@ message** (pencil). X removes only those unsent words. Edit opens **Review your
 message** inside that same bubble, where you can change the words and use its
 existing **Send** button. It keeps the original destination and message identity;
 your typed message box stays unchanged, even if it contains a draft. Empty edits
-stay visible, with Send disabled. Main edits through the same project/session
-access check as its voice connection; an unavailable session cannot accept
-speech edits. Interrupted or failed recordings keep their
+stay visible, with Send disabled. Main edits through the same exact conversation access check as its voice
+connection; an unavailable session cannot accept speech edits. Interrupted or failed recordings keep their
 words and offer Send in the bubble; use the pencil to correct them before retrying.
 A confirmed failed send retains its actual error in that bubble. Send retries its
 original request. Explicit Edit clears that known local failure so the next Send
@@ -180,6 +179,15 @@ minus or the avatar to keep listening.
 Open voice for a different conversation to switch. Unfinished words require
 completion or **Discard and switch**; **Stay here** keeps the original target.
 There is only one voice window and one active capture/playback owner.
+
+On installations with speech configured, a source-less Learning conversation
+uses Main's same microphone, spoken replies and review controls; it does not
+require an invented project. Its voice target is labelled **Lesson** and the
+actual conversation name. Capture stays attached to that person's saved attempt
+and conversation. Switching attempts does not resend or redirect words. Reading
+lesson history does not authorize new teaching work: each Send still checks the
+current saved lesson and access. Without a speech service, use the same typed
+Main conversation; voice availability is optional.
 
 Signing out, losing access to the target, or leaving the page releases its
 resources. A project agent remains the selected voice target even if its text

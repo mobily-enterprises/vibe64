@@ -20,6 +20,8 @@ reads and commands without creating a second session panel or progress owner.
 - `packages/vibe64-training/src/client/TrainingPreviewPresentation.vue`
 - `packages/vibe64-training/src/client/useTrainingPresentationCue.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
+- `packages/vibe64-voice/src/server/Vibe64VoiceProvider.js`
+- `packages/vibe64-voice/src/client/projectVoiceBinding.js`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `packages/vibe64-training/src/server/registerRoutes.js`
 - `packages/vibe64-training/src/server/actions.js`
@@ -138,7 +140,33 @@ question capture and workspace observations remain with their original owners.
 
 This move retains Colleague compatibility while Main's canonical delivered
 question/cue and receipt transport remain absent. No selected attempt, saved
-progress or flattened Main history is promoted into those facts. Main speech
-must reuse its original voice controller with an actual Learning transport
-scope; an empty project path cannot supply that scope. Native/source-less visual
+progress or flattened Main history is promoted into those facts. Main speech now reuses its original voice controller with the actual Learning
+transport scope described below; an empty project path cannot supply that scope. Native/source-less visual
 and installed/browser/audio acceptance remain open.
+
+## Source-less Main optional voice transport
+
+The existing VoiceProvider registers one additional Learning socket URL with the
+same original JSKIT proxy/configuration. Original origin validation precedes the
+canonical Session Inspect action; its existing contributor reauthenticates the
+actor and exact saved attempt, then Training and Store validate the immutable
+session/owner/pin. Successful exact inspected ID is required before upstream.
+There is no project fallback, copied auth reader, separate proxy/controller or
+new active-work rule. Inspect grants observation; every original Main Send still
+requires fresh write authority. Voice is optional and local typed Learning stays
+independent of the service.
+
+The same projectVoiceBinding branches only on its captured typed Learning Main
+identity, requiring exact API path/learner/actor and no project. Its explicit
+Learning voice ID includes learner/attempt/session, the socket uses that captured
+path, and its label is Lesson plus actual session name. Capture/submission retain
+exact learner/attempt/API provenance; an accepted old target never retargets or
+resends after navigation. Original Working URL/ID, narration preferences,
+controller, retention and queued delivery remain unchanged. No cue/current
+question/native receipt field is created by this routing increment.
+
+Original Voice and Runtime tests retain exact full prefixes. Appended cases
+exercise the real canonical contributor/action/proxy and same retained Main
+binding; the Voice unit saved-context/session reader is explicitly controlled.
+Actual saved-state owners retain their own original proof. Installed service,
+physical audio, browser/phone and canonical teacher narration cues remain open.

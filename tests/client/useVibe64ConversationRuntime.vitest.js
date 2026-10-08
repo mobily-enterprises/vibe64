@@ -419,3 +419,55 @@ describe("same Main transport for an actual learning conversation", () => {
     expect(mocks.request).not.toHaveBeenCalled();
   });
 });
+
+describe("same Main voice binding for actual source-less Learning", () => {
+  const attempt = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const nextAttempt = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const path = `/api/learning/${attempt}/vibe64/sessions`;
+  it("captures the exact Learning voice socket and submits through its existing Main target", async () => {
+    const f = fixture({ projectSlug: "", sessionId: "lesson", learningAttemptId: attempt, learnerId: "42", sessionsApiPath: path });
+    const runtime = f.runtime.value; const binding = createProjectVoiceBinding(runtime);
+    expect(binding.id).toBe(JSON.stringify(["learning", runtime.identity.actorKey, "42", attempt, "lesson"]));
+    expect(binding.conversationId).toBe(mainConversationId({ learningAttemptId: attempt, sessionId: "lesson" }));
+    expect(binding.socketUrl).toBe(`${path}/lesson/voice/ws`); expect(binding.label).toBe("Lesson · lesson");
+    expect(binding.preferenceTarget).toBe("coding"); expect(binding.defaults).toEqual({ readAloud: true });
+    const context = binding.captureContext(); expect(context).toEqual(runtime.identity);
+    binding.retain(); releases.push(() => binding.release());
+    await binding.submitText("Teach me the next step", { messageId: "lesson-voice", context });
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request).toHaveBeenCalledWith(`/api/assistant/app/conversations/${encodeURIComponent(binding.conversationId)}/messages`, expect.objectContaining({
+      method: "POST", body: expect.objectContaining({ messageId: "lesson-voice", text: "Teach me the next step" })
+    }));
+    expect(binding.narration.vocalizeThinking).toBe(false); expect(binding.narration.vocalizeInterimTurns).toBe(false);
+  });
+  it("retains an admitted voice target without retargeting or resending after attempt changes", async () => {
+    const f = fixture({ projectSlug: "", sessionId: "lesson", learningAttemptId: attempt, learnerId: "42", sessionsApiPath: path });
+    const runtime = f.runtime.value; const binding = createProjectVoiceBinding(runtime); const context = binding.captureContext();
+    binding.retain(); releases.push(() => binding.release());
+    const held = Promise.withResolvers(); mocks.request.mockReturnValueOnce(held.promise);
+    const sending = binding.submitText("Captured original words", { messageId: "held-lesson-voice", context });
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(1));
+    f.selected.learningAttemptId = nextAttempt; f.selected.sessionsApiPath = `/api/learning/${nextAttempt}/vibe64/sessions`;
+    await nextTick();
+    expect(binding.socketUrl).toBe(`${path}/lesson/voice/ws`); expect(binding.captureContext()).toEqual(context);
+    held.resolve({ ok: true }); expect(await sending).toBe(false);
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    await expect(binding.submitText("Old target cannot admit new words", { messageId: "retired-lesson-voice", context })).rejects.toThrow("no longer available");
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
+  it("refuses changed captured learner, attempt or API path without dispatch", async () => {
+    const f = fixture({ projectSlug: "", sessionId: "lesson", learningAttemptId: attempt, learnerId: "42", sessionsApiPath: path });
+    const binding = createProjectVoiceBinding(f.runtime.value); const context = binding.captureContext();
+    for (const changed of [{ learnerId: "other" }, { learningAttemptId: nextAttempt }, { sessionsApiPath: `/api/learning/${nextAttempt}/vibe64/sessions` }]) {
+      expect(() => binding.submitText("Wrong target", { messageId: "wrong-lesson-voice", context: { ...context, ...changed } })).toThrow("another conversation");
+    }
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+  it("refuses mixed or incomplete Learning identity without a Working voice fallback", () => {
+    const f = fixture({ projectSlug: "", sessionId: "lesson", learningAttemptId: attempt, learnerId: "42", sessionsApiPath: path });
+    for (const changed of [{ projectSlug: "fake" }, { learnerId: "" }, { actorKey: "" }, { sessionsApiPath: "/api/vibe64/sessions" }]) {
+      expect(() => createProjectVoiceBinding({ ...f.runtime.value, identity: { ...f.runtime.value.identity, ...changed } })).toThrow("exact saved learner");
+    }
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+});

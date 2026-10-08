@@ -133,3 +133,99 @@ test("revoked Colleague permission never opens a speech connection", { timeout: 
   assert.equal(JSON.parse((await v.messages.next()).value[0]).code, "voice_auth_required");
   assert.equal((await v.closed)[0], 1008); assert.equal(f.upstreams.length, 0);
 });
+
+// Genuine new Learning URL; original contributor/action/proxy are exercised.
+// Only the owning saved-context/session read is controlled at this unit boundary.
+const learningVoiceAttempt = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const otherLearningVoiceAttempt = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+async function learningVoiceFixture(t, { inspection = { ok: true, sessionId: "learning-session" }, user = { uid: 42, username: "learner", role: "owner" }, ownerId = "42", denied = false } = {}) {
+  const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
+  const { createSessionActions, ACTION_INSPECT_SESSION } = await import("../../packages/vibe64-sessions/src/server/actions.js");
+  const { registerVibe64ActionContext } = await import("../../packages/vibe64-core/src/server/actionContext.js");
+  const { currentProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const root = await mkdtemp(path.join(os.tmpdir(), "learning-voice-"));
+  const token = createVoiceAccessToken({ key: "0123456789abcdef0123456789abcdef", tenant: "fixture" });
+  const tokenFile = path.join(root, "voice.token"); await writeFile(tokenFile, token);
+  const upstream = new WebSocketServer({ host: "127.0.0.1", port: 0 }); await once(upstream, "listening");
+  const upstreams = [], inspections = [], authorizations = [], sockets = [];
+  upstream.on("connection", (socket, request) => {
+    assert.equal(request.headers.authorization, `Bearer ${token}`);
+    upstreams.push(socket); socket.send(JSON.stringify({ type: "voice.ready" }));
+  });
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "actual-sessions", domain: "vibe64-sessions", actions: createSessionActions({
+    sessions: { async inspectSession(id, input) { inspections.push({ id, input, scope: currentProjectRequestContext() }); return inspection; } }
+  }).filter(action => action.id === ACTION_INSPECT_SESSION).map(action => ({ channels: ["api"], surfaces: ["app"], ...action })) });
+  registerVibe64ActionContext(actions, {
+    resolveUser: async () => user,
+    authorizeProject() { assert.fail("Learning voice cannot authorize a Working project"); },
+    async resolveLearningContext(input) {
+      authorizations.push(input);
+      if (denied || input.attemptId !== learningVoiceAttempt || input.sessionId !== "learning-session") {
+        throw Object.assign(new Error("Saved Learning scope unavailable"), { code: "learning_scope_unavailable", statusCode: 403 });
+      }
+      return { learningScope: { learnerId: ownerId, attemptId: learningVoiceAttempt },
+        projectRuntimeRoot: path.join(root, "learning-sessions", learningVoiceAttempt), systemRoot: root };
+    }
+  });
+  const fastify = Fastify(); await fastify.register(websocket);
+  await Vibe64VoiceProvider.setup({ env: { VIBE64_VOICE_ENDPOINT: `ws://127.0.0.1:${upstream.address().port}/v1/voice`, VIBE64_VOICE_ACCESS_TOKEN_FILE: tokenFile },
+    fastify, sessions: { inspectSession() { assert.fail("No direct Working/session fallback"); } }, actionCatalogue: actions }, {});
+  await fastify.listen({ host: "127.0.0.1", port: 0 });
+  t.after(async () => {
+    for (const socket of [...sockets, ...upstreams, ...fastify.websocketServer.clients]) socket.terminate();
+    await fastify.close(); await new Promise(resolve => upstream.close(resolve)); await rm(root, { recursive: true, force: true });
+  });
+  return { inspections, authorizations, upstreams,
+    async open({ attemptId = learningVoiceAttempt, sessionId = "learning-session", origin = `http://127.0.0.1:${fastify.server.address().port}` } = {}) {
+      const socket = new WebSocket(`ws://127.0.0.1:${fastify.server.address().port}/api/learning/${encodeURIComponent(attemptId)}/vibe64/sessions/${encodeURIComponent(sessionId)}/voice/ws`, { headers: { origin } });
+      sockets.push(socket);
+      const messages = on(socket, "message", { signal: t.signal }); t.after(() => messages.return());
+      const closed = once(socket, "close", { signal: t.signal }); void closed.catch(() => {});
+      await once(socket, "open", { signal: t.signal });
+      return { socket, messages, closed };
+    }
+  };
+}
+
+test("Learning voice uses canonical exact actor/attempt/session observation and the original ordered speech proxy", { timeout: 10000 }, async t => {
+  const f = await learningVoiceFixture(t); const v = await f.open();
+  assert.equal(JSON.parse((await v.messages.next()).value[0]).type, "voice.ready");
+  assert.equal(f.authorizations.length, 1);
+  assert.deepEqual(f.authorizations[0], { actor: { uid: 42, username: "learner", role: "owner" }, attemptId: learningVoiceAttempt, sessionId: "learning-session", access: "observe" });
+  assert.equal(f.inspections.length, 1); assert.equal(f.inspections[0].id, "learning-session");
+  assert.equal(f.inspections[0].scope.learningScope.attemptId, learningVoiceAttempt);
+  assert.equal(f.inspections[0].scope.learningScope.learnerId, "42");
+  assert.equal(f.inspections[0].scope.slug, undefined); assert.equal(f.inspections[0].scope.targetRoot, undefined);
+  assert.equal(f.inspections[0].input.vibe64User.uid, 42);
+  const forwarded = on(f.upstreams[0], "message", { signal: t.signal }); t.after(() => forwarded.return());
+  const start = JSON.stringify({ type: "listen.start", turnId: "learning-one", sampleRate: 16000 });
+  const pcm = Buffer.from([0, 0, 1, 0]); const stop = JSON.stringify({ type: "listen.stop", turnId: "learning-one" });
+  for (const frame of [start, pcm, stop]) v.socket.send(frame);
+  for (const [frame, binary] of [[start, false], [pcm, true], [stop, false]]) assert.deepEqual((await forwarded.next()).value, [Buffer.from(frame), binary]);
+  const final = JSON.stringify({ type: "transcript.final", turnId: "learning-one", text: "Captured lesson words" });
+  f.upstreams[0].send(final); assert.deepEqual((await v.messages.next()).value, [Buffer.from(final), false]);
+  const upstreamClosed = once(f.upstreams[0], "close", { signal: t.signal });
+  v.socket.close(1000, "Lesson voice finished"); assert.deepEqual(await upstreamClosed, [1000, Buffer.from("Lesson voice finished")]);
+});
+
+for (const [label, options, target, code] of [
+  ["foreign owner", { ownerId: "other" }, {}, "vibe64_learning_scope_mismatch"],
+  ["signed out", { user: null }, {}, "vibe64_auth_required"],
+  ["revoked saved scope", { denied: true }, {}, "learning_scope_unavailable"],
+  ["another attempt", {}, { attemptId: otherLearningVoiceAttempt }, "learning_scope_unavailable"],
+  ["another session", {}, { sessionId: "other" }, "learning_scope_unavailable"],
+  ["mismatched inspection", { inspection: { ok: true, sessionId: "other" } }, {}, "voice_session_unavailable"],
+  ["failed inspection", { inspection: { ok: false, sessionId: "learning-session" } }, {}, "voice_session_unavailable"]
+]) test(`Learning voice refuses ${label} before upstream access`, { timeout: 5000 }, async t => {
+  const f = await learningVoiceFixture(t, options); const v = await f.open(target);
+  assert.equal(JSON.parse((await v.messages.next()).value[0]).code, code);
+  assert.equal((await v.closed)[0], 1008); assert.equal(f.upstreams.length, 0);
+});
+
+test("Learning voice checks the original socket origin before any saved scope or session read", { timeout: 5000 }, async t => {
+  const f = await learningVoiceFixture(t); const v = await f.open({ origin: "https://foreign.example" });
+  assert.equal(JSON.parse((await v.messages.next()).value[0]).code, "voice_auth_required");
+  assert.equal((await v.closed)[0], 1008); assert.equal(f.authorizations.length, 0);
+  assert.equal(f.inspections.length, 0); assert.equal(f.upstreams.length, 0);
+});

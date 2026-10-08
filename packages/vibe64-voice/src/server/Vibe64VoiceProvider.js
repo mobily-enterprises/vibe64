@@ -1,5 +1,6 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { registerVoiceProxyRoute, resolveVoiceProxyConfig, readVoiceCatalogue } from "@jskit-ai/assistant-voice/server";
+import { ACTION_INSPECT_SESSION } from "@local/vibe64-sessions/server/actions";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { isTrustedStudioWebSocketRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { resolveProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
@@ -25,6 +26,18 @@ const Vibe64VoiceProvider = defineFeature({
         const context = await resolveProjectRequestContext({ projectContext: getStudioProjectContext(), request });
         const sessionId = String(request.params?.sessionId || "").trim();
         const inspection = await runWithProjectRequestContext(context, () => sessions.inspectSession(sessionId));
+        if (inspection?.ok !== true || !sessionId || inspection.sessionId !== sessionId) {
+          throw Object.assign(new Error("This session is not available."), { code: "voice_session_unavailable", statusCode: 403 });
+        }
+      }
+    });
+    registerVoiceProxyRoute(fastify, { proxyConfig, route: "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/voice/ws",
+      async authorize(request) {
+        authorizeOrigin(request);
+        const sessionId = String(request.params?.sessionId || "").trim();
+        const inspection = await actionCatalogue.execute({ actionId: ACTION_INSPECT_SESSION,
+          input: { learningAttemptId: request.params?.learningAttemptId, sessionId },
+          context: { channel: "api", surface: "app", requestMeta: { request } } });
         if (inspection?.ok !== true || !sessionId || inspection.sessionId !== sessionId) {
           throw Object.assign(new Error("This session is not available."), { code: "voice_session_unavailable", statusCode: 403 });
         }
