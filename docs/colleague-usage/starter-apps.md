@@ -26,3 +26,5 @@ Colleague can explain the choices and offer coding-agent help. A how-to question
 alone does not authorize starter import, resource preparation or fixture reset.
 Applying to an existing application is unavailable; it does not replace authored
 source. These are three complete starters; optional packs are not part of this flow.
+OpenCode's generated, ignored plugin-install files alone do not make a blank
+project an existing application. Custom OpenCode files still prevent import.
