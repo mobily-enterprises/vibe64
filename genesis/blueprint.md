@@ -807,6 +807,10 @@ and workspace preparation.
 Starter selection waits briefly for session initialization. Once its source is
 added, a later setup-check failure is shown as a setup problem with recheck,
 without presenting the completed import as a failed action.
+The official JSKIT choices are Basic app, Database app and Accounts app, with
+ready server, client and browser tests. Database adds persistence without login;
+Accounts adds authentication and persisted profiles. Database-backed starters
+declare separate integration and browser-test databases.
 Background connection checks and active-turn steering do not perform this write.
 Already-loaded guidance becomes current through the assistant's normal context
 refresh lifecycle.

@@ -17,6 +17,7 @@ workspace.
 - `packages/vibe64-project/src/server/managedProject.js`
 - `packages/vibe64-genesis/src/server/index.js`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
+- `docs/colleague-usage/starter-apps.md`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `packages/vibe64-core/src/server/studioProjectContext.js`
 - `packages/vibe64-core/src/server/projectRequestContext.js`
@@ -36,6 +37,12 @@ workspace.
 - `packages/vibe64-core/src/server/projectRuntimeOpenState.js`
 
 ## Public contract
+
+Official JSKIT starter choices are Basic app, Database app and Accounts app.
+They include server/client/browser tests and a declared browser-tests target;
+Database adds MySQL migrations without login, while Accounts adds authentication
+and account-persistence tests. Import and Workspace setup remain separate.
+The task guide is `docs/colleague-usage/starter-apps.md`.
 
 Standalone lesson practice admission uses the same Project context, record
 creation, rollback and request-context storage. Training reads the actual actor's
