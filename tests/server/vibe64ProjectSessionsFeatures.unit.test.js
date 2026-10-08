@@ -387,3 +387,53 @@ test("project and sessions package declarations contain no scaffold or container
     assert.doesNotMatch(source, /containerTokens|scaffoldMode|scaffoldShape/u);
   }
 });
+
+test("learning HTTP routes reuse original session adapters and only canonical learning action permissions", async () => {
+  const { registerRoutes } = await import("../../packages/vibe64-sessions/src/server/registerRoutes.js");
+  const original = [], learning = [];
+  const http = entries => ({ router: { register: (...args) => entries.push(args) } });
+  registerRoutes(http(original), { routeSurface: "app" });
+  registerRoutes(http(learning), { routeSurface: "app", learningScoped: true,
+    projectContext: { readWorkspaceProject: () => assert.fail("A learning URL cannot resolve a substitute project") } });
+  const allowed = new Set(createSessionActions({ sessions: {} })
+    .filter(action => action.extensions.vibe64.learningAccess).map(action => action.id));
+  const seen = new Set();
+  const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  for (const [method, routePath, options, handler] of learning) {
+    assert.equal(routePath.startsWith("/api/learning/:learningAttemptId/vibe64/"), true, routePath);
+    assert.equal(routePath.includes(":slug"), false);
+    const suffix = routePath.slice("/api/learning/:learningAttemptId/vibe64".length);
+    const ordinary = original.find(([verb, url]) => verb === method && url.endsWith(suffix));
+    assert.ok(ordinary, `${method} ${suffix} must reuse an original adapter`);
+    assert.deepEqual(options, ordinary[2], "body validators, limits and response metadata are retained");
+    const calls = [];
+    const reply = { code(status) { assert.equal(status, 200); return this; }, send(result) { assert.equal(result.ok, true); return this; } };
+    await handler({ ip: "127.0.0.1", hostname: "localhost", headers: { origin: "http://localhost" },
+      params: { learningAttemptId: attemptId, sessionId: "learning-session" }, query: {},
+      body: { message: "actual user words", vibe64User: { uid: "browser-selected" }, learningAttemptId: "browser-attempt" },
+      async executeAction(call) { calls.push(call); return { ok: true }; }
+    }, reply);
+    assert.equal(calls.length, 1);
+    assert.equal(allowed.has(calls[0].actionId), true, calls[0].actionId);
+    assert.equal(calls[0].input.learningAttemptId, attemptId);
+    assert.equal(Object.hasOwn(calls[0].input, "vibe64User"), false);
+    seen.add(calls[0].actionId);
+  }
+  assert.deepEqual([...seen].sort(), [...allowed].filter(id => id !== "vibe64.sessions.conversation.context.read").sort());
+  assert.equal(learning.some(([, url]) => /repository|setup|renewal|pull-request|\/work\b/u.test(url)), false);
+});
+
+test("learning route admission rejects missing attempt URL and non-local transport before executing any action", async () => {
+  const { registerRoutes } = await import("../../packages/vibe64-sessions/src/server/registerRoutes.js");
+  const entries = [];
+  registerRoutes({ router: { register: (...args) => entries.push(args) } }, { learningScoped: true });
+  const create = entries.find(([method, url]) => method === "POST" && url.endsWith("/sessions"));
+  assert.ok(create);
+  const base = { ip: "127.0.0.1", hostname: "localhost", headers: { origin: "http://localhost" }, params: {}, body: {},
+    executeAction: () => assert.fail("Rejected transport must not execute Create") };
+  const reply = { code(status) { this.status = status; return this; }, send(result) { this.result = result; return this; } };
+  await assert.rejects(create[3](base, reply), { code: "vibe64_learning_attempt_required", statusCode: 400 });
+  await create[3]({ ...base, ip: "203.0.113.10", hostname: "remote.invalid" }, reply);
+  assert.equal(reply.status, 403);
+  assert.equal(reply.result.errors[0].code, "studio_local_request_required");
+});

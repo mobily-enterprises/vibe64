@@ -16,6 +16,12 @@ Colleague can explain this recovery and offer supported lesson operations. It
 must not substitute a new project, a different lesson attempt or another person's
 conversation. A missing connection or missing lesson support is a real error.
 
+A supported learning conversation can inspect its history, available authorized
+AI choices and connection access, change its selection, send or steer a message,
+rename the conversation and stop its own work. A lesson conversation without a
+practice project does not gain project Git, setup or repository operations. Those
+require their actual working or exercise project and its normal permissions.
+
 These action and storage prerequisites do not yet expose a complete lesson picker
 or Main teacher in every installation. They do not establish successful question
 delivery, assessment, speech or presentation. Use the installation's supported

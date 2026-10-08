@@ -418,6 +418,22 @@ retrying continuously.
 
 ## Source-less learning session foundation
 
+`@local/vibe64-sessions/server/routes` exposes the original route registrar for
+host composition. Its explicit `learningScoped:true` option reuses the original
+HTTP validators, limits, input builders and responses under
+`/api/learning/:learningAttemptId/vibe64`. The canonical Session action metadata
+supplies the only allowlist. The transport binds the URL attempt, strips browser
+user fields and retains the original local/hosted request gate. Source/setup/Git,
+renewal and other project-only actions are not registered in this namespace.
+The normal project route registration remains unchanged. Learning model catalogue
+reads use fresh attempt observation authority and the same Session capability
+reader; they do not grant access to another person's connections. Actual host
+registration and installed/browser acceptance are separate requirements.
+
+Sources: `packages/vibe64-sessions/src/server/registerRoutes.js`,
+`packages/vibe64-sessions/src/server/actions.js`,
+`tests/server/vibe64ProjectSessionsFeatures.unit.test.js`.
+
 The existing Runtime and Store also accept a constructor-only `learningScope`
 containing the authenticated `learnerId`, exact `attemptId`, complete opaque
 `pin`, and `noExercise:true`. The composing Training owner must authorize the
