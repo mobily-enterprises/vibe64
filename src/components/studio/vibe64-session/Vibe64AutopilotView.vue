@@ -579,9 +579,6 @@
     </section>
 
     <section class="studio-autopilot__project-panel" aria-label="Project">
-      <div v-if="!props.sourceWorkspaceAvailable" class="studio-autopilot__right-pane-page" aria-label="Lessons">
-        <slot name="dashboard" :dashboard-context="dashboardContext" />
-      </div>
       <Vibe64AsyncModuleState
         v-if="props.sourceWorkspaceAvailable && sourceToolLoading"
         class="studio-autopilot__right-pane-page"
@@ -589,7 +586,7 @@
         loading
       />
       <Vibe64DashboardShell
-        v-if="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard'"
+        v-if="props.sourceWorkspaceAvailable && !props.lessonsAvailable && props.projectPane === 'dashboard'"
         v-show="dashboardShellVisible"
         class="studio-autopilot__dashboard-shell"
         :dashboard-context="dashboardContext"
@@ -759,20 +756,24 @@
       </section>
 
       <div
-        v-show="props.sourceWorkspaceAvailable && props.projectPane !== 'dashboard'"
+        v-show="!props.sourceWorkspaceAvailable || props.projectPane !== 'dashboard' || props.lessonsAvailable"
         class="studio-autopilot__right-pane-page"
         role="tabpanel"
       >
         <TrainingPreviewPresentation
-          v-if="props.sourceWorkspaceAvailable"
-          :active="props.active && props.projectPane === 'preview' && !props.sessionSelectionArchived"
+          :lessons-available="props.lessonsAvailable"
+          :app-available="props.sourceWorkspaceAvailable"
+          :attempt-id="props.learningAttemptId"
+          :active="props.active && (props.lessonsAvailable || props.projectPane === 'preview') && !props.sessionSelectionArchived"
           :project-slug="projectSlug"
           :session-id="selectedAssistantSessionId"
-          v-slot="{ appVisible, presentation }"
         >
+          <template #lessons><slot name="dashboard" :dashboard-context="dashboardContext" /></template>
+          <template #default="{ appVisible, presentation }">
           <Vibe64ProjectOnboarding
             v-if="props.sourceWorkspaceAvailable"
-            :active="props.active && props.projectPane === 'preview'"
+            :active="props.active && (props.lessonsAvailable ? appVisible : props.projectPane === 'preview')"
+            :presentation-active="props.active && props.lessonsAvailable && !props.sessionSelectionArchived"
             :archived="props.sessionSelectionArchived"
             :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
             :can-ask="assistantJuniorAllowed"
@@ -791,15 +792,16 @@
               :busy="agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
               class="studio-autopilot__preview-launch"
               embedded-preview
-              :preview-displayed="props.projectPane === 'preview' && appVisible"
+              :preview-displayed="(props.lessonsAvailable || props.projectPane === 'preview') && appVisible"
               :session="props.session"
               :source-operations-suspended="sourceOperationsSuspended"
-              :toolbar-teleport-target="props.projectPane === 'preview' && appVisible ? props.previewToolbarTeleportTarget : ''"
+              :toolbar-teleport-target="(props.lessonsAvailable || props.projectPane === 'preview') && appVisible ? props.previewToolbarTeleportTarget : ''"
               :window-displayed="props.active"
               @preview-attachment-state="updatePreviewAttachmentState"
               @test-approval="updateTestApproval"
             />
           </Vibe64ProjectOnboarding>
+          </template>
         </TrainingPreviewPresentation>
       </div>
     </section>

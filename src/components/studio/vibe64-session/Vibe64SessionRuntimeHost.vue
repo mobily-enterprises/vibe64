@@ -6,6 +6,8 @@
   >
     <Vibe64AutopilotView
       :source-workspace-available="sourceWorkspaceAvailable"
+      :lessons-available="props.lessonsAvailable"
+      :learning-attempt-id="learningAttemptId"
       :active="autopilotModeActive"
       :agent-connection-error="agentConnectionError"
       :agent-connection-status="agentConnectionStatus"
@@ -93,6 +95,7 @@ import {
 } from "@/composables/useVibe64SessionRuntimeHost.js";
 
 const props = defineProps({
+  lessonsAvailable: Boolean,
   refreshRepositoryState: {
     default: null,
     type: Function
@@ -182,6 +185,7 @@ const {
   saveSessionWork,
   sessionsApiPath,
   sourceWorkspaceAvailable,
+  learningAttemptId,
   sessionRenewal,
   selectedAgentTerminalId,
   selection,

@@ -7,6 +7,9 @@ import TrainingVisualPlayer from "./TrainingVisualPlayer.vue";
 
 const props = defineProps({
   active: Boolean,
+  lessonsAvailable: Boolean,
+  appAvailable: { type: Boolean, default: true },
+  attemptId: { type: String, default: "" },
   projectSlug: { type: String, required: true },
   sessionId: { type: String, required: true }
 });
@@ -17,13 +20,19 @@ const resource = shallowRef(null);
 const player = ref(null);
 const display = ref({ phase: "closed", state: "", description: "", error: "" });
 const revision = ref(0);
-const mode = ref("app");
+const mode = ref(props.appAvailable && !props.lessonsAvailable ? "app" : "lessons");
 const collapsed = ref(false);
 const cue = ref(null);
 const visible = computed(() => props.active && mode.value === "presentation" && !collapsed.value);
-const appVisible = computed(() => mode.value !== "presentation" || collapsed.value);
+const appVisible = computed(() => props.appAvailable && (mode.value === "app" || collapsed.value));
+const lessonsVisible = computed(() => props.lessonsAvailable && (mode.value === "lessons" || !props.appAvailable && collapsed.value));
+watch(() => props.lessonsAvailable, enabled => {
+  if (!enabled && mode.value === "lessons" && props.appAvailable) mode.value = "app";
+});
 let mounted = true;
 let pausing = null;
+let hiddenRevision = 0;
+watch(visible, (shown, wasShown) => { if (wasShown && !shown) hiddenRevision += 1; }, { flush: "sync" });
 let transitionRevision = 0;
 const checkpointError = ref("");
 let checkpointOperation = null;
@@ -37,7 +46,8 @@ function ensureSelection(expected) {
 function exactSelection(input) {
   const expected = selection.value;
   ensureSelection(expected);
-  if (input?.attemptId !== expected.attemptId || input?.visualId !== expected.visualId) {
+  if ((props.attemptId && expected.attemptId !== props.attemptId) ||
+      input?.attemptId !== expected.attemptId || input?.visualId !== expected.visualId) {
     throw new Error("Use the exact displayed attempt and visual identity.");
   }
   if (!player.value) throw new Error("The lesson presentation is not ready. Wait for it to open before sending a command.");
@@ -96,7 +106,8 @@ async function ready(expected) {
 }
 
 async function open({ attemptId, visualId } = {}) {
-  if (!actorKey.value || !props.active || !props.projectSlug || !props.sessionId ||
+  if (!actorKey.value || !props.active || !props.appAvailable || !props.projectSlug || !props.sessionId ||
+      (props.attemptId && props.attemptId !== attemptId) ||
       !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(attemptId || "") ||
       !/^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u.test(visualId || "")) {
     throw new Error("Open a declared visual for the signed-in learner's exact attempt in its active Preview.");
@@ -339,13 +350,19 @@ async function pauseHidden(force = false) {
       !resource.value?.visual.commands.some(value => value.name === "pause")) return;
   const expected = selection.value;
   pausing = expected;
+  const hiddenAtStart = hiddenRevision;
   try {
     await command({ ...expected, commandId: crypto.randomUUID(), name: "pause" });
     await snapshot(expected);
   } catch (error) {
     if (mounted && selection.value === expected) display.value = { ...display.value, error: error.message };
   } finally {
-    if (pausing === expected) pausing = null;
+    if (pausing === expected) {
+      pausing = null;
+      if (mounted && selection.value === expected && !visible.value && hiddenRevision !== hiddenAtStart) {
+        void pauseHidden();
+      }
+    }
   }
 }
 
@@ -353,7 +370,7 @@ watch([visible, () => display.value.phase], () => {
   if (!visible.value) retireCue("The lesson presentation is hidden.", false);
   void pauseHidden();
 }, { flush: "post" });
-watch([actorKey, () => props.projectSlug, () => props.sessionId], () => {
+watch([actorKey, () => props.projectSlug, () => props.sessionId, () => props.attemptId], () => {
   retireCue("The learner or exercise changed.", false);
   cue.value = null;
   checkpointOperation = null;
@@ -362,7 +379,7 @@ watch([actorKey, () => props.projectSlug, () => props.sessionId], () => {
   selection.value = null;
   resource.value = null;
   display.value = { phase: "closed", state: "", description: "", error: "" };
-  mode.value = "app";
+  mode.value = props.appAvailable ? "app" : "lessons";
   collapsed.value = false;
   revision.value++;
 }, { flush: "sync" });
@@ -377,9 +394,10 @@ defineExpose({ presentation });
 
 <template>
   <section class="training-preview">
-    <div v-if="selection" class="training-preview__choices" aria-label="Preview content">
-      <v-btn min-height="48" :variant="appVisible ? 'tonal' : 'text'" @click="mode = 'app'">App preview</v-btn>
-      <v-btn min-height="48" :variant="!appVisible ? 'tonal' : 'text'" @click="mode = 'presentation'; collapsed = false">Colleague presentation</v-btn>
+    <div v-if="selection || lessonsAvailable" class="training-preview__choices" aria-label="Preview content">
+      <v-btn v-if="appAvailable" min-height="48" :variant="appVisible ? 'tonal' : 'text'" :aria-pressed="appVisible" @click="mode = 'app'; collapsed = false">{{ lessonsAvailable ? 'App' : 'App preview' }}</v-btn>
+      <v-btn v-if="lessonsAvailable" min-height="48" :variant="lessonsVisible ? 'tonal' : 'text'" :aria-pressed="lessonsVisible" @click="mode = 'lessons'; collapsed = false">Lessons</v-btn>
+      <v-btn min-height="48" :disabled="!selection" :variant="visible ? 'tonal' : 'text'" :aria-pressed="visible" @click="mode = 'presentation'; collapsed = false">{{ lessonsAvailable ? 'Presentation' : 'Colleague presentation' }}</v-btn>
       <v-btn v-if="mode === 'presentation'" min-height="48" variant="text" @click="collapsed = !collapsed">
         {{ collapsed ? 'Restore presentation' : 'Minimise presentation' }}
       </v-btn>
@@ -394,10 +412,14 @@ defineExpose({ presentation });
         {{ checkpointOperation ? 'Retry diagram checkpoint' : 'Save current diagram' }}
       </v-btn>
     </div>
-    <div v-show="appVisible" class="training-preview__app">
+    <div v-if="appAvailable" v-show="appVisible" class="training-preview__app">
       <slot :app-visible="appVisible" :presentation="presentation" />
     </div>
-    <div v-show="!appVisible" class="training-preview__presentation">
+    <div v-if="lessonsAvailable" v-show="lessonsVisible" class="training-preview__lessons" aria-label="Lessons">
+      <slot name="lessons" />
+      <p v-if="!appAvailable && !selection" role="status">This lesson has no App preview. No lesson presentation is open.</p>
+    </div>
+    <div v-show="lessonsAvailable ? visible : !appVisible" class="training-preview__presentation">
       <TrainingVisualPlayer v-if="resource" ref="player" :resource="resource" :attempt-id="selection.attemptId" :snapshot="resource.snapshot" @state="observedState" @error="observedError" />
       <v-skeleton-loader v-else-if="display.phase === 'loading'" type="image" aria-label="Loading lesson presentation" />
       <div v-if="!resource && display.error">
@@ -427,6 +449,7 @@ defineExpose({ presentation });
   min-width: 0;
   min-height: 0;
 }
+.training-preview__lessons,
 .training-preview__presentation {
   flex: 1;
   min-width: 0;

@@ -121,6 +121,7 @@ import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFix
 
 const props = defineProps({
   active: Boolean,
+  presentationActive: Boolean,
   presentation: { type: Object, default: null },
   archived: Boolean,
   busy: Boolean,
@@ -178,6 +179,7 @@ const displayedPreview = {
   get projectSlug() { return projectSlug.value; },
   get sessionId() { return props.sessionId; },
   get screen() {
+    if (props.presentationActive && !props.active) return undefined;
     if (showPreview.value) return !props.archived && (loadError.value || state.value === "attention")
       ? "outputs-with-setup-warning" : "outputs";
     if (state.value === "adoption") return "existing-project-setup";
@@ -187,7 +189,7 @@ const displayedPreview = {
 };
 watchEffect(() => {
   if (!colleaguePreview) return;
-  if (props.active) colleaguePreview.value = displayedPreview;
+  if (props.active || props.presentationActive) colleaguePreview.value = displayedPreview;
   else if (colleaguePreview.value === displayedPreview) colleaguePreview.value = null;
 });
 onBeforeUnmount(() => {

@@ -16,6 +16,9 @@ reads and commands without creating a second session panel or progress owner.
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/composables/useVibe64AutopilotView.js`
+- `src/composables/useVibe64SessionRuntimeHost.js`
+- `packages/vibe64-training/src/client/TrainingPreviewPresentation.vue`
+- `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `packages/vibe64-training/src/server/registerRoutes.js`
 - `packages/vibe64-training/src/server/actions.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
@@ -78,13 +81,40 @@ feedback is scoped to learner and route/mode generation. Retired failures cannot
 be displayed as current requests. Shared transport/native errors keep their
 existing owners.
 
-Lessons presently use the original right-pane slot with a clear Lessons label.
-A source-less Host's existing sourceWorkspaceAvailable projection hides Save,
-Temporary AI/workspace and source-backed App children; true/default keeps the
-original Working controls even while source operations are suspended. It does
-not construct a second player or pretend that a source-less App is available.
-The combined App/Lessons/Presentation Preview, Main teaching coordination,
-installed host and browser/device acceptance remain open.
+The original TrainingPreviewPresentation composes its existing App/player with
+an opt-in Lessons slot. Its default two-view names/policy stay intact; the actual
+Learning composition offers App/Lessons/Presentation, with one retained App,
+original picker slot and original sandboxed controller player across view
+switches. The captured Learning Host exports only its existing exact attempt ID;
+the wrapper refuses a different attempt and retires changed scope. Actor fences,
+resource pin verification, commands, cues and checkpoint receipts retain their
+original owners. No pin/progress reader or native receipt is invented.
+
+Autopilot's actual App display and toolbar facts use that wrapper's appVisible
+and its opt-in activation, so an App choice works even while the original page
+pane remains dashboard. Lessons does not count as visible App. The original
+Onboarding read/actions use App visibility in this opt-in composition. Its new
+optional presentationActive flag retains the same original presentation bridge
+for the alive source-backed wrapper across all three choices, including opening
+a declared diagram from Lessons. Hidden App reports no setup screen; an actual
+visible player keeps the existing Online lesson-presentation focus projection.
+This split is necessary because the original active flag owned both App reads
+and presentation callbacks. Default false retains original Working behavior. A source-less
+Host's existing sourceWorkspaceAvailable projection omits App/Onboarding/output
+owners, hides Save and Temporary/workspace tools, and shows truthful unavailable
+presentation. True/default keeps original Working controls, including suspended
+Working behavior. The original empty Learning pane uses the same host without a
+fake project, player or teaching message. Main teaching/current-question/cue
+connection and source-less visual authority remain unimplemented; this frontend
+composition does not complete LM10's installed/browser/device acceptance.
+
+Original checkpoint/cue methods retain their implementation. Exact before-source
+runs exposed a prior hidden-pause race: a genuine second hide was dropped while
+an earlier pause waited for fresh checkpoint authority. The existing pause owner
+now compares a local shown-to-hidden revision when settling, and honours only a
+newer hide on the same alive selection still hidden. Phase events do not enqueue
+repeated pauses; no prior uncertain checkpoint/request is replayed. This is a
+necessary lifecycle correction, not a different player or progress protocol.
 
 Focused evidence retains the original app-index assertion, project-opening
 assertions and command/attention fixtures. Actual compiled setup/templates prove

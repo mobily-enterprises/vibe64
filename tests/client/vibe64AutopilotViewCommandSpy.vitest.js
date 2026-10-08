@@ -1086,7 +1086,8 @@ it("projects actual source availability without suppressing suspended Working co
   expect(temporary).toContain('v-if="props.sourceWorkspaceAvailable"');
   const presentation = component.slice(component.indexOf('<TrainingPreviewPresentation'), component.indexOf('</TrainingPreviewPresentation>'));
   expect(presentation).toContain('v-if="props.sourceWorkspaceAvailable"');
-  expect(component).toContain('v-if="!props.sourceWorkspaceAvailable"');
-  expect(component).toContain('aria-label="Lessons"');
+  expect(presentation).toContain(':app-available="props.sourceWorkspaceAvailable"');
+  expect(presentation).toContain('<template #lessons>');
+  expect(fs.readFileSync(path.resolve("packages/vibe64-training/src/client/TrainingPreviewPresentation.vue"), "utf8")).toContain('aria-label="Lessons"');
   expect(fs.readFileSync(runtimeHostPath, "utf8")).toContain(':source-workspace-available="sourceWorkspaceAvailable"');
 });

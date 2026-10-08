@@ -110,10 +110,32 @@ for (const [component, relativePath] of [
 }
 
 const autopilot = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue"), "utf8");
+// Compile the unchanged actual Autopilot Preview subtree: unrelated chat/source
+// tools stay outside this finite composition fixture. Original wrapper and
+// Onboarding setup still own resources; only OutputControls display is observed.
+const previewSubtree = autopilot.slice(autopilot.indexOf("<TrainingPreviewPresentation"),
+  autopilot.indexOf("</TrainingPreviewPresentation>") + "</TrainingPreviewPresentation>".length);
+const ActualAutopilotPreview = Vue.defineComponent({
+  props: { model: Object, requestTemporaryAi: Function },
+  setup({ model, requestTemporaryAi }) {
+    return {
+      props: Vue.computed(() => ({ ...model, sourceWorkspaceAvailable: model.appAvailable,
+        learningAttemptId: model.attemptId, sessionSelectionArchived: model.archived,
+        previewToolbarTeleportTarget: "#actual-preview-toolbar" })),
+      projectSlug: Vue.computed(() => model.projectSlug),
+      selectedAssistantSessionId: Vue.computed(() => model.sessionId),
+      dashboardContext: {}, sourceOperationsSuspended: false, agentActive: false,
+      assistantJuniorAllowed: true, startTemporaryAiTask: requestTemporaryAi,
+      askCodexToFixPreviewIdentity() {}, attachPreviewFile() {}, attachPreviewFileProducer() {},
+      updatePreviewAttachmentState() {}, updateTestApproval() {}
+    };
+  },
+  render: new Function("Vue", compile(previewSubtree, { mode: "function", prefixIdentifiers: true }).code)(Vue)
+});
 const onboardingTag = autopilot.match(/<Vibe64ProjectOnboarding\b[\s\S]*?>/u)?.[0];
 const activeBinding = onboardingTag?.match(/:active="([^"]+)"/u)?.[1];
 if (!activeBinding) throw new Error("The actual onboarding activity binding is required.");
-const onboardingActive = new Function("props", `return (${activeBinding});`);
+const onboardingActive = new Function("props", "appVisible = true", `return (${activeBinding});`);
 
 function opening(state = "ready", sessionId = "session-a") {
   return {
@@ -142,12 +164,16 @@ function nodeText(node) {
 
 // Real Onboarding setup/template, QueryClient, command, feedback and realtime;
 // only Vuetify presentation and the ready OutputControls slot are stand-ins.
-function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false } = {}) {
+function mountOnboarding({ active = true, projectPane = "preview", live = true, temporaryChats = false, withPresentation = false, withAutopilotPreview = false, lessonsAvailable = false, appAvailable = true, attemptId = "", holdCheckpoints = false } = {}) {
   mocks.live = live;
-  if (withPresentation) mocks.visuals = [];
-  const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, sessionId: "session-a", projectSlug: "project-a", presentation: null });
+  if (withPresentation || withAutopilotPreview) mocks.visuals = [];
+  const props = Vue.reactive({ active, archived: false, busy: false, canAsk: true, mounted: true, projectPane, lessonsAvailable, appAvailable, attemptId, sessionId: "session-a", projectSlug: "project-a", presentation: null });
   const reads = [];
   const visualReads = [];
+  const checkpointReads = [];
+  const checkpointWrites = [];
+  let savedVisual = null;
+  let checkpointRevision = 0;
   const presentationHost = Vue.shallowRef(null);
   const viewer = Vue.shallowRef({ actorKey: "member-42" });
   const writes = [];
@@ -157,15 +183,40 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   const listeners = new Set();
   const sessionListeners = new Set();
   const feedback = { dismiss: vi.fn(), report: vi.fn(() => ({ skipped: true })) };
-  const outputs = { mounted: vi.fn(), unmounted: vi.fn() };
+  const outputs = { mounted: vi.fn(), unmounted: vi.fn(), controls: Vue.shallowRef(null) };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let closed = false;
   const colleaguePreview = Vue.shallowRef(null);
   const transport = {
     request(url, options) {
       if (url.startsWith("/api/vibe64/training/attempts/")) {
+        const scope = JSON.stringify([viewer.value?.actorKey, props.projectSlug, props.sessionId, url]);
+        if (options.method === "POST") {
+          expect(savedVisual?.scope).toBe(scope);
+          expect(options.body.projectSlug).toBe(props.projectSlug);
+          expect(options.body.sessionId).toBe(props.sessionId);
+          expect(options.body.expectedRevision).toBe(checkpointRevision);
+          expect(options.body.requestId).toMatch(/^[a-f0-9-]{36}$/u);
+          checkpointWrites.push({ url, options: structuredClone(options) });
+          return Promise.resolve({ revision: ++checkpointRevision });
+        }
+        if (savedVisual?.scope === scope) {
+          const response = { ...savedVisual.resource, revision: checkpointRevision };
+          if (holdCheckpoints) {
+            const pending = Promise.withResolvers();
+            checkpointReads.push({ url, options, resolve: () => pending.resolve(response) });
+            return pending.promise;
+          }
+          checkpointReads.push({ url, options });
+          return Promise.resolve(response);
+        }
         const response = Promise.withResolvers();
-        visualReads.push({ url, options, ...response });
+        visualReads.push({ url, options, reject: response.reject, resolve(value) {
+          if (value?.id === url.split("/").at(-1) && value.visual?.id === value.id) {
+            savedVisual = { scope, resource: value };
+          }
+          response.resolve(value);
+        } });
         return response.promise;
       }
       if (url.startsWith("/api/vibe64/sessions/") || url.startsWith("/api/assistant/app/conversations/")) {
@@ -228,19 +279,32 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
         });
         requestTemporaryAi.mockImplementation(temporary.startTask);
       }
-      const appBody = ({ presentation = props.presentation } = {}) => Vue.h(Onboarding, {
-        active: onboardingActive(props), archived: props.archived, busy: props.busy, canAsk: props.canAsk,
+      const appBody = ({ presentation = props.presentation, appVisible = true } = {}) => Vue.h(Onboarding, {
+        active: onboardingActive(props, appVisible), archived: props.archived, busy: props.busy, canAsk: props.canAsk,
         requestTemporaryAi, sessionId: props.sessionId, presentation
       }, { default: () => Vue.h(outputSlot) });
-      return () => !props.mounted ? null : withPresentation ? Vue.h(PreviewPresentation, {
+      return () => !props.mounted ? null : withAutopilotPreview ? Vue.h(ActualAutopilotPreview, {
+        model: props, requestTemporaryAi
+      }, { dashboard: () => Vue.h("input", { "aria-label": "Actual Lessons slot" }) }) : withPresentation ? Vue.h(PreviewPresentation, {
         ref: presentationHost, active: onboardingActive(props) && !props.archived,
-        projectSlug: props.projectSlug, sessionId: props.sessionId
-      }, { default: appBody }) : appBody();
+        projectSlug: props.projectSlug, sessionId: props.sessionId,
+        lessonsAvailable: props.lessonsAvailable, appAvailable: props.appAvailable, attemptId: props.attemptId
+      }, { default: appBody, lessons: () => Vue.h("input", { "aria-label": "Lesson picker selection" }) }) : appBody();
     }
   });
+  app.component("TrainingPreviewPresentation", PreviewPresentation);
+  app.component("Vibe64ProjectOnboarding", Onboarding);
+  app.component("Vibe64OutputControls", Vue.defineComponent({
+    props: ["previewDisplayed", "windowDisplayed", "toolbarTeleportTarget"],
+    setup(controls) {
+      outputs.controls.value = controls;
+      outputs.mounted(); Vue.onBeforeUnmount(outputs.unmounted);
+      return () => Vue.h("output", "Actual output controls placement");
+    }
+  }));
   app.use(VueQueryPlugin, { queryClient });
   app.provide(VIBE64_COLLEAGUE_PREVIEW_KEY, colleaguePreview);
-  if (withPresentation) app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
+  if (withPresentation || withAutopilotPreview) app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
   app.provide(Vue.ssrContextKey, { modules: new Set() });
   app.provide(routeLocationKey, Vue.reactive({ path: "/app/project/project-a", params: {}, query: {}, matched: [] }));
   app.provide("jskit.shell-web.runtime.web-error.client", feedback);
@@ -267,7 +331,7 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   app.mount(container);
   return {
     colleaguePreview, container, conversationRequests, feedback, listeners, outputs, props, reads, requestTemporaryAi, temporary, writes,
-    visualReads, presentationHost, viewer,
+    visualReads, checkpointReads, checkpointWrites, presentationHost, viewer,
     button: (label) => findNode(container, (node) => node.type === "button" && nodeText(node).includes(label)),
     async projectChanged(projectSlug = "project-a") {
       for (const handler of listeners) handler({ projectSlug });
@@ -1124,5 +1188,181 @@ it("a stopped armed cue ignores its late final identity and never starts motion"
     expect(handle.state.cue.phase).toBe("interrupted");
     expect(handle.state.cue.outputId).toBe("");
     expect(mocks.visuals[0].operations).toHaveLength(1);
+  } finally { fixture.close(); }
+});
+
+
+it("offers opt-in App/Lessons/Presentation in one retained original host without remounting slots or player", async () => {
+  const fixture = mountOnboarding({ withPresentation: true, lessonsAvailable: true, attemptId: visualRequest.attemptId });
+  try {
+    fixture.button("App").props.onClick(); await Vue.nextTick();
+    await vi.waitFor(() => expect(fixture.reads).toHaveLength(1));
+    await fixture.settleRead(0);
+    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    const output = findNode(fixture.container, node => node.type === "output");
+    const picker = findNode(fixture.container, node => node.props?.["aria-label"] === "Lesson picker selection");
+    picker.props.value = "retained exact release";
+    expect(fixture.button("Lessons").props["aria-pressed"]).toBe(true);
+    const handle = fixture.presentationHost.value.presentation;
+    await expect(handle.open({ ...visualRequest, attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" })).rejects.toThrow("exact attempt");
+    expect(fixture.visualReads).toHaveLength(0);
+    const opening = handle.open(visualRequest);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    fixture.visualReads[0].resolve(visualResource(false));
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    mocks.visuals[0].ready(); await opening;
+    const playerId = handle.state.playerInstanceId;
+    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    expect(handle.state.visible).toBe(false);
+    expect(findNode(fixture.container, node => node.props?.["aria-label"] === "Lesson picker selection")).toBe(picker);
+    expect(picker.props.value).toBe("retained exact release");
+    fixture.button("App").props.onClick(); await Vue.nextTick();
+    expect(findNode(fixture.container, node => node.type === "output")).toBe(output);
+    expect(fixture.outputs.mounted).toHaveBeenCalledOnce(); expect(fixture.outputs.unmounted).not.toHaveBeenCalled();
+    fixture.button("Presentation").props.onClick(); await Vue.nextTick();
+    expect(handle.state.visible).toBe(true); expect(handle.state.playerInstanceId).toBe(playerId);
+    expect(mocks.visuals).toHaveLength(1);
+    fixture.props.attemptId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"; await Vue.nextTick();
+    expect(handle.state.phase).toBe("closed"); expect(handle.state.attemptId).toBeUndefined();
+    expect(fixture.visualReads).toHaveLength(1);
+  } finally { fixture.close(); }
+});
+
+it("shows Lessons without creating a source-less App or claiming an available presentation", async () => {
+  const fixture = mountOnboarding({ withPresentation: true, lessonsAvailable: true, appAvailable: false, attemptId: visualRequest.attemptId });
+  try {
+    await Vue.nextTick();
+    expect(fixture.reads).toHaveLength(0); expect(fixture.outputs.mounted).not.toHaveBeenCalled();
+    expect(fixture.button("App")).toBeNull();
+    expect(fixture.button("Lessons").props["aria-pressed"]).toBe(true);
+    expect(fixture.button("Presentation").props.disabled).toBe(true);
+    expect(nodeText(fixture.container)).toContain("This lesson has no App preview. No lesson presentation is open.");
+    await expect(fixture.presentationHost.value.presentation.open(visualRequest)).rejects.toThrow("exact attempt");
+    expect(fixture.visualReads).toHaveLength(0); expect(fixture.writes).toHaveLength(0);
+  } finally { fixture.close(); }
+});
+
+
+it("keeps original fresh checkpoint reads and writes distinct from opening without hiding their exact receipts", async () => {
+  const fixture = mountOnboarding({ withPresentation: true });
+  try {
+    await fixture.settleRead(0);
+    const handle = fixture.presentationHost.value.presentation;
+    const opening = handle.open(visualRequest);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    fixture.visualReads[0].resolve(visualResource(false));
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    mocks.visuals[0].ready(); await opening;
+    const pending = handle.command({ ...visualRequest, commandId: "fresh-checkpoint", name: "advance" });
+    mocks.visuals[0].finish(0, { state: "shown", labels: { caption: "Saved actual state" } });
+    expect((await pending).phase).toBe("completed");
+    expect(fixture.visualReads).toHaveLength(1);
+    expect(fixture.checkpointReads).toHaveLength(1);
+    expect(fixture.checkpointWrites).toHaveLength(1);
+    expect(fixture.checkpointReads[0].url).toBe(fixture.visualReads[0].url);
+    expect(fixture.checkpointWrites[0].url).toBe(fixture.visualReads[0].url);
+    expect(fixture.checkpointWrites[0].options.body).toEqual(expect.objectContaining({
+      projectSlug: "project-a", sessionId: "session-a", expectedRevision: 0,
+      snapshot: { state: "shown", paused: false, labels: { caption: "Saved actual state" } }
+    }));
+  } finally { fixture.close(); }
+});
+
+
+it("honours a newer hide of the same player while its earlier pause checkpoint is held without replaying that save", async () => {
+  const fixture = mountOnboarding({ withPresentation: true, holdCheckpoints: true });
+  try {
+    await fixture.settleRead(0);
+    const handle = fixture.presentationHost.value.presentation;
+    const opening = handle.open(visualRequest);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    fixture.visualReads[0].resolve(visualResource());
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    mocks.visuals[0].ready(); await opening;
+    fixture.button("Minimise presentation").props.onClick();
+    await vi.waitFor(() => expect(mocks.visuals[0].operations).toHaveLength(1));
+    mocks.visuals[0].finish(0, { paused: true });
+    await vi.waitFor(() => expect(fixture.checkpointReads).toHaveLength(1));
+    fixture.button("Restore presentation").props.onClick(); await Vue.nextTick();
+    expect(handle.state.visible).toBe(true);
+    fixture.button("App preview").props.onClick(); await Vue.nextTick();
+    expect(handle.state.visible).toBe(false);
+    expect(mocks.visuals[0].operations).toHaveLength(1);
+    expect(fixture.checkpointWrites).toHaveLength(0);
+    fixture.checkpointReads[0].resolve();
+    await vi.waitFor(() => expect(mocks.visuals[0].operations).toHaveLength(2));
+    expect(mocks.visuals[0].operations.map(value => value.input.name)).toEqual(["pause", "pause"]);
+    expect(mocks.visuals[0].operations[0].input.commandId).not.toBe(mocks.visuals[0].operations[1].input.commandId);
+    expect(fixture.checkpointWrites).toHaveLength(1);
+    mocks.visuals[0].finish(1, { paused: true });
+    await vi.waitFor(() => expect(fixture.checkpointReads).toHaveLength(2));
+    fixture.checkpointReads[1].resolve();
+    await vi.waitFor(() => expect(fixture.checkpointWrites).toHaveLength(2));
+    await Vue.nextTick(); await Vue.nextTick();
+    expect(mocks.visuals[0].operations).toHaveLength(2);
+    expect(new Set(fixture.checkpointWrites.map(value => value.options.body.requestId)).size).toBe(2);
+    expect(fixture.checkpointWrites.map(value => value.options.body.expectedRevision)).toEqual([0, 1]);
+  } finally { fixture.close(); }
+});
+
+
+it("uses the actual compiled Autopilot choices for display, original bridge and toolbar truth while Learning stays on its dashboard pane", async () => {
+  const fixture = mountOnboarding({ withAutopilotPreview: true, lessonsAvailable: true, projectPane: "dashboard" });
+  try {
+    await Vue.nextTick(); await Vue.nextTick();
+    expect(fixture.reads).toHaveLength(0);
+    const bridge = fixture.colleaguePreview.value;
+    expect(bridge).toBeTruthy(); expect(bridge.screen).toBeUndefined();
+    const lessons = findNode(fixture.container, node => node.props?.["aria-label"] === "Actual Lessons slot");
+    const opening = bridge.presentation.open(visualRequest);
+    await vi.waitFor(() => expect(fixture.visualReads).toHaveLength(1));
+    fixture.visualReads[0].resolve(visualResource(false));
+    await vi.waitFor(() => expect(mocks.visuals).toHaveLength(1));
+    mocks.visuals[0].ready(); await opening; await Vue.nextTick();
+    expect(bridge.presentation.state.visible).toBe(true);
+    expect(fixture.colleaguePreview.value).toBe(bridge);
+    expect(fixture.reads).toHaveLength(0); expect(fixture.outputs.mounted).not.toHaveBeenCalled();
+    expect(Vue.toValue(mocks.query.enabled)).toBe(false);
+    fixture.button("App").props.onClick(); await Vue.nextTick();
+    await vi.waitFor(() => expect(fixture.reads).toHaveLength(1)); await fixture.settleRead(0);
+    const output = findNode(fixture.container, node => node.type === "output");
+    expect(fixture.props.projectPane).toBe("dashboard");
+    expect(fixture.colleaguePreview.value).toBe(bridge); expect(bridge.screen).toBe("outputs");
+    expect(fixture.outputs.controls.value.previewDisplayed).toBe(true);
+    expect(fixture.outputs.controls.value.windowDisplayed).toBe(true);
+    expect(fixture.outputs.controls.value.toolbarTeleportTarget).toBe("#actual-preview-toolbar");
+    fixture.button("Presentation").props.onClick(); await Vue.nextTick();
+    expect(fixture.colleaguePreview.value).toBe(bridge); expect(bridge.presentation.state.visible).toBe(true);
+    expect(bridge.screen).toBeUndefined(); expect(Vue.toValue(mocks.query.enabled)).toBe(false);
+    expect(fixture.outputs.controls.value.previewDisplayed).toBe(false);
+    expect(fixture.outputs.controls.value.windowDisplayed).toBe(true);
+    expect(fixture.outputs.controls.value.toolbarTeleportTarget).toBe("");
+    fixture.button("Lessons").props.onClick(); await Vue.nextTick();
+    expect(fixture.colleaguePreview.value).toBe(bridge); expect(bridge.presentation.state.visible).toBe(false);
+    expect(bridge.screen).toBeUndefined(); expect(Vue.toValue(mocks.query.enabled)).toBe(false);
+    expect(fixture.outputs.controls.value.previewDisplayed).toBe(false);
+    expect(fixture.outputs.controls.value.windowDisplayed).toBe(true);
+    expect(fixture.outputs.controls.value.toolbarTeleportTarget).toBe("");
+    expect(findNode(fixture.container, node => node.type === "output")).toBe(output);
+    expect(findNode(fixture.container, node => node.props?.["aria-label"] === "Actual Lessons slot")).toBe(lessons);
+    expect(fixture.outputs.mounted).toHaveBeenCalledOnce(); expect(fixture.outputs.unmounted).not.toHaveBeenCalled();
+    expect(mocks.visuals).toHaveLength(1); expect(mocks.visuals[0].disposed).toBe(false);
+    fixture.button("App").props.onClick(); await Vue.nextTick();
+    expect(fixture.colleaguePreview.value).toBe(bridge);
+    expect(fixture.outputs.controls.value.previewDisplayed).toBe(true);
+    expect(Vue.toValue(mocks.query.enabled)).toBe(true);
+    fixture.props.active = false; await Vue.nextTick();
+    expect(fixture.colleaguePreview.value).toBeNull();
+    expect(fixture.outputs.controls.value.windowDisplayed).toBe(false);
+  } finally { fixture.close(); }
+});
+
+it("does not mount source-backed App owners in the actual source-less Autopilot Preview composition", async () => {
+  const fixture = mountOnboarding({ withAutopilotPreview: true, lessonsAvailable: true, appAvailable: false, projectPane: "dashboard" });
+  try {
+    await Vue.nextTick(); await Vue.nextTick();
+    expect(fixture.reads).toHaveLength(0); expect(fixture.outputs.mounted).not.toHaveBeenCalled();
+    expect(fixture.button("App")).toBeNull(); expect(fixture.button("Presentation").props.disabled).toBe(true);
+    expect(findNode(fixture.container, node => node.props?.["aria-label"] === "Actual Lessons slot")).toBeTruthy();
   } finally { fixture.close(); }
 });

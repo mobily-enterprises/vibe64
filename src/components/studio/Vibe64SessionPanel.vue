@@ -112,7 +112,10 @@
           v-if="dashboardProjectActive"
           class="studio-ai-sessions__dashboard-empty-pane"
         >
-          <slot name="dashboard" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" />
+          <TrainingPreviewPresentation v-if="props.purposeFilter === 'learning'" :active="props.active" lessons-available :app-available="false" project-slug="" session-id="">
+            <template #lessons><slot name="dashboard" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" /></template>
+          </TrainingPreviewPresentation>
+          <slot v-else name="dashboard" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" />
         </div>
         <div
           v-else
@@ -172,6 +175,7 @@
         :preview-toolbar-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.previewToolbarTeleportTarget : ''"
         :prompt-hint-policy="promptHintPolicy"
         :project-pane="projectPane"
+        :lessons-available="props.purposeFilter === 'learning'"
         :toolbar-sessions="toolbar.sessions"
         :refresh-repository-state="toolbar.refreshRepositoryState"
         @busy-change="setRuntimeBusy"
@@ -202,6 +206,7 @@ import Vibe64SessionArchiveDialog from "@/components/studio/vibe64-session/Vibe6
 import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
+import TrainingPreviewPresentation from "@local/vibe64-training/client/preview-presentation";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64UnavailableSessions from "@/components/studio/Vibe64UnavailableSessions.vue";
 import {

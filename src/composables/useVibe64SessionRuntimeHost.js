@@ -667,6 +667,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     saveSessionWork,
     sessionsApiPath,
     sourceWorkspaceAvailable: computed(() => !learningScope),
+    learningAttemptId: learningScope?.learningAttemptId || "",
     selectedAgentTerminalId,
     selection,
     sendAgentMessage,

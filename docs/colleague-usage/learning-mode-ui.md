@@ -19,8 +19,18 @@ narrow screens these controls switch the visible pane. Working and Learning use
 one retained session panel, so switching modes does not delete drafts or stop
 already admitted background work. A project that is still loading or failed
 keeps its original Working readiness gate while retaining the hidden panel.
-Source-less Learning conversations do not expose repository Save status,
-Temporary AI/workspace tools or the project's App preview as lesson resources.
+The original Preview host offers **Lessons**, **App** when this session actually
+has a source-backed application, and **Presentation** after a declared diagram
+has been opened. A declared diagram can open from Lessons; hidden App controls do not remain
+interactive. Switching these views retains the App and diagram instances
+and the lesson picker within that host. Hidden diagrams pause; returning does
+not replay their motion or count as a completed lesson. If sound is off, use the
+presentation's **Continue** only after its explanation is ready.
+
+Source-less Learning conversations show Lessons, omit App and leave Presentation
+disabled until supported visual authority exists. They do not expose repository
+Save status or Temporary AI/workspace tools. A saved lesson checkpoint does not
+mean a presentation is currently open.
 
 If Start is unconfirmed, **Retry lesson start** keeps its original request
 identity, lesson and revision. Do not substitute a different lesson request.
@@ -36,7 +46,8 @@ errors are cleared when their view is retired. Colleague can explain this flow
 and offer existing actions; a how-to question alone does not authorize execution.
 Private provider key entry remains a human-only step.
 
-This attachment opens the original lesson and conversation controls. Actual Main
-teaching, the combined App/Lessons/Presentation Preview, and desktop/mobile live
-acceptance remain separate delivery gates; opening a conversation does not itself
-send a teaching request.
+This attachment composes the original Preview choices and opens the original
+lesson and conversation controls. Actual Main teaching and its visual/current
+question receipt connection, source-less presentation support, and desktop/mobile
+live acceptance remain separate delivery gates. Opening a conversation does not
+itself send a teaching request.
