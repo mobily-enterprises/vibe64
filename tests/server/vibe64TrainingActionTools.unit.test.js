@@ -959,14 +959,15 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   const unexpected = () => assert.fail("no-exercise preparation must not invoke source, setup or native session effects");
   const { training } = await Vibe64TrainingProvider.setup({ actionCatalogue: actions, http,
     project: { createRuntime: unexpected, runInProjectContext: unexpected },
-    sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: {}, trainingHost: null });
+    sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: { outputTargetStatus: unexpected }, trainingHost: null });
   assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host" });
-  assert.deepEqual(Object.keys(training).sort(), ["assessment", "brief", "catalogue", "content", "exercises", "learners", "learningSessions", "mainTeaching", "teaching"]);
+  assert.equal(typeof training.checks.runOrientationCheck, "function");
+  assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["assessment", "brief", "catalogue", "content", "exercises", "learners", "learningSessions", "mainTeaching", "teaching"]);
   assert.equal(typeof training.teaching.prepareQuestion, "function");
   assert.equal(typeof training.assessment.evaluateAnswer, "function");
   assert.deepEqual(training.mainTeaching.actionIds.slice(0, 4), ["vibe64.training.learning.read", "vibe64.training.teaching-brief.read",
     "vibe64.training.question.prepare", "vibe64.training.answer.evaluate"]);
-  assert.deepEqual(training.mainTeaching.actionIds.slice(4), ["vibe64.training.visual.open", "vibe64.training.visual.command",
+  assert.deepEqual(training.mainTeaching.actionIds.slice(4, 9), ["vibe64.training.visual.open", "vibe64.training.visual.command",
     "vibe64.training.visual.cue", "vibe64.training.visual.cue.read", "vibe64.training.visual.snapshot"]);
   assert.ok(registered.some(route => route.url.startsWith("/api/learning/:learningAttemptId/vibe64/")));
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
@@ -1052,7 +1053,11 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/presentation/focus"],
     ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/presentation/ack"]
   ]);
-  const originalRoutes = registered.filter(route => !presentationRoutes.includes(route));
+  const practicalRoutes = registered.filter(route => route.url.endsWith("/training/observations"));
+  assert.deepEqual(practicalRoutes.map(route => [route.method, route.url]), [
+    ["POST", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/training/observations"]
+  ]);
+  const originalRoutes = registered.filter(route => !presentationRoutes.includes(route) && !practicalRoutes.includes(route));
   assert.equal(originalRoutes.length, 11);
   assert.equal(registered.every(route => route.options.surface === "app"), true);
   assert.equal(originalRoutes.some(route => route.url.startsWith("/api/learning/") &&
@@ -1162,4 +1167,27 @@ test("missing Main practical method remains explicitly unavailable without Helpe
     submissionId: "unavailable-practical", messageId: "accepted-words", observationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
     "api", { trainingMain: { evaluateTrainingAnswer() { effects++; } } }), { code: "VIBE64_TRAINING_MAIN_UNAVAILABLE", statusCode: 503 });
   assert.equal(effects, 0);
+});
+
+
+test("Main practical read contract preserves the original bounded DTO and refuses supervisor or caller-selected browser evidence", async t => {
+  const f = await fixture(t); const reserved = await f.reserve();
+  const { createTrainingPracticalActions } = await import("../../packages/vibe64-training/src/server/practicalActions.js");
+  const actions = createActionCatalogue(); let reads = 0;
+  actions.register({ contributorId: "actual-practical-read", domain: "training", actions: createTrainingPracticalActions().map(value => ({
+    ...value, channels: ["api", "automation", "internal"], surfaces: ["app"] })) });
+  registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user, authorizeProject() {} });
+  const input = { attemptId: reserved.attempt.attemptId };
+  const context = { channel: "internal", surface: "app", trainingMain: { async readTrainingPractical(value) {
+    reads++; assert.deepEqual(value.attemptId, input.attemptId); return { ok: true };
+  } } };
+  const execute = (value, extra = {}) => actions.execute({ actionId: "vibe64.training.practical.read", input: value, context: { ...context, ...extra } });
+  assert.deepEqual(await execute(input), { ok: true });
+  for (const supplied of [{ clientId: "another-tab" }, { observationId: "chosen-observation" }, { origin: "learner" }, { outcome: "passed" }, { text: "invented fact" }]) {
+    await assert.rejects(execute({ ...input, ...supplied }));
+  }
+  await assert.rejects(execute(input, { colleague: {} }), { code: "VIBE64_TRAINING_SUPERVISOR_ONLY" });
+  await assert.rejects(execute(input, { trainingMain: undefined }), { code: "VIBE64_TRAINING_MAIN_UNAVAILABLE" });
+  f.auth.user = null; await assert.rejects(execute(input), { code: "vibe64_auth_required" });
+  assert.equal(reads, 1);
 });

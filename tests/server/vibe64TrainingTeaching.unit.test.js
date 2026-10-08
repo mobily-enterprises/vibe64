@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { trainingTeachingFixture as fixture } from "../fixtures/trainingTeachingFixture.js";
+import { trainingTeachingFixture as fixture, mainTeachingTerminals } from "../fixtures/trainingTeachingFixture.js";
 import { createTrainingTeachingOwner } from "../../packages/vibe64-training/src/server/teaching.js";
 import { createTrainingAnswerAssessment } from "../../packages/vibe64-training/src/server/answerAssessment.js";
 
@@ -646,7 +646,6 @@ async function mainTeachingFixture(t) {
   const { createTrainingTeachingActions } = await import("../../packages/vibe64-training/src/server/teachingActions.js");
   const { createTrainingAssessmentActions } = await import("../../packages/vibe64-training/src/server/assessmentActions.js");
   const { createSessionActions, createLearningTeachingContextActions } = await import("../../packages/vibe64-sessions/src/server/actions.js");
-  const { defineVibe64AgentExecutionProfileResolution, VIBE64_AGENT_HELPER_WORKLOAD_LIMITS } = await import("@local/vibe64-runtime/shared");
   const saved = await f.learners.readLearningSessionScope({ actor: f.actor, attemptId: f.attemptId });
   const assessment = createTrainingAnswerAssessment({ learners: f.learners, content: f.content, teaching: f.owner });
   const main = createTrainingMainTeaching({ teaching: f.owner, assessment });
@@ -663,10 +662,12 @@ async function mainTeachingFixture(t) {
     project: { createRuntime: async () => runtime }, sessions: { createSession() {}, inspectSession() {} } });
   const auth = { user: f.actor, afterResolve: null };
   const actions = createActionCatalogue();
+  const { createTrainingPracticalActions } = await import("../../packages/vibe64-training/src/server/practicalActions.js");
   const definitions = [...createTrainingActions({ catalogue: { readCatalogue() {} }, learners: f.learners, teachingBrief: brief }),
     ...createTrainingTeachingActions({ mainTeaching: main }),
     ...createTrainingPresentationActions({ learners: f.learners, content: f.content, mainTeaching: main }),
-    ...createTrainingAssessmentActions({ mainTeaching: main }).filter(action => action.id === "vibe64.training.answer.evaluate"),
+    ...createTrainingAssessmentActions({ mainTeaching: main }),
+    ...createTrainingPracticalActions(),
     createSessionActions({ sessions: {} }).find(action => action.id === "vibe64.sessions.conversation.context.read"),
     ...createLearningTeachingContextActions()];
   actions.register({ contributorId: "actual-training-main", domain: "training", actions: definitions.map(action => ({
@@ -685,39 +686,7 @@ async function mainTeachingFixture(t) {
   const current = { runtime, sessionId, assistantSelection: selection, signal: controller.signal,
     browserAuthority: { sessionId, learningAttemptId: f.attemptId, actorId: "42", requestContext } };
   const helperCalls = [], controls = { failCleanup: false, helperWait: null, onHelper: null, current: true };
-  const terminals = {
-    async requireAssistantSelectionAccess(value, options) {
-      assert.deepEqual(value, selection);
-      assert.equal(options.vibe64User.uid, 42);
-    },
-    async resolveAssistantPurpose(input, options) {
-      assert.equal(input.purpose, "training_assessment");
-      assert.equal(input.workflowEngineId, "codex");
-      assert.equal(options.vibe64User.uid, 42);
-      return { available: true, effectiveSelection: selection, connectionIdentity: "configured-helper-account" };
-    },
-    async resolveEphemeralAgentExecutionProfile(_scope, input, options) {
-      assert.equal(options.expectedConnectionIdentity, "configured-helper-account");
-      return defineVibe64AgentExecutionProfileResolution({ ...input, providerId: "codex", revision: "helper-v1", model: "helper", thinking: "low",
-        limits: VIBE64_AGENT_HELPER_WORKLOAD_LIMITS.training_assessment,
-        policy: { tools: "none", environmentAccess: false, networkAccess: false, repositoryWrite: false },
-        request: { allowProviderModelFallback: false, reasoning: true, summary: false } });
-    },
-    async runEphemeralAgentChatTurn(scope, input, options) {
-      helperCalls.push({ scope, input, options });
-      const log = await runtime.store.readConversationLog(sessionId);
-      assert.equal(log.at(-1).metadata.trainingHelper.scope.id, scope.id, "new Helper receipt belongs to this exact admitted answer turn");
-      controls.onHelper?.();
-      await controls.helperWait;
-      for (const event of [{ type: "thread", threadId: "helper-thread" }, { type: "turn", turnId: "helper-turn" },
-        { type: "helper-execution", executionId: "helper-execution" }]) await options.onEvent(event);
-      return { ok: true, status: "completed", text: JSON.stringify({ outcome: "passed", explanation: "Identifies Preview." }) };
-    },
-    async deleteEphemeralAgentConversation(_scope, input) {
-      assert.equal(input.executionProfile.policy.tools, "none");
-      return controls.failCleanup ? { ok: false, error: "Helper cleanup uncertain." } : { ok: true };
-    }
-  };
+  const terminals = mainTeachingTerminals({ runtime, sessionId, selection, controls, helperCalls });
   const target = { threadId: "main-native-thread", turnId: "native-question-turn", outerTurnId: "ask-question",
     active: true, assistantSelection: selection };
   const bound = main.bindConversation({ runtime, sessionId, actions, terminals, native: { readTurn: async () => ({ ...target }) } });
@@ -757,7 +726,7 @@ test("Main teaching composes the exact original four-action discovery and stages
   const f = await mainTeachingFixture(t);
   const mapped = await f.bound.applicationTools.prepareContext(f.current, f.admitted);
   const set = f.tools.resolveToolSet(mapped, { discoveryOnly: true });
-  const search = await f.tools.executeToolCall({ toolName: "assistant_action_search", toolSet: set, context: mapped, argumentsText: "{}" });
+  const search = await f.tools.executeToolCall({ toolName: "assistant_action_search", toolSet: set, context: mapped, argumentsText: JSON.stringify({ limit: f.main.actionIds.length }) });
   assert.equal(search.ok, true, JSON.stringify(search));
   assert.deepEqual(search.result.items.map(item => item.actionId).sort(), [...f.main.actionIds].sort());
   assert.equal(f.tools.resolveToolSet({ channel: "internal", surface: "app" }).tools.length, 0);
@@ -894,7 +863,8 @@ test("Main nine teaching definitions retain original scopes and cannot borrow a 
   assert.equal(f.current.browserAuthority.requestContext.requestMeta.request.params.learningAttemptId, f.attemptId,
     "the original exact browser route remains retained for every fresh authority check");
   assert.notEqual(mapped.requestMeta.request, f.current.browserAuthority.requestContext.requestMeta.request);
-  assert.equal(f.main.actionIds.length, 9);
+  assert.equal(f.main.actionIds.slice(0, 9).length, 9);
+  assert.deepEqual(f.main.actionIds.slice(9), ["vibe64.training.practical.read", "vibe64.training.practical.evaluate"]);
   const { createTrainingPresentationActions } = await import("../../packages/vibe64-training/src/server/presentationActions.js");
   const visual = createTrainingPresentationActions({ learners: f.learners, content: f.content, mainTeaching: f.main });
   for (const definition of visual) {
@@ -1003,8 +973,8 @@ test("Main native without original final-reader counterpart refuses narrated cue
 // - OpenCode exact final-owner seam before removing the explicit cue refusal.
 
 
-async function practiceMainPresentationFixture(t) {
-  const f = await fixture(t, { ready: true, exercise: true });
+async function practiceMainPresentationFixture(t, options = {}) {
+  const f = await fixture(t, { ready: true, exercise: true, ...options });
   const { mkdir } = await import("node:fs/promises");
   const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
   const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
@@ -1098,5 +1068,331 @@ test("practice Main rechecks access after the original physical source read befo
     actions: f.actions, context: f.current, input: { clientId: "practice-client" } }),
   { statusCode: 403, message: "Practice access was revoked." });
   assert.equal(refused, 1, "the grant must be read after the actual source validation");
+  assert.deepEqual(await storedFiles(f.paths), before);
+});
+
+// Same original native/Helper test facility, moved once for the actual Main
+// practical counterpart. No real provider, gesture or acoustic acceptance claim.
+
+async function mainPracticalFixture(t, { assessmentId = "workspace-navigation", assistance = "none", checkGate } = {}) {
+  const f = await practiceMainPresentationFixture(t, { practical: true, exerciseCheck: assessmentId === "try-the-application" });
+  const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
+  const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
+  const { createServiceToolCatalog } = await import("@jskit-ai/assistant-core/server");
+  const { createTrainingTeachingActions } = await import("../../packages/vibe64-training/src/server/teachingActions.js");
+  const { createTrainingAssessmentActions } = await import("../../packages/vibe64-training/src/server/assessmentActions.js");
+  const { createTrainingPracticalActions } = await import("../../packages/vibe64-training/src/server/practicalActions.js");
+  const { registerVibe64ActionContext } = await import("@local/vibe64-core/server/actionContext");
+  const { runtime, sessionId } = f;
+  const selection = { engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt-5.5",
+    variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` };
+  const controls = { current: true, failCleanup: false, helperWait: null, onHelper: null, user: f.actor,
+    output: { ok: true, activeTerminal: { id: "actual-main-app-run" } }, denied: false, inspectGate: null };
+  const helperCalls = [], checkCalls = [], authorityCalls = [], checkStarted = Promise.withResolvers();
+  const terminals = mainTeachingTerminals({ runtime, sessionId, selection, controls, helperCalls });
+  const assessment = createTrainingAnswerAssessment({ learners: f.learners, content: f.content, teaching: f.owner });
+  const checks = { async runOrientationCheck(input) {
+    checkCalls.push(structuredClone({ ...input, signal: undefined }));
+    checkStarted.resolve();
+    await checkGate;
+    return { checkResult: { check: "orientation-response", observationId: input.observationId, outcome: "passed" } };
+  } };
+  const main = createTrainingMainTeaching({ teaching: f.owner, assessment, checks });
+  const controller = new AbortController();
+  const current = { ...f.current, assistantSelection: selection, signal: controller.signal,
+    browserAuthority: { ...f.current.browserAuthority,
+      requestContext: { channel: "internal", surface: "app", requestMeta: { request: { vibe64User: f.actor,
+        params: { learningAttemptId: f.attemptId } } } } } };
+  const target = { threadId: "practice-native-thread", turnId: "practice-question-turn", outerTurnId: "practice-question",
+    active: true, assistantSelection: selection };
+  const actions = { async execute({ actionId, input }) {
+    authorityCalls.push({ actionId, input: structuredClone(input) });
+    assert.deepEqual(input, { sessionId, learningAttemptId: f.attemptId }, "no Working/project tuple authorizes this private practice");
+    if (!controls.user || controls.user.uid !== f.actor.uid || controls.denied) throw new Error("Current practice access denied.");
+    if (actionId === "vibe64.sessions.inspect") { await controls.inspectGate; return { ok: true }; }
+    if (actionId === "vibe64.terminals.outputs.read") return controls.output;
+    assert.ok(["vibe64.sessions.conversation.context.read", "vibe64.sessions.conversation.teaching-context.read"].includes(actionId));
+    return { ...f.grant, user: controls.user };
+  } };
+  const native = { async readTurn() { return { ...target }; } };
+  const bound = main.bindConversation({ runtime, sessionId, actions, terminals, native });
+  const catalogue = createActionCatalogue();
+  catalogue.register({ contributorId: "actual-practical-training", domain: "training", actions: [
+    ...createTrainingTeachingActions({ mainTeaching: main }), ...createTrainingAssessmentActions({ mainTeaching: main }),
+    ...createTrainingPracticalActions()
+  ].map(value => ({ ...value, channels: ["api", "automation", "internal"], surfaces: ["app"] })) });
+  registerVibe64ActionContext(catalogue, { resolveUser: async () => controls.user, authorizeProject() { assert.fail("native learner tools do not admit a Working project"); } });
+  async function admit(messageId, text, data) {
+    const row = await runtime.store.writeConversationUserMessage(sessionId, { messageId, text, data });
+    return Object.freeze({ conversationId: sessionId, turnId: row.turnId, messageId, nativeTurnId: target.turnId,
+      nativeThreadId: target.threadId, origin: "user", assertCurrent() {
+        if (!controls.current) throw new Error("The original accepted practice turn retired.");
+        controller.signal.throwIfAborted();
+      } });
+  }
+  const admitted = await admit("practice-question", "Please teach the practical.", { clientId: "actual-practice-browser" });
+  const mapped = await bound.applicationTools.prepareContext(current, admitted);
+  const { actor: _actor, ...questionInput } = f.input;
+  const prepared = await catalogue.execute({ actionId: "vibe64.training.question.prepare",
+    input: { ...questionInput, assessmentId, assistance, text: "Carry out the practical and explain what you observed." }, context: mapped });
+  await runtime.store.writeConversationAssistantMessage(sessionId, { text: prepared.questionText, outputId: "actual-practical-question-output" });
+  target.active = false;
+  await main.completeConversation({ runtime, sessionId, outerTurnId: target.outerTurnId, outcome: "completed", nativeTurn: target });
+  assert.deepEqual(await main.readQuestion({ runtime, sessionId, context: current, actions }), prepared.reference);
+  const captured = await f.owner.capturePractical({ actor: f.actor, reference: prepared.reference });
+  f.grant.project.slug = captured.target.projectSlug;
+  const call = { runtime, sessionId, context: current, actions };
+  await main.focusPresentation({ ...call, input: { clientId: "actual-practice-browser",
+    focus: { projectSlug: captured.target.projectSlug, sessionId, pane: "preview" } } });
+  const gesture = (control, gestureId, changes = {}) => ({ clientId: "actual-practice-browser", gestureId, control,
+    reference: prepared.reference, workspace: { ...captured.target, ready: true, mainChatVisible: true,
+      projectVisible: true, pane: "preview", ...changes.workspace },
+    ...(control === "exercise-response" ? { exercise: { instanceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      interactionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", requestId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      playerInstanceId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", frameRequestId: 1 } } : {}), ...changes });
+  const observe = input => main.observeTrainingPractical({ ...call, input });
+  async function acceptExplanation(clientId = "actual-practice-browser", words = "I chose the project and its Main session, then opened Preview.") {
+    const request = await main.captureMessage({ ...call, input: { messageId: "actual-practice-explanation", message: words,
+      clientId, trainingQuestion: prepared.reference, data: { observationId: "untrusted" } } });
+    target.turnId = "practice-answer-turn"; target.outerTurnId = request.messageId; target.active = true;
+    const accepted = await admit(request.messageId, request.message, request.data);
+    return { accepted, request, context: { ...await bound.applicationTools.prepareContext(current, accepted), signal: controller.signal } };
+  }
+  const tools = createServiceToolCatalog(catalogue);
+  return { ...f, main, runtime, sessionId, controller, controls, target, native, bound, actions, catalogue, current, call,
+    prepared, captured, gesture, observe, acceptExplanation, helperCalls, checkCalls, checkStarted, authorityCalls, tools };
+}
+
+async function completeMainPractical(f) {
+  const id = f.prepared.reference.assessmentId;
+  if (id === "try-the-application") return f.observe(f.gesture("exercise-response", "app-response"));
+  const rows = id === "workspace-navigation" ? ["project-select", "session-select", "preview-select"]
+    : ["colleague-minimize", "chat-show", "colleague-restore"];
+  let result;
+  for (const [i, control] of rows.entries()) result = await f.observe(f.gesture(control, `gesture-${i}`,
+    id === "return-to-colleague" ? { workspace: { ...f.captured.target, ready: true, mainChatVisible: true,
+      projectVisible: true, pane: "preview", colleagueVisible: i === 2 } } : {}));
+  return result;
+}
+
+test("Main original practical collector keeps exact gesture retries and bounded collecting facts without grading or progress writes", async t => {
+  const f = await mainPracticalFixture(t); const before = await storedFiles(f.paths);
+  const first = f.gesture("project-select", "gesture-0");
+  const receipt = await f.observe(first); assert.equal(receipt.phase, "collecting");
+  assert.deepEqual(await f.observe(first), receipt);
+  await assert.rejects(f.observe({ ...first, workspace: { ...first.workspace, mainChatVisible: false } }));
+  const explained = await f.acceptExplanation();
+  const read = () => f.catalogue.execute({ actionId: "vibe64.training.practical.read", input: { attemptId: f.attemptId }, context: explained.context });
+  assert.deepEqual((await read()).trainingPracticalProgress, { reference: f.prepared.reference,
+    assessmentId: "workspace-navigation", phase: "collecting", acceptedSteps: 1, lastControl: "project-select" });
+  assert.equal((await read()).trainingPractical, undefined);
+  assert.deepEqual(await storedFiles(f.paths), before);
+  assert.equal(f.helperCalls.length, 0);
+  await assert.rejects(f.catalogue.execute({ actionId: "vibe64.training.practical.read", input: { attemptId: f.attemptId, clientId: "other-browser" }, context: explained.context }));
+  f.target.active = false;
+  const final = await completeMainPractical(f); assert.equal(final.phase, "completed");
+  assert.deepEqual(await f.observe(f.gesture("preview-select", "gesture-2")), final);
+  f.target.active = true;
+  const facts = (await read()).trainingPractical;
+  assert.equal(facts.observationId, final.observationId); assert.equal(facts.origin, "learner");
+  assert.equal(facts.assistance, "none"); assert.equal(facts.producer, "workspace");
+  assert.deepEqual(Object.keys(facts).sort(), ["reference", "observationId", "assessmentId", "producer", "operation", "observedAt", "assistance", "origin"].sort());
+  assert.deepEqual(await storedFiles(f.paths), before);
+});
+
+test("Main practical observer retains the real general Colleague hide/use/restore contract and refuses missing visibility", async t => {
+  const f = await mainPracticalFixture(t, { assessmentId: "return-to-colleague" });
+  await assert.rejects(f.observe(f.gesture("colleague-minimize", "hidden-without-body-fact")));
+  const result = await completeMainPractical(f); assert.equal(result.phase, "completed");
+  const answer = await f.acceptExplanation();
+  const facts = await f.catalogue.execute({ actionId: "vibe64.training.practical.read", input: { attemptId: f.attemptId }, context: answer.context });
+  assert.equal(facts.trainingPractical.producer, "colleague"); assert.equal(facts.trainingPractical.operation, "return-to-colleague");
+  assert.equal(f.helperCalls.length, 0);
+});
+
+test("Main practical evaluation uses only the initiating accepted explanation and completed connection observation through the original Helper/writer", async t => {
+  const f = await mainPracticalFixture(t); const receipt = await completeMainPractical(f);
+  const explanation = await f.acceptExplanation();
+  const input = { attemptId: f.attemptId, expectedRevision: (await f.read()).revision,
+    submissionId: "actual-main-practical", messageId: explanation.request.messageId, observationId: receipt.observationId };
+  await assert.rejects(f.catalogue.execute({ actionId: "vibe64.training.practical.evaluate",
+    input: { ...input, observationId: "ffffffff-ffff-4fff-8fff-ffffffffffff" }, context: explanation.context }));
+  const before = f.helperCalls.length;
+  const saved = await f.catalogue.execute({ actionId: "vibe64.training.practical.evaluate", input, context: explanation.context });
+  assert.equal(saved.outcome, "passed"); assert.equal(f.helperCalls.length, before + 1);
+  const prompt = JSON.parse(f.helperCalls.at(-1).input.prompt);
+  assert.equal(prompt.evidence.text, explanation.request.message);
+  assert.equal(prompt.evidence.observationId, receipt.observationId);
+  assert.equal((await f.catalogue.execute({ actionId: "vibe64.training.practical.evaluate", input, context: explanation.context })).replayed, true);
+  assert.equal(f.helperCalls.length, before + 1);
+  assert.equal((await f.runtime.store.readConversationLog(f.sessionId)).at(-1).metadata.trainingHelper, null);
+  assert.equal((await f.read()).active.learning.submissions.at(-1).evidence.observationId, receipt.observationId);
+});
+
+test("Main App observation retains the original server-selected run and check exactly once without a caller terminal or pass", async t => {
+  const f = await mainPracticalFixture(t, { assessmentId: "try-the-application", assistance: "substantial" });
+  const before = await storedFiles(f.paths);
+  const input = f.gesture("exercise-response", "app-response"); const saved = await f.observe(input);
+  assert.deepEqual(await f.observe(input), saved); assert.equal(f.checkCalls.length, 1);
+  assert.equal(f.checkCalls[0].terminalId, "actual-main-app-run");
+  assert.equal(f.checkCalls[0].observationId, saved.observationId);
+  assert.equal(f.checkCalls[0].instanceId, input.exercise.instanceId);
+  const answer = await f.acceptExplanation();
+  const facts = await f.catalogue.execute({ actionId: "vibe64.training.practical.read", input: { attemptId: f.attemptId }, context: answer.context });
+  assert.equal(facts.trainingPractical.origin, "teacher"); assert.equal(facts.trainingPractical.assistance, "demonstration");
+  assert.equal(facts.trainingPractical.checkOutcome, "passed");
+  assert.deepEqual(await storedFiles(f.paths), before); assert.equal(f.helperCalls.length, 0);
+});
+
+for (const reason of ["retire", "logout", "replace-question"]) {
+  test(`Main practical held check cannot publish a receipt after ${reason}`, async t => {
+    const gate = Promise.withResolvers();
+    const f = await mainPracticalFixture(t, { assessmentId: "try-the-application", checkGate: gate.promise });
+    const before = await storedFiles(f.paths);
+    const pending = f.observe(f.gesture("exercise-response", "held-response"));
+    await Promise.race([f.checkStarted.promise, pending]);
+    let cleanup;
+    if (reason === "retire") cleanup = f.bound.cleanup({});
+    if (reason === "logout") f.controls.user = null;
+    if (reason === "replace-question") await f.owner.prepareQuestion({ ...f.input, expectedRevision: (await f.read()).revision,
+      requestId: "replacement-practical", assessmentId: "try-the-application", text: "Try it independently again.", assistance: "none" });
+    gate.resolve(); await assert.rejects(pending); await cleanup;
+    assert.equal(f.helperCalls.length, 0);
+    if (reason !== "replace-question") assert.deepEqual(await storedFiles(f.paths), before);
+  });
+}
+
+// This exercises the SAME canonical receipt predicate and saved pass at Main's
+// actual Store read. The receipt originates in the original action catalogue;
+// controlled Store retention here is not a real native-provider acceptance run.
+test("Main completed practical question discovery requires the original completed execute receipt plus its exact saved pass", async t => {
+  const f = await mainPracticalFixture(t); const receipt = await completeMainPractical(f);
+  const answer = await f.acceptExplanation();
+  const input = { attemptId: f.attemptId, expectedRevision: (await f.read()).revision, submissionId: "durable-main-practical",
+    messageId: answer.request.messageId, observationId: receipt.observationId };
+  const set = f.tools.resolveToolSet(answer.context, { discoveryOnly: true });
+  const contract = await f.tools.executeToolCall({ toolName: "assistant_action_contract", toolSet: set,
+    context: answer.context, argumentsText: JSON.stringify({ actionId: "vibe64.training.practical.evaluate" }) });
+  assert.equal(contract.ok, true);
+  const args = JSON.stringify({ actionId: "vibe64.training.practical.evaluate", input });
+  const result = await f.tools.executeToolCall({ toolName: "assistant_action_execute", toolSet: set, context: answer.context, argumentsText: args });
+  assert.equal(result.ok, true); assert.equal(result.result.result.outcome, "passed");
+  assert.deepEqual(await f.main.readQuestion(f.call), f.prepared.reference, "a saved pass alone cannot retire a delivered question");
+  const call = { toolCallId: "actual-practical-execute", name: "assistant_action_execute", status: "complete", arguments: args, result };
+  await f.runtime.store.conversationStorage.write(f.sessionId, transaction => transaction.updateTurnMetadata(answer.accepted.turnId, { applicationTools: [call] }));
+  const before = await f.runtime.store.readConversationLog(f.sessionId);
+  assert.equal(await f.main.readQuestion(f.call), null);
+  assert.deepEqual(await f.runtime.store.readConversationLog(f.sessionId), before, "discovery never rewrites pending questions or receipts");
+  for (const corrupt of [value => { value.name = "assistant_action_contract"; }, value => { value.arguments = "not-json"; },
+    value => { value.status = "unknown"; }, value => { value.result.ok = false; },
+    value => { value.result.result.result.outcome = "not-yet-passed"; },
+    value => { const args = JSON.parse(value.arguments); args.input.messageId = "another-message"; value.arguments = JSON.stringify(args); },
+    value => { value.result.result.actionId = "vibe64.test.operate"; },
+    value => { value.result.result.result.submissionId = "another-submission"; }, value => { value.result.result.version = 2; }]) {
+    const changed = structuredClone(call); corrupt(changed);
+    await f.runtime.store.conversationStorage.write(f.sessionId, transaction => transaction.updateTurnMetadata(answer.accepted.turnId, { applicationTools: [changed] }));
+    assert.deepEqual(await f.main.readQuestion(f.call), f.prepared.reference, "the original predicate refuses each corrupt native receipt");
+  }
+});
+
+
+test("Main practical HTTP adapter preserves strict original gesture schema and captures only its saved Learning URL target", async t => {
+  const f = await mainPracticalFixture(t);
+  const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
+  const { createTrainingMainPracticalActions } = await import("../../packages/vibe64-training/src/server/mainPracticalActions.js");
+  const { registerTrainingMainPresentationRoutes } = await import("../../packages/vibe64-training/src/server/mainPresentationRoutes.js");
+  const { default: Fastify } = await import("fastify");
+  const actions = createActionCatalogue();
+  // Explicit controlled host grant. Full standalone/hosted saved-practice
+  // contributor acceptance is a separate original integration gate; this uses
+  // the actual original schema/action/route plus Main/Store/collector consumer.
+  f.runtime.learningTeaching = f.main;
+  actions.register({ contributorId: "actual-practical-http", domain: "training", actions: createTrainingMainPracticalActions({
+    project: { createRuntime: async () => f.runtime }, actions: f.actions }) });
+  actions.registerContextContributor({ id: "controlled-saved-practice-host", async contribute({ input }) {
+    if (!f.controls.user || f.controls.user.uid !== f.actor.uid) throw Object.assign(new Error("Sign in."), { statusCode: 401 });
+    if (input.learningAttemptId !== f.attemptId || input.sessionId !== f.sessionId) throw Object.assign(new Error("Unknown saved target."), { statusCode: 403 });
+    return { actor: { id: "42" }, vibe64Action: { user: f.controls.user,
+      learning: { learningScope: f.scope, runLearningOperation: operation => operation() } } };
+  } });
+  const server = Fastify(); t.after(() => server.close());
+  server.decorateRequest("executeAction", function ({ actionId, input }) {
+    return actions.execute({ actionId, input, context: { channel: "api", surface: this.routeOptions.config.surface,
+      requestMeta: { request: this } } });
+  });
+  registerTrainingMainPresentationRoutes({ router: { register(method, url, options, handler) {
+    server.route({ method, url, config: { surface: options.surface }, handler });
+  } } });
+  const url = `/api/learning/${f.attemptId}/vibe64/sessions/${f.sessionId}/training/observations`;
+  const first = f.gesture("project-select", "actual-http-project");
+  const request = { ...first, sessionId: "forged-body-session", learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" };
+  const response = await server.inject({ method: "POST", url, payload: request });
+  assert.equal(response.statusCode, 200, response.body); assert.equal(response.json().acceptedSteps, 1);
+  assert.deepEqual((await server.inject({ method: "POST", url, payload: request })).json(), response.json());
+  for (const supplied of [{ conversationId: "borrowed-conversation" }, { terminalId: "chosen-run" }, { origin: "learner" },
+    { outcome: "passed" }, { observationId: "chosen-id" }, { actor: f.actor }, { text: "invented fact" }, { paths: ["private"] }]) {
+    assert.notEqual((await server.inject({ method: "POST", url, payload: { ...request, ...supplied } })).statusCode, 200);
+  }
+  assert.notEqual((await server.inject({ method: "POST", url, payload: { ...request,
+    reference: { ...first.reference, attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } } })).statusCode, 200);
+  assert.notEqual((await server.inject({ method: "POST", url: url.replace(f.sessionId, "another-session"), payload: request })).statusCode, 200);
+  assert.notEqual((await server.inject({ method: "POST", url: url.replace(f.attemptId, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), payload: request })).statusCode, 200);
+  for (const channel of ["automation", "internal"]) await assert.rejects(actions.execute({
+    actionId: "vibe64.training.practical.observe-native", input: { ...first, sessionId: f.sessionId, learningAttemptId: f.attemptId },
+    context: { channel, surface: "app", requestMeta: { request: {} } } }));
+  f.controls.user = null;
+  assert.equal((await server.inject({ method: "POST", url, payload: request })).statusCode, 401);
+  assert.equal(f.helperCalls.length, 0);
+});
+
+
+test("Main practical read and grading cannot borrow another initiating browser's observation", async t => {
+  const f = await mainPracticalFixture(t); const receipt = await completeMainPractical(f);
+  const answer = await f.acceptExplanation("unconnected-other-browser");
+  const before = await storedFiles(f.paths);
+  await assert.rejects(f.catalogue.execute({ actionId: "vibe64.training.practical.read", input: { attemptId: f.attemptId }, context: answer.context }));
+  await assert.rejects(f.catalogue.execute({ actionId: "vibe64.training.practical.evaluate", input: { attemptId: f.attemptId,
+    expectedRevision: (await f.read()).revision, submissionId: "foreign-browser-practical", messageId: answer.request.messageId,
+    observationId: receipt.observationId }, context: answer.context }));
+  assert.equal(f.helperCalls.length, 0); assert.deepEqual(await storedFiles(f.paths), before);
+});
+
+test("Main practical retirement during the original retained Helper cannot save a pass or repeat inference", async t => {
+  const f = await mainPracticalFixture(t); const receipt = await completeMainPractical(f);
+  const answer = await f.acceptExplanation(), gate = Promise.withResolvers(), entered = Promise.withResolvers();
+  f.controls.helperWait = gate.promise; f.controls.onHelper = () => entered.resolve();
+  const before = await storedFiles(f.paths);
+  const grading = f.catalogue.execute({ actionId: "vibe64.training.practical.evaluate", input: { attemptId: f.attemptId,
+    expectedRevision: (await f.read()).revision, submissionId: "held-main-practical", messageId: answer.request.messageId,
+    observationId: receipt.observationId }, context: answer.context });
+  await Promise.race([entered.promise, grading]);
+  const cleanup = f.bound.cleanup({}); gate.resolve(); await assert.rejects(grading); await cleanup;
+  assert.equal(f.helperCalls.length, 1); assert.deepEqual(await storedFiles(f.paths), before);
+});
+
+
+// Hold the FINAL collector authorization log read, not an earlier read followed
+// by another account check. Reuse the original Main/practical fixture unchanged.
+test("Main practical final held-log authorization rejects revoked access before recording a gesture", async t => {
+  const f = await mainPracticalFixture(t), before = await storedFiles(f.paths);
+  const originalRead = f.runtime.store.readConversationLog.bind(f.runtime.store);
+  const entered = Promise.withResolvers(), release = Promise.withResolvers();
+  let reads = 0;
+  f.runtime.store.readConversationLog = async (...args) => {
+    const rows = await originalRead(...args);
+    if (++reads === 3) { entered.resolve(); await release.promise; }
+    return rows;
+  };
+  const observing = f.observe(f.gesture("project-select", "revoked-final-log"));
+  await Promise.race([entered.promise, observing.then(() => assert.fail("The final account fence was not reached."))]);
+  f.controls.denied = true;
+  release.resolve();
+  await assert.rejects(observing, /access denied/i);
+  f.runtime.store.readConversationLog = originalRead;
+  f.controls.denied = false;
+  const facts = await f.main.readTrainingPractical({ ...f.call, clientId: "actual-practice-browser" });
+  assert.deepEqual(facts, { ok: true }, "no step or completed DTO was published during revoked access");
+  assert.equal(f.helperCalls.length, 0); assert.equal(f.checkCalls.length, 0);
+  assert.equal((await f.read()).completion.passed, 0);
   assert.deepEqual(await storedFiles(f.paths), before);
 });

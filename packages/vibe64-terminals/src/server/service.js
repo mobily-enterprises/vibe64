@@ -1343,6 +1343,17 @@ function createService({
     projectService
   });
 
+  async function closeAgentSession(sessionId, options = {}) {
+    const result = await sessionAgent.closeSession(sessionId, options);
+    if (result?.ok === false) return result;
+    const runtime = options.runtime || (currentProjectRequestContext()?.learningScope
+      ? await projectService.createRuntime({ inspectSource: false }) : null);
+    if (runtime?.learningScope && runtime.learningTeaching) {
+      await runtime.learningTeaching.cleanupConversation({ runtime, sessionId, terminals: service, context: options });
+    }
+    return result;
+  }
+
   async function prepareAssistantChangeover(sessionId, context) {
     requireCompletedConversationRewind(context.session);
     const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
@@ -1356,7 +1367,7 @@ function createService({
       // before that resume so only the user's next Send starts work.
       await context.runtime.store.writeMetadataValue(sessionId, "codex_changeover_pause_goal", "yes");
     }
-    const closed = await sessionAgent.closeSession(sessionId, { ...context, changeover: true });
+    const closed = await closeAgentSession(sessionId, { ...context, changeover: true });
     if (closed?.ok === false) return closed;
     const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     await rememberAssistantBeforeChangeover(context, vibe64AssistantConversationKey(selection));
@@ -2170,7 +2181,7 @@ function createService({
         }] : []),
         {
           controller: {
-            closeAllForSession: (id, options) => sessionAgent.closeSession(id, options)
+            closeAllForSession: (id, options) => closeAgentSession(id, options)
           },
           label: "assistant"
         },

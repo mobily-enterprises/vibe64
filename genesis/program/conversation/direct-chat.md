@@ -18,10 +18,35 @@ only that Send's server-owned browser authority through its private context
 allowlist. Working input/options and control grants cannot provide this authority.
 The mapper rechecks the original WRITE grant and actual accepted thread/turn/message
 after awaits, while independent Stop remains with the original native owner.
+Teaching binding initializes through the same memoized applicationTools property
+only when Core retains a new descriptor or performs a genuine replacement.
+Ordinary cached reads, subscriptions and sends still prepare and authorize their
+original host context, but discarded descriptors cannot retire the live browser
+connection or collected observations. Genuine replacement retains the original
+wrapper identity and generation retirement fence; there is no second runtime cache.
 Routing retains trusted captured question data only for this configured Learning
 branch, including its original uncertain-receipt repair; duplicate UUIDs preserve
 their first accepted words and association. The original completed native
 checkpoint projects exact question delivery and keeps source-less no-Git behavior.
+OpenCode's original final projection now has a closed receipt-capture option.
+The default projection return remains its original failure fields; streaming and
+reasoning-only projection cannot claim a final receipt. The same retained native
+turn exposes a read-only exact key/thread/outer-turn result only after its original
+writer and publication succeed and its current-input/admission fences settle.
+Empty-answer recovery retains its actual recovery-input/native-item correlation
+and original outer turn. Private same-turn companions retain its original target
+and shared-process identities captured before observation begins. The getter also
+requires that exact current target, unaborted controller, native thread and shared
+process; release, same-key reacquisition or process replacement cannot reattach
+old evidence. Failure, Stop or observation loss leave no usable result; a getter
+does not read history, resume or dispatch model work.
+Main adapts its immutable original OpenCode context key to that same owner, while
+Codex retains its original session-keyed getter. The callback is omitted when an
+older OpenCode owner lacks the facility, preserving the existing early refusal.
+Teaching still verifies the exact written assistant output and latest accepted
+request; these owner/component additions do not establish a narrated-cue trial,
+installed package adoption or Claude teacher composition.
+
 The existing native-context root reader validates both Learning scopes against
 their durable session. Only noExercise:true supplies the private source-less
 override; practicals retain their original source-availability, environment and
@@ -3532,3 +3557,18 @@ retains its bounded classification outline; it is not a full paired read. Follow
 review receives the actual full pair through the original readWorkPlan capture and
 retains its bounded oversized-context refusal, current actor, Stop and native receipt
 checks. A successful review turn alone never completes the artifact.
+
+#### Retained Main teaching cleanup after application session close
+
+`packages/vibe64-terminals/src/server/service.js` uses its same private
+`closeAgentSession` at the two original manager-close callers: assistant
+changeover and per-session terminal close (including archive/renewal/Project
+cleanup). It first awaits original native closure and keeps native failures.
+Only then does the exact supplied Learning runtime, or the original runtime
+resolved from current trusted Learning context, retire its original Teaching
+connections and drain the retained Helper. Working without a supplied runtime
+gains no additional read. Cleanup refusal remains retryable through its durable
+Helper receipt; a stopped native manager binding is not claimed retained.
+Raw shared-handle disposal, internal replacement and shutdown bypasses remain
+separate lifecycle acceptance obligations, not proved by the idle changeover
+companion. JSKIT receives no Training dependency or second cleanup registry.

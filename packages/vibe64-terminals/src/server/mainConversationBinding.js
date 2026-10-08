@@ -367,14 +367,19 @@ export async function createSessionConversationBinding(provider, sessionId, opti
     runtime, session, readSession: () => runtime.getSession(sessionId, { inspectSource: false })
   });
   const conversation = original.conversation({ engine, publish: host.publish, checkpoint: host.checkpoint });
-  const teaching = ["codex", "opencode"].includes(engine) && runtime.learningScope && runtime.learningTeaching
-    ? runtime.learningTeaching.bindConversation({ runtime, sessionId, actions: openingContext.teachingActions,
+  const teachingAvailable = ["codex", "opencode"].includes(engine) && runtime.learningScope && runtime.learningTeaching;
+  let teaching;
+  const bindTeaching = () => runtime.learningTeaching.bindConversation({ runtime, sessionId, actions: openingContext.teachingActions,
       terminals: openingContext.teachingTerminals, native: {
-        ...(engine === "codex" ? { readFinalAssistantResult({ threadId, turnId }) {
-          // Read the existing final owner, scoped to this immutable Main session.
-          const result = host.native.runOwner.readFinalAssistantResult(sessionId, threadId, turnId);
-          return result ? structuredClone(result) : null;
-        } } : {}),
+        ...(engine === "codex" || typeof host.native.owner.readFinalAssistantResult === "function" ? {
+          readFinalAssistantResult({ threadId, turnId }) {
+            // Read the existing final owner, scoped to this immutable Main session.
+            const result = engine === "codex"
+              ? host.native.runOwner.readFinalAssistantResult(sessionId, threadId, turnId)
+              : host.native.owner.readFinalAssistantResult(host.context.key, threadId, turnId);
+            return result ? structuredClone(result) : null;
+          }
+        } : {}),
         notifyPresentation: event => host.publish(sessionId, event),
         async readTurn() {
         if (engine === "codex") {
@@ -387,15 +392,14 @@ export async function createSessionConversationBinding(provider, sessionId, opti
         return { threadId: native.thread.id, turnId: native.turn.id, active: native.turn.active,
           outerTurnId: `opencode:${native.thread.id}:${native.turn.id}`,
           assistantSelection: vibe64AssistantSelectionFromMetadata(current.metadata) };
-      } } }) : null;
-  return {
+      } } });
+  const binding = {
     ...conversation, namespace: host.namespace, engine,
     prepareInput: engine === "codex" && typeof prepareInput === "function" ? async (input, current) => {
       const prepared = await prepareInput(input, current);
       return { ...prepared, actorContext: prepared.vibe64User || null };
     } : prepareInput,
     ...(engine === "codex" ? { selection } : {}),
-    ...(teaching ? { applicationTools: teaching.applicationTools } : {}),
     async admission(current) {
       if (engine !== "codex") return requireMainConversationAdmission(runtime, sessionId, current);
       const session = await runtime.getSession(sessionId, { inspectSource: false });
@@ -420,6 +424,17 @@ export async function createSessionConversationBinding(provider, sessionId, opti
       messagePreparation: createCodexMainMessagePreparation(sessionId, host.messageEnvironment, host.native.messagePreparation)
     } : host.native
   };
+  if (teachingAvailable) Object.defineProperty(binding, "applicationTools", {
+    enumerable: true,
+    get() {
+      // Only the descriptor retained by the original runtime initializes this
+      // facility. Routine opens may prepare a descriptor then reuse its cached
+      // predecessor; they must not retire that predecessor's browser evidence.
+      teaching ||= bindTeaching();
+      return teaching.applicationTools;
+    }
+  });
+  return binding;
 }
 
 // Main message policy runs at the existing native owner's preparation and

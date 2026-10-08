@@ -1,3 +1,4 @@
+import { TRAINING_MAIN_PRACTICAL_OBSERVATION_ACTION } from "./mainPracticalActions.js";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { TRAINING_MAIN_PRESENTATION_ACTION, TRAINING_MAIN_PRESENTATION_FOCUS_ACTION,
   TRAINING_MAIN_PRESENTATION_ACK_ACTION } from "./mainPresentationActions.js";
@@ -7,6 +8,9 @@ function registerTrainingMainPresentationRoutes(http) {
     routeRelativePath: "learning/:learningAttemptId/vibe64/sessions/:sessionId/training" });
   const target = request => ({ sessionId: request.params.sessionId,
     learningAttemptId: request.params.learningAttemptId });
+  routes.actionRoute("POST", "/observations", { actionId: TRAINING_MAIN_PRACTICAL_OBSERVATION_ACTION,
+    summary: "Observe an actual gesture in this saved Main practical question", bodyLimit: 16 * 1024,
+    buildInput: request => ({ ...routes.requestBody(request), ...target(request) }) });
   routes.actionRoute("GET", "/presentation", { actionId: TRAINING_MAIN_PRESENTATION_ACTION,
     summary: "Read this Main browser’s pending lesson presentation",
     buildInput: request => ({ clientId: routes.requestQuery(request).clientId, ...target(request) }) });

@@ -4046,6 +4046,8 @@ test("actual Learning OpenCode Main publishes one catalogue and promotes its adm
   const { createTrainingActions } = await import("../../packages/vibe64-training/src/server/actions.js");
   const { createTrainingTeachingActions } = await import("../../packages/vibe64-training/src/server/teachingActions.js");
   const { createTrainingAssessmentActions } = await import("../../packages/vibe64-training/src/server/assessmentActions.js");
+  const { createTrainingPresentationActions } = await import("../../packages/vibe64-training/src/server/presentationActions.js");
+  const { createTrainingPracticalActions } = await import("../../packages/vibe64-training/src/server/practicalActions.js");
   const { createLearningTeachingContextActions } = await import("../../packages/vibe64-sessions/src/server/actions.js");
   const { createOpenCodeConversationPlugin, openCodeApplicationToolSchemas } = await import("@jskit-ai/assistant-core/server/opencode-process");
   let removeTeaching;
@@ -4086,7 +4088,9 @@ test("actual Learning OpenCode Main publishes one catalogue and promotes its adm
   const definitions = [...createSessionActions({ sessions }), ...createLearningTeachingContextActions(),
     ...createTrainingActions({ catalogue: { readCatalogue() {} }, learners: teaching.learners, teachingBrief: brief }),
     ...createTrainingTeachingActions({ mainTeaching: main }),
-    ...createTrainingAssessmentActions({ mainTeaching: main }).filter(action => action.id === "vibe64.training.answer.evaluate")];
+    ...createTrainingPresentationActions({ learners: teaching.learners, content: teaching.content, mainTeaching: main }),
+    ...createTrainingAssessmentActions({ mainTeaching: main }),
+    ...createTrainingPracticalActions()];
   actions.register({ contributorId: "actual-learning-opencode-main", domain: "training",
     actions: definitions.map(action => ({ ...action, channels: action.channels || ["api", "automation", "internal"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => {
@@ -4145,7 +4149,7 @@ test("actual Learning OpenCode Main publishes one catalogue and promotes its adm
     row.content[0].state = { ...row.content[0].state, status: "completed", output: JSON.stringify(result) };
     return result;
   }
-  const search = await call("learning-search", "assistant_action_search", {});
+  const search = await call("learning-search", "assistant_action_search", { limit: main.actionIds.length });
   assert.equal(search.ok, true, JSON.stringify(search));
   assert.deepEqual(search.result.items.map(value => value.actionId).sort(), [...main.actionIds].sort());
   const contract = await call("learning-question-contract", "assistant_action_contract", { actionId: "vibe64.training.question.prepare" });
@@ -4209,4 +4213,56 @@ test("actual Learning OpenCode Main publishes one catalogue and promotes its adm
   await f.service.close();
   assert.equal((await runtime.getSession(sessionId, { inspectSource: false })).workspaceSetup.status, "unconfigured",
     "A no-workspace lesson must not run source preparation or save a false source failure after its native turn.");
+});
+
+
+test("Learning Main final reader exposes the original OpenCode saved publication at its own native checkpoint", { timeout: 30_000 }, async t => {
+  const { trainingTeachingFixture } = await import("../fixtures/trainingTeachingFixture.js");
+  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
+  let removeTeaching;
+  const teaching = await trainingTeachingFixture({ after(callback) { removeTeaching = callback; } }, { ready: false, exercise: false });
+  const saved = await teaching.learners.readLearningSessionScope({ actor: teaching.actor, attemptId: teaching.attemptId });
+  let native, checkpointResult;
+  const teachingBinding = {
+    bindConversation(input) { native = input.native; return {}; },
+    async completeConversation({ nativeTurn, outcome }) {
+      if (outcome === "completed") checkpointResult = native.readFinalAssistantResult(nativeTurn);
+    },
+    async cleanupConversation() {}
+  };
+  const f = await boundMainOpenCodeFixture(t, { assistantResponses: ["Exact native explanation."],
+    async runtimeFactory({ harness }) {
+      harness.session.sessionId = `learning-${teaching.attemptId}`;
+      const runtime = new Vibe64SessionRuntime({ projectContextRoot: harness.root,
+        projectRuntimeRoot: saved.projectRuntimeRoot, learningScope: saved.scope,
+        learningInstructions: () => "Teach only the installed lesson in this controlled native binding proof.",
+        learningTeaching: teachingBinding,
+        promptRenderer: () => assert.fail("A source-less binding must not render a project source prompt.") });
+      await runtime.createSession({ sessionId: harness.session.sessionId,
+        metadata: { assistant_selection: harness.session.metadata.assistant_selection } });
+      return runtime;
+    }
+  });
+  t.after(() => removeTeaching());
+  await f.manager.sendMessage(f.context.sessionId,
+    { messageId: "native-reader-request", message: "Explain this lesson." }, f.context);
+  const state = await f.manager.sessionState(f.context.sessionId, f.context);
+  await f.controller.waitForTurn(f.context.sessionId, f.context);
+  const turn = (await f.manager.sessionState(f.context.sessionId, f.context)).turn;
+  const result = native.readFinalAssistantResult({ threadId: state.thread.id, turnId: turn.id });
+  assert.ok(result, "The reader must use the original successful native result, not saved chat inference.");
+  assert.deepEqual(checkpointResult, result, "The original checkpoint sees the already published native receipt.");
+  const log = await f.store.readConversationLog(f.context.sessionId);
+  const written = log.find(value => value.assistant?.text === "Exact native explanation.");
+  assert.deepEqual(result.conversationTurn, written);
+  assert.equal(result.text, written.assistant.text);
+  assert.equal(result.conversationTurn.assistant.outputId, written.assistant.outputId);
+  assert.equal(result.threadId, state.thread.id);
+  assert.equal(result.turnId, turn.id);
+  assert.equal(native.readFinalAssistantResult({ threadId: "foreign-thread", turnId: turn.id }), null);
+  assert.equal(native.readFinalAssistantResult({ threadId: state.thread.id, turnId: "foreign-turn" }), null);
+  result.conversationTurn.assistant.text = "Caller mutation";
+  assert.equal(native.readFinalAssistantResult({ threadId: state.thread.id, turnId: turn.id }).conversationTurn.assistant.text,
+    "Exact native explanation.");
+  assert.equal(f.promptCalls.length, 1, "Final reads do not dispatch another native prompt.");
 });

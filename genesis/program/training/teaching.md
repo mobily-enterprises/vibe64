@@ -32,6 +32,10 @@
 - `packages/vibe64-training/src/server/assessmentActions.js`
 - `packages/vibe64-training/src/server/teachingActions.js`
 - `packages/vibe64-training/src/server/teachingRole.js`
+- `packages/vibe64-training/src/server/practicalObservations.js`
+- `packages/vibe64-training/src/server/practicalActions.js`
+- `packages/vibe64-training/src/server/mainPracticalActions.js`
+- `packages/vibe64-training/src/shared/practicalSchemas.js`
 - `tests/server/vibe64TrainingActionTools.unit.test.js`
 - `packages/vibe64-training/src/server/declaredCheck.js`
 - `tests/server/vibe64TrainingDeclaredCheck.unit.test.js`
@@ -43,9 +47,8 @@
 
 ## Public contract
 
-Main alone owns admitted teaching operations. The shared eight-action teacher
-identity set excludes question preparation, answer/practical evaluation and five
-visual operations from Colleague's existing tool policy. Each original contract
+Main alone owns admitted teaching operations. The shared teacher identity set excludes the original eight teaching operations
+and the new bounded Main practical read from Colleague's existing tool policy. Each original contract
 also authenticates then requires Main authority, so retained contracts and direct
 API dispatch cannot reinstate a supervisor teaching effect. Main admission,
 question staging, exact final proof, Helper, pinned rubrics, original learner CAS
@@ -1014,3 +1017,46 @@ assertion adaptation whose inverse restores its full original prefix. Appended
 cases use the actual compiled Preview subtree and real original Runtime/Store
 and installed ready-content/learner owners; the Main authority wire is controlled,
 not live authenticated host/native proof.
+
+### Main practical observation ownership
+
+The original Colleague native observation transaction and context DTO projection
+move once to `practicalObservations.js`; Colleague immediately calls that owner.
+Its actual admission tail, connection objects, Stop/rotation/closed fences,
+ordered native controls, exact gesture replay, fixed server observations and
+post-check current-question/access checks stay in place. Original strict issued
+reference, gesture/workspace/exercise and bounded DTO schemas move once to the
+Training shared schema. The old Colleague action and route keep their original
+fields, scopes and API-only exclusion.
+
+Main adds its own already-existing connection lifetime to this same collector.
+Only a saved false lesson can use the Learning observations URL. The original
+route owner overrides attempt/session from the URL; the conversation identity is
+derived by the original typed Main selector. Workspace display facts must still
+match the original captured physical project/initial session. Sessions inspection
+and App output reads instead use that exact saved Learning tuple and the existing
+fresh action contributor; no ordinary private-project catalogue admission is added.
+The original native check runs with the actual server-selected terminal. Public
+composition constructs that existing owner; Online injects its original normal or
+exact-attempt preview owner, without a second check implementation.
+
+The Main tool catalogue retains its prior nine-ID prefix and appends
+`practical.read` and `practical.evaluate`. Read selects the original bounded DTO
+only from the accepted message's captured browser client, with current native
+admission/account/actor/attempt/pin checks. A model cannot supply client or evidence.
+Evaluation reuses the same retained Helper and `evaluateAdmittedTrainingAssessment`,
+adding the original completed observation/reference/check identity fences before
+and after awaits and inside the original sole learner writer. It does not replace
+grading, infer observations from text, or write another progress ledger.
+
+Main question discovery passes the unchanged `completedPracticalQuestions`
+canonical receipt proofs into the existing question-reference reader. A saved pass
+alone cannot suppress a question; the exact completed native execute envelope,
+accepted explanation, delivered question, evidence ID and saved rubric/hash must
+all match. Reads neither backfill receipts nor mutate saved questions.
+
+This server increment does not attach Main browser gesture producers. Actual
+prepared-target project selection, real Colleague hide/use/restore, identified
+App interaction, reconnect/Stop behavior across the installed native facade,
+provider tool-receipt retention and desktop/mobile practical acceptance remain
+required. Registration or controlled component results do not prove those gates.

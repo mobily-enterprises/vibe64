@@ -6,22 +6,24 @@ import { isDeepStrictEqual } from "node:util";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { createRetainedConversationHelper } from "@local/vibe64-terminals/server/retainedConversationHelper";
 import { evaluateAdmittedTrainingAssessment } from "./conversationAssessment.js";
-import { captureDeliveredTrainingQuestion, deliveredQuestion, promoteTrainingQuestionDeliveries,
+import { createTrainingPracticalObservations } from "./practicalObservations.js";
+import { captureDeliveredTrainingQuestion, deliveredQuestion, completedPracticalQuestions, promoteTrainingQuestionDeliveries,
   readAcceptedTrainingAnswer, stageAdmittedTrainingQuestion } from "./deliveryProof.js";
 
 const MAIN_TEACHING_ACTION_IDS = Object.freeze([
   "vibe64.training.learning.read", "vibe64.training.teaching-brief.read",
   "vibe64.training.question.prepare", "vibe64.training.answer.evaluate",
   "vibe64.training.visual.open", "vibe64.training.visual.command", "vibe64.training.visual.cue",
-  "vibe64.training.visual.cue.read", "vibe64.training.visual.snapshot"
+  "vibe64.training.visual.cue.read", "vibe64.training.visual.snapshot",
+  "vibe64.training.practical.read", "vibe64.training.practical.evaluate"
 ]);
-function failure(message) {
-  return Object.assign(new Error(message), { code: "VIBE64_TRAINING_MAIN_UNADMITTED", statusCode: 409 });
+function failure(message, code = "VIBE64_TRAINING_MAIN_UNADMITTED", statusCode = 409) {
+  return Object.assign(new Error(message), { code, statusCode });
 }
 
 // Main supplies its original native target and canonical Store. Training retains
 // the original question/answer proof, Helper coordination and sole progress owner.
-function createTrainingMainTeaching({ teaching, assessment } = {}) {
+function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
   if (!teaching?.prepareQuestion || !assessment?.evaluateAnswer) {
     throw new TypeError("Main teaching requires the original question and assessment owners.");
   }
@@ -146,7 +148,7 @@ function createTrainingMainTeaching({ teaching, assessment } = {}) {
     const log = await runtime.store.readConversationLog(sessionId);
     const delivery = deliveredQuestion({ record: { conversationLog: log, scopeId: sessionId } });
     const reference = log.find(turn => turn.turnId === delivery?.turnId)?.metadata.trainingQuestionDelivery.reference;
-    const result = reference ? await teaching.readQuestionReference({ actor: grant.user }) : null;
+    const result = reference ? await teaching.readQuestionReference({ actor: grant.user, completedPracticals: completedPracticalQuestions({ record: { conversationLog: log, scopeId: sessionId } }) }) : null;
     const after = await actions.execute({ actionId: "vibe64.sessions.conversation.context.read", input, context: authority.requestContext });
     if (after.actor.id !== grant.actor.id || !isDeepStrictEqual(after.project?.learningScope, scope)) throw failure("The observed learning conversation changed.");
     return isDeepStrictEqual(result, reference) ? result : null;
@@ -156,7 +158,7 @@ function createTrainingMainTeaching({ teaching, assessment } = {}) {
     let state = conversations.get(key);
     if (state) return state;
     state = { helperTurnId: null, retainedTurnId: null, cleanupContext: null,
-      connections: new Map(), generation: 0, binding: null };
+      connections: new Map(), generation: 0, binding: null, practicalAdmission: Promise.resolve() };
     state.presentation = createTrainingPresentationCoordination({ changed() {
       const notification = state.binding?.native.notifyPresentation?.({ type: "configuration" });
       void notification?.catch(() => {});
@@ -235,10 +237,64 @@ function createTrainingMainTeaching({ teaching, assessment } = {}) {
     const key = `${runtime.stateRoot}\0${sessionId}`;
     const state = helperFor(runtime, sessionId, terminals);
     retirePresentationState(state);
+    await state.practicalAdmission;
     await evaluations.get(key)?.catch(() => {});
     await state.helper.cleanup(state.cleanupContext || context);
     state.cleanupContext = null;
     state.helperTurnId = null;
+  }
+  // The original browser observer remains independent of an active native
+  // turn. It uses the current completed question and the saved false lesson
+  // target; new gesture collection is serialized in this same connection owner.
+  async function practicalContext({ runtime, sessionId, context: current, actions, clientId }) {
+    if (runtime.learningScope?.noExercise !== false) throw failure("This lesson has no prepared practical workspace.");
+    const state = await presentationState({ runtime, sessionId, context: current, actions, access: "write" });
+    const connection = state?.connections.get(clientId);
+    if (!state?.binding || !connection) throw failure("Use the original connected Main browser for this practical question.");
+    const generation = state.generation, native = state.binding.native;
+    let log = [];
+    const requireCurrent = reference => {
+      current.signal?.throwIfAborted();
+      if (state.generation !== generation || state.binding?.native !== native ||
+          !isDeepStrictEqual(state.binding?.scope, runtime.learningScope) || state.connections.get(clientId) !== connection ||
+          reference && !deliveredQuestion({ record: { conversationLog: log, scopeId: sessionId } }, reference)) {
+        throw failure("Repeat the practical task in its current connected lesson question.");
+      }
+    };
+    const authorizeCurrent = async reference => {
+      log = await runtime.store.readConversationLog(sessionId);
+      // The connection was admitted before this read; reauthorize after its
+      // awaited storage work so revocation cannot admit a gesture or replay.
+      await freshAuthority(current, runtime, sessionId, actions);
+      requireCurrent(reference);
+    };
+    await authorizeCurrent();
+    const context = { ...current.browserAuthority.requestContext, signal: current.signal,
+      trainingPractical: teaching, trainingChecks: checks };
+    delete context.vibe64Action;
+    return { state, connection, context, targetInput: { learningAttemptId: runtime.learningScope.attemptId, sessionId },
+      requireCurrent, authorizeCurrent };
+  }
+  async function observeTrainingPractical({ input, ...current }) {
+    const prepared = await practicalContext({ ...current, clientId: input.clientId });
+    const { state, connection, context, targetInput, requireCurrent, authorizeCurrent } = prepared;
+    const observations = createTrainingPracticalObservations({ actions: current.actions, failure });
+    const observing = state.practicalAdmission.then(() => observations.observe({ ...input,
+      conversationId: mainConversationId({ learningAttemptId: current.runtime.learningScope.attemptId, sessionId: current.sessionId }) }, {
+      connection, context, targetInput, requireCurrent: () => requireCurrent(input.reference),
+      authorizeCurrent: () => authorizeCurrent(input.reference)
+    }));
+    state.practicalAdmission = observing.catch(() => {});
+    return observing;
+  }
+  async function readTrainingPractical({ clientId, ...current }) {
+    const prepared = await practicalContext({ ...current, clientId });
+    const { connection, context, targetInput, requireCurrent, authorizeCurrent } = prepared;
+    const observations = createTrainingPracticalObservations({ actions: current.actions, failure });
+    const facts = await observations.read({ connection, context, targetInput,
+      requireCurrent: () => requireCurrent(connection.trainingPractical?.reference) });
+    await authorizeCurrent(connection.trainingPractical?.reference);
+    return { ok: true, ...facts };
   }
   function bindConversation({ runtime, sessionId, actions, native, terminals }) {
     const scope = runtime.learningScope;
@@ -350,28 +406,65 @@ function createTrainingMainTeaching({ teaching, assessment } = {}) {
             storage, storageId: sessionId, admitted: { ...admitted, nativeOuterTurnId: target.outerTurnId }, failure,
             requireCurrent: () => requireCurrent({ ...current, signal: execution.signal }, admitted) });
         },
+        async readTrainingPractical(input, execution) {
+          if (input.attemptId !== scope.attemptId) throw failure("Read only this bound attempt's practical facts.");
+          const captured = { ...current, signal: execution.signal };
+          const { message } = await requireCurrent(captured, admitted);
+          if (!message.data?.clientId) throw failure("The accepted explanation has no initiating Main browser.");
+          const result = await readTrainingPractical({ runtime, sessionId, context: captured, actions, clientId: message.data.clientId });
+          await requireCurrent(captured, admitted);
+          return result;
+        },
         async evaluateTrainingAnswer(input, execution) {
-          if (input.attemptId !== scope.attemptId || input.messageId !== admitted.messageId) {
-            throw failure("Evaluate only this bound attempt's actual accepted learner message.");
-          }
-          if (evaluations.has(key)) throw failure("Finish or stop the current grading Helper first.");
-          const guard = () => requireCurrent({ ...current, signal: execution.signal }, admitted);
-          const operation = Promise.resolve().then(async () => {
-            const { log } = await guard();
-            const accepted = readAcceptedTrainingAnswer(log, admitted);
-            if (!accepted) throw failure("Use an accepted answer associated with its exact delivered native question.");
-            const { grant } = await guard();
-            helperState.helperTurnId = admitted.turnId;
-            helperState.cleanupContext = { assistantSelection: current.assistantSelection,
-              requestMeta: { request: { vibe64User: grant.user } } };
-            return evaluateAdmittedTrainingAssessment("answer", { ...input, message: structuredClone(accepted.message) }, execution,
-              { assessment, signal: execution.signal, requireCurrent: guard, assertCurrent: admitted.assertCurrent,
-                helper: { runHelper: (_state, context, value) => helper.runHelper(context, { ...value, signal: execution.signal }) } });
-          }).finally(() => { if (evaluations.get(key) === operation) evaluations.delete(key); });
-          evaluations.set(key, operation);
-          return operation;
+          return evaluateTraining("answer", input, execution);
+        },
+        async evaluateTrainingPractical(input, execution) {
+          return evaluateTraining("practical", input, execution);
         }
       };
+      async function evaluateTraining(kind, input, execution) {
+        if (input.attemptId !== scope.attemptId || input.messageId !== admitted.messageId) {
+          throw failure("Evaluate only this bound attempt's actual accepted learner message.");
+        }
+        if (evaluations.has(key)) throw failure("Finish or stop the current grading Helper first.");
+        let connection, practical, practicalFacts;
+        const guard = async () => {
+          const checked = await requireCurrent({ ...current, signal: execution.signal }, admitted);
+          if (practical && (helperState.connections.get(checked.message.data?.clientId) !== connection ||
+              connection.trainingPractical !== practical ||
+              !isDeepStrictEqual({ reference: practical.reference, observation: practical.observation, checkResult: practical.checkResult }, practicalFacts))) {
+            throw failure("The native practical observation changed before evaluation finished.");
+          }
+          return checked;
+        };
+        const operation = Promise.resolve().then(async () => {
+          const { log, message } = await guard();
+          const accepted = readAcceptedTrainingAnswer(log, admitted);
+          if (!accepted) throw failure("Use an accepted answer associated with its exact delivered native question.");
+          if (kind === "practical") {
+            connection = helperState.connections.get(message.data?.clientId);
+            practical = connection?.trainingPractical;
+            if (!practical?.observation || practical.observation.observationId !== input.observationId ||
+                !isDeepStrictEqual(practical.reference, accepted.reference)) {
+              throw failure("Evaluate only this connection's completed observation for its exact delivered question.");
+            }
+            practicalFacts = structuredClone({ reference: practical.reference,
+              observation: practical.observation, checkResult: practical.checkResult });
+          }
+          const { grant } = await guard();
+          helperState.helperTurnId = admitted.turnId;
+          helperState.cleanupContext = { assistantSelection: current.assistantSelection,
+            requestMeta: { request: { vibe64User: grant.user } } };
+          return evaluateAdmittedTrainingAssessment(kind, {
+            attemptId: input.attemptId, expectedRevision: input.expectedRevision, submissionId: input.submissionId,
+            message: structuredClone(accepted.message),
+            ...(kind === "practical" ? { observation: structuredClone(practicalFacts.observation), checkResult: structuredClone(practicalFacts.checkResult) } : {})
+          }, execution, { assessment, signal: execution.signal, requireCurrent: guard, assertCurrent: admitted.assertCurrent,
+            helper: { runHelper: (_state, context, value) => helper.runHelper(context, { ...value, signal: execution.signal }) } });
+        }).finally(() => { if (evaluations.get(key) === operation) evaluations.delete(key); });
+        evaluations.set(key, operation);
+        return operation;
+      }
       return { ...context, trainingMain: coordinator };
     }
     const bound = Object.freeze({
@@ -383,7 +476,7 @@ function createTrainingMainTeaching({ teaching, assessment } = {}) {
   }
   return Object.freeze({ actionIds: MAIN_TEACHING_ACTION_IDS, bindConversation, captureMessage,
     completeConversation, readQuestion, cleanupConversation, readPresentation,
-    focusPresentation, acknowledgePresentation
+    focusPresentation, acknowledgePresentation, observeTrainingPractical, readTrainingPractical
   });
 }
 

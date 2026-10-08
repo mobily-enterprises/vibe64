@@ -1,3 +1,6 @@
+import { createTrainingDeclaredCheckOwner } from "./declaredCheck.js";
+import { createTrainingPracticalActions } from "./practicalActions.js";
+import { createTrainingMainPracticalActions } from "./mainPracticalActions.js";
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { isLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
@@ -46,7 +49,8 @@ const Vibe64TrainingProvider = defineFeature({
     const projectRepositoryService = createManagedProjectRepositoryService({ projectContext, projectService: project });
     const teaching = createTrainingTeachingOwner({ learners, content });
     const assessment = createTrainingAnswerAssessment({ learners, content, teaching });
-    const mainTeaching = createTrainingMainTeaching({ teaching, assessment });
+    const checks = createTrainingDeclaredCheckOwner({ learners, content, project, terminals });
+    const mainTeaching = createTrainingMainTeaching({ teaching, assessment, checks });
     const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, projectContext,
       learningTeaching: mainTeaching, practiceSessions: true });
     const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals,
@@ -68,7 +72,7 @@ const Vibe64TrainingProvider = defineFeature({
       resolveLearningContext: learningSessions.resolveContext
     });
     registerLearningSessionRoutes(http, { learningScoped: true, routeSurface: "app" });
-    return { training: Object.freeze({ catalogue, content, learners, brief, exercises, learningSessions, teaching, assessment, mainTeaching }) };
+    return { training: Object.freeze({ catalogue, content, learners, brief, exercises, learningSessions, teaching, assessment, checks, mainTeaching }) };
   },
   actions({ training, trainingHost, project }, { actionCatalogue }) {
     if (trainingHost) return [];
@@ -77,7 +81,9 @@ const Vibe64TrainingProvider = defineFeature({
     ...createTrainingTeachingActions({ mainTeaching: training.mainTeaching }),
     ...createTrainingPresentationActions({ learners: training.learners, content: training.content, mainTeaching: training.mainTeaching }),
     ...createTrainingMainPresentationActions({ project, actions: actionCatalogue }),
-    ...createTrainingAssessmentActions({ mainTeaching: training.mainTeaching }).filter(action => action.id === "vibe64.training.answer.evaluate"),
+    ...createTrainingMainPracticalActions({ project, actions: actionCatalogue }),
+    ...createTrainingPracticalActions(),
+    ...createTrainingAssessmentActions({ mainTeaching: training.mainTeaching }),
     ...createTrainingVisualResourceActions({ learners: training.learners, content: training.content,
       teaching: training.teaching, actions: actionCatalogue })];
   }

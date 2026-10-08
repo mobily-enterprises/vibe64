@@ -1,3 +1,4 @@
+import { trainingQuestionField, trainingObservationFields, trainingPracticalProgressField, trainingPracticalField } from "@local/vibe64-training/shared/practical-schemas";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createColleagueUsageKnowledge } from "./usageKnowledge.js";
@@ -69,17 +70,7 @@ const assignmentOutput = { mode: "replace", schema: createSchema({ ok: { type: "
 
 // The transport carries only the issued reference. Training validates its
 // provenance and supplies the server-owned snapshot before native admission.
-const trainingQuestionField = { type: "object", required: false, schema: createSchema({
-  attemptId: { type: "string", required: true, noTrim: true, maxLength: 36,
-    pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$" },
-  questionId: { type: "string", required: true, noTrim: true, maxLength: 64,
-    pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" },
-  assessmentId: { type: "string", required: true, noTrim: true, maxLength: 64,
-    pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" },
-  issuedRevision: { type: "integer", required: true, min: 1, max: Number.MAX_SAFE_INTEGER },
-  topicHash: { type: "string", required: true, noTrim: true, maxLength: 64, pattern: "^[a-f0-9]{64}$" },
-  lessonHash: { type: "string", required: true, noTrim: true, maxLength: 64, pattern: "^[a-f0-9]{64}$" }
-}) };
+
 
 function createColleagueActions(colleague, usage = createColleagueUsageKnowledge()) {
   const definition = (name, fields, execute, assistant, projectScoped = false) => withVibe64ActionContext({
@@ -90,27 +81,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     ...(assistant ? { extensions: { assistant } } : {}),
     execute
   }, { projectScoped });
-  const nativeObservation = definition("training.observe-native", {
-    clientId, conversationId: clientId,
-    gestureId: { ...clientId, noTrim: true, maxLength: 64, pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$" },
-    control: { type: "string", required: true,
-      enum: ["project-select", "session-select", "preview-select", "chat-show", "colleague-minimize", "colleague-restore", "exercise-response"] },
-    reference: { ...trainingQuestionField, required: true },
-    exercise: { type: "object", required: false, schema: createSchema({
-      ...Object.fromEntries(["instanceId", "interactionId", "requestId", "playerInstanceId"].map(key => [key, {
-        ...clientId, noTrim: true, maxLength: 36,
-        pattern: "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
-      }])),
-      frameRequestId: { type: "integer", required: true, min: 1, max: Number.MAX_SAFE_INTEGER }
-    }) },
-    workspace: { type: "object", required: true, schema: createSchema({
-      projectSlug: { ...clientId, maxLength: 48, pattern: "^[a-z0-9][a-z0-9-]*$" },
-      sessionId: clientId,
-      mainChatVisible: { type: "boolean", required: true }, projectVisible: { type: "boolean", required: true },
-      pane: { ...text, required: true, maxLength: 64 }, ready: { type: "boolean", required: true },
-      colleagueVisible: { type: "boolean", required: false }
-    }) }
-  }, (input, context) => colleague.observeTrainingPractical(input, context), { exclude: true });
+  const nativeObservation = definition("training.observe-native", trainingObservationFields, (input, context) => colleague.observeTrainingPractical(input, context), { exclude: true });
   return [
     { ...nativeObservation, channels: ["api"], surfaces: ["app"], idempotency: "domain_native" },
     definition("usage.topics.read", {
@@ -244,21 +215,8 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       alwaysAvailable: true,
       description: "Read the project, session, conversation and displayed view targeted by this Colleague request. pane=chat means the project view is hidden behind compact chat; no Preview or integration detail is claimed in that state. An empty pane for a selected project means its layout is not ready. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. integrationEnvironment describes the loaded visible Integrations panel, including an empty configuration; integrationId is present only for an existing selected slot. integrationDirty means the displayed draft is unsaved, so this is not proof of saved configuration or a working connection. These fields are absent when the panel is unavailable. Production selection does not require a development session. databaseScreen reports whether the visible Database is loading, unavailable or a workspace; databaseView identifies overview, erd or data only when loaded; databaseTable is the exact selected table in Data, without SQL, columns or rows. These are UI selections, not live database health or query results, and are omitted when the panel is hidden or belongs to another session. An empty focus means the project chooser. planView is present only while the matching native Plan and history dialog is open; current or history identifies its displayed tab, not approval or agent activity. Navigation does not silently retarget a pending request. Optional trainingPracticalProgress reports accepted native steps for the same delivered question: its collecting phase, acceptedSteps and lastControl are coaching context, never an observation or assessment pass. Continue the next step without replacing the question or repeating accepted steps. Workspace navigation is project selection, then revealing the exact reserved session’s Main chat through its session tab or Show chat, then Preview. Optional trainingPractical reports only a completed current native learner observation for this connection's delivered question, with its exact observationId/reference and declared producer/operation, saved assistance/origin and optional check outcome. It is not an assessment pass. Use those actual IDs with the current accepted learner explanation for practical evaluation; absent completed facts do not erase accepted collecting steps; never invent evidence. If both projections are absent, inspect current readiness/question and repeat the native task only when its collection is unavailable.",
       output: { schema: createSchema({ ok: { type: "boolean", required: true }, focus: { ...focusField, required: true },
-        trainingPracticalProgress: { type: "object", required: false, schema: createSchema({
-          reference: { ...trainingQuestionField, required: true }, assessmentId: { ...clientId, maxLength: 64 },
-          phase: { type: "string", required: true, enum: ["collecting"] },
-          acceptedSteps: { type: "integer", required: true, min: 1, max: 2 },
-          lastControl: { type: "string", required: true,
-            enum: ["project-select", "session-select", "chat-show", "preview-select", "colleague-minimize"] }
-        }) },
-        trainingPractical: { type: "object", required: false, schema: createSchema({
-          reference: { ...trainingQuestionField, required: true }, observationId: clientId,
-          assessmentId: { ...clientId, maxLength: 64 }, producer: { type: "string", required: true, enum: ["workspace", "colleague", "exercise"] },
-          operation: { ...clientId, maxLength: 64 }, observedAt: { ...clientId, maxLength: 24 },
-          assistance: { type: "string", required: true, enum: ["none", "hint", "demonstration", "substantial"] },
-          origin: { type: "string", required: true, enum: ["learner", "teacher"] },
-          checkOutcome: { type: "string", required: false, enum: ["passed", "not-yet-passed"] }
-        }) }
+        trainingPracticalProgress: trainingPracticalProgressField,
+        trainingPractical: trainingPracticalField
       }), mode: "replace" }
     })
   ];

@@ -31,6 +31,16 @@ tool-free Helper and the lesson's original pinned rubric and progress rules.
 Practical gestures and diagram narration are separate capabilities; these four
 tools do not establish them.
 
+When Main uses a narrated diagram cue with a supported AI connection, follow
+its completed explanation and the matching diagram step. A partial reply or a
+stopped turn does not confirm that cue. If narration cannot be confirmed, keep
+the saved attempt and read the error before retrying; ordinary chat text cannot
+replace the confirmed explanation or turn a diagram step into a lesson pass.
+
+Reading or reopening the same retained lesson conversation preserves its connected
+lesson state; sending your explanation uses that same state. Genuine conversation
+replacement or a retired connection requires fresh lesson recovery.
+
 Reply to the question actually shown in that conversation. Typed input captures
 its current question; voice input captures it when recording begins. Retrying an
 uncertain Send keeps the original message identity and exact words. A stale or

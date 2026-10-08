@@ -19,12 +19,19 @@ Retained Preview and Main Learning-mode placement remain host integration work.
 Owns the original canonical delivered-question and completed-practical proof
 readers plus delivery promotion, staging, accepted-answer correlation and
 delivered-question capture, originally reused by Colleague and now composed by
-the admitted Main teacher. The shared eight-action teacher role set excludes
+the admitted Main teacher. The shared teacher role set excludes
 these teaching effects from Colleague's common discovery/contract/execute policy;
 the original action boundaries also authenticate and require Main authority.
 Colleague retains lifecycle, progress and authoring coordination. Its private
 compatibility producer remains source-preserved until the corresponding Main
 producer and original assertions are proved; it grants no supervisor tool access.
+Owns the original native practical transaction, strict gesture/reference schemas
+and bounded partial/completed facts moved once from Colleague, which immediately
+reuses them with its unchanged connection and admission lifetime. Main uses the
+same collector with its saved practice authority, current delivered question and
+accepted browser identity; assessment retains the original Helper and sole
+learner writer. Frontend person-event and installed native practical proof remain
+open.
 Owns the original ephemeral browser presentation transaction and cue/receipt
 predicates, immediately consumed by Colleague using its unchanged connection
 objects. One original pending slot, deadlines, output binding and terminal ACK
@@ -66,16 +73,17 @@ project marker. Training owns authority/retry validation, Runtime owns offline
 metadata/archive staging, Core owns verified file publication and the ledger;
 Online retains stopped-service activation. Progress/source/native histories and
 unreferenced Working sessions remain unchanged. Main
-teaching coordinator supplies nine learning, question, assessment and declared
-visual actions to the original Codex/OpenCode Main native host for no-exercise
+teaching coordinator supplies its original nine learning, question, assessment
+and declared visual actions plus the two practical read/evaluate operations to the original Codex/OpenCode Main native host for no-exercise
 and authorized prepared practice attempts. Source-bearing validation precedes
 the fresh authority grant, retaining the actual source/Genesis/Env/Git owners.
 The captured Main browser uses the existing subscriber to refresh one
 presentation resource and the original navigation/cue/player and speech owners.
 Three browser-only presentation read/focus/acknowledgement actions remain outside
 the model tool catalogue. Codex narrated cues require the original final-result
-owner and exact canonical output. OpenCode narrated cues remain unsupported until
-its original final-result seam is available; progress alone cannot authorize them. Fresh originating-request WRITE authority and
+owner and exact canonical output. OpenCode narrated cues use the same original published final-result owner;
+progress alone cannot authorize them and actual native/browser cue acceptance
+remains open. Fresh originating-request WRITE authority and
 accepted thread/turn/message guards fence every effect and final progress save;
 the original retained Helper, transcript transaction and native checkpoint remain
 the execution, receipt and delivery owners. Practice presentation retains its

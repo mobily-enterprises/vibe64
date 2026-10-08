@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { defineVibe64AgentExecutionProfileResolution, VIBE64_AGENT_HELPER_WORKLOAD_LIMITS } from "@local/vibe64-runtime/shared";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -80,3 +82,41 @@ async function fixture(t, { ready = true, practical = false, evidence = null, ex
 
 
 export { fixture as trainingTeachingFixture };
+
+function mainTeachingTerminals({ runtime, sessionId, selection, controls, helperCalls }) {
+  return {
+    async requireAssistantSelectionAccess(value, options) {
+      assert.deepEqual(value, selection);
+      assert.equal(options.vibe64User.uid, 42);
+    },
+    async resolveAssistantPurpose(input, options) {
+      assert.equal(input.purpose, "training_assessment");
+      assert.equal(input.workflowEngineId, "codex");
+      assert.equal(options.vibe64User.uid, 42);
+      return { available: true, effectiveSelection: selection, connectionIdentity: "configured-helper-account" };
+    },
+    async resolveEphemeralAgentExecutionProfile(_scope, input, options) {
+      assert.equal(options.expectedConnectionIdentity, "configured-helper-account");
+      return defineVibe64AgentExecutionProfileResolution({ ...input, providerId: "codex", revision: "helper-v1", model: "helper", thinking: "low",
+        limits: VIBE64_AGENT_HELPER_WORKLOAD_LIMITS.training_assessment,
+        policy: { tools: "none", environmentAccess: false, networkAccess: false, repositoryWrite: false },
+        request: { allowProviderModelFallback: false, reasoning: true, summary: false } });
+    },
+    async runEphemeralAgentChatTurn(scope, input, options) {
+      helperCalls.push({ scope, input, options });
+      const log = await runtime.store.readConversationLog(sessionId);
+      assert.equal(log.at(-1).metadata.trainingHelper.scope.id, scope.id, "new Helper receipt belongs to this exact admitted answer turn");
+      controls.onHelper?.();
+      await controls.helperWait;
+      for (const event of [{ type: "thread", threadId: "helper-thread" }, { type: "turn", turnId: "helper-turn" },
+        { type: "helper-execution", executionId: "helper-execution" }]) await options.onEvent(event);
+      return { ok: true, status: "completed", text: JSON.stringify({ outcome: "passed", explanation: "Identifies Preview." }) };
+    },
+    async deleteEphemeralAgentConversation(_scope, input) {
+      assert.equal(input.executionProfile.policy.tools, "none");
+      return controls.failCleanup ? { ok: false, error: "Helper cleanup uncertain." } : { ok: true };
+    }
+  };
+}
+
+export { mainTeachingTerminals };

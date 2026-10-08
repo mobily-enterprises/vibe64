@@ -56,7 +56,7 @@ function createTrainingAssessmentActions({ colleague, mainTeaching } = {}) {
             required: completion.required, passed: completion.passed, completed: completion.completed } };
       } catch (cause) { throw operationError(cause); }
     }
-  }, { projectScoped: false, ...(kind === "answer" ? { learningAccess: "write" } : {}) })));
+  }, { projectScoped: false, learningAccess: "write" })));
 }
 
 export { createTrainingAssessmentActions };
