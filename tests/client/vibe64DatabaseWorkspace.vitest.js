@@ -87,8 +87,8 @@ async function flushWorkspace(runQuery) {
   await Vue.nextTick();
 }
 
-function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout = vi.fn(), view = "data" } = {}) {
-  const props = Vue.reactive({ active, projectSlug: "alpha", sessionId: "database-session" });
+function mountDatabaseWorkspace({ active = true, initialState = null, saveLayout = vi.fn(), view = "data", onRequestOverviewAssistant } = {}) {
+  const props = Vue.reactive({ active, projectSlug: "alpha", sessionId: "database-session", onRequestOverviewAssistant });
   const route = Vue.reactive({ path: "/app/alpha/dashboard/database", query: { session: props.sessionId, ...(view === null ? {} : { databaseView: view }) } });
   const router = { replace: vi.fn(async (location) => Object.assign(route, location)) };
   mocks.route = route;
@@ -172,6 +172,36 @@ const firstState = {
 const secondState = { ...firstState, schema: { ...firstState.schema, tables: [secondTable] } };
 
 describe("Database Workspace automatic table admission", () => {
+  it("omits the physical database from MySQL/MariaDB default SELECTs", async () => {
+    const fixture = mountDatabaseWorkspace({ initialState: {
+      ...firstState,
+      schema: { ...firstState.schema, engine: "mysql", tables: [{ ...firstTable, schema: "v64_internal", qualifiedName: "v64_internal.items" }] }
+    } });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      fixture.workspace.activeView = "data";
+      await flushWorkspace(fixture.runQuery);
+      expect(fixture.runQuery).toHaveBeenCalledWith(expect.objectContaining({ sql: "SELECT *\nFROM `items`;" }));
+    } finally { await fixture.close(); }
+  });
+
+  it("requests a bounded ungrouped review preserving manual classifications", async () => {
+    const request = vi.fn();
+    const fixture = mountDatabaseWorkspace({ initialState: {
+      ...firstState, schema: { ...firstState.schema, tables: [{ ...firstTable, reference: "items" }] }
+    }, view: "overview", onRequestOverviewAssistant: request });
+    try {
+      await flushWorkspace(fixture.runQuery);
+      fixture.workspace.requestOverviewAssistant({ scope: "ungrouped", tables: ["public.items"] });
+      expect(request).toHaveBeenCalledWith(expect.objectContaining({
+        displayMessage: "Review 1 ungrouped tables: Balanced.",
+        message: expect.stringContaining('Review only these currently ungrouped tables: ["items"]')
+      }));
+      expect(request.mock.calls[0][0].message).toContain("Preserve existing actors, names, descriptions, memberships and manual choices");
+      expect(fixture.runQuery).not.toHaveBeenCalled();
+    } finally { await fixture.close(); }
+  });
+
   it.each([
     ["useAssistantSql", "SELECT count(*) FROM public.items;"],
     ["useAssistantSql", "DELETE FROM public.items WHERE id = 1;"],

@@ -10,6 +10,20 @@ a mounted table preserves its own draft and results; leaving or reloading the
 workspace does not preserve an unsaved SQL draft. A loading or unavailable database
 is not an empty successful query.
 
+In **Overview**, select **Review N ungrouped tables** to ask the coding agent to
+classify the tables currently under **Other tables**, including ones previously
+reviewed. The request preserves existing groups and manual choices; the agent
+can explain why some tables remain ungrouped. The control requires an available
+coding assistant and submitting it starts that request. Colleague can explain
+these steps; its navigation actions do not themselves classify tables.
+After opening an actor or **Other tables**, use **Back to data overview** in the
+header, or press **Escape**, to return. This labelled control is also available
+on mobile.
+
+Default table SELECTs use the table name without the physical database prefix
+on MySQL/MariaDB. PostgreSQL keeps its schema prefix so tables in different
+schemas remain distinct. **Reset to SELECT \*** restores the same default query.
+
 Queries and deliberate edits use Database's existing controls, unlock rules and
 confirmations. Check the exact selected database and table before changing data.
 Cancellation targets the active query; a cancellation receipt does not prove the

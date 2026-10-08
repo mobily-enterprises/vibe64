@@ -1,6 +1,7 @@
 <template>
   <section class="database-overview" tabindex="-1" @keydown.esc="closeActor">
     <header class="database-overview__toolbar" aria-label="Data overview controls">
+      <v-btn v-if="activeGroup" ref="closeButton" class="database-overview__back" :prepend-icon="mdiArrowLeft" variant="tonal" @click="closeActor">Back to data overview</v-btn>
       <div class="database-overview__title">
         <strong>{{ activeGroup ? activeGroup.name : 'Data overview' }}</strong>
         <span v-if="activeGroup">{{ actorSchema.tables.length }} tables</span>
@@ -8,6 +9,7 @@
       </div>
       <div ref="diagramControls" class="database-overview__controls">
         <template v-if="!activeGroup">
+          <v-btn v-if="graph.coverage.others.length" :disabled="!assistantAvailable" variant="tonal" @click="reviewUngrouped">Review {{ graph.coverage.others.length }} ungrouped tables</v-btn>
           <v-btn v-if="!overview.present" :disabled="!assistantAvailable" size="small" variant="tonal" @click="openGeneration">Create with AI</v-btn>
           <v-btn class="database-overview__icon-button" :icon="mdiImageFilterCenterFocus" size="small" variant="text" aria-label="Fit" title="Fit overview" @click="fit" />
           <v-menu v-model="overviewOptions" :close-on-content-click="false">
@@ -30,7 +32,6 @@
           </v-menu>
         </template>
       </div>
-      <v-btn v-if="activeGroup" ref="closeButton" class="database-overview__back database-overview__icon-button" :icon="mdiClose" aria-label="Close details" title="Back to overview" size="small" variant="text" @click="closeActor" />
     </header>
     <p v-if="overview.error" class="database-overview__warning" role="alert">{{ overview.error }} Your tables remain available under Other tables. Repair {{ DATA_OVERVIEW_PATH }} or edit the actors.</p>
     <p v-else-if="!overview.present" class="database-overview__hint">Choose the main actors with AI or Edit actors. Supporting tables can belong together across several relationships.</p>
@@ -145,7 +146,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { mdiClose, mdiImageFilterCenterFocus, mdiTuneVariant } from "@mdi/js";
+import { mdiArrowLeft, mdiImageFilterCenterFocus, mdiTuneVariant } from "@mdi/js";
 import { Handle, Position, VueFlow } from "@vue-flow/core";
 import DatabaseErd from "./DatabaseErd.vue";
 import DatabaseTableList from "./DatabaseTableList.vue";
@@ -353,6 +354,13 @@ function openGeneration() {
   generation.value = true;
 }
 function generate() { generation.value = false; emit("request-assistant", { abstraction: abstraction.value, scope: generationScope.value }); }
+function reviewUngrouped() {
+  emit("request-assistant", {
+    abstraction: props.overview.definition.abstraction || "balanced",
+    scope: "ungrouped",
+    tables: [...graph.value.coverage.others]
+  });
+}
 function openEditor() {
   overviewOptions.value = false;
   baseHash = props.overview.hash;
@@ -458,8 +466,8 @@ async function save() {
 @media (max-width: 700px) {
   .database-overview__toolbar { grid-template-columns: minmax(0, 1fr) 48px; gap: 4px 8px; }
   .database-overview__title { grid-column: 1; grid-row: 1; min-height: 48px; flex-wrap: wrap; align-content: center; gap: 0 8px; }
-  .database-overview__controls { grid-column: 1 / -1; grid-row: 2; min-height: 48px; }
-  .database-overview__back { grid-column: 2; }
+  .database-overview__controls { grid-column: 1 / -1; grid-row: 3; min-height: 48px; flex-wrap: wrap; }
+  .database-overview__back { grid-column: 1 / -1; grid-row: 2; justify-self: start; min-height: 48px; }
   .database-overview__icon-button, .database-overview__controls :deep(.database-erd__icon-button) { width: 48px; height: 48px; }
   .database-overview__detail { grid-template-columns: 140px minmax(0, 1fr); }
   .database-overview__tables { padding: 6px; }

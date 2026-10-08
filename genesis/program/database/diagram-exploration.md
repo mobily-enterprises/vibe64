@@ -31,6 +31,13 @@ requiring every table and field to be read at once.
 
 ## Public contract
 
+Overview exposes **Review N ungrouped tables** directly. It requests an exact
+review of the current Other tables membership, including previously reviewed
+tables, while preserving existing actors and manual choices. Actor details and
+Other tables have a labelled **Back to data overview** header control; Escape
+also closes them. MySQL/MariaDB default table SELECTs omit the database prefix;
+PostgreSQL retains schema qualification. Other authored SQL remains unchanged.
+
 Overview, ERD and Data selection lives in the Database URL's `databaseView` query
 parameter. An absent or invalid value selects Overview without rewriting the
 URL on mount, so initial loading cannot cancel navigation away. Manual view changes
