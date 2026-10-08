@@ -74,6 +74,7 @@ const ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF = "vibe64.repository.history.d
 // Repository, setup, renewal and project operations retain project authority.
 const learningAccess = {
   [ACTION_CREATE_SESSION]: "create",
+  [ACTION_UPDATE_CURRENT_SESSION]: "control",
   [ACTION_LIST_ASSISTANT_CAPABILITIES]: "observe",
   [ACTION_READ_CONVERSATION_CONTEXT]: "observe",
   [ACTION_LIST_SESSIONS]: "observe",

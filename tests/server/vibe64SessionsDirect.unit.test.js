@@ -4243,3 +4243,40 @@ test("a learning creation facility reauthorizes under the original preparation l
     assert.equal(f.nativeMessages.length, 0);
   });
 });
+
+test("canonical learning current-session selection and clearing retain scope without admitting new work", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await learningSessionCreationFixture(root);
+    const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
+    const { registerVibe64ActionContext } = await import("../../packages/vibe64-core/src/server/actionContext.js");
+    const actions = createActionCatalogue();
+    actions.register({ contributorId: "actual-sessions", domain: "vibe64-sessions", actions: createSessionActions({ sessions: f.service })
+      .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
+    registerVibe64ActionContext(actions, {
+      resolveUser: async () => f.actor,
+      authorizeProject: () => assert.fail("Learning selection cannot touch a working project"),
+      resolveLearningContext: input => f.learningSessions.resolveContext(input)
+    });
+    const created = await f.learningSessions.openSession({ actor: f.actor, attemptId: f.scope.attemptId });
+    assert.equal(created.ok, true, created.error);
+    const execute = (actionId, input) => actions.execute({ actionId, input: { learningAttemptId: f.scope.attemptId, ...input },
+      context: { surface: "app", channel: "internal" } });
+    const selected = await execute(ACTION_UPDATE_CURRENT_SESSION, { sessionId: created.sessionId });
+    assert.equal(selected.ok, true, selected.error);
+    assert.equal((await f.runtime.store.readCurrentSession()).sessionId, created.sessionId);
+    const missing = execute(ACTION_UPDATE_CURRENT_SESSION, { sessionId: "another-attempt-session" });
+    await assert.rejects(missing, { code: "vibe64_session_not_found" });
+    assert.equal((await f.runtime.store.readCurrentSession()).sessionId, created.sessionId);
+    f.trainingState.active = false;
+    const cleared = await execute(ACTION_UPDATE_CURRENT_SESSION, { sessionId: "" });
+    assert.equal(cleared.ok, true, cleared.error);
+    assert.equal(await f.runtime.store.readCurrentSession(), null);
+    await assert.rejects(execute(ACTION_SEND_AGENT_MESSAGE, { sessionId: created.sessionId, message: "Must not restart ended teaching" }),
+      { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+    f.trainingState.active = true;
+    await assert.rejects(execute(ACTION_INTERRUPT_AGENT_TURN, {}));
+    await assert.rejects(execute(ACTION_UPDATE_SESSION_PRESENCE, {}));
+    assert.equal(f.nativeMessages.length, 0);
+    assert.equal(f.createdInputs.length, 1);
+  });
+});

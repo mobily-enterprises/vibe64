@@ -24,7 +24,7 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
     if ((access === "write" || access === "create") && (!saved.active || !saved.activeSummaryCurrent)) {
       throw learningError("VIBE64_TRAINING_ATTEMPT_INACTIVE", "Resume this exact confirmed active lesson before admitting new work. Historical conversations remain readable.");
     }
-    if ((access === "write" || access === "control") && !sessionId) {
+    if (access === "write" && !sessionId) {
       throw learningError("VIBE64_TRAINING_SESSION_REQUIRED", "Use the exact saved learning conversation.");
     }
     const context = Object.freeze({

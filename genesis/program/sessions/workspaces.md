@@ -430,6 +430,19 @@ reads use fresh attempt observation authority and the same Session capability
 reader; they do not grant access to another person's connections. Actual host
 registration and installed/browser acceptance are separate requirements.
 
+The original Store's `paths()` supplies its existing current-session alias owner
+with `<private-learning-runtime>/sessions/selected` only for an admitted immutable
+learning scope. The original atomic relative `active/<sessionId>` symlink, read,
+conflict checks, selection validation and archive/closing clearing run unchanged.
+Ordinary source aliases retain their existing path and source requirement. This
+is new namespace composition, not a historical data repair. The canonical current
+selection action declares control access: selection/clearing retains historical
+identity without admitting work. Clearing needs no selected session ID; Stop and
+presence still require theirs through the original action schemas, while sending
+requires an exact confirmed active lesson/session. Store and canonical action
+tests cover independent working selection, foreign binding refusal, missing
+records, conflicts and lifecycle cleanup.
+
 Sources: `packages/vibe64-sessions/src/server/registerRoutes.js`,
 `packages/vibe64-sessions/src/server/actions.js`,
 `tests/server/vibe64ProjectSessionsFeatures.unit.test.js`.

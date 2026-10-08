@@ -2463,3 +2463,47 @@ test("native identity descriptor is bounded, scope-checked and distinct from sou
       { code: "vibe64_learning_session_scope_mismatch" });
   });
 });
+
+test("learning selection reuses the original alias owner inside its private runtime without changing working selection", async () => {
+  await withTemporaryRoot(async root => {
+    const learning = privateLessonStore(root);
+    const sourceRoot = path.join(root, "ordinary-source");
+    const working = createStore(root, { projectSessionSourceRoot: sourceRoot });
+    const ordinary = await working.createSession({ sessionId: "working-selected", runtimeKind: "genesis" });
+    await working.updateCurrentSession(ordinary.sessionId);
+    const lesson = await learning.createSession({ sessionId: "lesson-selected", runtimeKind: "genesis" });
+    assert.equal(await learning.readCurrentSession(), null);
+    assert.equal(learning.paths().currentSessionAliasPath, path.join(root, "private-learning", "sessions", "selected"));
+    assert.equal(await fs.lstat(learning.paths().currentSessionAliasPath).catch(error => error.code), "ENOENT");
+    await learning.updateCurrentSession(lesson.sessionId);
+    assert.equal(await fs.readlink(learning.paths().currentSessionAliasPath), path.join("active", lesson.sessionId));
+    assert.equal((await learning.readCurrentSession()).sessionId, lesson.sessionId);
+    assert.equal((await working.readCurrentSession()).sessionId, ordinary.sessionId);
+    assert.equal((await privateLessonStore(root).readCurrentSession()).sessionId, lesson.sessionId);
+    await assert.rejects(privateLessonStore(root, { ...privateLessonScope(), learnerId: "43" }).readCurrentSession(),
+      { code: "vibe64_learning_session_scope_mismatch" });
+    await assert.rejects(learning.updateCurrentSession("missing-lesson"), { code: "vibe64_session_not_found" });
+    assert.equal((await learning.readCurrentSession()).sessionId, lesson.sessionId);
+    await learning.updateCurrentSession("");
+    assert.equal(await learning.readCurrentSession(), null);
+    assert.equal((await working.readCurrentSession()).sessionId, ordinary.sessionId);
+    assert.equal(await fs.lstat(learning.paths().currentSessionAliasPath).catch(error => error.code), "ENOENT");
+  });
+});
+
+test("learning selected alias retains original conflict and lifecycle clearing safeguards", async () => {
+  await withTemporaryRoot(async root => {
+    const store = privateLessonStore(root);
+    const lesson = await store.createSession({ sessionId: "closing-selected-lesson", runtimeKind: "genesis" });
+    const alias = store.paths().currentSessionAliasPath;
+    await writeFile(alias, "do not overwrite a conflicting file\n");
+    await assert.rejects(store.updateCurrentSession(lesson.sessionId), { code: "vibe64_current_session_alias_conflict" });
+    assert.equal(await readFile(alias, "utf8"), "do not overwrite a conflicting file\n");
+    await fs.rm(alias);
+    await store.updateCurrentSession(lesson.sessionId);
+    await store.writeStatus(lesson.sessionId, "archived");
+    await store.publishSessionArchive(lesson.sessionId);
+    assert.equal(await store.readCurrentSession(), null);
+    assert.equal(await fs.lstat(alias).catch(error => error.code), "ENOENT");
+  });
+});

@@ -1142,12 +1142,16 @@ function createVibe64SessionStore({
   }
 
   function paths(sessionId = "") {
-    return resolveVibe64SessionPaths({
+    const resolved = resolveVibe64SessionPaths({
       projectContextRoot: normalizedProjectContextRoot,
       projectRuntimeRoot: normalizedStateRoot,
       projectSessionSourceRoot,
       sessionId
     });
+    return admittedLearningScope ? {
+      ...resolved,
+      currentSessionAliasPath: resolveVibe64CurrentSessionAliasPath(resolved.sessionsRoot)
+    } : resolved;
   }
 
   function renewalStateRoot() {

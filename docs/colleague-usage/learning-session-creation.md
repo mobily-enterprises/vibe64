@@ -22,6 +22,12 @@ rename the conversation and stop its own work. A lesson conversation without a
 practice project does not gain project Git, setup or repository operations. Those
 require their actual working or exercise project and its normal permissions.
 
+Selecting or clearing a supported learning conversation changes only that saved
+attempt's selection. It leaves your working project's selected conversation
+unchanged. Reopening the same attempt can recover its saved selection. Selecting
+history does not resume an ended lesson or send a message. Use the supported
+lesson start or resume operation before requesting new teaching work.
+
 These action and storage prerequisites do not yet expose a complete lesson picker
 or Main teacher in every installation. They do not establish successful question
 delivery, assessment, speech or presentation. Use the installation's supported
