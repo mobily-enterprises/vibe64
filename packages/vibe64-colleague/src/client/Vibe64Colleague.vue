@@ -1,5 +1,6 @@
 <script setup>
 import { useVibe64Voice } from "@local/vibe64-voice/client";
+import { useTrainingPresentationCue } from "@local/vibe64-training/client/presentation-cue";
 import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { useDisplay } from "vuetify";
 import { VNavigationDrawer } from "vuetify/components";
@@ -67,11 +68,7 @@ async function openVoice() {
     get label() { return props.name; },
     get state() {
       const state = projectConversationVoiceState({ turns: target.turns.value, status: target.snapshot.value?.status, interimReply: target.snapshot.value?.interimReply });
-      const cue = displayedPreview?.value?.presentation?.state.cue;
-      // Provider streams are not classified as final until their completion.
-      // Buffer this one armed explanation for speech; the transcript still streams.
-      return cue?.clientId === clientId && cue.conversationId === target.identity.conversationId && cue.phase === "armed"
-        ? { ...state, streamingReply: null } : state;
+      return presentationCue.voiceState(state, target.identity.conversationId);
     },
     get available() { return mounted && target.current.value; },
     get adapter() { return conversation.runtime.value === target ? adapter.value : null; },
@@ -92,11 +89,7 @@ async function openVoice() {
       if (mounted && conversation.runtime.value === target) voiceTranscript.value = value ? { ...value, canTake } : null;
     },
     onPlayback(event) {
-      if (voiceSession.value && event.conversationId === target.identity.conversationId) {
-        if (event.phase === "started") audibleOutput = { conversationId: event.conversationId, outputId: event.outputId };
-        else if (audibleOutput?.conversationId === event.conversationId && audibleOutput.outputId === event.outputId) audibleOutput = null;
-      }
-      displayedPreview?.value?.presentation?.playback(event);
+      presentationCue.playback(event, target.identity.conversationId);
     },
     onVisual(value) { emit("voice-visual", value); },
     onError: reportFailure
@@ -140,9 +133,6 @@ let mounted = true;
 let revision = 0;
 let navigating = null;
 let navigationReceipt = null;
-let cueReporting = null;
-let cueReported = "";
-let audibleOutput = null;
 
 function reportFailure(error) {
   const message = String(error?.message || error || "Colleague could not complete this request.");
@@ -250,40 +240,15 @@ const voiceSession = computed(() => {
     state.binding.conversationId === identity?.conversationId &&
     state.binding.id === JSON.stringify(["colleague", identity?.actorKey]) ? state.session : null;
 });
-function observePresentationCue(value) {
-  if (!mounted || !value || value.clientId !== clientId || value.conversationId !== product.value.conversationId) return false;
-  return displayedPreview?.value?.presentation?.observeCue(value, { readAloud: voiceSession.value?.readAloud?.value === true }) || false;
-}
-
-watch(() => displayedPreview?.value?.presentation?.state.cue, value => {
-  const session = voiceSession.value;
-  if (value?.phase !== "interrupted" || value.clientId !== clientId || value.audioPhase !== "started" || !session ||
-      audibleOutput?.conversationId !== value.conversationId || audibleOutput.outputId !== value.outputId ||
-      conversation.runtime.value?.identity.conversationId !== value.conversationId) return;
-  audibleOutput = null;
-  // Deliberate diagram retirement uses the existing whole-binding audio stop.
-  // A later output or mere drawer minimise never enters this identity fence.
-  session.stopSpeech();
-}, { flush: "sync" });
-
-watch(() => displayedPreview?.value?.presentation?.state.cue, async value => {
-  if (!mounted || !value || value.clientId !== clientId || value.conversationId !== product.value.conversationId ||
-      !["completed", "interrupted", "failed"].includes(value.phase)) return;
-  const receipt = JSON.stringify(value);
-  if (cueReported === receipt || cueReporting === receipt) return;
-  cueReporting = receipt;
-  const expectedActor = actorKey.value;
-  try {
-    await requestColleague("/navigation/ack", { method: "POST", body: {
-      clientId, commandId: value.navigationId, ok: true, cue: value
-    } });
-    if (mounted && expectedActor === actorKey.value) cueReported = receipt;
-  } catch {
-    if (mounted && expectedActor === actorKey.value) productError.value = "The lesson cue receipt was not confirmed. Read its current status before continuing.";
-  } finally {
-    if (cueReporting === receipt) cueReporting = null;
-  }
+const presentationCue = useTrainingPresentationCue({
+  scope: () => ({ mounted, actorKey: actorKey.value, clientId, conversationId: product.value.conversationId,
+    runtimeConversationId: conversation.runtime.value?.identity.conversationId }),
+  presentation: () => displayedPreview?.value?.presentation,
+  voiceSession,
+  acknowledge: body => requestColleague("/navigation/ack", { method: "POST", body }),
+  error: productError
 });
+function observePresentationCue(value) { return presentationCue.observe(value); }
 
 function voicePreviewActionsAllowed(messageId) {
   const transcript = voiceTranscript.value;
@@ -732,10 +697,8 @@ watch(actorKey, () => {
   product.value = { conversationId: "", error: "" };
   productError.value = "";
   pointerNotice.value = "";
-  displayedPreview?.value?.presentation?.retireCue("The signed-in learner changed.");
-  cueReported = "";
-  cueReporting = null;
-  audibleOutput = null;
+  presentationCue.retire("The signed-in learner changed.");
+  presentationCue.reset();
   navigationReceipt = null;
   navigating = null;
   voiceTranscript.value = null;
@@ -759,7 +722,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (voice?.launcher.value === launcher.value?.$el) voice.launcher.value = null;
   realtimeSocket.off("connect", refresh);
-  displayedPreview?.value?.presentation?.retireCue("Colleague left this browser view.");
+  presentationCue.retire("Colleague left this browser view.");
   if (learnerGestures?.value === nativeGestureOwner) learnerGestures.value = null;
   nativeTickets.clear();
   mounted = false;

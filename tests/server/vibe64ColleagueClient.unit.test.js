@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { registerHooks } from "node:module";
 import test from "node:test";
 import * as vue from "vue";
+import { useTrainingPresentationCue } from "../../packages/vibe64-training/src/client/useTrainingPresentationCue.js";
 import { routeLocationKey } from "vue-router";
 import * as mdi from "@mdi/js";
 import { compileScript, parse } from "@vue/compiler-sfc";
@@ -725,6 +726,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     vuetify: { useDisplay: () => display },
     "vuetify/components": { VNavigationDrawer: {} },
     "@local/vibe64-voice/client": { useVibe64Voice: () => voice },
+    "@local/vibe64-training/client/presentation-cue": { useTrainingPresentationCue },
     "@jskit-ai/assistant-voice/client": { ConversationDialog: {}, VoiceConversationControls: {}, projectConversationVoiceState,
       useVoiceLauncher: launcherModule.exports.useVoiceLauncher },
     "@jskit-ai/assistant-runtime/client": { useAssistantConversation },

@@ -18,6 +18,8 @@ reads and commands without creating a second session panel or progress owner.
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
 - `packages/vibe64-training/src/client/TrainingPreviewPresentation.vue`
+- `packages/vibe64-training/src/client/useTrainingPresentationCue.js`
+- `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `packages/vibe64-training/src/server/registerRoutes.js`
 - `packages/vibe64-training/src/server/actions.js`
@@ -121,3 +123,22 @@ assertions and command/attention fixtures. Actual compiled setup/templates prove
 L placement, exact Start intent and loaded-row selection; loading/error slot
 cases prove retained object/draft identity and active projection. Native work,
 real device geometry and teacher delivery are not proved by these fixtures.
+
+## Original cue client ownership
+
+Training now owns the exact Colleague client cue coordination through
+useTrainingPresentationCue. Colleague immediately reuses it at the same original
+voice-state, product/event, playback and actor/unmount sites. It buffers only the
+armed exact-client/conversation explanation, forwards real final/output/audio
+facts to the sole original Preview handle, stops only the still-audible matching
+retired output, and deduplicates the original terminal acknowledgement. The five
+facilities are its existing readonly scope, Preview handle, actual voice session,
+one receipt transport and product error ref. Navigation, genuine gestures,
+question capture and workspace observations remain with their original owners.
+
+This move retains Colleague compatibility while Main's canonical delivered
+question/cue and receipt transport remain absent. No selected attempt, saved
+progress or flattened Main history is promoted into those facts. Main speech
+must reuse its original voice controller with an actual Learning transport
+scope; an empty project path cannot supply that scope. Native/source-less visual
+and installed/browser/audio acceptance remain open.

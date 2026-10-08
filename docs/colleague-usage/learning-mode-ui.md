@@ -25,7 +25,11 @@ has been opened. A declared diagram can open from Lessons; hidden App controls d
 interactive. Switching these views retains the App and diagram instances
 and the lesson picker within that host. Hidden diagrams pause; returning does
 not replay their motion or count as a completed lesson. If sound is off, use the
-presentation's **Continue** only after its explanation is ready.
+presentation's **Continue** only after its explanation is ready. A supported
+narrated diagram waits for its confirmed final explanation and actual sound and
+motion completion. Hiding or stopping it does not count as completed teaching.
+If its cue receipt was not confirmed, read the current status before continuing;
+do not assume the explanation or motion succeeded.
 
 Source-less Learning conversations show Lessons, omit App and leave Presentation
 disabled until supported visual authority exists. They do not expose repository

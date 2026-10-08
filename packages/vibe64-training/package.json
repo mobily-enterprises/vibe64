@@ -26,7 +26,8 @@
     "./server/preparation": "./src/server/preparation.js",
     "./server/installed-catalogue": "./src/server/installedCatalogue.js",
     "./server/routes": "./src/server/registerRoutes.js",
-    "./server/conversation-assessment": "./src/server/conversationAssessment.js"
+    "./server/conversation-assessment": "./src/server/conversationAssessment.js",
+    "./client/presentation-cue": "./src/client/useTrainingPresentationCue.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -65,6 +66,10 @@
           {
             "subpath": "./client/lesson-picker",
             "summary": "Displays supplied installed lesson choices and saved progress, emitting explicit start or resume intent without state writes."
+          },
+          {
+            "subpath": "./client/presentation-cue",
+            "summary": "Coordinates original exact-output cue speech and terminal receipts with the existing Preview and voice owners."
           }
         ]
       }
