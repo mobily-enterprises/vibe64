@@ -115,7 +115,7 @@ function createClaudeConversationHost({
   }
 
   const cleanupApplication = {
-    readContext: contextFor,
+    readContext: context => contextFor({ ...context, allowClosing: true }),
     terminals: { close: sessionId => closeTerminalSessionsForNamespace(claudeTerminalNamespace(sessionId)) }
   };
 

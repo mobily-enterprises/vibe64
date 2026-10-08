@@ -29,6 +29,12 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+// Presentation of an admitted native descriptor is separate from source access.
+// Starting/reacquiring execution still validates the active root through Runtime.
+function nativeStateWorkdir(session) {
+  return session?.purpose === "learning" ? session.nativeExecutionRoot || "" : terminalWorktreePath(session);
+}
+
 function codexAppServerTurnState(session = {}) {
   return nativeCodexAppServerTurnState(session, normalizeVibe64AgentRunState);
 }
@@ -36,7 +42,7 @@ function codexAppServerTurnState(session = {}) {
 function codexState(session = {}, {
   codexTerminal = activeCodexTerminal(session)
 } = {}) {
-  const workdir = terminalWorktreePath(session);
+  const workdir = nativeStateWorkdir(session);
   const codexConversationId = codexConversationIdForWorkdir(session, workdir);
   const codexThreadId = normalizeCodexThreadId(codexConversationId);
   const agentIdentity = codexAgentIdentityState(session, workdir);
@@ -100,7 +106,8 @@ function createCodexConversationStorage({ projectService, runOwner }) {
       run,
       metadataEntries
     ] = await Promise.all([
-      store.readSessionSourceDescriptor(normalizedSessionId),
+      store.learningScope ? store.readSessionNativeDescriptor(normalizedSessionId)
+        : store.readSessionSourceDescriptor(normalizedSessionId),
       readCodexAppServerAgentRunForSession(store, normalizedSessionId),
       Promise.all(CODEX_STATE_METADATA_NAMES.map(async (name) => [
         name,
@@ -121,12 +128,12 @@ function createCodexConversationStorage({ projectService, runOwner }) {
     return {
       async readIdentity() {
         const current = await readCodexStateSession(sessionId);
-        return codexThreadIdForWorkdir(current, terminalWorktreePath(current));
+        return codexThreadIdForWorkdir(current, nativeStateWorkdir(current));
       },
       async read() {
         const current = await readCodexStateSession(sessionId);
         return { session: current,
-          get threadId() { return codexThreadIdForWorkdir(current, terminalWorktreePath(current)); },
+          get threadId() { return codexThreadIdForWorkdir(current, nativeStateWorkdir(current)); },
           get run() { return current.agentRuns[0] || null; },
           get nativeResult() { return { ok: true, sessionId, sessionUpdated: false, ...codexState(current) }; } };
       }

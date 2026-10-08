@@ -28,7 +28,10 @@ session and Workspace setup facilities; otherwise start/resume reports unavailab
 This subsystem owns start/resume/end/retained-pin continuation policy while hosts
 supply concrete resources and provisioning. Reserved
 no-exercise quizzes reuse these pins and answer owners without project effects;
-practical and visual operations retain their preparation gates. Teaching
+practical and visual operations retain their preparation gates. Its read-only internal learning-scope reader derives the actual learner/attempt
+and installed no-exercise pin with a private server namespace. It reports current
+and ended state without repair; runtime construction/admission stays with the
+existing session and conversation owners. Teaching
 delivery, public standalone provisioning and installation controls remain incomplete. JSKIT and
 Genesis do not own teaching semantics. Topic source
 and generated bundles are author-controlled files, rather than database tables.
@@ -89,6 +92,12 @@ through bounded settings results.
 ## `sessions` Session workspaces
 
 Owns isolated working sessions, their lifecycle and recoverable workspace history.
+The same Runtime/Store now accepts a constructor-authorized no-exercise learning
+scope and atomically retains its immutable owner/attempt/pin/conversation binding.
+It preserves the existing supported storage format, archive history and native
+state readers; it does not authorize Training content or create a parallel
+runtime. Historical learning reads cannot acquire an executable root. Main
+Learning mode creation/selection/renewal and browser adoption remain incomplete.
 Its open/archive list actions also own bounded Colleague discovery pages and
 archival timestamps; native lists and unavailable-record diagnosis retain their
 existing owner and format.

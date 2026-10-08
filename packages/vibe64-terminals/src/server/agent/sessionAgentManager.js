@@ -545,7 +545,8 @@ function createSessionAgentManager({
         return provider.projectConversationResult(method, async () => {
           const goalOperation = method === "readGoal" ? "read" : method === "updateGoal" ? "update" : "";
           const conversation = await openMainConversation(conversationRuntime,
-            context.canonicalGoal && goalOperation ? { ...context, goalOperation } : context,
+            method === "interruptTurn" ? { ...context, allowClosing: true } :
+              context.canonicalGoal && goalOperation ? { ...context, goalOperation } : context,
             request.prepareInput, context.canonicalGoal && goalOperation ? "canonical" : "native");
           return command(conversation, request);
         });

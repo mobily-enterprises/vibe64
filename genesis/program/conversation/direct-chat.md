@@ -3253,3 +3253,49 @@ The composer uses the same shared eligibility predicate; output speech is not
 an admission condition. Router's existing request-routing workload allows 8,192
 output characters, accommodating its bounded review schema including JSON
 escaping. The original lifecycle tests now use the actual shared schema validator.
+
+## Source-less learning uses the same native Main owners
+
+An authenticated host may construct the original Runtime/Store with an exact
+Training-authorized no-exercise learning scope and fresh instruction owner. The
+native context reader calls `getNativeExecutionRoot` for that exact durable active
+session; it never accepts a caller purpose flag, metadata cwd or source-path
+alias. The original Codex/Claude/OpenCode account access, conversation identity,
+message admission, ownership conflict, canonical completion and shared-process
+owners remain in charge. Ordinary workspace branches keep their existing source,
+Git actor, Genesis and managed-command rules.
+
+For that validated learning runtime only, native system instructions come from
+`getLearningInstructions`, while `renderPrompt` preserves the actual user request.
+Codex carries the trusted runtime only in its private host options, strips it
+before supplying native parameters, and validates before reading instructions.
+Claude uses the same native system-instruction boundary; OpenCode records a
+learning instruction snapshot through its existing private environment registry
+and plugin. Learning is durable Main context, never an ephemeral or Helper scope.
+No workspace Git/Env/database/Preview command wrappers are fabricated.
+
+The bounded Codex native descriptor reads original metadata/status/run files
+without transcript hydration. Its private cwd is an identity/display projection;
+execution reacquisition separately validates the active directory through Runtime.
+JSKIT's existing output-context callback is awaited before provider reuse so a
+trusted host can perform that validation; ordinary synchronous callbacks remain
+valid. Git checkpointing returns `learning_session_no_git_checkpoint` with
+`checkpoint.applicable: false` and the exact outer turn/outcome. It creates no
+Git success task or lesson pass and does not replace canonical turn completion.
+
+The original interruption caller marks only `interruptTurn` as a closing control
+before opening Main. Cleanup, observation recovery and admitted turn completion
+may validate the same active private directory with the explicit server-only
+`allowClosing: true` exception; fresh admission, readiness, prompt rendering and
+teaching instructions continue to refuse closing sessions. This exception keeps
+all exact durable actor/attempt/pin, status and directory checks. The original
+serial terminal closure still interrupts before releasing its native owner, even
+though a learning session truthfully has no source workspace. Codex cleanup
+unsubscribes by its captured private cwd/thread identity, leaving shared-account
+participants attached. Historical storage controls use the same bounded saved
+identity without admitting work, resuming a thread or recreating a directory.
+
+These native prerequisites do not establish the Main Learning launcher, lesson
+authorization, practical assessment, installed package adoption or a successful
+native/browser/device teaching trial. The host must supply the real pinned brief
+and private namespace; source operations retain their original refusal.

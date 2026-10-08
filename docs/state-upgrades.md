@@ -682,3 +682,21 @@ refuses the newer ledger. The original tests preserve profile bytes, modes,
 inodes and timestamps through check, interruption, retry and refusal; this is
 registry-version proof, not a claim of live host activation. Published scripts
 remain unchanged and the runner's normal backup/locking contract is unchanged.
+
+## New source-less learning session bindings
+
+Constructor-authorized new learning sessions can atomically write the optional
+`learning_session` metadata field through the original session staging owner.
+It retains schemaVersion1 plus the exact learner, attempt, opaque installed pin,
+no-exercise purpose and conversation identity. It contains no absolute execution
+path and cannot be changed through ordinary metadata writes. Archive summaries
+retain that same binding through their existing metadata whitelist.
+
+Working sessions without it keep their original bytes and behavior. No working
+session, old Colleague teaching record, archived transcript or reservation is
+inferred to be a learning session; no historical transformation or numbered
+repair is needed for this new explicitly admitted namespace. Reads validate,
+never create or repair, and refuse a claimed foreign or malformed scope. Future
+format changes or adoption of existing history still require the numbered
+stopped-writer upgrade procedure with script-owned backups. This prospective
+format support alone activates neither a Main launcher nor a lesson.

@@ -19,6 +19,7 @@ import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
+import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { prepareOpenCodeSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { openCodeFingerprint, recordOpenCodeSessionIdentity } from "./openCodeConversationStorage.js";
 import { normalizePlainObject as record, openCodeError, openCodeRuntimeFailure } from "./terminalShared.js";
@@ -272,7 +273,8 @@ function createOpenCodeHostPreparation({
       sessionId: context.sessionId,
       vibe64User: options.vibe64User || null
     }), context.selection.modelProviderId);
-    const projectContextRoot = path.resolve(context.runtime.projectContextRoot);
+    const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
+    const projectContextRoot = learningRoot || path.resolve(context.runtime.projectContextRoot);
     return { key: context.key, connection, failure: openCodeRuntimeFailure, async configure() {
       let helperModelId = "";
       if (!context.assistantScope && getAssistantManager()) {
@@ -294,8 +296,10 @@ function createOpenCodeHostPreparation({
         modelProviderId: context.selection.modelProviderId,
         env: commands.env,
         pathEntries: commands.shimDirs,
-        projectContextRoot: path.resolve(context.runtime.projectContextRoot),
-        promptContext: promptContext("main", context.assistantScope),
+        projectContextRoot,
+        promptContext: learningRoot ? { scope: "learning",
+          instructions: await context.runtime.getLearningInstructions(context.sessionId) }
+          : promptContext("main", context.assistantScope),
         sessionId: context.sessionId,
         upstreamSessionId: storedUpstreamSessionId(context),
         workdir: context.workdir

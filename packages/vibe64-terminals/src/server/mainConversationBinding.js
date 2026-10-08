@@ -62,6 +62,16 @@ export async function requireMainConversationAdmission(runtime, sessionId, curre
   requireCompletedConversationRewind(current.session || await runtime.getSession(sessionId, { inspectSource: false }));
 }
 
+// Only a server-constructed learning runtime can opt into a source-less cwd.
+// Its original store reader validates the exact active durable scope each time.
+export async function learningSessionExecutionRoot(runtime, sessionId, { allowClosing = false } = {}) {
+  if (!runtime?.learningScope) return "";
+  if (typeof runtime.getNativeExecutionRoot !== "function") {
+    throw new TypeError("Learning sessions require the trusted native execution root reader.");
+  }
+  return runtime.getNativeExecutionRoot(sessionId, { allowClosing });
+}
+
 // These are the original application snapshot contracts, not native acquisition.
 // Codex takes a full matching snapshot, OpenCode a bounded matching snapshot, and
 // Claude retains its captured/pinned snapshot. Native reads never move here.
@@ -104,7 +114,7 @@ export async function readSessionConversationContext(engine, projectService, ses
     if (!session) {
       throw openCodeError("vibe64_session_not_found", "Vibe64 session is not available.", { sessionId: id }, 404);
     }
-    const workdir = terminalSessionSourceRoot(session);
+    const workdir = await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) || terminalSessionSourceRoot(session);
     if (!workdir || !String(session.sessionRoot ?? "").trim() || !String(runtime.stateRoot ?? "").trim()) {
       throw openCodeError(
         "vibe64_opencode_session_roots_missing",
@@ -118,7 +128,7 @@ export async function readSessionConversationContext(engine, projectService, ses
   if (!scope && !session) throw claudeConversationError("This session is unavailable.");
   const selection = options.assistantSelection || vibe64AssistantSelectionFromMetadata(session?.metadata);
   if (selection?.engineId !== "claude") throw claudeConversationError("This session does not have a Claude Code selection.");
-  const workdir = scope?.workdir || terminalSessionSourceRoot(session);
+  const workdir = scope?.workdir || await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) || terminalSessionSourceRoot(session);
   if (!path.isAbsolute(workdir || "") || !runtime.stateRoot) throw claudeConversationError("Claude requires a prepared session workspace.");
   return { ...options, runtime, session, assistantSelection: selection, selection, sessionId: id, workdir,
     key: `${path.resolve(runtime.stateRoot)}\0${id}` };
@@ -153,15 +163,16 @@ async function prepareCodexConversationContext(sessionId, runtime, session, allo
       ok: false
     };
   }
-  const executionRoot = terminalSessionSourceRoot(session);
+  const learningRoot = await learningSessionExecutionRoot(runtime, sessionId, { allowClosing });
+  const executionRoot = learningRoot || terminalSessionSourceRoot(session);
   if (!executionRoot) {
     return retryableTerminalFailure({
       ok: false,
       error: "Vibe64 Codex execution root is not available."
     });
   }
-  const workdir = terminalWorktreePath(session);
-  if (codexSessionWorktreeWasRemoved(session)) {
+  const workdir = learningRoot || terminalWorktreePath(session);
+  if (!learningRoot && codexSessionWorktreeWasRemoved(session)) {
     return codexHost.unavailableWorktree(
       runtime,
       sessionId,
@@ -171,7 +182,7 @@ async function prepareCodexConversationContext(sessionId, runtime, session, allo
       })
     );
   }
-  if (!codexSessionWorkdirAllowed({
+  if (!learningRoot && !codexSessionWorkdirAllowed({
     session,
     executionRoot,
     workdir
@@ -184,6 +195,11 @@ async function prepareCodexConversationContext(sessionId, runtime, session, allo
     });
   }
   if (!await directoryExists(workdir)) {
+    if (learningRoot) {
+      throw Object.assign(new Error("The learning native execution directory is unavailable."), {
+        code: "vibe64_learning_native_directory_unavailable"
+      });
+    }
     return codexHost.unavailableWorktree(
       runtime,
       sessionId,
@@ -389,6 +405,10 @@ function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
     threadPreparation: nativePreparation.threadPreparation,
     async prepareMessage(input, prepared, { starting, selected }) {
       const { runtime, executionRoot, workdir, messageId, actorContext: vibe64User } = prepared;
+      const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
+      if (learningRoot && (executionRoot !== learningRoot || workdir !== learningRoot)) {
+        throw new Error("Learning message preparation belongs to a different native execution root.");
+      }
       if (!starting) {
         const { turnOwnership } = prepared;
         const { session: currentSession, threadId, turnId } = selected;
@@ -410,6 +430,7 @@ function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
             turnId
           }, session: currentSession };
         }
+        if (learningRoot) return null;
         let actorMetadata = ownershipMatchesTurn && turnOwnership.reusable === true
           ? sessionGitCommandActorFromMetadata(currentSession)
           : null;
@@ -447,7 +468,7 @@ function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
       }
       const { agentSettings, preparedSession, thread, userRequest } = prepared;
       let stageStartedAt = Date.now();
-      const actorResult = await recordSessionGitCommandActor({
+      const actorResult = learningRoot ? null : await recordSessionGitCommandActor({
         env,
         overwrite: true,
         reason: "codex-prompt",
@@ -559,7 +580,8 @@ export function createClaudeConversationMessagePolicy({ env, recordGitActor, pub
   const text = value => String(value ?? "").trim();
   async function prepareMessage(entry, input, { context: ctx, message, steering, renewal }) {
     if (entry.profile && message.length > entry.profile.limits.maxInputCharacters) throw error("Claude helper input exceeded its limit.");
-    if (!ctx.assistantScope && !entry.profile) {
+    const learningRoot = await learningSessionExecutionRoot(ctx.runtime, ctx.sessionId);
+    if (!ctx.assistantScope && !entry.profile && !learningRoot) {
       const actor = await recordGitActor({ env, overwrite: !steering, reason: "agent-message", runtime: ctx.runtime,
         session: ctx.session, sourceRoot: ctx.workdir, threadId: entry.id, vibe64User: ctx.vibe64User, workdir: ctx.workdir });
       if (actor?.ok === false) throw error(actor.error, actor.code);
@@ -722,7 +744,8 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
         writeRun: prepared.application.writeRun,
         monitor: prepared.application.monitor,
         async prepare({ overwrite, threadId }) {
-          const actor = await recordGitActor({
+          const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
+          const actor = learningRoot ? null : await recordGitActor({
             env,
             overwrite,
             reason: "agent-message",

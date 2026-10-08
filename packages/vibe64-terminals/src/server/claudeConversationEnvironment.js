@@ -6,6 +6,7 @@ import { claudeFlagSettings } from "./claudeCodeProcess.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { claudeConversationError as error, claudeTerminalNamespace } from "./terminalShared.js";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
+import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import {
   closeTerminalSession, readTerminalSession, resizeTerminalSession,
   subscribeTerminalSession, writeTerminalSessionText
@@ -33,6 +34,7 @@ function createClaudeConversationEnvironment({
   }
 
   async function sessionGuidanceEnvironment(entry) {
+    if (await learningSessionExecutionRoot(entry.context.runtime, entry.context.sessionId)) return {};
     const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
     const registry = await vibe64HostContextRegistry(runtimeRoot);
     await registry.register(entry.id, sessionGuidance(entry), entry.context.workdir);
@@ -40,6 +42,9 @@ function createClaudeConversationEnvironment({
   }
 
   async function prepareSessionEnvironment(context) {
+    if (await learningSessionExecutionRoot(context.runtime, context.sessionId)) {
+      return { env: {}, shimDirs: [] };
+    }
     const prepared = await prepareCommandEnvironment({
       env, gitCommand: codexGitCommand,
       agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
@@ -64,8 +69,10 @@ function createClaudeConversationEnvironment({
     const flagSettings = claudeFlagSettings({ toolFree: Boolean(profile || entry.context.assistantScope),
       effort: profile ? profile.thinking : selection.variantId, providerEnv: configuration.env });
     const identity = JSON.stringify([selection, profile, input.outputSchema, entry.accountIdentity]);
+    const learningRoot = await learningSessionExecutionRoot(entry.context.runtime, entry.context.sessionId);
     const systemPrompt = entry.context.assistantScope?.stableContext || (profile
       ? "Complete only the supplied task."
+      : learningRoot ? await entry.context.runtime.getLearningInstructions(entry.context.sessionId)
       : await vibe64ConversationInstructions({ workdir: entry.context.workdir, promptContext: sessionGuidance(entry) }));
     return {
       systemPrompt, contextIdentity: identity, settings: flagSettings, model: configuration.model,
@@ -87,7 +94,7 @@ function createClaudeConversationEnvironment({
     const guidanceEnvironment = !profile && !ctx.assistantScope ? await sessionGuidanceEnvironment(entry) : {};
     return { command, commandRunner, stopExecution, credentialHome,
       env: { ...env, ...prepared.env, ...guidanceEnvironment },
-      shimDirs: !profile && !ctx.assistantScope ? withGenesisCommandShim(prepared.shimDirs) : prepared.shimDirs,
+      shimDirs: !profile && !ctx.assistantScope && !ctx.runtime?.learningScope ? withGenesisCommandShim(prepared.shimDirs) : prepared.shimDirs,
       model: external ? "" : model,
       effort: profile ? profile.thinking : selection.variantId,
       toolFree: Boolean(profile || ctx.assistantScope), outputSchema,

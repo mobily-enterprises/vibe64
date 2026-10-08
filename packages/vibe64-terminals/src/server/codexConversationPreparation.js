@@ -7,7 +7,7 @@ import {
   codexAppServerThreadPreparationForSession, codexAppServerThreadSettings
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import {
-  createMainConversationBinding, readSessionConversationContext, sessionBriefingIsDelivered
+  createMainConversationBinding, readSessionConversationContext, sessionBriefingIsDelivered, learningSessionExecutionRoot
 } from "./mainConversationBinding.js";
 import { codexAppServerAdmissionError, codexAppServerFrozenTurnInterruptResponse } from "./codexSessionProviderHost.js";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
@@ -48,7 +48,7 @@ function createCodexConversationPreparation({
   const { codexAppServerProviderKey } = runtimeHost;
   const {
     createRuntimeForSession, codexAppServerManagedThreadIdentity,
-    codexAppServerRuntimeOptionsForSession
+    codexAppServerRuntimeOptionsForSession, codexAppServerControlRuntimeOptionsForSession
   } = sessionRuntimeHost;
   const { codexToolHomeResult, codexReconnectTerminalFailureForError } = accountPreparation;
   const {
@@ -99,13 +99,14 @@ function createCodexConversationPreparation({
 
   async function withCodexAppServerObservationRecovery(runtime, session, operation) {
     const sessionId = session.sessionId;
+    const learningRoot = await learningSessionExecutionRoot(runtime, sessionId, { allowClosing: true });
     const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, () => {
       return operation(sessionId, {
         store: runtime.store,
         getSession: id => runtime.getSession(id, { inspectSource: false })
       }, session, {
-        threadId: current => codexThreadIdForWorkdir(current, terminalWorktreePath(current)),
-        providerOptions: current => codexAppServerRuntimeOptionsForSession(current, { runtime })
+        threadId: current => codexThreadIdForWorkdir(current, learningRoot || terminalWorktreePath(current)),
+        providerOptions: current => codexAppServerControlRuntimeOptionsForSession(current, { runtime })
       });
     }, { operation: "recover-codex-observation", waitMs: 10_000 });
     return exclusive.acquired ? exclusive.value : session;
@@ -124,10 +125,11 @@ function createCodexConversationPreparation({
     }
     const runtime = await createRuntimeForSession();
     const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
     return {
       session,
       get connection() {
-        const workdir = terminalWorktreePath(session);
+        const workdir = learningRoot || terminalWorktreePath(session);
         const threadId = codexThreadIdForWorkdir(session, workdir);
         return {
           workdir, threadId,
@@ -362,7 +364,7 @@ function createCodexConversationPreparation({
         executionRoot,
         workdir
       }),
-      providerOptions: currentSession => codexAppServerRuntimeOptionsForSession(currentSession, {
+      providerOptions: currentSession => codexAppServerControlRuntimeOptionsForSession(currentSession, {
         runtime,
         executionRoot,
         toolHomeSource,

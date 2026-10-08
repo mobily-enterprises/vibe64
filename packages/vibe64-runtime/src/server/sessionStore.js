@@ -8,6 +8,7 @@ import {
 } from "@jskit-ai/assistant-core/server/conversation";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { parseIntegrationSetupRequest } from "../shared/integrationSetupRequest.js";
 import { defineVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "../shared/assistantSelection.js";
 import { copyFile, cp, lstat, mkdir, open, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
@@ -40,6 +41,7 @@ import {
 const VIBE64_SESSION_SCHEMA_VERSION = 2;
 const VIBE64_SESSION_ARCHIVE_SCHEMA_VERSION = 2;
 const SESSION_LABEL_METADATA = "label";
+const LEARNING_SESSION_METADATA = "learning_session";
 const SESSION_LABEL_MAX_LENGTH = 120;
 const VIBE64_SESSION_STATUS = deepFreeze({
   ACTIVE: "active",
@@ -67,6 +69,7 @@ const SESSION_ARCHIVE_KIND = "vibe64.session_archive";
 const RENEWAL_ARCHIVE_SELECTION_METADATA = "renewal_selected_before_archive";
 const RENEWAL_ARCHIVE_SELECTION_NONE = "none";
 const SESSION_ARCHIVE_INDEX_METADATA_NAMES = Object.freeze([
+  LEARNING_SESSION_METADATA,
   "repository_branch",
   "github_pull_request",
   "base_branch",
@@ -1067,9 +1070,44 @@ function conversationTurnRoot(sessionPaths, turnId) {
   return path.join(sessionPaths.conversationLogRoot, normalizedTurnId);
 }
 
+// The composing server authorizes the installed pin and its no-exercise descriptor.
+// This constructor contract validates identity and preserves that opaque exact pin;
+// it grants no Training/content authority and never accepts a browser purpose flag.
+function validateLearningSessionScope(value) {
+  if (value === undefined || value === null) return null;
+  const invalid = () => vibe64Error("Learning sessions require an authorized learner, exact attempt/pin and no-exercise scope.",
+    "vibe64_learning_scope_invalid");
+  if (!isPlainObject(value) || Object.keys(value).some(name => !["learnerId", "attemptId", "pin", "noExercise"].includes(name)) ||
+      typeof value.learnerId !== "string" || !value.learnerId || value.learnerId.trim() !== value.learnerId ||
+      // eslint-disable-next-line no-control-regex -- Match the existing authenticated learner identity contract.
+      Buffer.byteLength(value.learnerId) > 128 || /[\u0000-\u001f\u007f]/u.test(value.learnerId) ||
+      typeof value.attemptId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value.attemptId) ||
+      value.noExercise !== true || !isPlainObject(value.pin) ||
+      !["course", "topic", "lesson"].every(name => isPlainObject(value.pin[name]))) throw invalid();
+  let bytes, pin;
+  try { bytes = JSON.stringify(value.pin); pin = JSON.parse(bytes); } catch { throw invalid(); }
+  if (Buffer.byteLength(bytes) > 4096 || !isDeepStrictEqual(pin, value.pin)) throw invalid();
+  return deepFreeze({ learnerId: value.learnerId, attemptId: value.attemptId, pin, noExercise: true });
+}
+
+function learningSessionBinding(metadata, learningScope, sessionId) {
+  const raw = metadata?.[LEARNING_SESSION_METADATA];
+  if (!learningScope && raw === undefined) return null;
+  const expected = learningScope && { schemaVersion: 1, ...learningScope, conversationId: sessionId };
+  let binding;
+  try { binding = JSON.parse(raw); } catch { /* Refuse missing or malformed claimed purpose. */ }
+  if (!expected || !isDeepStrictEqual(binding, expected) ||
+      SESSION_SOURCE_DESCRIPTOR_METADATA_NAMES.some(name => Object.hasOwn(metadata, name))) {
+    throw vibe64Error("This learning session does not match its admitted owner, attempt, pin or source-less purpose.",
+      "vibe64_learning_session_scope_mismatch");
+  }
+  return binding;
+}
+
 function createVibe64SessionStore({
   clock = undefined,
   logger = null,
+  learningScope = null,
   onRenewalArchiveCommitStep = null,
   onRenewalQuiesceStep = null,
   projectContextRoot = process.cwd(),
@@ -1077,6 +1115,10 @@ function createVibe64SessionStore({
   projectSessionSourceRoot = "",
   sessionLockProcessPlatform = process.platform
 } = {}) {
+  const admittedLearningScope = validateLearningSessionScope(learningScope);
+  if (admittedLearningScope && projectSessionSourceRoot) {
+    throw vibe64Error("A source-less learning runtime cannot use a project session source root.", "vibe64_learning_scope_invalid");
+  }
   const normalizedProjectContextRoot = normalizeTargetRoot(projectContextRoot);
   const resolvedProjectRuntimeRoot = String(projectRuntimeRoot || "").trim();
   if (!resolvedProjectRuntimeRoot) {
@@ -1596,15 +1638,25 @@ function createVibe64SessionStore({
     };
   }
 
+  async function assertStoredLearningScope(sessionPaths) {
+    if (admittedLearningScope || await pathExists(metadataFilePath(sessionPaths, LEARNING_SESSION_METADATA))) {
+      await readMetadataFromPaths(sessionPaths);
+    }
+  }
+
   async function withReadableSessionPathsForRenewal(sessionId, operation) {
+    const read = async (sessionPaths, archiveRecord) => {
+      await assertStoredLearningScope(sessionPaths);
+      return operation(sessionPaths, archiveRecord);
+    };
     const activePaths = paths(sessionId);
-    const unarchivedRead = await readUnarchivedSessionIfPresent(sessionId, operation);
+    const unarchivedRead = await readUnarchivedSessionIfPresent(sessionId, read);
     if (unarchivedRead.found) {
       return unarchivedRead.value;
     }
     const publishedArchive = await readSessionArchiveRecord(sessionId);
     if (publishedArchive) {
-      return withExtractedSessionArchive(publishedArchive, operation);
+      return withExtractedSessionArchive(publishedArchive, read);
     }
     throw vibe64Error(`Unknown vibe64 session: ${activePaths.sessionId}`, "vibe64_session_not_found");
   }
@@ -1895,6 +1947,7 @@ function createVibe64SessionStore({
         // Resolve the active tree only after acquiring the stable session lock.
         // A close operation may have detached it while this writer was queued.
         const sessionPaths = await ensureActiveSessionRoot(requestedPaths.sessionId);
+        await assertStoredLearningScope(sessionPaths);
         const lease = createSessionOperationLease();
         const participant = beginSessionOperation(lease);
         let result;
@@ -2061,13 +2114,22 @@ function createVibe64SessionStore({
     return normalizeText(await readTextIfExists(sessionPaths.statusPath)) || VIBE64_SESSION_STATUS.ACTIVE;
   }
 
+  function assertMutableMetadataName(name) {
+    if (name === LEARNING_SESSION_METADATA || admittedLearningScope && SESSION_SOURCE_DESCRIPTOR_METADATA_NAMES.includes(name)) {
+      throw vibe64Error("Learning purpose and its source-less binding are immutable; start a separately admitted session.",
+        "vibe64_learning_session_binding_immutable");
+    }
+  }
+
   async function writeMetadataValue(sessionId, name, value) {
+    assertMutableMetadataName(name);
     return mutateSession(sessionId, async (sessionPaths) => {
       await writeTextFile(metadataFilePath(sessionPaths, name), `${normalizeText(value)}\n`);
     });
   }
 
   async function writeMetadataValueForRenewal(sessionId, name, value) {
+    assertMutableMetadataName(name);
     return mutateSessionForRenewal(sessionId, async (sessionPaths) => {
       await writeTextFile(metadataFilePath(sessionPaths, name), `${normalizeText(value)}\n`);
     });
@@ -2096,6 +2158,7 @@ function createVibe64SessionStore({
   }
 
   async function deleteMetadataValue(sessionId, name) {
+    assertMutableMetadataName(name);
     return mutateSession(sessionId, async (sessionPaths) => {
       await rm(metadataFilePath(sessionPaths, name), {
         force: true
@@ -2124,11 +2187,33 @@ function createVibe64SessionStore({
         ];
       })
     );
-    return Object.fromEntries(metadataEntries);
+    const metadata = Object.fromEntries(metadataEntries);
+    learningSessionBinding(metadata, admittedLearningScope, sessionPaths.sessionId);
+    return metadata;
+  }
+
+  async function readSessionNativeDescriptor(sessionId) {
+    if (!admittedLearningScope) return readSessionSourceDescriptor(sessionId);
+    return withReadableSessionPaths(sessionId, async (sessionPaths, archiveRecord) => {
+      const metadata = await readMetadataFromPaths(sessionPaths);
+      const learning = learningSessionBinding(metadata, admittedLearningScope, sessionPaths.sessionId);
+      const status = await readStatusFromPaths(sessionPaths);
+      return {
+        metadata: Object.fromEntries(SESSION_SOURCE_DESCRIPTOR_METADATA_NAMES.map(name => [name, ""])),
+        projectContextRoot: sessionPaths.projectContextRoot,
+        sessionId: sessionPaths.sessionId,
+        sessionRoot: archiveRecord ? "" : sessionPaths.sessionRoot,
+        purpose: "learning", learning, status, archived: Boolean(archiveRecord) || status === VIBE64_SESSION_STATUS.ARCHIVED,
+        // Identity display retains the original namespace, even after archival.
+        // Execution permission and directory proof belong to Runtime's getter.
+        nativeExecutionRoot: path.join(paths(sessionId).sessionRoot, "native")
+      };
+    });
   }
 
   async function readSessionSourceDescriptor(sessionId) {
     return withReadableSessionPaths(sessionId, async (sessionPaths) => {
+      if (admittedLearningScope) await readMetadataFromPaths(sessionPaths);
       const metadataEntries = await Promise.all(
         SESSION_SOURCE_DESCRIPTOR_METADATA_NAMES.map(async (name) => [
           name,
@@ -2902,7 +2987,9 @@ function createVibe64SessionStore({
     }
     const publishedArchive = await readSessionArchiveRecord(sessionId);
     if (publishedArchive) {
-      return sessionArchiveSummary(publishedArchive);
+      const summary = sessionArchiveSummary(publishedArchive);
+      learningSessionBinding(summary.metadata, admittedLearningScope, summary.sessionId);
+      return summary;
     }
     throw vibe64Error(`Unknown vibe64 session: ${activePaths.sessionId}`, "vibe64_session_not_found");
   }
@@ -4056,6 +4143,11 @@ function createVibe64SessionStore({
     sessionId = "",
     status = VIBE64_SESSION_STATUS.ACTIVE
   } = {}) {
+    if (Object.hasOwn(metadata, LEARNING_SESSION_METADATA) ||
+        admittedLearningScope && SESSION_SOURCE_DESCRIPTOR_METADATA_NAMES.some(name => Object.hasOwn(metadata, name))) {
+      throw vibe64Error("Learning purpose is supplied only by the authorized runtime constructor, not creation metadata.",
+        "vibe64_learning_scope_invalid");
+    }
     const normalizedMetadata = Object.fromEntries(
       Object.entries(metadata).map(([name, value]) => [assertSafeMetadataName(name), normalizeText(value)])
     );
@@ -4069,6 +4161,11 @@ function createVibe64SessionStore({
       ? assertValidVibe64SessionId(sessionId)
       : await createAvailableSessionId(rootPaths, createdAt);
     const sessionPaths = paths(resolvedSessionId);
+    if (admittedLearningScope) {
+      normalizedMetadata[LEARNING_SESSION_METADATA] = JSON.stringify({
+        schemaVersion: 1, ...admittedLearningScope, conversationId: resolvedSessionId
+      });
+    }
     return enqueueSessionMutation(sessionPaths.sessionRoot, async () => {
       const release = await acquireStoreSessionLock(sessionPaths, "create", {
         waitMs: SESSION_MUTATION_LOCK_WAIT_MS
@@ -4091,6 +4188,7 @@ function createVibe64SessionStore({
           throw vibe64Error(`Vibe64 session already exists: ${resolvedSessionId}`, "vibe64_session_exists");
         }
         await mkdir(stagedSessionRoot, { recursive: true });
+        if (admittedLearningScope) await mkdir(path.join(stagedSessionRoot, "native"), { mode: 0o700 });
         await Promise.all([
           mkdir(stagedPaths.dropZoneRoot, { recursive: true }),
           mkdir(stagedPaths.agentRunsRoot, {
@@ -4885,7 +4983,11 @@ function createVibe64SessionStore({
     )));
     return [
       ...unarchivedSummaries,
-      ...archivedRecords.map(sessionArchiveSummary)
+      ...archivedRecords.map(record => {
+        const summary = sessionArchiveSummary(record);
+        learningSessionBinding(summary.metadata, admittedLearningScope, summary.sessionId);
+        return summary;
+      })
     ].sort((left, right) => normalizeText(left.sessionId).localeCompare(normalizeText(right.sessionId)));
   }
 
@@ -5214,6 +5316,7 @@ function createVibe64SessionStore({
     readSessionForRenewal,
     readSessionRenewalStateRecord,
     readSessionSourceDescriptor,
+    readSessionNativeDescriptor,
     readSessionSummary,
     readStatus,
     readStatusForRenewal,
@@ -5225,6 +5328,7 @@ function createVibe64SessionStore({
     restoreSessionAfterRenewalCancellation,
     runSessionExclusive,
     runSessionExclusiveForRenewal,
+    learningScope: admittedLearningScope,
     runSessionRenewalStateExclusive,
     runSessionRenewalWorkflowExclusive,
     updateCurrentSession,
@@ -5262,6 +5366,8 @@ export {
   conversationMessageIdentity,
   conversationMessageVersion,
   createVibe64SessionStore,
+  learningSessionBinding,
+  validateLearningSessionScope,
   isValidVibe64SessionId,
   normalizeVibe64AgentRunState,
   resolveVibe64SessionPaths,

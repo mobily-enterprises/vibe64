@@ -4,6 +4,7 @@ import { prepareAgentSessionCommandEnvironment } from "./agentCommandEnvironment
 import { VIBE64_CODEX_ATTACHMENTS_ROOT_ENV } from "./codexAttachments.js";
 import { errorMessage } from "./codexStartupHealth.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
+import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import {
   CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE,
   codexSessionWorktreeUnavailableFailure,
@@ -66,6 +67,7 @@ function createCodexSessionEnvironment({
     session = {},
     sessionId = ""
   } = {}) {
+    if (await learningSessionExecutionRoot(runtime, sessionId)) return {};
     if (!codexGitCommand || !normalizeText(sessionId)) {
       return {};
     }
@@ -96,6 +98,7 @@ function createCodexSessionEnvironment({
   } = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     const runOperation = async (currentSession = session) => {
+      await learningSessionExecutionRoot(runtime, normalizedSessionId);
       if (codexSessionWorktreeIsUnavailable(currentSession)) {
         const failure = codexSessionWorktreeUnavailableFailure({
           session: currentSession,
@@ -131,6 +134,7 @@ function createCodexSessionEnvironment({
     target = "codex"
   } = {}) {
     const terminalEnvForSession = async (currentSession = session) => {
+      if (await learningSessionExecutionRoot(runtime, sessionId)) return {};
       const projectEnvStartedAt = Date.now();
       const projectEnvPromise = loadProjectExecutionEnv({
         prepare: true,

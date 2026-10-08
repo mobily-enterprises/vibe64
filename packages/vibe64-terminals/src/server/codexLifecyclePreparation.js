@@ -8,6 +8,7 @@ import { codexThreadIdForWorkdir, withCodexState } from "./codexConversationStor
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
 import { renewalCleanupContext, renewalArchivedPredecessorContext } from "./sessionRenewalHandover.js";
 import { codexTerminalNamespace, terminalSessionSourceRoot, terminalWorktreePath } from "./terminalShared.js";
+import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -32,7 +33,7 @@ function createCodexLifecyclePreparation({
   conversationPreparation, helperPreparation, health, runtimeLifecycle, renewalSessionClosures, enabled
 }) {
   const { codexAppServerRuntimeOptionsFromSessionMetadata, codexAppServerPersistedRuntimeHost } = runtimeHost;
-  const { createRuntimeForSession, codexAppServerRuntimeOptionsForSession,
+  const { createRuntimeForSession, codexAppServerRuntimeOptionsForSession, codexAppServerStorageRuntimeOptionsForSession,
     codexAppServerManagedThreadIdentity, sessionHasCodexAppServerRuntime } = sessionRuntimeHost;
   const { codexAttachmentEnv } = sessionEnvironment;
   const { codexAppServerSessionProviderContext } = providerHost;
@@ -51,8 +52,10 @@ function createCodexLifecyclePreparation({
     const selectedSession = { ...session, metadata: { ...session.metadata,
       codex_routing_home_provider: binding.modelProviderId } };
     // Control requests neither resume native work nor require archived source.
-    const providerOptions = await codexAppServerRuntimeOptionsForSession(selectedSession, {
-      runtime, terminalEnv: {}, workdir: runtime.projectContextRoot, executionRoot: runtime.projectContextRoot
+    const providerOptions = await codexAppServerStorageRuntimeOptionsForSession(selectedSession, {
+      runtime, terminalEnv: {}, ...(!runtime.learningScope ? {
+        workdir: runtime.projectContextRoot, executionRoot: runtime.projectContextRoot
+      } : {})
     });
     providerOptions.routingModelProviderId = binding.modelProviderId;
     return { providerContext: codexAppServerSessionProviderContext(normalizeText(sessionId), providerOptions),
@@ -67,7 +70,12 @@ function createCodexLifecyclePreparation({
     const runtime = providedRuntime || await createRuntimeForSession();
     const session = providedSession || await runtime.getSession(normalizedSessionId);
     const providerOptions = providedProviderOptions ?? codexAppServerRuntimeOptionsFromSessionMetadata(session);
-    const workdir = terminalWorktreePath(session);
+    const workdir = runtime.learningScope
+      ? (await runtime.store.readSessionNativeDescriptor(normalizedSessionId)).nativeExecutionRoot
+      : terminalWorktreePath(session);
+    if (runtime.learningScope && !session.archived) {
+      await learningSessionExecutionRoot(runtime, normalizedSessionId, { allowClosing: true });
+    }
     const threadId = codexThreadIdForWorkdir(session, workdir);
     return { providerOptions, workdir, threadId };
   }
@@ -147,6 +155,12 @@ function createCodexLifecyclePreparation({
       async read() {
         const runtime = renewalCleanup?.runtime || await createRuntimeForSession();
         const session = renewalCleanup?.session || await runtime.getSession(normalizedSessionId);
+        const workdir = runtime.learningScope
+          ? (await runtime.store.readSessionNativeDescriptor(normalizedSessionId)).nativeExecutionRoot
+          : terminalWorktreePath(session);
+        if (runtime.learningScope && !session.archived) {
+          await learningSessionExecutionRoot(runtime, normalizedSessionId, { allowClosing: true });
+        }
         let providerOptions = null;
         return {
           get helpers() { return prepareCodexAppServerHelperRestoration({ runtime, session }); },
@@ -157,10 +171,9 @@ function createCodexLifecyclePreparation({
               get exists() { return Boolean(session); },
               get providerOptions() { return providerOptions; },
               set providerOptions(value) { providerOptions = value; },
-              get threadId() { return codexThreadIdForWorkdir(session, terminalWorktreePath(session)); },
+              get threadId() { return codexThreadIdForWorkdir(session, workdir); },
               get unsubscribeParameters() {
                 const resolvedOptions = providerOptions ?? codexAppServerRuntimeOptionsFromSessionMetadata(session);
-                const workdir = terminalWorktreePath(session);
                 const threadId = codexThreadIdForWorkdir(session, workdir);
                 return { providerOptions: resolvedOptions, workdir, threadId };
               },

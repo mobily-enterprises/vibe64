@@ -861,3 +861,149 @@ test("PR context reaches the opening prompt and survives session renewal", async
     assert.equal(successor.metadata.github_pull_request, pr);
   });
 });
+
+
+const sourceLessLessonScope = () => ({ learnerId: "42", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", noExercise: true,
+  pin: { course: { courseId: "first-course", release: "0.1.0" },
+    topic: { schemaVersion: 1, topicId: "getting-started", release: "0.1.0", repository: "vibe64/learn-getting-started",
+      commit: "a".repeat(40), topicHash: "b".repeat(64) }, lesson: { code: "V64-START-00", hash: "c".repeat(64) } } });
+
+function sourceLessLessonRuntime(root, options = {}) {
+  return new Vibe64SessionRuntime({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "learning-runtime"),
+    learningScope: sourceLessLessonScope(), ...options });
+}
+
+test("authorized source-less learning session retains original store identity across restart without creating project source", async () => {
+  await withTemporaryRoot(async root => {
+    const runtime = sourceLessLessonRuntime(root);
+    const scope = sourceLessLessonScope();
+    const created = await runtime.createSession({ sessionId: "lesson-zero", metadata: { label: "First lesson" } });
+    assert.equal(created.purpose, "learning");
+    assert.deepEqual(created.companion, { id: "learning", label: "Learning" });
+    assert.deepEqual(created.learning, { schemaVersion: 1, ...scope, conversationId: "lesson-zero" });
+    assert.equal(created.sourceReady, false);
+    assert.equal(created.sourcePath, "");
+    assert.equal(created.sourceInspection, null);
+    assert.equal(created.manifest.schemaVersion, 2, "The original session format is retained");
+    assert.equal(created.nativeExecutionRoot, path.join(runtime.store.paths("lesson-zero").sessionRoot, "native"));
+    assert.equal(await runtime.getNativeExecutionRoot("lesson-zero"), created.nativeExecutionRoot);
+    assert.deepEqual((await runtime.listSessions()).map(value => value.sessionId), ["lesson-zero"]);
+    assert.equal((await runtime.listSessionSummaries())[0].purpose, "learning");
+    await assert.rejects(() => access(path.join(created.sessionRoot, "source")), { code: "ENOENT" });
+    const before = await runtime.store.readSession("lesson-zero");
+    const restarted = sourceLessLessonRuntime(root);
+    assert.deepEqual(await restarted.store.readSession("lesson-zero"), before);
+    assert.deepEqual(await restarted.getSession("lesson-zero"), created);
+    assert.deepEqual(await restarted.store.readSessionSourceDescriptor("lesson-zero"), {
+      metadata: Object.fromEntries(["base_commit", "canonical_commit", "repository_mode", "source", "source_kind", "source_path", "source_path_authority", "source_removed"].map(name => [name, ""])),
+      projectContextRoot: root, sessionId: "lesson-zero", sessionRoot: created.sessionRoot
+    });
+    assert.deepEqual(await restarted.renderPrompt("lesson-zero", { request: "Teach me" }), { prompt: "Teach me" });
+    await assert.rejects(() => restarted.getLearningInstructions("lesson-zero"), { code: "vibe64_learning_instructions_unavailable" });
+  });
+});
+
+test("learning construction cannot be enabled by caller metadata or source provisioning flags", async () => {
+  await withTemporaryRoot(async root => {
+    const working = new Vibe64SessionRuntime({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root) });
+    await assert.rejects(() => working.createSession({ sessionId: "caller-purpose", metadata: { purpose: "learning" } }),
+      { code: "vibe64_session_source_creator_required" });
+    const learning = sourceLessLessonRuntime(root);
+    await assert.rejects(() => learning.createSession({ sessionId: "forged-binding", metadata: { learning_session: "{}" } }),
+      { code: "vibe64_learning_scope_invalid" });
+    assert.throws(() => sourceLessLessonRuntime(root, { createSessionSource: async () => assert.fail("No source creation") }),
+      { code: "vibe64_learning_scope_invalid" });
+    assert.throws(() => sourceLessLessonRuntime(root, { projectSessionSourceRoot: managedSessionSourceRoot(root) }),
+      { code: "vibe64_learning_scope_invalid" });
+    assert.throws(() => sourceLessLessonRuntime(root, { store: working.store }), { code: "vibe64_learning_scope_invalid" });
+    for (const patch of [{ noExercise: false }, { learnerId: "" }, { attemptId: "another" }, { mode: "learning" }, { pin: {} }]) {
+      assert.throws(() => sourceLessLessonRuntime(root, { learningScope: { ...sourceLessLessonScope(), ...patch } }),
+        { code: "vibe64_learning_scope_invalid" });
+    }
+  });
+});
+
+test("missing or aliased learning native directory fails execution and passive reads never recreate it", async () => {
+  await withTemporaryRoot(async root => {
+    const { rm, symlink } = await import("node:fs/promises");
+    const runtime = sourceLessLessonRuntime(root);
+    const created = await runtime.createSession({ sessionId: "missing-learning-cwd" });
+    const before = await runtime.store.readSession(created.sessionId);
+    await rm(created.nativeExecutionRoot, { recursive: true });
+    assert.equal((await runtime.getSession(created.sessionId)).sourceReady, false);
+    const summaries = await runtime.listSessionSummaries({ includeUnavailable: true });
+    assert.equal(summaries[0].unavailable.code, "vibe64_learning_native_directory_unavailable");
+    assert.deepEqual(await runtime.listSessions(), []);
+    await assert.rejects(() => runtime.getNativeExecutionRoot(created.sessionId), { code: "vibe64_learning_native_directory_unavailable" });
+    await assert.rejects(() => access(created.nativeExecutionRoot), { code: "ENOENT" });
+    assert.deepEqual(await runtime.store.readSession(created.sessionId), before);
+    const foreign = path.join(root, "foreign-directory");
+    await mkdir(foreign);
+    await symlink(foreign, created.nativeExecutionRoot);
+    await assert.rejects(() => runtime.getNativeExecutionRoot(created.sessionId), { code: "vibe64_learning_native_directory_unavailable" });
+  });
+});
+
+test("archived source-less learning history retains exact binding without requiring or retargeting its active cwd", async () => {
+  await withTemporaryRoot(async root => {
+    const runtime = sourceLessLessonRuntime(root);
+    const created = await runtime.createSession({ sessionId: "archived-learning" });
+    await runtime.writeConversationUserMessage(created.sessionId, { messageId: "original-learner-question", text: "Teach me" });
+    await runtime.writeConversationAssistantMessage(created.sessionId, { messageId: "original-native-answer", outputId: "native-output", text: "Welcome" });
+    const log = await runtime.readConversationLog(created.sessionId);
+    const archived = await runtime.archiveSession(created.sessionId);
+    assert.equal(archived.archived, true);
+    assert.deepEqual(archived.learning, created.learning);
+    assert.equal(archived.nativeExecutionRoot, "");
+    await assert.rejects(() => access(created.nativeExecutionRoot), { code: "ENOENT" });
+    const restarted = sourceLessLessonRuntime(root);
+    assert.deepEqual(await restarted.readConversationLog(created.sessionId), log);
+    assert.deepEqual((await restarted.getSession(created.sessionId)).learning, created.learning);
+    assert.equal((await restarted.listSessionSummaries({ statusGroup: "archived" }))[0].nativeExecutionRoot, "");
+    await assert.rejects(() => restarted.getNativeExecutionRoot(created.sessionId), { code: "vibe64_learning_session_inactive" });
+  });
+});
+
+
+test("learning instructions use only the fresh exact owner and reject stale, absent or invalid results", async () => {
+  await withTemporaryRoot(async root => {
+    let result = "Teach this exact pin.";
+    let reads = 0;
+    const runtime = sourceLessLessonRuntime(root, {
+      promptRenderer: async () => assert.fail("Learning never renders Genesis"),
+      promptEnvironment: async () => assert.fail("Learning never reads project Env"),
+      learningInstructions: async sessionId => { assert.equal(sessionId, "fresh-teaching"); reads += 1; return result; }
+    });
+    await runtime.createSession({ sessionId: "fresh-teaching" });
+    assert.equal(await runtime.getLearningInstructions("fresh-teaching"), result);
+    result = "Updated progress on the same pin.";
+    assert.equal(await runtime.getLearningInstructions("fresh-teaching"), result);
+    assert.equal(reads, 2);
+    assert.deepEqual(await runtime.renderPrompt("fresh-teaching", { request: "Can you repeat that?" }), { prompt: "Can you repeat that?" });
+    assert.equal(reads, 2, "The actual authored request is separate from native system instructions");
+    for (result of [null, "", "a".repeat(128 * 1024 + 1)]) {
+      await assert.rejects(() => runtime.getLearningInstructions("fresh-teaching"), { code: "vibe64_learning_instructions_invalid" });
+    }
+    const late = sourceLessLessonRuntime(root, { learningInstructions: async () => {
+      await runtime.store.writeStatus("fresh-teaching", "blocked"); return "Late instructions";
+    } });
+    await assert.rejects(() => late.getLearningInstructions("fresh-teaching"), { code: "vibe64_learning_session_inactive" });
+    await assert.rejects(() => runtime.renderPrompt("fresh-teaching", { request: "Cannot run" }), { code: "vibe64_learning_session_inactive" });
+  });
+});
+
+
+test("closing learning session cannot expose execution or instructions or admit another request", async () => {
+  await withTemporaryRoot(async root => {
+    let instructionsRead = false;
+    const runtime = sourceLessLessonRuntime(root, { learningInstructions: async () => { instructionsRead = true; return "Teach"; } });
+    await runtime.createSession({ sessionId: "closing-learning" });
+    await runtime.markSessionClosing("closing-learning", { reason: "archived" });
+    for (const operation of [() => runtime.getNativeExecutionRoot("closing-learning"), () => runtime.getLearningInstructions("closing-learning"),
+      () => runtime.renderPrompt("closing-learning", { request: "Continue" })]) {
+      await assert.rejects(operation, { code: "vibe64_learning_session_inactive" });
+    }
+    assert.equal(instructionsRead, false);
+    assert.equal((await runtime.getSession("closing-learning")).purpose, "learning", "Retained history remains readable during close");
+  });
+});

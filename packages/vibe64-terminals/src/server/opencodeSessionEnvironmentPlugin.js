@@ -85,6 +85,13 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => {
       const selected = await sessionEnvironmentForUpstreamSession(id, client);
       if (!selected?.promptContext) return { conversation: selected?.conversation, instructions: null };
       const { workdir, promptContext } = selected;
+      if (promptContext.scope === "learning") {
+        return { conversation: selected.conversation, instructions: {
+          identity: JSON.stringify(promptContext),
+          placement: "append",
+          read: () => promptContext.instructions
+        } };
+      }
       if (promptContext.scope === "ephemeral") {
         return { conversation: selected.conversation, instructions: {
           identity: JSON.stringify(promptContext),

@@ -1,5 +1,6 @@
 import process from "node:process";
-import { rm } from "node:fs/promises";
+import { lstat, realpath, rm } from "node:fs/promises";
+import { isDeepStrictEqual } from "node:util";
 import path from "node:path";
 
 import {
@@ -23,6 +24,8 @@ import {
 import {
   VIBE64_SESSION_STATUS,
   createVibe64SessionStore,
+  learningSessionBinding,
+  validateLearningSessionScope,
   vibe64SessionStatusIsHidden
 } from "./sessionStore.js";
 import {
@@ -35,7 +38,8 @@ import {
 import {
   VIBE64_SESSION_CLOSING_AT_METADATA,
   VIBE64_SESSION_CLOSING_REASON_METADATA,
-  sessionClosingMetadata
+  sessionClosingMetadata,
+  sessionIsClosing
 } from "./sessionLifecycle.js";
 import {
   archiveSessionSource as archiveStoredSessionSource,
@@ -105,8 +109,10 @@ function plainManifest(manifest = {}) {
 }
 
 function plainSessionView(session = {}, {
-  sourceInspection = null
+  sourceInspection = null,
+  learningScope = null
 } = {}) {
+  const learning = learningSessionBinding(session.metadata, learningScope, session.sessionId);
   const sourcePath = sessionSourcePath(session);
   const workspaceSetup = workspaceSetupStateFromMetadata(session.metadata);
   return {
@@ -123,10 +129,12 @@ function plainSessionView(session = {}, {
       required: false
     }),
     backgroundTasks: Array.isArray(session.backgroundTasks) ? session.backgroundTasks : [],
-    companion: {
+    companion: learning ? { id: "learning", label: "Learning" } : {
       id: GENESIS_SESSION_KIND,
       label: "Genesis"
     },
+    ...(learning ? { purpose: "learning", learning,
+      nativeExecutionRoot: session.archived || archivedSessionStatus(session.status) ? "" : learningNativeExecutionRoot(session) } : {}),
     conversationLogRoot: normalizeText(session.conversationLogRoot),
     manifest: plainManifest(session.manifest),
     metadata: publicSessionMetadata(session.metadata),
@@ -176,7 +184,23 @@ function sessionHasRenewalHandover(session = {}) {
   return acknowledged || delivered;
 }
 
-async function sessionAvailabilityIssue(session = {}) {
+function learningNativeExecutionRoot(session) {
+  return path.join(session.stateRoot, "sessions", "active", session.sessionId, "native");
+}
+
+async function requireLearningNativeDirectory(session) {
+  const directory = learningNativeExecutionRoot(session);
+  try {
+    const info = await lstat(directory);
+    if (!info.isDirectory() || info.isSymbolicLink() || await realpath(directory) !== directory) throw new Error("Not a private native directory.");
+  } catch {
+    throw vibe64Error("The learning execution directory is missing or aliased. Ask your administrator to restore the original session; reads do not recreate it.",
+      "vibe64_learning_native_directory_unavailable");
+  }
+  return directory;
+}
+
+async function sessionAvailabilityIssue(session = {}, learningScope = null) {
   if (!sessionIsSupported(session)) {
     return {
       code: "vibe64_session_runtime_unsupported",
@@ -188,6 +212,10 @@ async function sessionAvailabilityIssue(session = {}) {
     sessionSourceCreationFailed(session) || normalizeText(session.metadata?.session_archive_operation)
   ) {
     return null;
+  }
+  if (learningSessionBinding(session.metadata, learningScope, session.sessionId)) {
+    try { await requireLearningNativeDirectory(session); return null; }
+    catch (error) { return { code: error.code, message: error.message }; }
   }
   const sourcePath = sessionSourcePath(session);
   if (sourcePath && await pathExists(sourcePath)) {
@@ -234,6 +262,8 @@ class Vibe64SessionRuntime {
     clock = undefined,
     createSessionSource = null,
     inspectSourceByDefault = true,
+    learningScope = null,
+    learningInstructions = null,
     projectContextRoot = process.cwd(),
     projectRuntimeRoot = "",
     projectSessionSourceRoot = "",
@@ -243,6 +273,17 @@ class Vibe64SessionRuntime {
     sourceInspectionError = null,
     store = undefined
   } = {}) {
+    this.learningScope = validateLearningSessionScope(learningScope);
+    if (learningInstructions !== null && (typeof learningInstructions !== "function" || !this.learningScope)) {
+      throw vibe64Error("Learning instructions require an authorized learning runtime and its server-owned reader.", "vibe64_learning_scope_invalid");
+    }
+    this.learningInstructions = learningInstructions;
+    if (this.learningScope && (projectSessionSourceRoot || createSessionSource)) {
+      throw vibe64Error("A source-less learning runtime cannot provision a project source.", "vibe64_learning_scope_invalid");
+    }
+    if (store && !isDeepStrictEqual(store.learningScope ?? null, this.learningScope)) {
+      throw vibe64Error("The supplied session store must retain the exact admitted learning scope.", "vibe64_learning_scope_invalid");
+    }
     this.inspectSourceByDefault = inspectSourceByDefault !== false;
     this.createSessionSource = typeof createSessionSource === "function"
       ? createSessionSource
@@ -266,6 +307,7 @@ class Vibe64SessionRuntime {
     }
     this.store = store || createVibe64SessionStore({
       clock,
+      learningScope: this.learningScope,
       projectContextRoot,
       projectRuntimeRoot: this.stateRoot,
       projectSessionSourceRoot: this.projectSessionSourceRoot
@@ -284,6 +326,11 @@ class Vibe64SessionRuntime {
       sessionId,
       status
     });
+    if (this.learningScope) {
+      // "genesis" remains the supported storage/runtime format, not a claim
+      // that this source-less learning session has a Genesis project.
+      return this.sessionView(session);
+    }
     try {
       if (this.createSessionSource) {
         await this.createSessionSource({
@@ -481,7 +528,7 @@ class Vibe64SessionRuntime {
 
   async listSessions(options = {}) {
     const sessions = await this.store.listSessions(options);
-    const issues = await Promise.all(sessions.map(sessionAvailabilityIssue));
+    const issues = await Promise.all(sessions.map(session => sessionAvailabilityIssue(session, this.learningScope)));
     return Promise.all(sessions
       .filter((_session, index) => !issues[index])
       .map((session) => this.sessionView(session)));
@@ -489,7 +536,7 @@ class Vibe64SessionRuntime {
 
   async listSessionSummaries({ includeUnavailable = false, ...options } = {}) {
     const sessions = await this.store.listSessionSummaries(options);
-    const issues = await Promise.all(sessions.map(sessionAvailabilityIssue));
+    const issues = await Promise.all(sessions.map(session => sessionAvailabilityIssue(session, this.learningScope)));
     return sessions.flatMap((session, index) => {
       const unavailable = issues[index];
       if (unavailable) {
@@ -502,7 +549,7 @@ class Vibe64SessionRuntime {
           unavailable
         }] : [];
       }
-      return [plainSessionView(session)];
+      return [plainSessionView(session, { learningScope: this.learningScope })];
     });
   }
 
@@ -537,7 +584,8 @@ class Vibe64SessionRuntime {
       ? await this.inspectSourceForSession(session)
       : null;
     return plainSessionView(session, {
-      sourceInspection
+      sourceInspection,
+      learningScope: this.learningScope
     });
   }
 
@@ -549,7 +597,8 @@ class Vibe64SessionRuntime {
       ? await inspectSessionSource(this, session)
       : null;
     return plainSessionView(session, {
-      sourceInspection
+      sourceInspection,
+      learningScope: this.learningScope
     });
   }
 
@@ -568,12 +617,46 @@ class Vibe64SessionRuntime {
     return sessionSourcePath(session);
   }
 
+  async getNativeExecutionRoot(sessionId, { allowClosing = false } = {}) {
+    const session = assertUsableSession(await this.store.readSession(sessionId));
+    if (!learningSessionBinding(session.metadata, this.learningScope, session.sessionId)) return requireSessionSourceRoot(session);
+    if (session.archived || (sessionIsClosing(session) && allowClosing !== true) || session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
+      throw vibe64Error("Historical or inactive learning sessions cannot execute.", "vibe64_learning_session_inactive");
+    }
+    return requireLearningNativeDirectory(session);
+  }
+
+  async getLearningInstructions(sessionId) {
+    const requireActive = session => {
+      if (!learningSessionBinding(session.metadata, this.learningScope, session.sessionId) ||
+          session.archived || sessionIsClosing(session) || session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
+        throw vibe64Error("Learning instructions require the exact active learning session.", "vibe64_learning_session_inactive");
+      }
+    };
+    requireActive(assertUsableSession(await this.store.readSession(sessionId)));
+    if (!this.learningInstructions) {
+      throw vibe64Error("The learning instruction owner is unavailable; no project guidance was substituted.", "vibe64_learning_instructions_unavailable");
+    }
+    const instructions = await this.learningInstructions(sessionId);
+    requireActive(assertUsableSession(await this.store.readSession(sessionId)));
+    if (typeof instructions !== "string" || !instructions.trim() || Buffer.byteLength(instructions) > 128 * 1024) {
+      throw vibe64Error("The learning owner must return bounded nonempty teaching instructions.", "vibe64_learning_instructions_invalid");
+    }
+    return instructions;
+  }
+
   async renderPrompt(sessionId, {
     input = {},
     request = "",
     task = "work"
   } = {}) {
     const session = assertSupportedSession(await this.store.readSession(sessionId));
+    if (learningSessionBinding(session.metadata, this.learningScope, session.sessionId)) {
+      if (session.archived || sessionIsClosing(session) || session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
+        throw vibe64Error("Historical or inactive learning sessions cannot admit work.", "vibe64_learning_session_inactive");
+      }
+      return { prompt: normalizeText(request) };
+    }
     const sourceRoot = requireSessionSourceRoot(session);
     let genesisTask = assertGenesisPromptTask(task, {
       required: true
@@ -773,7 +856,7 @@ class Vibe64SessionRuntime {
             recursive: true
           });
         }
-      } else {
+      } else if (!learningSessionBinding(session.metadata, this.learningScope, session.sessionId)) {
         await this.assertSourceHealthy(session);
       }
       await this.store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ARCHIVED);

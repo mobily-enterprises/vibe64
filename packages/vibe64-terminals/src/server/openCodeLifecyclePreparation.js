@@ -60,7 +60,7 @@ function createOpenCodeLifecyclePreparation({
   }
 
   async function prepareInterruption(sessionId, options = {}) {
-    const context = await contextFor(sessionId, options);
+    const context = await contextFor(sessionId, { ...options, allowClosing: true });
     return { key: context.key,
       get threadId() { return storedUpstreamSessionId(context); },
       writeRun: (turn, state, error) => writeRun(context, turn, state, error),

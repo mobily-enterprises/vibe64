@@ -20,6 +20,7 @@ import { codexThreadIdForWorkdir } from "./codexConversationStorage.js";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
 import { codexTerminalNamespace, terminalWorktreePath } from "./terminalShared.js";
 import { subscribeUnixCommandControlChanges } from "./unixJsonCommand.js";
+import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -75,6 +76,7 @@ function createCodexSessionProviderHost(host) {
   // before the native owner that will later invoke its preparations.
 
   async function prepareCodexAppServerSessionProvider(sessionId, options, providerKey, identity) {
+    const { learningRuntime, ...nativeOptions } = options;
     const projectContext = currentProjectRequestContext();
     const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
     async function readProviderSession(runtime) {
@@ -102,7 +104,7 @@ function createCodexSessionProviderHost(host) {
       resources: host.runOwner.runtimeLifecycle.resources(providerKey),
       get parameters() {
         return {
-          ...options,
+          ...nativeOptions,
           terminalEnv: { ...options.terminalEnv, ...hostEnvironment },
           logger,
           readInstructions: async (params, threadId) => {
@@ -110,6 +112,9 @@ function createCodexSessionProviderHost(host) {
             // the provider's construction options here would restore an old prompt
             // during an unrelated control check after their catalogue changes.
             if (options.assistantScope) return undefined;
+            if (await learningSessionExecutionRoot(learningRuntime, sessionId)) {
+              return learningRuntime.getLearningInstructions(sessionId);
+            }
             const registry = await vibe64HostContextRegistry(runtimeRoot);
             const binding = params.hostContext
               ? { promptContext: params.hostContext, workdir: params.cwd }
@@ -117,6 +122,7 @@ function createCodexSessionProviderHost(host) {
             return binding ? vibe64ConversationInstructions(binding) : undefined;
           },
           bindThreadContext: async (threadId, hostContext, params) => {
+            if (await learningSessionExecutionRoot(learningRuntime, sessionId)) return;
             const registry = await vibe64HostContextRegistry(runtimeRoot);
             await registry.register(threadId, hostContext, params.cwd);
           },
@@ -183,13 +189,19 @@ function createCodexSessionProviderHost(host) {
         if (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
           throw new Error("The assistant session is closing.");
         }
-        const workdir = normalizeText(params.cwd || options.workdir) || terminalWorktreePath(session);
-        const registry = await vibe64HostContextRegistry(runtimeRoot);
-        await registry.register(
+        const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
+        if (learningRoot && normalizeText(params.cwd) && normalizeText(params.cwd) !== learningRoot) {
+          throw new Error("The learning thread belongs to a different native execution root.");
+        }
+        const workdir = learningRoot || normalizeText(params.cwd || options.workdir) || terminalWorktreePath(session);
+        if (!learningRoot) {
+          const registry = await vibe64HostContextRegistry(runtimeRoot);
+          await registry.register(
           threadId,
           vibe64SessionContextInput(threadId === codexThreadIdForWorkdir(session, workdir) ? "main" : "temporary"),
           workdir
-        );
+          );
+        }
         const agentSettings = codexAgentSettingsFromSession(session);
         return {
           workdir,

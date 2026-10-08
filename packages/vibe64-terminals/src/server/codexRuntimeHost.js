@@ -9,6 +9,7 @@ import { stableHash } from "@local/vibe64-execution/server";
 import { codexGitCommandShimDirs } from "./codexTerminalAccess.js";
 import { executionEnvFingerprint, loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { terminalSessionSourceRoot, terminalWorktreePath } from "./terminalShared.js";
+import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV, VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV } from "./agentEnvCommand.js";
 
 const CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER = "\u001f";
@@ -265,29 +266,37 @@ function createCodexSessionRuntimeHost({
     };
   }
 
-  async function codexAppServerRuntimeOptionsForSession(session = {}, {
+  async function prepareSessionRuntimeOptions(session = {}, {
     runtime = null,
     runtimeDir = "",
     executionRoot = "",
     terminalEnv,
     toolHomeSource = "",
     workdir = ""
-  } = {}) {
+  } = {}, nativeContext = "execution") {
     const metadata = session.metadata || {};
-    const effectiveExecutionRoot = normalizeText(executionRoot) || terminalSessionSourceRoot(session);
-    const effectiveWorkdir = normalizeText(workdir) || terminalWorktreePath(session);
     const effectiveRuntime = runtime || await createRuntimeForSession();
+    const sessionId = normalizeText(session.sessionId || session.id);
+    const learningRoot = effectiveRuntime.learningScope && nativeContext === "storage"
+      ? (await effectiveRuntime.store.readSessionNativeDescriptor(sessionId)).nativeExecutionRoot
+      : await learningSessionExecutionRoot(effectiveRuntime, sessionId, { allowClosing: nativeContext === "control" });
+    if (learningRoot && (normalizeText(executionRoot) && path.resolve(executionRoot) !== learningRoot ||
+        normalizeText(workdir) && path.resolve(workdir) !== learningRoot)) {
+      throw new Error("Learning native execution must use its exact private session root.");
+    }
+    const effectiveExecutionRoot = learningRoot || normalizeText(executionRoot) || terminalSessionSourceRoot(session);
+    const effectiveWorkdir = learningRoot || normalizeText(workdir) || terminalWorktreePath(session);
     const suppliedTerminalEnv = isRecord(terminalEnv);
     const baseTerminalEnv = suppliedTerminalEnv
       ? terminalEnv
-      : await loadProjectExecutionEnv({
+      : learningRoot ? {} : await loadProjectExecutionEnv({
           projectService,
           runCommand,
           runtime: effectiveRuntime,
           session,
           target: "codex"
         });
-    const effectiveTerminalEnv = suppliedTerminalEnv
+    const effectiveTerminalEnv = suppliedTerminalEnv || learningRoot
       ? baseTerminalEnv
       : {
         ...baseTerminalEnv,
@@ -313,9 +322,23 @@ function createCodexSessionRuntimeHost({
       terminalEnv: effectiveTerminalEnv,
       toolHomeSource,
       workdir: effectiveWorkdir
-    }), routingModelProviderId: vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })?.modelProviderId,
+    }), ...(learningRoot ? { learningRuntime: effectiveRuntime } : {}),
+      routingModelProviderId: vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })?.modelProviderId,
       ...(session.status === VIBE64_SESSION_STATUS.RENEWAL_PENDING && normalizeText(metadata.renewal_id)
         ? { renewalId: normalizeText(metadata.renewal_id) } : {}) };
+  }
+
+  function codexAppServerRuntimeOptionsForSession(session, options) {
+    return prepareSessionRuntimeOptions(session, options);
+  }
+
+  // These original owners control retained threads; neither admits new work.
+  function codexAppServerControlRuntimeOptionsForSession(session, options) {
+    return prepareSessionRuntimeOptions(session, options, "control");
+  }
+
+  function codexAppServerStorageRuntimeOptionsForSession(session, options) {
+    return prepareSessionRuntimeOptions(session, options, "storage");
   }
 
   async function codexAppServerHelperRuntimeOptionsForSession(session = {}, options = {}) {
@@ -337,10 +360,17 @@ function createCodexSessionRuntimeHost({
     if (!sessionHasCodexAppServerRuntime(session)) {
       return null;
     }
-    return {
-      managedIdentity: codexAppServerManagedThreadIdentity(session),
+    const prepared = roots => ({
+      managedIdentity: codexAppServerManagedThreadIdentity(session, roots),
       providerOptions: () => codexAppServerRuntimeOptionsForSession(session, { runtime })
-    };
+    });
+    if (runtime?.learningScope) {
+      return learningSessionExecutionRoot(runtime, session.sessionId, { allowClosing: true }).then(root => ({
+        managedIdentity: codexAppServerManagedThreadIdentity(session, { executionRoot: root, workdir: root }),
+        providerOptions: () => codexAppServerControlRuntimeOptionsForSession(session, { runtime })
+      }));
+    }
+    return prepared();
   }
 
   return {
@@ -348,6 +378,8 @@ function createCodexSessionRuntimeHost({
     createStoreForSession,
     codexAppServerManagedThreadIdentity,
     codexAppServerRuntimeOptionsForSession,
+    codexAppServerControlRuntimeOptionsForSession,
+    codexAppServerStorageRuntimeOptionsForSession,
     codexAppServerHelperRuntimeOptionsForSession,
     sessionHasCodexAppServerRuntime,
     codexAppServerOutputContext

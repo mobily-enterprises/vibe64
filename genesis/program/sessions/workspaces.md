@@ -14,6 +14,8 @@ the canonical project and from other sessions.
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
+- `tests/server/vibe64Runtime.unit.test.js`
+- `tests/server/vibe64SessionStore.unit.test.js`
 - `tests/server/assistantRoutingStateInventory.unit.test.js`
 - `tests/server/vibe64SessionStorageLifecycle.unit.test.js`
 - `packages/vibe64-terminals/src/server/sessionNaming.js`
@@ -395,3 +397,55 @@ freshness check as fallback. The fallback does no work while the page is hidden
 and refreshes immediately when the person returns. Session-renewal recovery
 also slows its checks when maintenance needs operator attention rather than
 retrying continuously.
+
+## Source-less learning session foundation
+
+The existing Runtime and Store also accept a constructor-only `learningScope`
+containing the authenticated `learnerId`, exact `attemptId`, complete opaque
+`pin`, and `noExercise:true`. The composing Training owner must authorize the
+actor, active attempt, installed pin and the lesson's genuinely no-exercise
+descriptor before constructing this scope and its fixed private runtime root.
+Runtime validates bounded identities/JSON shape and exact durable equality; it
+does not reimplement Training validation or acquire content authority. Browser
+arguments, creation metadata and a mode flag cannot enable this purpose.
+
+Original atomic session staging creates one new immutable `learning_session`
+metadata value (`schemaVersion:1`, that scope, `conversationId:sessionId`) and a
+private `native` directory inside the original session tree. The existing
+`genesis` runtimeKind remains a supported format sentinel, not a claim that this
+session has a Genesis project. The new view reports purpose `learning`, companion
+Learning, the exact binding, no source and no workspace setup. Ordinary absent
+purpose remains working unchanged. Claimed, corrupt, wrong-owner/attempt/pin or
+mixed-source bindings fail closed; normal metadata writers cannot alter/remove
+that binding or attach source to it.
+
+`getNativeExecutionRoot(sessionId)` reads that original session and permits only
+a matching active, non-closing learning session with its original regular, non-aliased
+`<runtime>/sessions/active/<sessionId>/native` directory. It never uses an archive
+extraction/closing path as a new native cwd. Historical reads retain exact
+binding without requiring that old directory to exist; archived views expose no
+executable root and execution refuses them. The bounded store
+`readSessionNativeDescriptor` reuses metadata/status readers without hydrating
+history. For learning it reports the derived original active native identity even
+when archived, with its explicit status/archived facts; this is not directory or
+execution proof. Ordinary calls retain the original source descriptor exactly. Missing/aliased active directories
+are unavailable, not recreated by reads. Source getters/inspection remain
+truthful and source operations do not turn this directory into a source checkout.
+
+One constructor-only `learningInstructions(sessionId)` reader is supplied by the
+original Training owner. `getLearningInstructions` validates exact active durable
+scope before/after awaiting it and returns a bounded nonempty string (the
+original Brief128KiB bound). The owner independently refreshes attempt/content
+permissions and pin/progress, without truncating or substituting project guidance.
+Learning `renderPrompt` returns the actual normalized user request; it does not
+read project Env, invoke Genesis or pretend the native cwd is project source.
+Ordinary prompt rendering is unchanged.
+
+This is a genuinely new optional explicitly admitted binding, not a changed
+historical format or conversion: no prior working session or Colleague-teacher
+history is inferred, migrated or lazily repaired. Future changes to existing
+bindings require the numbered stopped-writer upgrade procedure. The same
+original store leases, transcript, status and archive owners remain. Browser
+admission, native provider/environment integration, learning renewal/selection,
+teaching evidence and complete learner acceptance are separate unfinished work;
+these constructors do not add a launch control or establish Main teaching.

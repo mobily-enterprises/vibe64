@@ -122,3 +122,23 @@ Reduced-motion preferences also disable the animation.
 
 Colleague can explain these states. It should verify current session activity
 through its available read operations before claiming that work has stopped.
+
+
+## Lessons that do not need a practice workspace
+
+A lesson without practical workspace steps can retain its own conversation and
+saved lesson identity without creating a project, Git checkout or Preview app.
+It does not use a coding session's source as a substitute. Your existing working
+sessions and saved lessons remain separate.
+
+If the lesson reports that its execution directory is missing, keep the session
+and ask the administrator to inspect or restore it. Reloading does not rebuild
+that directory or repeat your request. Archived lesson history remains readable,
+but cannot continue running as the archived conversation. Colleague can explain
+the reported error; it cannot grant another learner's access or silently replace
+the saved lesson with newer content.
+
+This session foundation adds no lesson-launch control. Lesson selection and
+Main teaching must be connected through the existing learning flow before this
+can be used from the interface; the ordinary **New session** control still creates
+a working session with source.

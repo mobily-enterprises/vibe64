@@ -2105,42 +2105,52 @@ function createService({
   }
 
   function closeAllSessionTerminals(sessionId, controllerOptions = {}) {
-    return closeAgentSessionCommandEnvironment(sessionId, () => closeTerminalControllersForSession(sessionId, [
-      {
-        controller: { closeAllForSession: async (id, options) => {
-          const agentContext = await assistantSessionOptions(id, options);
-          await sessionNaming.closeSession(agentContext);
-          await cleanupSessionSaveCommitMessage({ agent: sessionAgent, agentContext });
-          return { ok: true };
-        } },
-        label: "Naming helpers"
-      },
-      {
-        controller: { closeAllForSession: (id, options) => sessionPromptHints.cancelSessionPromptHintsForSession(id, options) },
-        label: "Prompt suggestions"
-      },
-      { controller: { closeAllForSession: (id, options) => databaseToolsProvider?.closeAssistantsForSession(id, options) },
-        label: "Database copilot" },
-      { controller: { closeAllForSession: (id) => sourceEditorProvider?.closeExplanationsForSession(id) },
-        label: "Source explanations" },
-      { controller: outputTarget, label: "outputTarget" },
-      ...(!controllerOptions.renewalCleanup && controllerOptions.session?.sourceReady !== false ? [{
-        controller: { closeAllForSession: (id) => sessionAgent.interruptTurn(id) },
-        label: "assistantTurn"
-      }] : []),
-      {
-        controller: {
-          closeAllForSession: (id, options) => sessionAgent.closeSession(id, options)
+    return closeAgentSessionCommandEnvironment(sessionId, async () => {
+      let learningNativeAvailable = false;
+      if (controllerOptions.session?.sourceReady === false && controllerOptions.session?.purpose === "learning") {
+        const runtime = controllerOptions.runtime || await projectService.createRuntime({ inspectSource: false });
+        if (runtime.learningScope) {
+          await runtime.getNativeExecutionRoot(sessionId, { allowClosing: true });
+          learningNativeAvailable = true;
+        }
+      }
+      return closeTerminalControllersForSession(sessionId, [
+        {
+          controller: { closeAllForSession: async (id, options) => {
+            const agentContext = await assistantSessionOptions(id, options);
+            await sessionNaming.closeSession(agentContext);
+            await cleanupSessionSaveCommitMessage({ agent: sessionAgent, agentContext });
+            return { ok: true };
+          } },
+          label: "Naming helpers"
         },
-        label: "assistant"
-      },
-      { controller: agentDatabaseCommand, label: "agentDatabase" },
-      { controller: agentEnvCommand, label: "agentEnv" },
-      { controller: agentPreviewCommand, label: "agentPreview" },
-      { controller: agentSessionCommand, label: "agentSessionCommand" }
-    ], {
-      controllerOptions
-    })).finally(() => providerUsage.forget(terminalProjectScopeKey(), sessionId));
+        {
+          controller: { closeAllForSession: (id, options) => sessionPromptHints.cancelSessionPromptHintsForSession(id, options) },
+          label: "Prompt suggestions"
+        },
+        { controller: { closeAllForSession: (id, options) => databaseToolsProvider?.closeAssistantsForSession(id, options) },
+          label: "Database copilot" },
+        { controller: { closeAllForSession: (id) => sourceEditorProvider?.closeExplanationsForSession(id) },
+          label: "Source explanations" },
+        { controller: outputTarget, label: "outputTarget" },
+        ...(!controllerOptions.renewalCleanup && (controllerOptions.session?.sourceReady !== false || learningNativeAvailable) ? [{
+          controller: { closeAllForSession: (id) => sessionAgent.interruptTurn(id) },
+          label: "assistantTurn"
+        }] : []),
+        {
+          controller: {
+            closeAllForSession: (id, options) => sessionAgent.closeSession(id, options)
+          },
+          label: "assistant"
+        },
+        { controller: agentDatabaseCommand, label: "agentDatabase" },
+        { controller: agentEnvCommand, label: "agentEnv" },
+        { controller: agentPreviewCommand, label: "agentPreview" },
+        { controller: agentSessionCommand, label: "agentSessionCommand" }
+      ], {
+        controllerOptions
+      });
+    }).finally(() => providerUsage.forget(terminalProjectScopeKey(), sessionId));
   }
 
   function renewalTerminalAdmissionOwner(renewalId = "") {

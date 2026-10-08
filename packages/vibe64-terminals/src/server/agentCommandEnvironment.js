@@ -5,6 +5,7 @@ import { requestUnixJsonCommand } from "./unixJsonCommand.js";
 import { codexTerminalNamespace, openCodeError } from "./terminalShared.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { prepareAgentHelperCommand } from "./agentHelperCommand.js";
+import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import {
   prepareAgentDatabaseCommand
 } from "./agentDatabaseCommand.js";
@@ -77,6 +78,9 @@ async function prepareOpenCodeSessionCommandEnvironment(context = {}, {
       env: context.assistantScope.environment || {},
       shimDirs: []
     };
+  }
+  if (await learningSessionExecutionRoot(context.runtime, context.sessionId)) {
+    return { env: {}, shimDirs: [] };
   }
   if (!codexGitCommand) {
     return { env: {}, shimDirs: [] };
