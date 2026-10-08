@@ -17,7 +17,7 @@
       :github-actor-teleport-target="props.githubActorTeleportTarget"
       :interrupt-agent-turn="interruptAgentTurn"
       :page="guardedPage"
-      :project-context="props.projectContext"
+      :project-context="runtimeProjectContext"
       :preview-toolbar-teleport-target="props.previewToolbarTeleportTarget"
       :prompt-hint-policy="props.promptHintPolicy"
       :refresh-session-data="refreshSessionData"
@@ -27,7 +27,7 @@
       :session-archive="dialogs.archive"
       :session-renewal="sessionRenewal"
       :session="selection.selectedSession"
-      :sessions-api-path="sessionData.sessionsApiPath"
+      :sessions-api-path="sessionsApiPath"
       :session-selection-archived="selection.isArchived"
       :session-toolbar="autopilotSessionToolbar"
       :send-agent-message="sendAgentMessage"
@@ -41,7 +41,7 @@
     >
       <template #ai-terminal="{ active: tabActive }">
         <Vibe64CodexSession
-          v-if="selectedAssistantEngineId === 'codex'"
+          v-if="sourceWorkspaceAvailable && selectedAssistantEngineId === 'codex'"
           class="studio-ai-sessions__tab-terminal"
           :allow-start="tabActive && codexTerminalCanStart"
           :display-mode="tabActive ? 'full' : 'headless'"
@@ -54,7 +54,7 @@
           @session-update="agentTerminal.sessionUpdate"
         />
         <Vibe64NativeAgentSession
-          v-else-if="['claude', 'opencode'].includes(selectedAssistantEngineId)"
+          v-else-if="sourceWorkspaceAvailable && ['claude', 'opencode'].includes(selectedAssistantEngineId)"
           class="studio-ai-sessions__tab-terminal"
           :allow-start="tabActive"
           :display-mode="tabActive ? 'full' : 'headless'"
@@ -177,7 +177,10 @@ const {
   refreshSessionData,
   refreshWorkState,
   retryWorkspaceSetup,
+  runtimeProjectContext,
   saveSessionWork,
+  sessionsApiPath,
+  sourceWorkspaceAvailable,
   sessionRenewal,
   selectedAgentTerminalId,
   selection,

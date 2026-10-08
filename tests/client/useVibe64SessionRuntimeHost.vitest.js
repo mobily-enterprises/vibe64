@@ -331,3 +331,136 @@ describe("session navigation projections", () => {
     ]);
   });
 });
+
+// Exercise the original host constructor; the shared transport's own retained
+// binding, admission and account fences have their original separate fixtures.
+import { computed, createRenderer, h, reactive, ref, shallowRef, toValue, nextTick } from "vue";
+import { useVibe64SessionRuntimeHost } from "../../src/composables/useVibe64SessionRuntimeHost.js";
+const mountedHostMocks = vi.hoisted(() => ({
+  conversation: vi.fn(), renewal: vi.fn(), request: vi.fn(), events: vi.fn()
+}));
+vi.mock("../../src/composables/useVibe64ConversationRuntime.js", () => ({
+  useVibe64ConversationRuntime: mountedHostMocks.conversation
+}));
+vi.mock("../../src/composables/useVibe64SessionRenewal.js", () => ({
+  useVibe64SessionRenewal: mountedHostMocks.renewal
+}));
+vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
+  useRealtimeEvent: mountedHostMocks.events
+}));
+vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
+  getHttpWebClient: () => ({ request: mountedHostMocks.request })
+}));
+vi.mock("@jskit-ai/http-web/client/composables/useUiFeedback", () => ({
+  useUiFeedback: () => ({ success: vi.fn(), error: vi.fn() })
+}));
+const mountedHostRenderer = createRenderer({
+  createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
+  setElementText() {}, setText() {}, insert() {}, remove() {}, patchProp() {},
+  parentNode() {}, nextSibling() {}
+});
+function mountedHostFixture({ learning = false, learnerId = "learner-one" } = {}) {
+  const attemptId = "314cdfd8-182f-4e15-8f79-71381e4a89b4";
+  const session = { sessionId: learning ? `learning-${attemptId}` : "working-one",
+    ...(learning ? { purpose: "learning", learningAttemptId: attemptId } : {}),
+    agentSession: { turn: {} } };
+  const state = reactive({ sessions: [session], learnerId, apiPath: "/api/projects/one/vibe64/sessions" });
+  const props = reactive({ active: true, sessionId: session.sessionId, projectContext: { slug: "one" } });
+  props.sessionData = {
+    sessions: computed(() => state.sessions),
+    sessionsApiPath: computed(() => state.apiPath),
+    learningLearnerId: computed(() => state.learnerId),
+    learningLoadError: ref(""), sessionList: { loadError: "working list temporarily unavailable" },
+    shortSessionId: id => id, refreshSessionData: vi.fn(async () => {}),
+    canCreateSession: true, createSessionVisible: true,
+    archive: { command: { isRunning: false }, request: vi.fn() }
+  };
+  // Props in the actual component are shallow: preserve the same ref contract.
+  const hostProps = { get active() { return props.active; }, get sessionId() { return props.sessionId; },
+    get projectContext() { return props.projectContext; }, sessionData: {
+      ...props.sessionData, sessions: computed(() => state.sessions),
+      sessionsApiPath: computed(() => state.apiPath), learningLearnerId: computed(() => state.learnerId)
+    } };
+  mountedHostMocks.conversation.mockClear(); mountedHostMocks.renewal.mockClear();
+  mountedHostMocks.request.mockClear(); mountedHostMocks.events.mockClear();
+  const send = vi.fn(async () => true);
+  mountedHostMocks.conversation.mockImplementation(() => shallowRef({
+    mounted: { session: ref(session), detailState: ref({}), agentConnectionError: ref(""),
+      agentConnectionStatus: ref("connected"), refresh: vi.fn(async () => {}) }, sendAgentMessage: send
+  }));
+  mountedHostMocks.renewal.mockImplementation(() => ({ sourceOperationsSuspended: ref(false) }));
+  mountedHostMocks.request.mockResolvedValue({ ok: true, unsaved: false });
+  let host;
+  const app = mountedHostRenderer.createApp({ setup() {
+    host = useVibe64SessionRuntimeHost(hostProps, vi.fn()); return () => h("div");
+  } });
+  app.mount({});
+  return { app, host, props, state, attemptId, send };
+}
+
+describe("same keyed Main host across purpose filters", () => {
+  it("retains a learning record's exact target when visible project, selection and filter change", async () => {
+    const f = mountedHostFixture({ learning: true });
+    try {
+      const captured = mountedHostMocks.conversation.mock.calls[0][0];
+      const readTarget = () => ({ sessionId: toValue(captured.sessionId), projectSlug: toValue(captured.projectSlug),
+        learnerId: toValue(captured.learnerId), learningAttemptId: toValue(captured.learningAttemptId),
+        sessionsApiPath: toValue(captured.sessionsApiPath) });
+      const expected = { sessionId: `learning-${f.attemptId}`, projectSlug: "", learnerId: "learner-one",
+        learningAttemptId: f.attemptId, sessionsApiPath: `/api/learning/${f.attemptId}/vibe64/sessions` };
+      expect(readTarget()).toEqual(expected);
+      f.props.active = false; f.props.projectContext = { slug: "two" }; f.props.sessionId = "working-two";
+      f.state.apiPath = "/api/projects/two/vibe64/sessions"; f.state.learnerId = "different-learner";
+      await nextTick();
+      expect(readTarget()).toEqual(expected);
+      expect(toValue(captured.active)).toBe(false);
+      expect(mountedHostMocks.conversation).toHaveBeenCalledTimes(1);
+      expect(f.host.selection.selectedSessionId).toBe(expected.sessionId);
+      expect(f.host.guardedPage.value.error).toBe("");
+      expect(f.host.autopilotSessionToolbar.canCreateSession).toBe(false);
+      expect(f.host.autopilotSessionToolbar.createSessionVisible).toBe(false);
+      expect(f.host.runtimeProjectContext.value).toEqual({});
+      expect(f.host.sourceWorkspaceAvailable.value).toBe(false);
+      expect(f.host.codexTerminalCanStart.value).toBe(false);
+      await expect(f.host.sendAgentMessage({ message: "same captured request" })).resolves.toBe(true);
+      expect(f.send).toHaveBeenCalledWith({ message: "same captured request" });
+    } finally { f.app.unmount(); }
+  });
+
+  it("does not inspect or mutate a project workspace for a source-less learning host", async () => {
+    const f = mountedHostFixture({ learning: true });
+    try {
+      const renewal = mountedHostMocks.renewal.mock.calls[0][0];
+      expect(toValue(renewal.sessionsApiPath)).toBe("");
+      expect(toValue(renewal.selectedSessionId)).toBe("");
+      await f.host.refreshWorkState();
+      await expect(f.host.retryWorkspaceSetup()).resolves.toBe(false);
+      await expect(f.host.saveSessionWork()).resolves.toBe(false);
+      await expect(f.host.updateSessionWork()).resolves.toBe(false);
+      expect(f.host.workState.value.loading).toBe(false);
+      expect(mountedHostMocks.request).not.toHaveBeenCalled();
+      const event = mountedHostMocks.events.mock.calls[0][0];
+      expect(event.matches({ payload: { projectSlug: "one", repositoryWorkflow: { requirePullRequest: true } } })).toBe(false);
+    } finally { f.app.unmount(); }
+  });
+
+  it("preserves original reactive Working targets and source facilities", async () => {
+    const f = mountedHostFixture();
+    try {
+      const captured = mountedHostMocks.conversation.mock.calls[0][0];
+      expect(Object.hasOwn(captured, "learningAttemptId")).toBe(false);
+      expect(Object.hasOwn(captured, "learnerId")).toBe(false);
+      expect(toValue(captured.projectSlug)).toBe("one");
+      expect(toValue(captured.sessionsApiPath)).toBe("/api/projects/one/vibe64/sessions");
+      f.props.projectContext = { slug: "two" }; f.state.apiPath = "/api/projects/two/vibe64/sessions";
+      await nextTick();
+      expect(toValue(captured.projectSlug)).toBe("two");
+      expect(toValue(captured.sessionsApiPath)).toBe("/api/projects/two/vibe64/sessions");
+      expect(f.host.autopilotSessionToolbar.canCreateSession).toBe(true);
+      expect(f.host.sourceWorkspaceAvailable.value).toBe(true);
+      expect(f.host.codexTerminalCanStart.value).toBe(true);
+      await f.host.refreshWorkState();
+      expect(mountedHostMocks.request.mock.calls.some(([path]) => path === "/api/projects/two/vibe64/sessions/working-one/work")).toBe(true);
+    } finally { f.app.unmount(); }
+  });
+});

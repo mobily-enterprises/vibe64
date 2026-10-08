@@ -3402,3 +3402,19 @@ binding after the original completeness check. Unconfigured threads retain their
 original settings. A differing retained manifest fails before resume without
 rewriting the saved binding or replacing history. Exact teacher admission,
 catalogue composition and installed native acceptance remain separate prerequisites.
+
+## Keyed Learning chat retention
+
+The original mounted runtime host captures each saved Learning record's session,
+attempt and API-returned own learner when constructed. Its Main conversation and
+session HTTP path remain attached to that tuple when the visible purpose filter,
+selection or Working project changes. The Vue host passes that captured path and
+empty project context to the same Autopilot view. Hiding the keyed host changes
+its active presentation without constructing a replacement conversation.
+
+Source-less Learning has no project work inspection, Workspace setup mutation,
+Save/update request, renewal resource target or native PTY launch. Its supported
+Main chat Send/Stop and refresh still use their original owner. Ordinary Working
+targets retain their original reactive project/path and source facilities. This
+mounted-host increment does not establish the Main teacher catalogue, completed
+mode UI, native teaching, physical audio or browser acceptance.
