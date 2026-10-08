@@ -50,8 +50,7 @@ import {
   useVibe64MountedSessionData
 } from "../../src/composables/useVibe64MountedSessionData.js";
 
-describe("useVibe64MountedSessionData", () => {
-  beforeEach(() => {
+function resetMountedSessionFixture() {
     realtimeMocks.events.length = 0;
     realtimeMocks.handlers.clear();
     realtimeMocks.socket.connected = false;
@@ -82,7 +81,10 @@ describe("useVibe64MountedSessionData", () => {
       endpointMocks.options = options;
       return endpointMocks.resource;
     });
-  });
+}
+
+describe("useVibe64MountedSessionData", () => {
+  beforeEach(resetMountedSessionFixture);
 
   it("keeps one fixed session live while its host is mounted", async () => {
     const scope = effectScope();
@@ -824,5 +826,73 @@ describe("useVibe64MountedSessionData", () => {
       await vi.advanceTimersByTimeAsync(60_000);
       expect(httpMocks.request).not.toHaveBeenCalled();
     });
+  });
+});
+
+
+describe("learning scope in the original mounted session owner", () => {
+  beforeEach(resetMountedSessionFixture);
+  const attempt = "11111111-1111-4111-8111-111111111111";
+  const other = "22222222-2222-4222-8222-222222222222";
+  const path = `/api/learning/${attempt}/vibe64/sessions`;
+
+  it("isolates original detail query scope and all three session event channels by exact attempt", async () => {
+    const scope = effectScope();
+    const controller = scope.run(() => useVibe64MountedSessionData({
+      projectSlug: "", sessionId: "lesson", sessionsApiPath: path, learningAttemptId: attempt, learnerId: "learner-a",
+      summarySession: ref({ sessionId: "lesson", revision: 1 })
+    }));
+    try {
+      expect(endpointMocks.options.enabled.value).toBe(true);
+      expect(endpointMocks.options.path.value).toBe(`${path}/lesson`);
+      expect(endpointMocks.options.queryKey.value).toEqual(["vibe64", "learning", "learner-a", attempt, "app", "public", "session", "lesson", "detail"]);
+      const payload = { learningAttemptId: attempt, sessionId: "lesson", reason: "session-agent-turn-delta", revision: 5,
+        agentSession: { turn: { id: "turn", active: true, state: "active" } } };
+      const overlay = realtimeMocks.events.find(entry => entry.matches?.({ payload }));
+      expect(overlay).toBeDefined();
+      expect(overlay.matches({ payload: { ...payload, learningAttemptId: other } })).toBe(false);
+      expect(overlay.matches({ payload: { ...payload, projectSlug: "working" } })).toBe(false);
+      expect(overlay.matches({ payload: { ...payload, learningAttemptId: undefined } })).toBe(false);
+      overlay.onEvent({ payload: { ...payload, learningAttemptId: other } });
+      expect(controller.session.value?.agentSession?.turn?.active).toBeUndefined();
+      overlay.onEvent({ payload });
+      expect(controller.session.value?.agentSession?.turn?.active).toBe(true);
+      const detail = { learningAttemptId: attempt, sessionId: "lesson", reason: "session-action-run" };
+      expect(endpointMocks.options.realtime.matches({ payload: detail })).toBe(true);
+      expect(endpointMocks.options.realtime.matches({ payload: { ...detail, learningAttemptId: other } })).toBe(false);
+      expect(endpointMocks.options.realtime.matches({ payload: { ...detail, learningAttemptId: undefined } })).toBe(false);
+      const selected = { ...detail, reason: "session-assistant-selection-updated" };
+      const selection = realtimeMocks.events.find(entry => entry.matches?.({ payload: selected }));
+      expect(selection).toBeDefined();
+      expect(selection.matches({ payload: { ...selected, learningAttemptId: other } })).toBe(false);
+      expect(selection.matches({ payload: { ...selected, sessionId: "other-session" } })).toBe(false);
+      expect(httpMocks.request).not.toHaveBeenCalled();
+    } finally { scope.stop(); }
+  });
+
+  it("does not prepare native work or enable detail reads with missing own learner or mixed route scope", async () => {
+    const scope = effectScope();
+    const controller = scope.run(() => useVibe64MountedSessionData({
+      projectSlug: "", sessionId: "lesson", sessionsApiPath: path, learningAttemptId: attempt
+    }));
+    try {
+      expect(endpointMocks.options.enabled.value).toBe(false);
+      realtimeMocks.socket.connected = true;
+      await controller.retryAgentConnection();
+      expect(endpointMocks.resource.query.refetch).not.toHaveBeenCalled();
+      expect(httpMocks.request).not.toHaveBeenCalled();
+      expect(endpointMocks.options.realtime.matches({ payload: { learningAttemptId: attempt, sessionId: "lesson" } })).toBe(false);
+    } finally { scope.stop(); }
+  });
+
+  it("excludes learning notifications from the unchanged Working detail and overlay readers", () => {
+    const scope = effectScope();
+    scope.run(() => useVibe64MountedSessionData({ projectSlug: "project-a", sessionId: "same", sessionsApiPath: "/api/vibe64/sessions" }));
+    try {
+      const payload = { learningAttemptId: attempt, sessionId: "same", reason: "session-agent-turn-delta", revision: 5,
+        agentSession: { turn: { id: "turn", active: true, state: "active" } } };
+      expect(realtimeMocks.events.some(entry => entry.matches?.({ payload }))).toBe(false);
+      expect(endpointMocks.options.realtime.matches({ payload: { ...payload, reason: "session-action-run" } })).toBe(false);
+    } finally { scope.stop(); }
   });
 });

@@ -17,7 +17,8 @@ const renderer = createRenderer({ createElement: () => ({}), createText: () => (
   setElementText() {}, setText() {}, insert() {}, remove() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
 const releases = [];
 afterEach(() => { releases.splice(0).reverse().forEach(release => release()); vi.clearAllMocks(); });
-function fixture({ readGoal = () => null, status = "ready", steering = true } = {}) {
+function fixture({ readGoal = () => null, status = "ready", steering = true,
+  learningAttemptId, learnerId, projectSlug = "one", sessionId = "s1", sessionsApiPath = "/api/vibe64/sessions" } = {}) {
   const disposed = [];
   const owners = [];
   mocks.mounted.mockImplementation(identity => {
@@ -38,10 +39,11 @@ function fixture({ readGoal = () => null, status = "ready", steering = true } = 
   mocks.access.mockReturnValue(access);
   mocks.request.mockResolvedValue({ ok: true });
   const viewer = ref({ actorKey: "owner" });
-  const selected = reactive({ sessionId: "s1", projectSlug: "one" });
+  const selected = reactive({ sessionId, projectSlug, learningAttemptId, learnerId, sessionsApiPath });
   let runtime;
   const app = renderer.createApp({ setup() {
-    runtime = useVibe64ConversationRuntime({ sessionId: computed(() => selected.sessionId), projectSlug: computed(() => selected.projectSlug), sessionsApiPath: "/api/vibe64/sessions" });
+    runtime = useVibe64ConversationRuntime({ sessionId: computed(() => selected.sessionId), projectSlug: computed(() => selected.projectSlug), sessionsApiPath: computed(() => selected.sessionsApiPath),
+      learningAttemptId: computed(() => selected.learningAttemptId), learnerId: computed(() => selected.learnerId) });
     return () => h("div");
   } });
   app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer);
@@ -324,5 +326,96 @@ describe("retained project conversation ownership", () => {
     expect(await sending).toBe(false);
     expect(runtime.cancelMessage("pending-router")).toBe(false);
     expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+const learningAttemptA = "11111111-1111-4111-8111-111111111111";
+const learningAttemptB = "22222222-2222-4222-8222-222222222222";
+const learningPath = attempt => `/api/learning/${attempt}/vibe64/sessions`;
+
+describe("same Main transport for an actual learning conversation", () => {
+  it("uses the exact Main learning selector, ordinary app transport and captured application path", async () => {
+    const f = fixture({ projectSlug: "", sessionId: "learning-session", learningAttemptId: learningAttemptA,
+      learnerId: "learner-a", sessionsApiPath: learningPath(learningAttemptA) });
+    const runtime = f.runtime.value;
+    expect(runtime.identity).toMatchObject({ projectSlug: "", learningAttemptId: learningAttemptA, learnerId: "learner-a",
+      sessionId: "learning-session", sessionsApiPath: learningPath(learningAttemptA) });
+    expect(runtime.identity.actorKey).toBe(JSON.stringify(["learning", "owner", "learner-a", learningAttemptA]));
+    expect(f.viewer.value).toEqual({ actorKey: "owner" });
+    expect(f.owners[0].identity.learningAttemptId).toBe(learningAttemptA);
+    expect(mocks.access.mock.calls[0][0].learnerId).toBe("learner-a");
+    await runtime.send({ message: "Teach this lesson" }, { messageId: "learning-first" });
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request.mock.calls[0][0]).toBe(`/api/assistant/app/conversations/${encodeURIComponent(mainConversationId({
+      learningAttemptId: learningAttemptA, sessionId: "learning-session"
+    }))}/messages`);
+    expect(mocks.request.mock.calls[0][1].body).toMatchObject({ messageId: "learning-first", text: "Teach this lesson" });
+    expect(f.owners[0].refresh).toHaveBeenCalledWith({ reason: "agent-message-accepted" });
+  });
+
+  it("keeps accepted work captured and never resends it after explicit attempt/learner change", async () => {
+    const f = fixture({ projectSlug: "", sessionId: "same-session", learningAttemptId: learningAttemptA,
+      learnerId: "learner-a", sessionsApiPath: learningPath(learningAttemptA) });
+    const original = f.runtime.value;
+    const retained = original.retain(); releases.push(retained.release);
+    original.draft.value = "Original unsent words";
+    mocks.request.mockReturnValue(new Promise(() => {}));
+    const sending = original.send({ message: "Exact accepted request" }, { messageId: "captured-learning" });
+    await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(1));
+    const acceptedUrl = mocks.request.mock.calls[0][0];
+    f.selected.learningAttemptId = learningAttemptB;
+    f.selected.sessionsApiPath = learningPath(learningAttemptB);
+    await nextTick();
+    expect(original.available.value).toBe(false);
+    expect(await sending).toBe(false);
+    expect(f.runtime.value.identity.learningAttemptId).toBe(learningAttemptB);
+    expect(f.runtime.value.draft.value).toBe("");
+    expect(original.draft.value).toBe(""); // Original dispatch/actor retirement clears its private editor buffer.
+    await expect(original.send({ message: "Do not cross attempts" })).rejects.toThrow("no longer available");
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(acceptedUrl).toContain(encodeURIComponent(mainConversationId({ learningAttemptId: learningAttemptA, sessionId: "same-session" })));
+    const second = f.runtime.value;
+    const secondRetained = second.retain(); releases.push(secondRetained.release);
+    f.selected.learnerId = "learner-b";
+    await nextTick();
+    expect(second.available.value).toBe(false);
+    expect(f.runtime.value.identity.actorKey).not.toBe(second.identity.actorKey);
+    expect(f.runtime.value.draft.value).toBe("");
+    f.viewer.value = null;
+    await nextTick();
+    expect(f.runtime.value).toBe(null);
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes goals only for the exact learning attempt without sending a message", async () => {
+    const f = fixture({ projectSlug: "", sessionId: "lesson", learningAttemptId: learningAttemptA,
+      learnerId: "learner-a", sessionsApiPath: learningPath(learningAttemptA) });
+    await vi.waitFor(() => expect(mocks.read.mock.calls.some(([url]) => url.endsWith("/goal"))).toBe(true));
+    const count = () => mocks.read.mock.calls.filter(([url]) => url.endsWith("/goal")).length;
+    const before = count();
+    for (const payload of [
+      { learningAttemptId: learningAttemptB, sessionId: "lesson", reason: "codex-goal" },
+      { projectSlug: "working", sessionId: "lesson", reason: "codex-goal" },
+      { sessionId: "lesson", reason: "codex-goal" },
+      { learningAttemptId: learningAttemptA, sessionId: "other", reason: "codex-goal" }
+    ]) f.socket.publish(VIBE64_SESSION_CHANGED_EVENT, payload);
+    await nextTick();
+    expect(count()).toBe(before);
+    f.socket.publish(VIBE64_SESSION_CHANGED_EVENT, { learningAttemptId: learningAttemptA, sessionId: "lesson", reason: "codex-goal" });
+    await vi.waitFor(() => expect(count()).toBeGreaterThan(before));
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { learningAttemptId: learningAttemptA, learnerId: undefined, sessionsApiPath: learningPath(learningAttemptA), projectSlug: "" },
+    { learningAttemptId: learningAttemptA, learnerId: "learner", sessionsApiPath: learningPath(learningAttemptB), projectSlug: "" },
+    { learningAttemptId: learningAttemptA, learnerId: "learner", sessionsApiPath: learningPath(learningAttemptA), projectSlug: "working" },
+    { learningAttemptId: "invalid", learnerId: "learner", sessionsApiPath: learningPath("invalid"), projectSlug: "" }
+  ])("refuses incomplete/mixed learning scope without creating a Working fallback (%j)", input => {
+    const f = fixture(input);
+    expect(f.runtime.value).toBe(null);
+    expect(f.owners).toEqual([]);
+    expect(mocks.request).not.toHaveBeenCalled();
   });
 });

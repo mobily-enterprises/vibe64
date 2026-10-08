@@ -139,3 +139,46 @@ it("isolates database private workspaces and Helper availability for owner, memb
   expect(database.state.value).toBeNull();
   expect(request).toHaveBeenCalledTimes(3);
 });
+
+it("isolates real Learning access caches by API own learner identity and exact attempt without changing viewer", async () => {
+  configureHttpWebClient({ request });
+  const attempt = ref("11111111-1111-4111-8111-111111111111");
+  const learner = ref("learner-a");
+  const viewer = ref({ actorKey: "local" });
+  const second = Promise.withResolvers();
+  request.mockImplementation(() => learner.value === "learner-b" ? second.promise
+    : Promise.resolve({ ok: true, available: true, canUse: true }));
+  let access;
+  app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
+    .createApp({ setup() {
+      access = useVibe64AssistantAccess({ viewer, projectSlug: "", sessionId: "same-session",
+        learningAttemptId: attempt, learnerId: learner,
+        sessionsApiPath: () => `/api/learning/${attempt.value}/vibe64/sessions` });
+      return () => null;
+    } });
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  await flush();
+  expect(access.canUseChat.value).toBe(true);
+  const first = access.scopeKey.value;
+  learner.value = "learner-b";
+  await flush();
+  expect(access.scopeKey.value).not.toBe(first);
+  expect(access.access.value).toBe(null);
+  expect(access.canUseChat.value).toBe(false);
+  expect(viewer.value).toEqual({ actorKey: "local" });
+  expect(request).toHaveBeenCalledTimes(2);
+  second.resolve({ ok: true, available: true, canUse: false });
+  await flush();
+  expect(access.canUseChat.value).toBe(false);
+  const member = access.scopeKey.value;
+  attempt.value = "22222222-2222-4222-8222-222222222222";
+  await flush();
+  expect(access.scopeKey.value).not.toBe(member);
+  expect(request).toHaveBeenCalledTimes(3);
+  expect(request.mock.calls[2][0]).toContain(`/api/learning/${attempt.value}/vibe64/sessions/`);
+  viewer.value = null;
+  await flush();
+  expect(access.access.value).toBe(null);
+  expect(request).toHaveBeenCalledTimes(3);
+});

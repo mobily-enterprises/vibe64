@@ -12,7 +12,8 @@ import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SURFACE_ID,
   vibe64SessionPath,
-  vibe64SessionQueryKey
+  vibe64SessionQueryKey,
+  vibe64SessionEventMatchesScope
 } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
@@ -36,12 +37,16 @@ function assistantAccessText(value = "") {
 
 function useVibe64AssistantAccess({
   active = true,
+  learningAttemptId: learningAttemptInput,
+  learnerId: learnerInput,
   projectSlug: projectSlugInput,
   viewer: viewerInput,
   sessionId = "",
   sessionsApiPath = ""
 } = {}) {
-  const projectSlug = projectSlugInput === undefined ? useVibe64ProjectSlug()
+  const learningAttemptId = computed(() => readRefOrGetterValue(learningAttemptInput));
+  const learnerId = computed(() => assistantAccessText(readRefOrGetterValue(learnerInput)));
+  const projectSlug = projectSlugInput === undefined && learningAttemptInput === undefined ? useVibe64ProjectSlug()
     : computed(() => readRefOrGetterValue(projectSlugInput));
   const viewer = viewerInput === undefined
     ? (hasInjectionContext() ? inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" }) : { actorKey: "local" })
@@ -53,7 +58,12 @@ function useVibe64AssistantAccess({
   const currentSessionsApiPath = computed(() => assistantAccessText(
     readRefOrGetterValue(sessionsApiPath)
   ));
+  const learningScopeReady = computed(() => learningAttemptId.value === undefined || Boolean(
+    learningAttemptId.value && learnerId.value && !projectSlug.value &&
+    currentSessionsApiPath.value === `/api/learning/${learningAttemptId.value}/vibe64/sessions`
+  ));
   const enabled = computed(() => Boolean(
+    learningScopeReady.value &&
     readRefOrGetterValue(active) !== false &&
     currentSessionId.value &&
     currentSessionsApiPath.value && actorKey.value
@@ -68,6 +78,11 @@ function useVibe64AssistantAccess({
       if (event === VIBE64_CONNECTIONS_CHANGED_EVENT || event === VIBE64_ACCOUNTS_CHANGED_EVENT) {
         return true;
       }
+      // Preserve Working's original session/reason policy; the new Learning
+      // carrier must not refresh a Working access owner with the same ID.
+      if (!learningScopeReady.value || (learningAttemptId.value === undefined
+        ? Boolean(payload.learningAttemptId)
+        : !vibe64SessionEventMatchesScope(payload, { learningAttemptId: learningAttemptId.value }))) return false;
       const reason = assistantAccessText(payload.reason);
       if (["codex-app-server-turn-active", "codex-app-server-turn-idle", "opencode-server-turn-active",
         "opencode-server-turn-idle", "claude-stream-turn-active", "claude-stream-turn-idle"].includes(reason)) {
@@ -85,7 +100,7 @@ function useVibe64AssistantAccess({
       ...vibe64SessionQueryKey(
         VIBE64_SURFACE_ID,
         ROUTE_VISIBILITY_PUBLIC,
-        projectSlug.value
+        projectSlug.value, { learningAttemptId: learningAttemptId.value, learnerId: learnerId.value }
       ),
       currentSessionId.value,
       "assistant-access", actorKey.value || "signed-out"
@@ -99,11 +114,13 @@ function useVibe64AssistantAccess({
     refreshOnPull: true,
     requestRecoveryLabel: "AI access"
   });
-  const scopeKey = computed(() => JSON.stringify([projectSlug.value, currentSessionId.value, actorKey.value]));
+  const scopeKey = computed(() => JSON.stringify(learningAttemptId.value === undefined
+    ? [projectSlug.value, currentSessionId.value, actorKey.value]
+    : ["learning", learnerId.value, learningAttemptId.value, currentSessionId.value, actorKey.value]));
 
   const access = computed(() => {
     const value = accessResource.data.value;
-    return actorKey.value && value && value.ok !== false ? value : null;
+    return learningScopeReady.value && actorKey.value && value && value.ok !== false ? value : null;
   });
   const purposes = computed(() => access.value?.purposes || {});
   const currentPurpose = computed(() => purposes.value[access.value?.currentMode]);

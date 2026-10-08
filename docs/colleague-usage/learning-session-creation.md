@@ -73,3 +73,23 @@ last confirmed list and ask the owner to inspect that exact attempt. Do not assu
 the conversation is missing or create a replacement merely because the read
 failed. The read addition alone does not establish that every installation has
 completed its visible Learning filter or teacher controls.
+
+
+## Main chat transport: integration prerequisite
+
+A supported Learning Main chat uses your actual saved attempt and authorized
+conversation, including its original Send, steering, Stop and goal behavior.
+Its own learner identity comes from the signed-in API. It does not use a fake
+project or change your Working or Colleague history. Merely hiding the original
+session with the mode filter retains its conversation and draft. Changing account
+or the exact lesson attempt blocks further work on the old captured target;
+an already-submitted message is not resent to the newly selected conversation.
+
+Learning chat updates belong to the exact attempt. Updates for another lesson or
+working project cannot enable its access, change activity or refresh its goal.
+If updates or access are unavailable, check the same saved attempt before
+retrying; refresh never proves failure or authorizes repeating a message. The
+same transport applies on desktop and mobile. Its prepared client integration
+does not yet prove the visible Main launcher, actual teaching, speech or visuals.
+Colleague can explain the supported controls and offer the original actions; an
+offer does not authorize a new lesson or reset progress.

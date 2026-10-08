@@ -746,6 +746,20 @@ binding.
 
 ## Sources
 
+- `tests/client/useVibe64AssistantAccessCache.vitest.js`
+
+- `tests/client/useVibe64AssistantAccess.vitest.js`
+
+- `tests/client/useVibe64MountedSessionData.vitest.js`
+
+- `tests/client/useVibe64ConversationRuntime.vitest.js`
+
+- `src/lib/vibe64SessionRequestConfig.js`
+
+- `src/composables/useVibe64AssistantAccess.js`
+
+- `src/composables/useVibe64ConversationRuntime.js`
+
 - `src/components/StudioAppShellLayout.vue`
 - `src/composables/useVibe64SessionSelection.js`
 - `src/composables/useStoredSelection.js`
@@ -791,15 +805,7 @@ binding.
 
 - `packages/vibe64-core/src/server/sessionRealtimeEvents.js`
 
-Learning session notifications reuse this same publisher and channel. Its
-optional `learningAttemptId` comes from the original trusted request context's
-learning scope, or the already validated nested session view when deferred work
-has no request context. Extra payload fields cannot select that identity. Such
-events carry an empty working-project slug; a trusted working-project context
-cannot be reclassified by a conflicting learning view. Ordinary events retain
-their original shape. Client exact-attempt matching and mounted Learning-mode
-acceptance remain separate integration obligations; an event is no authority,
-completion proof or reason to resend work.
+
 
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
@@ -901,6 +907,16 @@ completion proof or reason to resend work.
 - `vite.config.mjs`
 
 ## Public contract
+
+Learning session notifications reuse this same publisher and channel. Its
+optional `learningAttemptId` comes from the original trusted request context's
+learning scope, or the already validated nested session view when deferred work
+has no request context. Extra payload fields cannot select that identity. Such
+events carry an empty working-project slug; a trusted working-project context
+cannot be reclassified by a conflicting learning view. Ordinary events retain
+their original shape. Client exact-attempt matching and mounted Learning-mode
+acceptance remain separate integration obligations; an event is no authority,
+completion proof or reason to resend work.
 
 The session-owned browser facade supplies Main's original native conversation to
 the same JSKIT assistant transport used by optional Colleague. Its transport ID
@@ -3351,3 +3367,28 @@ exclusion and learner-binding checks. This prerequisite does not derive an OS
 actor, install a local host contributor, expose routes or prove native teaching;
 the actual host must admit its real local authority without replacing transport
 gates. Unsupported construction scopes fail before registration.
+
+
+## Learning Main client transport prerequisite
+
+The original `useVibe64ConversationRuntime` can select an actual Main learning
+attempt/session through the same supplied retained conversation and app endpoint.
+The composing host supplies each immutable record's attempt, exact Learning
+session API path and the API-returned own learner identity; current mode/query
+flags and source metadata cannot provide that contract. No project is invented.
+The optional Main binding actor key combines the original nonempty viewer actor,
+own learner and exact attempt; sign-out or a changed learner/attempt immediately
+blocks old new-work admission. Already-accepted work keeps its captured target
+without automatic resend. Global viewer identity, Working bindings and Colleague
+history remain unchanged. Learning drafts have that same isolated identity;
+omitted scope retains original Working storage keys.
+
+Original Mounted and AssistantAccess readers reuse the Session query-key owner
+with an optional learner/attempt namespace and the actual registered Learning
+route. Detail refresh, activity overlays, assistant-selection, access and goal
+notifications require the exact learning attempt and reject mixed project events.
+Working events retain each channel's original matching and reject learning
+notifications. The original resource/actor fences, provider reconciliation,
+submission/steering, goal and receipt owners remain authoritative. No second
+chat, provider, store or controller is added. Actual mode attachment, native
+teaching and browser/device acceptance remain separate open requirements.

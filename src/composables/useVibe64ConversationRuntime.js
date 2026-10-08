@@ -10,7 +10,7 @@ import { useVibe64ConversationLog } from "./useVibe64ConversationLog.js";
 import { useVibe64AssistantAccess } from "./useVibe64AssistantAccess.js";
 import { useVibe64AgentSettings } from "./useVibe64AgentSettings.js";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
-import { agentTurnControlPayloadFromContext, VIBE64_SESSION_CHANGED_EVENT, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
+import { agentTurnControlPayloadFromContext, VIBE64_SESSION_CHANGED_EVENT, vibe64SessionEventMatchesScope, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { isArchivedVibe64Session } from "@/lib/vibe64SessionViewModel.js";
@@ -20,7 +20,8 @@ function browserDraftStorage(identity) {
   try {
     const storage = typeof window !== "undefined" ? window.sessionStorage : null;
     return storage ? { storage, key: `vibe64:chat-composer:v1:${JSON.stringify([
-      identity.actorKey, identity.projectSlug, identity.sessionId
+      ...(identity.learningAttemptId === undefined ? [identity.actorKey, identity.projectSlug, identity.sessionId]
+        : [identity.actorKey, "learning", identity.learnerId, identity.learningAttemptId, identity.sessionId])
     ])}` } : null;
   } catch { return null; }
 }
@@ -44,7 +45,8 @@ function createConversationApplication(conversation, { identity, viewer, summary
   const refreshGoal = () => { if (!globalThis.document?.hidden) void conversation.refreshGoal(); };
   useRealtimeEvent({
     enabled: active, event: VIBE64_SESSION_CHANGED_EVENT,
-    matches: ({ payload = {} } = {}) => payload.projectSlug === identity.projectSlug &&
+    matches: ({ payload = {} } = {}) => vibe64SessionEventMatchesScope(payload, identity) &&
+      (identity.learningAttemptId !== undefined || payload.projectSlug === identity.projectSlug) &&
       payload.sessionId === identity.sessionId && ["codex-goal", "claude-goal", "assistant-routing-changed"].includes(payload.reason),
     onEvent: refreshGoal
   });
@@ -113,13 +115,30 @@ function createConversationApplication(conversation, { identity, viewer, summary
 }
 
 /** Main text and voice consume one supplied retained conversation. */
-function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath, active = true, summarySession } = {}) {
+function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath, learningAttemptId, learnerId, active = true, summarySession } = {}) {
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
-  const identity = computed(() => Object.freeze({ sessionId: String(toValue(sessionId) || ""),
-    projectSlug: String(toValue(projectSlug) || ""), actorKey: toValue(viewer)?.actorKey || "",
-    sessionsApiPath: scopedDevelopmentApiUrl(String(toValue(sessionsApiPath) || ""), String(toValue(projectSlug) || "")) }));
+  const identity = computed(() => {
+    const target = { sessionId: String(toValue(sessionId) || ""), projectSlug: String(toValue(projectSlug) || ""),
+      actorKey: toValue(viewer)?.actorKey || "",
+      sessionsApiPath: scopedDevelopmentApiUrl(String(toValue(sessionsApiPath) || ""), String(toValue(projectSlug) || "")) };
+    const attempt = toValue(learningAttemptId);
+    if (attempt !== undefined) {
+      target.learningAttemptId = attempt;
+      target.learnerId = typeof toValue(learnerId) === "string" ? toValue(learnerId) : "";
+      // Only the host's actual API-returned own learner identity scopes this
+      // Main binding. It neither changes the global viewer nor grants access.
+      const ready = !target.projectSlug && target.learnerId && target.actorKey &&
+        target.sessionsApiPath === `/api/learning/${attempt}/vibe64/sessions`;
+      target.actorKey = ready ? JSON.stringify(["learning", target.actorKey, target.learnerId, attempt]) : "";
+    }
+    return Object.freeze(target);
+  });
   const binding = useAssistantConversation({
-    conversationId: () => identity.value.sessionId && identity.value.projectSlug ? mainConversationId(identity.value) : "",
+    conversationId: () => {
+      const target = identity.value;
+      if (!target.sessionId || !target.actorKey || (target.learningAttemptId === undefined && !target.projectSlug)) return "";
+      try { return mainConversationId(target); } catch { return ""; }
+    },
     actorKey: () => identity.value.actorKey, endpoint: "/api/assistant/app", surfaceId: "app", hostSurfaceId: "app",
     workspaceSlug: "", active, goal: true, deferWhileWorking: true, draftStorage: () => browserDraftStorage(identity.value),
     api: createAssistantApi({ request: (url, options) => getHttpWebClient().request(url, options),

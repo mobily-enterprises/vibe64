@@ -41,8 +41,7 @@ function resource(data = null) {
   };
 }
 
-describe("useVibe64AssistantAccess", () => {
-  beforeEach(() => {
+function resetAssistantAccessFixture() {
     endpointMocks.options.length = 0;
     endpointMocks.resources = [resource()];
     endpointMocks.useEndpointResource.mockReset();
@@ -50,7 +49,10 @@ describe("useVibe64AssistantAccess", () => {
       endpointMocks.options.push(options);
       return endpointMocks.resources[endpointMocks.options.length - 1];
     });
-  });
+}
+
+describe("useVibe64AssistantAccess", () => {
+  beforeEach(resetAssistantAccessFixture);
 
   it("loads configured session choices without provider or model catalogs", () => {
     endpointMocks.resources = [resource({ engines: [] }), resource({ engines: [] }), resource({ engines: [] })];
@@ -236,5 +238,57 @@ describe("useVibe64AssistantAccess", () => {
     expect(endpointMocks.resources[0].reload).toHaveBeenCalledOnce();
     expect(endpointMocks.options).toHaveLength(1);
     scope.stop();
+  });
+});
+
+
+describe("learning scope in the original assistant access owner", () => {
+  beforeEach(resetAssistantAccessFixture);
+  const attempt = "11111111-1111-4111-8111-111111111111";
+  const other = "22222222-2222-4222-8222-222222222222";
+  const path = `/api/learning/${attempt}/vibe64/sessions`;
+
+  it("uses the exact learner/attempt access namespace and rejects foreign or missing attempt events", async () => {
+    endpointMocks.resources = [resource({ ok: true, available: true, canUse: true })];
+    const scope = effectScope();
+    const learner = ref("learner-a");
+    const viewer = ref({ actorKey: "owner" });
+    const access = scope.run(() => useVibe64AssistantAccess({ viewer, projectSlug: "", sessionId: "lesson",
+      sessionsApiPath: path, learningAttemptId: attempt, learnerId: learner }));
+    try {
+      const options = endpointMocks.options[0];
+      expect(options.enabled.value).toBe(true);
+      expect(options.path.value).toBe(`${path}/lesson/assistant-access`);
+      expect(options.queryKey.value).toEqual(["vibe64", "learning", "learner-a", attempt, "app", "public", "session", "lesson", "assistant-access", "owner"]);
+      const payload = { learningAttemptId: attempt, sessionId: "lesson", reason: "codex-app-server-turn-idle" };
+      expect(options.realtime.matches({ payload })).toBe(true);
+      for (const wrong of [ { ...payload, learningAttemptId: other }, { ...payload, learningAttemptId: undefined },
+        { ...payload, projectSlug: "working" }, { ...payload, sessionId: "other" } ]) {
+        expect(options.realtime.matches({ payload: wrong })).toBe(false);
+      }
+      expect(options.realtime.matches({ event: "vibe64.accounts.changed" })).toBe(true);
+      const before = access.scopeKey.value;
+      learner.value = "learner-b";
+      await nextTick();
+      expect(access.scopeKey.value).not.toBe(before);
+      expect(options.queryKey.value).toContain("learner-b");
+      viewer.value = null;
+      await nextTick();
+      expect(options.enabled.value).toBe(false);
+      expect(access.access.value).toBe(null);
+    } finally { scope.stop(); }
+  });
+
+  it("does not enable cached availability with missing own learner identity or a mixed project scope", () => {
+    endpointMocks.resources = [resource({ ok: true, available: true, canUse: true })];
+    const scope = effectScope();
+    const access = scope.run(() => useVibe64AssistantAccess({ viewer: { actorKey: "owner" },
+      projectSlug: "", sessionId: "lesson", sessionsApiPath: path, learningAttemptId: attempt }));
+    try {
+      expect(endpointMocks.options[0].enabled.value).toBe(false);
+      expect(access.access.value).toBe(null);
+      expect(access.canUseChat.value).toBe(false);
+      expect(endpointMocks.options[0].realtime.matches({ payload: { learningAttemptId: attempt, sessionId: "lesson" } })).toBe(false);
+    } finally { scope.stop(); }
   });
 });
