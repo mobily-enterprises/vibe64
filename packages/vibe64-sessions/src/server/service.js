@@ -1634,7 +1634,7 @@ function createService({
       }, "Vibe64 could not inspect assistant access.");
     },
 
-    async sendAgentMessage(sessionId, input = {}) {
+    async sendAgentMessage(sessionId, input = {}, options = {}) {
       const request = messageText(input);
       if (!request) {
         return {
@@ -1658,6 +1658,7 @@ function createService({
           messageId,
           message: request
         }, {
+          ...(runtime.learningScope && options.browserAuthority ? { browserAuthority: options.browserAuthority } : {}),
           runtime,
           vibe64User: input.vibe64User || null
         });

@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
+import { mainConversationRequestContext } from "./mainConversationAuthority.js";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL } from "@local/vibe64-terminals/server/actions";
 import {
@@ -58,12 +58,9 @@ function createMainBrowserConversations({ actions, terminals } = {}) {
       const accessTarget = target.learningAttemptId
         ? { learningAttemptId: target.learningAttemptId, sessionId: target.sessionId }
         : { projectSlug: target.projectSlug, sessionId: target.sessionId };
-      const request = context?.requestMeta?.request;
       // Never retain an action contributor's cached authority for a later read,
       // subscription publication or mutation.
-      const requestContext = { surface: "app", channel: "internal", requestMeta: request ? {
-        ...context.requestMeta, request: { ...request, headers: request.headers, vibe64User: authenticatedVibe64User(context) }
-      } : context?.requestMeta };
+      const requestContext = mainConversationRequestContext(context);
       const grant = await actions.execute({ actionId: ACTION_READ_CONVERSATION_CONTEXT, input: accessTarget, context: requestContext });
       const actorId = grant.actor.id;
 

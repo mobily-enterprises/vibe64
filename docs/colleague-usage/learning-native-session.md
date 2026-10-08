@@ -88,3 +88,9 @@ matches it. If the current teaching turn is stopped or replaced while preparing
 a question, retry the same saved request in a current authorized turn before
 claiming delivery. Moving the existing staging coordination does not enable Main
 teaching by itself.
+
+Learning Send retains its original authorized request privately so future lesson
+effects can check current access again. If access is lost or the attempt ends,
+read the retained history and resume an authorized active attempt before new
+teaching work. Sending still preserves your exact words; this prerequisite alone
+does not make lesson tools available or certify an assessment.

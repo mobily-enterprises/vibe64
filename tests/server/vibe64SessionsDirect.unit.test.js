@@ -4480,3 +4480,82 @@ test("teaching WRITE context has no API/model projection and refuses caller auth
   assert.deepEqual(gate.channels, ["internal"]);
   assert.equal(gate.extensions.assistant, undefined);
 });
+
+
+test("actual Learning Main Send forwards only its resolved request authority for later fresh teaching admission", async () => {
+  await withTemporaryRoot(async root => {
+    const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
+    const { registerVibe64ActionContext } = await import("../../packages/vibe64-core/src/server/actionContext.js");
+    const { ACTION_READ_TEACHING_WRITE_CONTEXT, createLearningTeachingContextActions } = await import("../../packages/vibe64-sessions/src/server/actions.js");
+    const f = await learningSessionCreationFixture(root);
+    const created = await f.learningSessions.openSession({ actor: f.actor, attemptId: f.scope.attemptId });
+    const target = { learningAttemptId: f.scope.attemptId, sessionId: created.sessionId };
+    const native = [];
+    const service = createService({ project: f.project, publishSessionChanged: async () => {},
+      terminals: { async sendAgentMessage(sessionId, input, options) {
+        native.push({ sessionId, input, options });
+        return { ok: true, delivered: true, messageId: input.messageId };
+      } } });
+    const actions = createActionCatalogue();
+    actions.register({ contributorId: "actual-sessions", domain: "vibe64-sessions",
+      actions: [...createSessionActions({ sessions: service }), ...createLearningTeachingContextActions()]
+        .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
+    let user = f.actor;
+    registerVibe64ActionContext(actions, { resolveUser: async () => user,
+      authorizeProject: () => assert.fail("Learning Send cannot borrow a Working project grant"),
+      resolveLearningContext: input => f.learningSessions.resolveContext(input) });
+    const request = { headers: { "x-client-marker": "original-request" },
+      vibe64User: { uid: "99", username: "forged", role: "owner" } };
+    const conversations = createMainBrowserConversations({ actions,
+      terminals: { openBrowserConversation: () => assert.fail("Send must use its original action/service owner") } });
+    const conversation = await conversations.open({ id: mainConversationId(target), context: { requestMeta: { request } } });
+    const words = "These are my exact accepted words.\nKeep the second line.";
+    const result = await conversation.send({ text: words, messageId: "actual-learning-request", data: {
+      browserAuthority: { actorId: "99" }, teachingAuthority: { actorId: "99" },
+      learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", vibe64User: { uid: "99" }
+    } });
+    assert.equal(result.ok, true);
+    assert.equal(native.length, 1);
+    const authority = native[0].options.browserAuthority;
+    assert.ok(authority, "the actual learning Send must retain its resolved request for later WRITE checks");
+    assert.deepEqual(Object.keys(authority).sort(), ["sessionId", "learningAttemptId", "actorId", "requestContext"].sort());
+    assert.equal(authority.sessionId, created.sessionId);
+    assert.equal(authority.learningAttemptId, f.scope.attemptId);
+    assert.equal(authority.actorId, f.actor.uid);
+    assert.equal(authority.requestContext.surface, "app");
+    assert.equal(authority.requestContext.channel, "internal");
+    assert.equal(authority.requestContext.requestMeta.request.vibe64User, f.actor);
+    assert.equal(authority.requestContext.requestMeta.request.headers, request.headers);
+    assert.equal(native[0].options.runtime.learningScope.attemptId, f.scope.attemptId);
+    assert.equal(native[0].input.message, words);
+    for (const key of ["browserAuthority", "teachingAuthority", "requestContext", "learningAttemptId", "pin"]) {
+      assert.equal(Object.hasOwn(native[0].input, key), false, key);
+    }
+    const fresh = () => actions.execute({ actionId: ACTION_READ_TEACHING_WRITE_CONTEXT, input: target,
+      context: authority.requestContext });
+    assert.equal((await fresh()).actor.id, f.actor.uid);
+    f.trainingState.active = false;
+    await assert.rejects(fresh(), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+    f.trainingState.active = true;
+    user = null;
+    await assert.rejects(fresh(), { code: "vibe64_auth_required" });
+    assert.equal(native.length, 1, "fresh authority reads cannot dispatch another native message");
+  });
+});
+
+test("ordinary Working Send retains its original two-argument service call without teaching authority", async () => {
+  const calls = [];
+  const actor = { uid: "42", username: "ada", role: "member" };
+  const definition = createSessionActions({ sessions: { sendAgentMessage(...args) { calls.push(args); return { ok: true }; } } })
+    .find(value => value.id === ACTION_SEND_AGENT_MESSAGE);
+  const input = { projectSlug: "working-project", sessionId: "working-session", message: "My original Working words", messageId: "work-request" };
+  await definition.execute(input, { actor: { id: actor.uid }, vibe64Action: { user: actor,
+    project: { slug: input.projectSlug, targetRoot: "/already-authorized/working-project" } } });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].length, 2);
+  assert.equal(calls[0][0], input.sessionId);
+  assert.deepEqual(calls[0][1], { message: input.message, messageId: input.messageId, vibe64User: actor });
+  for (const key of ["browserAuthority", "teachingAuthority", "requestContext"]) {
+    assert.equal(definition.input.schema.patch({ ...input, [key]: {} }).errors[key].code, "FIELD_NOT_ALLOWED", key);
+  }
+});

@@ -1,4 +1,5 @@
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { mainConversationRequestContext } from "./mainConversationAuthority.js";
 import { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool } from "./assistantContracts.js";
 import {
   sessionRenameActionInputValidator,
@@ -447,7 +448,14 @@ function createSessionActions({ sessions } = {}) {
       assistant: conversationOperationTool("Send an agreed request or steering to Main chat in the exact selected project/session. Supply a unique messageId and reuse it unchanged on a retry. submissionKind=steer requires a running turn; send requires a new turn. A delivery receipt is not a completed answer: read the conversation or create a watch. Plan creation, changes, reopening, archival and execution are ordinary chat requests routed by intent. An optional planRevision checks the referenced current document without bypassing Router. Never send merely because a watch recommends more work."),
       kind: "command",
       input: agentMessageActionInputValidator,
-      execute: (input) => sessions.sendAgentMessage(input.sessionId, withoutSessionId(input))
+      execute(input, context) {
+        const learning = context.vibe64Action?.learning;
+        if (!learning) return sessions.sendAgentMessage(input.sessionId, withoutSessionId(input));
+        return sessions.sendAgentMessage(input.sessionId, withoutSessionId(input), {
+          browserAuthority: { sessionId: input.sessionId, learningAttemptId: learning.learningScope.attemptId,
+            actorId: context.actor.id, requestContext: mainConversationRequestContext(context) }
+        });
+      }
     }),
     action({
       id: ACTION_INSPECT_ASSISTANT_ACCESS,

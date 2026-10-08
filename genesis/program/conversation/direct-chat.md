@@ -885,6 +885,7 @@ binding.
 - `packages/vibe64-terminals/src/server/sessionConversations.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-sessions/src/server/mainBrowserConversations.js`
+- `packages/vibe64-sessions/src/server/mainConversationAuthority.js`
 - `packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js`
 - `packages/vibe64-sessions/src/shared/conversationIdentity.js`
 - `packages/vibe64-terminals/src/server/providerUsage.js`
@@ -3451,3 +3452,13 @@ Send returns. Working roots and unscoped callbacks retain their original
 behavior; Learning still returns the existing no-Git checkpoint result. This
 necessary new-host adaptation supplies no teaching manifest or completion
 promotion, and its source-graph callback proof is not installed native acceptance.
+
+Canonical Learning Send retains the actual resolved actor/session/attempt and
+original request projection in private `browserAuthority` options through the
+original Sessions service. The Main facade and action reuse one request-context
+projection in `mainConversationAuthority.js`. It carries no cached contributor
+grant; later effects must call the internal WRITE gate and then recheck their
+actual admitted native turn and cancellation. Input JSON cannot supply authority,
+and request data never becomes native input or persisted metadata. Working Send
+keeps its original two-argument call. This provenance prerequisite does not
+register the teacher manifest or complete Main teaching acceptance.
