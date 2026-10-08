@@ -471,3 +471,82 @@ describe("same Main voice binding for actual source-less Learning", () => {
     expect(mocks.request).not.toHaveBeenCalled();
   });
 });
+
+
+describe("Main lesson answer context uses the original conversation snapshot", () => {
+  const lessonQuestion = (questionId = "question-one") => ({ attemptId: learningAttemptA,
+    questionId, assessmentId: "workspace-navigation", issuedRevision: 4,
+    topicHash: "a".repeat(64), lessonHash: "b".repeat(64) });
+  const lessonFixture = () => fixture({ projectSlug: "", sessionId: "lesson-answer",
+    learningAttemptId: learningAttemptA, learnerId: "learner-a", sessionsApiPath: learningPath(learningAttemptA) });
+
+  it("captures only the delivered question fields in a typed Main answer", async () => {
+    const f = lessonFixture(); const runtime = f.runtime.value; const question = lessonQuestion();
+    f.snapshot(runtime.identity, { trainingQuestion: { ...question, claimedPass: true } });
+    await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(question));
+    await runtime.send({ message: "My actual answer" }, { messageId: "typed-lesson-answer" });
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request.mock.calls[0][1].body).toMatchObject({ text: "My actual answer",
+      messageId: "typed-lesson-answer", data: { trainingQuestion: question } });
+    expect(mocks.request.mock.calls[0][1].body.data.trainingQuestion).toEqual(question);
+    expect(runtime.draft.value).toBe("");
+  });
+
+  it("keeps the spoken answer attached to its recording-start question", async () => {
+    const f = lessonFixture(); const runtime = f.runtime.value; const first = lessonQuestion();
+    f.snapshot(runtime.identity, { trainingQuestion: first });
+    await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(first));
+    const binding = createProjectVoiceBinding(runtime); const context = binding.captureContext();
+    expect(context.trainingQuestion).toEqual(first);
+    expect(context.trainingQuestion).not.toBe(runtime.trainingQuestion.value);
+    const next = lessonQuestion("question-two");
+    f.snapshot(runtime.identity, { trainingQuestion: next });
+    await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(next));
+    await binding.submitText("Answer to the first question", { messageId: "captured-lesson-answer", context });
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request.mock.calls[0][1].body.data.trainingQuestion).toEqual(first);
+  });
+
+  it("never associates an earlier ordinary recording with a later delivered question", async () => {
+    const f = lessonFixture(); const runtime = f.runtime.value;
+    const binding = createProjectVoiceBinding(runtime); const context = binding.captureContext();
+    expect(context).toEqual(runtime.identity);
+    const question = lessonQuestion();
+    f.snapshot(runtime.identity, { trainingQuestion: question });
+    await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(question));
+    await binding.submitText("Words recorded before that question", { messageId: "ordinary-lesson-words", context });
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request.mock.calls[0][1].body.data).not.toHaveProperty("trainingQuestion");
+  });
+
+  it("retains the original question and words when the original delivery owner retries", async () => {
+    const f = lessonFixture(); const runtime = f.runtime.value; const first = lessonQuestion();
+    f.snapshot(runtime.identity, { trainingQuestion: first });
+    await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(first));
+    mocks.request.mockResolvedValueOnce({ ok: false, error: "Delivery refused", retryable: true });
+    await expect(runtime.send({ message: "Original answer words" }, { messageId: "retry-lesson-answer" })).rejects.toThrow("Delivery refused");
+    const request = runtime.delivery.find("retry-lesson-answer").payload.request;
+    const saved = { ...request, data: { ...request.data, trainingQuestion: { ...request.data.trainingQuestion } } };
+    const next = lessonQuestion("question-two");
+    f.snapshot(runtime.identity, { trainingQuestion: next });
+    await vi.waitFor(() => expect(runtime.trainingQuestion.value).toEqual(next));
+    await runtime.send({ message: "Replacement must not win" }, { messageId: "retry-lesson-answer" });
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.request.mock.calls[1][1].body).toEqual({ ...saved, messageId: "retry-lesson-answer" });
+    expect(saved.data.trainingQuestion).toEqual(first);
+  });
+
+  it("does not add lesson context to Working or adopt another attempt's snapshot", async () => {
+    const f = fixture(); const runtime = f.runtime.value;
+    f.snapshot(runtime.identity, { trainingQuestion: lessonQuestion() });
+    await vi.waitFor(() => expect(runtime.trainingQuestion.value).toBe(null));
+    await runtime.send({ message: "Ordinary work", trainingQuestion: lessonQuestion() }, { messageId: "working-no-lesson" });
+    expect(mocks.request.mock.calls[0][1].body.data).not.toHaveProperty("trainingQuestion");
+    const learning = lessonFixture(); const target = learning.runtime.value;
+    learning.snapshot(target.identity, { trainingQuestion: lessonQuestion() });
+    await vi.waitFor(() => expect(target.trainingQuestion.value).toEqual(lessonQuestion()));
+    learning.snapshot(target.identity, { trainingQuestion: { ...lessonQuestion(), attemptId: learningAttemptB } });
+    await vi.waitFor(() => expect(target.trainingQuestion.value).toBe(null));
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+  });
+});

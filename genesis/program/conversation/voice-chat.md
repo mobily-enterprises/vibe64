@@ -68,6 +68,15 @@ startup/current capture through the existing owner, retaining earlier pending
 delivery and the typed draft; visible return alone cannot restart recording.
 Document visibility is separate from avatar collapse and mounted-body eligibility.
 Voice retains no independent chat history and never changes the typed draft.
+Learning Main exposes its bounded delivered-question reference from the same
+conversation snapshot. Typed answers capture the current reference through
+original prepareMessage; a recording captures its reference at start through
+the original project binding. Explicit absence stays local and omits the wire
+field, so earlier speech cannot adopt a later question. Retry uses the original
+saved request. Working requests keep their original data mapping. This carries
+association only: native admission, fresh actor/pin checks and assessment stay
+with the existing Main and Training owners.
+
 JSKIT's hands-free Pause stops new microphone input immediately while retaining
 the buffered tail for its original final flush. A matching stale endpoint rejection
 releases only that rejected commit; pending admission retains its existing ordering

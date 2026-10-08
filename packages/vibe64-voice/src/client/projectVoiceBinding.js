@@ -43,7 +43,8 @@ export function createProjectVoiceBinding(runtime, view = {}) {
     get adapter() { return view.adapter || null; },
     get presentation() { return view.presentation || "dialog"; },
     get onTranscript() { return view.onTranscript; },
-    captureContext: () => ({ ...identity }),
+    captureContext: () => ({ ...identity,
+      ...(learning && runtime.trainingQuestion?.value ? { trainingQuestion: { ...runtime.trainingQuestion.value } } : {}) }),
     retain() { retained = runtime.retain(); runtime = retained.runtime; },
     release() { retained?.release(); retained = null; },
     submitText(text, { messageId, context } = {}) {
@@ -52,7 +53,8 @@ export function createProjectVoiceBinding(runtime, view = {}) {
             context?.sessionsApiPath !== identity.sessionsApiPath)) {
         throw new Error("This recording belongs to another conversation.");
       }
-      return runtime.send({ message: text, agentSettings: runtime.agentSettings.requestSettings.value }, { messageId });
+      return runtime.send({ message: text, agentSettings: runtime.agentSettings.requestSettings.value,
+        ...(learning ? { trainingQuestion: context.trainingQuestion ? { ...context.trainingQuestion } : null } : {}) }, { messageId });
     },
     cancelWork: () => runtime.interrupt()
   };

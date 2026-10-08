@@ -29,6 +29,17 @@ not keep a lesson chat visible after your own lesson list no longer grants acces
 Colleague can explain the supported controls and offer authorized
 operations; an offer is not permission to start or repeat a lesson.
 
+When the Main teacher has delivered a question, a typed answer carries that
+question's reference through the same Send operation. Speech captures the
+reference when that recording starts. A later question cannot silently become
+the question for those earlier words; a recording that started without a
+question remains an ordinary message. Retry keeps the original words and
+reference. This association is not a pass: the server still checks the delivered
+question, accepted message, current permission and grading evidence. These
+controls apply equally on desktop and phone; speech requires an available
+configured voice service. Colleague can explain them but cannot invent an
+answer receipt or a successful assessment.
+
 These retained-host prerequisites apply on desktop and phone. They do not yet
 establish the complete visible Learning launcher, teacher tool integration,
 lesson delivery, physical speech or Preview presentation. Those require their

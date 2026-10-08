@@ -40,6 +40,12 @@ function createConversationApplication(conversation, { identity, viewer, summary
     Boolean(turn.value.id) && turn.value.state === "active" && mounted.agentConnectionStatus.value === "connected");
   const available = computed(() => current.value && !isArchivedVibe64Session(mounted.session.value || {}) &&
     !mounted.detailState.value?.error && !access.accessError.value);
+  const trainingQuestion = computed(() => {
+    const reference = conversation.snapshot.value?.trainingQuestion;
+    if (!available.value || identity.learningAttemptId === undefined || reference?.attemptId !== identity.learningAttemptId) return null;
+    return Object.freeze(Object.fromEntries(["attemptId", "questionId", "assessmentId", "issuedRevision", "topicHash", "lessonHash"]
+      .map(key => [key, reference[key]])));
+  });
   // A goal can stay pinned to another native engine after a chat selection.
   // Product invalidations refresh the same binding; they own no goal cache.
   const refreshGoal = () => { if (!globalThis.document?.hidden) void conversation.refreshGoal(); };
@@ -65,6 +71,13 @@ function createConversationApplication(conversation, { identity, viewer, summary
     const body = agentTurnControlPayloadFromContext(authored);
     const data = Object.fromEntries(["agentSettings", "displayMessage", "displayAttachments", "genesisTask",
       "planRevision", "reviewAction", "originId"].filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]));
+    // A recording's explicit absence must not acquire a later question. The
+    // local null marker never enters the original optional-object wire schema.
+    const reference = Object.hasOwn(authored, "trainingQuestion") ? authored.trainingQuestion : trainingQuestion.value;
+    if (identity.learningAttemptId !== undefined && reference?.attemptId === identity.learningAttemptId) {
+      data.trainingQuestion = Object.fromEntries(["attemptId", "questionId", "assessmentId", "issuedRevision", "topicHash", "lessonHash"]
+        .map(key => [key, reference[key]]));
+    }
     return { ...authored, submissionKind, data, request: { text: String(authored.message || ""), data,
       ...(authored.attachmentIds?.length ? { attachmentIds: authored.attachmentIds } : {}),
       ...(submissionKind === "steer" ? { steer: true } : {}) } };
@@ -99,7 +112,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
       return result;
     } finally { void mounted.refresh({ reason: "agent-turn-interrupted" }).catch(() => {}); }
   }
-  return { identity, mounted, conversationLog, access, agentSettings, available, steerable,
+  return { identity, mounted, conversationLog, access, agentSettings, available, steerable, trainingQuestion,
     canSubmit: conversation.canSubmit, queueWhileSending: conversation.queueWhileSending,
     delivery: conversation.delivery, draft: conversation.draft, draftAttachments: conversation.draftAttachments,
     draftRetry: conversation.draftRetry, draftRetryMatches: conversation.draftRetryMatches,
