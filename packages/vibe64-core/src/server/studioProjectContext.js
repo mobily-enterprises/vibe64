@@ -198,7 +198,7 @@ async function assertDirectoryUsable(directoryPath = "") {
     if (error?.code && error.code.startsWith("vibe64_")) {
       throw error;
     }
-    const wrapped = new Error(`Project path is not readable and writable: ${directoryPath}`);
+    const wrapped = new Error(`Project path is not readable and writable: ${directoryPath}`, { cause: error });
     wrapped.code = "vibe64_project_path_not_accessible";
     throw wrapped;
   }

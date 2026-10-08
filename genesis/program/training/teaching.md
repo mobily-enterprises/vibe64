@@ -908,7 +908,13 @@ acceptance is not inferred from this bounded admission integration.
 
 Collection reads only each saved initial session's bounded original metadata
 and summary owners, with no transcript hydration or creation. A missing session
-is absent; corrupt binding/project/content propagates without repair. False rows
+is absent; corrupt binding/project/content propagates without repair. An ended
+exercise's missing Project is omitted only when the original Core error preserves
+an ENOENT cause, the original saved learner scope is revalidated, its Project
+metadata is empty and all Core-derived source/runtime/session roots are absent.
+Local reads use the same original private practice scope. No history/progress
+write, preparation or recreation occurs. Active missing storage, retained deletion
+metadata, surviving roots and unsafe/inaccessible paths remain errors. False rows
 add actual `projectSlug` and `noExercise:false` to the existing safe schema. The
 browser-only own learner identity and original native omission stay unchanged;
 normal and author-preview histories remain separate with their original bounds.

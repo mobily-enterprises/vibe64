@@ -3027,3 +3027,110 @@ test("saved ready historical preparation is adopted only at its original initial
   assert.deepEqual(await treeState(f.systemRoot), missing);
   assert.deepEqual(await fs.readFile(f.paths.progress), progress);
 });
+
+
+// LM17 local collection companion: reuse the original actual installed learner,
+// local Core/Project/Git/Runtime source fixture and its explicit offline adoption.
+// Missing/unsafe storage below is fixture injection, as in the original missing
+// historical session test. It is not a new local user project-delete operation.
+async function localCollectionContinuityFixture(t, { ended = true } = {}) {
+  const f = await historicalPracticeFixture(t);
+  await f.run(true);
+  assert.equal(f.core.projectCatalogEnabled, false);
+  assert.deepEqual((await f.learning.readSessions({ actor: f.actor })).map(row => row.sessionId), [f.initial.sessionId]);
+  const roots = await f.learning.resolvePracticeContext({ actor: f.actor, attemptId: f.saved.scope.attemptId, access: "observe" }, async () => {
+    const state = await f.core.readWorkspaceProjectState({ slug: f.saved.projectSlug });
+    return { ...state, projectSessionSourceRoot: f.core.projectSessionSourceRootForSlug(f.saved.projectSlug) };
+  });
+  assert.equal(roots.projectContextRoot, f.legacyRuntime.projectContextRoot);
+  assert.equal(roots.projectRuntimeRoot, f.legacyRuntime.stateRoot);
+  assert.equal(roots.projectSessionSourceRoot, f.legacyRuntime.projectSessionSourceRoot);
+  assert.notEqual(roots.projectSessionSourceRoot, roots.projectContextRoot, "local managed source is a distinct original owner root");
+  if (ended) {
+    const saved = await f.state.readState({ actor: f.actor });
+    await f.state.endAttempt({ actor: f.actor, attemptId: f.saved.scope.attemptId,
+      expectedRevision: saved.revision, requestId: "end-local-read", reason: "discard" });
+  }
+  const progress = await fs.readFile(f.paths.progress);
+  const active = await fs.readFile(f.paths.active);
+  const workingSource = await fs.readFile(path.join(f.sourceRoot, "package.json"));
+  const unchanged = async () => {
+    assert.deepEqual(await fs.readFile(f.paths.progress), progress);
+    assert.deepEqual(await fs.readFile(f.paths.active), active);
+    assert.deepEqual(await fs.readFile(path.join(f.sourceRoot, "package.json")), workingSource);
+  };
+  return { ...f, roots, unchanged };
+}
+
+async function injectAbsentLocalPractice(f, { retainManagedSource = false } = {}) {
+  // Exact temporary fixture roots came from original Core inside its owning
+  // callback; no consumer path inference, provider admission or lazy repair.
+  await fs.rm(f.roots.projectContextRoot, { recursive: true });
+  await fs.rm(f.roots.projectRuntimeRoot, { recursive: true });
+  if (!retainManagedSource) await fs.rm(f.roots.projectSessionSourceRoot, { recursive: true });
+}
+
+test("local ended Learning collection omits only completely absent original practice storage without recreating progress or source", async t => {
+  const f = await localCollectionContinuityFixture(t);
+  await injectAbsentLocalPractice(f);
+  assert.deepEqual(await f.learning.readSessions({ actor: f.actor }), []);
+  assert.deepEqual(await f.learning.readSessions({ actor: f.actor }), [], "repeat does not repair or recreate the old source");
+  for (const root of [f.roots.projectContextRoot, f.roots.projectRuntimeRoot, f.roots.projectSessionSourceRoot]) {
+    await assert.rejects(fs.lstat(root), { code: "ENOENT" });
+  }
+  const saved = await f.state.readState({ actor: f.actor, includeCompletion: true });
+  assert.equal(saved.active, null);
+  assert.equal(saved.progress.attempts[0].ended.reason, "discard");
+  assert.deepEqual(saved.progress.attempts[0].pin, f.pin);
+  await assert.rejects(f.learning.resolveContext({ actor: { uid: 43 }, attemptId: f.saved.scope.attemptId, access: "observe" }),
+    { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  await assert.rejects(f.learning.resolveContext({ actor: f.actor, attemptId: f.saved.scope.attemptId,
+    sessionId: f.initial.sessionId, access: "write" }), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
+  await f.unchanged();
+});
+
+test("local ended collection retains managed source and refuses unsafe aliases or raw access failures instead of omitting history", async t => {
+  const f = await localCollectionContinuityFixture(t);
+  const sourceBytes = await fs.readFile(path.join(f.initial.sourcePath, "server.mjs"));
+  await injectAbsentLocalPractice(f, { retainManagedSource: true });
+  await assert.rejects(f.learning.readSessions({ actor: f.actor }),
+    error => error.code === "vibe64_project_path_not_accessible" && error.cause?.code === "ENOENT");
+  assert.deepEqual(await fs.readFile(path.join(f.initial.sourcePath, "server.mjs")), sourceBytes);
+  await f.unchanged();
+  await fs.rm(f.roots.projectSessionSourceRoot, { recursive: true });
+  await fs.symlink(f.sourceRoot, f.roots.projectSessionSourceRoot);
+  try {
+    await assert.rejects(f.learning.readSessions({ actor: f.actor }), { code: "vibe64_practice_path_unsafe" });
+    await f.unchanged();
+  } finally { await fs.rm(f.roots.projectSessionSourceRoot); }
+  const parent = path.dirname(f.roots.projectContextRoot);
+  const { mode } = await fs.stat(parent);
+  await fs.chmod(parent, 0);
+  try {
+    // Original local practiceDirectoryExists encounters the unreadable parent
+    // BEFORE assertDirectoryUsable, so this is raw EACCES, without wrapper guesses.
+    await assert.rejects(f.learning.readSessions({ actor: f.actor }), { code: "EACCES" });
+  } finally { await fs.chmod(parent, mode & 0o7777); }
+  assert.deepEqual(await f.learning.readSessions({ actor: f.actor }), []);
+  await f.unchanged();
+});
+
+test("local active missing storage and ended stored ownership corruption remain refusals at the original saved practice owner", async t => {
+  const active = await localCollectionContinuityFixture(t, { ended: false });
+  await injectAbsentLocalPractice(active);
+  await assert.rejects(active.learning.readSessions({ actor: active.actor }),
+    error => error.code === "vibe64_project_path_not_accessible" && error.cause?.code === "ENOENT");
+  assert.equal((await active.state.readState({ actor: active.actor })).active.attemptId, active.saved.scope.attemptId);
+  await active.unchanged();
+  const ended = await localCollectionContinuityFixture(t);
+  const bytes = await fs.readFile(ended.projectRecordPath);
+  const record = JSON.parse(bytes);
+  record.training.learnerKey = Buffer.from("foreign-learner").toString("base64url");
+  await fs.writeFile(ended.projectRecordPath, `${JSON.stringify(record)}\n`);
+  try {
+    await assert.rejects(ended.learning.readSessions({ actor: ended.actor }), { code: "vibe64_practice_scope_mismatch" });
+    await ended.unchanged();
+  } finally { await fs.writeFile(ended.projectRecordPath, bytes); }
+  assert.deepEqual((await ended.learning.readSessions({ actor: ended.actor })).map(row => row.sessionId), [ended.initial.sessionId]);
+  await ended.unchanged();
+});

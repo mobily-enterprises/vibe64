@@ -63,6 +63,13 @@ content and their original evidence. It does not stop, delete, restore or overwr
 the earlier project, and does not prove that the new Preview runs. Ordinary new
 starts still require an enabled release. A no-exercise lesson creates no project.
 
+If an owner separately archived and deleted an ended exercise, its lesson history,
+passed assessments and evidence remain. Learning omits that deleted conversation
+and can still open the healthy continued lesson. Reading history does not recreate
+the old project. Incomplete deletion, inaccessible storage, changed ownership or
+missing pinned content remains an error requiring owner inspection. A missing
+active exercise is not treated as harmless old history.
+
 A different active attempt must be resumed or explicitly ended; continuation cannot
 take it over. On an uncertain save Colleague reads progress and retries the same
 continuation request, rather than inventing another exercise. A retired request's

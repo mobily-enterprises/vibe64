@@ -1,3 +1,4 @@
+import { lstat } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import { captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
@@ -224,6 +225,26 @@ function createTrainingLearningSessions({ learners, teachingBrief, project, sess
         // Exercise attempts use their real project, never this reserved namespace.
         if (error.code === "VIBE64_TRAINING_EXERCISE_REQUIRED" ||
             practiceSessions && error.code === "VIBE64_TRAINING_SESSION_REQUIRED") continue;
+        if (practiceSessions && attempt.ended && error.code === "vibe64_project_path_not_accessible" &&
+            error.cause?.code === "ENOENT") {
+          const saved = await learners.readExerciseProjectScope({ actor, attemptId: attempt.attemptId, access: "observe" });
+          const readRemoved = async () => {
+            const state = await projectContext.readWorkspaceProjectState({ slug: saved.projectSlug });
+            if (Object.keys(state.metadata).length) return false;
+            for (const root of [state.projectContextRoot, state.projectRuntimeRoot,
+              projectContext.projectSessionSourceRootForSlug(saved.projectSlug)]) {
+              try { await lstat(root); return false; }
+              catch (missing) { if (missing.code !== "ENOENT") throw missing; }
+            }
+            return true;
+          };
+          // An ended exercise may have been explicitly deleted. Retain its
+          // evidence, but omit its conversation only after complete removal.
+          // Partial deletion, unsafe paths and authority errors still fail.
+          const removed = projectContext.projectCatalogEnabled ? await readRemoved()
+            : await projectContext.runWithPracticeProjectScope({ actor, training: saved.training, access: "observe" }, readRemoved);
+          if (removed) continue;
+        }
         throw error;
       }
       const read = async () => {
