@@ -1809,6 +1809,9 @@ function createService({
     const session = existingSession || await runtime.getSession(sessionId, {
       inspectSource: false
     });
+    if (runtime.learningScope?.noExercise === true) {
+      return { completion: null, state: session.workspaceSetup };
+    }
     const setup = await workspaceSetup.start({
       renewal,
       retry,

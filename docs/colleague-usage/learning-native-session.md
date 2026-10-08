@@ -10,6 +10,7 @@ not send a teaching request or prove that its teaching tools are available.
 A lesson without a practice exercise retains its conversation and history under
 your exact saved attempt. It creates no practice project, uses no practice
 database slot and has no source changes to Save or Git recovery checkpoint.
+Finishing a teaching turn does not start workspace setup for this kind of lesson.
 Resume the confirmed attempt after an interruption. Do not create a substitute
 workspace or reset its progress to hide a preparation failure.
 

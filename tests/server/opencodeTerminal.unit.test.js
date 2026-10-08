@@ -4205,4 +4205,8 @@ test("actual Learning OpenCode Main publishes one catalogue and promotes its adm
   allowed = true;
   busy = false;
   await f.service.interruptAgentTurn(sessionId, {}, { runtime, vibe64User: teaching.actor });
+  // Closing drains the actual after-turn completion queue before checking it.
+  await f.service.close();
+  assert.equal((await runtime.getSession(sessionId, { inspectSource: false })).workspaceSetup.status, "unconfigured",
+    "A no-workspace lesson must not run source preparation or save a false source failure after its native turn.");
 });
