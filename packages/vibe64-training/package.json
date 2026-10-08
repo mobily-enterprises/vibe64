@@ -32,7 +32,9 @@
     "./server/main-teaching": "./src/server/mainTeaching.js",
     "./server/visual-resource-actions": "./src/server/visualResourceActions.js",
     "./server/visual-resource-routes": "./src/server/visualResourceRoutes.js",
-    "./client/preview-registration": "./src/client/useTrainingPreviewRegistration.js"
+    "./client/preview-registration": "./src/client/useTrainingPreviewRegistration.js",
+    "./server/presentation-coordination": "./src/server/presentationCoordination.js",
+    "./client/presentation-operation": "./src/client/presentationOperation.js"
   },
   "jskit": {
     "kind": "runtime",

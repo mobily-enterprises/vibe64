@@ -20,6 +20,8 @@
 - `packages/vibe64-training/src/server/teaching.js`
 - `packages/vibe64-training/src/server/visualResourceActions.js`
 - `packages/vibe64-training/src/server/visualResourceRoutes.js`
+- `packages/vibe64-training/src/server/presentationCoordination.js`
+- `packages/vibe64-training/src/client/presentationOperation.js`
 - `packages/vibe64-training/src/server/deliveryProof.js`
 - `packages/vibe64-training/src/server/mainTeaching.js`
 - `packages/vibe64-runtime/src/shared/trainingQuestionReference.js`
@@ -832,3 +834,23 @@ These APIs and the retained client handle do not establish Main navigation, cue,
 audible-completion or terminal-acknowledgement transport. Those operations must
 reuse the original teaching coordinators and actual canonical native receipts;
 selected IDs, progress and rendered history cannot substitute for that proof.
+
+### Original browser presentation coordination
+
+Training owns the exact original ephemeral navigation/cue transaction through
+`createTrainingPresentationCoordination`. Colleague immediately uses it with its
+original connection map, interactive/native turn admission and command grammar.
+One connection retains the same pending slot for general navigation and lesson
+presentation; splitting that slot would break original exclusivity. The original
+15-second/45-second deadlines, exact player/output/terminal receipt checks,
+canonical-final binding, identical ACK replay and Stop/fresh/focus retirement
+ordering remain. The sole host facility publishes the existing product change;
+no account, progress, native process, new queue or durable journal is owned here.
+A live generation getter preserves the original ACK-time consumer generation.
+
+`executeTrainingPresentationOperation` returns the original player operation
+promise. Online's existing actor/view/handle fences still run after it completes
+and before `trainingPresentationReceipt` projects the original bounded fields.
+No extra player or browser registration is introduced. Main browser client
+admission, cue tools, canonical event decoration and voice/ACK attachment remain
+separate required work; this extraction does not fabricate those fields.

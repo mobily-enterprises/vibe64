@@ -866,3 +866,13 @@ contributors can supply them on each operation; explicit owners or null remain
 unchanged. Future admitted answers retain the existing canonical question
 snapshot and delivery identity. Older ordinary messages stay ungraded; this
 correction performs no historical conversion or inferred association.
+
+### Shared browser presentation transaction
+
+Colleague delegates its original pending navigation/cue receipt lifetime and
+predicates to Training's presentation coordinator, immediately using the same
+connection objects. General view grammar, map ownership, current native turn
+admission, event ordering and every Stop/fresh/focus/failure call site remain in
+this service. The coordinator is an ephemeral state facility and never enters
+the saved conversation record. Original browser/cue assertions remain unchanged;
+this move adds no Main piloting route, connection identity or persisted field.

@@ -30,6 +30,9 @@ narrated diagram waits for its confirmed final explanation and actual sound and
 motion completion. Hiding or stopping it does not count as completed teaching.
 If its cue receipt was not confirmed, read the current status before continuing;
 do not assume the explanation or motion succeeded.
+When Colleague opens a diagram, keep that same browser open until its operation
+is confirmed. Stop or starting a fresh Colleague conversation retires its old
+explanation; an old confirmation cannot complete a new one.
 
 Source-less Learning conversations show Lessons and omit App. A supported declared
 diagram can use the same Presentation player only in your exact saved lesson

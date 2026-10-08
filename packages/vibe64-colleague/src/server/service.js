@@ -1,3 +1,4 @@
+import { publicCue, createTrainingPresentationCoordination } from "@local/vibe64-training/server/presentation-coordination";
 import { evaluateAdmittedTrainingAssessment } from "@local/vibe64-training/server/conversation-assessment";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -21,10 +22,6 @@ function requireResult(result) {
   return result;
 }
 function publicWatch({ cursor, ...watch }) { return watch; }
-function publicCue(cue) {
-  const { generation, name, parameters, operation, projectSlug, sessionId, ...value } = cue;
-  return value;
-}
 function colleagueHistoryMessages(turn) {
   const runtime = turn.metadata?.runtime;
   return turn.messages.flatMap(message => {
@@ -160,6 +157,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve(),
       browserObservers: new Set()
     };
+    state.presentation = createTrainingPresentationCoordination({ changed: () => publishBrowserChange(state) });
     if (record.status === "working") {
       record.status = "interrupted";
       record.error ||= "The server restarted. Your history is kept. Inspect unfinished operations before continuing; nothing was repeated.";
@@ -253,8 +251,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             messageId: event.messageId, streaming: colleagueBrowserStream(event.streaming), interimReply });
           return;
         }
-        const presentationCue = [...state.connections.values()].map(connection => connection.cue).find(cue =>
-          cue?.turnId === event.turnId && cue.outputId === (event.outputId || event.messageId));
+        const presentationCue = state.presentation.outputCue(state.connections.values(), event);
         observer.listener({ ...event, interimReply,
           ...(event.type === "message" && event.status === "inProgress"
             ? { text: event.text.replace(/[\uD800-\uDBFF]$/, "") } : {}),
@@ -314,8 +311,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         context.colleague?.autonomous || generation !== state.generation || !turnId || !connection) {
       throw failure("Stage a lesson question only in its current admitted interactive turn.");
     }
-    const cue = connection.cue;
-    if (requireCompletedCue && cue && (cue.phase !== "completed" || cue.conversationId !== conversationId || cue.clientId !== connection.clientId)) {
+    if (requireCompletedCue && !state.presentation.allowsQuestion(connection, conversationId)) {
       throw failure("Finish the current explanation cue before asking the next lesson question.");
     }
     return { conversationId, turnId, generation };
@@ -506,12 +502,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           return;
         }
         if (progress && (event.role === "commentary" || (event.outputId || event.messageId) === progress.id)) return;
-        const cue = state.connections.get(connection.clientId)?.cue;
-        if (cue?.phase === "armed" && cue.generation === generation && event.role === "assistant" && event.status === "complete") {
-          cue.outputId = event.outputId || event.messageId;
-          cue.canonicalFinal = true;
-          cue.phase = "bound";
-        }
+        state.presentation.bindOutput(state.connections.get(connection.clientId), event, generation);
         state.interimReply = null;
         state.streamingReply = { id: event.outputId || event.messageId, turnId: event.turnId,
           ...(event.outputId ? { outputId: event.outputId } : {}), role: "assistant",
@@ -562,10 +553,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       .catch(async error => {
         admission.reject(error);
         if (state.generation !== generation) return;
-        const cue = state.connections.get(connection.clientId)?.cue;
-        if (cue?.generation === generation && !["completed", "interrupted", "failed"].includes(cue.phase)) {
-          cue.phase = "failed";
-        }
+        state.presentation.failCue(state.connections.get(connection.clientId), generation);
         state.record.status = "failed";
         state.record.error = error.message;
         await persist(state);
@@ -1060,7 +1048,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           state.streamRevision = 0;
           state.requestContext = context;
           for (const connection of state.connections.values()) {
-            if (connection.cue) connection.cue.phase = "interrupted";
+            state.presentation.retireCue(connection);
             connection.acknowledge?.({ ok: false,
               error: "The previous Colleague conversation was retained as history before navigation completed." });
           }
@@ -1243,12 +1231,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     async readCue(input, context) {
       const state = await stateFor(context);
       assertCurrentConversation(state, context.colleague?.conversationId);
-      const cue = state.connections.get(context.colleague?.clientId)?.cue;
-      if (!cue || cue.conversationId !== state.record.scopeId || cue.cueId !== input.cueId ||
-          cue.attemptId !== input.attemptId || cue.visualId !== input.visualId) {
-        return { ok: false, error: "The current browser has no matching live lesson cue. Open and explain it again explicitly." };
-      }
-      return { ok: true, presentation: publicCue(cue) };
+      return state.presentation.readCue(state.connections.get(context.colleague?.clientId), input, { conversationId: state.record.scopeId });
     },
     async context(_input, context = {}) {
       const state = await stateFor(context);
@@ -1298,10 +1281,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     async focus(input, context) {
       const state = await stateFor(context);
       const connection = state.connections.get(input.clientId) || { clientId: input.clientId };
-      if (connection.cue && (connection.cue.projectSlug !== input.focus?.projectSlug || connection.cue.sessionId !== input.focus?.sessionId)) {
-        connection.cue.phase = "interrupted";
-        publishBrowserChange(state);
-      }
+      state.presentation.retireForFocus(connection, input.focus);
       connection.focus = input.focus;
       state.connections.set(input.clientId, connection);
       return { ok: true, focus: connection.focus };
@@ -1331,21 +1311,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const connection = state.connections.get(context.colleague?.clientId);
       if (!connection) return { ok: false, error: "The initiating browser is no longer connected." };
       if (input.presentation?.operation === "cue") {
-        if (!state.running || context.colleague?.generation !== state.generation || context.colleague?.autonomous || !state.replyTurnId) {
-          return { ok: false, error: "Arm a lesson cue only inside its admitted interactive explanation turn." };
-        }
-        if (connection.cue?.cueId === input.presentation.cueId) {
-          const cue = connection.cue;
-          if (cue.turnId !== state.replyTurnId || cue.conversationId !== state.record.scopeId ||
-              ["attemptId", "visualId", "commandId", "name"].some(key => cue[key] !== input.presentation[key]) ||
-              !isDeepStrictEqual(cue.parameters, input.presentation.parameters)) {
-            return { ok: false, error: "Reuse a cue identity only for its exact original turn and declared transition." };
-          }
-          return { ok: true, focus: connection.focus, presentation: publicCue(cue) };
-        }
-        if (connection.cue && !["completed", "interrupted", "failed"].includes(connection.cue.phase)) {
-          return { ok: false, error: "The previous lesson cue has not finished. Read its actual receipt before continuing." };
-        }
+        const result = state.presentation.admitCue(connection, input, { conversationId: state.record.scopeId, turnId: state.replyTurnId,
+          interactive: Boolean(state.running && context.colleague?.generation === state.generation && !context.colleague?.autonomous && state.replyTurnId) });
+        if (result) return result;
       }
       if (connection.navigation?.status === "pending") return { ok: false, error: "The browser is still opening the previous view." };
       const command = { id: randomUUID(), projectSlug: input.projectSlug,
@@ -1362,73 +1330,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         Object.assign(command.presentation, { navigationId: command.id, clientId: connection.clientId,
           conversationId: state.record.scopeId, turnId: state.replyTurnId });
       }
-      connection.navigation = command;
-      publishBrowserChange(state);
-      return new Promise((resolve) => {
-        const timer = setTimeout(() => {
-          command.status = "failed";
-          connection.acknowledge = null;
-          publishBrowserChange(state);
-          resolve({ ok: false, error: "The browser did not acknowledge navigation. Open Colleague in that browser and try again." });
-        }, input.presentation ? 45000 : 15000);
-        connection.acknowledge = (result) => {
-          clearTimeout(timer);
-          command.status = result.ok ? "completed" : "failed";
-          connection.acknowledge = null;
-          if (result.focus) connection.focus = result.focus;
-          if (result.ok && command.presentation?.operation === "cue") {
-            connection.cue = { ...command.presentation, projectSlug: command.projectSlug, sessionId: command.sessionId,
-              generation: state.generation, playerInstanceId: result.presentation.playerInstanceId,
-              outputId: "", canonicalFinal: false, phase: "armed" };
-          }
-          publishBrowserChange(state);
-          resolve(result);
-        };
-      });
+      return state.presentation.begin(connection, command, { get generation() { return state.generation; } });
     },
     async acknowledgeNavigation(input, context) {
       const state = await stateFor(context);
       const connection = state.connections.get(input.clientId);
-      if (input.cue) {
-        const expected = connection?.cue;
-        const result = input.cue;
-        if (!expected || expected.conversationId !== state.record.scopeId || input.commandId !== expected.navigationId ||
-            !["completed", "interrupted", "failed"].includes(result.phase) ||
-            ["cueId", "commandId", "navigationId", "clientId", "conversationId", "turnId", "attemptId", "visualId", "playerInstanceId", "outputId"]
-              .some(key => result[key] !== expected[key]) || result.canonicalFinal !== expected.canonicalFinal ||
-            JSON.stringify(result).length > 8192 ||
-            result.phase === "completed" && (!expected.canonicalFinal || result.visualPhase !== "completed" ||
-              !["completed", "off"].includes(result.audioPhase)) ||
-            ["interrupted", "failed"].includes(expected.phase) && result.phase === "completed") {
-          return { ok: false, error: "This cue receipt does not match the initiating browser's actual selected explanation." };
-        }
-        if (expected.receipt && ["completed", "interrupted", "failed"].includes(expected.phase)) {
-          return { ok: isDeepStrictEqual(expected.receipt, result) };
-        }
-        expected.phase = result.phase;
-        expected.receipt = structuredClone(result);
-        publishBrowserChange(state);
-        return { ok: true };
-      }
-      if (!connection || connection.navigation?.id !== input.commandId || !connection.acknowledge) {
-        return { ok: false, error: "This navigation command is no longer pending." };
-      }
-      const expected = connection.navigation.presentation;
-      if (input.ok && expected) {
-        const result = input.presentation;
-        if (!result || result.attemptId !== expected.attemptId || result.visualId !== expected.visualId || !result.playerInstanceId ||
-            (expected.operation === "open" && result.phase !== "ready") ||
-            (expected.operation === "command" && (result.phase !== "completed" || result.commandId !== expected.commandId)) ||
-            (expected.operation === "cue" && (result.phase !== "armed" ||
-              ["cueId", "commandId", "navigationId", "conversationId", "turnId", "clientId"].some(key => result[key] !== expected[key]))) ||
-            (expected.operation === "snapshot" && !result.snapshot) || JSON.stringify(result).length > 8192 ||
-            input.focus?.projectSlug !== connection.navigation.projectSlug || input.focus?.sessionId !== connection.navigation.sessionId || input.focus?.pane !== "preview") {
-          return { ok: false, error: "The browser has not confirmed this exact lesson presentation operation." };
-        }
-      }
-      connection.acknowledge({ ok: input.ok, ...(input.error ? { error: input.error } : {}), ...(input.focus ? { focus: input.focus } : {}),
-        ...(expected && input.presentation ? { presentation: input.presentation } : {}) });
-      return { ok: true };
+      return state.presentation.acknowledge(connection, input, { conversationId: state.record.scopeId });
     },
     async send(input, context, { receiptOnly = false } = {}) {
       const state = await stateFor(context);
@@ -1488,7 +1395,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       await state.admission;
       try { assertCurrentConversation(state, expected); } catch (error) { state.stopping = false; throw error; }
       state.generation += 1;
-      for (const connection of state.connections.values()) if (connection.cue) connection.cue.phase = "interrupted";
+      for (const connection of state.connections.values()) state.presentation.retireCue(connection);
       state.streamingReply = null;
       state.interimReply = null;
       publishReply(state);

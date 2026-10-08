@@ -22,6 +22,14 @@ delivered-question capture, immediately reused by the original Colleague
 consumer. Interactive admission, connection receipts and Helper/control
 coordination remain with the consumer; these operations neither grant a pass
 nor add Main teaching.
+Owns the original ephemeral browser presentation transaction and cue/receipt
+predicates, immediately consumed by Colleague using its unchanged connection
+objects. One original pending slot, deadlines, output binding and terminal ACK
+rules are shared; consumers retain maps, fresh authority, native turn admission,
+general navigation grammar and Stop/focus/replacement call sites. The shared
+client dispatch returns the original player promise and projects its bounded
+receipt only after the host's existing fresh actor/view/handle fence. No new
+Main client identity, persisted format or player is introduced.
 Owns bounded durable assessment receipts and lesson resume state, checked against
 the installed pin, plus a read-only teaching brief without executable assets or
 source paths. Owns internal pinned-rubric grading through the existing retained
