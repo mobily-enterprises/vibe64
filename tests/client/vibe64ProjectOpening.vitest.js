@@ -71,7 +71,7 @@ afterEach(() => { while (dispose.length) dispose.pop()(); });
 const success = { ok: true, runtime: { open: true } };
 async function flush() { for (let i = 0; i < 8; i += 1) await Vue.nextTick(); }
 
-async function mountPage() {
+async function mountPage({ independentContent = false, retainIndependentContent = false, onSessionSetup = null } = {}) {
   mocks.requests = [];
   mocks.realtime = [];
   const router = createRouter({ history: createMemoryHistory(), routes: [
@@ -81,7 +81,7 @@ async function mountPage() {
   ] });
   await router.push("/app/project/dogandgroom");
   const renderer = Vue.createRenderer({
-    createElement: (type) => ({ type, children: [], props: {} }),
+    createElement: (type) => ({ type, children: [], props: {}, style: {} }),
     createText: (text) => ({ type: "text", text, children: [] }),
     createComment: (text) => ({ type: "comment", text, children: [] }),
     insert(node, parent, anchor) {
@@ -105,15 +105,17 @@ async function mountPage() {
   let page;
   let issues;
   const sessionMounted = vi.fn();
-  const Session = Vue.defineComponent({ setup() { sessionMounted(); return () => Vue.h("article", "Assistant ready"); } });
+  const Session = Vue.defineComponent({ setup() { onSessionSetup?.(); sessionMounted(); return () => Vue.h("article", "Assistant ready"); } });
   const app = renderer.createApp({ setup() {
     page = useVibe64AppPage();
     issues = useVibe64Issues(Vue.ref({ active: false }));
     return () => Vue.h(ProjectSelectionGate, {
+      independentContent: Vue.toValue(independentContent),
+      retainIndependentContent,
       runtimeReady: page.projectRuntimeReady.value,
       runtimeError: page.projectRuntimeError.value,
       onRetryRuntime: page.retryProjectRuntime
-    }, { default: () => Vue.h(Session) });
+    }, { default: ({ contentActive }) => Vue.h(Session, { active: contentActive }) });
   } });
   app.use(router);
   const queryClient = new QueryClient();
@@ -265,4 +267,48 @@ describe("opening a routed project", () => {
     await flush();
     expect(view.page.projectRuntimeReady.value).toBe(true);
   });
+});
+
+it("keeps independent Learning content mounted across healthy mode toggles without weakening the default Working gate", async () => {
+  const independent = Vue.ref(false);
+  const view = await mountPage({ independentContent: independent, retainIndependentContent: true });
+  expect(view.sessionMounted).not.toHaveBeenCalled();
+  mocks.requests[0].resolve(success); await flush();
+  expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+  independent.value = true; await flush();
+  independent.value = false; await flush();
+  expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+});
+
+it("shows independently authorized Learning content during a failed project opening without manufacturing project readiness", async () => {
+  const independent = Vue.ref(true);
+  const view = await mountPage({ independentContent: independent, retainIndependentContent: true });
+  expect(view.page.projectRuntimeReady.value).toBe(false);
+  expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+  mocks.requests[0].resolve({ ok: false, error: "Project denied" }); await flush();
+  expect(view.page.projectRuntimeReady.value).toBe(false);
+  expect(view.page.projectRuntimeError.value).toBe("Project denied");
+  expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+  independent.value = false; await flush();
+  expect(view.page.projectRuntimeReady.value).toBe(false);
+});
+
+it.each(["loading", "failed"])("retains the exact Learning slot and draft when returning to unavailable Working (%s)", async state => {
+  const independent = Vue.ref(true);
+  let draft;
+  const view = await mountPage({ independentContent: independent, retainIndependentContent: true,
+    onSessionSetup() { draft = Vue.ref("initial"); } });
+  const identity = draft; draft.value = "a draft still being written";
+  if (state === "failed") { mocks.requests[0].resolve({ ok: false, error: "Project denied" }); await flush(); }
+  expect(view.page.projectRuntimeReady.value).toBe(false);
+  independent.value = false; await flush();
+  const article = view.root.children.flatMap(node => node.children || []).flatMap(node => node.children || [])
+    .find(node => node.type === "article");
+  expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+  expect(draft).toBe(identity); expect(draft.value).toBe("a draft still being written");
+  expect(article?.props.active).toBe(false);
+  independent.value = true; await flush();
+  expect(view.sessionMounted).toHaveBeenCalledTimes(1);
+  expect(draft).toBe(identity); expect(draft.value).toBe("a draft still being written");
+  expect(article?.props.active).toBe(true);
 });

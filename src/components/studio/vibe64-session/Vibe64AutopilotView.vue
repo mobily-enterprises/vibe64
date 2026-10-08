@@ -75,6 +75,7 @@
         </v-tooltip>
         <div class="studio-autopilot__header-actions studio-autopilot__header-actions--compact">
           <v-menu
+            v-if="props.sourceWorkspaceAvailable || props.sessionRenewal?.visible"
             location="bottom end"
           >
             <template #activator="{ props: menuProps }">
@@ -117,6 +118,7 @@
                 @click="requestSessionRenewal(sessionActionsTrigger)"
               />
               <v-list-item
+                v-if="props.sourceWorkspaceAvailable"
                 class="studio-autopilot__session-action-item"
                 data-vibe64-temporary-ai-action
                 :disabled="!sessionId || props.sessionSelectionArchived"
@@ -162,7 +164,7 @@
               @click="requestSessionRenewal($event.currentTarget)"
             />
           </v-badge>
-          <v-badge color="primary" dot :model-value="temporaryAiHasUnreadMessages" offset-x="5" offset-y="5">
+          <v-badge v-if="props.sourceWorkspaceAvailable" color="primary" dot :model-value="temporaryAiHasUnreadMessages" offset-x="5" offset-y="5">
             <v-btn
               :aria-label="temporaryAiHasUnreadMessages ? 'Open temporary AI: unread messages' : 'Open temporary AI'"
               :disabled="!sessionId || props.sessionSelectionArchived"
@@ -555,6 +557,7 @@
       </Vibe64ConversationLog>
 
       <Vibe64TemporaryAiWorkspace
+        v-if="props.sourceWorkspaceAvailable"
         ref="temporaryAiWorkspace"
         :active="props.active && !chatCollapsed"
         :session-selected="props.active"
@@ -576,14 +579,17 @@
     </section>
 
     <section class="studio-autopilot__project-panel" aria-label="Project">
+      <div v-if="!props.sourceWorkspaceAvailable" class="studio-autopilot__right-pane-page" aria-label="Lessons">
+        <slot name="dashboard" :dashboard-context="dashboardContext" />
+      </div>
       <Vibe64AsyncModuleState
-        v-if="sourceToolLoading"
+        v-if="props.sourceWorkspaceAvailable && sourceToolLoading"
         class="studio-autopilot__right-pane-page"
         label="session source"
         loading
       />
       <Vibe64DashboardShell
-        v-if="props.projectPane === 'dashboard'"
+        v-if="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard'"
         v-show="dashboardShellVisible"
         class="studio-autopilot__dashboard-shell"
         :dashboard-context="dashboardContext"
@@ -606,7 +612,7 @@
           role="tabpanel"
         >
           <slot
-            v-if="rightPaneTabMounted('ai-terminal')"
+            v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('ai-terminal')"
             name="ai-terminal"
             :active="rightPaneTab === 'ai-terminal'"
           />
@@ -614,7 +620,7 @@
       </Vibe64DashboardShell>
 
       <section
-        v-if="props.projectPane === 'dashboard' && rightPaneTab === 'changes'"
+        v-if="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'changes'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -635,7 +641,7 @@
       </section>
 
       <section
-        v-show="props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+        v-show="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -664,7 +670,7 @@
         <Vibe64SessionFiles
           :key="assistantAccessScopeKey"
           :repo-available="Boolean(sessionSourceRoot)"
-          v-if="rightPaneTabMounted('editor')"
+          v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('editor')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
           :agent-active="agentActive"
           :file-bookmarks="fileBookmarks"
@@ -681,7 +687,7 @@
       </section>
 
       <section
-        v-show="props.projectPane === 'dashboard' && rightPaneTab === 'database'"
+        v-show="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -699,7 +705,7 @@
         <Vibe64DatabaseWorkspace
           :key="assistantAccessScopeKey"
           :open-request="databaseOpenRequest"
-          v-if="rightPaneTabMounted('database')"
+          v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('database')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
           :assistant-available="assistantCanUsePurpose('junior')"
           :assistant-unavailable-message="assistantJuniorRestrictionMessage"
@@ -712,7 +718,7 @@
       </section>
 
       <section
-        v-show="props.projectPane === 'dashboard' && rightPaneTab === 'system'"
+        v-show="props.sourceWorkspaceAvailable && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
         class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane"
         role="tabpanel"
       >
@@ -729,7 +735,7 @@
         </header>
         <Vibe64SubsystemsView
           :assistant-available="assistantJuniorAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
-          v-if="rightPaneTabMounted('system')"
+          v-if="props.sourceWorkspaceAvailable && rightPaneTabMounted('system')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
           class="studio-autopilot__session-tool-content"
           :resolve-request-url="resolveStudioRequestUrl"
@@ -753,17 +759,19 @@
       </section>
 
       <div
-        v-show="props.projectPane !== 'dashboard'"
+        v-show="props.sourceWorkspaceAvailable && props.projectPane !== 'dashboard'"
         class="studio-autopilot__right-pane-page"
         role="tabpanel"
       >
         <TrainingPreviewPresentation
+          v-if="props.sourceWorkspaceAvailable"
           :active="props.active && props.projectPane === 'preview' && !props.sessionSelectionArchived"
           :project-slug="projectSlug"
           :session-id="selectedAssistantSessionId"
           v-slot="{ appVisible, presentation }"
         >
           <Vibe64ProjectOnboarding
+            v-if="props.sourceWorkspaceAvailable"
             :active="props.active && props.projectPane === 'preview'"
             :archived="props.sessionSelectionArchived"
             :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
@@ -1439,6 +1447,7 @@ function copyActivityOutput(output = "") {
 }
 
 function openTemporaryAi() {
+  if (!props.sourceWorkspaceAvailable) return;
   if (!sessionId.value || props.sessionSelectionArchived) {
     return false;
   }

@@ -102,6 +102,7 @@ const vibe64AutopilotViewProps = {
     default: true,
     type: Boolean
   },
+  sourceWorkspaceAvailable: { default: true, type: Boolean },
   agentConnectionError: {
     default: "",
     type: String
@@ -1226,7 +1227,7 @@ function useVibe64AutopilotView(props, emit, {
       : "Review selected session changes"
   ));
   const saveWorkHeaderVisible = computed(() => Boolean(
-    props.active && sessionId.value
+    props.sourceWorkspaceAvailable !== false && props.active && sessionId.value
   ));
   const saveWorkTitle = computed(() => {
     if (!repositoryAssistantStateSettled.value) {

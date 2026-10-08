@@ -5,6 +5,7 @@
     :data-vibe64-session-runtime-id="props.sessionId"
   >
     <Vibe64AutopilotView
+      :source-workspace-available="sourceWorkspaceAvailable"
       :active="autopilotModeActive"
       :agent-connection-error="agentConnectionError"
       :agent-connection-status="agentConnectionStatus"

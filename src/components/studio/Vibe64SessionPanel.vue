@@ -79,8 +79,10 @@
           />
         </div>
         <Vibe64TemporaryAiWorkspace
-          v-if="hostConversation" class="studio-ai-sessions__empty-host-conversation" active
-          @select-main-chat="hostConversation.close()"
+          v-if="hostConversation" v-show="props.purposeFilter !== 'learning'"
+          class="studio-ai-sessions__empty-host-conversation"
+          :active="props.active && props.purposeFilter !== 'learning'"
+          @select-main-chat="closeEmptyHostConversation"
         />
         <div class="studio-ai-sessions__empty-chat-body">
           <div
@@ -160,7 +162,7 @@
         v-for="runtimeSessionId in runtimeHostSessionIds"
         v-show="runtimeSessionId === selection.selectedSessionId"
         :key="runtimeSessionId"
-        :active="runtimeSessionId === selection.selectedSessionId"
+        :active="props.active && runtimeSessionId === selection.selectedSessionId"
         :session-data="sessionData"
         :session-id="runtimeSessionId"
         :chat-collapsed="chatCollapsed"
@@ -254,6 +256,19 @@ const {
   toolbar,
   visiblePageError
 } = useVibe64SessionPanel(props, emit);
+
+function closeEmptyHostConversation() {
+  if (props.active && props.purposeFilter !== "learning") hostConversation?.close();
+}
+
+function selectLearningConversation({ sessionId, attemptId, learnerId } = {}) {
+  if (props.purposeFilter !== "learning" || learnerId !== sessionData.learningLearnerId.value) return false;
+  const row = sessionData.availableSessions.value.find(value => value.sessionId === sessionId);
+  if (!row || row.purpose !== "learning" || row.learningAttemptId !== attemptId) return false;
+  sessionData.selectSessionId(sessionId);
+  return sessionData.selectedSessionId.value === sessionId;
+}
+defineExpose({ selectLearningConversation });
 
 async function createSessionForEmptyState(assistantSelection = {}, options = {}) {
   const response = await toolbar.createSession?.(assistantSelection, options);

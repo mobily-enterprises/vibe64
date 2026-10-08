@@ -1066,3 +1066,27 @@ describe("Vibe64 direct session view", () => {
   });
 
 });
+
+
+it("projects actual source availability without suppressing suspended Working controls", () => {
+  const source = fs.readFileSync(composablePath, "utf8");
+  const expression = source.match(/const saveWorkHeaderVisible = computed\(\(\) => Boolean\(([\s\S]*?)\n  \)\);/u)?.[1];
+  expect(expression).toBeTruthy();
+  const visible = new Function("props", "sessionId", `return Boolean(${expression});`);
+  for (const suspended of [true, false]) {
+    const props = { active: true, sourceOperationsSuspended: suspended };
+    expect(visible(props, vue.ref("working"))).toBe(true);
+    expect(visible({ ...props, sourceWorkspaceAvailable: true }, vue.ref("working"))).toBe(true);
+    expect(visible({ ...props, sourceWorkspaceAvailable: false }, vue.ref("learning"))).toBe(false);
+  }
+  expect(visible({ active: false }, vue.ref("working"))).toBe(false);
+  const component = fs.readFileSync(componentPath, "utf8");
+  expect(component).toContain('v-if="props.sourceWorkspaceAvailable || props.sessionRenewal?.visible"');
+  const temporary = component.slice(component.indexOf('<Vibe64TemporaryAiWorkspace'), component.indexOf('/>', component.indexOf('<Vibe64TemporaryAiWorkspace')));
+  expect(temporary).toContain('v-if="props.sourceWorkspaceAvailable"');
+  const presentation = component.slice(component.indexOf('<TrainingPreviewPresentation'), component.indexOf('</TrainingPreviewPresentation>'));
+  expect(presentation).toContain('v-if="props.sourceWorkspaceAvailable"');
+  expect(component).toContain('v-if="!props.sourceWorkspaceAvailable"');
+  expect(component).toContain('aria-label="Lessons"');
+  expect(fs.readFileSync(runtimeHostPath, "utf8")).toContain(':source-workspace-available="sourceWorkspaceAvailable"');
+});

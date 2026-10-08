@@ -34,10 +34,11 @@
     </div>
   </v-app-bar>
 
-  <v-main class="bg-background" :class="{ 'studio-app-shell-layout--learning': learningMode }">
+  <v-main class="bg-background" :class="{ 'studio-app-shell-layout--learning': learningMode, 'studio-app-shell-layout--fill-viewport': fillViewport }">
     <v-container
       fluid
       class="shell-layout__content studio-app-shell-layout__content"
+      :class="{ 'studio-app-shell-layout__content--fill-viewport': fillViewport }"
       @touchstart.passive="startPaneSwipe"
       @touchmove="movePaneSwipe"
       @touchend="endPaneSwipe"
@@ -63,7 +64,8 @@ const props = defineProps({
   mobilePaneSwipeEnabled: Boolean,
   chatCollapsed: Boolean,
   showLearningModeControl: Boolean,
-  learningMode: Boolean
+  learningMode: Boolean,
+  fillViewport: Boolean
 });
 const emit = defineEmits(["update:chatCollapsed", "update:learningMode"]);
 let paneSwipe = null;
@@ -228,6 +230,17 @@ function endPaneSwipe(event) {
 
 .studio-app-shell-layout__content {
   padding: 0.75rem 0.75rem 0;
+}
+
+.studio-app-shell-layout--fill-viewport { height: 100dvh; overflow: hidden; }
+.studio-app-shell-layout__content--fill-viewport {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
 }
 
 .studio-app-shell-layout--learning {

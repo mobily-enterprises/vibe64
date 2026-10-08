@@ -38,6 +38,7 @@ const vibe64SessionPanelEmits = [
   "project-attention"
 ];
 const vibe64SessionPanelProps = {
+  active: { default: true, type: Boolean },
   learningResource: {
     default: null,
     type: Object

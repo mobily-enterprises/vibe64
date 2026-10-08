@@ -1,7 +1,7 @@
 <template>
   <div class="project-selection-gate">
     <StudioErrorNotice
-      v-if="displayError"
+      v-if="displayError && !independentContent"
       title="Project could not load"
       :error="displayError"
       compact
@@ -20,20 +20,30 @@
     </StudioErrorNotice>
 
     <v-skeleton-loader
-      v-if="!displayError && (selectionInitialLoading || !runtimeReady)"
+      v-if="loadingVisible"
       aria-label="Loading project"
       class="project-selection-gate__loading"
       type="article"
     />
 
+    <div
+      v-if="retainIndependentContent && retainedContentMounted"
+      v-show="contentActive"
+      :inert="!contentActive"
+      :aria-hidden="!contentActive ? 'true' : undefined"
+      class="project-selection-gate__retained-content"
+    >
+      <slot :project-selection="projectSelection" :reload="loadProjectSelection" :content-active="contentActive" />
+    </div>
     <slot
-      v-else-if="runtimeReady && selectedSlotVisible"
+      v-if="!retainIndependentContent && contentActive"
       :project-selection="projectSelection"
       :reload="loadProjectSelection"
+      :content-active="contentActive"
     />
 
     <v-sheet
-      v-else-if="runtimeReady && pickerVisible"
+      v-if="!independentContent && !loadingVisible && runtimeReady && pickerVisible"
       class="project-selection-gate__picker"
       rounded="lg"
       border
@@ -91,7 +101,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useProjectSelectionGate } from "@/composables/useProjectSelectionGate.js";
@@ -100,6 +110,10 @@ import {
 } from "@/lib/vibe64ProjectScope.js";
 
 const props = defineProps({
+  // Presentation only: the independent content retains its own authenticated
+  // Training/Session authority. It gains no project or source access here.
+  independentContent: Boolean,
+  retainIndependentContent: Boolean,
   beforeRetry: {
     type: Function,
     default: null
@@ -157,6 +171,12 @@ const {
 const displayError = computed(() => recoveryError.value || errorMessage.value || props.runtimeError);
 const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker);
 const pickerVisible = computed(() => selectionReady.value && (props.forcePicker || !hasSelection.value));
+const loadingVisible = computed(() => !props.independentContent && !displayError.value &&
+  (selectionInitialLoading.value || !props.runtimeReady));
+const contentActive = computed(() => props.independentContent ||
+  (!loadingVisible.value && props.runtimeReady && selectedSlotVisible.value));
+const retainedContentMounted = ref(false);
+watch(contentActive, active => { if (active) retainedContentMounted.value = true; }, { immediate: true, flush: "sync" });
 
 async function retryProject() {
   if (recovering.value) {
@@ -196,6 +216,8 @@ async function handleCreateProject() {
 </script>
 
 <style scoped>
+.project-selection-gate__retained-content { display: flex; flex: 1 1 auto; min-height: 0; }
+
 .project-selection-gate {
   align-content: start;
   display: grid;

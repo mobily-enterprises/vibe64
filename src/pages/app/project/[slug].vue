@@ -16,6 +16,9 @@ import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButt
 import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
+import { ref } from "vue";
+import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
+import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
 
 const githubActorHostId = "studio-home-shell-github-actor";
 const githubActorTeleportTarget = `#${githubActorHostId}`;
@@ -54,10 +57,23 @@ const {
   targetFolderName
 } = useVibe64AppPage();
 
+const panel = ref(null);
+const learning = useVibe64LearningMode({ onConversationOpened(identity) {
+  if (panel.value?.selectLearningConversation(identity)) setChatCollapsed(false);
+} });
+const { learningMode, purposeFilter, learningResource } = learning;
+async function changeLearningMode(value) {
+  await learning.setLearningMode(value);
+  if (value && learningMode.value) setChatCollapsed(true);
+}
+
 </script>
 
 <template>
   <StudioAppShellLayout
+    show-learning-mode-control
+    :learning-mode="learningMode"
+    @update:learning-mode="changeLearningMode"
     :chat-collapsed="chatCollapsed"
     :mobile-pane-swipe-enabled="mobilePaneSwipeEnabled"
     @update:chat-collapsed="setChatCollapsed"
@@ -136,7 +152,7 @@ const {
           />
 
           <div
-            v-if="projectPaneNavigationVisible"
+            v-if="projectPaneNavigationVisible && !learningMode"
             class="studio-home-shell-project-tabs studio-home-shell-project-tabs--desktop"
             role="tablist"
             aria-label="Project"
@@ -155,12 +171,12 @@ const {
             </button>
           </div>
           <div
-            v-if="previewToolbarHostVisible"
+            v-if="previewToolbarHostVisible && !learningMode"
             :id="previewToolbarHostId"
             class="studio-home-shell-preview-toolbar-host"
           />
           <button
-            v-if="mobileProjectActionVisible"
+            v-if="mobileProjectActionVisible && !learningMode"
             class="studio-home-shell-project-mobile-action"
             type="button"
             :aria-label="mobileProjectAction.ariaLabel"
@@ -169,6 +185,9 @@ const {
             {{ mobileProjectAction.label }}
             <v-icon :icon="mdiChevronRight" size="15" />
           </button>
+          <v-btn v-if="learningMode" variant="text" @click="setChatCollapsed(!chatCollapsed)">
+            {{ chatCollapsed ? "Show chat" : "Show lessons" }}
+          </v-btn>
         </div>
       </div>
     </template>
@@ -177,7 +196,7 @@ const {
     </template>
     <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
       <v-alert
-        v-if="pageError"
+        v-if="pageError && !learningMode"
         type="error"
         variant="tonal"
         border="start"
@@ -188,6 +207,8 @@ const {
 
       <div class="studio-screen__gate-scroll">
         <ProjectSelectionGate
+          retain-independent-content
+          :independent-content="learningMode"
           :runtime-ready="projectRuntimeReady"
           :runtime-error="projectRuntimeError"
           @retry-runtime="retryProjectRuntime"
@@ -199,7 +220,7 @@ const {
         >
           <template #default="projectSelectionSlotProps">
             <Teleport
-              v-if="projectSelectionSlotProps?.projectSelection?.currentProject?.repositoryMode === 'local_source'"
+              v-if="!learningMode && projectSelectionSlotProps?.projectSelection?.currentProject?.repositoryMode === 'local_source'"
               to="#studio-home-shell-local-remotes"
               defer
             >
@@ -208,19 +229,24 @@ const {
               />
             </Teleport>
             <Vibe64SessionPanel
+              ref="panel"
+              :active="projectSelectionSlotProps.contentActive"
+              :learning-resource="learningResource"
+              :purpose-filter="purposeFilter"
               :chat-collapsed="chatCollapsed"
               create-session-teleport-target="#studio-home-shell-create-session"
               :github-actor-teleport-target="githubActorTeleportTarget"
               :project-context="projectSelectionSlotProps?.projectSelection?.currentProject || {}"
               :preview-toolbar-teleport-target="previewToolbarTeleportTarget"
-              :project-pane="projectPane"
+              :project-pane="learningMode ? 'dashboard' : projectPane"
               @title-change="emitPageTitle"
               @chat-attention="setChatCollapsed(false)"
               @project-attention="showProjectPane"
             >
               <template #dashboard="dashboardSlotProps">
+                <Vibe64LearningLessonLauncher v-if="learningMode" :learning="learning" />
                 <RouterView
-                  v-if="dashboardRouteActive"
+                  v-else-if="dashboardRouteActive"
                   :dashboard-context="dashboardSlotProps?.dashboardContext || {}"
                 />
               </template>
