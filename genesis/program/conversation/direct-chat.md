@@ -12,7 +12,7 @@ teacher implementation; actual application tools still require the original
 native owner and explicit trusted learning composition.
 
 For an explicitly configured no-exercise Learning Runtime, one typed Training
-teaching facility now supplies the original Codex and OpenCode Main bindings with the same
+teaching facility now supplies the original Codex, OpenCode and supported Claude Main bindings with the same
 service-tool catalogue at early readiness and Send. The original Manager forwards
 only that Send's server-owned browser authority through its private context
 allowlist. Working input/options and control grants cannot provide this authority.
@@ -72,11 +72,45 @@ retained before-state checkpoint; checkpoint ordering and storage are unchanged.
 The exact context/thread/turn getter does not read saved history or start native
 work. Default sinks, unacknowledged input, failed publication/checkpoint, Stop,
 changed accounts/processes and closed/restored entries cannot supply final proof.
-This receipt-only prerequisite leaves Claude's Main teaching guard closed. Actual
-supplied-owner command/MCP custody, CLI declaration, Main question correlation and
-native checkpoint attachment remain required before enabling Claude teaching.
-Claude, practice teaching, live native/installed adoption and browser
-acceptance remain incomplete.
+Claude's same supplied-store run attaches its existing command/tool schemas only
+for configured application tools, without selecting standalone execution release
+or swapping the original storage. Its native ACK first awaits the original
+canonical writer/publication and active-state update, then the common accepted
+request callback before native tool effects. Steering keeps each native tool's
+originating message and adopts its own ACK. A new ACK retires old effect custody
+while its canonical admission is pending. Main's opt-in current native read
+requires the exact live process, account, command and native tuple after its
+awaited state read; retained/restored state alone cannot authorize tools.
+The same control-pipe executor checks native tool-use ID/name/arguments; the original run joins attached tool work and
+clears only its own command. Stale/protocol refusals precede execution; a current
+owned executor error reaches the original failure/verified Stop/drain owner.
+An already invoked old failure cannot stop its accepted steering successor.
+The common ordered tool-work catch attributes a rejected effect only to its
+still-current request; the old action retains its own error receipt and is not
+replayed, while current effect failure still fails its own run.
+The configured normal CLI adds only the existing SDK
+MCP declaration, preserving original source tools and permission defaults.
+
+The lazy Main binding requires both this actual owner's application-tools
+capability and exact final reader before admitting Claude teaching. It uses the
+original retained native turn for active tool admission, and the native turn's
+settled tuple at the original pre-idle checkpoint. The existing Training mapper,
+question proof, Helper and progress writers remain unchanged. Only configured
+Learning data carries its original captured question/client association. Practice
+Claude retains Genesis guidance and its shim, project Env/source and Git, adding
+fresh pinned instructions through the same native instruction boundary. Ordinary
+Working and scoped/Helper defaults remain unchanged.
+
+The original-file component proof covers supplied-owner ACK/tool custody,
+steering, tool-work drain, unchanged default argv and actual no-exercise Main
+question delivery/answer capture/Stop. The original Public file passes66/66
+through the normally installed local Core archive, with all234 installed package
+files matching its canonical source. Its new native MCP fixture uses the original
+search, exact-contract and execution protocol; final evidence matches the original
+published writer snapshot before later teaching checkpoint metadata promotion.
+This is component composition, not logged-in CLI acceptance. Actual narrated-cue,
+Helper grading, physical-practice and live account/native/browser acceptance
+remain required; no supported older owner is silently enabled.
 
 JSKIT's conversation runtime owns native instruction installation and refresh
 for Codex, Claude and OpenCode, shared by main chat and Colleague. Vibe64 supplies

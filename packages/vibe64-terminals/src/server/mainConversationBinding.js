@@ -367,7 +367,9 @@ export async function createSessionConversationBinding(provider, sessionId, opti
     runtime, session, readSession: () => runtime.getSession(sessionId, { inspectSource: false })
   });
   const conversation = original.conversation({ engine, publish: host.publish, checkpoint: host.checkpoint });
-  const teachingAvailable = ["codex", "opencode"].includes(engine) && runtime.learningScope && runtime.learningTeaching;
+  const teachingAvailable = (["codex", "opencode"].includes(engine) || engine === "claude" &&
+    host.native.owner.applicationToolsSupported === true && typeof host.native.owner.readFinalAssistantResult === "function") &&
+    runtime.learningScope && runtime.learningTeaching;
   let teaching;
   const bindTeaching = () => runtime.learningTeaching.bindConversation({ runtime, sessionId, actions: openingContext.teachingActions,
       terminals: openingContext.teachingTerminals, native: {
@@ -385,6 +387,14 @@ export async function createSessionConversationBinding(provider, sessionId, opti
         if (engine === "codex") {
           const current = await host.state.read();
           return { ...codexAppServerTurnState(current.session),
+            assistantSelection: vibe64AssistantSelectionFromMetadata(current.session.metadata) };
+        }
+        if (engine === "claude") {
+          const current = await host.state.read();
+          const turn = host.native.owner.readRetainedTurn(host.context.key, current.threadId, { saved: null, current: true });
+          if (!turn) throw new Error("Claude's lesson tools require their current admitted native process.");
+          return { threadId: current.threadId, turnId: turn?.id || "", active: Boolean(turn?.active),
+            outerTurnId: `claude:${current.threadId}:${turn?.id || ""}`,
             assistantSelection: vibe64AssistantSelectionFromMetadata(current.session.metadata) };
         }
         const native = await host.native.owner.readSessionState(openingContext, host.native.preparation.state);
@@ -653,6 +663,7 @@ export function createClaudeConversationMessagePolicy({ env, recordGitActor, pub
       const { input, context: ctx, message, messageId, uuid, actorMetadata } = event;
       const conversationTurn = await ctx.runtime.store.writeConversationUserMessage(ctx.sessionId, {
         messageId, text: text(input.displayMessage) || message, attachments: input.displayAttachments,
+        ...(ctx.runtime.learningScope && ctx.runtime.learningTeaching && input.data !== undefined ? { data: input.data } : {}),
         turnMetadata: { ...actorMetadata, assistantSelection: ctx.selection, engineId: ENGINE, upstreamMessageId: uuid }
       });
       await publishSessionChanged(ctx.sessionId, { reason: "claude-stream-message-delivered", payload: {

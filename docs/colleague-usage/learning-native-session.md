@@ -14,8 +14,9 @@ Finishing a teaching turn does not start workspace setup for this kind of lesson
 Resume the confirmed attempt after an interruption. Do not create a substitute
 workspace or reset its progress to hide a preparation failure.
 
-For lessons without a practice workspace, Codex and OpenCode Main can use the
-lesson teaching tools supplied by your installation. If those tools are
+Codex, OpenCode and Claude Main can use the lesson teaching tools supplied by
+your installation. Claude needs the installation’s supported native application
+tool connection; an ordinary CLI reply alone does not confirm a teaching action. If those tools are
 unavailable, keep the saved attempt and conversation, check the selected AI
 account, and report the exact error before retrying. If a provider cannot use these tools, keep the conversation and ask the installation owner to check its lesson support. Changing workflows
 or sending ordinary chat does not enable missing teaching, grading or presentation

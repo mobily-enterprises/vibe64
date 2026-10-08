@@ -1318,17 +1318,25 @@ test("scoped Claude helper cleanup recovers the captured managed process after r
   assert.equal(f.context.session.metadata[`claude_conversation_${captured.conversationId}`], undefined);
 });
 
-async function boundMainFixture(t, { configureProcess } = {}) {
+async function boundMainFixture(t, { configureProcess, runtimeFactory, actions, toolPolicy } = {}) {
   let removeFixture;
   const f = await fixture({ after(callback) { removeFixture = callback; } });
-  const store = createVibe64SessionStore({ projectContextRoot: f.root, projectRuntimeRoot: path.join(f.root, "runtime") });
-  await store.createSession({ sessionId: "test", runtimeKind: "genesis" });
-  for (const [key, value] of Object.entries(f.context.session.metadata)) await store.writeMetadataValue("test", key, value);
-  f.context.runtime.store = store;
-  f.context.runtime.getSession = id => store.readSession(id);
-  f.context.session = await store.readSession("test");
+  let store;
+  if (runtimeFactory) {
+    f.context.runtime = await runtimeFactory(f);
+    store = f.context.runtime.store;
+    f.context.session = await store.readSession(f.context.sessionId);
+  } else {
+    store = createVibe64SessionStore({ projectContextRoot: f.root, projectRuntimeRoot: path.join(f.root, "runtime") });
+    await store.createSession({ sessionId: "test", runtimeKind: "genesis" });
+    for (const [key, value] of Object.entries(f.context.session.metadata)) await store.writeMetadataValue("test", key, value);
+    f.context.runtime.store = store;
+    f.context.runtime.getSession = id => store.readSession(id);
+    f.context.session = await store.readSession("test");
+  }
   let provider;
-  const conversations = createConversationRuntime({ authorize: ({ context, conversationId }) => context.sessionId === conversationId,
+  const conversations = createConversationRuntime({ ...(actions ? { actions, toolPolicy } : {}),
+    authorize: ({ context, conversationId }) => context.sessionId === conversationId,
     host: { nativeTools: true, conversation: ({ id, context, input, options, operation }) => operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
       ? prepareSessionDetachedConversationCleanup(provider, id, context, input,
         operation === "interruptDetachedConversation" ? "interruptDetachedChatTurn" : "deleteDetachedChatThread") : operation === "inspectTemporaryActivity"
@@ -1358,7 +1366,7 @@ async function boundMainFixture(t, { configureProcess } = {}) {
     finally { await removeFixture(); }
   });
   return { ...f, provider, store, conversations, publications,
-    open: (representation = "canonical", context = f.context) => conversations.open({ id: "test", context, representation }) };
+    open: (representation = "canonical", context = f.context) => conversations.open({ id: f.context.sessionId, context, representation }) };
 }
 
 test("main Claude binds the actual provider once and adopts its original receipt, stream and steering", { timeout: 15000 }, async t => {
@@ -2167,4 +2175,168 @@ test("Claude original Main writer returns exact canonical final proof without en
   assert.equal(f.checkpoints.length > 0, true, "Original source checkpoint still runs");
   await f.provider.closeProject();
   assert.equal(owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id), null);
+});
+
+
+// Uses the same original bound Main fixture, native process/ACK, actual supplied
+// Store, Core catalogue and Training question/progress owners. Its server context
+// grant is composed here; it does not claim HTTP/browser/account acceptance.
+test("actual Claude Learning Main executes its admitted native tool and promotes only its exact final checkpoint", { timeout: 30_000 }, async t => {
+  const { trainingTeachingFixture } = await import("../fixtures/trainingTeachingFixture.js");
+  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
+  const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
+  const { createTrainingAnswerAssessment } = await import("../../packages/vibe64-training/src/server/answerAssessment.js");
+  const { createTrainingLearningSessions } = await import("../../packages/vibe64-training/src/server/learningSessions.js");
+  const { createTrainingTeachingBrief } = await import("../../packages/vibe64-training/src/server/teachingBrief.js");
+  const { createTrainingActions } = await import("../../packages/vibe64-training/src/server/actions.js");
+  const { createTrainingTeachingActions } = await import("../../packages/vibe64-training/src/server/teachingActions.js");
+  const { createTrainingAssessmentActions } = await import("../../packages/vibe64-training/src/server/assessmentActions.js");
+  const { createTrainingPresentationActions } = await import("../../packages/vibe64-training/src/server/presentationActions.js");
+  const { createTrainingPracticalActions } = await import("../../packages/vibe64-training/src/server/practicalActions.js");
+  const { createLearningTeachingContextActions } = await import("../../packages/vibe64-sessions/src/server/actions.js");
+  let removeTeaching;
+  const teaching = await trainingTeachingFixture({ after(callback) { removeTeaching = callback; } }, { ready: false, exercise: false });
+  teaching.actor.role = "owner";
+  const main = createTrainingMainTeaching({ teaching: teaching.owner,
+    assessment: createTrainingAnswerAssessment({ learners: teaching.learners, content: teaching.content, teaching: teaching.owner }) });
+  const saved = await teaching.learners.readLearningSessionScope({ actor: teaching.actor, attemptId: teaching.attemptId });
+  const actions = createActionCatalogue();
+  let runtime;
+  const brief = createTrainingTeachingBrief({ learners: teaching.learners, content: teaching.content });
+  const learning = createTrainingLearningSessions({ learners: teaching.learners, teachingBrief: brief, learningTeaching: main,
+    project: { createRuntime: async () => runtime }, sessions: { createSession() {}, inspectSession() {} } });
+  const scope = await learning.resolveContext({ actor: teaching.actor, attemptId: teaching.attemptId });
+  const f = await boundMainFixture(t, { actions,
+    toolPolicy: ({ actionId, context }) => Boolean(context.runtime?.learningScope && context.runtime.learningTeaching?.actionIds.includes(actionId)),
+    async runtimeFactory(base) {
+      base.context.sessionId = `learning-${teaching.attemptId}`;
+      runtime = new Vibe64SessionRuntime({ projectContextRoot: base.root, projectRuntimeRoot: saved.projectRuntimeRoot,
+        learningScope: scope.learningScope, learningInstructions: scope.learningInstructions, learningTeaching: scope.learningTeaching,
+        promptRenderer: () => assert.fail("No-exercise Main must not render a project source prompt") });
+      await runtime.createSession({ sessionId: base.context.sessionId,
+        metadata: { assistant_selection: base.context.session.metadata.assistant_selection } });
+      return runtime;
+    }
+  });
+  // The original provider drains before its actual learner-owned storage is removed.
+  t.after(() => removeTeaching());
+  let allowed = true;
+  const sessionContext = createSessionActions({ sessions: {} }).filter(action => action.id === ACTION_READ_CONVERSATION_CONTEXT);
+  const definitions = [...sessionContext, ...createLearningTeachingContextActions(),
+    ...createTrainingActions({ catalogue: { readCatalogue() {} }, learners: teaching.learners, teachingBrief: brief }),
+    ...createTrainingTeachingActions({ mainTeaching: main }),
+    ...createTrainingAssessmentActions({ mainTeaching: main }),
+    ...createTrainingPresentationActions({ learners: teaching.learners, content: teaching.content, mainTeaching: main }),
+    ...createTrainingPracticalActions()];
+  actions.register({ contributorId: "actual-learning-claude-main", domain: "training",
+    actions: definitions.map(action => ({ ...action, channels: action.channels || ["api", "automation", "internal"], surfaces: ["app"] })) });
+  registerVibe64ActionContext(actions, { resolveUser: async () => {
+    if (!allowed) throw Object.assign(new Error("Learning actor access revoked"), { statusCode: 403 });
+    return teaching.actor;
+  }, authorizeProject: () => assert.fail("Source-less teaching cannot borrow a project ACL"),
+  resolveLearningContext: input => learning.resolveContext(input) });
+  const sessionId = f.context.sessionId;
+  const requestContext = { surface: "app", channel: "internal", requestMeta: { request: {
+    params: { learningAttemptId: teaching.attemptId }, vibe64User: teaching.actor } } };
+  f.context.vibe64User = teaching.actor;
+  f.context.browserAuthority = { sessionId, learningAttemptId: teaching.attemptId,
+    actorId: scope.learningScope.learnerId, requestContext };
+  f.context.teachingActions = actions;
+  f.context.teachingTerminals = { async requireAssistantSelectionAccess(selection, options) {
+    assert.deepEqual(selection, defineVibe64AssistantSelection(f.context.assistantSelection));
+    assert.equal(options.vibe64User.uid, teaching.actor.uid);
+  } };
+  const sendLearning = async input => f.provider.sendMessage(f.context,
+    await main.captureMessage({ input, context: f.context, runtime, sessionId, actions }));
+  const canonical = await f.open();
+  assert.equal(f.processes.length, 0, "Opening the actual Main is inert");
+  let sent = await sendLearning({ message: "Teach this exact saved lesson.",
+    messageId: "actual-claude-learning-request", clientId: "actual-claude-browser", data: { forged: true } });
+  assert.equal(sent.delivered, true);
+  assert.equal(f.processes.length, 1);
+  const process = f.processes[0];
+  assert.equal(process.options.applicationTools, true);
+  assert.equal(process.options.toolFree, false, "The supplied native owner is not replaced by Helper/isolated execution");
+  assert.equal(process.options.workdir, await runtime.getNativeExecutionRoot(sessionId));
+  const native = (await createSessionConversationBinding(f.provider, sessionId, f.context)).native;
+  const entry = [...native.owner.entries.values()].find(value => value.main && value.context.sessionId === sessionId);
+  assert.equal(entry.command.admitted, true);
+  assert.equal(entry.main, true);
+  assert.equal(Boolean(entry.profile), false);
+  let log = await f.store.readConversationLog(sessionId);
+  assert.deepEqual(log[0].messages.find(message => message.role === "user").data, { clientId: "actual-claude-browser" });
+  async function call(id, name, input) {
+    await process.options.onEvent({ type: "assistant", session_id: entry.id, uuid: `native-${id}`,
+      message: { content: [{ type: "tool_use", id, name: `mcp__application__${name}`, input }] } });
+    const response = await process.options.onControlRequest({ subtype: "mcp_message", server_name: "application",
+      message: { jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: input,
+        _meta: { "claudecode/toolUseId": id } } } }, { signal: new AbortController().signal });
+    return JSON.parse(response.mcp_response.result.content[0].text);
+  }
+  const retiredInput = { limit: main.actionIds.length };
+  await process.options.onEvent({ type: "assistant", session_id: entry.id, uuid: "retired-native-tool",
+    message: { content: [{ type: "tool_use", id: "retired-tool-call", name: "mcp__application__assistant_action_search", input: retiredInput }] } });
+  sent = await sendLearning({ message: "Use this current request to teach the lesson.",
+    messageId: "actual-claude-current-teaching-request", clientId: "actual-claude-browser" });
+  assert.equal(sent.deliveryMode, "steer");
+  assert.equal(f.processes.length, 1);
+  await assert.rejects(process.options.onControlRequest({ subtype: "mcp_message", server_name: "application",
+    message: { jsonrpc: "2.0", id: "retired-tool-call", method: "tools/call", params: {
+      name: "assistant_action_search", arguments: retiredInput, _meta: { "claudecode/toolUseId": "retired-tool-call" } } }
+  }, { signal: new AbortController().signal }), /retired input/);
+  assert.equal(entry.command.toolFailure, undefined, "Refusal must happen before the real Common executor can poison the new input");
+  const search = await call("learning-search", "assistant_action_search", { limit: main.actionIds.length });
+  assert.equal(search.ok, true, JSON.stringify(search));
+  assert.deepEqual(search.result.items.map(value => value.actionId).sort(), [...main.actionIds].sort());
+  const contract = await call("learning-question-contract", "assistant_action_contract", {
+    actionId: "vibe64.training.question.prepare", version: 1 });
+  assert.equal(contract.ok, true, JSON.stringify(contract));
+  assert.equal(contract.result.actionId, "vibe64.training.question.prepare");
+  assert.equal(contract.result.version, 1);
+  const prepared = await call("learning-question", "assistant_action_execute", { actionId: "vibe64.training.question.prepare", input: {
+    attemptId: teaching.attemptId, expectedRevision: 1, requestId: "actual-claude-first-question",
+    assessmentId: "explain", text: teaching.input.text, assistance: "none" } });
+  assert.equal(prepared.ok, true, JSON.stringify(prepared));
+  log = await f.store.readConversationLog(sessionId);
+  const authored = log.find(turn => turn.messages.some(message => message.messageId === "actual-claude-current-teaching-request"));
+  assert.equal(authored.metadata.trainingQuestionDelivery.phase, "prepared");
+  assert.equal(authored.metadata.trainingQuestionDelivery.nativeThreadId, sent.thread.id);
+  assert.equal(authored.metadata.trainingQuestionDelivery.nativeTurnId, sent.turn.id);
+  assert.equal((await teaching.read()).completion.passed, 0, "Tool preparation is not an assessment pass");
+  await process.options.onEvent({ type: "result", session_id: entry.id, subtype: "success",
+    result: teaching.input.text, uuid: "actual-claude-question-final" });
+  await canonical.wait();
+  log = await f.store.readConversationLog(sessionId);
+  assert.equal(log.find(turn => turn.turnId === authored.turnId).metadata.trainingQuestionDelivery.phase, "delivered");
+  const final = native.owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id);
+  assert.equal(final.threadId, sent.thread.id);
+  assert.equal(final.turnId, sent.turn.id);
+  assert.equal(final.text, teaching.input.text);
+  const finalPublication = f.publications.findLast(event => event.reason === "claude-stream-message" &&
+    event.payload.conversationLogPatch.turn.messages.some(message => message.messageId === final.itemId));
+  assert.ok(finalPublication, "The exact final must have its original canonical publication");
+  assert.deepEqual(final.conversationTurn, finalPublication.payload.conversationLogPatch.turn);
+  assert.equal(final.conversationTurn.turnId, authored.turnId);
+  assert.equal(final.conversationTurn.metadata.trainingQuestionDelivery.phase, "prepared",
+    "Later checkpoint promotion cannot rewrite the original published final snapshot");
+  assert.equal((await teaching.read()).completion.passed, 0, "Confirmed question delivery is not grading");
+  assert.equal(entry.command, null);
+  assert.equal(entry.process, process, "The original supplied owner retains its process");
+  assert.equal(f.processes.length, 1);
+  const delivered = log.find(turn => turn.turnId === authored.turnId);
+  await sendLearning({ message: "I try it in Preview.", messageId: "actual-claude-stop-request",
+    trainingQuestion: delivered.metadata.trainingQuestionDelivery.reference });
+  const answered = (await f.store.readConversationLog(sessionId)).flatMap(turn => turn.messages)
+    .find(message => message.messageId === "actual-claude-stop-request");
+  assert.equal(answered.text, "I try it in Preview.");
+  assert.equal(answered.data.trainingQuestion.attemptId, teaching.attemptId);
+  assert.deepEqual(answered.data.trainingQuestion.delivery, { conversationId: sessionId,
+    turnId: delivered.turnId, outputId: delivered.metadata.trainingQuestionDelivery.outputId });
+  allowed = false;
+  await assert.rejects(call("revoked-read", "assistant_action_execute", { actionId: "vibe64.training.learning.read", input: {} }), /Learning actor access revoked/);
+  allowed = true;
+  await f.provider.interruptTurn(f.context);
+  await canonical.wait();
+  assert.equal(native.owner.readFinalAssistantResult(entry.context.key, entry.id, entry.turn.id), null);
+  assert.equal((await f.provider.sessionState(f.context)).turn.active, false);
 });

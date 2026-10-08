@@ -68,17 +68,24 @@ function createClaudeConversationEnvironment({
     const configuration = claudeModelConfiguration({ providerId: selection.modelProviderId, model: profile?.model || selection.modelId }, external);
     const flagSettings = claudeFlagSettings({ toolFree: Boolean(profile || entry.context.assistantScope),
       effort: profile ? profile.thinking : selection.variantId, providerEnv: configuration.env });
-    const identity = JSON.stringify([selection, profile, input.outputSchema, entry.accountIdentity]);
+    const applicationTools = Boolean(entry.command?.tools);
+    const identity = JSON.stringify(applicationTools
+      ? [selection, profile, input.outputSchema, entry.accountIdentity, entry.toolSchemas]
+      : [selection, profile, input.outputSchema, entry.accountIdentity]);
     const learningRoot = await learningSessionExecutionRoot(entry.context.runtime, entry.context.sessionId);
-    const systemPrompt = entry.context.assistantScope?.stableContext || (profile
+    let systemPrompt = entry.context.assistantScope?.stableContext || (profile
       ? "Complete only the supplied task."
       : learningRoot ? await entry.context.runtime.getLearningInstructions(entry.context.sessionId)
       : await vibe64ConversationInstructions({ workdir: entry.context.workdir, promptContext: sessionGuidance(entry) }));
+    if (!profile && !entry.context.assistantScope && entry.context.runtime.learningScope?.noExercise === false) {
+      systemPrompt += `\n\n${await entry.context.runtime.getLearningInstructions(entry.context.sessionId)}`;
+    }
     return {
       systemPrompt, contextIdentity: identity, settings: flagSettings, model: configuration.model,
       instructionMode: entry.context.assistantScope || profile ? "replace" : "append",
-      liveUpdateIdentity: profile ? undefined : JSON.stringify(input.outputSchema ?? null),
-      profile, external, outputSchema: input.outputSchema, selection
+      liveUpdateIdentity: profile ? undefined : JSON.stringify(applicationTools
+        ? [input.outputSchema ?? null, entry.toolSchemas] : input.outputSchema ?? null),
+      profile, external, outputSchema: input.outputSchema, selection, ...(applicationTools ? { applicationTools: true } : {})
     };
   }
 
@@ -90,14 +97,14 @@ function createClaudeConversationEnvironment({
     return { ...prepared, workdir: profile || ctx.assistantScope ? credentialHome.home : ctx.workdir };
   }
 
-  async function configureProcess(entry, { instructionArguments, model, profile, external, outputSchema, selection }, { context: ctx, prepared }) {
+  async function configureProcess(entry, { instructionArguments, model, profile, external, outputSchema, selection, applicationTools }, { context: ctx, prepared }) {
     const guidanceEnvironment = !profile && !ctx.assistantScope ? await sessionGuidanceEnvironment(entry) : {};
     return { command, commandRunner, stopExecution, credentialHome,
       env: { ...env, ...prepared.env, ...guidanceEnvironment },
-      shimDirs: !profile && !ctx.assistantScope && !ctx.runtime?.learningScope ? withGenesisCommandShim(prepared.shimDirs) : prepared.shimDirs,
+      shimDirs: !profile && !ctx.assistantScope && ctx.runtime?.learningScope?.noExercise !== true ? withGenesisCommandShim(prepared.shimDirs) : prepared.shimDirs,
       model: external ? "" : model,
       effort: profile ? profile.thinking : selection.variantId,
-      toolFree: Boolean(profile || ctx.assistantScope), outputSchema,
+      toolFree: Boolean(profile || ctx.assistantScope), outputSchema, ...(applicationTools ? { applicationTools: true } : {}),
       instructionArguments,
       execution: { ownerId: entry.id, sessionId: ctx.sessionId }
     };

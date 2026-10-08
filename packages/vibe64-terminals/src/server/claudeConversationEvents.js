@@ -103,11 +103,20 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
     if (event.type === "admit-message" && messagePolicy.skipAdmission(entry, event)) return;
     if (event.type !== "before-state") return receiveTurnEvent(entry, event);
     if (!event.active && entry.turn.active && !entry.context.assistantScope && !entry.profile && !entry.renewal) {
+      const runtime = entry.context.runtime;
+      let nativeTurn;
+      if (runtime.learningScope && runtime.learningTeaching) {
+        const native = entry.nativeTurn.read();
+        if (native.turnId !== entry.turn.id) throw error("Claude's lesson checkpoint belongs to a different native turn.");
+        nativeTurn = { threadId: entry.id, turnId: native.turnId,
+          outerTurnId: `claude:${entry.id}:${entry.turn.id}`, active: native.active,
+          status: native.status, error: native.error };
+      }
       return checkpointSessionTurn({
-        projectService, runtime: entry.context.runtime, session: entry.context.session,
+        projectService, runtime, session: entry.context.session,
         sessionId: entry.context.sessionId, outerTurnId: `claude:${entry.id}:${entry.turn.id}`,
         outcome: [RUN.COMPLETED, RUN.INTERRUPTED, RUN.CANCELLED].includes(event.state) ? event.state : "failed",
-        publishSessionChanged
+        ...(nativeTurn ? { nativeTurn } : {}), publishSessionChanged
       });
     }
   };
