@@ -134,7 +134,8 @@ function plainSessionView(session = {}, {
       label: "Genesis"
     },
     ...(learning ? { purpose: "learning", learning,
-      nativeExecutionRoot: session.archived || archivedSessionStatus(session.status) ? "" : learningNativeExecutionRoot(session) } : {}),
+      nativeExecutionRoot: session.archived || archivedSessionStatus(session.status) ? ""
+        : learning.noExercise ? learningNativeExecutionRoot(session) : sourcePath } : {}),
     conversationLogRoot: normalizeText(session.conversationLogRoot),
     manifest: plainManifest(session.manifest),
     metadata: publicSessionMetadata(session.metadata),
@@ -213,7 +214,7 @@ async function sessionAvailabilityIssue(session = {}, learningScope = null) {
   ) {
     return null;
   }
-  if (learningSessionBinding(session.metadata, learningScope, session.sessionId)) {
+  if (learningSessionBinding(session.metadata, learningScope, session.sessionId)?.noExercise) {
     try { await requireLearningNativeDirectory(session); return null; }
     catch (error) { return { code: error.code, message: error.message }; }
   }
@@ -283,7 +284,7 @@ class Vibe64SessionRuntime {
       throw vibe64Error("Learning teaching requires an authorized runtime and its typed Training owner.", "vibe64_learning_scope_invalid");
     }
     this.learningTeaching = learningTeaching;
-    if (this.learningScope && (projectSessionSourceRoot || createSessionSource)) {
+    if (this.learningScope?.noExercise && (projectSessionSourceRoot || createSessionSource)) {
       throw vibe64Error("A source-less learning runtime cannot provision a project source.", "vibe64_learning_scope_invalid");
     }
     if (store && !isDeepStrictEqual(store.learningScope ?? null, this.learningScope)) {
@@ -331,7 +332,7 @@ class Vibe64SessionRuntime {
       sessionId,
       status
     });
-    if (this.learningScope) {
+    if (this.learningScope?.noExercise) {
       // "genesis" remains the supported storage/runtime format, not a claim
       // that this source-less learning session has a Genesis project.
       return this.sessionView(session);
@@ -628,7 +629,7 @@ class Vibe64SessionRuntime {
     if (session.archived || (sessionIsClosing(session) && allowClosing !== true) || session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
       throw vibe64Error("Historical or inactive learning sessions cannot execute.", "vibe64_learning_session_inactive");
     }
-    return requireLearningNativeDirectory(session);
+    return this.learningScope.noExercise ? requireLearningNativeDirectory(session) : requireSessionSourceRoot(session);
   }
 
   async getLearningInstructions(sessionId) {
@@ -656,11 +657,12 @@ class Vibe64SessionRuntime {
     task = "work"
   } = {}) {
     const session = assertSupportedSession(await this.store.readSession(sessionId));
-    if (learningSessionBinding(session.metadata, this.learningScope, session.sessionId)) {
+    const learning = learningSessionBinding(session.metadata, this.learningScope, session.sessionId);
+    if (learning) {
       if (session.archived || sessionIsClosing(session) || session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
         throw vibe64Error("Historical or inactive learning sessions cannot admit work.", "vibe64_learning_session_inactive");
       }
-      return { prompt: normalizeText(request) };
+      if (learning.noExercise) return { prompt: normalizeText(request) };
     }
     const sourceRoot = requireSessionSourceRoot(session);
     let genesisTask = assertGenesisPromptTask(task, {
@@ -861,7 +863,7 @@ class Vibe64SessionRuntime {
             recursive: true
           });
         }
-      } else if (!learningSessionBinding(session.metadata, this.learningScope, session.sessionId)) {
+      } else if (!learningSessionBinding(session.metadata, this.learningScope, session.sessionId)?.noExercise) {
         await this.assertSourceHealthy(session);
       }
       await this.store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ARCHIVED);

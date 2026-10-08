@@ -57,3 +57,8 @@ resolve its supported recovery. Do not erase history or recreate the conversatio
 to bypass the mismatch. An unconfirmed Helper cleanup must be resolved before
 another evaluation. Colleague can explain recovery and offer supported actions;
 private connection-key entry remains a human-only step.
+
+Practice lessons require their real prepared workspace. If preparation reports
+missing source, retain the attempt and resolve that failure before continuing;
+a conversation alone cannot replace the workspace. Existing conversations and
+progress remain unchanged.

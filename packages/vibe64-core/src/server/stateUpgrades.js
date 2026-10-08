@@ -25,10 +25,11 @@ import trainingAssessments from "./stateUpgrades/20261006-training-assessments.j
 import trainingAttemptHistory from "./stateUpgrades/20261007-training-attempt-history.js";
 import trainingQuestionAdmission from "./stateUpgrades/20261007-training-question-admission.js";
 import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.js";
+import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";
 
 // Published entries are immutable. Append new upgrades in order; never remove one.
 
-const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy];
+const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions];
 
 async function readLedger(ledgerPath) {
   let source;

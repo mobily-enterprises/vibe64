@@ -2507,3 +2507,63 @@ test("learning selected alias retains original conflict and lifecycle clearing s
     assert.equal(await fs.lstat(alias).catch(error => error.code), "ENOENT");
   });
 });
+
+
+test("source-bearing Learning keeps original source descriptor and alias owners with an immutable exact binding", async () => {
+  await withTemporaryRoot(async root => {
+    const { managedSessionSourceRoot, sourceMetadata } = await import("./vibe64TestHelpers.js");
+    const scope = { ...privateLessonScope(), noExercise: false };
+    const options = { projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root),
+      projectSessionSourceRoot: managedSessionSourceRoot(root), learningScope: scope };
+    const store = createVibe64SessionStore(options);
+    const session = await store.createSession({ sessionId: "practice-bound", runtimeKind: "genesis", metadata: sourceMetadata(root, "practice-bound") });
+    assert.deepEqual(JSON.parse(session.metadata.learning_session), { schemaVersion: 1, ...scope, conversationId: session.sessionId });
+    assert.equal(Object.isFrozen(store.learningScope.pin.lesson), true);
+    const source = await store.readSessionSourceDescriptor(session.sessionId);
+    const descriptor = await store.readSessionNativeDescriptor(session.sessionId);
+    assert.deepEqual(descriptor, { ...source, purpose: "learning", learning: JSON.parse(session.metadata.learning_session),
+      status: "active", archived: false, nativeExecutionRoot: session.metadata.source_path });
+    await assert.rejects(access(path.join(session.sessionRoot, "native")), { code: "ENOENT" });
+    assert.equal(store.paths().currentSessionAliasPath, path.join(managedSessionSourceRoot(root), "sessions", "selected"));
+    await store.updateCurrentSession(session.sessionId);
+    assert.equal((await store.readCurrentSession()).sessionId, session.sessionId);
+    for (const operation of [() => store.writeMetadataValue(session.sessionId, "learning_session", "{}"),
+      () => store.writeMetadataValueForRenewal(session.sessionId, "learning_session", "{}"),
+      () => store.deleteMetadataValue(session.sessionId, "learning_session")]) {
+      await assert.rejects(operation, { code: "vibe64_learning_session_binding_immutable" });
+    }
+    await store.writeMetadataValue(session.sessionId, "base_commit", "a".repeat(40));
+    assert.equal((await store.readSessionSourceDescriptor(session.sessionId)).metadata.base_commit, "a".repeat(40),
+      "The original source provisioning writer remains available for actual practice source");
+    await store.writeStatus(session.sessionId, "archived");
+    await store.publishSessionArchive(session.sessionId);
+    const archived = await store.readSessionNativeDescriptor(session.sessionId);
+    assert.equal(archived.archived, true); assert.equal(archived.status, "archived"); assert.equal(archived.sessionRoot, "");
+    assert.equal(archived.nativeExecutionRoot, session.metadata.source_path, "Identity stays the actual source path, never an archive extraction/native substitute");
+    assert.deepEqual(archived.learning, descriptor.learning);
+  });
+});
+
+test("source-bearing Learning refuses missing source configuration, foreign scopes and raw metadata adoption", async () => {
+  await withTemporaryRoot(async root => {
+    const { managedSessionSourceRoot, sourceMetadata } = await import("./vibe64TestHelpers.js");
+    const scope = { ...privateLessonScope(), noExercise: false };
+    assert.throws(() => privateLessonStore(root, scope), { code: "vibe64_learning_scope_invalid" });
+    const options = { projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root), projectSessionSourceRoot: managedSessionSourceRoot(root) };
+    const own = createVibe64SessionStore({ ...options, learningScope: scope });
+    const session = await own.createSession({ sessionId: "private-practice", runtimeKind: "genesis", metadata: sourceMetadata(root, "private-practice") });
+    const file = path.join(own.paths(session.sessionId).metadataRoot, "learning_session");
+    const before = await readFile(file);
+    for (const wrong of [null, { ...scope, learnerId: "43" }, { ...scope, attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+      { ...scope, pin: { ...scope.pin, lesson: { ...scope.pin.lesson, hash: "d".repeat(64) } } }]) {
+      const other = createVibe64SessionStore({ ...options, learningScope: wrong });
+      for (const operation of [() => other.readSession(session.sessionId), () => other.readSessionSourceDescriptor(session.sessionId),
+        () => other.readSessionNativeDescriptor(session.sessionId), () => other.writeMetadataValue(session.sessionId, "label", "Foreign write")]) {
+        await assert.rejects(operation, { code: "vibe64_learning_session_scope_mismatch" });
+      }
+    }
+    assert.deepEqual(await readFile(file), before);
+    await assert.rejects(own.createSession({ sessionId: "caller-practice-binding", runtimeKind: "genesis", metadata: {
+      ...sourceMetadata(root, "caller-practice-binding"), learning_session: session.metadata.learning_session } }), { code: "vibe64_learning_scope_invalid" });
+  });
+});

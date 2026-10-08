@@ -725,3 +725,22 @@ catalogue. A retained thread with absent or differing identity refuses a new
 nonempty manifest through the shared native owner before resume. This is a
 new-write-only attribute with no historical conversion or numbered repair;
 authorized recovery and activation of actual lesson tools remain separate work.
+
+## New source-bearing Learning session boundary
+
+`20261008-learning-practice-sessions` follows personal voice policy. New trusted
+constructor scopes can explicitly retain `noExercise:false` in the same immutable
+`learning_session` binding, alongside the original real project source metadata.
+The original source creator, source descriptor, Genesis environment, conversation
+history, Git inspection and archive owners remain in use. A false scope without
+its actual configured source namespace is refused; the private native directory
+for no-exercise lessons is not a substitute checkout.
+
+Apply the candidate registry with session and learner writers stopped before
+activating these new writes. The script reads or converts no application file;
+only the ordered ledger changes and no application-data backup is needed for
+this prospective step. Check is read-only, interrupted publication safely retries
+and the previous registry refuses its newer completed ledger. Existing Working
+and no-exercise Learning bindings, metadata and progress are unchanged. There is
+no historical adoption, inference or lazy repair. Full practice preparation,
+teacher transport and installed learner acceptance require their own proofs.

@@ -118,8 +118,10 @@ through bounded settings results.
 ## `sessions` Session workspaces
 
 Owns isolated working sessions, their lifecycle and recoverable workspace history.
-The same Runtime/Store now accepts a constructor-authorized no-exercise learning
-scope and atomically retains its immutable owner/attempt/pin/conversation binding.
+The same Runtime/Store accepts constructor-authorized learning scopes and
+atomically retains their immutable owner/attempt/pin/conversation binding.
+No-exercise scopes retain private native identity; explicit practice scopes reuse
+the original actual-source creator, descriptor, Genesis environment and Git owner.
 It preserves the existing supported storage format, archive history and native
 state readers; it does not authorize Training content or create a parallel
 runtime. Historical learning reads cannot acquire an executable root. Main

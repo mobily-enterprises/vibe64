@@ -499,7 +499,7 @@ Sources: `packages/vibe64-sessions/src/server/registerRoutes.js`,
 
 The existing Runtime and Store also accept a constructor-only `learningScope`
 containing the authenticated `learnerId`, exact `attemptId`, complete opaque
-`pin`, and `noExercise:true`. The composing Training owner must authorize the
+`pin`, and an explicit `noExercise` boolean. For `noExercise:true`, the composing Training owner must authorize the
 actor, active attempt, installed pin and the lesson's genuinely no-exercise
 descriptor before constructing this scope and its fixed private runtime root.
 Runtime validates bounded identities/JSON shape and exact durable equality; it
@@ -557,3 +557,24 @@ or prove complete lesson controls, teacher admission or installed geometry.
 The original Rename dialog captures the chosen saved row's own Learning attempt
 path; Working rows use the original Working path exposed by the same Data/Host.
 The currently selected attempt cannot retarget the named conversation.
+
+Source-bearing Learning uses an explicitly authorized `noExercise:false` scope
+in the same Runtime/Store, with the same immutable learner/attempt/pin binding.
+It requires the original configured source namespace and invokes the original
+source creator and attachment checks. Its native cwd is the actual session
+source; no private native directory substitutes for it. The original source
+descriptor, selected alias, Genesis prompt/environment, Git inspection, history
+and archive owners remain. Only `noExercise:true` bypasses Genesis and project
+Env. Fresh Training instructions remain a separate native system facility.
+Closing denies fresh execution, instructions and rendering while the existing
+explicit control path retains the admitted source identity. Unavailable original source inspection still
+prevents archiving through its original gate.
+
+The prospective `20261008-learning-practice-sessions` boundary reads or converts
+no application data. It neither adopts old Working sessions nor establishes
+practice provisioning, teacher tools, browser transport or installed acceptance.
+Sources: `packages/vibe64-runtime/src/server/runtime.js`,
+`packages/vibe64-runtime/src/server/sessionStore.js`,
+`packages/vibe64-core/src/server/stateUpgrades/20261008-learning-practice-sessions.js`,
+`tests/server/vibe64Runtime.unit.test.js`, `tests/server/vibe64SessionStore.unit.test.js`,
+`tests/server/stateUpgrades.unit.test.js`.
