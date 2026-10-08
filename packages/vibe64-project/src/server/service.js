@@ -303,12 +303,12 @@ function createService({
     : getStudioProjectContext());
 
   function selectedTargetRoot() {
-    if (currentProjectRequestContext()?.learningScope) return "";
+    if (currentProjectRequestContext()?.learningScope?.noExercise) return "";
     return String(currentProjectTargetRoot() || studioProjectContext.targetRoot || "").trim();
   }
 
   function requireSelectedTargetRoot() {
-    if (currentProjectRequestContext()?.learningScope) {
+    if (currentProjectRequestContext()?.learningScope?.noExercise) {
       throw vibe64Error("This learning session has no project source.", "vibe64_session_source_required");
     }
     const target = selectedTargetRoot();
@@ -319,7 +319,7 @@ function createService({
   }
 
   function selectedSourceRoot() {
-    if (currentProjectRequestContext()?.learningScope) return "";
+    if (currentProjectRequestContext()?.learningScope?.noExercise) return "";
     const requestSource = currentProjectSourceRoot();
     if (requestSource) {
       return requestSource;
@@ -363,7 +363,7 @@ function createService({
   }
 
   function selectedSessionSourceRoot() {
-    if (currentProjectRequestContext()?.learningScope) return "";
+    if (currentProjectRequestContext()?.learningScope?.noExercise) return "";
     const requestRoot = currentProjectSessionSourceRoot();
     if (requestRoot) {
       return requestRoot;
@@ -379,22 +379,27 @@ function createService({
     if (learningContext?.learningScope) {
       const actorId = String(learningContext.vibe64User?.uid ?? learningContext.vibe64User?.username ?? "");
       if (!actorId || actorId !== learningContext.learningScope.learnerId ||
-          learningContext.slug || learningContext.targetRoot || learningContext.sourceRoot || learningContext.projectSessionSourceRoot) {
-        throw vibe64Error("Use this authenticated learner's private session context.", "vibe64_learning_scope_mismatch");
+          (learningContext.learningScope.noExercise
+            ? learningContext.slug || learningContext.targetRoot || learningContext.sourceRoot || learningContext.projectSessionSourceRoot
+            : !learningContext.slug || !learningContext.targetRoot || !learningContext.projectRuntimeRoot || !learningContext.projectSessionSourceRoot)) {
+        throw vibe64Error("Use this authenticated learner's exact private or practice session context.", "vibe64_learning_scope_mismatch");
       }
-      return createVibe64SessionStore({
-        logger,
-        projectContextRoot: learningContext.projectRuntimeRoot,
-        projectRuntimeRoot: learningContext.projectRuntimeRoot,
-        learningScope: learningContext.learningScope
-      });
+      if (learningContext.learningScope.noExercise) {
+        return createVibe64SessionStore({
+          logger,
+          projectContextRoot: learningContext.projectRuntimeRoot,
+          projectRuntimeRoot: learningContext.projectRuntimeRoot,
+          learningScope: learningContext.learningScope
+        });
+      }
     }
     const target = requireSelectedTargetRoot();
     return createVibe64SessionStore({
       logger,
       projectContextRoot: target,
       projectRuntimeRoot: selectedProjectRuntimeRoot(),
-      projectSessionSourceRoot: selectedSessionSourceRoot()
+      projectSessionSourceRoot: selectedSessionSourceRoot(),
+      learningScope: learningContext?.learningScope
     });
   }
 
@@ -1195,7 +1200,7 @@ function createService({
 
   async function createRuntime(options = {}) {
     const requestContext = captureProjectRequestContext() || {};
-    if (requestContext.learningScope) {
+    if (requestContext.learningScope?.noExercise) {
       return new Vibe64SessionRuntime({
         inspectSourceByDefault: false,
         projectContextRoot: requestContext.projectRuntimeRoot,
@@ -1213,6 +1218,9 @@ function createService({
       projectContextRoot: target,
       projectRuntimeRoot: selectedProjectRuntimeRoot(),
       projectSessionSourceRoot: selectedSessionSourceRoot(),
+      learningScope: requestContext.learningScope,
+      learningInstructions: requestContext.learningInstructions,
+      learningTeaching: requestContext.learningTeaching,
       promptEnvironment: () => runWithProjectRequestContext(requestContext, promptEnvironment),
       store: sessionStore()
     });

@@ -45,13 +45,17 @@ exercise start/resume reports unavailable before practice effects.
 This subsystem owns start/resume/end/retained-pin continuation policy while hosts
 supply concrete resources and provisioning. Reserved
 no-exercise quizzes reuse these pins and answer owners without project effects;
-practical and visual operations retain their preparation gates. Its read-only internal learning-scope reader derives the actual learner/attempt
-and installed no-exercise pin with a private server namespace. It reports current
-and ended state without repair. Its internal learning-session coordinator derives
-the authenticated attempt context and fresh pinned teaching instructions while
-using the original preparation lock, Project factory and Main Session creation.
-Historical observation/control cannot admit new lesson work. Runtime construction,
-native admission and native providers stay with existing owners. Main
+practical and visual operations retain their preparation gates. Its read-only
+learning-scope owners derive the actual learner, saved attempt and exact installed
+pin without repair. No-exercise attempts use a private server namespace; explicit
+configured practice admission reuses the saved actual Project and initial session,
+including its original source, Git and Workspace setup owners. The same internal
+learning-session coordinator derives fresh authenticated authority and pinned
+teaching instructions. Preparation reuses its already-held original barrier;
+subsequent effects reenter the original saved-attempt admission. Captured
+observation/control cannot admit new work or change project selection. Runtime
+construction, immutable session binding and native providers remain with their
+existing owners; no historical session is silently adopted or replaced. Main
 teaching coordinator supplies the exact four learning-read, brief-read,
 question-prepare and answer-evaluate actions to the original Codex/OpenCode Main native
 host for no-exercise attempts. Fresh originating-request WRITE authority and

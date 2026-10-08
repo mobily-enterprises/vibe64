@@ -856,10 +856,13 @@ function createService({
           if (sessionId === undefined) {
             throw new TypeError("Learning creation requires a server-reserved session ID.");
           }
-          if (expectedCommit !== undefined || ["repositoryBranch", "pullRequestNumber", "expectedCommit",
+          if ((currentProjectRequestContext().learningScope.noExercise && expectedCommit !== undefined) ||
+            ["repositoryBranch", "pullRequestNumber", "expectedCommit",
             "sourceContext", "sourcePath", "sourceRoot", "projectSessionSourceRoot", "createSessionSource"]
             .some(name => Object.hasOwn(input, name))) {
-            throw new TypeError("A source-less learning session cannot select source, branch, pull request or commit options.");
+            throw new TypeError(currentProjectRequestContext().learningScope.noExercise
+              ? "A source-less learning session cannot select source, branch, pull request or commit options."
+              : "A saved practice learning session cannot select different source, branch, pull request or commit options.");
           }
           learningRuntime = await project.createRuntime(sessionRuntimeOptions(terminals));
           if (!learningRuntime.learningScope) {
@@ -886,7 +889,7 @@ function createService({
             ),
             created_by: text(vibe64User?.username || vibe64User?.name)
           },
-          ...(!runtime.learningScope ? { sourceContext: {
+          ...(!runtime.learningScope?.noExercise ? { sourceContext: {
             ...(expectedCommit === undefined ? {} : { expectedCommit }),
             ...(repositoryBranch ? { expectedCommit: repositoryBranch.commit } : {}),
             ...(pullRequest ? { expectedCommit: pullRequest.headCommit } : {}),
@@ -894,7 +897,7 @@ function createService({
           } } : {})
         });
         let created;
-        if (runtime.learningScope) {
+        if (runtime.learningScope?.noExercise) {
           if (typeof runtime.store?.assertSessionCreationAbsent !== "function") {
             throw new TypeError("Reserved session creation requires the session store's absence check.");
           }
@@ -939,7 +942,7 @@ function createService({
         }
         let setup = null;
         try {
-          if (!runtime.learningScope) setup = await setupRunner.start({
+          if (!runtime.learningScope?.noExercise) setup = await setupRunner.start({
             retry: true,
             runtime,
             session: created.session
@@ -979,7 +982,7 @@ function createService({
             originId: input.originId
           });
         }
-        return publicSession(currentSession, runtime.learningScope ? {} : {
+        return publicSession(currentSession, runtime.learningScope?.noExercise ? {} : {
           creation: created.updatedPolicy.creation,
           limits: created.updatedPolicy.limits
         });

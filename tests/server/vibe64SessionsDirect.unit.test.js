@@ -4559,3 +4559,44 @@ test("ordinary Working Send retains its original two-argument service call witho
     assert.equal(definition.input.schema.patch({ ...input, [key]: {} }).errors[key].code, "FIELD_NOT_ALLOWED", key);
   }
 });
+
+test("source-bearing Learning creation retains the original source context, policy limits, setup entry and publication", async () => {
+  const path = await import("node:path");
+  await withTemporaryRoot(async root => {
+    const actor = { uid: 42, username: "learner", role: "member" };
+    const scope = { learnerId: "42", attemptId: "12345678-1234-4234-8234-123456789abc", noExercise: false,
+      pin: { course: { courseId: "intro-course", release: "0.1.0" }, topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0",
+        repository: "example/learn-intro", commit: "a".repeat(40), topicHash: "b".repeat(64) }, lesson: { code: "INTRO-01", hash: "c".repeat(64) } } };
+    const setup = [];
+    const publications = [];
+    const f = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(root),
+      startWorkspaceSetup: input => { setup.push(input); return { completion: null }; },
+      publishSessionChanged: async (id, value) => publications.push({ id, value }) });
+    // Preserve this ORIGINAL Sessions policy fixture; immutable persisted
+    // Runtime/Store binding and actual Git clones are proved by the learner case.
+    f.runtime.learningScope = scope;
+    const result = await runWithProjectRequestContext({ learningScope: scope, vibe64User: actor },
+      () => f.service.createSession({}, { sessionId: `training-${scope.attemptId}`, expectedCommit: "d".repeat(40) }));
+    assert.equal(result.ok, true, result.error);
+    assert.equal(f.creationInputs.length, 1);
+    assert.deepEqual(f.creationInputs[0].sourceContext, { expectedCommit: "d".repeat(40), vibe64User: actor });
+    assertInitialPlanMetadata(f.creationInputs[0].metadata, actor.username);
+    assert.equal(setup.length, 1);
+    assert.equal(setup[0].runtime, f.runtime);
+    assert.equal(setup[0].session.sessionId, `training-${scope.attemptId}`);
+    assert.equal(result.creation.canCreate, true);
+    assert.deepEqual(result.limits, { maxOpenSessions: 3, openSessionCount: 1 });
+    assert.equal(publications.length, 1);
+    assert.equal(publications[0].value.operation, "created");
+    const busy = sessionCreationPolicyHarness({ projectRuntimeRoot: path.join(root, "busy-runtime"), scope: "project",
+      initialSessions: [{ sessionId: "existing-open" }],
+      startWorkspaceSetup: () => assert.fail("policy rejection cannot start setup"),
+      publishSessionChanged: () => assert.fail("policy rejection cannot publish creation") });
+    busy.runtime.learningScope = scope;
+    const denied = await runWithProjectRequestContext({ learningScope: scope, vibe64User: actor },
+      () => busy.service.createSession({}, { sessionId: `training-${scope.attemptId}`, expectedCommit: "d".repeat(40) }));
+    assert.equal(denied.ok, false);
+    assert.equal(denied.code, "vibe64_session_creation_limit");
+    assert.equal(busy.creationInputs.length, 0);
+  });
+});

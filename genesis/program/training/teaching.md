@@ -854,3 +854,47 @@ and before `trainingPresentationReceipt` projects the original bounded fields.
 No extra player or browser registration is introduced. Main browser client
 admission, cue tools, canonical event decoration and voice/ACK attachment remain
 separate required work; this extraction does not fabricate those fields.
+
+
+### Explicitly composed source-bearing Main sessions
+
+Actual standalone and hosted composers opt into `practiceSessions:true`; its
+closed constructor default remains false so original exercise exclusion and
+ordinary `resolvePracticeContext` Runtime:null policy stay unchanged. Both modes
+compose the SAME learner, Brief, preparation, Project/Sessions/Runtime/Store
+owners. Preparation receives that exact coordinator reference and calls
+`runPreparationSessionContext` only around the original initial-session block,
+inside its already-held preparation barrier and actual Project scope. It creates
+no second runtime, registry or progress writer.
+
+`readExerciseProjectScope` adds the authenticated saved false scope and system
+root. The original immutable project marker derives namespace and source facts.
+Only original atomic Store creation writes the new learning binding. Existing
+ready unflagged records are refused, not adopted or replaced by normal reads.
+Their full compatibility needs a separate numbered stopped-service upgrade.
+
+False context resolution returns original captured CONTROL identity plus ONE
+trusted callback execution facility. Core validates its private original owner,
+marker/pin/actor/roots and invokes the existing hosted project gate before effects;
+local authority retains its original localhost/OS actor and private practice
+scope. Fresh execution rechecks the saved active attempt under the original
+write barrier. The exact Create action avoids wrapping the already-locking opener.
+Instructions use the original Brief with fresh pin/activity checks; false keeps
+original physical source Genesis/environment rendering. Teacher/native/presentation
+acceptance is not inferred from this bounded admission integration.
+
+Collection reads only each saved initial session's bounded original metadata
+and summary owners, with no transcript hydration or creation. A missing session
+is absent; corrupt binding/project/content propagates without repair. False rows
+add actual `projectSlug` and `noExercise:false` to the existing safe schema. The
+browser-only own learner identity and original native omission stay unchanged;
+normal and author-preview histories remain separate with their original bounds.
+Existing Learning encoded identity/HTTP namespace carries the saved false session
+ID; no projectSlug is admitted in that transport tuple. The same host must use
+separately verified actual project facts for physical Preview/source controls.
+
+Sources: original `learningSessions.js`, `preparation.js`, `learnerState.js`,
+Core `studioProjectContext.js`, `projectRequestContext.js`, `actionContext.js`,
+Project and Sessions original services; focused original Core/Project/Learner/
+Preparation/Session/ActionContext tests retain their assertion bodies and default
+policies except the documented additive saved-scope fixture projection.

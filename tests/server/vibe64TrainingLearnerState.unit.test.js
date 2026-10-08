@@ -2468,7 +2468,8 @@ test("exercise project scope reads the exact saved learner and installed exercis
   const attemptId = reserved.attempt.attemptId;
   const before = await treeState(f.systemRoot);
   const saved = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" });
-  assert.deepEqual(saved, { training: { schemaVersion: 1, learnerKey: "NDI", attemptId, pin: f.pin,
+  assert.deepEqual(saved, { scope: { learnerId: "42", attemptId, pin: f.pin, noExercise: false }, systemRoot: f.systemRoot,
+    training: { schemaVersion: 1, learnerKey: "NDI", attemptId, pin: f.pin,
     exercise: { kind: "bundled", sourcePath: "training/exercises/app" } },
     projectSlug: reserved.attempt.projectSlug, active: true, activeSummaryCurrent: true });
   saved.training.pin.lesson.hash = "e".repeat(64);
@@ -2695,4 +2696,133 @@ test("original learning receipt replay refreshes authority and preserves exact s
   assert.equal(checks, 2);
   assert.deepEqual(await fs.readFile(f.paths.progress), before.progress);
   assert.deepEqual(await fs.readFile(f.paths.active), before.active);
+});
+
+test("configured practice Learning binds the saved actual initial Main session and re-admits writes without changing the default caller", async t => {
+  const f = await fixture(t);
+  const [{ createStudioProjectContext }, { createService: createProject }, { createService: createSessions },
+    { createManagedProjectRepositoryService }, { createSessionSource }, { createTrainingLearningSessions },
+    { assertProjectEffectAdmission, captureProjectRequestContext, runWithProjectRequestContext }] = await Promise.all([
+    import("../../packages/vibe64-core/src/server/studioProjectContext.js"),
+    import("../../packages/vibe64-project/src/server/service.js"),
+    import("../../packages/vibe64-sessions/src/server/service.js"),
+    import("../../packages/vibe64-project/src/server/managedRepository.js"),
+    import("../../packages/vibe64-terminals/src/server/sessionSource.js"),
+    import("../../packages/vibe64-training/src/server/learningSessions.js"),
+    import("../../packages/vibe64-core/src/server/projectRequestContext.js")
+  ]);
+  const core = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
+    explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true } });
+  const project = createProject({ projectContext: core });
+  const repository = createManagedProjectRepositoryService({ projectContext: core, projectService: project });
+  const reserved = await f.reserve();
+  const attemptId = reserved.attempt.attemptId;
+  const begun = await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: reserved.revision });
+  const saved = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" });
+  const installed = createInstalledTrainingContent({ systemRoot: f.systemRoot });
+  const exercise = await installed.readExercise({ ...f.pin.topic, lessonCode: f.pin.lesson.code, lessonHash: f.pin.lesson.hash });
+  const publications = [];
+  let sourceCalls = 0;
+  let setupCalls = 0;
+  let capturedSetup;
+  const selection = { agentId: "build", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "opencode", modelId: "big-pickle",
+    modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: "" };
+  const sessions = createSessions({ project, initializeModelRouting: async () => ({ ok: true }),
+    terminals: {
+      async resolveAssistantPurpose(input, options) {
+        assert.equal(options.vibe64User, f.actor);
+        assert.equal(input.purpose, "senior");
+        return { available: true, effectiveSelection: selection, connectionIdentity: "controlled-original-account-seam" };
+      },
+      async requireAssistantSelectionAccess(value, options) {
+        assert.deepEqual(value, selection);
+        assert.equal(options.vibe64User, f.actor);
+        assert.equal(options.expectedConnectionIdentity, "controlled-original-account-seam");
+      },
+      async createSessionSource(input) {
+        sourceCalls++;
+        assert.equal(input.vibe64User, f.actor);
+        return project.runProjectSourceExclusive(async () => createSessionSource({ ...input,
+          project: await project.readCurrentProject() }), { operation: "session-source-create" });
+      }
+    },
+    workspaceSetupRunner: { isRunning: () => false, wait: () => null,
+      start({ runtime, session }) {
+        setupCalls++;
+        capturedSetup = captureProjectRequestContext();
+        assert.deepEqual(runtime.learningScope, saved.scope);
+        assert.equal(session.sessionId, saved.initialSessionId);
+        return { completion: null };
+      }
+    },
+    publishSessionChanged: async (id, value) => publications.push({ id, value })
+  });
+  const learning = createTrainingLearningSessions({ learners: f.state,
+    teachingBrief: createTrainingTeachingBrief({ learners: f.state, content: installed }),
+    project, sessions, projectContext: core, practiceSessions: true });
+  const progressBefore = await fs.readFile(f.paths.progress);
+  const activeBefore = await fs.readFile(f.paths.active);
+  let created;
+  await core.runWithPracticeProjectScope({ actor: f.actor, training: saved.training, access: "create" }, async () => {
+    await repository.createManagedGitProject({ slug: saved.projectSlug, training: saved.training }, {
+      initializeProject: async ({ projectRoot }) => {
+        for (const file of exercise.files) {
+          await fs.mkdir(path.dirname(path.join(projectRoot, file.path)), { recursive: true });
+          await fs.writeFile(path.join(projectRoot, file.path), file.bytes, { flag: "wx" });
+        }
+      }
+    });
+    const proof = await repository.verifyTrainingProjectSource({ slug: saved.projectSlug, training: saved.training }, { files: exercise.files });
+    await project.runInProjectContext(saved.projectSlug, () => learning.runPreparationSessionContext({ actor: f.actor, attemptId,
+      sessionId: saved.initialSessionId }, async () => {
+      created = await sessions.createSession({ vibe64User: f.actor }, { sessionId: saved.initialSessionId, expectedCommit: proof.commit });
+      assert.equal(created.ok, true, created.error);
+    }));
+  });
+  assert.equal(created.purpose, "learning");
+  assert.equal(created.learning.noExercise, false);
+  assert.equal(created.sourceReady, true);
+  assert.ok(created.sourcePath);
+  assert.equal(created.learning.conversationId, begun.attempt.preparation.initialSessionId);
+  assert.equal(sourceCalls, 1);
+  assert.equal(setupCalls, 1, "original source setup entry remains admitted, without fabricating setup success");
+  assert.equal(publications.length, 1);
+  assert.equal(created.creation.canCreate, true);
+  assert.ok(created.limits);
+  await runWithProjectRequestContext(capturedSetup, async () => {
+    assert.equal(core.currentPracticeProjectScope().access, "control");
+    assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+    assert.equal((await project.createRuntime({ inspectSource: false })).projectContextRoot, capturedSetup.targetRoot);
+  });
+  const context = await learning.resolveContext({ actor: f.actor, attemptId, sessionId: created.sessionId, access: "write" });
+  await runWithProjectRequestContext(context, () => assert.throws(assertProjectEffectAdmission,
+    { code: "vibe64_practice_effect_admission_required" }));
+  await context.runLearningOperation(async () => {
+    assert.doesNotThrow(assertProjectEffectAdmission);
+    const runtime = await project.createRuntime({ inspectSource: false });
+    assert.deepEqual(runtime.learningScope, saved.scope);
+    assert.equal((await runtime.store.readSession(created.sessionId)).metadata.source_kind, "session_clone");
+  });
+  const summaries = await learning.readSessions({ actor: f.actor });
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0].sessionId, created.sessionId);
+  assert.equal(summaries[0].projectSlug, saved.projectSlug);
+  assert.equal(summaries[0].noExercise, false);
+  assert.equal(JSON.stringify(summaries).includes(created.sourcePath), false);
+  assert.equal((await learning.openSession({ actor: f.actor, attemptId })).sessionId, created.sessionId);
+  assert.equal(sourceCalls, 1, "open never creates or replaces the practice session");
+  const defaultOwner = createTrainingLearningSessions({ learners: f.state,
+    teachingBrief: createTrainingTeachingBrief({ learners: f.state, content: installed }), project, sessions, projectContext: core });
+  assert.deepEqual(await defaultOwner.readSessions({ actor: f.actor }), [], "default fixture retains original exercise exclusion");
+  assert.deepEqual(await fs.readFile(f.paths.progress), progressBefore);
+  assert.deepEqual(await fs.readFile(f.paths.active), activeBefore);
+  await assert.rejects(() => learning.resolveContext({ actor: { uid: 43 }, attemptId, sessionId: created.sessionId }),
+    { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  await assert.rejects(() => learning.resolveContext({ actor: f.actor, attemptId, sessionId: "other-practice" }),
+    { code: "VIBE64_TRAINING_SESSION_MISMATCH" });
+  const current = await f.state.resumeAttempt({ actor: f.actor, attemptId });
+  await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: current.revision, requestId: "end-bound-practice", reason: "restart" });
+  // The original preparation barrier refuses the now-ended reservation first.
+  await assert.rejects(() => context.runLearningOperation(() => assert.fail()), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  assert.equal((await learning.readSessions({ actor: f.actor }))[0].sessionId, created.sessionId);
 });

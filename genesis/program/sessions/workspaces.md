@@ -247,15 +247,20 @@ failure does not falsify a session already saved. This seam alone adds no learne
 start control or training operation.
 
 The same `createSession` also accepts the existing Project runtime for a trusted
-server learning context. It requires a reserved internal ID and refuses branch,
-PR, commit and source options before source resolution. The original trusted
+server learning context. It requires a reserved internal ID. Only `noExercise:true`
+refuses the internal source commit and bypasses source creation/policy/setup;
+explicit false retains the original reserved `expectedCommit`, policy lock, source
+creator, capacity fields and Workspace setup. Both refuse raw source/branch/PR
+choices supplied through input. The original trusted
 actor, workflow initialization, effective Senior/backup and selected connection
 access policy still precede the write. Its one shared metadata body uses the
 original fields; Runtime/Store alone creates the immutable learning binding.
 After the store's real absence preflight, the original locked staged create owns
-atomic publication and duplicate refusal. This branch creates no source,
+atomic publication and duplicate refusal. The source-less branch creates no source,
 workspace setup, development database slot or synthetic capacity policy; its
 result is the actual public session view without `creation`/`limits` fields.
+The false branch retains the ordinary original source policy and actual result
+fields, rather than fabricating setup or capacity success.
 The common inspect and `session-created` publication sequence remains unchanged,
 including truthful retention after inspection/publication failures. Ordinary
 source creation retains PR/routing/runtime/policy/source/setup order and its
@@ -578,3 +583,34 @@ Sources: `packages/vibe64-runtime/src/server/runtime.js`,
 `packages/vibe64-core/src/server/stateUpgrades/20261008-learning-practice-sessions.js`,
 `tests/server/vibe64Runtime.unit.test.js`, `tests/server/vibe64SessionStore.unit.test.js`,
 `tests/server/stateUpgrades.unit.test.js`.
+
+
+### Saved practice Learning admission
+
+New source-bearing Learning sessions receive immutable `noExercise:false` facts
+only during original lesson preparation's actual initial-session create block.
+The server-supplied Training coordinator overlays these facts within the original
+Core practice grant while the original preparation barrier is already held; it
+never reacquires that non-reentrant lock. Source creator, expected commit, Git,
+account/routing, policy and async setup owners remain original.
+
+Both local and hosted Training enter the same private Core grant validation,
+callback expiry and captured CONTROL implementation. The hosted internal entry
+requires an existing exact managed_git marker and actual original Project ALS
+identity/derived catalogue roots; the local entry retains its existing
+catalogue-enabled refusal/private namespace and atomic creation policy. Captured
+CONTROL permits accepted setup/native observation and cleanup, not fresh user
+work, metadata/deletion or global selection effects. Fresh false Main operations
+use the one `runLearningOperation` facility to read the saved actor/attempt/pin
+and reenter the original scope; the exact Create action delegates directly to the
+existing saved-session opener, which already holds its one preparation barrier.
+Working and source-less defaults remain unchanged.
+
+Main transport retains the existing Learning attempt/session tuple and HTTP
+namespace with the actual saved initialSessionId. The physical Project/source
+identity stays separate and real. Browser collection adds bounded actual project
+slug and `noExercise:false`, never source/native paths. Host/Preview and actual
+native teacher adoption remain separate composed acceptance requirements.
+Historical ready unflagged sessions refuse; this source does not backfill them.
+Their supported adoption requires a separately reviewed numbered stopped-service
+upgrade, preserving old source, history and published upgrade immutability.

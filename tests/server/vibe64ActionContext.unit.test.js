@@ -314,3 +314,95 @@ test("learning-only matching retains reserved authority, exact selector and fore
     { code: "vibe64_learning_scope_mismatch" });
   assert.equal(f.calls.at(-1).learning.access, "control");
 });
+
+test("practice Main actions use fresh original hosted authorization and callback grants while exact Create owns one opener barrier", async t => {
+  const [{ mkdtemp, rm }, os, path, { createStudioProjectContext }, { createService: createProject },
+    { assertProjectEffectAdmission, captureProjectRequestContext, runWithProjectRequestContext }] = await Promise.all([
+    import("node:fs/promises"), import("node:os"), import("node:path"),
+    import("../../packages/vibe64-core/src/server/studioProjectContext.js"),
+    import("../../packages/vibe64-project/src/server/service.js"),
+    import("../../packages/vibe64-core/src/server/projectRequestContext.js")
+  ]);
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-practice-action-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const core = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"),
+    explicitSystemRoot: path.join(root, "system"), env: {}, home: root });
+  const project = createProject({ projectContext: core });
+  const actor = { uid: 42, username: "learner", role: "member" };
+  const training = { schemaVersion: 1, learnerKey: "NDI", attemptId: learningAttempt,
+    pin: { course: { courseId: "intro-course", release: "0.1.0" }, topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0",
+      repository: "example/learn-intro", commit: "a".repeat(40), topicHash: "b".repeat(64) },
+      lesson: { code: "INTRO-01", hash: "c".repeat(64) } }, exercise: { kind: "bundled", sourcePath: "training/exercises/app" } };
+  const slug = `training-${learningAttempt.replaceAll("-", "")}`;
+  await core.createWorkspaceProjectRecord({ slug, training });
+  const learningScope = Object.freeze({ learnerId: "42", attemptId: learningAttempt, pin: training.pin, noExercise: false });
+  const actions = createActionCatalogue();
+  const calls = [];
+  let allowed = true;
+  let active = true;
+  let openerBarriers = 0;
+  let captured;
+  for (const [id, access] of [["vibe64.test.practice-write", "write"], ["vibe64.sessions.create", "create"]]) {
+    const definition = withVibe64ActionContext({ id, kind: "command", channels: ["internal"], surfaces: ["app"],
+      input: { mode: "create", schema: createSchema({ sessionId: { type: "string", required: false } }) },
+      async execute(input, context) {
+        if (access === "create") return context.vibe64Action.learning.createLearningSession(input);
+        assert.doesNotThrow(assertProjectEffectAdmission);
+        assert.deepEqual(currentProjectRequestContext().learningScope, learningScope);
+        calls.push("effect");
+        return { ok: true };
+      }
+    }, { learningAccess: access });
+    actions.register({ contributorId: id, domain: "test", actions: [definition] });
+  }
+  registerVibe64ActionContext(actions, {
+    projectContext: core,
+    resolveUser: async () => actor,
+    async authorizeProject(input) {
+      calls.push("authorize");
+      assert.equal(input.user, actor);
+      assert.equal(input.slug, slug, "the trusted saved scope selects the original project, never transport input");
+      assert.equal((await core.readWorkspaceProject({ slug: input.slug })).project.slug, slug);
+      if (!allowed) throw Object.assign(new Error("Actual host denied access"), { code: "actual_host_denied", statusCode: 403 });
+    },
+    async resolveLearningContext(input) {
+      assert.equal(input.actor, actor);
+      assert.equal(input.attemptId, learningAttempt);
+      if (!active) throw Object.assign(new Error("Ended exact saved attempt"), { code: "saved_attempt_ended" });
+      await project.runInProjectContext(slug, () => core.runWithHostedTrainingProjectScope({ actor, training, access: "control" },
+        () => runWithProjectRequestContext({ ...currentProjectRequestContext(), learningScope }, () => {
+          captured = captureProjectRequestContext();
+        })));
+      return Object.freeze({ ...captured,
+        async runLearningOperation(operation) {
+          assert.notEqual(input.access, "create", "Create must not reacquire the opener's own barrier");
+          if (!active) throw Object.assign(new Error("Ended exact saved attempt"), { code: "saved_attempt_ended" });
+          calls.push("fresh-grant");
+          return project.runInProjectContext(slug, () => core.runWithHostedTrainingProjectScope({ actor, training, access: input.access },
+            () => runWithProjectRequestContext({ ...currentProjectRequestContext(), learningScope }, operation)));
+        },
+        async createLearningSession() {
+          assert.equal(input.access, "create");
+          openerBarriers++;
+          if (!active) throw Object.assign(new Error("Ended exact saved attempt"), { code: "saved_attempt_ended" });
+          return { ok: true, sessionId: `training-${learningAttempt}` };
+        }
+      });
+    }
+  });
+  const execute = (actionId, input = {}) => actions.execute({ actionId,
+    input: { learningAttemptId: learningAttempt, ...input }, context: { channel: "internal", surface: "app" } });
+  await execute("vibe64.test.practice-write", { sessionId: `training-${learningAttempt}` });
+  assert.deepEqual(calls, ["authorize", "fresh-grant", "effect"]);
+  await runWithProjectRequestContext(captured, () => assert.throws(assertProjectEffectAdmission,
+    { code: "vibe64_practice_effect_admission_required" }));
+  allowed = false;
+  await assert.rejects(() => execute("vibe64.test.practice-write"), { code: "actual_host_denied" });
+  assert.deepEqual(calls, ["authorize", "fresh-grant", "effect", "authorize"]);
+  allowed = true;
+  assert.equal((await execute("vibe64.sessions.create")).sessionId, `training-${learningAttempt}`);
+  assert.equal(openerBarriers, 1);
+  active = false;
+  await assert.rejects(() => execute("vibe64.test.practice-write"), { code: "saved_attempt_ended" });
+  assert.equal(openerBarriers, 1);
+});

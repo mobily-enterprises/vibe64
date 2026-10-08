@@ -40,13 +40,16 @@ const Vibe64TrainingProvider = defineFeature({
     const learners = createTrainingLearnerState({ systemRoot, content });
     const brief = createTrainingTeachingBrief({ learners, content });
     const projectRepositoryService = createManagedProjectRepositoryService({ projectContext, projectService: project });
-    const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals });
     const teaching = createTrainingTeachingOwner({ learners, content });
     const assessment = createTrainingAnswerAssessment({ learners, content, teaching });
     const mainTeaching = createTrainingMainTeaching({ teaching, assessment });
-    const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, projectContext, learningTeaching: mainTeaching });
+    const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, projectContext,
+      learningTeaching: mainTeaching, practiceSessions: true });
+    const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals,
+      learningSessions });
     registerVibe64ActionContext(actionCatalogue, {
       admissionScope: "learning-only",
+      projectContext,
       resolveUser({ request }) {
         // A browser-supplied actor is never local authority. Retain the original
         // transport check without its hosted signed-in-user alternative.

@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import {
   currentProjectRequestContext,
@@ -88,6 +89,14 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
         if (!learningAccess || !learning || learning.learningScope.attemptId !== learningAttemptId) {
           throw actionContextError("vibe64_learning_authority_required", "Authorize this learner’s exact saved attempt before continuing.");
         }
+        if (learning.learningScope.noExercise === false) {
+          if (definition.id === "vibe64.sessions.create" && learningAccess === "create") {
+            // The exact saved-session opener already owns the non-reentrant
+            // preparation barrier; it admits no alternative source or ID.
+            return execute(trustedInput, context, deps);
+          }
+          return learning.runLearningOperation(() => execute(trustedInput, context, deps));
+        }
         return runWithProjectRequestContext({ ...learning, vibe64User: user }, () => execute(trustedInput, context, deps));
       }
       if (!projectScoped) return execute(trustedInput, context, deps);
@@ -145,8 +154,30 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
         learning = await resolveLearningContext({ actor: user, attemptId: learningAttemptId,
           sessionId: input.sessionId, access: scope.learningAccess });
         if (!learning?.learningScope || learning.learningScope.attemptId !== learningAttemptId ||
-            learning.learningScope.learnerId !== String(user.uid ?? user.username) ||
-            learning.slug || learning.targetRoot || learning.sourceRoot || learning.projectSessionSourceRoot) {
+            learning.learningScope.learnerId !== String(user.uid ?? user.username)) {
+          throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");
+        }
+        if (learning.learningScope.noExercise === false) {
+          if (!learning.slug || !learning.targetRoot || !learning.projectRuntimeRoot || !learning.projectSessionSourceRoot ||
+              learning.sourceRoot || typeof learning.runLearningOperation !== "function" ||
+              scope.learningAccess === "create" && typeof learning.createLearningSession !== "function") {
+            throw actionContextError("vibe64_learning_scope_mismatch", "The authorized practice context does not match its actual Project owner.");
+          }
+          const practice = await runWithProjectRequestContext(learning, () => projectContext?.currentPracticeProjectScope?.());
+          if (!practice || practice.access !== "control" || practice.slug !== learning.slug ||
+              practice.training.attemptId !== learningAttemptId || !isDeepStrictEqual(practice.training.pin, learning.learningScope.pin) ||
+              practice.training.learnerKey !== Buffer.from(String(user.uid ?? user.username)).toString("base64url") ||
+              ["targetRoot", "projectRuntimeRoot", "projectSessionSourceRoot", "projectRecordPath", "systemRoot", "projectsRoot"]
+                .some(name => practice[name] !== learning[name])) {
+            throw actionContextError("vibe64_learning_scope_mismatch", "Practice admission requires its original captured Project control identity.");
+          }
+          // Hosted projects retain their original fresh access gate. Standalone
+          // Learning is admitted by its original closed saved-practice owner;
+          // it still cannot authorize ordinary Working projects.
+          if (projectContext?.projectCatalogEnabled) {
+            await authorizeProject({ slug: learning.slug, user, definition, input, context });
+          }
+        } else if (learning.slug || learning.targetRoot || learning.sourceRoot || learning.projectSessionSourceRoot) {
           throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");
         }
       } else if (scope.projectScoped) {

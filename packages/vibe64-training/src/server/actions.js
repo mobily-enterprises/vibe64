@@ -13,7 +13,9 @@ const learningSessionSummary = { type: "object", required: true, schema: createS
   status: { ...text, maxLength: 64 }, revision,
   createdAt: { ...text, minLength: 0, maxLength: 64 }, updatedAt: { ...text, minLength: 0, maxLength: 64 },
   archived: { type: "boolean", required: false }, archivedAt: { ...text, required: false, minLength: 0, maxLength: 64 },
-  purpose: { ...text, enum: ["learning"] }, learningAttemptId: attemptId, lessonCode: id
+  purpose: { ...text, enum: ["learning"] }, learningAttemptId: attemptId, lessonCode: id,
+  noExercise: { type: "boolean", required: false },
+  projectSlug: { ...text, required: false, maxLength: 48, pattern: "^[a-z0-9][a-z0-9_-]*$" }
 }) };
 const resultOutput = {
   mode: "replace",

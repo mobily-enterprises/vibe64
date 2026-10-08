@@ -52,13 +52,13 @@ does not authorize installing arbitrary content. Starting or resuming a lesson
 uses the same saved attempt and revision rules as hosted Vibe64. Retrying an
 uncertain start keeps its request and content choice; it does not reset progress.
 
-This standalone increment supports lessons without a practice exercise. A lesson
-that requires a practice project can report that exercise preparation is
-unavailable. Keep its saved attempt and ask the installation owner for support;
-there is no successful practice project or setup to retry yet. Ending the attempt
-requires an explicit request and retains its history. Lesson delivery, assessment
-and the visible Main Learning launcher still require their own supported controls
-and acceptance; backend availability alone is not a completed lesson.
+A practice lesson keeps its own reserved workspace and initial conversation.
+Reopening uses that saved conversation; it does not create an alternative source
+or bypass Workspace setup. If preparation is unavailable, keep the attempt and
+ask the installation owner for support. If an older prepared conversation cannot
+confirm its lesson binding, keep its source and history intact and ask the owner
+to restore supported access. Resuming does not silently convert old work or reset
+progress. Ending the attempt requires an explicit request and retains history.
 
 ## Saved conversations
 

@@ -1864,3 +1864,103 @@ test("admitted practice capture retains only same-owner control after the fresh 
     assert.doesNotThrow(assertProjectEffectAdmission);
   });
 });
+
+test("hosted saved practice shares original callback expiry and captured control without widening catalogue effects", async () => {
+  await withTemporaryRoot(async root => {
+    const { assertProjectEffectAdmission, captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } =
+      await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+    const options = { explicitProjectsRoot: path.join(root, "catalogue"), explicitSystemRoot: path.join(root, "system"),
+      explicitManagedSourceRoot: path.join(root, "sources"), env: {}, home: root };
+    const core = createStudioProjectContext(options);
+    const foreign = createStudioProjectContext(options);
+    const project = createProjectService({ projectContext: core });
+    const actor = { uid: 42, username: "learner" };
+    const training = trainingProvenance();
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    await assert.rejects(() => core.runWithPracticeProjectScope({ actor, training }, () => assert.fail()), /Local practice access/u);
+    await core.createWorkspaceProjectRecord({ slug, training });
+    let captured;
+    let expired;
+    await project.runInProjectContext(slug, () => core.runWithHostedTrainingProjectScope({ actor, training, access: "write" }, async () => {
+      assert.doesNotThrow(assertProjectEffectAdmission);
+      await core.updateWorkspaceProjectMetadata({ slug, developmentDatabaseScope: "session" });
+      expired = currentProjectRequestContext();
+      captured = captureProjectRequestContext();
+      assert.equal(core.currentPracticeProjectScope().access, "write");
+      assert.equal(captured.projectSessionSourceRoot, core.projectSessionSourceRootForSlug(slug), "hosted retains its original real source namespace");
+    }));
+    const recordPath = core.projectRecordPathForSlug(slug);
+    const before = await readFile(recordPath);
+    await assert.rejects(() => runWithProjectRequestContext(expired, () => core.readWorkspaceProject({ slug })),
+      { code: "vibe64_practice_scope_expired" });
+    await runWithProjectRequestContext(captured, async () => {
+      assert.equal(core.currentPracticeProjectScope().access, "control");
+      assert.equal((await project.readCurrentProject()).slug, slug);
+      assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+      await assert.rejects(() => core.updateWorkspaceProjectMetadata({ slug, developmentDatabaseScope: "project" }),
+        { code: "vibe64_practice_effect_admission_required" });
+      await assert.rejects(() => core.beginWorkspaceProjectDeletion({ slug }), { code: "vibe64_practice_effect_admission_required" });
+      await assert.rejects(() => core.selectWorkspaceProject({ slug }), { code: "vibe64_practice_effect_admission_required" });
+      await assert.rejects(() => core.discardWorkspaceProjectRecord({ slug }), { code: "vibe64_practice_effect_admission_required" });
+      await assert.rejects(() => foreign.readWorkspaceProject({ slug }), { code: "vibe64_practice_context_mismatch" });
+    });
+    assert.deepEqual(await readFile(recordPath), before);
+    await project.runInProjectContext(slug, async () => {
+      await assert.rejects(() => core.runWithHostedTrainingProjectScope({ actor: { uid: 43 }, training }, () => assert.fail()),
+        { code: "vibe64_practice_scope_mismatch" });
+      const changed = structuredClone(training);
+      changed.pin.lesson.hash = "e".repeat(64);
+      await assert.rejects(() => core.runWithHostedTrainingProjectScope({ actor, training: changed }, () => assert.fail()),
+        { code: "vibe64_practice_scope_mismatch" });
+    });
+    await assert.rejects(() => core.runWithHostedTrainingProjectScope({ actor, training }, () => assert.fail()),
+      { code: "vibe64_practice_scope_mismatch" });
+    assert.deepEqual(await readFile(recordPath), before);
+  });
+});
+
+test("original nested practice Project resolver retains immutable Learning facts while captured control stays read-only", async () => {
+  await withTemporaryRoot(async root => {
+    const { assertProjectEffectAdmission, captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } =
+      await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+    const working = path.join(root, "working");
+    await mkdir(working);
+    const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
+      explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
+    const project = createProjectService({ projectContext: core });
+    const training = trainingProvenance();
+    const actor = { uid: 42, username: "learner" };
+    const slug = `training-${training.attemptId.replaceAll("-", "")}`;
+    const learningScope = Object.freeze({ learnerId: "42", attemptId: training.attemptId, pin: training.pin, noExercise: false });
+    const learningInstructions = () => "Exact pinned practice instructions";
+    const learningTeaching = Object.freeze({ bindConversation() {} });
+    let captured;
+    let expired;
+    await core.runWithPracticeProjectScope({ actor, training, access: "create" }, async () => {
+      await core.createWorkspaceProjectRecord({ slug, training });
+      await runWithProjectRequestContext({ ...currentProjectRequestContext(), learningScope, learningInstructions, learningTeaching },
+        () => project.runInProjectContext(slug, async () => {
+          const current = currentProjectRequestContext();
+          assert.equal(current.learningScope, learningScope);
+          assert.equal(current.learningInstructions, learningInstructions);
+          assert.equal(current.learningTeaching, learningTeaching);
+          const runtime = await project.createRuntime({ inspectSource: false });
+          assert.deepEqual(runtime.learningScope, learningScope);
+          assert.equal(runtime.projectContextRoot, current.targetRoot);
+          assert.equal(runtime.projectSessionSourceRoot, current.projectSessionSourceRoot);
+          captured = captureProjectRequestContext();
+          expired = current;
+        }));
+    });
+    await assert.rejects(() => runWithProjectRequestContext(expired, () => project.createRuntime({ inspectSource: false })),
+      { code: "vibe64_practice_scope_expired" });
+    await runWithProjectRequestContext(captured, () => project.runInProjectContext(slug, async () => {
+      assert.equal(currentProjectRequestContext().learningScope, learningScope);
+      assert.equal(currentProjectRequestContext().learningInstructions, learningInstructions);
+      assert.equal(core.currentPracticeProjectScope().access, "control");
+      assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+      assert.deepEqual((await project.createRuntime({ inspectSource: false })).learningScope, learningScope);
+    }));
+    assert.equal(core.targetRoot, working);
+  });
+});

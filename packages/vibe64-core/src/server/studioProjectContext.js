@@ -9,7 +9,7 @@ import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
 
-import { assertProjectEffectAdmission, currentPracticeProjectScope, runWithPracticeProjectContext } from "./projectRequestContext.js";
+import { assertProjectEffectAdmission, currentPracticeProjectScope, currentProjectRequestContext, runWithPracticeProjectContext } from "./projectRequestContext.js";
 
 import {
   VIBE64_PROJECTS_ROOT_ENV,
@@ -804,6 +804,17 @@ function createStudioProjectContext({
     if (projectCatalogEnabled || typeof operation !== "function") {
       throw new TypeError("Local practice access requires the original local Project context and an owning callback.");
     }
+    return runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess }, operation, false);
+  }
+
+  async function runWithHostedTrainingProjectScope(input = {}, operation) {
+    if (!projectCatalogEnabled || typeof operation !== "function") {
+      throw new TypeError("Hosted practice access requires the original catalogue Project context and an owning callback.");
+    }
+    return runTrainingProjectScope(input, operation, true);
+  }
+
+  async function runTrainingProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe" }, operation, hosted) {
     if (!["observe", "control", "write", "create"].includes(practiceAccess)) {
       throw new TypeError("Practice access requires an explicit supported operation scope.");
     }
@@ -815,15 +826,33 @@ function createStudioProjectContext({
     if (!learnerId || Buffer.from(learnerId).toString("base64url") !== training.learnerKey) {
       throw Object.assign(new Error("Practice access belongs to the admitted learner."), { code: "vibe64_practice_scope_mismatch" });
     }
-    const { slug, projectsRoot: practiceProjectsRoot, projectContextRoot } = practiceProjectNamespace(training);
+    const privateNamespace = practiceProjectNamespace(training);
+    const { slug } = privateNamespace;
+    const practiceProjectsRoot = hosted ? projectsRoot : privateNamespace.projectsRoot;
+    const projectContextRoot = hosted
+      ? resolveProjectContextRoot({ projectsRoot, slug }) : privateNamespace.projectContextRoot;
     // Preserve original runtime inventory, upgrade and canonical Git ownership.
     const projectRuntimeRoot = resolveCatalogProjectRuntimeRoot({ slug, systemRoot });
-    const projectSessionSourceRoot = path.join(managedSourceRoot, slug);
+    const projectSessionSourceRoot = hosted ? projectContextRoot : path.join(managedSourceRoot, slug);
+    if (hosted) {
+      const current = currentProjectRequestContext();
+      if (!current || current.slug !== slug || current.targetRoot !== projectContextRoot ||
+          current.projectRuntimeRoot !== projectRuntimeRoot || current.projectSessionSourceRoot !== projectSessionSourceRoot ||
+          current.projectRecordPath !== resolveProjectRecordPath({ projectRuntimeRoot }) ||
+          current.systemRoot !== systemRoot || current.projectsRoot !== projectsRoot || current.sourceRoot || current.sourceConfigRoot) {
+        throw Object.assign(new Error("Hosted practice requires its original exact Project context."), { code: "vibe64_practice_scope_mismatch" });
+      }
+    }
     for (const directory of [projectContextRoot, projectRuntimeRoot, projectSessionSourceRoot]) {
-      await practiceDirectoryExists(directory);
+      if (!await practiceDirectoryExists(directory) && hosted) {
+        throw Object.assign(new Error("Hosted practice requires its existing prepared Project storage."), { code: "vibe64_practice_scope_mismatch" });
+      }
     }
     const projectRecordPath = resolveProjectRecordPath({ projectRuntimeRoot });
     const metadata = await readProjectMetadata({ projectRecordPath });
+    if (hosted && !Object.keys(metadata).length) {
+      throw Object.assign(new Error("Hosted practice requires its existing owned Project record."), { code: "vibe64_practice_scope_mismatch" });
+    }
     if (await pathExists(projectContextRoot) || await pathExists(projectRuntimeRoot) || Object.keys(metadata).length) {
       if (!isDeepStrictEqual(metadata.training, training) || metadata.deletion ||
           projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
@@ -1264,7 +1293,9 @@ function createStudioProjectContext({
       throw projectCatalogUnavailableError();
     }
 
+    assertProjectEffectAdmission();
     const slug = projectSlugFromInput(input);
+    practiceScope(slug);
     const projectContextRoot = resolveProjectContextRoot({
       projectsRoot,
       slug
@@ -1328,6 +1359,7 @@ function createStudioProjectContext({
     if (!projectCatalogEnabled) {
       throw projectCatalogUnavailableError();
     }
+    assertProjectEffectAdmission();
     if (typeof update !== "function") {
       throw new TypeError("updateWorkspaceProjectState requires an update function.");
     }
@@ -1428,7 +1460,9 @@ function createStudioProjectContext({
       throw projectCatalogUnavailableError();
     }
 
+    assertProjectEffectAdmission();
     const slug = normalizeProjectSlug(input?.slug || input?.projectSlug || input?.name);
+    practiceScope(slug);
     const projectContextRoot = resolveProjectContextRoot({
       projectsRoot,
       slug
@@ -1467,6 +1501,7 @@ function createStudioProjectContext({
   return Object.freeze({
     currentPracticeProjectScope: () => practiceScope(),
     runWithPracticeProjectScope,
+    runWithHostedTrainingProjectScope,
     assertWorkspaceProjectAvailable,
     beginWorkspaceProjectDeletion,
     completeWorkspaceProjectDeletionStep,

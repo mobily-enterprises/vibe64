@@ -20,3 +20,8 @@ Colleague can explain the error and use supported lesson controls when asked.
 Standalone exercise conversations in Learning, their Preview and practical
 assessment are still being integrated; prepared source alone does not make that
 complete flow available.
+
+Opening supported practice teaching retains the reserved initial conversation,
+source and history. An ownership or lesson-binding error needs owner inspection;
+do not create a replacement or switch it to an unrelated Working project. An
+older prepared conversation is not silently converted by resuming the lesson.

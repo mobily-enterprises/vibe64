@@ -45,6 +45,11 @@ async function resolveProjectRequestContext({
       systemRoot: practice.systemRoot,
       targetRoot: project.projectRoot,
       vibe64User: practice.vibe64User,
+      ...(currentProjectRequestContext().learningScope ? {
+        learningScope: currentProjectRequestContext().learningScope,
+        learningInstructions: currentProjectRequestContext().learningInstructions,
+        learningTeaching: currentProjectRequestContext().learningTeaching
+      } : {}),
       [practiceScopeKey]: currentProjectRequestContext()[practiceScopeKey]
     });
   }
@@ -173,6 +178,11 @@ function captureProjectRequestContext() {
   const scope = Object.freeze({ ...grant.scope, access: "control",
     vibe64User: Object.freeze({ ...grant.scope.vibe64User }) });
   return Object.freeze({ ...scope,
+    ...(context.learningScope ? {
+      learningScope: context.learningScope,
+      learningInstructions: context.learningInstructions,
+      learningTeaching: context.learningTeaching
+    } : {}),
     [practiceScopeKey]: Object.freeze({ owner: grant.owner, scope, active: () => true })
   });
 }

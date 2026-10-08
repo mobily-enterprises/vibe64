@@ -572,6 +572,8 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const exercise = await installed.readExercise({ ...attempt.pin.topic,
       lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
     return {
+      scope: { learnerId: paths.learner.id, attemptId, pin: structuredClone(attempt.pin), noExercise: false },
+      systemRoot,
       training: { schemaVersion: 1, learnerKey: paths.learner.key, attemptId, pin: structuredClone(attempt.pin),
         exercise: { kind: "bundled", sourcePath: exercise.sourcePath } },
       projectSlug: attempt.projectSlug,
