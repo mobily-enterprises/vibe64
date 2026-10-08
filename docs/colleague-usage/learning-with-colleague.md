@@ -235,3 +235,33 @@ interaction is not itself a rubric pass, and demonstrated steps remain labelled
 as demonstrated.
 
 An assessment error does not prove a Helper setup problem. Keep the attempt and question; inspect the actual cause. After admission recovery, give a fresh answer to the current question; old messages stay unchanged.
+
+
+## Preview lesson choices: integration prerequisite
+
+The prepared **Lessons** picker displays the host's installed courses in their
+original order, including exact course/topic releases and lesson hashes. It does
+not install or enable content. Disabled courses, preview courses and draft
+lessons stay labelled and unavailable for a new start. Choose a published lesson
+from an enabled release, then use **Start selected lesson** to request that exact
+lesson. Selection alone never starts anything. The host's original lesson action
+must still authorize and admit it; unavailable support or a failed read is not a
+successful start.
+
+**Resume saved lesson** requests only the displayed saved attempt. Its retained
+pin can be older than the currently enabled catalogue. This button is available
+only when the host actually supports resume, not merely because progress exists.
+Starting a different lesson requires explicitly ending the active saved attempt
+through the existing lesson operation first; the picker never does that for you.
+**Saved lesson history** remains read-only and visible independently of new-start
+or resume support. Ended history is not marked completed without an actual
+completion result.
+
+Assessment counts are the supplied saved result, never calculated from chat,
+diagram motion or a selection. **Saved lesson identity** shows the actual saved
+commit and hash. **Refresh lessons** requests fresh reads; loading and read errors
+do not create or repair state. Desktop and phone use the same controls, with
+wrapping content and scrollable choices. Colleague can explain these choices and
+offer its supported start/resume operation, but only an accepted offer or direct
+request authorizes execution. This component is not yet attached to a hosted
+Preview route; Main Learning mode and its live browser acceptance remain open.

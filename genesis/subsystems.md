@@ -9,7 +9,11 @@ CLI entry point without changing editor launch. Owns private server-only pinned
 learner reservations outside projects, reusing Core atomic writes and Kernel locks.
 Owns installed immutable course definitions/locks and revisioned enablement, and
 declared visual asset reads from exact installed lesson pins. These are internal
-server facilities without course controls or source access for Colleague.
+server facilities without source access for Colleague. The presentational lesson
+picker displays parent-supplied installed choices and saved progress, and emits
+explicit start/resume intent through the original Training operations. It owns
+neither API reads, permission/pin/progress rules nor writes; retained Preview and
+Main Learning-mode placement remain host integration work.
 Owns the original canonical delivered-question and completed-practical proof
 readers plus delivery promotion, staging, accepted-answer correlation and
 delivered-question capture, immediately reused by the original Colleague

@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Vibe64 teaching content validation, deterministic bundles and verified pinned snapshot installation and reads.",
   "exports": {
+    "./client/lesson-picker": "./src/client/TrainingLessonPicker.vue",
     "./client/preview-presentation": "./src/client/TrainingPreviewPresentation.vue",
     "./server/actions": "./src/server/actions.js",
     "./server/presentation-actions": "./src/server/presentationActions.js",
@@ -45,6 +46,10 @@
           {
             "subpath": "./client/preview-presentation",
             "summary": "Retains the App preview beside the exact lesson's controlled SVG presentation."
+          },
+          {
+            "subpath": "./client/lesson-picker",
+            "summary": "Displays supplied installed lesson choices and saved progress, emitting explicit start or resume intent without state writes."
           }
         ]
       }

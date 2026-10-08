@@ -14,6 +14,8 @@ the module alone does not provide infrastructure or prove a delivered lesson.
 
 ## Sources
 
+- `packages/vibe64-training/src/client/TrainingLessonPicker.vue`
+
 - `packages/vibe64-training/src/server/contentSchemas.js`
 - `packages/vibe64-training/src/server/content.js`
 - `packages/vibe64-training/src/server/catalogue.js`
@@ -470,3 +472,37 @@ The previously oversized `teaching-content` guide is divided by task into bounde
 facts retain their owning scope; historical facility-only availability prose is
 made conditional on the actual host registrations. Original usage limits are
 unchanged, and the original shipped-topic test verifies every complete guide read.
+
+
+## Read-only lesson picker prerequisite
+
+`@local/vibe64-training/client/lesson-picker` exports the presentational
+`TrainingLessonPicker`. The parent supplies the original bounded `courses.list`
+and `learning.read` projections, separate read/loading errors, pending action
+state and explicit supported start/resume capabilities. The picker preserves
+supplied course/topic lesson order. It displays disabled/preview/draft choices
+truthfully and emits no automatic selection, installation, enablement, start,
+progress or repair operation.
+
+A selected exact course/release/lesson/hash/topic identity remains local display
+state. Changed or removed choices clear it rather than retargeting a request.
+Explicit Start emits only `{courseId, release, lessonCode, expectedRevision}` for
+the original start owner; the parent retains request identity and actual admission.
+It adds no catalogue revision guard, pin receipt or second start contract. The
+existing server action resolves and authorizes the immutable installed pin.
+The list projection supplies lesson hash/topic release, not source commit or
+lesson title; the picker never invents those missing facts.
+
+Resume emits only the supplied saved attempt ID, independently of current course
+enablement. A saved attempt alone cannot enable resume; the parent must supply
+actual host support. Read-only ended history remains visible without write
+capabilities. Completion displays only the matching supplied counts/Boolean,
+never a browser-derived pass, and malformed display shapes report an error
+without repair. The original learner/content/permission/progress validators and
+writers remain unchanged. Loading retains already displayed choices and disables
+new intent; initial loads use Material skeletons.
+
+This component does not attach a Learning mode, API route, Main conversation,
+Preview tab or player. The host's original retained Preview/session owners must
+supply authenticated captured data and effects; native/browser/device acceptance
+remains separate. Existing App/SVG presentation and motion owners are untouched.
