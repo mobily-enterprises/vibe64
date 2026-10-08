@@ -94,6 +94,15 @@ specify the flow to check. The agent uses the session's managed browser tools;
 you do not need to provide an execution ID or change application code to enable
 them. Application login may still require your credentials or interaction.
 
+The coding agent runs managed test suites and live Preview browser checks one
+after the other. A suite owns Preview until its cleanup and restoration finish;
+the agent can read status and logs while waiting, then confirms there is no
+active test run and the restored Preview is ready before live inspection. This
+also applies after cancelling a suite. If restoration fails, ask the coding
+agent to recover that existing run before another check. **Test Preview**
+identifies the test environment while it is selected. Colleague can explain the
+sequence and offer coding-agent assistance through the existing chat controls.
+
 The coding agent can read `vibe64-helper playwright --help` before a project has
 browser tests or a matching test runtime. Help starts neither Preview nor a browser.
 An actual suite still requires the project's installed Playwright version and a

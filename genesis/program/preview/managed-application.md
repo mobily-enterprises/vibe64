@@ -111,6 +111,13 @@ unsupported-runtime and ready; active suite status remains a separate operation.
 An unsupported-runtime error identifies tests as not started and directs runtime
 reconciliation to the operator while retaining the interactive browser entry point.
 
+Managed-session instructions and command help require browser suites and live
+Preview browser actions to run sequentially. The coding agent waits on the
+original suite through cleanup and restoration, confirms no active managed run
+and a ready restored Preview, then performs live inspection. Read-only status
+and logs remain available while tests run. This guidance uses the existing test
+owner and recovery guard; it adds no execution or locking mechanism.
+
 The original Studio URL classifier keeps `/api/vibe64/training` and its slash
 descendants global on selected-project pages. The hosted visual-resource route
 selects the fresh authenticated learner's exact active attempt and installed pin;
