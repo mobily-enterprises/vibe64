@@ -112,6 +112,12 @@ to restore execution, then retry in the same conversation. Use **AI Accounts**
 to reconnect only when the account check asks you to sign in.
 Colleague uses the same saved native Claude login as Main. Opening Colleague
 does not move that login to another profile or require a separate sign-in.
+If reopening reports another working directory or credential home, ask the
+workspace operator to restore the original host configuration. Do not move native
+history files or change accounts to bypass the warning. The shared driver can
+resume a verified scoped Claude binding without creating another native thread;
+it does not automatically recover bindings retired by an earlier application
+upgrade. Those records need the operator's verified offline state upgrade.
 If a model rejects a sent request, its error appears in the message box. Your
 request remains in the conversation; this is separate from **Reconnecting…**,
 which reports a failed connection check. Read the error before sending again.

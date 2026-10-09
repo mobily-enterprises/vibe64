@@ -84,6 +84,12 @@ and canonical text unchanged. The terminal service supplies authorized account r
 managed execution. Each person has an independent native scope.
 The shared host preserves the native Claude profile lookup used by Main;
 it inherits an explicit configuration directory without inventing a default override.
+The shared Claude driver also retains the original distinction between the private
+logical scope and credential-home native history: an explicitly supplied scoped
+binding must match both trusted host paths and retains its saved native UUID under
+the unchanged account guard. Ordinary bindings retain their workdir checks. This
+driver facility does not import retired product bindings; their verified conversion remains the
+application's stopped, numbered-upgrade responsibility.
 
 The private `conversation.json` remains the authoritative product record. JSKIT's
 record transactions commit its canonical transcript and runtime metadata through
