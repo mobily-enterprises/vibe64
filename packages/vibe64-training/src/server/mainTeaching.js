@@ -364,8 +364,8 @@ function createTrainingMainTeaching({ teaching, assessment, checks } = {}) {
           }
           const conversationId = mainConversationId({ learningAttemptId: scope.attemptId, sessionId });
           if (presentation.operation === "cue") {
-            // The bound OpenCode owner does not yet expose its exact final-result
-            // carrier. Refuse before any browser effect; keep its other visuals.
+            // Unsupported native owners cannot confirm an exact final-result
+            // carrier. Refuse before any browser effect; keep their other visuals.
             if (typeof native.readFinalAssistantResult !== "function") {
               return { ok: false, error: "Narrated lesson cues are unavailable for this native provider until its exact final response can be confirmed." };
             }

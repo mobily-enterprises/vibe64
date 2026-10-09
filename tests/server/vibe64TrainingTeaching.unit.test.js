@@ -970,7 +970,8 @@ test("Main native without original final-reader counterpart refuses narrated cue
 // - genuine record persisted by existing runOwner -> exact same canonical final binds once;
 // - cancelled/failed/superseded/latest-user mismatch -> no bind;
 // - existing prepared-question promotion assertions remain unchanged;
-// - OpenCode exact final-owner seam before removing the explicit cue refusal.
+// - OpenCode's original bound checkpoint reader is covered in opencodeTerminal.unit.test.js;
+//   actual narrated cue/player/audio acceptance remains required for every supported owner.
 
 
 async function practiceMainPresentationFixture(t, options = {}) {

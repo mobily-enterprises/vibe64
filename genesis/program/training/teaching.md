@@ -946,8 +946,8 @@ policies except the documented additive saved-scope fixture projection.
 
 ### Captured no-exercise Main browser presentation
 
-The candidate Main adapter uses one client identity per original retained Main
-application. Its prospective authored message data associates that browser with
+The Main adapter uses one client identity per original retained Main
+application. Its authored message data associates that browser with
 the exact accepted request; UUID replay retains the original facts. Three API-only
 operations in the existing Learning namespace read, report focus and acknowledge
 the same extracted presentation transaction. Original Colleague definitions
@@ -966,12 +966,27 @@ remain with the original retained application lifetime. At 128 such origins, the
 client refuses a new cue before effects through the original failed navigation
 ACK; it never evicts an old origin because a loaded page omitted it.
 
-This candidate is not attached or validated. In particular, cue-only completion
-needs an actual genuine final carrier guard, not merely the last nonempty saved
-assistant message. Native ordering, API/actor revocation, deferred initial voice
-hydration, compiled player and installed acceptance remain required. It admits
-only no-exercise Learning sessions. The later practice slice retains this same
-presentation owner; actual installed/native acceptance remains separate. Original question promotion is independent.
+`mainConversationBinding.js` attaches the original Codex run owner's final reader
+or the supplied Claude/OpenCode native owner's `readFinalAssistantResult`.
+`mainTeaching.js` matches that result's exact native thread/turn, canonical saved
+message/output/text, accepted learner request, pin and initiating browser before
+binding a cue. Saved progress or a last nonempty reply cannot confirm a final.
+Unsupported owners still refuse a cue before any browser effect.
+
+OpenCode's existing JSKIT projection retains only its awaited published native
+final receipt. Its monitor fences the exact accepted input, native item/text,
+registered target and shared process; release, reacquisition, Stop and account
+replacement cannot reuse that receipt. Public `openCodeConversationEvents.js`
+supplies the original output identity and exact retained native checkpoint. The
+existing `opencodeTerminal.unit.test.js` Learning Main final-reader case checks
+that checkpoint against the saved publication, foreign tuple refusal, defensive
+copy and no second prompt; original question-promotion assertions remain intact.
+
+These source and original native-harness checks do not establish installed
+narrated cue/player or physical audio acceptance. Actual browser/native ordering,
+revocation, initial voice hydration, compiled player and device narration remain
+required. The practice slice retains this same presentation owner. Original
+question promotion is independent of cue and audio completion.
 
 
 ### Offline adoption of original prepared practice sessions

@@ -51,7 +51,9 @@ tool-free Helper and the lesson's original pinned rubric and progress rules.
 Practical gestures and diagram narration are separate capabilities; these four
 tools do not establish them.
 
-When Main uses a narrated diagram cue with a supported AI connection, follow
+Codex, OpenCode and supported Claude connections can confirm a narrated diagram
+through their own exact completed native response. Keep the initiating browser
+and retained lesson conversation open. When Main uses that cue, follow
 its completed explanation and the matching diagram step. A partial reply or a
 stopped turn does not confirm that cue. If narration cannot be confirmed, keep
 the saved attempt and read the error before retrying; ordinary chat text cannot
