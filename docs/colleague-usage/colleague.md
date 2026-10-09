@@ -151,7 +151,9 @@ When a question needs a lookup or another product action, Colleague can show
 and speak a short progress sentence before its final answer. Each is spoken once;
 finishing and saving the answer does not replay its opening words. Progress describes
 what it is checking; it is not confirmation that an action succeeded. Stop or
-new steering clears old progress.
+new steering clears old progress. The acknowledgement is temporary: the completed
+answer enters saved history, while new progress text does not. Existing historical
+messages remain unchanged.
 For an API-based Colleague, progress longer than 280 characters fails the response
 before its requested action starts. The message and history stay available for a
 follow-up. This bound currently applies only to the API integration; equivalent

@@ -147,6 +147,14 @@ export async function createControlledColleagueNativeCommands(root, responses) {
           return;
         }
         if (response.tool) {
+          if (response.progress !== undefined) {
+            const progress = { id: "tool-progress", type: "agentMessage", phase: "commentary", text: response.progress };
+            emitTurn("item/started", { item: { id: progress.id, type: progress.type, phase: progress.phase } });
+            emitTurn("item/agentMessage/delta", { itemId: progress.id, delta: progress.text });
+            turn.items.push(progress);
+            save();
+            emitTurn("item/completed", { item: progress });
+          }
           try {
             await callTool(turn, "assistant_action_contract", { actionId: response.tool.actionId, version: 1 });
             await callTool(turn, "assistant_action_execute", { actionId: response.tool.actionId, version: 1, input: response.tool.input });
@@ -328,7 +336,12 @@ export async function createControlledColleagueNativeCommands(root, responses) {
         commands: { codex, claude } };
     },
     async trace() {
-      try { return (await readFile(trace, "utf8")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line)); }
+      try {
+        const text = await readFile(trace, "utf8");
+        // The active executable may still be appending its last JSONL record.
+        // Parse every completed record strictly; wait for the unfinished tail.
+        return text.slice(0, text.lastIndexOf("\n") + 1).trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+      }
       catch (error) { if (error.code === "ENOENT") return []; throw error; }
     }
   };

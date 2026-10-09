@@ -287,8 +287,14 @@ the original “Let me check that.” fallback applies. The selected `interimRep
 is transient product presentation on the same authorized read/subscription, not
 another stored assistant answer. A single generation-fenced projector runs before
 both product and browser publication, independent of subscription callback order.
-Proven native output identity follows live output into saved history so speech
-does not replay the acknowledgement or confuse it with the later answer.
+Colleague supplies the shared runtime's server-owned `persistCommentary: false`
+policy. The existing final and recovered-output writers exclude commentary;
+Codex's original live output owner completes/publishes the stream without a
+canonical row and retains native item/fingerprint deduplication. Other consumers
+keep persistence by default. No existing rows are deleted, and native provider
+history, reasoning and action receipts are unchanged. Native intent association
+remains open: a completed native sentence can still produce the fallback at the
+first tool boundary. This storage correction does not prove that association.
 The original 280-character pre-effect refusal is restored for the direct API
 carrier through the common driver's opt-in `maxApiToolProgressCharacters` limit;
 final replies keep their separate 16000-character bound. Native tool carriers

@@ -326,7 +326,8 @@ test("tool progress is shared commentary and the final answer does not repeat it
   answer.resolve(reply("One project is open."));
   const final = await f.service.wait(f.context);
   assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);
-  assert.deepEqual(final.messages.filter(message => message.role === "commentary").map(message => message.text), [progress]);
+  // Frozen first-progress test261: the completed acknowledgement is never saved.
+  assert.deepEqual(final.messages.filter(message => message.role === "commentary").map(message => message.text), []);
 });
 
 // Original first-progress assertions, driven through shared API tools instead
@@ -2749,14 +2750,19 @@ test("a question in tool commentary cannot associate an unrelated completed fina
     async readQuestionReference() { return issuedQuestion; },
     async captureQuestion() { captures++; return capturedQuestion; }
   };
-  f.observations.onOperation = (_input, context) => f.service.stageTrainingQuestion(issuedQuestion,
-    { ...context, trainingTeaching: f.context.trainingTeaching });
+  f.observations.onOperation = async (_input, context) => {
+    assert.equal((await f.service.read({}, f.context)).streamingReply.text, capturedQuestion.question.text,
+      "the exact question remains visible as transient progress before the application effect");
+    return f.service.stageTrainingQuestion(issuedQuestion,
+      { ...context, trainingTeaching: f.context.trainingTeaching });
+  };
   await f.send("Teach me.", "prepare-question");
   await f.service.wait(f.context);
   const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
   const turn = saved.conversationLog[0];
   assert.equal(turn.metadata.runtime.status, "complete");
-  assert.ok(turn.messages.some(message => message.role === "commentary" && message.text === capturedQuestion.question.text));
+  // Frozen test261 keeps tool acknowledgement out of canonical history.
+  assert.deepEqual(turn.messages.filter(message => message.role === "commentary"), []);
   assert.equal(turn.assistant.text, "Let us discuss something else.");
   assert.equal(turn.metadata.trainingQuestionDelivery.questionText, capturedQuestion.question.text);
   assert.equal(turn.metadata.trainingQuestionDelivery.phase, "prepared");
@@ -5088,4 +5094,48 @@ test("Colleague fresh native seed retains the original 24-row window and 2000-ch
       .slice(-24).map(({ role, text }) => ({ role, text: text.slice(0, 2_000) })));
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")).conversationLog.slice(0, after.conversationLog.length), after.conversationLog);
   assert.deepEqual(f.observations.mutations, []);
+});
+
+// Storage-only companion of frozen first-progress test261. The separate native
+// intent association companion remains open; this test makes no intent claim.
+test("native Colleague transient progress storage preserves only the final answer", async t => {
+  const operation = Promise.withResolvers();
+  t.after(() => operation.resolve());
+  const progress = "Let me check your projects.";
+  const f = await fixture(t, [{ progress, tool: { actionId: "vibe64.test.operate", input: { value: "native-transient" } }, text: "One project is open." }], { native: true });
+  f.observations.onOperation = () => operation.promise;
+  await f.send("Which projects are open?");
+  await until(() => f.observations.mutations.length === 1);
+  const checking = await f.service.read({}, f.context);
+  assert.equal(checking.status, "working");
+  assert.equal(checking.operation.status, "executing");
+  assert.equal(checking.messages.filter(message => message.role === "assistant").length, 0);
+  assert.deepEqual(checking.messages.filter(message => message.role === "commentary"), []);
+  const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+  assert.equal((await readFile(file, "utf8")).includes(progress), false,
+    "native progress is absent from canonical storage at the real pending-effect barrier");
+  operation.resolve();
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.deepEqual(f.observations.mutations, ["native-transient"]);
+  assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);
+  assert.deepEqual(final.messages.filter(message => message.role === "commentary"), []);
+  assert.equal((await readFile(file, "utf8")).includes(progress), false);
+  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1,
+    "transient storage adds no explicit native inference");
+});
+
+// The original native seed polls the actual fixture's append-only trace while
+// the executable may still be writing its final record. Completed JSON stays strict.
+test("controlled native trace defers only an unfinished appended JSONL record", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "colleague-native-trace-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const native = await createControlledColleagueNativeCommands(root, []);
+  const file = path.join(root, "controlled-native", "trace.jsonl");
+  await writeFile(file, '{"method":"thread/start"}\n{"method":"turn/');
+  assert.deepEqual(await native.trace(), [{ method: "thread/start" }]);
+  await writeFile(file, '{"method":"thread/start"}\n{"method":"turn/start"}\n');
+  assert.deepEqual(await native.trace(), [{ method: "thread/start" }, { method: "turn/start" }]);
+  await writeFile(file, '{"method":"thread/start"}\n{"method":}\n');
+  await assert.rejects(native.trace(), SyntaxError, "a completed malformed record must never be ignored");
 });

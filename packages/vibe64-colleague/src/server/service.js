@@ -101,7 +101,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const summaries = createConversationSummary({ actions, terminals, persist,
     workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
   const users = new Map();
-  const runtime = createConversationRuntime({ storage, actions,
+  const runtime = createConversationRuntime({ storage, actions, persistCommentary: false,
     limits: { ...toolLimits, maxToolCalls: 24, maxInputCharacters: COLLEAGUE_TOOL_PAYLOAD_LIMIT,
       maxFinalReplyCharacters: 16_000, maxApiToolProgressCharacters: 280,
       maxInitialNativeHistoryMessages: 24, maxInitialNativeHistoryMessageCharacters: 2_000,
