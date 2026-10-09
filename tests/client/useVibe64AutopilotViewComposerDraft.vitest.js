@@ -1134,7 +1134,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       const sendAgentMessage = vi.fn().mockImplementationOnce(() => delivery.promise).mockResolvedValue(true);
       const { props, view } = await createViewWithProps({ sendAgentMessage });
       props.session.agentSession.turn = { active: true, id: "turn-1", state: "active" };
-      await nextTick();
+      await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
       view.composerDraft.value = "Keep the parser.";
       const submission = view.submitComposerMessage();
       expect(view.composerDraft.value).toBe("");
