@@ -17,10 +17,7 @@ const output = { mode: "replace", schema: createSchema({
   }) }
 }) };
 
-function createTrainingAssessmentActions({ colleague, mainTeaching } = {}) {
-  if (!mainTeaching?.bindConversation && (typeof colleague?.evaluateTrainingAnswer !== "function" || typeof colleague?.evaluateTrainingPractical !== "function")) {
-    throw new TypeError("Assessment evaluation requires the original Colleague message/observation admission and Helper lifetime.");
-  }
+function createTrainingAssessmentActions() {
   return Object.freeze(["answer", "practical"].map(kind => withVibe64ActionContext({
     id: `vibe64.training.${kind}.evaluate`, version: 1, kind: "command", idempotency: "domain_native",
     input: { mode: "create", schema: createSchema({

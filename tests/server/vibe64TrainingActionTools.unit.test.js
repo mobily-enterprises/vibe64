@@ -1228,3 +1228,49 @@ test("saved author-trial HTTP read retains fresh owner/actor isolation and perfo
   assert.equal((await server.inject({ method: "GET", url: "/api/vibe64/training/author-preview" })).statusCode, 401);
   assert.equal(seen.length, before, "member/sign-out refuses before original preview read");
 });
+
+
+test("teacher definitions register without Colleague and dispatch the current request Main through the original catalogue", async t => {
+  const f = await questionFixture(t);
+  const teaching = createTrainingTeachingOwner({ learners: f.learners, content: f.content });
+  const definitions = [...createTrainingTeachingActions(), ...createTrainingAssessmentActions(),
+    ...createTrainingPresentationActions({ learners: f.learners, content: f.content })];
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "request-main-registration", domain: "training", actions: definitions.map(value => ({
+    ...value, channels: ["api", "automation"], surfaces: ["app"] })) });
+  registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
+    authorizeProject() { assert.fail("Question registration must not admit a Working project."); } });
+  actions.registerContextContributor({ id: "registered-question-owner", contribute() { return { trainingTeaching: teaching }; } });
+  const calls = [];
+  const firstMain = {
+    requireTrainingQuestionTurn(context) { calls.push(["first", "preflight", context.vibe64Action.user]); return {}; },
+    async stageTrainingQuestion(reference, context) {
+      calls.push(["first", "stage", context.vibe64Action.user]);
+      assert.deepEqual((await teaching.captureQuestion({ actor: context.vibe64Action.user, reference })).question.text, f.questionInput.text);
+    }
+  };
+  const nextMain = {
+    requireTrainingQuestionTurn(context) { calls.push(["next", "preflight", context.vibe64Action.user]); return {}; },
+    async stageTrainingQuestion(reference, context) {
+      calls.push(["next", "stage", context.vibe64Action.user]);
+      assert.equal((await teaching.captureQuestion({ actor: context.vibe64Action.user, reference })).question.id, reference.questionId);
+    }
+  };
+  const execute = extra => actions.execute({ actionId: "vibe64.training.question.prepare", input: f.questionInput,
+    context: { channel: "api", surface: "app", ...extra } });
+  const prepared = await execute({ trainingMain: firstMain });
+  assert.equal(prepared.delivery, "prepared");
+  assert.equal(prepared.questionText, f.questionInput.text);
+  const saved = await inventory(f.systemRoot);
+  const replay = await execute({ trainingMain: nextMain });
+  assert.deepEqual(replay, { ...prepared, replayed: true });
+  assert.deepEqual(calls, [["first", "preflight", f.auth.user], ["first", "stage", f.auth.user],
+    ["next", "preflight", f.auth.user], ["next", "stage", f.auth.user]]);
+  await assert.rejects(execute({ trainingMain: nextMain, colleague: { clientId: "supervisor" } }),
+    { code: "VIBE64_TRAINING_SUPERVISOR_ONLY", statusCode: 403 });
+  await assert.rejects(execute({}), { code: "VIBE64_TRAINING_MAIN_UNAVAILABLE", statusCode: 503 });
+  f.auth.user = null;
+  await assert.rejects(execute({ trainingMain: nextMain }), { code: "vibe64_auth_required", statusCode: 401 });
+  assert.equal(calls.length, 4, "registration supplies no cached teacher or supervisor fallback");
+  assert.deepEqual(await inventory(f.systemRoot), saved, "replay and refused authority do not change original saved learning");
+});

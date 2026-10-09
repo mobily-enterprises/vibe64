@@ -24,6 +24,11 @@ Colleague as a substitute. Creating or resuming an attempt does not prove its
 Main chat opened. An empty catalogue needs owner installation/enablement,
 not an invented substitute.
 
+You can continue questions and diagrams in the saved Main conversation while
+Colleague's drawer is closed. Opening Colleague does not enable a missing Main
+teacher or grant grading access. The return-to-Colleague practical still requires
+its actual drawer controls and your explanation to Main.
+
 A lesson without a declared practice exercise stays reserved: it creates no
 practice project or Workspace setup. Its separately opened Learning Main is a
 private teacher conversation, not a practice exercise. The fresh teaching brief identifies this

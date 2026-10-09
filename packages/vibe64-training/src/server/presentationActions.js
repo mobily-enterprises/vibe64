@@ -18,9 +18,9 @@ const output = { mode: "replace", schema: createSchema({
 
 // Teaching chooses a declared operation. The original Colleague navigation
 // receipt waits for the initiating browser and the original sandbox player.
-function createTrainingPresentationActions({ learners, content, colleague, mainTeaching } = {}) {
-  if (typeof learners?.readState !== "function" || typeof content?.readVisual !== "function" || (!mainTeaching?.bindConversation && typeof colleague?.navigate !== "function")) {
-    throw new TypeError("Training presentation actions require the learner, content and Colleague owners.");
+function createTrainingPresentationActions({ learners, content } = {}) {
+  if (typeof learners?.readState !== "function" || typeof content?.readVisual !== "function") {
+    throw new TypeError("Training presentation actions require the learner and content owners.");
   }
   const definition = (operation, extra, description) => withVibe64ActionContext({
     id: `vibe64.training.visual.${operation === "cue-read" ? "cue.read" : operation}`,

@@ -78,12 +78,12 @@ const Vibe64TrainingProvider = defineFeature({
     if (trainingHost) return [];
     return [...createTrainingActions({ catalogue: training.catalogue, learners: training.learners,
       teachingBrief: training.brief, exercises: training.exercises, learningSessions: training.learningSessions }),
-    ...createTrainingTeachingActions({ mainTeaching: training.mainTeaching }),
-    ...createTrainingPresentationActions({ learners: training.learners, content: training.content, mainTeaching: training.mainTeaching }),
+    ...createTrainingTeachingActions(),
+    ...createTrainingPresentationActions({ learners: training.learners, content: training.content }),
     ...createTrainingMainPresentationActions({ project, actions: actionCatalogue }),
     ...createTrainingMainPracticalActions({ project, actions: actionCatalogue }),
     ...createTrainingPracticalActions(),
-    ...createTrainingAssessmentActions({ mainTeaching: training.mainTeaching }),
+    ...createTrainingAssessmentActions(),
     ...createTrainingVisualResourceActions({ learners: training.learners, content: training.content,
       teaching: training.teaching, actions: actionCatalogue })];
   }

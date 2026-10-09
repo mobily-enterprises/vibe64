@@ -56,6 +56,15 @@ and genuine browser receipts remain their original owners. Registration and
 compatibility source preservation do not establish that Main practical assessment
 or source-bearing presentation is supported; those need their actual producers.
 
+Teacher action registration requires no Colleague or preselected Main coordinator.
+Question and assessment definitions have no constructor-owned teacher; presentation
+definitions retain only their actual learner/content readers. Every execution still
+authenticates and selects the exact admitted `context.trainingMain`, refusing
+supervisor context or missing Main methods before effects. Public and Online
+register those same definitions; isolated normal/author-preview scope is selected
+by the existing request authority, not by a supervisor constructor fallback.
+Retained Colleague observation/history and compatibility methods are unchanged.
+
 
 ### Bound no-exercise Main teaching
 

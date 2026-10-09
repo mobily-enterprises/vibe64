@@ -14,10 +14,7 @@ const output = { mode: "replace", schema: createSchema({
   delivery: { ...text, enum: ["prepared"] }
 }) };
 
-function createTrainingTeachingActions({ colleague, mainTeaching } = {}) {
-  if (!mainTeaching?.bindConversation && (typeof colleague?.requireTrainingQuestionTurn !== "function" || typeof colleague?.stageTrainingQuestion !== "function")) {
-    throw new TypeError("Question preparation requires the original Colleague turn admission and question staging owners.");
-  }
+function createTrainingTeachingActions() {
   return Object.freeze([withVibe64ActionContext({
     id: "vibe64.training.question.prepare", version: 1, kind: "command", idempotency: "domain_native",
     input: { mode: "create", schema: createSchema({
