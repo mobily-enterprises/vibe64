@@ -295,3 +295,13 @@ it("keeps Progress fully visible and resets expansion across documents, archives
   await nextTick();
   expect(f.state().technicalPanel).toBe(null);
 });
+
+
+it("uses the same native viewer to show automatically archived plans while preserving both documents", () => {
+  const f = mount({ available: false, current: null, history: [{ id: "b".repeat(64), title: "Completed scope", status: "completed", archivedAt: "2026-10-09T00:00:00Z" }] });
+  f.state().showPlan("history");
+  expect(f.state().open).toBe(true);
+  expect(f.state().showHistory).toBe(true);
+  expect(f.state().history[0].status).toBe("completed");
+  expect(mocks.request).not.toHaveBeenCalled();
+});

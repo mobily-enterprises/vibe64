@@ -114,18 +114,17 @@ it("keeps Check delivery without an unsent-handoff Stop for uncertain delivery",
   }
 });
 
-
-it("shows continuation evidence and preserves an incomplete outcome across restore without a duplicate toast", async () => {
+it("leaves continuation evidence in chat and preserves an incomplete outcome across restore without a duplicate toast", async () => {
   const outcome = { decision: "continue", explanation: "Import is still authorised and unfinished.", nextStep: "Implement import validation." };
   const f = mount({ messageId: "auto-work", status: "sent", resolvedMode: "junior", continuation: "implementation", outcome });
-  expect(f.state().actionable).toBe(true);
+  expect(f.state().actionable).toBe(false);
   expect(f.state().showOutcome).toBe(true);
   expect(f.state().label).toContain("Continuing implementation");
   f.props.value.request = { ...f.props.value.request, status: "done", reviewStatus: "skipped_incomplete",
     outcome: { decision: "wait", reason: "blocked", explanation: "A required account is unavailable.", nextStep: "" } };
   await nextTick();
   expect(f.state().label).toBe("Implementation incomplete.");
-  expect(f.state().actionable).toBe(true);
+  expect(f.state().actionable).toBe(false);
   expect(feedback.report).not.toHaveBeenCalled();
   const saved = f.props.value.request;
   app.unmount();
@@ -134,4 +133,15 @@ it("shows continuation evidence and preserves an incomplete outcome across resto
   restored.props.value.request = { ...saved, stopped: true, reviewStatus: "cancelled" };
   await nextTick();
   expect(restored.state().showOutcome).toBe(false);
+});
+
+it("does not render the Router explanation as a blue composer alert during review", async () => {
+  const request = { messageId: "review", status: "reviewing", outcome: { decision: "review", explanation: "The authorised scope is ready." } };
+  const f = mount(request);
+  expect(f.state().actionable).toBe(false);
+  const app = createSSRApp(RoutingNotice, { request });
+  app.use(createVuetify());
+  const html = await renderToString(app);
+  expect(html).not.toContain("The authorised scope is ready.");
+  expect(html).not.toContain("v-alert");
 });

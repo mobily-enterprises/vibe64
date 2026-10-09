@@ -537,7 +537,13 @@ the direct roles and Router. In Auto, Router recognizes discussion, plan changes
 execution and Deslop. New work and discussion go to Senior; explicit execution
 of the active plan goes to Junior.
 Routing progress appears with the message, without a duplicate banner above the
-composer. Interrupted-review notices disappear; errors and recovery actions remain.
+composer.
+When final Senior review and any enabled Deslop succeed, an explicitly completed
+plan and its Progress automatically move together to History after the final
+explanation. Chat links to that session's plan history. Unfinished, interrupted,
+replaced and unrelated plans stay current; a new planning discussion does not
+silently replace them.
+Interrupted-review notices disappear; errors and recovery actions remain.
 Routing is visible before delivery, and each routed exchange retains its mode
 and answering model. Auto planning restricts Senior to plan management. Junior
 implements the active plan and records unresolved decisions for the user. Direct Senior and Junior may both edit application files when asked.
@@ -547,7 +553,8 @@ In Auto, Router checks each normally finished implementation turn against the
 original request, accepted steering, full current plan and recent visible replies.
 It can continue authorised independent work on the selected coding role, hand
 reviewable work to Senior, or wait for a necessary decision, resource, permission
-or explicit pause. Its explanation and next step remain visible. A partial result
+or explicit pause. Its explanation and next step appear as Status messages in chat,
+without a large composer banner. A partial result
 is presented as implementation incomplete, not plan completion. Two consecutive
 turns without reported progress or eight automatic continuations stop for a new
 user request. Router judges recorded evidence; Senior verifies the actual work.

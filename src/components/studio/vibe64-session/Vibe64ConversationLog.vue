@@ -234,6 +234,7 @@ const emit = defineEmits([
   "check-integration",
   "cancel-integration",
   "open-source-file",
+  "open-plan-history",
   "reload",
   "resend-turn"
 ]);
@@ -464,6 +465,11 @@ const adapter = computed(() => ({
     cancel: (id) => emit("cancel-turn", id),
     edit: (id) => emit("edit-turn", id),
     openLink(payload) {
+      if (payload.href === "#vibe64-plan-history") {
+        payload.event?.preventDefault?.();
+        emit("open-plan-history");
+        return;
+      }
       const target = sourceEditorLinkTarget({ href: payload.href, sourceRoot: props.sourceRoot, text: payload.text });
       if (!target) return;
       payload.event?.preventDefault?.();

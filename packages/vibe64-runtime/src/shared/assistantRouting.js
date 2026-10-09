@@ -390,6 +390,18 @@ function parseReviewRoutingDecision(text) {
   return result;
 }
 
+function assistantRoutingOutcomeNotice(request) {
+  if (!request?.messageId || !request.outcome || request.stopped) return null;
+  const outcome = request.outcome;
+  const heading = outcome.decision === "review" ? "Ready for Senior review."
+    : outcome.decision === "continue" ? "Continuing implementation."
+      : outcome.reason === "user_wait" ? "Paused at your request." : "Implementation incomplete.";
+  return {
+    messageId: `assistant-routing-outcome:${request.messageId}:${request.autoExecution?.continuations || 0}:${outcome.decision}`,
+    text: [heading, outcome.explanation, outcome.nextStep ? `Next step: ${outcome.nextStep}` : ""].filter(Boolean).join("\n\n")
+  };
+}
+
 function assistantRoutingStatusLabel(request) {
   if (!request) return "";
   const role = (request.status?.startsWith("review") || request.status?.startsWith("planning")) ? "senior" : request.resolvedMode;
@@ -434,4 +446,5 @@ export { ASSISTANT_MODES, ASSISTANT_ROUTING_METADATA, ASSISTANT_ROUTING_ROLES, A
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_PURPOSE_ROLES, ROUTING_REASONS, routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences,
   assistantRoutingFromMetadata, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantReviewRoutingPrompt, parseReviewRoutingDecision,
-  assistantModeLabel, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel };
+  assistantModeLabel, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,
+  assistantRoutingOutcomeNotice };

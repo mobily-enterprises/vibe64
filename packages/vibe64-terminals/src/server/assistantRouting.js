@@ -2,14 +2,14 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { readWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
+import { readWorkPlan, manageWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
 import { parseNumberedQuestionPrompt, parseAnswerChoicePrompt } from "@jskit-ai/assistant-core/shared/conversation";
 import { latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
 import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
   ROUTING_REASONS, assistantModePrompt, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingFromMetadata,
-  assistantRoutingPrompt, parseRoutingDecision, assistantReviewRoutingPrompt, parseReviewRoutingDecision
+  assistantRoutingPrompt, parseRoutingDecision, assistantReviewRoutingPrompt, parseReviewRoutingDecision, assistantRoutingOutcomeNotice
 } from "@local/vibe64-runtime/shared/assistantRouting";
 
 const STATE_KEY = "assistant_routing_request";
@@ -90,6 +90,15 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     await context.runtime.store.writeMetadataValue(context.session.sessionId, STATE_KEY, JSON.stringify(state));
     await publish(context.session.sessionId, { reason: "assistant-routing-changed", payload: {
       assistantRoutingRequest: state, ...(context.routingConversationId ? { conversationId: context.routingConversationId } : {})
+    } });
+  }
+  async function writeNotice(context, state, notice) {
+    if (!notice) return;
+    const sessionId = context.session.sessionId;
+    const conversationId = context.routingConversationId;
+    const turn = await context.runtime.store.writeConversationSystemMessage(conversationId ? { sessionId, conversationId } : sessionId, notice);
+    if (turn) await publish(sessionId, { reason: "assistant-routing-changed", payload: {
+      assistantRoutingRequest: state, conversationLogPatch: { type: "upsert-turn", turn }, ...(conversationId ? { conversationId } : {})
     } });
   }
   async function currentGoal(sessionId, context) {
@@ -722,6 +731,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       }
       // Turn outcomes describe execution, never plan completion. Only an
       // explicit Senior plan command changes the document's lifecycle.
+      const reviewedPlan = state.workPlan;
       if (usesPlan) state.workPlan = plan;
       if (state.status === "planning") {
         liveFollowupRequests.delete(keyFor(sessionId, context));
@@ -734,6 +744,28 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         liveFollowupRequests.delete(keyFor(sessionId, context));
         state.status = "done";
         state.reviewStatus = state.reviewStatus !== "cancelled" && run.state === "completed" ? "completed" : "incomplete";
+        // Senior's explicit completion proves acceptance; native success alone never does.
+        // Only the exact scope admitted to this review may leave the current slot.
+        if (usesPlan && state.reviewStatus === "completed" && !state.stopped && !state.error &&
+            reviewedPlan?.status === "active" && plan?.status === "completed" &&
+            plan.text.replace(/^Status: completed\r?$/mu, "Status: active") === reviewedPlan.text.replace(/^Status: active\r?$/mu, "Status: active")) {
+          try {
+            const replies = await context.runtime.store.readConversationTail(sessionId, { userLimit: 2 });
+            if (!replies.some(turn => turn.user?.messageId === state.reviewMessageId && turn.assistant?.text?.trim())) {
+              state.error = "Review finished, but its final explanation was not confirmed. The completed plan stays current; check the review reply before archiving it.";
+              await save(context, state);
+              return;
+            }
+            const result = await manageWorkPlan(context, { operation: "archive", expectedRevision: plan.revision,
+              expectedProgressRevision: plan.progressRevision || "" }, "review");
+            await save(context, state);
+            await writeNotice(context, state, { messageId: `assistant-plan-archived:${state.reviewMessageId}`,
+              text: `Completed plan archived: ${plan.title}.\n\n[View plan history](#vibe64-plan-history)` });
+            await publish(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice, assistantRoutingRequest: state } });
+          } catch (error) {
+            state.error = `Review finished, but automatic plan archival could not be confirmed: ${error.message} Open Plan and history to check before retrying Archive.`;
+          }
+        }
         await save(context, state); return;
       }
       if (!needsReview(state) || run.state !== "completed") {
@@ -742,6 +774,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         if (needsReview(state)) {
           state.reviewStatus = "skipped_incomplete";
           state.outcome = { decision: "wait", reason: "blocked", explanation: `Implementation ${run.state || "stopped"}. Send a new request when ready to resume.`, nextStep: "", progress: false };
+          await writeNotice(context, state, assistantRoutingOutcomeNotice(state));
         }
         await save(context, state); return;
       }
@@ -811,6 +844,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
             await save(current, state);
           }
         }
+        await writeNotice(current, state, assistantRoutingOutcomeNotice(state));
         if (state.outcome.decision === "wait") {
           state.status = "done";
           state.reviewStatus = state.outcome.reason === "user_wait" ? "cancelled"

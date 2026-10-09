@@ -3312,3 +3312,52 @@ for (const width of [390, 820, 1280]) {
     await expect(indicator).toHaveCount(0);
   });
 }
+
+for (const width of [390, 1280]) {
+  test(`@plan-review-archive review explanations stay in chat and archive links open native History at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    const explanation = "The implementation is ready for its final Senior review.";
+    const routingRequest = { messageId: "plan-request", status: "reviewing", resolvedMode: "junior", mode: "auto", review: true,
+      assignments: {}, input: { message: "Finish the agreed plan." }, outcome: { decision: "review", reason: "ready", explanation, nextStep: "", progress: true } };
+    const turns: Record<string, unknown>[] = [{ turnId: "000001", user: { role: "user", messageId: "plan-request", text: "Finish the agreed plan." },
+      assistant: { role: "assistant", text: "Implementation is ready. I will review it now." } }];
+    const server = await assistantStatusServer();
+    try {
+      const session = server.state.session;
+      session.agentSession.turn.active = false;
+      session.metadata.assistant_routing_request = JSON.stringify(routingRequest);
+      server.state.conversationLog = turns;
+      const archiveId = "b".repeat(64);
+      await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/work-plan`, route => fulfillJson(route, {
+        available: false, current: null, history: [{ id: archiveId, title: "Validated plan", status: "completed", total: 1,
+          archivedAt: "2026-10-09T00:00:00Z" }]
+      }));
+      await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+      const composer = page.getByLabel("Message AI assistant");
+      await expect(composer).toBeVisible();
+      await expect(page.locator(".assistant-transcript__system").filter({ hasText: explanation })).toHaveCount(1);
+      await expect(page.locator(".studio-autopilot__composer .v-alert")).toHaveCount(0);
+      routingRequest.status = "done";
+      session.metadata.assistant_routing_request = JSON.stringify({ ...routingRequest, reviewStatus: "completed" });
+      turns.push({ turnId: "000002", system: { role: "system", messageId: "assistant-plan-archived:final-review",
+        text: "Completed plan archived: Validated plan.\n\n[View plan history](#vibe64-plan-history)" } });
+      await page.reload();
+      const historyLink = page.getByRole("link", { name: "View plan history", exact: true });
+      await expect(historyLink).toBeVisible();
+      await composer.fill("Keep this next request.");
+      await historyLink.click();
+      const dialog = page.getByRole("dialog", { name: "Plan and history", exact: true });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("tab", { name: "History", exact: true })).toHaveAttribute("aria-selected", "true");
+      await expect(dialog.getByText("Validated plan", { exact: true })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath(`plan-history-${width}.png`) });
+      await dialog.getByRole("button", { name: "Close plan", exact: true }).click();
+      await expect(composer).toHaveValue("Keep this next request.");
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      expect(server.state.messages).toEqual([]);
+    } finally {
+      await page.close();
+      await server.close();
+    }
+  });
+}

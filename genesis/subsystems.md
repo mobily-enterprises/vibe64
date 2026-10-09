@@ -498,7 +498,11 @@ now binds stable scope and detailed implementation instructions with separate
 Progress as one revision-fenced artifact; the existing viewer shows the summary
 and checklist first with expandable Technical details, without shortening agent reads;
 its original read/mutation queue protects paired reads and document retirement.
-Senior owns scope/lifecycle; Junior writes Progress. Both native roles read the
+Senior owns scope/lifecycle; Junior writes Progress. The original routing owner
+automatically archives only its exact explicitly completed plan after successful
+final Senior review and enabled Deslop, using the same plan writer and current
+Progress revision. Its outcome and archive notices use the existing canonical
+system-message writer; the native plan viewer owns their history navigation. Both native roles read the
 full pair through the existing paged helper, and the existing viewer shows both
 tabs for current and archived artifacts. The numbered stopped-service upgrade
 preserves legacy bytes and IDs through the original Runtime inventory and Core

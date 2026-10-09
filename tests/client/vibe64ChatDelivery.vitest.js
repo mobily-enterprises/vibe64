@@ -68,3 +68,27 @@ describe("routed chat delivery presentation", () => {
     expect(accepted.system).toBeUndefined();
   });
 });
+
+it("shows restored review explanations as one system chat message without rewriting or duplicating history", () => {
+  const receipt = { turnId: "accepted", user: { messageId: request.messageId, text: "Hello" } };
+  const routed = { ...request, status: "reviewing", outcome: { decision: "review", explanation: "The work is ready for review.", nextStep: "" } };
+  const original = structuredClone(receipt);
+  const turns = chatTurnsWithRouting([receipt], routed);
+  expect(turns).toHaveLength(2);
+  expect(turns[1].system).toMatchObject({ role: "system", text: "Ready for Senior review.\n\nThe work is ready for review." });
+  expect(receipt).toEqual(original);
+  expect(chatTurnsWithRouting(turns, routed)).toEqual(turns);
+  expect(chatTurnsWithRouting(turns, { ...routed, stopped: true })).toEqual(turns);
+  expect(chatTurnsWithRouting([], { ...routed, stopped: true })).toEqual([]);
+});
+
+it("puts continuation and waiting explanations in chat, preserving the next step and original message", () => {
+  for (const decision of ["continue", "wait"]) {
+    const turns = chatTurnsWithRouting([], { ...request, status: "done", outcome: {
+      decision, reason: "blocked", explanation: "A required check remains.", nextStep: decision === "continue" ? "Run the focused check." : ""
+    } });
+    expect(turns).toHaveLength(1);
+    expect(turns[0].system.text).toContain("A required check remains.");
+    expect(turns[0].system.text.includes("Next step: Run the focused check.")).toBe(decision === "continue");
+  }
+});

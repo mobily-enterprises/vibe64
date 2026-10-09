@@ -57,7 +57,27 @@ acceptance requirement against the work and evidence, and explicitly completes t
 A finished turn or a fully ticked checklist alone does not complete a plan.
 Updates appear while the viewer is open.
 
-## Archive the current plan
+## Automatic completion and archival
+
+After Auto's final Senior review and any enabled Deslop finish successfully,
+Senior explicitly marks the involved plan Completed. Once the final explanation
+has been delivered and that review turn finishes, Vibe64 automatically moves
+that exact Plan and Progress pair into History. Chat shows **Completed plan
+archived** with **View plan history**, which opens this session's existing viewer.
+The plan icon remains available and opens History when there is no current plan.
+
+A finished implementation or Router's readiness explanation is not completion.
+Interrupted reviews, unfinished plans and unrelated requests do not archive a
+plan. A different plan created while reviewing is not archived by the old review.
+If automatic archival cannot be confirmed, the notice explains the problem;
+inspect Current plan and History before retrying Archive. Older completed plans
+are not moved retroactively just by opening or restoring a session.
+
+Discussing a new plan leaves the current one untouched. After successful automatic
+archival, there is no current plan to replace. Otherwise, explicitly choose an
+update or archive-and-replace; Senior asks if that choice is unclear.
+
+## Archive the current plan manually
 
 1. Open **Current plan** and select **Archive** in the dialog header.
 2. While the request runs, the control says **Archiving…**. On success, the viewer
@@ -177,11 +197,19 @@ pending planning and implementation handoffs. If delivery is uncertain, use
 was never delivered. Colleague can explain this recovery and offer to stop the
 pending work or send your explicit continuation through its existing actions.
 
+Router's explanation and any suggested next step appear as an ordinary **Status**
+message in the scrollable chat, alongside the relevant exchange. They do not
+occupy a blue box above the composer or speak as an assistant's answer. New
+explanations remain in chat history after reload and later requests. Recovery
+errors and **Retry review**, **Check delivery** and **Stop** controls remain above
+the composer when action is required.
+
 When ready, Auto starts one separate Senior review, even when Senior implemented
 it or both roles use the same model. The **Deslop** switch adds behavior-preserving
 cleanup after the implementation review, within the same Senior turn. Senior
 checks the cleanup before explicitly completing the plan; unfinished work or
-verification leaves it active. A failed Router decision leaves **Retry review** for an
+verification leaves it active. The successful final review automatically archives
+the exact completed pair as described above. A failed Router decision leaves **Retry review** for an
 explicit review request, or use **Stop** to cancel it. The same controls and
 notices appear on desktop and mobile. Colleague's conversation watches treat
 unfinished waiting outcomes as needing attention. Colleague can explain the outcome and offer

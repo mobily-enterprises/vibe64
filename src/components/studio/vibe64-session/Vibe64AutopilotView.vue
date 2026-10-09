@@ -363,6 +363,7 @@
         @edit-turn="editOptimisticMessage"
         @load-more="loadMoreChatTurns"
         @open-source-file="openSourceEditorFile"
+        @open-plan-history="workPlanViewer?.showPlan('history')"
         @open-integration="openIntegrationRequest"
         @skip-integration="skipIntegrationRequest"
         @resume-integration="resumeIntegrationRequest"
@@ -523,7 +524,7 @@
                     :conversation-runtime="props.conversationRuntime"
                     :sessions-api-path="props.sessionsApiPath"
                   />
-                  <Vibe64WorkPlan :session="props.session" :sessions-api-path="props.sessionsApiPath" :active="props.active && conversationLogVisible" :busy="agentActive" />
+                  <Vibe64WorkPlan ref="workPlanViewer" :session="props.session" :sessions-api-path="props.sessionsApiPath" :active="props.active && conversationLogVisible" :busy="agentActive" />
                   <Vibe64SessionAssistantMenu
                     v-model="composerSettingsOpen"
                     :target="composerSettingsButton"
@@ -977,6 +978,7 @@ const composerSettingsButton = ref(null);
 const mainChat = ref(null);
 const sessionActionsTrigger = ref(null);
 const temporaryAiWorkspace = ref(null);
+const workPlanViewer = ref(null);
 const temporaryAiHasUnreadMessages = computed(() => temporaryAiWorkspace.value?.hasUnreadMessages === true);
 const sessionActionsLabel = computed(() => [
   "Session actions",

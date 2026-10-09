@@ -79,6 +79,7 @@ function showPlan(requestedView = "default") {
   view.value = requestedView === "default" ? (plan.value?.current ? "current" : "history") : requestedView;
   open.value = true;
 }
+defineExpose({ showPlan });
 
 const colleaguePlan = inject(VIBE64_COLLEAGUE_PLAN_KEY, null);
 const planViewer = {

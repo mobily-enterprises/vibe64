@@ -144,6 +144,7 @@ function mountMainConversationLog({ render = false } = {}) {
   });
   let state;
   let exposed;
+  const emit = vi.fn();
   const originalSetup = module.exports.default.setup;
   if (render) module.exports.default.setup = (props, context) => {
     state = originalSetup(props, context);
@@ -151,7 +152,7 @@ function mountMainConversationLog({ render = false } = {}) {
   };
   const app = renderer.createApp({ setup() {
     if (render) return () => vue.h(module.exports.default, props);
-    state = module.exports.default.setup(props, { emit: vi.fn(), expose: value => { exposed = value; } });
+    state = module.exports.default.setup(props, { emit, expose: value => { exposed = value; } });
     return () => null;
   } });
   if (render) {
@@ -162,7 +163,7 @@ function mountMainConversationLog({ render = false } = {}) {
   const root = {};
   app.mount(root);
   if (render) exposed = app._instance.subTree.component.exposed;
-  return { app, root, state, exposed, props, voice, runtime, controls };
+  return { app, root, state, exposed, props, voice, runtime, controls, emit };
 }
 
 describe("Vibe64 direct session view", () => {
@@ -1067,10 +1068,9 @@ describe("Vibe64 direct session view", () => {
 
 });
 
-
 it("projects actual source availability without suppressing suspended Working controls", () => {
   const source = fs.readFileSync(composablePath, "utf8");
-  const expression = source.match(/const saveWorkHeaderVisible = computed\(\(\) => Boolean\(([\s\S]*?)\n  \)\);/u)?.[1];
+  const expression = source.match(/const saveWorkHeaderVisible = computed\(\(\) => Boolean\(([\s\S]*?)\n {2}\)\);/u)?.[1];
   expect(expression).toBeTruthy();
   const visible = new Function("props", "sessionId", `return Boolean(${expression});`);
   for (const suspended of [true, false]) {
@@ -1090,4 +1090,17 @@ it("projects actual source availability without suppressing suspended Working co
   expect(presentation).toContain('<template #lessons>');
   expect(fs.readFileSync(path.resolve("packages/vibe64-training/src/client/TrainingPreviewPresentation.vue"), "utf8")).toContain('aria-label="Lessons"');
   expect(fs.readFileSync(runtimeHostPath, "utf8")).toContain(':source-workspace-available="sourceWorkspaceAvailable"');
+});
+
+it("opens native plan history from its system-message link without treating it as source or changing chat", () => {
+  const f = mountMainConversationLog();
+  try {
+    const preventDefault = vi.fn();
+    const original = [...f.props.turns];
+    f.state.adapter.value.actions.openLink({ href: "#vibe64-plan-history", event: { preventDefault } });
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(f.emit).toHaveBeenCalledWith("open-plan-history");
+    expect(f.emit).not.toHaveBeenCalledWith("open-source-file", expect.anything());
+    expect(f.props.turns).toEqual(original);
+  } finally { f.app.unmount(); }
 });

@@ -1364,6 +1364,33 @@ archives that other plan first. Reopening the current plan creates no duplicate.
 Completion is an
 explicit admitted Senior/review operation at exact Plan and Progress revisions. A nonempty scope is required; checkmarks are not a completion gate or proof. Senior must review actual evidence against every acceptance requirement. Ending a coding or
 review turn only ends execution and cannot promote a plan's status.
+After the exact admitted automatic final review (including any enabled Deslop)
+finishes successfully, Routing archives an explicitly completed, unchanged scope
+through this SAME revision-fenced plan owner. It compares the reviewed scope
+bytes with the current completed document before invoking archive; unrelated,
+replaced, active, stopped and failed scopes remain current. Progress is captured
+at the current paired revision. The bounded canonical transcript tail must also
+contain a nonempty final assistant reply for this exact review message; commentary
+and another request's answer cannot stand in for the final explanation. A missing
+reply leaves the completed pair current with a truthful recovery notice.
+There is no inference of acceptance from native
+success, historical scan, second writer or storage conversion. Chat receives an
+idempotent system notice and a View plan history link, using the existing
+conversation writer/publication and native viewer. An archival failure is visible
+without declaring an unverified archive successful or launching model work.
+
+
+Router outcome explanations use the same persisted system-message writer and
+canonical upsert-turn publication as other application chat statuses, with a
+stable request/continuation/decision identity. Repeated callbacks do not duplicate
+them; writes and publications retain the selected conversation scope. New messages
+survive later routing requests and reload. The original browser
+routing projection can show an older saved outcome without rewriting its history,
+and suppresses its projected copy once the canonical notice is loaded. The
+composer notice keeps actionable errors and recovery controls but no explanation
+paragraph. System messages do not enter Router's visible assistant/user context.
+The history link opens the SAME scoped plan viewer, without source navigation or
+an AI request.
 
 The viewer reads canonical current/history pages independently of the latest
 routing request or selected chat mode. The document icon sits in the existing

@@ -1,4 +1,4 @@
-import { assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingStatusLabel, assistantRoutingOutcomeNotice } from "@local/vibe64-runtime/shared/assistantRouting";
 
 function routedChatMessage(request, local = null) {
   if (!request || !["routing", "sending", "uncertain", "failed"].includes(request.status)) return null;
@@ -13,6 +13,14 @@ function routedChatMessage(request, local = null) {
 }
 
 function chatTurnsWithRouting(turns, request, checking = false) {
+  const result = chatTurnsWithDelivery(turns, request, checking);
+  const notice = assistantRoutingOutcomeNotice(request);
+  if (!notice || result.some(turn => turn.system?.messageId === notice.messageId)) return result;
+  // Restored older requests can display their saved explanation without rewriting history.
+  return [...result, { turnId: notice.messageId, system: { role: "system", ...notice } }];
+}
+
+function chatTurnsWithDelivery(turns, request, checking) {
   if (!request) return turns;
   const matches = (turn) => turn.user?.messageId === request.messageId || turn.optimistic?.id === request.messageId;
   // Saved receipts and successful HTTP admission outrank older routing errors.

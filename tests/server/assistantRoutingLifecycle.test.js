@@ -3,7 +3,7 @@ import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { readWorkPlan, readWorkPlanPage, manageWorkPlan, workPlanPath, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { readWorkPlan, readWorkPlanPage, readWorkPlanHistory, manageWorkPlan, workPlanPath, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
@@ -90,6 +90,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   const metadata = { assistant_selection: JSON.stringify(assignments.senior),
     ...(preferences ? { assistant_routing: JSON.stringify({ workflowEngineId: "codex", ...preferences }) } : {}) };
   const receipts = new Map();
+  const notices = new Map();
   const session = { sessionId: "session-1", metadata };
   const store = {
     paths: () => ({ sessionRoot: path.join(root, "sessions", session.sessionId), conversationsRoot: path.join(root, "sessions", session.sessionId, "conversations") }),
@@ -98,7 +99,13 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
     conversationMessageIdExists: async (_id, messageId) => receipts.has(messageId),
     readConversationTail: async () => [{ user: { text: "Please propose validation." },
       messages: [{ role: "assistant", text: "Add the agreed required-field rule." }, { role: "thinking", text: "PRIVATE THOUGHT" }] }],
-    writeConversationUserMessage: async (_id, value) => { receipts.set(value.messageId, value); }
+    writeConversationUserMessage: async (_id, value) => { receipts.set(value.messageId, value); },
+    writeConversationSystemMessage: async (_id, value) => {
+      if (notices.has(value.messageId)) return null;
+      const turn = { turnId: value.messageId, system: { role: "system", ...value } };
+      notices.set(value.messageId, turn);
+      return turn;
+    }
   };
   const context = { runtime: { store, stateRoot: root }, session, vibe64User: { role: "owner", username: "owner" } };
   if (readyPlan) {
@@ -178,7 +185,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
       return { ok: true, delivered: true, threadId: "native-thread", turnId: `turn-${sends.length}` };
     } };
   const service = createAssistantRouting(routingOptions);
-  return { service, context, metadata, agent, router, sends, events, catalog, catalogs, connections, assignments, configuration,
+  return { service, context, metadata, agent, router, sends, events, notices, catalog, catalogs, connections, assignments, configuration,
     restart: () => createAssistantRouting(routingOptions),
     helperCalls: () => helperCalls, cleanupCalls: () => cleanupCalls,
     failAdmission: () => { failAdmission = true; }, state: () => JSON.parse(metadata.assistant_routing_request || "null") };
@@ -2102,4 +2109,160 @@ test("original routing retains admitted Learning data through uncertain receipt 
     assert.equal(Object.hasOwn(repaired[0], "data"), learning);
     assert.equal(f.state().status, "sent");
   }
+});
+
+for (const deslop of [true, false]) {
+  test(`successful final review archives the exact completed Plan and Progress with Deslop ${deslop ? "on" : "off"}`, async t => {
+    const f = await fixture(t, { mode: "auto", review: deslop }, { readyPlan: false });
+    await manageWorkPlan(f.context, { operation: "new", text: "# Validation\n- [ ] Reject empty names\n\n## Technical details\nUse the existing validator." }, "senior");
+    await f.service.send("session-1", request, f.context);
+    await f.service.afterTurn("session-1", completion(), f.context);
+    assert.equal(f.state().status, "reviewing");
+    let plan = await readWorkPlan(f.context);
+    const progressText = "# Progress\nImplementation, final review and enabled cleanup checked. Focused test passed.";
+    await manageWorkPlan(f.context, { operation: "progress-write", expectedRevision: plan.revision,
+      expectedProgressRevision: plan.progressRevision || "", text: progressText }, "review");
+    plan = await readWorkPlan(f.context);
+    await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision,
+      expectedProgressRevision: plan.progressRevision }, "review");
+    const completed = await readWorkPlan(f.context);
+    f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: f.state().reviewMessageId }, assistant: { text: "Final review and enabled Deslop completed; all requirements verified." } }];
+    assert.equal((await readWorkPlanHistory(f.context)).length, 0, "explicit completion waits for the final review turn to finish");
+    await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+    assert.equal(await readWorkPlan(f.context), null);
+    const [archive] = await readWorkPlanHistory(f.context);
+    assert.equal(archive.status, "completed");
+    const saved = await readWorkPlanPage(f.context, { archiveId: archive.id });
+    assert.equal(saved.text, completed.text);
+    assert.equal(saved.progressText, progressText);
+    assert.equal(f.state().reviewStatus, "completed");
+    const notices = [...f.notices.values()].map(turn => turn.system.text);
+    assert.equal(notices.filter(text => text.includes("Completed plan archived")).length, 1);
+    assert.match(notices.at(-1), /\[View plan history\]\(#vibe64-plan-history\)/u);
+    assert.ok(f.events.some(event => event.reason === "work-plan-changed"));
+    await f.restart().afterTurn("session-1", completion("turn-2"), f.context, { recovered: true });
+    assert.equal((await readWorkPlanHistory(f.context)).length, 1);
+    assert.equal(f.sends.length, 2, "archival/recovery never repeats model work");
+  });
+}
+
+for (const outcome of ["failed", "interrupted", "cancelled", "user-stop", "active", "replacement", "unrelated"]) {
+  test(`final review does not archive an ${outcome} plan`, async t => {
+    const f = await fixture(t, undefined, { readyPlan: false });
+    await manageWorkPlan(f.context, { operation: "new", text: "# Original scope\n- [ ] Prove original behavior" }, "senior");
+    if (outcome === "unrelated") f.router.respond = async () => ({ ok: true,
+      text: '{"mode":"senior","reason":"explicit_implementation"}' });
+    await f.service.send("session-1", request, f.context);
+    await f.service.afterTurn("session-1", completion(), f.context);
+    let plan = await readWorkPlan(f.context);
+    if (outcome === "replacement") {
+      await manageWorkPlan(f.context, { operation: "new", text: "# Replacement scope\n- [ ] Other work",
+        expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "", archiveCurrent: true }, "senior");
+      plan = await readWorkPlan(f.context);
+    }
+    if (outcome !== "active") await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision,
+      expectedProgressRevision: plan.progressRevision || "" }, "review");
+    const current = await readWorkPlan(f.context);
+    f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: f.state().reviewMessageId }, assistant: { text: "Final review explanation." } }];
+    const history = await readWorkPlanHistory(f.context);
+    if (outcome === "user-stop") await f.service.cancel("session-1", f.context);
+    await f.service.afterTurn("session-1", completion("turn-2",
+      ["failed", "interrupted", "cancelled"].includes(outcome) ? outcome : "completed"), f.context);
+    assert.equal((await readWorkPlan(f.context)).revision, current.revision);
+    assert.deepEqual(await readWorkPlanHistory(f.context), history);
+    assert.equal([...f.notices.values()].some(turn => turn.system.text.includes("Completed plan archived")), false);
+  });
+}
+
+test("Router explanations are durable, published once, and retained separately from assistant replies", async t => {
+  const f = await fixture(t);
+  await f.service.send("session-1", request, f.context);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  const notices = [...f.notices.values()];
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].system.role, "system");
+  assert.match(notices[0].system.text, /Ready for Senior review.*Implementation is ready for review/su);
+  assert.ok(f.events.some(event => event.payload.conversationLogPatch?.turn.system.messageId === notices[0].system.messageId));
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.equal(f.notices.size, 1);
+});
+
+test("an obsolete review completion cannot archive the current plan", async t => {
+  const f = await fixture(t, undefined, { readyPlan: false });
+  await manageWorkPlan(f.context, { operation: "new", text: "# Current scope\n- [ ] Verify behavior" }, "senior");
+  await f.service.send("session-1", request, f.context);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  const plan = await readWorkPlan(f.context);
+  await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision,
+    expectedProgressRevision: plan.progressRevision || "" }, "review");
+  f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: f.state().reviewMessageId }, assistant: { text: "Final review explanation." } }];
+  await f.service.afterTurn("session-1", completion("obsolete-turn"), f.context);
+  assert.equal((await readWorkPlan(f.context)).status, "completed");
+  assert.equal((await readWorkPlanHistory(f.context)).length, 0);
+  assert.equal(f.state().status, "reviewing");
+  await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+  assert.equal(await readWorkPlan(f.context), null);
+  assert.equal((await readWorkPlanHistory(f.context)).length, 1);
+});
+
+test("failed automatic archival preserves explicit completion and offers truthful manual recovery", async t => {
+  const f = await fixture(t, undefined, { readyPlan: false });
+  await manageWorkPlan(f.context, { operation: "new", text: "# Verified scope\n- [ ] Verify behavior" }, "senior");
+  await f.service.send("session-1", request, f.context);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  let plan = await readWorkPlan(f.context);
+  await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision,
+    expectedProgressRevision: plan.progressRevision || "" }, "review");
+  plan = await readWorkPlan(f.context);
+  f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: f.state().reviewMessageId }, assistant: { text: "Final review explanation." } }];
+  const archivePath = path.join(path.dirname(workPlanPath(f.context)), "archive");
+  await writeFile(archivePath, "An invalid archive-directory binding must not be replaced.");
+  await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+  assert.equal((await readWorkPlan(f.context)).revision, plan.revision);
+  assert.equal(f.state().reviewStatus, "completed");
+  assert.match(f.state().error, /automatic plan archival could not be confirmed/u);
+  assert.match(f.state().error, /check before retrying Archive/u);
+  assert.equal([...f.notices.values()].some(turn => turn.system.text.includes("Completed plan archived")), false);
+  assert.equal(f.sends.length, 2, "archival failure does not repeat implementation or review");
+  await rm(archivePath);
+  await manageWorkPlan(f.context, { operation: "archive", expectedRevision: plan.revision,
+    expectedProgressRevision: plan.progressRevision || "" }, "user");
+  assert.equal(await readWorkPlan(f.context), null);
+  assert.equal((await readWorkPlanHistory(f.context)).length, 1);
+});
+
+test("native success without the exact final review explanation keeps the completed plan current", async t => {
+  const f = await fixture(t, undefined, { readyPlan: false });
+  await manageWorkPlan(f.context, { operation: "new", text: "# Verified scope\n- [ ] Verify behavior" }, "senior");
+  await f.service.send("session-1", request, f.context);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  const plan = await readWorkPlan(f.context);
+  await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision,
+    expectedProgressRevision: plan.progressRevision || "" }, "review");
+  f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: "another-request" }, assistant: { text: "An unrelated final answer." } },
+    { user: { messageId: f.state().reviewMessageId }, commentary: [{ text: "Still checking." }] }];
+  await f.service.afterTurn("session-1", completion("turn-2"), f.context);
+  assert.equal((await readWorkPlan(f.context)).status, "completed");
+  assert.equal((await readWorkPlanHistory(f.context)).length, 0);
+  assert.match(f.state().error, /final explanation was not confirmed/u);
+  assert.equal([...f.notices.values()].some(turn => turn.system.text.includes("Completed plan archived")), false);
+});
+
+
+test("Router notices retain their selected conversation in both storage and publication", async t => {
+  const f = await fixture(t);
+  f.context.routingConversationId = "temporary-1";
+  await manageWorkPlan(f.context, { operation: "new", text: "# Conversation scope\n- [ ] Verify scoped notice" }, "senior");
+  const scopes = [];
+  const write = f.context.runtime.store.writeConversationSystemMessage;
+  f.context.runtime.store.writeConversationSystemMessage = async (scope, notice) => {
+    scopes.push(scope);
+    return write(scope, notice);
+  };
+  await f.service.send("session-1", request, f.context);
+  await f.service.afterTurn("session-1", completion(), f.context);
+  assert.deepEqual(scopes, [{ sessionId: "session-1", conversationId: "temporary-1" }]);
+  const patches = f.events.filter(event => event.payload.conversationLogPatch);
+  assert.equal(patches.length, 1);
+  assert.equal(patches[0].payload.conversationId, "temporary-1");
 });

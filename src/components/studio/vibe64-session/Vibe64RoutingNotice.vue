@@ -2,8 +2,6 @@
   <v-alert v-if="actionable" variant="tonal" density="compact" :type="request.error ? 'warning' : 'info'" class="mb-2" role="status">
     {{ label }}
     <p v-if="request.error" class="text-body-small mt-1">{{ request.error }}</p>
-    <p v-if="showOutcome" class="text-body-small mt-1">{{ request.outcome.explanation }}</p>
-    <p v-if="showOutcome && request.outcome.nextStep" class="text-body-small mt-1">Next step: {{ request.outcome.nextStep }}</p>
     <div v-if="followupNeedsAction" class="d-flex flex-wrap ga-1">
       <v-btn variant="text" min-height="48" :disabled="retrying" @click="$emit('retry')">
         {{ retryLabel }}
@@ -43,7 +41,7 @@ const actionable = computed(() => {
   if (request?.status === "cancelled" && !request.helper && !request.attemptedMessageId) return false;
   // These delivery failures and retry controls already appear on the unsent bubble.
   if (["failed", "uncertain"].includes(request?.status)) return false;
-  return Boolean(label.value && (request?.error || followupNeedsAction.value || showOutcome.value));
+  return Boolean(label.value && (request?.error || followupNeedsAction.value));
 });
 
 // Announce a newly finished review once. Restoring a conversation must not
