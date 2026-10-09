@@ -56,6 +56,9 @@ Stop explicitly stops its current turn and cancels
 locally waiting follow-ups before they are sent. The message box keeps its original model button at the left and
 Stop/Send controls at the right. Avatar and voice buttons are outside that toolbar;
 showing or hiding the face does not rearrange the composer buttons.
+Stop also works while Claude is starting. It cancels that startup without waiting
+for the connection timeout. If cleanup cannot be confirmed, the error remains
+visible and Stop can be retried; it does not claim that work has stopped.
 Stopping Colleague leaves your other agent conversations running.
 Minimizing or reopening the view does not itself stop a response.
 The model picker is unavailable during a turn or while sending.

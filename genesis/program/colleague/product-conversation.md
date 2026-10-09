@@ -98,8 +98,15 @@ it inherits an explicit configuration directory without inventing a default over
 The shared Claude driver also retains the original distinction between the private
 logical scope and credential-home native history: an explicitly supplied scoped
 binding must match both trusted host paths and retains its saved native UUID under
-the unchanged account guard. Ordinary bindings retain their workdir checks. This
-driver facility does not import retired product bindings; their verified conversion remains the
+the unchanged account guard. Ordinary bindings retain their workdir checks.
+During native initialization, the factory shares its existing private stop closure
+through the trusted startup callback. The shared owner retains an exact-ID,
+in-memory cleanup receipt until native-handle transfer or confirmed release;
+startup cancellation and initialization failure join that same cleanup owner.
+An unconfirmed stop or release failure retains the receipt for retry. Native
+account/workdir guards, historical recovery and foreign execution refusal remain
+unchanged; no startup receipt is serialized or inferred from missing processes.
+This driver facility does not import retired product bindings; their verified conversion remains the
 application's stopped, numbered-upgrade responsibility. The new
 `20261009-colleague-native-continuity` owner converts only a settled original
 native Claude/Anthropic record with unchanged selection, one actor-private scope,
