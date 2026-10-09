@@ -2829,6 +2829,57 @@ test("configured practice Learning binds the saved actual initial Main session a
   await assert.rejects(projectAction.execute({ learningAttemptId: attemptId }, admittedContext),
     { code: "VIBE64_TRAINING_PREPARATION_BUSY" });
   assert.equal(effects, 2, "supervision and project effects keep the original outer preparation barrier");
+  // Compose the actual internal teaching-grant query and Send capture under
+  // this saved practice owner's real, non-reentrant preparation.lock.
+  const { createActionCatalogue } = await import("@jskit-ai/kernel/server/actions");
+  const { registerVibe64ActionContext } = await import("../../packages/vibe64-core/src/server/actionContext.js");
+  const { createLearningTeachingContextActions } = await import("../../packages/vibe64-sessions/src/server/actions.js");
+  const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
+  const { createTrainingTeachingOwner } = await import("../../packages/vibe64-training/src/server/teaching.js");
+  const { createTrainingAnswerAssessment } = await import("../../packages/vibe64-training/src/server/answerAssessment.js");
+  const teaching = createTrainingTeachingOwner({ learners: f.state, content: installed });
+  const main = createTrainingMainTeaching({ teaching,
+    assessment: createTrainingAnswerAssessment({ learners: f.state, content: installed, teaching }) });
+  const actions = createActionCatalogue();
+  const requestContext = { channel: "internal", surface: "app" };
+  let currentActor = f.actor;
+  registerVibe64ActionContext(actions, { projectContext: core, resolveUser: async () => currentActor,
+    authorizeProject() { assert.fail("Standalone practice cannot borrow a Working project grant"); },
+    resolveLearningContext: learning.resolveContext });
+  actions.register({ contributorId: "original-teaching-grant", domain: "sessions",
+    actions: createLearningTeachingContextActions().map(definition => ({ ...definition, surfaces: ["app"] })) });
+  const grantInput = { learningAttemptId: attemptId, sessionId: created.sessionId };
+  const readGrant = input => actions.execute({ actionId: "vibe64.sessions.conversation.teaching-context.read",
+    input: { ...grantInput, ...input }, context: requestContext });
+  const capturedInput = { messageId: "nested-send-message", message: "Please teach this introduction.", clientId: "browser-one" };
+  const send = withVibe64ActionContext({ ...definition, id: "vibe64.test.browser-send",
+    async execute() {
+      assert.doesNotThrow(assertProjectEffectAdmission, "Send retains its outer WRITE admission");
+      const runtime = await project.createRuntime({ inspectSource: false });
+      const captured = await main.captureMessage({ input: capturedInput, runtime, sessionId: created.sessionId, actions,
+        context: { browserAuthority: { sessionId: created.sessionId, learningAttemptId: attemptId,
+          actorId: "42", requestContext } } });
+      assert.deepEqual(captured, { messageId: capturedInput.messageId, message: capturedInput.message,
+        data: { clientId: capturedInput.clientId } });
+      const grant = await readGrant();
+      await runWithProjectRequestContext(grant.project, () => {
+        assert.equal(core.currentPracticeProjectScope().access, "control");
+        assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
+      });
+      assert.doesNotThrow(assertProjectEffectAdmission, "nested grant restores Send's original WRITE identity");
+      await assert.rejects(context.runLearningOperation(() => assert.fail("no second writer")),
+        { code: "VIBE64_TRAINING_PREPARATION_BUSY" });
+      await assert.rejects(projectAction.execute({ learningAttemptId: attemptId }, admittedContext),
+        { code: "VIBE64_TRAINING_PREPARATION_BUSY" });
+      currentActor = { uid: 43 };
+      await assert.rejects(readGrant(), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+      currentActor = f.actor;
+      await assert.rejects(readGrant({ sessionId: "other-practice" }), { code: "VIBE64_TRAINING_SESSION_MISMATCH" });
+      assert.doesNotThrow(assertProjectEffectAdmission);
+    }
+  }, { learningAccess: "write" });
+  await send.execute({ learningAttemptId: attemptId }, { vibe64Action: { user: f.actor, learning: context } });
+  assert.equal(effects, 2, "the nested grant never admits the refused command or any project effect");
   const summaries = await learning.readSessions({ actor: f.actor });
   assert.equal(summaries.length, 1);
   assert.equal(summaries[0].sessionId, created.sessionId);
@@ -2848,6 +2899,7 @@ test("configured practice Learning binds the saved actual initial Main session a
     { code: "VIBE64_TRAINING_SESSION_MISMATCH" });
   const current = await f.state.resumeAttempt({ actor: f.actor, attemptId });
   await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: current.revision, requestId: "end-bound-practice", reason: "restart" });
+  await assert.rejects(readGrant(), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
   // The original preparation barrier refuses the now-ended reservation first.
   await assert.rejects(() => context.runLearningOperation(() => assert.fail()), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
   assert.equal((await learning.readSessions({ actor: f.actor }))[0].sessionId, created.sessionId);

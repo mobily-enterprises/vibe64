@@ -1104,3 +1104,10 @@ that exact authorization. They must not wrap their fresh native checks in the
 practice preparation barrier again: the original lock would correctly refuse
 that nested acquisition as busy. Browser/supervisor and project/workspace
 operations keep their original barrier and exact Create-opener handling.
+
+The internal teaching-context query still requires fresh WRITE eligibility for
+the exact learner, saved session, attempt and pin. It reads that grant in the
+resolver's captured CONTROL context, which cannot admit project effects. It does
+not acquire the enclosing browser Send's preparation barrier again. Commands,
+ordinary observation/control/creation queries and effect execution keep their
+original admission and serialization; ended or foreign grants remain refused.
