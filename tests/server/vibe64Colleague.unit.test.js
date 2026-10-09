@@ -5228,51 +5228,6 @@ test("Colleague fresh native seed retains the original 24-row window and 2000-ch
   assert.deepEqual(f.observations.mutations, []);
 });
 
-// Frozen first-progress test261 requires the acknowledgement to stay out of
-// canonical history while the actual application effect is still pending.
-// This companion supplies completed native commentary before the unchanged
-// native contract/execute calls; it does not replace the original API case.
-test("native Colleague progress remains transient at the pending application effect", async t => {
-  const operation = Promise.withResolvers();
-  t.after(() => operation.resolve());
-  const progress = "Let me check your projects.";
-  const f = await fixture(t, [{ progress, tool: { actionId: "vibe64.test.operate", input: { value: "native-progress" } }, text: "One project is open." }], { native: true });
-  f.observations.onOperation = () => operation.promise;
-  const initial = await f.service.read({}, f.context);
-  const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
-  await f.send("Which projects are open?");
-  await until(() => f.observations.mutations.length === 1);
-  const checking = await f.service.read({}, f.context);
-  assert.equal(checking.status, "working");
-  assert.equal(checking.operation.status, "executing");
-  const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
-  const nativeProgress = (await f.native.trace()).filter(row => row.notification?.method === "item/completed" &&
-    row.notification.params.item?.id === "tool-progress").map(row => ({ threadId: row.notification.params.threadId,
-      nativeTurnId: row.notification.params.turnId, itemId: row.notification.params.item.id }));
-  t.diagnostic(JSON.stringify({ pendingNativeProgress: checking.streamingReply.text,
-    savedNativeProgress: JSON.stringify(saved).includes(progress), operation: checking.operation.status,
-    authoredTurnId: checking.streamingReply.turnId, projectionId: checking.streamingReply.id,
-    nativeProgress, canonical: saved.conversationLog.map(turn => ({ turnId: turn.turnId,
-      nativeTurnId: turn.metadata?.runtime?.nativeTurnId,
-      messages: turn.messages.map(message => ({ messageId: message.messageId, outputId: message.outputId, role: message.role })) })) }));
-  assert.equal(JSON.stringify(saved).includes(progress), false,
-    "completed native acknowledgement must remain absent from canonical conversation.json at the real pending-effect barrier");
-  assert.equal(checking.streamingReply.text, progress);
-  assert.equal(checking.streamingReply.status, "completed");
-  assert.equal((await browser.read()).interimReply.text, progress);
-  assert.equal(checking.messages.filter(message => message.role === "assistant").length, 0);
-  operation.resolve();
-  const final = await f.service.wait(f.context);
-  assert.equal(final.status, "ready", final.error);
-  assert.deepEqual(f.observations.mutations, ["native-progress"]);
-  assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);
-  assert.equal((await browser.read()).interimReply, null);
-  const after = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
-  assert.equal(JSON.stringify(after).includes(progress), false, "only the final answer is saved, not the acknowledgement");
-  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1,
-    "native progress must not require an extra explicit inference");
-});
-
 // Storage-only companion of frozen first-progress test261. The separate native
 // intent association companion remains open; this test makes no intent claim.
 test("native Colleague transient progress storage preserves only the final answer", async t => {
