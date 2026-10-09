@@ -1998,3 +1998,133 @@ test("captured practice control cannot admit fresh user work or session and repo
     assert.equal(f.session.metadata.agent_identity_conversation_id, "pre-existing-thread");
   });
 });
+
+
+test("Codex service retirement preserves an archived family before deletion and refuses current or foreign successors", async t => {
+  const rows = new Map();
+  const operations = [];
+  let children = ["current-thread"];
+  let preservationCalls = 0;
+  let f;
+  const provider = {
+    async ensureAvailable() { return { ok: true }; },
+    close() {},
+    async stopRuntime() { return { processExitVerified: true, stopped: true }; },
+    async startThread() { assert.fail("Storage inspection must not start a native thread"); },
+    async resumeThread() { assert.fail("Storage inspection must not resume native work"); },
+    async sendTurn() { assert.fail("Storage inspection must not make inference"); },
+    async listNativeThreadsForCwd(directory) {
+      return [...rows.values()].filter(row => row.cwd === directory).map(row => row.id);
+    },
+    async listThreadDescendants(id) { return rows.has(id) ? children : []; },
+    async nativeThreadExists(id) { return rows.has(id); },
+    async readThreadStatus(id) {
+      if (!rows.has(id)) throw Object.assign(new Error(`thread not loaded: ${id}`), {
+        code: -32600, method: "thread/read"
+      });
+      return { raw: rows.get(id) };
+    },
+    async exportThreadHistory(id, emit) {
+      operations.push(`export:${id}`);
+      await emit({ type: "thread", thread: rows.get(id), text: [] });
+      await emit({ type: "item", text: [{ role: "assistant", text: `Preserved ${id}`, branchId: id }] });
+      return { revision: "a".repeat(64) };
+    },
+    async deleteThread(id) {
+      assert.equal(id, "parent-thread");
+      for (const familyId of [id, ...children]) {
+        assert.match(await f.runtime.store.readArtifact("session-1", `native/${familyId}.chat.jsonl`),
+          new RegExp(`Preserved ${familyId}`), "Every native family export must be published before deletion");
+        assert.equal(await readFile(rows.get(familyId).path, "utf8"), `Rollout ${familyId}\n`);
+      }
+      operations.push(`delete:${id}`);
+      for (const familyId of [id, ...children]) {
+        await rm(rows.get(familyId).path);
+        rows.delete(familyId);
+      }
+    }
+  };
+  f = await terminalServiceFixture(t, agentWriteLockHarness(), {
+    assistantSelection: CODEX_SELECTION, codexAppServerProviderFactory: () => provider
+  });
+  const workdir = f.session.metadata.source_path;
+  for (const id of ["parent-thread", "child-thread", "current-thread", "foreign-thread"]) {
+    const nativePath = path.join(f.root, "codex-home", ".codex", "sessions", `${id}.jsonl`);
+    await mkdir(path.dirname(nativePath), { recursive: true });
+    await writeFile(nativePath, `Rollout ${id}\n`);
+    rows.set(id, { id, cwd: id === "foreign-thread" ? `${workdir}-foreign` : workdir,
+      historyMode: "paginated", path: nativePath, updatedAt: 1, status: { type: "idle" } });
+  }
+  await f.runtime.store.writeMetadataValue("session-1", "codex_conversation_id", "current-thread");
+  await f.runtime.store.writeMetadataValue("session-1", "assistant_changeover", JSON.stringify({
+    retiredConversations: [{ conversationId: "parent-thread", workdir, modelProviderId: "openai",
+      assistantSelection: CODEX_SELECTION }]
+  }));
+  const input = { engineId: "codex", conversationId: "parent-thread" };
+  const refusePreservation = () => { preservationCalls++; assert.fail("An unowned family must not reach preservation"); };
+  await assert.rejects(f.service.retireAgentConversationHistory("session-1", input, {
+    runtime: f.runtime, beforeDelete: refusePreservation
+  }), /include a current Vibe64 conversation/);
+  assert.equal(preservationCalls, 0);
+  assert.deepEqual(operations, []);
+  children = ["foreign-thread"];
+  await assert.rejects(f.service.retireAgentConversationHistory("session-1", input, {
+    runtime: f.runtime, beforeDelete: refusePreservation
+  }), /idle native family in the exact saved directory/);
+  assert.equal(preservationCalls, 0);
+  assert.deepEqual(operations, []);
+  children = ["child-thread"];
+  rows.get("child-thread").status.type = "active";
+  await assert.rejects(f.service.retireAgentConversationHistory("session-1", input, {
+    runtime: f.runtime, beforeDelete: refusePreservation
+  }), /idle native family/);
+  rows.get("child-thread").status.type = "idle";
+  assert.equal(preservationCalls, 0);
+  assert.deepEqual(operations, []);
+  await f.runtime.store.writeStatus("session-1", "archived");
+  await f.runtime.store.publishSessionArchive("session-1");
+  await rm(workdir, { recursive: true });
+  const inventory = await f.service.scanAgentConversationStorage("session-1", { runtime: f.runtime });
+  const candidate = inventory.conversations.find(row => row.conversationId === "parent-thread");
+  assert.ok(candidate);
+  assert.equal(candidate.tracked, true);
+  const failedSink = new Error("Preservation disk is unavailable");
+  await assert.rejects(f.service.retireAgentConversationHistory("session-1", candidate, {
+    runtime: f.runtime, beforeDelete: async ({ exportConversation }) => {
+      await exportConversation("parent-thread", async () => { throw failedSink; });
+    }
+  }), error => error === failedSink);
+  assert.equal(rows.size, 4, "A failed preservation must retain every native conversation");
+  assert.equal(operations.some(operation => operation.startsWith("delete:")), false);
+  operations.length = 0;
+  const result = await f.service.retireAgentConversationHistory("session-1", candidate, {
+    runtime: f.runtime,
+    beforeDelete: async ({ archived, session, conversations, exportConversation, publishArtifacts }) => {
+      assert.equal(archived, true);
+      assert.equal(session.status, "archived");
+      assert.deepEqual(conversations.map(row => row.conversationId), ["child-thread", "parent-thread"]);
+      await assert.rejects(exportConversation("current-thread", async () => {}), /outside the inspected preservation scope/);
+      for (const row of conversations) {
+        const records = [];
+        await exportConversation(row.conversationId, async record => records.push(record));
+        const sourcePath = path.join(f.root, `${row.conversationId}.preserved.jsonl`);
+        await writeFile(sourcePath, records.map(JSON.stringify).join("\n") + "\n");
+        await publishArtifacts([{ relativePath: `native/${row.conversationId}.chat.jsonl`, sourcePath }]);
+        operations.push(`published:${row.conversationId}`);
+      }
+      return { preserved: true, exclusive: true };
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.conversationIds, ["child-thread", "parent-thread"]);
+  assert.deepEqual([...rows.keys()], ["current-thread", "foreign-thread"]);
+  assert.equal(operations.filter(operation => operation.startsWith("delete:")).length, 1);
+  for (const id of ["child-thread", "parent-thread"]) {
+    assert.ok(operations.indexOf(`published:${id}`) < operations.indexOf("delete:parent-thread"));
+    assert.match(await f.runtime.store.readArtifact("session-1", `native/${id}.chat.jsonl`), new RegExp(`Preserved ${id}`));
+  }
+  for (const id of ["current-thread", "foreign-thread"]) {
+    assert.equal(await readFile(rows.get(id).path, "utf8"), `Rollout ${id}\n`, "Unrelated native histories must remain untouched");
+  }
+  await assert.rejects(access(workdir), { code: "ENOENT" });
+});
