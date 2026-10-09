@@ -50,7 +50,10 @@ schema and can run read-only queries. If a lookup or query fails, that question
 stops and shows the error; narrow or correct the request before trying again.
 A step-limit error also asks you to narrow the question. If cleanup of the
 temporary Helper conversation fails, Copilot shows that error instead of reporting
-a successful answer. A proposed write has not run: **Put SQL in editor** only fills the editor, where the normal unlock and
+a successful answer. Cleanup retries address that original Helper and never
+resend the question. A new question can start only after the previous Helper is
+confirmed closed; changing the current model does not remove that obligation.
+A proposed write has not run: **Put SQL in editor** only fills the editor, where the normal unlock and
 confirmation rules still apply. On narrow screens Copilot overlays the workspace;
 use **Collapse database copilot** to return to the underlying view.
 

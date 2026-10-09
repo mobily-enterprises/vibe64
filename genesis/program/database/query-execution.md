@@ -101,6 +101,36 @@ restart replay. The existing parent cleanup artifact and query reservation owner
 remain the only application lifetime authorities. Canonical JSKIT tool consumers
 continue requiring their durable reservation and result writes.
 
+The model-facing spelling changes from the original database
+`action: answer|schema|query` object to the shared closed `response` alternatives:
+a final `{ answer, intent, sql }` or one schema-search/read-query operation. This
+is the structured transport adaptation needed to reuse the shared parser and
+operation coordinator. The supplied prompt and output schema change together
+for each new private Helper task. Each question creates that task and confirms
+its cleanup before returning; there is no saved native Database thread to resume
+under a different grammar. Mounted prior questions remain bounded authored
+context, not old protocol envelopes or a canonical effect ledger.
+
+Final answer, schema-search and SQL limits remain 1,200, 300 and 1,000 characters.
+The shared decoder preserves their string values and enforces the original
+declared closed schema, including its bounds and rejection of extra properties.
+The old application's independent parser did not enforce every declared bound;
+that omission is not a supported out-of-schema response contract. Empty searches,
+empty read requests, empty answers and combined tool/final responses remain
+invalid. Shared untrusted-result framing replaces the two database-specific
+sentinels while retaining the original schema/query values and warning that
+database comments, definitions and rows cannot give instructions. The original
+Database tests retain same-thread continuations, exact scoped cleanup, result
+bounds, response-four ordering, denied admission and late cancellation assertions;
+their envelope/sentinel expectations follow these ownership adaptations.
+
+This transient Database task is separate from JSKIT's optional SQL-backed chat
+storage. That owner retains old canonical rows, refuses ambiguous authored/tool
+associations without repair or replay, and keeps authenticated history browsing
+plus explicit fresh-conversation admission. Neither consumer infers that an
+unconfirmed effect failed. Source and controlled original assertions do not
+establish the installed native Helper or mounted historical recovery journey.
+
 Database access follows the host's project membership policy independently of
 AI access. Members can inspect schema, browse data, arrange diagrams and run
 manual SQL using the session's canonical database-tool connection. It accepts
@@ -124,7 +154,10 @@ results there. Cleanup must confirm native deletion before removing ownership
 and the scope directory. Failed cleanup prevents another question for that actor
 and remains retryable on session close after restart. A late native start after
 Close is still retained and cleaned up. Closing never re-resolves a destination
-or starts inference. Helper Stop cannot stop the main conversation.
+or starts inference. Cleanup uses the saved Helper selection, conversation and
+execution identity, even if current routing has changed; it removes the private
+artifact and root only after that original destination confirms deletion. Helper
+Stop cannot stop the main conversation.
 
 The client caches database workspace state per actor, project and session, and
 refreshes it when AI connections or routing change. Switching actors remounts
