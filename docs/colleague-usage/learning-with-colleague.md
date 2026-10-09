@@ -28,6 +28,11 @@ You can continue questions and diagrams in the saved Main conversation while
 Colleague's drawer is closed. Opening Colleague does not enable a missing Main
 teacher or grant grading access. The return-to-Colleague practical still requires
 its actual drawer controls and your explanation to Main.
+Colleague can explain retained native observation facts and accepted steps from
+its context query, but those facts do not pass an assessment. Give your explanation
+to the saved Learning Main teacher for grading. Missing observation facts do not
+mean accepted steps were lost; ask Main to check the current question before
+repeating the practical.
 
 A lesson without a declared practice exercise stays reserved: it creates no
 practice project or Workspace setup. Its separately opened Learning Main is a

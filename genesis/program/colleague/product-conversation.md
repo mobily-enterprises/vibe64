@@ -850,8 +850,11 @@ reference, observation/assessment identity, declared producer/operation, observe
 time, assistance/origin and optional check outcome. Teacher origin projects
 as demonstration assistance. Stale, unavailable and unauthorized facts are
 omitted without changing the original context response or writing state.
-This lets the existing practical action discover real IDs; it does not wake the
-teacher or grant access to App/window/source/check bytes.
+This retains discovery of real IDs for historical observations; it does not wake
+the teacher or grant access to App/window/source/check bytes. The supervisor
+query guidance directs practical evaluation to the saved Learning Main teacher,
+not to Colleague. Missing facts do not invalidate accepted collecting steps;
+Main checks the current question before a repeated task is recommended.
 
 ### Lesson authoring through existing operations
 
