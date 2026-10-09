@@ -3722,30 +3722,40 @@ test("Colleague native Codex to Claude selection retains exact written history a
 for (const mode of ["live-final", "history-final"]) {
   test(`Colleague native ${mode} projection retains the original final response with one dispatch`, async t => {
     const answer = "The provider completed this response.";
-    const f = await fixture(t, [{ text: answer, mode }], { native: true });
+    const f = await fixture(t, [{ text: reply(answer), mode }], { native: true });
     await f.send("Hello");
     const completed = await f.service.wait(f.context);
     assert.equal(completed.status, "ready", completed.error);
     assert.equal(completed.messages.at(-1).text, answer);
-    assert.deepEqual(completed.messages.map(({ role, text }) => [role, text]), mode === "live-final"
-      ? [["user", "Hello"], ["thinking", "Reasoning summary"], ["assistant", answer]]
-      : [["user", "Hello"], ["assistant", answer]]);
+    assert.deepEqual(completed.messages.map(({ role, text }) => [role, text]), [["user", "Hello"], ["assistant", answer]]);
     const trace = await f.native.trace();
     const starts = trace.filter(row => row.method === "turn/start");
     assert.equal(starts.length, 1);
-    assert.equal(starts[0].params.clientUserMessageId, "user-1");
+    const nativeMessageId = starts[0].params.clientUserMessageId;
+    assert.notEqual(nativeMessageId, "user-1", "The native response does not forge app-authored admission");
+    const eventText = JSON.parse(starts[0].params.input[0].text.split("\n").find(line => line.startsWith('{"event":'))).event;
+    const event = JSON.parse(eventText);
+    assert.deepEqual(event.userMessages, [{ messageId: "user-1", text: "Hello" }]);
+    assert.deepEqual(event.userMessageIds, ["user-1"]);
     const history = JSON.parse(await readFile(path.join(f.root, "controlled-native", "codex-history.json"), "utf8"));
     assert.equal(history.id, starts[0].params.threadId);
     assert.equal(history.turns.length, 1);
     assert.equal(history.turns[0].status, "completed");
-    assert.equal(history.turns[0].items[0].clientId, "user-1");
-    assert.equal(history.turns[0].items.find(item => item.type === "agentMessage").text, answer);
+    assert.equal(history.turns[0].items[0].clientId, nativeMessageId);
+    assert.equal(history.turns[0].items.find(item => item.type === "agentMessage").text, reply(answer));
     const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
     assert.equal(saved.conversationMetadata.runtime.binding.threadId, history.id);
-    const canonical = saved.conversationLog.filter(turn => turn.user?.messageId === "user-1");
+    const authored = saved.conversationLog.filter(turn => turn.user?.messageId === "user-1");
+    assert.equal(authored.length, 1);
+    assert.equal(authored[0].user.text, "Hello");
+    assert.equal(authored[0].assistant.text, answer);
+    const canonical = saved.conversationLog.filter(turn => turn.system?.messageId === nativeMessageId);
     assert.equal(canonical.length, 1);
     assert.equal(canonical[0].metadata.runtime.nativeTurnId, history.turns[0].id);
-    assert.equal(canonical[0].assistant.text, answer);
+    assert.equal(canonical[0].metadata.runtime.origin, "application");
+    assert.equal(canonical[0].metadata.runtime.completedEnvelope, true);
+    assert.equal(canonical[0].system.text, eventText);
+    assert.equal(canonical[0].assistant.text, reply(answer));
     const liveAnswers = trace.filter(row => row.notification?.method === "item/completed" && row.notification.params.item?.type === "agentMessage");
     assert.equal(liveAnswers.length, mode === "live-final" ? 1 : 0);
     if (mode === "history-final") {
@@ -3768,7 +3778,7 @@ for (const mode of ["live-final", "history-final"]) {
 for (const mode of ["history-completed", "failed", "foreign-completed"]) {
   test(`Colleague native ${mode} read preserves exact turn ownership without resend or mutations`, async t => {
     const answer = mode === "foreign-completed" ? "This belongs to another request." : "The original answer was recovered.";
-    const f = await fixture(t, [{ text: answer, mode }], { native: true });
+    const f = await fixture(t, [{ text: mode === "failed" ? answer : reply(answer), mode }], { native: true });
     await f.send("Check this once.");
     const result = await f.service.wait(f.context);
     const recovered = mode === "history-completed";
@@ -3779,18 +3789,30 @@ for (const mode of ["history-completed", "failed", "foreign-completed"]) {
     const trace = await f.native.trace();
     const starts = trace.filter(row => row.method === "turn/start");
     assert.equal(starts.length, 1);
-    assert.equal(starts[0].params.clientUserMessageId, "user-1");
+    const nativeMessageId = starts[0].params.clientUserMessageId;
+    assert.notEqual(nativeMessageId, "user-1", "The native response does not forge app-authored admission");
+    const eventText = JSON.parse(starts[0].params.input[0].text.split("\n").find(line => line.startsWith('{"event":'))).event;
+    const event = JSON.parse(eventText);
+    assert.deepEqual(event.userMessages, [{ messageId: "user-1", text: "Check this once." }]);
+    assert.deepEqual(event.userMessageIds, ["user-1"]);
     const history = JSON.parse(await readFile(path.join(f.root, "controlled-native", "codex-history.json"), "utf8"));
     assert.equal(history.id, starts[0].params.threadId);
-    const authored = history.turns.filter(turn => turn.items.some(item => item.type === "userMessage" && item.clientId === "user-1"));
+    const authored = history.turns.filter(turn => turn.items.some(item => item.type === "userMessage" && item.clientId === nativeMessageId));
     assert.equal(authored.length, 1);
     assert.equal(authored[0].status, recovered ? "completed" : "failed");
     const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
     assert.equal(saved.conversationMetadata.runtime.binding.threadId, history.id);
-    const canonical = saved.conversationLog.filter(turn => turn.user?.messageId === "user-1");
+    const plain = saved.conversationLog.filter(turn => turn.user?.messageId === "user-1");
+    assert.equal(plain.length, 1);
+    assert.equal(plain[0].user.text, "Check this once.");
+    assert.equal(plain[0].assistant?.text, recovered ? answer : undefined);
+    const canonical = saved.conversationLog.filter(turn => turn.system?.messageId === nativeMessageId);
     assert.equal(canonical.length, 1);
     assert.equal(canonical[0].metadata.runtime.nativeTurnId, authored[0].id);
     assert.equal(canonical[0].metadata.runtime.status, recovered ? "complete" : "failed");
+    assert.equal(canonical[0].metadata.runtime.origin, "application");
+    assert.equal(canonical[0].metadata.runtime.completedEnvelope, true);
+    assert.equal(canonical[0].system.text, eventText);
     const dispatchIndex = trace.findIndex(row => row.method === "turn/start");
     const reads = trace.slice(dispatchIndex + 1).filter(row => row.method === "thread/read" || row.method === "thread/turns/list");
     assert.ok(reads.some(row => row.method === "thread/turns/list"), "Recovery inspects actual saved native turns");
@@ -3802,11 +3824,13 @@ for (const mode of ["history-completed", "failed", "foreign-completed"]) {
       const status = trace.find(row => row.notification?.method === "thread/status/changed").notification;
       assert.deepEqual(status.params, { threadId: history.id, status: { type: "idle" } },
         "Native idle status supplies no turn ID; the actual observer resolves the authored turn from history");
-      assert.equal(canonical[0].assistant.text, answer);
+      assert.equal(canonical[0].assistant.text, reply(answer));
     } else {
       const terminal = trace.find(row => row.notification?.method === "turn/completed").notification;
       assert.equal(terminal.params.turn.id, authored[0].id);
       assert.equal(terminal.params.turn.status, "failed");
+      assert.equal(terminal.params.turn.error.message, "Controlled native failure");
+      assert.equal(canonical[0].assistant, null);
       assert.equal(authored[0].items.some(item => item.type === "agentMessage"), false);
     }
     if (mode === "foreign-completed") {
@@ -3816,7 +3840,7 @@ for (const mode of ["history-completed", "failed", "foreign-completed"]) {
       assert.equal(foreign.status, "completed");
       assert.equal(foreign.items[0].clientId, "foreign-user");
       assert.notEqual(foreign.items[0].clientId, starts[0].params.clientUserMessageId);
-      assert.equal(foreign.items[1].text, answer);
+      assert.equal(foreign.items[1].text, reply(answer));
       assert.equal(JSON.stringify(saved.conversationLog).includes(answer), false, "A foreign completed reply cannot become this user's result");
     } else {
       assert.equal(history.turns.length, 1);
@@ -4338,7 +4362,7 @@ for (const { mode, delayMs } of [
   });
 }
 
-for (const native of [false, true]) for (const length of [16_000, 16_001]) {
+for (const native of [false]) for (const length of [16_000, 16_001]) {
   test(`Colleague ${native ? "native" : "API"} final reply preserves the original ${length}-character boundary`, async t => {
     const answer = "x".repeat(length);
     const f = await fixture(t, native ? [{ text: answer, mode: "history-final" }] : [reply(answer)], { native });
@@ -4361,6 +4385,51 @@ for (const native of [false, true]) for (const length of [16_000, 16_001]) {
     } finally { await f.service.stop({}, f.context); }
   });
 }
+
+for (const length of [16_000, 16_001]) {
+  test(`Colleague native final reply preserves the original ${length}-character boundary`, async t => {
+    const answer = "x".repeat(length);
+    const text = reply(answer);
+    const count = length === 16_000 ? 1 : 3;
+    const f = await fixture(t, Array.from({ length: count }, () => ({ text, mode: "history-final" })), { native: true });
+    try {
+      await f.send("Give the requested answer.");
+      const result = await f.service.wait(f.context);
+      assert.equal(result.status, length === 16_000 ? "ready" : "failed", result.error);
+      const assistants = result.messages.filter(message => message.role === "assistant");
+      assert.equal(assistants.length, length === 16_000 ? 1 : 0);
+      if (length === 16_000) assert.equal(assistants[0].text, answer, "Preserve the complete accepted answer without truncation");
+      else assert.equal(result.error, "The model did not return a valid Colleague response. Your message is kept; try another model or retry.");
+      assert.deepEqual(f.observations.mutations, []);
+      const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+      const canonical = saved.conversationLog.filter(turn => turn.user?.messageId === "user-1");
+      assert.equal(canonical.length, 1, "Retain exactly one authored message");
+      assert.equal(canonical[0].assistant?.text, length === 16_000 ? answer : undefined,
+        "An oversized answer cannot enter saved product assistant history");
+      const internal = saved.conversationLog.filter(turn => turn.metadata?.runtime?.completedEnvelope === true);
+      assert.equal(internal.length, count, "Keep actual completed native receipts separate from the one authored user message");
+      for (const turn of internal) {
+        assert.equal(turn.metadata.runtime.status, "complete");
+        assert.equal(turn.assistant.text, text, "The real native completed envelope remains exact in private storage");
+        assert.notEqual(turn.system.messageId, "user-1");
+      }
+      assert.equal(saved.conversationLog.flatMap(turn => turn.metadata?.applicationTools || []).length, 0);
+      const trace = await f.native.trace();
+      const inputs = completedColleagueNativeInputs(trace);
+      assert.equal(inputs.length, count, "A valid reply runs once; an invalid reply exhausts only the original two corrections");
+      assert.equal(new Set(inputs.map(input => input.params.threadId)).size, 1);
+      assert.equal(trace.filter(row => row.method === "thread/start").length, 1);
+      assert.equal(trace.some(row => ["turn/interrupt", "turn/steer"].includes(row.method)), false);
+      assert.deepEqual(inputs[0].data.userMessages.map(message => message.messageId), ["user-1"]);
+      for (const input of inputs.slice(1)) {
+        assert.deepEqual(input.data.userMessages, []);
+        assert.deepEqual(input.data.userMessageIds, ["user-1"]);
+        assert.equal(input.data.feedback, "Your completed response did not match the required envelope. No tool was executed. Return exactly one valid JSON reply or tool envelope.");
+      }
+    } finally { await f.service.stop({}, f.context); }
+  });
+}
+
 
 test("Colleague decoded reply bound preserves a larger DeepSeek text-carried application payload", async t => {
   const value = "private-handover-".repeat(1100);
