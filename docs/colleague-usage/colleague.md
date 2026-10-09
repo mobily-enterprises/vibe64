@@ -74,6 +74,10 @@ Changing its selection keeps this conversation and its saved replies. A changed
 engine, provider, model, agent or effort starts a fresh native conversation for
 the next message; choosing the same selection retains the current one. Applying
 the selection does not send a message.
+The new native conversation receives recent saved messages as excerpts of up to
+2,000 characters each. Its 24-message window includes your current message,
+leaving up to 23 earlier excerpts. Your full saved replies remain in the chat,
+and your next message is sent in full.
 If Colleague reports that its previous native turn must be stopped, click its
 existing **Stop** control before selecting a model, including the same model.
 A failed response can leave native cleanup unfinished; selecting a model does

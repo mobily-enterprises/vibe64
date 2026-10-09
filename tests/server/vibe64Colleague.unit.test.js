@@ -5027,3 +5027,65 @@ test("R11 original scoped Claude receipt survives stopped product upgrade and cu
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")).conversationLog[0], conversationLog[0]);
   assert.deepEqual(restored.observations.mutations, []);
 });
+
+test("Colleague fresh native seed retains the original 24-row window and 2000-character text bounds", { timeout: 30_000 }, async t => {
+  const replies = Array.from({ length: 14 }, (_, index) => ({ text: `Reply ${index}: ` + "r".repeat(2_100) }));
+  const f = await fixture(t, [...replies, { text: "I have the recent discussion." }, { text: "The watched work has answered." }],
+    { native: true, watchPollMs: 15 });
+  registerWorkspaceConversation(f);
+  for (let index = 0; index < replies.length; index += 1) {
+    await f.send(`Question ${index}: ` + "q".repeat(2_100), `seed-user-${index}`);
+    const completed = await f.service.wait(f.context);
+    assert.equal(completed.status, "ready", completed.error);
+  }
+  const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+  const before = JSON.parse(await readFile(file, "utf8"));
+  const written = before.conversationLog.flatMap(turn => turn.messages.filter(message => message.role !== "thinking"));
+  assert.equal(written.length, 28);
+  const starts = (await f.native.trace()).filter(row => row.method === "turn/start");
+  await f.actions.execute({ actionId: "vibe64.colleague.model.select", input: {
+    assistantSelection: { ...before.assistantSelection, modelId: "another-model" }
+  }, context: f.context });
+  assert.deepEqual((await f.native.trace()).filter(row => row.method === "turn/start"), starts,
+    "selection itself must not start inference or repeat an authored request");
+  const words = "My new message is not part of the seed: " + "n".repeat(2_100);
+  await f.send(words, "seed-current-user");
+  const completed = await f.service.wait(f.context);
+  assert.equal(completed.status, "ready", completed.error);
+  const turns = (await f.native.trace()).filter(row => row.method === "turn/start");
+  assert.equal(turns.length, 15);
+  const prompt = turns.at(-1).params.input[0].text;
+  const history = prompt.split("\n").filter(line => line.startsWith("{")).map(JSON.parse)
+    .filter(value => Array.isArray(value.messages));
+  assert.equal(history.length, 1);
+  assert.deepEqual(history[0].messages.map(({ role, text }) => ({ role, text })),
+    written.slice(-23).map(({ role, text }) => ({ role, text: text.slice(0, 2_000) })));
+  assert.equal(history[0].messages.some(message => message.messageId === "seed-current-user" || message.text === words), false);
+  assert.ok(prompt.endsWith(words), "the actual current words are sent in full after the quoted seed");
+  const after = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(after.conversationLog.slice(0, before.conversationLog.length), before.conversationLog,
+    "short native seed text must not truncate canonical stored history or native receipts");
+  assert.equal(completed.messages.filter(message => message.role === "user" && message.text === words).length, 1);
+  assert.deepEqual(f.observations.mutations, []);
+
+  await f.actions.execute({ actionId: "vibe64.colleague.model.select", input: {
+    assistantSelection: { ...before.assistantSelection, modelId: "wake-model" }
+  }, context: f.context });
+  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 15);
+  await f.service.watch(workspaceWatch, f.context);
+  f.observations.target = { ok: true, status: "completed", runId: "seed-watch-run",
+    messages: [{ id: "seed-watch-answer", role: "assistant", text: "The watched work is ready." }] };
+  await until(async () => (await f.native.trace()).filter(row => row.method === "turn/start").length === 16);
+  const awakened = await f.service.wait(f.context);
+  assert.equal(awakened.status, "ready", awakened.error);
+  assert.equal(awakened.watches[0].status, "delivered");
+  const wakePrompt = (await f.native.trace()).filter(row => row.method === "turn/start").at(-1).params.input[0].text;
+  const wakeHistory = wakePrompt.split("\n").filter(line => line.startsWith("{")).map(JSON.parse)
+    .filter(value => Array.isArray(value.messages));
+  assert.equal(wakeHistory.length, 1);
+  assert.deepEqual(wakeHistory[0].messages.map(({ role, text }) => ({ role, text })),
+    after.conversationLog.flatMap(turn => turn.messages.filter(message => message.role !== "thinking"))
+      .slice(-24).map(({ role, text }) => ({ role, text: text.slice(0, 2_000) })));
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")).conversationLog.slice(0, after.conversationLog.length), after.conversationLog);
+  assert.deepEqual(f.observations.mutations, []);
+});

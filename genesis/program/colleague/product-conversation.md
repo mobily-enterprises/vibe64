@@ -69,6 +69,16 @@ remains an explicit facility error, not a legacy fallback.
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application
 tools, native history, admission, cancellation and model replacement. Its service
 owns product instructions, focused targets, watches, assignments and authorization.
+Its initial native history retains the original 24-row window with each
+text excerpt limited to 2,000 characters. The current user row occupies one slot
+before it is excluded from the seed; autonomous observations occupy none. The service
+supplies these limits to the existing shared native continuity owner; saved text,
+the current input, attachment references and delivery fingerprints remain intact.
+Returning engines still receive all missed or corrected messages without this
+initial seed clipping. Generic native defaults and direct-API continuity are unchanged.
+The shared request boundary accepts one current user message, while the frozen
+product could collect several prewritten pending rows in a worker batch. That
+batching policy remains a separate parity disposition; it is not recreated here.
 It consumes normalized events; it has no provider-event parser or reply/tool
 envelope loop. The service selects the original 16,000-character decoded final
 reply bound through JSKIT's `limits.maxFinalReplyCharacters`. The common runtime
