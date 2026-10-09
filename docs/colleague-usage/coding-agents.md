@@ -70,6 +70,9 @@ work. Do not resubmit an uncertain request as a workaround. Project **Close**
 also retries pending cleanup and reports unconfirmed exit; a failed Close is
 not successful cleanup.
 If Codex reports lost observation, wait for it to confirm that work stopped.
+A failed application-tool call can also require confirmed native cleanup.
+Changing the model does not clear that responsibility; finish **Stop** before
+sending more work, and inspect the retained reply or error before retrying.
 If Stop cannot be confirmed, restore the connection and select **Stop** again;
 the same conversation retains its cleanup responsibility. Checking or reopening
 the conversation does not resend the request. A recovered reply appears in its
