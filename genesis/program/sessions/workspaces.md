@@ -474,6 +474,16 @@ retrying continuously.
 
 ## Source-less learning session foundation
 
+Project's public `createSessionStore()` delegates directly to its existing
+`sessionStore()` owner. That owner retains authenticated learner/attempt/pin and
+source-scope validation and permits the admitted no-exercise runtime namespace;
+ordinary stores still require a selected project root. Codex's existing bounded
+state reader can therefore use `readSessionNativeDescriptor()` for a source-less
+lesson without acquiring project source or creating another runtime. Source
+operations retain their separate required-root guards. The original Project test
+file covers this public factory and Codex reader, ordinary missing-root refusal,
+foreign actors/attempts/pins and inconsistent source-bearing private contexts.
+
 `@local/vibe64-sessions/server/routes` exposes the original route registrar for
 host composition. Its explicit `learningScoped:true` option reuses the original
 HTTP validators, limits, input builders and responses under

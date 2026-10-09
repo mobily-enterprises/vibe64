@@ -1268,7 +1268,6 @@ function createService({
     },
 
     async createSessionStore() {
-      requireSelectedTargetRoot();
       return sessionStore();
     },
 

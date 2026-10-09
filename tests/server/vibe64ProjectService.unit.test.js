@@ -2341,3 +2341,58 @@ test("trusted source-bearing Learning Project runtime keeps original physical ro
     assert.equal(ordinary.learningScope, null, "ordinary Project factory does not infer purpose from a training marker");
   });
 });
+
+test("source-less Learning Project session store serves original Codex state without granting project source", async () => {
+  await withTemporaryRoot(async root => {
+    const { createCodexConversationStorage } = await import("../../packages/vibe64-terminals/src/server/codexConversationStorage.js");
+    const core = createStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"),
+      explicitSystemRoot: path.join(root, "system"), env: {}, home: root });
+    const service = createService({ projectContext: core, env: {} });
+    const actor = { uid: 42, username: "learner" };
+    const scope = { learnerId: "42", attemptId: "12345678-1234-4234-8234-123456789abc", noExercise: true,
+      pin: { course: { courseId: "intro-course", release: "0.1.0" },
+        topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0", repository: "example/learn-intro",
+          commit: "a".repeat(40), topicHash: "b".repeat(64) }, lesson: { code: "INTRO-00", hash: "c".repeat(64) } } };
+    const context = { projectRuntimeRoot: path.join(root, "private-learning"), learningScope: scope, vibe64User: actor };
+    const sessionId = "source-less-lesson";
+    const storage = createCodexConversationStorage({ projectService: service, runOwner: {
+      async readAgentRunForSession(store, id) {
+        assert.equal(store.learningScope.learnerId, actor.uid.toString());
+        assert.equal(id, sessionId);
+        return null;
+      }
+    } });
+    await runWithProjectRequestContext(context, async () => {
+      const store = await service.createSessionStore();
+      assert.deepEqual(store.learningScope, scope);
+      await store.createSession({ sessionId, runtimeKind: "genesis" });
+      await store.writeConversationUserMessage(sessionId, { messageId: "retained-question", text: "Teach this lesson." });
+      const state = await storage.readSession(sessionId);
+      assert.equal(state.purpose, "learning");
+      assert.deepEqual(state.learning.pin, scope.pin);
+      assert.equal(state.learning.attemptId, scope.attemptId);
+      assert.equal(state.nativeExecutionRoot, path.join(state.sessionRoot, "native"));
+      assert.equal(state.metadata.source_path, "");
+      assert.equal(await storage.state(sessionId).readIdentity(), "");
+      assert.equal(service.targetRoot, "");
+      assert.equal(service.currentProjectSourceRoot(), "");
+      assert.throws(() => service.requireSelectedTargetRoot(), { code: "vibe64_session_source_required" });
+      assert.deepEqual((await store.readConversationLog(sessionId)).flatMap(turn => turn.messages).map(message => message.text),
+        ["Teach this lesson."]);
+    });
+    await assert.rejects(() => service.createSessionStore(), { code: "vibe64_project_not_selected" });
+    await assert.rejects(() => runWithProjectRequestContext({ ...context, vibe64User: { uid: 43 } },
+      () => service.createSessionStore()), { code: "vibe64_learning_scope_mismatch" });
+    for (const field of ["slug", "targetRoot", "sourceRoot", "projectSessionSourceRoot"]) {
+      await assert.rejects(() => runWithProjectRequestContext({ ...context, [field]: root },
+        () => service.createSessionStore()), { code: "vibe64_learning_scope_mismatch" });
+    }
+    for (const foreignScope of [
+      { ...scope, attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      { ...scope, pin: { ...scope.pin, lesson: { ...scope.pin.lesson, hash: "d".repeat(64) } } }
+    ]) {
+      await assert.rejects(() => runWithProjectRequestContext({ ...context, learningScope: foreignScope },
+        () => storage.readSession(sessionId)), { code: "vibe64_learning_session_scope_mismatch" });
+    }
+  });
+});

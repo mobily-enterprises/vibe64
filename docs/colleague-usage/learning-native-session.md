@@ -16,6 +16,11 @@ Finishing a teaching turn does not start workspace setup for this kind of lesson
 Resume the confirmed attempt after an interruption. Do not create a substitute
 workspace or reset its progress to hide a preparation failure.
 
+Opening or resuming this source-less lesson with Codex reads its saved private
+conversation; it does not require a practice project. Keep that same attempt
+when changing its supported AI connection. If reading the conversation fails,
+retain the lesson and report the error instead of creating project source.
+
 Codex, OpenCode and Claude Main can use the lesson teaching tools supplied by
 your installation. Claude needs the installation’s supported native application
 tool connection; an ordinary CLI reply alone does not confirm a teaching action. If those tools are
