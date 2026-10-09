@@ -6,8 +6,10 @@ including follow-up guidance while a turn is active.
 Per-request role instructions distinguish provisional readiness from verified
 completion. Once implemented resources are prepared and Preview responds, the
 implementer invites the person to try the feature while verification continues.
-Auto implementation runs focused code checks and hands in-depth browser and
-visual verification to its separate Senior review. Without that automatic
+Auto implementation runs focused code and basic startup, route and API smoke
+checks, optionally checking that the changed page renders with its main control.
+It hands full browser end-to-end journeys and visual verification to its separate
+Senior review. Without that automatic
 review, the selected agent owns those checks itself. The existing routing
 coordinator supplies this distinction only for requests that will receive
 review; interrupted or unavailable checks remain explicitly unverified.

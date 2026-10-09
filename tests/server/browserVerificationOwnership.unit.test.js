@@ -17,6 +17,9 @@ test("automatic implementation hands browser verification to its separate Senior
   assert.match(prompt, /Senior review owns in-depth browser testing and visual inspection/);
   assert.match(prompt, /Do not run those checks in this implementation turn/);
   assert.match(prompt, /Run relevant focused code tests/);
+  assert.match(prompt, /basic smoke checks: confirm server startup, relevant routes and API responses/);
+  assert.match(prompt, /brief managed-browser check that the changed page renders and its main control is present/);
+  assert.match(prompt, /Leave full end-to-end browser suites, multi-step user journeys and visual inspection to Senior/);
   assert.match(prompt, /Tell the user that Senior will perform the remaining browser checks/);
   assert.doesNotMatch(prompt, /You own the remaining verification/);
   // A direct Junior request without automatic review must retain verification.

@@ -8,7 +8,10 @@ You can use Preview immediately; this message is provisional, not proof that all
 checks passed. You do not have to test it before the agent continues.
 
 For an implementation in **Auto**, the implementer runs focused code checks and
-hands browser testing and visual inspection to **Senior**. Senior exercises the
+basic smoke checks of startup, routes and API responses. It may briefly check
+that the changed page renders and its main control is present. Full browser
+end-to-end tests, multi-step user journeys and visual inspection belong to
+**Senior**. Senior exercises the
 requested user flow and reports results or remaining gaps. In **Custom** or a
 direct role without an automatic review, the same agent remains responsible for
 browser verification. A stopped or unavailable check must be reported as
