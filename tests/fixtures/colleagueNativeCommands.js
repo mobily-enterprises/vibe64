@@ -262,7 +262,25 @@ export async function createControlledColleagueNativeCommands(root, responses) {
         emitTurn("item/started", { item: { id: "answer", type: "agentMessage", phase } });
         emitTurn("item/reasoning/summaryTextDelta", { itemId: "reasoning", delta: "Reasoning" });
         emitTurn("item/reasoning/summaryTextDelta", { itemId: "reasoning", delta: " summary" });
-        emitTurn("item/agentMessage/delta", { itemId: "answer", delta: response.text });
+        if (response.mode === "held-completion") {
+          for (const delta of response.text) emitTurn("item/agentMessage/delta", { itemId: "answer", delta });
+        } else emitTurn("item/agentMessage/delta", { itemId: "answer", delta: response.text });
+        if (response.mode === "held-completion") {
+          const release = process.env.TEST_RESPONSES + "." + turn.id + ".release";
+          const deadline = Date.now() + 30000;
+          log({ completionHeld: { threadId: thread.id, turnId: turn.id } });
+          while (!existsSync(release) && turn.status === "inProgress" && ws.readyState === 1 && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+          // Original interrupt/disconnect owns cancellation, never a late final.
+          if (turn.status !== "inProgress" || ws.readyState !== 1) return;
+          if (!existsSync(release)) {
+            turn.status = "failed"; save();
+            emitTurn("turn/completed", { turn: { ...turn, error: { message: "Controlled native completion was not released" } } });
+            return;
+          }
+          log({ completionReleased: { threadId: thread.id, turnId: turn.id } });
+        }
         const answer = { id: "answer", type: "agentMessage", phase, text: response.text };
         turn.items.push(answer);
         emitTurn("item/completed", { item: answer });
@@ -334,6 +352,11 @@ export async function createControlledColleagueNativeCommands(root, responses) {
           CLAUDE_CODE_OAUTH_TOKEN: "", TEST_ACCOUNT: account, TEST_TRACE: trace, TEST_RESPONSES: queue,
           TEST_HISTORY: path.join(directory, "codex-history.json") },
         commands: { codex, claude } };
+    },
+    async releaseCompletion({ threadId, turnId }) {
+      const held = (await this.trace()).some(row => row.completionHeld?.threadId === threadId && row.completionHeld.turnId === turnId);
+      if (!held) throw new Error("The native fixture has not held this exact completion.");
+      await writeFile(queue + "." + turnId + ".release", "release");
     },
     async trace() {
       try {

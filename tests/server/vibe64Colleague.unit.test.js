@@ -5228,6 +5228,51 @@ test("Colleague fresh native seed retains the original 24-row window and 2000-ch
   assert.deepEqual(f.observations.mutations, []);
 });
 
+// Frozen first-progress test261 requires the acknowledgement to stay out of
+// canonical history while the actual application effect is still pending.
+// This companion supplies completed native commentary before the unchanged
+// native contract/execute calls; it does not replace the original API case.
+test("native Colleague progress remains transient at the pending application effect", async t => {
+  const operation = Promise.withResolvers();
+  t.after(() => operation.resolve());
+  const progress = "Let me check your projects.";
+  const f = await fixture(t, [{ progress, tool: { actionId: "vibe64.test.operate", input: { value: "native-progress" } }, text: "One project is open." }], { native: true });
+  f.observations.onOperation = () => operation.promise;
+  const initial = await f.service.read({}, f.context);
+  const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
+  await f.send("Which projects are open?");
+  await until(() => f.observations.mutations.length === 1);
+  const checking = await f.service.read({}, f.context);
+  assert.equal(checking.status, "working");
+  assert.equal(checking.operation.status, "executing");
+  const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  const nativeProgress = (await f.native.trace()).filter(row => row.notification?.method === "item/completed" &&
+    row.notification.params.item?.id === "tool-progress").map(row => ({ threadId: row.notification.params.threadId,
+      nativeTurnId: row.notification.params.turnId, itemId: row.notification.params.item.id }));
+  t.diagnostic(JSON.stringify({ pendingNativeProgress: checking.streamingReply.text,
+    savedNativeProgress: JSON.stringify(saved).includes(progress), operation: checking.operation.status,
+    authoredTurnId: checking.streamingReply.turnId, projectionId: checking.streamingReply.id,
+    nativeProgress, canonical: saved.conversationLog.map(turn => ({ turnId: turn.turnId,
+      nativeTurnId: turn.metadata?.runtime?.nativeTurnId,
+      messages: turn.messages.map(message => ({ messageId: message.messageId, outputId: message.outputId, role: message.role })) })) }));
+  assert.equal(JSON.stringify(saved).includes(progress), false,
+    "completed native acknowledgement must remain absent from canonical conversation.json at the real pending-effect barrier");
+  assert.equal(checking.streamingReply.text, progress);
+  assert.equal(checking.streamingReply.status, "completed");
+  assert.equal((await browser.read()).interimReply.text, progress);
+  assert.equal(checking.messages.filter(message => message.role === "assistant").length, 0);
+  operation.resolve();
+  const final = await f.service.wait(f.context);
+  assert.equal(final.status, "ready", final.error);
+  assert.deepEqual(f.observations.mutations, ["native-progress"]);
+  assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), ["One project is open."]);
+  assert.equal((await browser.read()).interimReply, null);
+  const after = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  assert.equal(JSON.stringify(after).includes(progress), false, "only the final answer is saved, not the acknowledgement");
+  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 1,
+    "native progress must not require an extra explicit inference");
+});
+
 // Storage-only companion of frozen first-progress test261. The separate native
 // intent association companion remains open; this test makes no intent claim.
 test("native Colleague transient progress storage preserves only the final answer", async t => {
@@ -5567,4 +5612,157 @@ test("Colleague transfers its existing native and genuine API owners without sel
   const decoded = events.filter(event => event.type === "message" && event.text === "Native C.");
   assert.equal(decoded.length, 1, "The retained authorized observer is reattached exactly once to the actual new owner");
   assert.equal(events.some(event => event.completedEnvelope === true || event.text?.includes('"kind":"reply"')), false);
+});
+
+
+// Frozen869ebb partial envelope assertions at the actual native completion boundary.
+test("native completed Colleague never displays or executes a full streamed tool envelope before the same native completion", async t => {
+  const text = call("allowed");
+  const f = await fixture(t, [{ text, mode: "held-completion" }, { text: reply("Done.") }], { native: true });
+  const initial = await f.service.read({}, f.context);
+  const browser = await f.service.browserConversations.open({ id: initial.conversationId, context: f.context });
+  const browserEvents = [];
+  const unsubscribe = await browser.subscribe(event => browserEvents.push(structuredClone(event)));
+  let held;
+  try {
+    await f.send("Do it", "partial-native");
+    const startupAt = Date.now();
+    for (let attempts = 0; attempts < 3000; attempts++) {
+      held = (await f.native.trace()).find(row => row.completionHeld)?.completionHeld;
+      if (held) break;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.ok(held, "Native completion was not held: " + JSON.stringify(await f.service.read({}, f.context)));
+    console.log("Held native startup observation ms:", Date.now() - startupAt);
+    const trace = await f.native.trace();
+    const input = completedColleagueNativeInputs(trace)[0];
+    assert.equal(input.params.threadId, held.threadId);
+    assert.equal(trace.find(row => row.notification?.method === "turn/started").notification.params.turn.id, held.turnId);
+    const deltas = trace.filter(row => row.notification?.method === "item/agentMessage/delta" && row.notification.params.turnId === held.turnId)
+      .map(row => row.notification.params.delta);
+    assert.equal(deltas.length, text.length, "Every JSON character crosses the actual held native stream");
+    assert.ok(deltas.every(delta => delta.length === 1));
+    assert.equal(deltas.join(""), text, "The complete valid tool JSON was streamed character by character before completion");
+    assert.equal(trace.some(row => row.notification?.method === "item/completed" || row.notification?.method === "turn/completed"), false);
+    // Give the existing native notification queue the same bounded observation
+    // opportunity as the original partial-argument test; never release its final.
+    await new Promise(resolve => setTimeout(resolve, 25));
+    const current = await f.service.read({}, f.context);
+    assert.equal(current.status, "working");
+    assert.equal(current.streamingReply, null);
+    assert.deepEqual(current.messages.map(message => [message.role, message.text]), [["user", "Do it"]]);
+    assert.ok(browserEvents.some(event => event.type === "presentation"), "The existing browser observer was attached before actual native streaming");
+    for (const event of browserEvents) {
+      assert.equal(event.interimReply?.text || "", "");
+      if (["assistant", "commentary"].includes(event.role)) assert.equal(event.text || "", "");
+      assert.deepEqual((event.streaming?.messages || []).filter(message =>
+        ["assistant", "commentary"].includes(message.role) && message.text), [],
+      "No earlier partial or raw tool text reached the public stream during the full character sequence");
+    }
+    assert.equal((await browser.read()).interimReply, null);
+    assert.deepEqual(f.observations.mutations, []);
+    const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+    const internal = saved.conversationLog.find(turn => turn.metadata?.runtime?.completedEnvelope === true);
+    assert.ok(internal);
+    assert.equal(internal.system.messageId, input.params.clientUserMessageId);
+    assert.notEqual(internal.system.messageId, "partial-native");
+    assert.equal(internal.metadata.runtime.nativeTurnId, held.turnId);
+    assert.equal(internal.metadata.runtime.status, "running");
+    assert.equal(saved.conversationLog.flatMap(turn => turn.metadata?.applicationTools || []).length, 0,
+      "A syntactically complete streamed envelope still has no durable application reservation");
+    await assert.rejects(f.native.releaseCompletion({ ...held, turnId: "foreign-completion" }), /exact completion/);
+    await f.native.releaseCompletion(held);
+    const final = await f.service.wait(f.context);
+    assert.equal(final.status, "ready", final.error);
+    assert.deepEqual(f.observations.mutations, ["allowed"]);
+    assert.deepEqual(final.messages.map(message => [message.role, message.text]), [["user", "Do it"], ["assistant", "Done."]]);
+    for (const event of browserEvents) {
+      if (event.role === "assistant" && event.text) assert.ok("Done.".startsWith(event.text),
+        "Only the real decoded reply prefix/final, never delayed tool JSON, crosses the public observer");
+      const payloads = [event.interimReply, ...(event.streaming?.messages || [])];
+      for (const message of payloads) {
+        if (!message?.text || !["assistant", "commentary", "thinking"].includes(message.role)) continue;
+        assert.ok(message.text === "Let me check that." || "Done.".startsWith(message.text),
+          "Even a delayed payload may contain only validated intent or decoded reply, never raw tool text");
+      }
+    }
+    const after = await f.native.trace();
+    assert.deepEqual(after.filter(row => row.completionReleased).map(row => row.completionReleased), [held]);
+    const inputs = completedColleagueNativeInputs(after);
+    assert.equal(inputs.length, 2);
+    assert.equal(inputs[1].params.threadId, held.threadId);
+    assert.equal(after.filter(row => row.method === "thread/start").length, 1);
+    assert.equal(after.some(row => ["turn/steer", "turn/interrupt"].includes(row.method)), false);
+    assert.equal(after.filter(row => row.notification?.method === "turn/completed" && row.notification.params.turn.id === held.turnId).length, 1);
+    const completed = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+    const same = completed.conversationLog.find(turn => turn.turnId === internal.turnId);
+    assert.equal(same.metadata.runtime.status, "complete");
+    assert.equal(same.assistant.text, text);
+    assert.equal(same.metadata.runtime.nativeTurnId, held.turnId);
+    assert.equal(same.metadata.applicationTools.length, 1);
+    assert.equal(same.metadata.applicationTools[0].status, "complete");
+    assert.equal(same.metadata.applicationTools[0].result.ok, true);
+  } finally {
+    try { await f.service.stop({}, f.context); }
+    finally {
+      unsubscribe();
+      if (held) await f.native.releaseCompletion(held);
+    }
+  }
+});
+
+// Frozen protocol accepts280 and rejects281 BEFORE the shared durable tool owner.
+test("native completed Colleague preserves the original 280 and 281 character tool progress boundary", async t => {
+  for (const length of [280, 281]) {
+    const text = JSON.stringify({ ...JSON.parse(call("bounded")), text: "x".repeat(length) });
+    const responses = length === 280 ? [{ text }, { text: reply("Done.") }]
+      : Array.from({ length: 3 }, () => ({ text }));
+    const f = await fixture(t, responses, { native: true });
+    const pending = Promise.withResolvers();
+    f.observations.onOperation = async () => { await pending.promise; };
+    try {
+      await f.send("Check it");
+      if (length === 280) {
+        const startupAt = Date.now();
+        for (let attempts = 0; attempts < 3000 && f.observations.mutations.length !== 1; attempts++)
+          await new Promise(resolve => setTimeout(resolve, 10));
+        assert.equal(f.observations.mutations.length, 1, "Native tool did not start: " + JSON.stringify(await f.service.read({}, f.context)));
+        console.log("Completed native tool startup observation ms:", Date.now() - startupAt);
+        const current = await f.service.read({}, f.context);
+        assert.equal(current.status, "working");
+        assert.equal(current.operation.status, "executing");
+        assert.equal(current.streamingReply.text, "x".repeat(280));
+        assert.equal(current.streamingReply.status, "completed");
+        assert.deepEqual(current.messages.filter(message => message.role === "assistant"), []);
+        pending.resolve();
+      }
+      const final = await f.service.wait(f.context);
+      assert.equal(final.status, length === 280 ? "ready" : "failed", final.error);
+      assert.deepEqual(f.observations.mutations, length === 280 ? ["bounded"] : []);
+      assert.deepEqual(final.messages.filter(message => message.role === "assistant").map(message => message.text), length === 280 ? ["Done."] : []);
+      if (length === 281) assert.equal(final.error, "The model did not return a valid Colleague response. Your message is kept; try another model or retry.");
+      const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+      const envelopes = saved.conversationLog.filter(turn => turn.metadata?.runtime?.completedEnvelope === true);
+      assert.equal(envelopes.length, length === 280 ? 2 : 3);
+      for (const turn of envelopes.slice(0, length === 280 ? 1 : 3)) {
+        assert.equal(turn.metadata.runtime.status, "complete");
+        assert.equal(turn.assistant.text, text, "Bound checks apply to the exact genuinely completed native envelope");
+      }
+      assert.equal(saved.conversationLog.flatMap(turn => turn.metadata?.applicationTools || []).length, length === 280 ? 1 : 0);
+      assert.equal(saved.conversationLog.filter(turn => turn.user?.messageId === "user-1").length, 1);
+      assert.equal(saved.conversationLog.some(turn => !turn.metadata?.runtime?.completedEnvelope && turn.messages.some(message => message.text === "x".repeat(length))), false,
+        "Progress is never a saved product assistant reply; raw completed carriers stay private");
+      const trace = await f.native.trace();
+      const inputs = completedColleagueNativeInputs(trace);
+      assert.equal(inputs.length, length === 280 ? 2 : 3);
+      assert.equal(new Set(inputs.map(input => input.params.threadId)).size, 1);
+      assert.equal(trace.some(row => ["turn/steer", "turn/interrupt"].includes(row.method)), false);
+      if (length === 280) assert.equal(inputs[1].data.progressAlreadySaid, "x".repeat(280));
+      else for (const input of inputs.slice(1)) assert.equal(input.data.feedback,
+        "Your completed response did not match the required envelope. No tool was executed. Return exactly one valid JSON reply or tool envelope.");
+    } finally {
+      pending.resolve();
+      await f.service.stop({}, f.context);
+    }
+  }
 });
