@@ -5,46 +5,33 @@ and owner recovery, read `teaching-content`.
 
 ## Asking Colleague about lessons
 
-In a host that registers the learning operations, ask Colleague to list available
-courses or read your saved lesson. These reads make no project or progress changes.
-A direct request to start a listed lesson, or accepting Colleague's offer, lets the
-host reserve the exact lesson and prepare its exercise when declared; ask to
-resume after an interruption to keep
-the exact saved attempt. Starting can report unavailable when this installation
-does not support lesson preparation. Ask the owner to configure lesson support,
-then retry the same saved attempt when one exists.
-The yellow **L** control and original session panel now attach Learning mode;
-read `learning-mode-ui` for its exact controls and retained Working selection.
-The saved lesson's Main conversation is its teacher. Colleague supervises
-lesson selection, saved progress and authoring assignments. Its catalogue and
-execution refuse question preparation, quiz/practical grading and the five lesson
-visual operations, including old loaded contracts. Ask the actual Main to teach;
-if the host lacks that Main facility, keep the lesson pending rather than using
-Colleague as a substitute. Creating or resuming an attempt does not prove its
-Main chat opened. An empty catalogue needs owner installation/enablement,
-not an invented substitute.
+Ask Colleague to list available courses or read your saved lesson; these reads
+change no project or progress. A direct start request or accepted offer authorizes
+reservation of that exact lesson and preparation of its declared exercise.
+Resume after interruption to retain the saved attempt. If preparation is
+unsupported, ask the owner to configure it, then retry that attempt.
+The yellow **L** and session panel attach Learning mode; read `learning-mode-ui`
+for controls and retained Working selection. Main teaches the saved lesson.
+Colleague supervises selection, progress and authoring; its catalogue and execution
+refuse question preparation, quiz/practical grading and all five lesson visual
+operations, including old contracts. Missing Main support leaves teaching pending;
+start/resume does not prove its chat opened. An empty catalogue requires owner
+installation/enablement, never substitute content.
 
-You can continue questions and diagrams in the saved Main conversation while
-Colleague's drawer is closed. Opening Colleague does not enable a missing Main
-teacher or grant grading access. The return-to-Colleague practical still requires
-its actual drawer controls and your explanation to Main.
-Colleague can explain retained native observation facts and accepted steps from
-its context query, but those facts do not pass an assessment. Give your explanation
-to the saved Learning Main teacher for grading. Missing observation facts do not
-mean accepted steps were lost; ask Main to check the current question before
-repeating the practical.
+Questions and diagrams continue in saved Main with Colleague's drawer closed.
+Opening Colleague grants no missing teacher/grading support. The return practical
+requires its actual drawer controls and your explanation to Main. Colleague can
+explain native observation facts/accepted steps from its context query; those facts
+are not a pass. Missing facts do not prove lost steps: ask Main to check the current
+question before repeating the practical.
 
-A lesson without a declared practice exercise stays reserved: it creates no
-practice project or Workspace setup. Its separately opened Learning Main is a
-private teacher conversation, not a practice exercise. The fresh teaching brief identifies this
-with `lesson.exerciseRequired: false`. The supported Main teacher can ask its declared quizzes
-and assess actual accepted answers through the same pinned rubric and saved
-progress. Main practical assessment requires its genuine observation facility;
-missing support leaves the practical incomplete. Do not repeatedly resume or inspect a nonexistent practice session.
-Practicals and diagrams retain their readiness guards.
-If a no-exercise lesson unexpectedly retains an exercise-preparation checkpoint,
-keep the progress and explicitly end/restart that lesson through its existing
-operations; it is not silently changed to ready.
+A no-exercise lesson stays reserved without a practice project or Workspace setup.
+Its Learning Main is a private teacher conversation; the fresh brief reports
+`lesson.exerciseRequired: false`. Supported Main quizzes assess accepted answers
+against the pinned rubric and save progress. Practicals require native observations;
+missing support leaves them incomplete. Keep practical/diagram readiness guards,
+and do not inspect/resume a nonexistent practice session. An unexpected exercise
+checkpoint requires explicit end/restart with progress retained, never silent repair.
 
 Saved `preparation.phase` is a checkpoint, not live setup status. If it remains
 `preparing`, finish the already-requested lesson with `lesson.resume` on that same
@@ -85,14 +72,12 @@ continues the remaining assessments; changed lesson content requires its own
 assessment. This never transfers another person's results or proves that a new
 practice project is running.
 
-When the host registers native assessment evaluation, do not claim a quiz or
-practical has passed merely because Colleague agrees, a diagram
-moved or a view opened. Evaluation uses the exact lesson rubric and the learner's
-admitted answer or observed action; provisional words and teacher demonstrations
-do not count. If evaluation or cleanup is unavailable, the result remains unsaved
-and needs a retry. After substantial help or a demonstration, ask for an
-independent follow-up. There is no raw pass-writing control: use only the host-registered native
-assessment operation, which reads the admitted message and actual observation.
+Only the host-registered native assessment operation can save a pass, using the
+pinned rubric, admitted learner message and required observation. Colleague's
+agreement, diagram motion, opened views, provisional words and demonstrations
+are insufficient. Unavailable evaluation/cleanup leaves results unsaved for retry.
+After substantial help or demonstration, require an independent follow-up;
+there is no raw pass-writing control.
 
 Use host-registered **question.prepare** in the current interactive teaching
 turn after reading the exact brief/revision and finishing any diagram/audio cue.
@@ -178,25 +163,22 @@ toggle workspace / Main, not Colleague. Desktop drawer and phone full-screen ret
 the session, speech, draft and exercise. Restore Colleague's actual body; another
 assistant's voice panel does not count.
 
-The native observation integration has no pass button; if unavailable, keep the
-practical incomplete. It associates the control you clicked and its settled view
-with the current delivered lesson question. If the lesson observation is not confirmed,
-repeat the requested step once the exercise is ready; the successful workspace
-action was not undone. A reload or changed question may require repeating an
-unfinished sequence. Progress is awarded only through the separate verified
-assessment operation and pinned rubric, including your explanation.
+Native observation binds your clicked control and settled view to the delivered
+question; it has no pass button. Unsupported observation leaves the practical
+incomplete. If unconfirmed, repeat the step once ready; the workspace action was
+not undone. Reload or question replacement may require repeating an unfinished
+sequence. Separate verified assessment uses the pinned rubric and your explanation.
 
 Observation retries retain the original gesture acknowledgement/step count;
 conflicting details are rejected. Completion is an observation, not a pass.
 After server restart repeat the sequence; workspace actions were not undone.
 Demonstration/substantial help remains teacher-origin, not independent evidence.
 
-For an admitted practical question, assessment now combines the native receipt
-for your action in the prepared exercise with your actual accepted explanation.
-The Main teacher must not replace your explanation with its own description of
-the activity. A teacher demonstration or a failed declared exercise check cannot
-count as your pass. Retrying the same saved assessment reads its original result;
-using the same observation for another submission is refused. Native assessment is not a learner grading button or proof of lesson completion.
+Practical assessment requires both your native exercise receipt and accepted
+explanation, never Main's substitute description. Demonstrations and failed
+declared checks cannot earn a pass. Retry reads the saved result; another submission
+cannot reuse the observation. Assessment is not a learner grading button or proof
+of lesson completion.
 
 ### Trying the real application
 
@@ -207,13 +189,11 @@ minimise Colleague so the real App is visible. Tell the Main teacher in ordinary
 what you pressed and what replied; a verified request alone does not replace
 this explanation.
 
-The lesson observes the exact visible App frame and checks its actual server
-response. A diagram, teacher demonstration, readiness signal or background
-response does not count as the learner action. If the App was hidden, the
-question changed, or the observation could not be confirmed, show the same
-exercise and press again. After the application server restarts, use **Reload
-preview** before a fresh press. This preserves the original application and
-Preview controls; Colleague receives neither source files nor screenshots.
+The lesson checks the visible App frame and real server response. Diagrams,
+demonstrations, readiness signals and background responses are insufficient.
+If App was hidden, the question changed or observation was unconfirmed, show the
+same exercise and press again. After server restart, use **Reload preview** before
+pressing. Original App/Preview controls remain; Colleague gets no source or screenshots.
 
 Colleague can read the completed observation's exact identity through its normal
 context query, then evaluate it with your accepted explanation. Missing or stale
@@ -247,11 +227,9 @@ through the existing lesson operation first; the picker never does that for you.
 or resume support. Ended history is not marked completed without an actual
 completion result.
 
-Assessment counts are the supplied saved result, never calculated from chat,
-diagram motion or a selection. **Saved lesson identity** shows the actual saved
-commit and hash. **Refresh lessons** requests fresh reads; loading and read errors
-do not create or repair state. Desktop and phone use the same controls, with
-wrapping content and scrollable choices. Colleague can explain these choices and
-offer its supported start/resume operation, but only an accepted offer or direct
-request authorizes execution. Use the saved Main conversation for teaching and its supported Preview controls.
-If unavailable, retain the attempt and ask the owner for help. See `learning-mode-ui`.
+Assessment counts come from saved results, never chat, motion or selection.
+**Saved lesson identity** shows the saved commit/hash. **Refresh lessons** rereads;
+loading/errors create or repair no state. Desktop/phone share wrapping, scrollable
+controls. Colleague can explain/offer supported start/resume; only a direct request
+or accepted offer authorizes it. Main teaches with supported Preview controls;
+if unavailable, retain the attempt and ask the owner. See `learning-mode-ui`.

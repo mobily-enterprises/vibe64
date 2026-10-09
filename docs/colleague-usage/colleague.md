@@ -1,46 +1,35 @@
 # Talk with Colleague
 
-Open Colleague with its avatar button in the page header. On desktop it opens a
-380-pixel drawer on the right, beside the workspace or Preview. The workspace
-stays mounted and usable in the remaining space; there is no dimmed backdrop.
-On a phone, the same conversation fills the screen or hides behind its launcher.
-Messages, the typed composer and optional speech controls appear together,
-without Talk/Text tabs.
-Opening does not start the microphone or enable sound. Tap **Talk** for hands-free,
-or hold it and release for push-to-talk; connection setup is automatic.
-Typed chat remains available if voice setup fails.
-Colleague uses your current Studio login for chat and live updates. If the login
-expires, sign in again and reopen Colleague; check any uncertain delivery before
-retrying. Colleague can explain the steps, but you must sign in yourself.
-Colleague replies briefly by default, usually one or two short sentences.
-Ask for a detailed explanation when you want more. A greeting gets a greeting;
-project/page details appear only when relevant.
+Open Colleague with the header avatar. Desktop uses a 380-pixel right drawer
+beside the mounted, usable workspace/Preview, without a backdrop. On phone it
+fills the screen or hides behind its launcher. Messages, composer and optional
+speech controls share one view, without Talk/Text tabs.
+Opening starts neither microphone nor sound. Tap **Talk** for hands-free or
+hold/release for push-to-talk; setup is automatic. Voice failure leaves typing available.
+Chat/live updates use your Studio login. If it expires, sign in yourself and reopen;
+check uncertain delivery before retrying. Colleague can explain the steps.
+Replies default to one or two short sentences; ask for detail when needed.
+Greetings get greetings; project/page details appear only when relevant.
 
-The conversation starts with its face and voice buttons visible at the top right
-of the message area, immediately below the header. Talk and the speaker control
-sit below the face. The small round minus at the end of that control row
-(accessible label **Minimise avatar**) removes the face and its controls without
-stopping audio or work. The anonymous **Show avatar** icon at
-the top right reopens it. Messages remain visible while they scroll behind the
-transparent space around the face. A short container can temporarily shrink it.
-While hidden, passive **Listening** and **Speaking** icons show unmuted capture
-and active audio separately. They are not buttons; **Show avatar** is the only
-action in that row. Expand it to use the voice controls. Speech review and retry
-stay visible independently of the face.
+The face starts at the message area's top right below the header, with Talk and
+speaker beneath it. The row's round minus, **Minimise avatar**, hides face/controls
+without stopping audio/work; the anonymous **Show avatar** icon restores them.
+Messages scroll visibly behind its transparent space; short containers can shrink
+the face. Hidden passive **Listening**/**Speaking** icons show unmuted capture/audio
+separately. Only **Show avatar** is actionable there; expand for voice controls.
+Speech review/retry remain visible independently.
 The microphone and speaker are independent; recording does not turn spoken
 replies on. Typing and ordinary steering preserve ongoing audio. During live
 hands-free capture, typed composition and sending stay independent
 of pending speech and its inline editor. One-off recording, push-to-talk and
 startup still gate Send; your typed draft stays editable and separate. Minimizing
 keeps voice active.
-The top-right **Minimize conversation** minus hides the view;
-clicking the visible header avatar also minimizes. **Close** X stops voice;
-Escape while focused inside the conversation also closes it. Clicking the desktop
-workspace leaves the drawer open. Draft, history and unfinished words stay when
-you minimize or resize; Close explicitly discards unsent speech.
-While minimized, a badge on the header avatar shows voice; a microphone and ring
-mean it is listening. Tap the avatar to reopen, or its adjacent **Stop voice chat**
-button to stop audio without reopening or stopping the agent's work.
+**Minimize conversation** (top-right minus) or the visible header avatar hides the
+view. **Close** X or Escape inside chat stops voice and discards unsent speech.
+Desktop workspace clicks leave the drawer open; minimizing/resizing retains draft,
+history and unfinished words. While minimized, the header avatar's voice badge
+uses a microphone/ring for listening. Tap it to reopen, or adjacent **Stop voice chat**
+to stop audio without reopening or stopping agent work.
 See [Voice chat](voice-chat.md) for recording, sound, target switching and recovery.
 
 The temporary speech bubble has **Discard unsent message** (X) and **Edit unsent
@@ -126,14 +115,11 @@ If a model rejects a sent request, its error appears in the message box. Your
 request remains in the conversation; this is separate from **Reconnecting…**,
 which reports a failed connection check. Read the error before sending again.
 
-Colleague keeps its operating instructions across follow-up questions and tool
-checks. You do not need to repeat them or restart the conversation when its
-available product tools change. Current permissions still apply to each action.
-The same instructions remain available after the assistant compacts its context
-or reconnects. If a connection check fails, inspect the reported status before
-retrying an action; Colleague does not automatically repeat an uncertain tool
-operation. If the error asks you to close an attached native assistant terminal,
-close it before resuming the conversation.
+Operating instructions survive follow-ups, tool checks, tool changes, compaction
+and reconnect; no repetition or restart is needed. Current permissions govern
+every action. After a failed connection check, inspect status before retrying;
+uncertain tools are never automatically repeated. If requested by the error,
+close the attached native assistant terminal before resuming.
 
 If a requested view or diagram opens but its confirmation fails, leave it open
 and ask Colleague to inspect its current state before asking for another change.
@@ -141,15 +127,12 @@ Rechecking the same pending confirmation keeps the original browser result; it
 does not repeat the navigation or presentation command. Changing account retires
 that pending confirmation rather than sending it as the new person.
 
-Reply text appears progressively while Colleague is answering. A character split
-across updates appears only after its remaining part arrives; the completed reply
-is unchanged. Hosted clients
-receive live updates and refresh the conversation after reconnecting. Completed replies and
-progress are retained; an interrupted answer is not shown as a completed reply. Live updates and refreshes keep the same conversation and expanded
-messages in place; a voice-enabled host can begin speaking readable phrases while the
-answer is still growing. Stop or new
-steering clears the unfinished reply. Reopening the drawer while it is working
-shows the current reply again. Tool requests are not displayed as chat text.
+Replies stream progressively; split characters wait for their remaining part,
+without changing the final text. Hosted live updates/reconnect refresh retain
+the conversation, expanded messages, completed replies and progress; interrupted
+answers stay incomplete. Voice can speak growing readable phrases. Stop/new
+steering clears unfinished output. Reopening reveals the current reply;
+tool requests are never chat text.
 
 Colleague accepts completed replies up to 16,000 characters. A longer reply
 reports a failure instead of silently cutting the answer short or saving it as
