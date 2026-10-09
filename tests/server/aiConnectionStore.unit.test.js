@@ -9,6 +9,7 @@ import {
   connectionFingerprint,
   createAiConnectionStore
 } from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
+import { verifyZaiConnection } from "../../packages/vibe64-accounts/src/server/zaiConnectionVerifier.js";
 
 const revisionA = `sha256:${"a".repeat(64)}`;
 const revisionB = `sha256:${"b".repeat(64)}`;
@@ -524,6 +525,39 @@ test("failed and stale OpenCode verification never replace a working key", async
     }, { provider: deepseek }),
     (error) => error.code === "vibe64_ai_key_verification_unavailable" && error.statusCode === 503
   );
+});
+
+test("regular Z.AI verification explains overload and balance without replacing keys or exposing provider text", async (t) => {
+  let providerErrorCode = "";
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    assert.equal(JSON.parse(options.body).model, "glm-4.7-flash");
+    return providerErrorCode
+      ? Response.json({ error: { code: providerErrorCode, message: "raw provider text with rejected-secret" } }, { status: 429 })
+      : Response.json({ choices: [{ message: { content: "OK" }, finish_reason: "stop" }] });
+  });
+  const { store } = await fixture(t, { verifyConnection: verifyZaiConnection });
+  const zai = provider("zai", { defaultModelId: "glm-4.7-flash" });
+  await store.upsertConnection({
+    apiKey: "working-key", modelProviderId: "zai", providerRevision: revisionA
+  }, { provider: zai });
+
+  for (const [code, expectedCode, status, reason] of [
+    ["1305", "vibe64_ai_key_verification_unavailable", 503, /temporarily overloaded/],
+    ["1113", "vibe64_ai_api_key_rejected", 422, /insufficient balance or no resource package/],
+    ["1308", "vibe64_ai_api_key_rejected", 422, /Check the key, billing, and quota/]
+  ]) {
+    providerErrorCode = code;
+    await assert.rejects(store.upsertConnection({
+      apiKey: "rejected-secret", modelProviderId: "zai", providerRevision: revisionA
+    }, { provider: zai }), (error) => {
+      assert.equal(error.code, expectedCode);
+      assert.equal(error.statusCode, status);
+      assert.match(error.message, reason);
+      assert.doesNotMatch(JSON.stringify({ message: error.message, fields: error.fieldErrors }), /raw provider text|rejected-secret/);
+      return true;
+    });
+    assert.equal((await store.resolveConnection("zai")).apiKey, "working-key");
+  }
 });
 
 test("legacy records migrate to native routing without exposing keys", async (t) => {

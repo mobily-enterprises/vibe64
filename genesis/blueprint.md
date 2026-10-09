@@ -147,6 +147,8 @@ model. The owner can also ask for saved regular Z.AI setup facts without exposin
 a key or changing settings. Saved facts do not prove current paid-model access.
 Account connection and credential entry remain in AI Accounts. Complete
 product-operation coverage remains in progress.
+Regular Z.AI connection failures explain temporary overload or insufficient
+balance when reported by the provider, while preserving any existing saved key.
 
 Colleague opens one written conversation with optional speech controls from its
 header avatar, without Talk/Text tabs. Opening starts neither recording nor sound.

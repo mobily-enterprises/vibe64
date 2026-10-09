@@ -7,13 +7,15 @@ const ZAI_RETRYABLE_ERROR_CODES = new Set([
   "1230",
   "1231",
   "1234",
-  "1302"
+  "1302",
+  "1305"
 ]);
 
-function zaiVerificationError({ retryable = false } = {}) {
+function zaiVerificationError({ retryable = false, providerErrorCode = "" } = {}) {
   const error = new Error("Z.AI key verification did not complete.");
   error.retryable = retryable;
   error.statusCode = retryable ? 503 : 422;
+  error.providerErrorCode = providerErrorCode;
   return error;
 }
 
@@ -59,7 +61,8 @@ async function verifyZaiConnection({ apiKey = "" } = {}) {
   if (!response.ok) {
     const errorCode = String(body?.error?.code ?? "").trim();
     throw zaiVerificationError({
-      retryable: zaiFailureIsRetryable(response.status, errorCode)
+      retryable: zaiFailureIsRetryable(response.status, errorCode),
+      providerErrorCode: errorCode
     });
   }
 

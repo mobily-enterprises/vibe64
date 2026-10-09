@@ -372,15 +372,25 @@ async function verifyOpenCodeConnection({
         409
       );
     }
+    let providerReason = "";
+    if (policy.modelProviderId === "zai") {
+      if (error?.providerErrorCode === "1305") {
+        providerReason = "Z.AI is temporarily overloaded.";
+      } else if (error?.providerErrorCode === "1113") {
+        providerReason = "Z.AI reports insufficient balance or no resource package.";
+      }
+    }
     const unavailable = error?.retryable === true || Number(error?.statusCode) >= 500;
     if (unavailable) {
       throw connectionVerificationError(
         "vibe64_ai_key_verification_unavailable",
-        `${policy.productLabel} could not be reached to verify this key. Nothing was saved; try again.`,
+        `${providerReason || `${policy.productLabel} could not be reached to verify this key.`} Nothing was saved; try again later.`,
         503
       );
     }
-    const message = `${policy.productLabel} rejected this key or could not complete a test request. Check the key, billing, and quota, then try again.`;
+    const message = providerReason
+      ? `${providerReason} Nothing was saved. Check billing and quota, then try again.`
+      : `${policy.productLabel} rejected this key or could not complete a test request. Check the key, billing, and quota, then try again.`;
     throw connectionVerificationError(
       "vibe64_ai_api_key_rejected",
       message,

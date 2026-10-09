@@ -86,6 +86,12 @@ do not paste a key into chat or reconnect solely because of a failed read.
 
 Saved state is not a live key, credit or paid-model entitlement check. In particular,
 full **GLM-4.7** uses paid regular-API credit and differs from free **GLM-4.7-Flash**.
+If **Verify and connect** reports that Z.AI is temporarily overloaded, nothing
+was saved: wait and retry the same key. This does not establish invalid credentials.
+If it reports insufficient balance or no resource package, check the provider's
+billing and quota before retrying. A failed replacement keeps the existing saved
+key. These messages and steps apply on desktop and mobile. Colleague can explain
+the reason; key entry remains your step in **AI Accounts**.
 The preferred provider/default-model badge does not prove future Senior routing
 or change Colleague's model. Ask for the actual routing before changing only the
 requested future workflow role. A correct lesson answer establishes understanding,

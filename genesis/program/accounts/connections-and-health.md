@@ -24,6 +24,9 @@ complete sanitized UI list. Missing regular Z.AI and unavailable storage are
 distinct; a Coding Plan does not satisfy this check. Saved facts do not prove
 current credentials, credit, entitlement, Senior routing or Colleague selection.
 Registration, key entry and paid-model consent remain human UI operations.
+Regular Z.AI verification identifies temporary overload and insufficient balance
+without exposing raw provider text. Failed verification never replaces a saved
+key; overload calls for a later retry rather than credential replacement.
 The newly exposed list rejects a trusted non-owner as well as enforcing host
 management policy. Hosted context freshly resolves the actor and rejects missing
 authentication before execution; standalone retains its original authorized
