@@ -45,6 +45,14 @@ route's path, hash and other query fields. This flag is presentation, never
 Training or session authority. The root app and project page attach the existing L control and original picker
 to the same session panel. The adapter itself owns no mounting or session state.
 
+The original root, project and hosted project Learning pane buttons keep their
+existing gesture-aware toggle handlers. `StudioAppShellLayout` supplies one
+shared presentation rule: at widths up to 400px, that same button occupies 48px
+and shows its chat or lesson icon instead of the text label. The full next-action
+accessible name and tooltip remain `Show chat` or `Show lessons`. This leaves
+room for the host's compact resource control and minimized Colleague controls;
+it does not add a second header or pane owner.
+
 `coursesResource` and `learningResource` use the original endpoint resource,
 Vue Query cache and HTTP cancellation, scoped by the injected actual viewer
 actor. A private reader envelope masks old data synchronously on actor changes;

@@ -282,4 +282,25 @@ function endPaneSwipe(event) {
   gap: 0.25rem;
   min-width: 0;
 }
+
+:deep(.studio-app-shell-layout__learning-pane-icon) {
+  display: none;
+}
+
+@media (max-width: 400px) {
+  :deep(.studio-app-shell-layout__learning-pane-toggle) {
+    flex: 0 0 48px;
+    min-width: 48px;
+    padding: 0;
+    width: 48px;
+  }
+
+  :deep(.studio-app-shell-layout__learning-pane-label) {
+    display: none;
+  }
+
+  :deep(.studio-app-shell-layout__learning-pane-icon) {
+    display: inline-flex;
+  }
+}
 </style>

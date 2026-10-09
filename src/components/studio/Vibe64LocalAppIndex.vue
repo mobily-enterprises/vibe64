@@ -3,6 +3,7 @@ import StudioAppShellLayout from "@/components/StudioAppShellLayout.vue";
 import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButton.vue";
 import { inject, ref } from "vue";
+import { mdiBookOpenPageVariant, mdiMessageTextOutline } from "@mdi/js";
 import Vibe64LearningPracticeProjectSelector from "./Vibe64LearningPracticeProjectSelector.vue";
 import { VIBE64_TRAINING_LEARNER_GESTURE_KEY } from "@/lib/vibe64AssistantHost.js";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
@@ -29,8 +30,16 @@ const { learningMode, purposeFilter, learningResource, setLearningMode } = learn
     <template #top-left>
       <div class="vibe64-local-app-index__top">{{ learningMode ? "Lessons" : "Projects" }}</div>
       <Vibe64LearningPracticeProjectSelector v-if="learningMode" :panel="panel" />
-      <v-btn v-if="learningMode" variant="text" @click="toggleChat($event)">
-        {{ chatCollapsed ? "Show chat" : "Show lessons" }}
+      <v-btn
+        v-if="learningMode"
+        class="studio-app-shell-layout__learning-pane-toggle"
+        :aria-label="chatCollapsed ? 'Show chat' : 'Show lessons'"
+        :title="chatCollapsed ? 'Show chat' : 'Show lessons'"
+        variant="text"
+        @click="toggleChat($event)"
+      >
+        <span class="studio-app-shell-layout__learning-pane-label">{{ chatCollapsed ? "Show chat" : "Show lessons" }}</span>
+        <v-icon class="studio-app-shell-layout__learning-pane-icon" :icon="chatCollapsed ? mdiMessageTextOutline : mdiBookOpenPageVariant" aria-hidden="true" />
       </v-btn>
     </template>
     <template #top-right>

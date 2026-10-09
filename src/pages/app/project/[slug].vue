@@ -17,6 +17,7 @@ import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64Loca
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
 import { ref } from "vue";
+import { mdiBookOpenPageVariant, mdiMessageTextOutline } from "@mdi/js";
 import Vibe64LearningPracticeProjectSelector from "@/components/studio/Vibe64LearningPracticeProjectSelector.vue";
 import Vibe64LearningLessonLauncher from "@/components/studio/Vibe64LearningLessonLauncher.vue";
 import { useVibe64LearningMode } from "@/composables/useVibe64LearningMode.js";
@@ -187,8 +188,16 @@ async function changeLearningMode(value) {
             {{ mobileProjectAction.label }}
             <v-icon :icon="mdiChevronRight" size="15" />
           </button>
-          <v-btn v-if="learningMode" variant="text" @click="setChatCollapsed(!chatCollapsed, $event)">
-            {{ chatCollapsed ? "Show chat" : "Show lessons" }}
+          <v-btn
+            v-if="learningMode"
+            class="studio-app-shell-layout__learning-pane-toggle"
+            :aria-label="chatCollapsed ? 'Show chat' : 'Show lessons'"
+            :title="chatCollapsed ? 'Show chat' : 'Show lessons'"
+            variant="text"
+            @click="setChatCollapsed(!chatCollapsed, $event)"
+          >
+            <span class="studio-app-shell-layout__learning-pane-label">{{ chatCollapsed ? "Show chat" : "Show lessons" }}</span>
+            <v-icon class="studio-app-shell-layout__learning-pane-icon" :icon="chatCollapsed ? mdiMessageTextOutline : mdiBookOpenPageVariant" aria-hidden="true" />
           </v-btn>
         </div>
       </div>
