@@ -1267,6 +1267,9 @@ for (const reason of ["retire", "logout", "replace-question"]) {
 // actual Store read. The receipt originates in the original action catalogue;
 // controlled Store retention here is not a real native-provider acceptance run.
 test("Main completed practical question discovery requires the original completed execute receipt plus its exact saved pass", async t => {
+  const { createTrainingMainTeaching } = await import("../../packages/vibe64-training/src/server/mainTeaching.js");
+  const { completedPracticalQuestions } = await import("../../packages/vibe64-training/src/server/deliveryProof.js");
+  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
   const f = await mainPracticalFixture(t); const receipt = await completeMainPractical(f);
   const answer = await f.acceptExplanation();
   const input = { attemptId: f.attemptId, expectedRevision: (await f.read()).revision, submissionId: "durable-main-practical",
@@ -1284,6 +1287,22 @@ test("Main completed practical question discovery requires the original complete
   const before = await f.runtime.store.readConversationLog(f.sessionId);
   assert.equal(await f.main.readQuestion(f.call), null);
   assert.deepEqual(await f.runtime.store.readConversationLog(f.sessionId), before, "discovery never rewrites pending questions or receipts");
+  const expected = [{ reference: f.prepared.reference, submissionId: input.submissionId, observationId: receipt.observationId }];
+  assert.deepEqual(completedPracticalQuestions({ record: { conversationLog: before, scopeId: f.sessionId } }), expected);
+  await f.bound.cleanup({});
+  const transcriptPath = path.join(f.runtime.stateRoot, "sessions", "active", f.sessionId, "conversation-log", "transcript.json");
+  const bytes = await readFile(transcriptPath);
+  const reopenedMain = createTrainingMainTeaching({ teaching: f.owner,
+    assessment: createTrainingAnswerAssessment({ learners: f.learners, content: f.content, teaching: f.owner }) });
+  const reopenedRuntime = new Vibe64SessionRuntime({ projectContextRoot: f.runtime.projectContextRoot,
+    projectRuntimeRoot: f.runtime.stateRoot, projectSessionSourceRoot: f.runtime.projectSessionSourceRoot,
+    learningScope: f.runtime.learningScope, learningTeaching: reopenedMain, inspectSourceByDefault: false });
+  const reopened = { ...f.call, runtime: reopenedRuntime, context: { ...f.current, runtime: reopenedRuntime } };
+  assert.equal(await reopenedMain.readQuestion(reopened), null,
+    "new backend without the transient observation still has exact canonical proof");
+  assert.deepEqual(await reopenedRuntime.store.readConversationLog(f.sessionId), before,
+    "read does not backfill or retire the saved question");
+  assert.deepEqual(await readFile(transcriptPath), bytes, "backend reconstruction does not rewrite canonical bytes");
   for (const corrupt of [value => { value.name = "assistant_action_contract"; }, value => { value.arguments = "not-json"; },
     value => { value.status = "unknown"; }, value => { value.result.ok = false; },
     value => { value.result.result.result.outcome = "not-yet-passed"; },
@@ -1293,7 +1312,38 @@ test("Main completed practical question discovery requires the original complete
     const changed = structuredClone(call); corrupt(changed);
     await f.runtime.store.conversationStorage.write(f.sessionId, transaction => transaction.updateTurnMetadata(answer.accepted.turnId, { applicationTools: [changed] }));
     assert.deepEqual(await f.main.readQuestion(f.call), f.prepared.reference, "the original predicate refuses each corrupt native receipt");
+    assert.deepEqual(await reopenedMain.readQuestion(reopened), f.prepared.reference);
+    assert.deepEqual(completedPracticalQuestions({ record: {
+      conversationLog: await reopenedRuntime.store.readConversationLog(f.sessionId), scopeId: f.sessionId
+    } }), [], "only exact native completed execution can suppress arming");
   }
+  await f.runtime.store.conversationStorage.write(f.sessionId, transaction => transaction.updateTurnMetadata(answer.accepted.turnId, { applicationTools: [call] }));
+  const repeatMessageId = "explicit-repeat-request";
+  Object.assign(f.target, { turnId: "explicit-repeat-native-turn", outerTurnId: repeatMessageId, active: true });
+  const repeatTurn = await f.runtime.store.writeConversationUserMessage(f.sessionId, {
+    messageId: repeatMessageId, text: "Please practise that task again.", data: { clientId: "actual-practice-browser" }
+  });
+  const repeatedAdmission = Object.freeze({ ...answer.accepted, turnId: repeatTurn.turnId, messageId: repeatMessageId,
+    nativeTurnId: f.target.turnId });
+  const repeatedContext = await f.bound.applicationTools.prepareContext(f.current, repeatedAdmission);
+  const { actor: _actor, ...questionInput } = f.input;
+  const repeated = await f.catalogue.execute({ actionId: "vibe64.training.question.prepare", context: repeatedContext,
+    input: { ...questionInput, expectedRevision: (await f.read()).revision, requestId: "explicit-repeat",
+      assessmentId: f.prepared.reference.assessmentId, text: "Please try the sequence again.", assistance: "none" } });
+  await f.runtime.store.writeConversationAssistantMessage(f.sessionId, {
+    text: repeated.questionText, outputId: "explicit-repeat-output"
+  });
+  f.target.active = false;
+  await f.main.completeConversation({ ...f.call, outerTurnId: repeatMessageId, nativeTurn: f.target, outcome: "completed" });
+  assert.deepEqual(await reopenedMain.readQuestion(reopened), repeated.reference,
+    "the old passed question cannot suppress a newly delivered explicit repeat");
+  const successorScope = `${f.sessionId}-successor`;
+  assert.equal(await reopenedMain.readQuestion({ ...reopened, context: { ...reopened.context,
+    browserAuthority: { ...reopened.context.browserAuthority, sessionId: successorScope }
+  } }), null);
+  assert.deepEqual(completedPracticalQuestions({ record: { conversationLog: before, scopeId: successorScope } }), [],
+    "archived records never provide active-scope arming evidence");
+  assert.deepEqual(await reopenedRuntime.store.readConversationLog(f.sessionId), await f.runtime.store.readConversationLog(f.sessionId));
 });
 
 
