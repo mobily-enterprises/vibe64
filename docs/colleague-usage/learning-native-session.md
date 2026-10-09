@@ -18,7 +18,11 @@ workspace or reset its progress to hide a preparation failure.
 
 Opening or resuming this source-less lesson with Codex reads its saved private
 conversation; it does not require a practice project. Keep that same attempt
-when changing its supported AI connection. If reading the conversation fails,
+when changing its supported AI connection. After an allowed assistant change,
+chat updates follow the newly selected assistant in that same conversation.
+Loaded older messages and unsent text stay available; changing the selection
+does not send a message. This also applies when another open view changes the
+selection. If updates fail, use the existing chat Reload recovery. If reading the conversation fails,
 retain the lesson and report the error instead of creating project source.
 
 Codex, OpenCode and Claude Main can use the lesson teaching tools supplied by
@@ -58,7 +62,6 @@ uncertain Send keeps the original message identity and exact words. A stale or
 missing question association leaves the words in chat without treating them as
 an answer to a newer question. An unconfirmed question or grade is not a pass:
 read the retained result before asking for another evaluation.
-
 Main receives the exact accepted answer identity with its captured question; you
 do not need to copy message IDs or move an answer to another conversation. If an
 evaluation says the answer is not admitted, retain the same lesson and report the

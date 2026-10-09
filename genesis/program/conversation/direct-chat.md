@@ -3,6 +3,13 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 
+The original session assistant-selection event refreshes the retained browser
+observer through JSKIT’s existing same-ID subscribe operation. Canonical reads
+and live updates then use the current authorized native owner even when its
+engine namespace changes; loaded history, drafts and delivery receipts remain.
+The session/learning scope fence applies before that refresh, including changes
+from another view. This observation operation neither admits nor repeats work.
+
 The existing empty-conversation welcome uses the captured Learning attempt to
 invite lesson teaching instead of new-project onboarding. It remains display
 text and creates no teacher input, question delivery or progress.

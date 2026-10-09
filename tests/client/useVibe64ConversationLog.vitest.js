@@ -1489,4 +1489,36 @@ describe("useVibe64ConversationLog", () => {
       expect(httpRequest).not.toHaveBeenCalled();
     } finally { scope.stop(); }
   });
+
+  for (const scopeIdentity of [{ projectSlug: "project-a" }, { projectSlug: "", learningAttemptId: "attempt-a" }]) {
+    it(`retargets supplied Main observation only for its own selection invalidation (${scopeIdentity.learningAttemptId || "Working"})`, async () => {
+      const scope = effectScope();
+      const session = ref({ sessionId: "session-1" });
+      const draft = ref("Keep these unsent words");
+      const pending = [{ id: "pending", text: "Already queued" }];
+      const earlier = { turnId: "000001", user: { messageId: "old", text: "Loaded earlier" } };
+      const conversation = { turns: ref([earlier]), draft, delivery: { state: { messages: pending } },
+        error: ref(""), accessDenied: ref(false), snapshot: ref({ status: "ready" }), loading: ref(false), reload: vi.fn() };
+      try {
+        scope.run(() => useVibe64ConversationLog({ ...scopeIdentity, session, conversation }));
+        const payload = { ...scopeIdentity, reason: "session-assistant-selection-updated", sessionId: "session-1" };
+        const listener = realtimeMocks.events.find(entry => entry.matches({ payload }));
+        expect(listener).toBeDefined();
+        expect(listener.matches({ payload: { ...payload, sessionId: "another" } })).toBe(false);
+        expect(listener.matches({ payload: scopeIdentity.learningAttemptId
+          ? { ...payload, learningAttemptId: "another-attempt" }
+          : { ...payload, projectSlug: "another-project" } })).toBe(false);
+        expect(listener.matches({ payload: scopeIdentity.learningAttemptId
+          ? { ...payload, learningAttemptId: undefined, projectSlug: "project-a" }
+          : { ...payload, projectSlug: "", learningAttemptId: "attempt-a" } })).toBe(false);
+        await listener.onEvent({ payload });
+        expect(conversation.reload).toHaveBeenCalledExactlyOnceWith({ resubscribe: true });
+        expect(draft.value).toBe("Keep these unsent words");
+        expect(conversation.delivery.state.messages).toBe(pending);
+        expect(conversation.turns.value[0]).toEqual(earlier);
+        expect(httpRequest).not.toHaveBeenCalled();
+      } finally { scope.stop(); }
+    });
+  }
+
 });

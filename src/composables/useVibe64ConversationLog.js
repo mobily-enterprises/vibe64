@@ -18,7 +18,8 @@ import {
   VIBE64_SURFACE_ID,
   vibe64ConversationLogPath,
   vibe64SessionPath,
-  vibe64ConversationLogQueryKey
+  vibe64ConversationLogQueryKey,
+  vibe64SessionEventMatchesScope
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   readRefOrGetterValue
@@ -330,6 +331,7 @@ function useVibe64ConversationLog({
   active = true,
   projectSlug: projectSlugInput,
   sessionsApiPath: sessionsApiPathInput,
+  learningAttemptId,
   session,
   conversation = null
 } = {}) {
@@ -356,10 +358,12 @@ function useVibe64ConversationLog({
     const realtime = useRealtimeEvent({ enabled, event: VIBE64_SESSION_CHANGED_EVENT,
       matches: context => (["session-assistant-selection-updated", "integration-setup-skipped", "integration-setup-completed"]
         .includes(context?.payload?.reason) || conversationLogCompletedTurnKey(context?.payload)) &&
-        conversationLogRealtimeShouldRefresh(context, sessionId.value),
+        conversationLogRealtimeShouldRefresh(context, sessionId.value) &&
+        vibe64SessionEventMatchesScope(context?.payload, { projectSlug: projectSlug.value, learningAttemptId }),
       onEvent: ({ payload = {} } = {}) => {
         realtimeCompletionKey = conversationLogCompletedTurnKey(payload) || realtimeCompletionKey;
-        return conversation.reload();
+        return payload.reason === "session-assistant-selection-updated"
+          ? conversation.reload({ resubscribe: true }) : conversation.reload();
       } });
     watch(() => conversationLogCompletedTurnKey(currentSession.value), key => {
       if (!enabled.value || !key) return;
