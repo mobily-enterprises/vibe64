@@ -3,6 +3,10 @@
 People work with the coding agent through one ordinary project conversation,
 including follow-up guidance while a turn is active.
 
+The existing empty-conversation welcome uses the captured Learning attempt to
+invite lesson teaching instead of new-project onboarding. It remains display
+text and creates no teacher input, question delivery or progress.
+
 Learning Main teaching has a separate internal Sessions WRITE-authority grant.
 The original observation grant remains read-only. The same authenticated action
 contributor resolves current saved learner/attempt/session authority on every

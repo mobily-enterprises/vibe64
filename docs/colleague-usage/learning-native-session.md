@@ -6,6 +6,8 @@ teacher; Colleague remains available for general application assistance. See
 [Choosing lessons and Learning conversations](learning-mode-ui.md) for the
 picker, chat and desktop/mobile view controls. Opening the conversation does
 not send a teaching request or prove that its teaching tools are available.
+An empty Learning chat invites you to ask Main to teach the saved lesson, one
+step at a time. This welcome is a prompt to you, not a delivered lesson question.
 
 A lesson without a practice exercise retains its conversation and history under
 your exact saved attempt. It creates no practice project, uses no practice

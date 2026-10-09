@@ -67,6 +67,7 @@ const STANDALONE_SESSION_TOOL_IDS = new Set([
   "system"
 ]);
 const EMPTY_CONVERSATION_WELCOME = "Hi! 👋 I’m excited to build something with you. Tell me what you have in mind—even a half-formed idea is perfect. We’ll shape it together.";
+const LEARNING_CONVERSATION_WELCOME = "Hi! 👋 Ask me to teach this lesson. We'll take it one step at a time.";
 const EXISTING_PROJECT_CONVERSATION_WELCOME = "Hi! 👋 This is an existing project. Tell me what you’d like to change, check, or improve, and we’ll work through it together.";
 const RENEWED_SESSION_CONVERSATION_WELCOME = "Hi! 👋 I’ve received the handover from the previous session and I’m ready to continue. Tell me what you’d like to do next.";
 const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";
@@ -224,14 +225,17 @@ const vibe64AutopilotViewProps = {
 
 function emptyConversationWelcomeText({
   existingProject = false,
+  learning = false,
   preferredName = "",
   renewedSession = false
 } = {}) {
-  const message = renewedSession
-    ? RENEWED_SESSION_CONVERSATION_WELCOME
-    : existingProject
-      ? EXISTING_PROJECT_CONVERSATION_WELCOME
-      : EMPTY_CONVERSATION_WELCOME;
+  const message = learning
+    ? LEARNING_CONVERSATION_WELCOME
+    : renewedSession
+      ? RENEWED_SESSION_CONVERSATION_WELCOME
+      : existingProject
+        ? EXISTING_PROJECT_CONVERSATION_WELCOME
+        : EMPTY_CONVERSATION_WELCOME;
   const name = normalizedAgentTurnText(preferredName);
   return name ? message.replace("Hi!", `Hi ${name}!`) : message;
 }
@@ -1570,6 +1574,7 @@ function useVibe64AutopilotView(props, emit, {
     !chatTurns.value.length
       ? emptyConversationWelcomeText({
           existingProject: workspaceSetupStatus.value !== "unconfigured",
+          learning: Boolean(normalizedAgentTurnText(props.learningAttemptId)),
           preferredName: preferredName.value,
           renewedSession: Boolean(normalizedAgentTurnText(
             props.session?.metadata?.renewed_from
