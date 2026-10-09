@@ -4808,3 +4808,90 @@ for (const autonomous of [false, true]) {
     }
   });
 }
+
+
+// Original five-key Colleague policy retires native history even when only the
+// model changes. API segment counts cannot prove this native consumer branch.
+test("Colleague native Codex model-only selection carries exact history once and restarts its new thread without repeated effects", async t => {
+  const f = await fixture(t, [
+    { text: "We discussed a grocery list.", tool: { actionId: "vibe64.test.operate", input: { value: "seed-once" } } },
+    { text: "I still have that discussion." }
+  ], { native: true });
+  await f.send("Let's discuss a grocery list.");
+  const before = await f.service.wait(f.context);
+  assert.equal(before.status, "ready", before.error);
+  assert.deepEqual(f.observations.mutations, ["seed-once"]);
+  const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+  const savedBefore = JSON.parse(await readFile(file, "utf8"));
+  const firstTrace = await f.native.trace();
+  const firstTurns = firstTrace.filter(row => row.method === "turn/start");
+  assert.equal(firstTrace.filter(row => row.method === "thread/start").length, 1);
+  assert.equal(firstTurns.length, 1);
+  const firstThread = firstTurns[0].params.threadId;
+  const browser = await f.service.browserConversations.open({ id: before.conversationId, context: f.context });
+  const selected = await browser.select({ assistantSelection: { ...before.assistantSelection, modelId: "another-model" } });
+  assert.equal(selected.assistantSelection.engineId, before.assistantSelection.engineId);
+  assert.equal(selected.assistantSelection.modelProviderId, before.assistantSelection.modelProviderId);
+  assert.equal(selected.assistantSelection.modelId, "another-model");
+  assert.equal(selected.conversationId, before.conversationId);
+  assert.deepEqual(selected.messages, before.messages);
+  const savedSelected = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(savedSelected.conversationLog, savedBefore.conversationLog);
+  const predecessor = savedSelected.conversationMetadata.runtime.predecessors.at(-1);
+  assert.equal(predecessor.segmentId, savedBefore.conversationMetadata.runtime.segmentId);
+  assert.equal(predecessor.binding.threadId, firstThread);
+  assert.equal(predecessor.replacement.retireNative, true);
+  assert.notEqual(savedSelected.conversationMetadata.runtime.segmentId, predecessor.segmentId);
+  const selectedTrace = await f.native.trace();
+  assert.deepEqual(selectedTrace.filter(row => row.method === "turn/start"), firstTurns,
+    "model selection never resends the authored request or starts inference");
+  assert.equal(selectedTrace.filter(row => row.method === "thread/start").length, 1,
+    "native successor creation belongs to the next admitted Send");
+  await f.send("What were we discussing?", "user-2");
+  const after = await f.service.wait(f.context);
+  assert.equal(after.status, "ready", after.error);
+  assert.equal(after.conversationId, before.conversationId);
+  assert.deepEqual(f.observations.mutations, ["seed-once"]);
+  const switchedTrace = await f.native.trace();
+  const creations = switchedTrace.filter(row => row.method === "thread/start");
+  const turns = switchedTrace.filter(row => row.method === "turn/start");
+  assert.equal(creations.length, 2, "the original model-only policy creates a distinct native successor");
+  assert.equal(creations[1].params.model, "another-model");
+  assert.equal(turns.length, 2);
+  const secondThread = turns[1].params.threadId;
+  assert.notEqual(secondThread, firstThread);
+  assert.equal(turns[1].params.clientUserMessageId, "user-2");
+  const prompt = turns[1].params.input[0].text;
+  const historyFrames = prompt.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line))
+    .filter(value => Array.isArray(value.messages));
+  assert.equal(historyFrames.length, 1);
+  assert.deepEqual(historyFrames[0].messages.map(({ role, text }) => [role, text]), [
+    ["user", "Let's discuss a grocery list."], ["assistant", "We discussed a grocery list."]
+  ]);
+  assert.ok(prompt.endsWith("What were we discussing?"));
+  const savedAfter = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(savedAfter.conversationLog[0], savedBefore.conversationLog[0],
+    "selection and continuity retain the original tool receipt and accepted history");
+  await f.service.close();
+  const restored = await fixture(t, [{ text: "Still using your saved choice." }], { systemRoot: f.root, native: f.native });
+  const retained = await restored.service.read({}, restored.context);
+  assert.deepEqual(retained.messages, after.messages);
+  assert.equal(retained.conversationId, before.conversationId);
+  assert.equal(retained.assistantSelection.modelId, "another-model");
+  await restored.send("Continue", "user-3");
+  const continued = await restored.service.wait(restored.context);
+  assert.equal(continued.status, "ready", continued.error);
+  assert.equal(continued.conversationId, before.conversationId);
+  const restartedTrace = await restored.native.trace();
+  assert.equal(restartedTrace.filter(row => row.method === "thread/start").length, 2,
+    "restart must not create a third native conversation");
+  assert.ok(restartedTrace.some(row => row.method === "thread/resume" && row.params.threadId === secondThread));
+  const restartedTurns = restartedTrace.filter(row => row.method === "turn/start");
+  assert.deepEqual(restartedTurns.map(row => [row.params.threadId, row.params.clientUserMessageId]),
+    [[firstThread, "user-1"], [secondThread, "user-2"], [secondThread, "user-3"]]);
+  assert.equal(restartedTurns[2].params.input[0].text.includes("[Previous conversation]"), false,
+    "restart resumes the native successor rather than quoting its history again");
+  assert.equal(restartedTurns[2].params.input[0].text.includes("[Conversation changeover]"), false);
+  assert.deepEqual(restored.observations.mutations, []);
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")).conversationLog[0], savedBefore.conversationLog[0]);
+});
